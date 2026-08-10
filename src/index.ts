@@ -1,0 +1,162 @@
+import { loadConfig } from './infra/config.js';
+import { initLogger, logger } from './infra/logger.js';
+import { initDatabase, closeDatabase } from './infra/db.js';
+import { autoMigrate } from './infra/migrate.js';
+import { RebeccaPanelRegistry } from './domain/services/RebeccaPanelRegistry.js';
+import { PurchaseCheckoutService } from './domain/services/PurchaseCheckoutService.js';
+import { TranslationService } from './domain/services/TranslationService.js';
+import { WalletService } from './domain/services/WalletService.js';
+import { ConfigService } from './domain/services/ConfigService.js';
+import { PricingService } from './domain/services/PricingService.js';
+import { PromoService } from './domain/services/PromoService.js';
+import { ReferralService } from './domain/services/ReferralService.js';
+import { TrialService } from './domain/services/TrialService.js';
+import { UserService } from './domain/services/UserService.js';
+import { AdminService } from './domain/services/AdminService.js';
+import { RefundService } from './domain/services/RefundService.js';
+import { ConfigTransferService } from './domain/services/ConfigTransferService.js';
+import { ConfigReconciliationService } from './domain/services/ConfigReconciliationService.js';
+import { BroadcastService } from './domain/services/BroadcastService.js';
+import { initializeBot, setupBot, startBot } from './telegram/bot.js';
+import {
+  markHealthFailed,
+  markHealthReady,
+  markHealthStopping,
+  setHealthPhase,
+  startHealthCheckServer,
+  stopHealthCheckServer,
+} from './infra/healthcheck.js';
+import { startNotifierCron, stopNotifierCron } from './jobs/notifier.js';
+import { startReconciliationCron, stopReconciliationCron } from './jobs/reconciler.js';
+import { startTrialCleanupCron, stopTrialCleanupCron } from './jobs/trialCleanup.js';
+import { startAutoRenewalCron, stopAutoRenewalCron } from './jobs/autoRenewal.js';
+import { startBroadcastWorker, stopBroadcastWorker } from './jobs/broadcast.js';
+
+async function main() {
+  initLogger();
+  logger.info('Starting RebeccaSellBot...');
+
+  const config = loadConfig();
+  await startHealthCheckServer(config.HEALTH_CHECK_PORT);
+
+  setHealthPhase('database_migrations');
+  const { db } = initDatabase(config.DATABASE_URL);
+  await autoMigrate(db);
+
+  setHealthPhase('services_initialization');
+  const translationService = new TranslationService({ defaultLocale: config.DEFAULT_LOCALE });
+  await translationService.ensureDefaultSettings();
+  if (!config.PANEL_CREDENTIALS_KEY) {
+    logger.warn(
+      'PANEL_CREDENTIALS_KEY is unset; the bot token is being used as a legacy credential key fallback'
+    );
+  }
+  const panelRegistry = new RebeccaPanelRegistry(
+    {
+      ...(config.REBECCA_API_URL ? { baseUrl: config.REBECCA_API_URL } : {}),
+      ...(config.REBECCA_API_KEY ? { apiKey: config.REBECCA_API_KEY } : {}),
+      ...(config.REBECCA_ADMIN_USERNAME ? { adminUsername: config.REBECCA_ADMIN_USERNAME } : {}),
+      ...(config.REBECCA_ADMIN_PASSWORD ? { adminPassword: config.REBECCA_ADMIN_PASSWORD } : {}),
+      serviceId: config.REBECCA_SERVICE_ID,
+    },
+    config.PANEL_CREDENTIALS_KEY ?? config.BOT_TOKEN
+  );
+  await panelRegistry.initialize(translationService);
+
+  const referralService = new ReferralService(translationService);
+  const promoService = new PromoService();
+  const walletService = new WalletService(
+    panelRegistry,
+    translationService,
+    referralService,
+    promoService
+  );
+  const configService = new ConfigService(panelRegistry, translationService);
+  const pricingService = new PricingService(translationService);
+  const purchaseCheckoutService = new PurchaseCheckoutService(panelRegistry);
+  const trialService = new TrialService(panelRegistry, translationService);
+  const userService = new UserService();
+  const adminService = new AdminService();
+  await adminService.initialize(config.ADMIN_IDS);
+  const refundService = new RefundService(panelRegistry, translationService);
+  const configTransferService = new ConfigTransferService(panelRegistry);
+  const configReconciliationService = new ConfigReconciliationService(panelRegistry);
+  const broadcastService = new BroadcastService();
+
+  setHealthPhase('rebecca_counter_sync');
+  await configService.syncCounters();
+
+  const services = {
+    walletService,
+    configService,
+    pricingService,
+    purchaseCheckoutService,
+    promoService,
+    trialService,
+    translationService,
+    panelRegistry,
+    userService,
+    adminService,
+    refundService,
+    configTransferService,
+    configReconciliationService,
+    broadcastService,
+    adminIds: adminService.adminIds,
+    isAdmin: (telegramId: number) => adminService.isAdmin(telegramId),
+  };
+
+  setHealthPhase('telegram_initialization');
+  const bot = setupBot(config, services);
+  await initializeBot(bot);
+
+  startNotifierCron(panelRegistry, translationService, bot.api);
+  startReconciliationCron(panelRegistry, {
+    promoService,
+    referralService,
+    trialService,
+    refundService,
+    configReconciliationService,
+  });
+  startTrialCleanupCron(panelRegistry, configService);
+  startAutoRenewalCron(panelRegistry, walletService, pricingService, translationService, bot.api);
+  startBroadcastWorker(broadcastService, bot.api);
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    markHealthStopping();
+    logger.info({ signal }, 'Shutting down gracefully...');
+    stopReconciliationCron();
+    stopNotifierCron();
+    stopTrialCleanupCron();
+    stopAutoRenewalCron();
+    stopBroadcastWorker();
+    if (bot.isRunning()) await bot.stop();
+    stopHealthCheckServer();
+    await closeDatabase();
+    process.exit(0);
+  };
+
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+
+  const pollingTask = startBot(bot);
+  markHealthReady();
+  await pollingTask;
+}
+
+main().catch(async (err) => {
+  markHealthFailed(err);
+  logger.fatal({ err }, 'Fatal error on application startup or long-polling');
+  stopReconciliationCron();
+  stopNotifierCron();
+  stopTrialCleanupCron();
+  stopAutoRenewalCron();
+  stopBroadcastWorker();
+  stopHealthCheckServer();
+  await closeDatabase().catch((closeErr) => {
+    logger.error({ err: closeErr }, 'Failed to close database after fatal error');
+  });
+  process.exit(1);
+});

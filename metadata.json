@@ -1,0 +1,6 @@
+{
+  "name": "RebeccaSellBot",
+  "description": "Telegram bot for selling VPN configurations, managing wallets, and integrating with Rebecca Panel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

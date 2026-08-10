@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Instance-aware lifecycle manager. It never assumes the current directory and
+# always loads the selected instance's .env for Compose interpolation.
+
+readonly BASE_PATH="/opt/RebeccaSellBot"
+
+die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+
+show_help() {
+  cat <<'EOF'
+rsbot — RebeccaSellBot multi-instance manager
+
+Usage:
+  rsbot list
+  rsbot <instance> <command>
+
+Commands:
+  up                 Build/start the instance and wait for health
+  down               Stop the instance without deleting its data
+  restart            Restart the instance containers
+  status             Show container status
+  logs [-f]          Show logs (use -f to follow)
+  update             Pull, rebuild, run Drizzle migrations, and start
+  backup             Create a compressed pg_dump backup
+  restore <file>     Restore a pg_dump custom-format backup
+  uninstall          Permanently remove only this instance and its volume
+EOF
+}
+
+validate_instance() { [[ "$1" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ ]]; }
+
+if docker info >/dev/null 2>&1; then
+  DOCKER=(docker)
+elif command -v sudo >/dev/null 2>&1; then
+  DOCKER=(sudo docker)
+else
+  die "Docker is unavailable and sudo is not installed."
+fi
+
+if [[ "${1:-}" == "list" ]]; then
+  printf 'Installed RebeccaSellBot instances in %s:\n' "$BASE_PATH"
+  if [[ ! -d "$BASE_PATH" ]]; then
+    printf '  No instances found.\n'
+    exit 0
+  fi
+
+  shopt -s nullglob
+  instance_dirs=("$BASE_PATH"/*)
+  shopt -u nullglob
+  found=false
+  for instance_dir in "${instance_dirs[@]}"; do
+    instance_name="$(basename "$instance_dir")"
+    [[ -d "$instance_dir" && -f "$instance_dir/.env" && -f "$instance_dir/docker-compose.yml" ]] || continue
+    validate_instance "$instance_name" || continue
+    found=true
+    state="$("${DOCKER[@]}" compose --env-file "$instance_dir/.env" -p "$instance_name" \
+      -f "$instance_dir/docker-compose.yml" ps --status running --quiet 2>/dev/null | wc -l | tr -d ' ')"
+    if [[ "$state" -gt 0 ]]; then
+      printf '  %s (running) — %s\n' "$instance_name" "$instance_dir"
+    else
+      printf '  %s (stopped) — %s\n' "$instance_name" "$instance_dir"
+    fi
+  done
+  [[ "$found" == true ]] || printf '  No instances found.\n'
+  exit 0
+fi
+
+if [[ $# -eq 0 || "${1:-}" == "--help" || "${1:-}" == "-h" || "${1:-}" == "help" ]]; then
+  show_help
+  exit 0
+fi
+
+[[ $# -ge 2 ]] || { show_help >&2; exit 1; }
+INSTANCE="$1"
+COMMAND="$2"
+shift 2
+
+validate_instance "$INSTANCE" || die "Invalid instance name: $INSTANCE"
+readonly INSTANCE
+readonly COMMAND
+readonly INSTANCE_DIR="$BASE_PATH/$INSTANCE"
+readonly ENV_FILE="$INSTANCE_DIR/.env"
+readonly COMPOSE_FILE="$INSTANCE_DIR/docker-compose.yml"
+
+[[ -d "$INSTANCE_DIR" ]] || die "Instance '$INSTANCE' was not found at $INSTANCE_DIR."
+[[ -f "$ENV_FILE" ]] || die "Missing instance environment file: $ENV_FILE"
+[[ -f "$COMPOSE_FILE" ]] || die "Missing Compose file: $COMPOSE_FILE"
+
+dc() {
+  "${DOCKER[@]}" compose --env-file "$ENV_FILE" -p "$INSTANCE" -f "$COMPOSE_FILE" "$@"
+}
+
+show_failure_diagnostics() {
+  printf "\nContainer startup failed. Current status:\n" >&2
+  dc ps >&2 || true
+  printf "\nRecent bot/database logs:\n" >&2
+  dc logs --tail=200 bot db >&2 || true
+}
+
+wait_for_stack() {
+  if ! dc up -d --wait "$@"; then
+    show_failure_diagnostics
+    return 1
+  fi
+}
+
+env_value() {
+  local key="$1" value
+  value="$(sed -n "s/^$key=//p" "$ENV_FILE" | head -n 1)"
+  [[ -n "$value" ]] || die "$key is missing from $ENV_FILE."
+  printf '%s' "$value"
+}
+
+case "$COMMAND" in
+  up)
+    printf "Starting '%s'...\n" "$INSTANCE"
+    if ! dc up -d --build --wait; then
+      show_failure_diagnostics
+      exit 1
+    fi
+    ;;
+  down)
+    printf "Stopping '%s'...\n" "$INSTANCE"
+    dc down
+    ;;
+  restart)
+    printf "Restarting '%s'...\n" "$INSTANCE"
+    dc restart
+    ;;
+  status)
+    dc ps
+    ;;
+  logs)
+    dc logs --tail=100 "$@"
+    ;;
+  update)
+    [[ -d "$INSTANCE_DIR/.git" ]] || die "Instance repository is not a Git checkout."
+    printf "Updating '%s'...\n" "$INSTANCE"
+    git -C "$INSTANCE_DIR" pull --ff-only
+    dc build bot
+    wait_for_stack db
+    dc run --rm --no-deps bot npm run db:migrate
+    wait_for_stack
+    printf "Updated '%s' successfully.\n" "$INSTANCE"
+    ;;
+  backup)
+    db_user="$(env_value DB_USER)"
+    db_name="$(env_value DB_NAME)"
+    backup_dir="$BASE_PATH/backups/$INSTANCE"
+    mkdir -p "$backup_dir"
+    timestamp="$(date +%Y%m%d_%H%M%S)"
+    backup_file="$backup_dir/backup_${INSTANCE}_${timestamp}.dump"
+    temporary_file="$(mktemp "$backup_dir/.backup_${INSTANCE}.${timestamp}.XXXXXX")"
+    cleanup_backup() { rm -f -- "$temporary_file"; }
+    trap cleanup_backup ERR
+    printf "Creating PostgreSQL backup for '%s'...\n" "$INSTANCE"
+    dc exec -T db pg_dump -Fc --no-owner -U "$db_user" "$db_name" > "$temporary_file"
+    chmod 600 "$temporary_file"
+    mv "$temporary_file" "$backup_file"
+    trap - ERR
+    printf 'Backup created: %s\n' "$backup_file"
+    ;;
+  restore)
+    restore_file="${1:-}"
+    [[ -n "$restore_file" && -r "$restore_file" ]] ||
+      die "Usage: rsbot $INSTANCE restore /path/to/backup.dump"
+    read -r -p "Restore replaces database objects for '$INSTANCE'. Type the instance name to continue: " confirmation
+    [[ "$confirmation" == "$INSTANCE" ]] || { printf 'Restore cancelled.\n'; exit 0; }
+    db_user="$(env_value DB_USER)"
+    db_name="$(env_value DB_NAME)"
+    printf "Stopping bot and restoring '%s'...\n" "$INSTANCE"
+    dc stop bot
+    dc exec -T db pg_restore --clean --if-exists --no-owner --no-privileges \
+      -U "$db_user" -d "$db_name" < "$restore_file"
+    dc up -d --wait bot
+    printf "Restore completed for '%s'.\n" "$INSTANCE"
+    ;;
+  uninstall)
+    read -r -p "This permanently removes '$INSTANCE', its containers, and its database volume. Type the instance name to continue: " confirmation
+    [[ "$confirmation" == "$INSTANCE" ]] || { printf 'Uninstall cancelled.\n'; exit 0; }
+    dc down -v --remove-orphans
+    resolved_base="$(realpath -m "$BASE_PATH")"
+    resolved_instance="$(realpath -m "$INSTANCE_DIR")"
+    [[ "$resolved_instance" == "$resolved_base/$INSTANCE" ]] ||
+      die "Refusing to remove an unexpected path: $resolved_instance"
+    rm -rf -- "$INSTANCE_DIR"
+    printf "Instance '%s' was uninstalled. Other instances were not changed.\n" "$INSTANCE"
+    ;;
+  *)
+    die "Unknown command: $COMMAND"
+    ;;
+esac
