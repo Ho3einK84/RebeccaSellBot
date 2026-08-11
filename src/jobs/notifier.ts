@@ -18,6 +18,9 @@ import type { SupportedLocale, TranslationService } from '../domain/services/Tra
 import { getDb } from '../infra/db.js';
 import { notificationDeliveries, userConfigs, users } from '../infra/schema.js';
 import { logger } from '../infra/logger.js';
+import { buildScreen } from '../telegram/designSystem.js';
+import { tForLocale } from '../telegram/locale.js';
+import { escapeTelegramMarkdown } from '../telegram/rendering.js';
 import { jobRunner } from './workerRuntime.js';
 
 export const NOTIFIER_CONDITION_TYPES = ['low_traffic', 'near_expiry'] as const;
@@ -252,16 +255,34 @@ export async function runNotifierSweep(
           .map((type) => notificationReason(type, assessment, translationService, locale))
           .join('\n');
         const keyboard = new InlineKeyboard().text(
-          translationService.get('renewal_button', locale),
+          tForLocale(translationService, locale, 'renewal_button'),
           `renew:open:${cfg.configId}`
         );
         await telegramApi.sendMessage(
           cfg.telegramId,
-          translationService.get('renewal_notification', locale, {
-            username: cfg.configUsername,
-            reasons,
+          buildScreen({
+            emoji: '⚠️',
+            title: tForLocale(translationService, locale, 'renewal_notification_title'),
+            subtitle: tForLocale(translationService, locale, 'renewal_notification_subtitle'),
+            primary: {
+              emoji: '📱',
+              label: tForLocale(translationService, locale, 'renewal_service_label'),
+              value: `\`${escapeTelegramMarkdown(cfg.configUsername)}\``,
+            },
+            sections: [
+              {
+                emoji: '⚠️',
+                title: tForLocale(translationService, locale, 'renewal_attention_section'),
+                fields: [
+                  {
+                    label: tForLocale(translationService, locale, 'ui_status_attention'),
+                    value: reasons,
+                  },
+                ],
+              },
+            ],
           }),
-          { reply_markup: keyboard }
+          { parse_mode: 'Markdown', reply_markup: keyboard }
         );
         logger.info(
           {
@@ -388,14 +409,18 @@ function notificationReason(
 ): string {
   if (type === 'low_traffic') {
     const remainingGb = Math.max(0, assessment.remainingBytes ?? 0) / BYTES_PER_GB;
-    return translationService.get('renewal_reason_low_traffic', locale, {
-      remaining: `${formatNotificationNumber(Number(remainingGb.toFixed(2)), locale)} GB`,
-    });
+    return escapeTelegramMarkdown(
+      tForLocale(translationService, locale, 'renewal_reason_low_traffic', {
+        remaining: `${formatNotificationNumber(Number(remainingGb.toFixed(2)), locale)} GB`,
+      })
+    );
   }
   const daysRemaining = Math.max(1, Math.ceil((assessment.secondsToExpiry ?? 0) / 86_400));
-  return translationService.get('renewal_reason_near_expiry', locale, {
-    remaining: formatNotificationNumber(daysRemaining, locale),
-  });
+  return escapeTelegramMarkdown(
+    tForLocale(translationService, locale, 'renewal_reason_near_expiry', {
+      remaining: formatNotificationNumber(daysRemaining, locale),
+    })
+  );
 }
 
 function positiveFinite(value: number): number {

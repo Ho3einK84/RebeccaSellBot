@@ -182,7 +182,7 @@ export const adminSystemMenu = new Menu<MenuContext>('admin-system-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -392,7 +392,14 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     (ctx) => t(ctx, 'admin_menu_back'),
     async (ctx) => {
       ctx.menu.nav('main-menu');
-      await ctx.editMessageText(t(ctx, 'main_menu'));
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '🏠',
+          title: t(ctx, 'home_title'),
+          subtitle: t(ctx, 'home_subtitle'),
+        }),
+        { parse_mode: 'Markdown' }
+      );
     }
   );
 

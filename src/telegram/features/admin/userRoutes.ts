@@ -3,6 +3,7 @@ import type { MenuContext } from '../../types.js';
 import { backKeyboard, buildEmptyState, buildScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 
 const USER_PAGE_SIZE = 7;
 
@@ -104,9 +105,32 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderUserScreen(
       ctx,
-      tm(ctx, 'admin_user_quick_topup_confirm', {
-        telegram_id: targetId,
-        amount: localizedNumber(amount, ctx),
+      buildScreen({
+        emoji: '💳',
+        title: t(ctx, 'admin_user_wallet_section'),
+        subtitle: t(ctx, 'admin_user_quick_topup_confirm', {
+          telegram_id: targetId,
+          amount: localizedNumber(amount, ctx),
+        }),
+        primary: {
+          emoji: '➕',
+          label: t(ctx, 'admin_balance_add'),
+          value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
+        },
+        sections: [
+          {
+            emoji: '👤',
+            title: t(ctx, 'admin_user_identity_section'),
+            fields: [
+              {
+                emoji: '🆔',
+                label: t(ctx, 'admin_user_id_label'),
+                value: `\`${localizedNumber(targetId, ctx)}\``,
+              },
+            ],
+          },
+        ],
+        footer: `⚠️ ${t(ctx, 'admin_confirm_button')}`,
       }),
       new InlineKeyboard()
         .text(
@@ -162,8 +186,18 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     const desired = user.isBanned ? 0 : 1;
     await renderUserScreen(
       ctx,
-      t(ctx, user.isBanned ? 'admin_user_unban_confirm' : 'admin_user_ban_confirm', {
-        telegram_id: targetId,
+      buildScreen({
+        emoji: user.isBanned ? '✅' : '🚫',
+        title: t(ctx, 'admin_user_profile_title'),
+        subtitle: t(ctx, user.isBanned ? 'admin_user_unban_confirm' : 'admin_user_ban_confirm', {
+          telegram_id: targetId,
+        }),
+        primary: {
+          emoji: user.isBanned ? '🟢' : '⚠️',
+          label: t(ctx, 'admin_user_status_label'),
+          value: user.isBanned ? t(ctx, 'admin_active') : t(ctx, 'admin_banned'),
+        },
+        footer: `⚠️ ${t(ctx, 'admin_confirm_button')}`,
       }),
       new InlineKeyboard()
         .text(t(ctx, 'admin_confirm_button'), `admin:user:ban:${targetId}:${desired}`)
@@ -242,15 +276,16 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
           const remote = details[index];
           return {
             emoji: remote?.status === 'active' ? '🟢' : '⚪️',
-            title: config.configUsername,
+            title: escapeTelegramMarkdown(config.configUsername),
             fields: [
               {
                 emoji: '⚡',
                 label: t(ctx, 'subscription_status_label'),
-                value:
+                value: escapeTelegramMarkdown(
                   remote?.status ??
-                  config.panelStatus ??
-                  t(ctx, 'subscription_status_unknown_short'),
+                    config.panelStatus ??
+                    t(ctx, 'subscription_status_unknown_short')
+                ),
               },
               {
                 emoji: '📊',
@@ -298,7 +333,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
                 fields: events.map((event) => ({
                   emoji: '•',
                   label: localizedDate(event.createdAt, ctx),
-                  value: `${event.action} · ${event.actorTelegramId ?? 'system'}`,
+                  value: `${escapeTelegramMarkdown(event.action)} · ${event.actorTelegramId ?? 'system'}`,
                 })),
               },
             ],
@@ -361,8 +396,18 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     const desired = user.isBanned ? 0 : 1;
     await renderUserScreen(
       ctx,
-      t(ctx, user.isBanned ? 'admin_user_unban_confirm' : 'admin_user_ban_confirm', {
-        telegram_id: targetId,
+      buildScreen({
+        emoji: user.isBanned ? '✅' : '🚫',
+        title: t(ctx, 'admin_user_profile_title'),
+        subtitle: t(ctx, user.isBanned ? 'admin_user_unban_confirm' : 'admin_user_ban_confirm', {
+          telegram_id: targetId,
+        }),
+        primary: {
+          emoji: user.isBanned ? '🟢' : '⚠️',
+          label: t(ctx, 'admin_user_status_label'),
+          value: user.isBanned ? t(ctx, 'admin_active') : t(ctx, 'admin_banned'),
+        },
+        footer: `⚠️ ${t(ctx, 'admin_confirm_button')}`,
       }),
       new InlineKeyboard()
         .text(t(ctx, 'admin_confirm_button'), `admin:user:ban:${targetId}:${desired}`)
@@ -404,9 +449,15 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
           {
             emoji: '🔗',
             label: t(ctx, 'admin_user_username_label'),
-            value: user.username ? `@${user.username}` : t(ctx, 'admin_username_unset'),
+            value: user.username
+              ? `@${escapeTelegramMarkdown(user.username)}`
+              : t(ctx, 'admin_username_unset'),
           },
-          { emoji: '🏷️', label: t(ctx, 'admin_user_name_label'), value: displayName },
+          {
+            emoji: '🏷️',
+            label: t(ctx, 'admin_user_name_label'),
+            value: escapeTelegramMarkdown(displayName),
+          },
           {
             emoji: '📅',
             label: t(ctx, 'admin_user_joined_label'),
@@ -458,7 +509,7 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
           {
             emoji: '🎟️',
             label: t(ctx, 'admin_user_referral_code_label'),
-            value: `\`${user.referralCode}\``,
+            value: `\`${escapeTelegramMarkdown(user.referralCode)}\``,
           },
           {
             emoji: '👥',

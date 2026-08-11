@@ -1,9 +1,12 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { logger } from '../../../infra/logger.js';
-import { t, tm } from '../../locale.js';
+import { localizedNumber, t } from '../../locale.js';
 import { DEFAULT_SETTINGS } from '../../../domain/services/TranslationService.js';
 import {
+  buildEmptyState,
+  buildPromptScreen,
+  buildScreen,
   handleConversationCancel,
   promptInConversation,
   replyInConversation,
@@ -12,14 +15,13 @@ import {
 } from '../../ui.js';
 import { buildSelectionKeyboard } from './settings.js';
 import { requireAdmin } from './shared.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 
 export async function adminEditTextsConversation(
   conversation: MyConversation,
   ctx: ConversationContext
 ) {
   if (!(await requireAdmin(conversation, ctx)) || !ctx.services) return;
-
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_text_editor_intro'));
 
   // Step 1: choose the language. A cancel affordance is included because the
   // explicit keyboard replaces the default Cancel row shown by the prompt above.
@@ -30,18 +32,34 @@ export async function adminEditTextsConversation(
     .text(t(ctx, 'admin_menu_back'), 'nav:main')
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_text_language_prompt'), {
-    reply_markup: languageKeyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '📝',
+      t(ctx, 'admin_text_editor_title'),
+      t(ctx, 'admin_text_language_prompt'),
+      t(ctx, 'admin_text_editor_subtitle')
+    ),
+    { parse_mode: 'Markdown', reply_markup: languageKeyboard }
+  );
   const languageData = await waitForCallbackInput(conversation, ['text-lang:', 'nav:main']);
   if (languageData === undefined || languageData === 'nav:main') return;
   const locale = languageData.slice('text-lang:'.length) as 'fa' | 'en';
 
   // Step 2: choose a category.
   const categoryKeyboard = buildCategoryKeyboard(ctx);
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_text_category_prompt'), {
-    reply_markup: categoryKeyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '📂',
+      t(ctx, 'admin_text_editor_title'),
+      t(ctx, 'admin_text_category_prompt'),
+      t(ctx, 'admin_text_editor_subtitle')
+    ),
+    { parse_mode: 'Markdown', reply_markup: categoryKeyboard }
+  );
   const categoryData = await waitForCallbackInput(conversation, ['text-cat:']);
   if (categoryData === undefined) return;
   const categoryId = categoryData.slice('text-cat:'.length);
@@ -67,11 +85,7 @@ export async function adminEditTextsConversation(
   await promptInConversation(
     conversation,
     ctx,
-    tm(ctx, 'admin_text_value_prompt', {
-      key: qualifiedKey,
-      current_value: currentValue,
-      default_value: defaultValue,
-    }),
+    buildTextValueScreen(ctx, qualifiedKey, currentValue, defaultValue),
     { parse_mode: 'Markdown', reply_markup: actionKeyboard }
   );
 
@@ -84,7 +98,17 @@ export async function adminEditTextsConversation(
       await promptInConversation(
         conversation,
         ctx,
-        tm(ctx, 'admin_text_reset_confirm', { key: qualifiedKey }),
+        buildScreen({
+          emoji: '⚠️',
+          title: t(ctx, 'admin_text_reset_title'),
+          subtitle: t(ctx, 'admin_text_reset_subtitle'),
+          primary: {
+            emoji: '📝',
+            label: t(ctx, 'admin_text_key_label'),
+            value: escapeTelegramMarkdown(qualifiedKey),
+          },
+          footer: t(ctx, 'admin_text_reset_consequence'),
+        }),
         {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard()
@@ -101,11 +125,7 @@ export async function adminEditTextsConversation(
       await promptInConversation(
         conversation,
         ctx,
-        tm(ctx, 'admin_text_value_prompt', {
-          key: qualifiedKey,
-          current_value: currentValue,
-          default_value: defaultValue,
-        }),
+        buildTextValueScreen(ctx, qualifiedKey, currentValue, defaultValue),
         { parse_mode: 'Markdown', reply_markup: actionKeyboard }
       );
       continue;
@@ -118,7 +138,18 @@ export async function adminEditTextsConversation(
         await replyInConversation(
           conversation,
           ctx,
-          tm(ctx, 'admin_text_reset_success', { key: qualifiedKey }),
+          buildScreen({
+            emoji: '✅',
+            title: t(ctx, 'admin_text_reset_title'),
+            primary: {
+              emoji: '📝',
+              label: t(ctx, 'admin_text_key_label'),
+              value: escapeTelegramMarkdown(qualifiedKey),
+            },
+            footer: t(ctx, 'admin_text_reset_success', {
+              key: escapeTelegramMarkdown(qualifiedKey),
+            }),
+          }),
           { parse_mode: 'Markdown' }
         );
         const refreshedValue = ctx.services.translationService.get(qualifiedKey);
@@ -130,11 +161,7 @@ export async function adminEditTextsConversation(
         await promptInConversation(
           conversation,
           ctx,
-          tm(ctx, 'admin_text_value_prompt', {
-            key: qualifiedKey,
-            current_value: refreshedValue,
-            default_value: defaultValue,
-          }),
+          buildTextValueScreen(ctx, qualifiedKey, refreshedValue, defaultValue),
           { parse_mode: 'Markdown', reply_markup: updatedKeyboard }
         );
       } catch (resetErr) {
@@ -142,7 +169,12 @@ export async function adminEditTextsConversation(
           { err: resetErr, key: qualifiedKey },
           'Failed to reset text setting to default'
         );
-        await replyInConversation(conversation, ctx, t(ctx, 'operation_failed'));
+        await replyInConversation(
+          conversation,
+          ctx,
+          buildEmptyState('⚠️', t(ctx, 'admin_text_editor_title'), t(ctx, 'operation_failed')),
+          { parse_mode: 'Markdown' }
+        );
         return;
       }
       continue;
@@ -150,19 +182,47 @@ export async function adminEditTextsConversation(
 
     if (input.callbackQuery?.data === 'text-act:edit') {
       await input.answerCallbackQuery();
-      await promptInConversation(conversation, ctx, t(ctx, 'admin_text_edit_prompt'));
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildPromptScreen(
+          '✍️',
+          t(ctx, 'admin_text_editor_title'),
+          t(ctx, 'admin_text_edit_prompt'),
+          escapeTelegramMarkdown(qualifiedKey)
+        ),
+        { parse_mode: 'Markdown' }
+      );
       const valueInput = await waitForTextInput(conversation);
       if (valueInput === undefined) return;
       const value = valueInput.trim();
       if (!value || value.length > 3_500) {
-        await replyInConversation(conversation, ctx, t(ctx, 'admin_text_value_invalid'));
+        await replyInConversation(
+          conversation,
+          ctx,
+          buildEmptyState(
+            '⚠️',
+            t(ctx, 'admin_text_editor_title'),
+            t(ctx, 'admin_text_value_invalid')
+          ),
+          { parse_mode: 'Markdown' }
+        );
         return;
       }
       await ctx.services.translationService.updateSetting(qualifiedKey, value);
       await replyInConversation(
         conversation,
         ctx,
-        tm(ctx, 'admin_text_saved', { key: qualifiedKey }),
+        buildScreen({
+          emoji: '✅',
+          title: t(ctx, 'admin_text_saved_title'),
+          primary: {
+            emoji: '📝',
+            label: t(ctx, 'admin_text_key_label'),
+            value: escapeTelegramMarkdown(qualifiedKey),
+          },
+          footer: t(ctx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
+        }),
         { parse_mode: 'Markdown' }
       );
       return;
@@ -171,21 +231,89 @@ export async function adminEditTextsConversation(
     if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
       const value = input.message.text.trim();
       if (!value || value.length > 3_500) {
-        await replyInConversation(conversation, ctx, t(ctx, 'admin_text_value_invalid'));
+        await replyInConversation(
+          conversation,
+          ctx,
+          buildEmptyState(
+            '⚠️',
+            t(ctx, 'admin_text_editor_title'),
+            t(ctx, 'admin_text_value_invalid')
+          ),
+          { parse_mode: 'Markdown' }
+        );
         return;
       }
       await ctx.services.translationService.updateSetting(qualifiedKey, value);
       await replyInConversation(
         conversation,
         ctx,
-        tm(ctx, 'admin_text_saved', { key: qualifiedKey }),
+        buildScreen({
+          emoji: '✅',
+          title: t(ctx, 'admin_text_saved_title'),
+          primary: {
+            emoji: '📝',
+            label: t(ctx, 'admin_text_key_label'),
+            value: escapeTelegramMarkdown(qualifiedKey),
+          },
+          footer: t(ctx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
+        }),
         { parse_mode: 'Markdown' }
       );
       return;
     }
 
-    await promptInConversation(conversation, input, t(input, 'text_input_required'));
+    await promptInConversation(
+      conversation,
+      input,
+      buildPromptScreen('✍️', t(input, 'admin_text_editor_title'), t(input, 'text_input_required')),
+      { parse_mode: 'Markdown' }
+    );
   }
+}
+
+const MAX_TRANSLATION_PREVIEW_CHARACTERS = 1_000;
+
+function buildTextValueScreen(
+  ctx: ConversationContext,
+  qualifiedKey: string,
+  currentValue: string,
+  defaultValue: string
+): string {
+  const current = markdownSafeValuePreview(currentValue);
+  const fallback = markdownSafeValuePreview(defaultValue);
+  return buildScreen({
+    emoji: '📝',
+    title: t(ctx, 'admin_text_editor_title'),
+    subtitle: t(ctx, 'admin_text_editor_subtitle'),
+    primary: {
+      emoji: '🔑',
+      label: t(ctx, 'admin_text_key_label'),
+      value: escapeTelegramMarkdown(qualifiedKey),
+    },
+    sections: [
+      {
+        emoji: '✏️',
+        title: t(ctx, 'admin_text_current_value_label'),
+        fields: [{ label: '—', value: current.text }],
+      },
+      {
+        emoji: '📚',
+        title: t(ctx, 'admin_text_default_value_label'),
+        fields: [{ label: '—', value: fallback.text }],
+      },
+    ],
+    footer:
+      current.truncated || fallback.truncated ? t(ctx, 'admin_text_preview_truncated') : undefined,
+  });
+}
+
+function markdownSafeValuePreview(value: string): { text: string; truncated: boolean } {
+  const characters = [...value];
+  const truncated = characters.length > MAX_TRANSLATION_PREVIEW_CHARACTERS;
+  const visible = truncated
+    ? `${characters.slice(0, MAX_TRANSLATION_PREVIEW_CHARACTERS).join('')}…`
+    : value;
+  return { text: escapeTelegramMarkdown(visible), truncated };
 }
 
 const TEXT_KEYS_PER_PAGE = 8;
@@ -198,7 +326,12 @@ async function pickTextKey(
   if (!ctx.services) return undefined;
   const category = TEXT_CATEGORIES.find((c) => c.id === categoryId);
   if (!category) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_text_key_invalid'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_text_editor_title'), t(ctx, 'admin_text_key_invalid')),
+      { parse_mode: 'Markdown' }
+    );
     return undefined;
   }
 
@@ -213,7 +346,16 @@ async function pickTextKey(
       .sort();
 
     if (keys.length === 0) {
-      await replyInConversation(conversation, ctx, t(ctx, 'admin_text_no_keys_found'));
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '📭',
+          t(ctx, 'admin_text_editor_title'),
+          t(ctx, 'admin_text_no_keys_found')
+        ),
+        { parse_mode: 'Markdown' }
+      );
       return undefined;
     }
 
@@ -226,7 +368,7 @@ async function pickTextKey(
       category: t(ctx, category.labelKey),
       description: t(ctx, category.descriptionKey),
       count: keys.length,
-      ...(search ? { search } : {}),
+      ...(search ? { search: escapeTelegramMarkdown(search) } : {}),
     });
 
     const keyboard = new InlineKeyboard();
@@ -246,7 +388,39 @@ async function pickTextKey(
     keyboard.text(t(ctx, 'admin_text_back_categories'), 'text-back-categories');
     keyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
-    await promptInConversation(conversation, ctx, promptText, { reply_markup: keyboard });
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildScreen({
+        emoji: '📝',
+        title: t(ctx, 'admin_text_editor_title'),
+        subtitle: t(ctx, 'admin_text_editor_subtitle'),
+        primary: {
+          emoji: '📚',
+          label: t(ctx, 'admin_text_key_label'),
+          value: localizedNumber(keys.length, ctx),
+        },
+        sections: [
+          {
+            emoji: '📂',
+            title: t(ctx, category.labelKey),
+            fields: [
+              { label: t(ctx, category.labelKey), value: t(ctx, category.descriptionKey) },
+              ...(search
+                ? [
+                    {
+                      label: t(ctx, 'admin_text_search_button'),
+                      value: escapeTelegramMarkdown(search),
+                    },
+                  ]
+                : []),
+            ],
+          },
+        ],
+        footer: promptText,
+      }),
+      { parse_mode: 'Markdown', reply_markup: keyboard }
+    );
     const data = await waitForCallbackInput(conversation, [
       'text-key:',
       'text-search',
@@ -259,11 +433,26 @@ async function pickTextKey(
     if (data.startsWith('text-key:')) {
       const key = data.slice('text-key:'.length);
       if (ctx.services.translationService.hasTranslationKey(key)) return key;
-      await replyInConversation(conversation, ctx, t(ctx, 'admin_text_key_invalid'));
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'admin_text_editor_title'), t(ctx, 'admin_text_key_invalid')),
+        { parse_mode: 'Markdown' }
+      );
       return undefined;
     }
     if (data === 'text-search') {
-      await promptInConversation(conversation, ctx, t(ctx, 'admin_text_search_prompt'));
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildPromptScreen(
+          '🔎',
+          t(ctx, 'admin_text_editor_title'),
+          t(ctx, 'admin_text_search_prompt'),
+          t(ctx, category.labelKey)
+        ),
+        { parse_mode: 'Markdown' }
+      );
       const searchInput = await waitForTextInput(conversation);
       if (searchInput === undefined) return undefined;
       search = searchInput.trim();

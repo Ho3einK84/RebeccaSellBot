@@ -15,8 +15,9 @@ import {
   normalizeInputDigits,
   resolveContextLocale,
   t,
-  tmForLocale,
+  tForLocale,
 } from '../locale.js';
+import { escapeTelegramMarkdown } from '../rendering.js';
 import {
   buildEmptyState,
   buildScreen,
@@ -974,11 +975,58 @@ export async function transferConfigConversation(
         (await ctx.services.userService.getLocale(target.telegramId)) ?? resolveContextLocale(ctx);
       await ctx.api.sendMessage(
         target.telegramId,
-        tmForLocale(ctx.services.translationService, recipientLocale, 'transfer_recipient_notice', {
-          username: result.configUsername,
-          telegram_id: result.fromTelegramId,
+        buildScreen({
+          emoji: '🎁',
+          title: tForLocale(
+            ctx.services.translationService,
+            recipientLocale,
+            'transfer_recipient_notice_title'
+          ),
+          subtitle: tForLocale(
+            ctx.services.translationService,
+            recipientLocale,
+            'transfer_recipient_notice_subtitle'
+          ),
+          primary: {
+            emoji: '📱',
+            label: tForLocale(
+              ctx.services.translationService,
+              recipientLocale,
+              'transfer_service_label'
+            ),
+            value: `\`${escapeTelegramMarkdown(result.configUsername)}\``,
+          },
+          sections: [
+            {
+              emoji: '👤',
+              title: tForLocale(
+                ctx.services.translationService,
+                recipientLocale,
+                'transfer_sender_label'
+              ),
+              fields: [
+                {
+                  emoji: '🆔',
+                  label: tForLocale(
+                    ctx.services.translationService,
+                    recipientLocale,
+                    'transfer_recipient_id_label'
+                  ),
+                  value: `\`${result.fromTelegramId.toLocaleString(
+                    recipientLocale === 'fa' ? 'fa-IR' : 'en-US'
+                  )}\``,
+                },
+              ],
+            },
+          ],
         }),
-        { parse_mode: 'Markdown' }
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard().text(
+            tForLocale(ctx.services.translationService, recipientLocale, 'menu_my_subscriptions'),
+            'subs:page:1'
+          ),
+        }
       );
     } catch {
       // Transfer ownership is authoritative even if Telegram delivery is blocked.

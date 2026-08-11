@@ -2,7 +2,7 @@
 
 import type { Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
-import { backKeyboard } from '../ui.js';
+import { backKeyboard, buildEmptyState } from '../ui.js';
 import { t } from '../locale.js';
 import { registerPromoAdminRoutes } from './admin/promoRoutes.js';
 import { registerAdminUserRoutes } from './admin/userRoutes.js';
@@ -33,6 +33,9 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
   // spinner, including callbacks from messages created by older deployments.
   bot.on('callback_query:data', async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_expired'), show_alert: true });
-    await ctx.reply(t(ctx, 'button_expired_help'), { reply_markup: backKeyboard(ctx, 'main') });
+    await ctx.reply(
+      buildEmptyState('⌛️', t(ctx, 'button_expired'), t(ctx, 'button_expired_help')),
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+    );
   });
 }

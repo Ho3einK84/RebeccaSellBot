@@ -129,3 +129,13 @@ export function buildEmptyState(
 ): string {
   return buildScreen({ emoji, title, footer: [body, actionHint].filter(Boolean).join('\n\n') });
 }
+
+/** A focused input step for conversations that need the user to type or upload something. */
+export function buildPromptScreen(
+  emoji: string,
+  title: string,
+  body: string,
+  subtitle?: string
+): string {
+  return buildScreen({ emoji, title, subtitle, footer: body });
+}

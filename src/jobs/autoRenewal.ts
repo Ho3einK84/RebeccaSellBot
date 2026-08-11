@@ -3,7 +3,7 @@
  * low-traffic/near-expiry conditions used by the notifier become active.
  */
 import cron from 'node-cron';
-import type { Api } from 'grammy';
+import { InlineKeyboard, type Api } from 'grammy';
 import { eq } from 'drizzle-orm';
 import { getDb } from '../infra/db.js';
 import { userConfigs, users } from '../infra/schema.js';
@@ -20,6 +20,9 @@ import {
 } from '../domain/services/WalletService.js';
 import type { PricingService } from '../domain/services/PricingService.js';
 import type { SupportedLocale, TranslationService } from '../domain/services/TranslationService.js';
+import { buildScreen } from '../telegram/designSystem.js';
+import { tForLocale } from '../telegram/locale.js';
+import { escapeTelegramMarkdown } from '../telegram/rendering.js';
 import {
   PostgresNotificationDeliveryStore,
   assessNotificationConditions,
@@ -159,7 +162,36 @@ export async function runAutoRenewalSweep(
             const locale = config.locale ?? translationService.resolveLocale();
             await telegramApi.sendMessage(
               config.telegramId,
-              translationService.get('auto_renew_package_unavailable', locale)
+              buildScreen({
+                emoji: '⚠️',
+                title: tForLocale(
+                  translationService,
+                  locale,
+                  'auto_renew_package_unavailable_title'
+                ),
+                subtitle: tForLocale(
+                  translationService,
+                  locale,
+                  'auto_renew_package_unavailable_subtitle'
+                ),
+                primary: {
+                  emoji: '📱',
+                  label: tForLocale(translationService, locale, 'auto_renew_service_label'),
+                  value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+                },
+                footer: `ℹ️ ${tForLocale(
+                  translationService,
+                  locale,
+                  'auto_renew_package_unavailable'
+                )}`,
+              }),
+              {
+                parse_mode: 'Markdown',
+                reply_markup: new InlineKeyboard().text(
+                  tForLocale(translationService, locale, 'subscription_view_detail'),
+                  config.configId ? `config:view:${config.configId}` : 'subs:page:1'
+                ),
+              }
             );
           } catch (err) {
             await deliveryStore.release(config, ['auto_renew_package_missing'], new Date());
@@ -181,9 +213,43 @@ export async function runAutoRenewalSweep(
             const locale = config.locale ?? translationService.resolveLocale();
             await telegramApi.sendMessage(
               config.telegramId,
-              translationService.get('auto_renew_low_balance', locale, {
-                username: config.configUsername,
-              })
+              buildScreen({
+                emoji: '💳',
+                title: tForLocale(translationService, locale, 'auto_renew_low_balance_title'),
+                subtitle: tForLocale(translationService, locale, 'auto_renew_low_balance_subtitle'),
+                primary: {
+                  emoji: '♻️',
+                  label: tForLocale(translationService, locale, 'auto_renew_required_label'),
+                  value: formatAutoRenewalCurrency(
+                    selectedPackage.price,
+                    translationService,
+                    locale
+                  ),
+                },
+                sections: [
+                  {
+                    emoji: '📱',
+                    title: tForLocale(translationService, locale, 'auto_renew_service_label'),
+                    fields: [
+                      {
+                        label: tForLocale(translationService, locale, 'auto_renew_service_label'),
+                        value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+                      },
+                      {
+                        label: tForLocale(translationService, locale, 'auto_renew_balance_label'),
+                        value: formatAutoRenewalCurrency(balance, translationService, locale),
+                      },
+                    ],
+                  },
+                ],
+              }),
+              {
+                parse_mode: 'Markdown',
+                reply_markup: new InlineKeyboard().text(
+                  tForLocale(translationService, locale, 'menu_top_up'),
+                  'nav:wallet'
+                ),
+              }
             );
           } catch (err) {
             await deliveryStore.release(config, ['auto_renew_low_balance'], new Date());
@@ -229,11 +295,43 @@ export async function runAutoRenewalSweep(
         const expireAt = new Date(now.getTime() + selectedPackage.durationDays * 86_400_000);
         await telegramApi.sendMessage(
           config.telegramId,
-          translationService.get('auto_renew_success', locale, {
-            username: config.configUsername,
-            gb: String(selectedPackage.gbAmount),
-            expiry: expireAt.toISOString().slice(0, 10),
-          })
+          buildScreen({
+            emoji: '✅',
+            title: tForLocale(translationService, locale, 'auto_renew_success_title'),
+            subtitle: tForLocale(translationService, locale, 'auto_renew_success_subtitle'),
+            primary: {
+              emoji: '📱',
+              label: tForLocale(translationService, locale, 'auto_renew_service_label'),
+              value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+            },
+            sections: [
+              {
+                emoji: '📦',
+                title: tForLocale(translationService, locale, 'auto_renew_package_label'),
+                fields: [
+                  {
+                    label: tForLocale(translationService, locale, 'auto_renew_package_label'),
+                    value: escapeTelegramMarkdown(selectedPackage.name),
+                  },
+                  {
+                    label: tForLocale(translationService, locale, 'auto_renew_quota_label'),
+                    value: `${formatAutoRenewalNumber(selectedPackage.gbAmount, locale)} GB`,
+                  },
+                  {
+                    label: tForLocale(translationService, locale, 'auto_renew_expiry_label'),
+                    value: expireAt.toLocaleDateString(locale === 'fa' ? 'fa-IR' : 'en-US'),
+                  },
+                ],
+              },
+            ],
+          }),
+          {
+            parse_mode: 'Markdown',
+            reply_markup: new InlineKeyboard().text(
+              tForLocale(translationService, locale, 'subscription_view_detail'),
+              config.configId ? `config:view:${config.configId}` : 'subs:page:1'
+            ),
+          }
         );
       } catch (err) {
         logger.warn(
@@ -260,4 +358,20 @@ export async function runAutoRenewalSweep(
 
 function normalizeLocale(locale: string): SupportedLocale | undefined {
   return locale === 'en' || locale === 'fa' ? locale : undefined;
+}
+
+function formatAutoRenewalNumber(value: number, locale: SupportedLocale): string {
+  return value.toLocaleString(locale === 'fa' ? 'fa-IR' : 'en-US');
+}
+
+function formatAutoRenewalCurrency(
+  value: number,
+  translationService: TranslationService,
+  locale: SupportedLocale
+): string {
+  return `${formatAutoRenewalNumber(value, locale)} ${tForLocale(
+    translationService,
+    locale,
+    'currency_toman'
+  )}`;
 }

@@ -1,7 +1,15 @@
 import type { ConversationContext, MyConversation } from '../../types.js';
-import { t } from '../../locale.js';
-import { promptInConversation, replyInConversation, waitForTextInput } from '../../ui.js';
+import { localizedNumber, t } from '../../locale.js';
+import {
+  buildEmptyState,
+  buildPromptScreen,
+  buildScreen,
+  promptInConversation,
+  replyInConversation,
+  waitForTextInput,
+} from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 
 export async function adminAddAdminConversation(
   conversation: MyConversation,
@@ -9,19 +17,46 @@ export async function adminAddAdminConversation(
 ): Promise<void> {
   const actorTelegramId = await requireAdmin(conversation, ctx);
   if (!actorTelegramId || !ctx.services) return;
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_add_admin_prompt'));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '➕',
+      t(ctx, 'admin_registry_title'),
+      t(ctx, 'admin_add_admin_prompt'),
+      t(ctx, 'admin_registry_subtitle')
+    ),
+    { parse_mode: 'Markdown' }
+  );
   const input = await waitForTextInput(conversation);
   if (input === undefined) return;
   const telegramId = parsePositiveSafeInteger(input);
   if (!telegramId) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_invalid_telegram_id'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_registry_title'), t(ctx, 'admin_invalid_telegram_id')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
   const added = await ctx.services.adminService.addAdmin(telegramId, actorTelegramId);
   await replyInConversation(
     conversation,
     ctx,
-    t(ctx, added ? 'admin_admin_added' : 'admin_admin_already_exists', { telegram_id: telegramId })
+    buildScreen({
+      emoji: added ? '✅' : 'ℹ️',
+      title: t(ctx, 'admin_registry_title'),
+      primary: {
+        emoji: '👤',
+        label: t(ctx, 'admin_registry_id_label'),
+        value: localizedNumber(telegramId, ctx),
+      },
+      footer: t(ctx, added ? 'admin_admin_added' : 'admin_admin_already_exists', {
+        telegram_id: telegramId,
+      }),
+    }),
+    { parse_mode: 'Markdown' }
   );
 }
 
@@ -35,15 +70,39 @@ export async function adminAssignOrphanConversation(
     (outsideCtx) => outsideCtx.session.orphanAssignIssueId as string | undefined
   );
   if (!issueId) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_orphan_issue_missing'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_orphan_detail_title'),
+        t(ctx, 'admin_orphan_issue_missing')
+      ),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_orphan_assign_prompt'));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '👤',
+      t(ctx, 'admin_orphan_detail_title'),
+      t(ctx, 'admin_orphan_assign_prompt'),
+      t(ctx, 'admin_orphan_queue_subtitle')
+    ),
+    { parse_mode: 'Markdown' }
+  );
   const query = await waitForTextInput(conversation);
   if (query === undefined) return;
   const target = await ctx.services.userService.findProfile(query);
   if (!target) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_user_not_found'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_orphan_detail_title'), t(ctx, 'admin_user_not_found')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
   try {
@@ -59,13 +118,48 @@ export async function adminAssignOrphanConversation(
       conversation,
       ctx,
       result
-        ? t(ctx, 'admin_orphan_assigned', {
-            username: result.configUsername,
-            telegram_id: target.telegramId,
+        ? buildScreen({
+            emoji: '✅',
+            title: t(ctx, 'admin_orphan_detail_title'),
+            primary: {
+              emoji: '🧩',
+              label: t(ctx, 'admin_orphan_service_label'),
+              value: escapeTelegramMarkdown(result.configUsername),
+            },
+            sections: [
+              {
+                emoji: '👤',
+                title: t(ctx, 'admin_registry_section'),
+                fields: [
+                  {
+                    label: t(ctx, 'admin_orphan_owner_label'),
+                    value: localizedNumber(target.telegramId, ctx),
+                  },
+                ],
+              },
+            ],
+            footer: t(ctx, 'admin_orphan_assigned', {
+              username: result.configUsername,
+              telegram_id: target.telegramId,
+            }),
           })
-        : t(ctx, 'admin_orphan_issue_missing')
+        : buildEmptyState(
+            '⚠️',
+            t(ctx, 'admin_orphan_detail_title'),
+            t(ctx, 'admin_orphan_issue_missing')
+          ),
+      { parse_mode: 'Markdown' }
     );
   } catch {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_orphan_assign_failed'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_orphan_detail_title'),
+        t(ctx, 'admin_orphan_assign_failed')
+      ),
+      { parse_mode: 'Markdown' }
+    );
   }
 }

@@ -1,7 +1,7 @@
 import type { Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
 import { t } from '../../locale.js';
-import { buildScreen } from '../../ui.js';
+import { buildEmptyState, buildScreen } from '../../ui.js';
 import {
   promoCenterKeyboard,
   promoDeleteConfirmKeyboard,
@@ -16,7 +16,12 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
   async function renderDetail(ctx: MenuContext, id: string): Promise<void> {
     const view = await promoDetailView(ctx, id);
     if (!view) {
-      await ctx.reply(t(ctx, 'admin_promo_not_found'), { reply_markup: promoCenterKeyboard(ctx) });
+      await renderPromoScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_not_found')),
+        promoCenterKeyboard(ctx),
+        'Markdown'
+      );
       return;
     }
     await renderPromoScreen(ctx, view.text, view.keyboard, 'Markdown');

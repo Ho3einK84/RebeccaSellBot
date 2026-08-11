@@ -143,7 +143,11 @@ describe('runAutoRenewalSweep', () => {
       gbAmount: 30,
       durationDays: 30,
     });
-    expect(ctx.telegramApi.sendMessage).toHaveBeenCalledWith(77, 'auto_renew_success');
+    expect(ctx.telegramApi.sendMessage).toHaveBeenCalledWith(
+      77,
+      expect.stringContaining('auto_renew_success_title'),
+      expect.objectContaining({ parse_mode: 'Markdown', reply_markup: expect.anything() })
+    );
   });
 
   it('deduplicates the low-balance notice across sweeps', async () => {
@@ -178,7 +182,11 @@ describe('runAutoRenewalSweep', () => {
       'auto_renew_package_missing',
       NOW
     );
-    expect(ctx.telegramApi.sendMessage).toHaveBeenCalledWith(77, 'auto_renew_package_unavailable');
+    expect(ctx.telegramApi.sendMessage).toHaveBeenCalledWith(
+      77,
+      expect.stringContaining('auto_renew_package_unavailable_title'),
+      expect.objectContaining({ parse_mode: 'Markdown', reply_markup: expect.anything() })
+    );
     expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();
   });
 

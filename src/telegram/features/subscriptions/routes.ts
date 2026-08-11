@@ -215,13 +215,26 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     const pendingPromo = await getPendingPromoPricing(ctx, ctx.from.id, pkg.price, pkg.gbAmount);
     if (pendingPromo.messageKey) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable'), show_alert: true });
-      await ctx.reply(t(ctx, pendingPromo.messageKey), { reply_markup: backKeyboard(ctx) });
+      await renderSubscriptionScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'renewal_selection_title'), t(ctx, pendingPromo.messageKey)),
+        backKeyboard(ctx)
+      );
       return;
     }
     const price = pendingPromo.quote?.finalAmount ?? pkg.price;
     if ((await ctx.services!.walletService.getBalance(ctx.from.id)) < price) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
-      await ctx.reply(t(ctx, 'insufficient_balance'), { reply_markup: backKeyboard(ctx) });
+      await renderSubscriptionScreen(
+        ctx,
+        buildEmptyState(
+          '💳',
+          t(ctx, 'insufficient_balance_title'),
+          t(ctx, 'insufficient_balance'),
+          t(ctx, 'insufficient_balance_hint')
+        ),
+        backKeyboard(ctx)
+      );
       return;
     }
     await ctx.answerCallbackQuery();
@@ -817,7 +830,11 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
       rememberArtifactMessage(ctx.session, photo.message_id);
     } catch {
-      await ctx.reply(t(ctx, 'subscription_qr_failed'), { reply_markup: backKeyboard(ctx) });
+      await renderSubscriptionScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'subscription_qr_title'), t(ctx, 'subscription_qr_failed')),
+        backKeyboard(ctx)
+      );
     }
   });
 }

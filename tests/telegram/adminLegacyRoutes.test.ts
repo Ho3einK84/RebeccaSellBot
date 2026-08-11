@@ -73,9 +73,14 @@ describe('legacy admin callback compatibility', () => {
     expect(approveTopup).not.toHaveBeenCalled();
     expect(rejectTopup).not.toHaveBeenCalled();
     expect(answerCallbackQuery).toHaveBeenCalledWith({ text: 'button_refreshed' });
-    expect(reply).toHaveBeenCalledWith(
-      'admin_receipt_approve_confirm',
-      expect.objectContaining({ reply_markup: expect.anything() })
+    const [confirmationText, confirmationOptions] = reply.mock.calls[0] ?? [];
+    expect(confirmationText).toContain('admin_receipt_approve_title');
+    expect(confirmationText).toContain('admin_receipt_approve_consequence');
+    expect(confirmationOptions).toEqual(
+      expect.objectContaining({
+        parse_mode: 'Markdown',
+        reply_markup: expect.anything(),
+      })
     );
   });
 
@@ -109,9 +114,14 @@ describe('legacy admin callback compatibility', () => {
     expect(getPendingTopup).toHaveBeenCalledWith('receipt_1');
     expect(approveTopup).not.toHaveBeenCalled();
     expect(rejectTopup).not.toHaveBeenCalled();
-    expect(reply).toHaveBeenCalledWith(
-      'admin_receipt_approve_confirm',
-      expect.objectContaining({ reply_markup: expect.anything() })
+    const [confirmationText, confirmationOptions] = reply.mock.calls[0] ?? [];
+    expect(confirmationText).toContain('admin_receipt_approve_title');
+    expect(confirmationText).toContain('admin_receipt_approve_consequence');
+    expect(confirmationOptions).toEqual(
+      expect.objectContaining({
+        parse_mode: 'Markdown',
+        reply_markup: expect.anything(),
+      })
     );
   });
 
@@ -137,9 +147,10 @@ describe('legacy admin callback compatibility', () => {
     await route.handler(ctx);
 
     expect(adjustBalanceAdmin).not.toHaveBeenCalled();
-    expect(reply).toHaveBeenCalledWith(
-      'admin_user_quick_topup_confirm',
-      expect.objectContaining({ reply_markup: expect.anything() })
+    const [confirmationText, confirmationOptions] = reply.mock.calls[0] ?? [];
+    expect(String(confirmationText)).toContain('admin_user_quick_topup_confirm');
+    expect(confirmationOptions).toEqual(
+      expect.objectContaining({ parse_mode: 'Markdown', reply_markup: expect.anything() })
     );
   });
 
@@ -165,8 +176,9 @@ describe('legacy admin callback compatibility', () => {
     expect(findProfile).toHaveBeenCalledWith('42');
     expect(setBanned).not.toHaveBeenCalled();
     expect(answerCallbackQuery).toHaveBeenCalledWith({ text: 'button_refreshed' });
-    expect(reply).toHaveBeenCalledWith(
-      'admin_user_ban_confirm',
+    const [confirmationText, confirmationOptions] = reply.mock.calls[0] ?? [];
+    expect(String(confirmationText)).toContain('admin_user_ban_confirm');
+    expect(confirmationOptions).toEqual(
       expect.objectContaining({ reply_markup: expect.anything() })
     );
   });

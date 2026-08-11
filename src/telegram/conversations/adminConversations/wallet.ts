@@ -1,14 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { logger } from '../../../infra/logger.js';
-import {
-  localizedDateForLocale,
-  localizedNumber,
-  localizedNumberForLocale,
-  t,
-  tForLocale,
-  tmForLocale,
-} from '../../locale.js';
+import { localizedNumber, localizedNumberForLocale, t, tForLocale } from '../../locale.js';
 import {
   PendingTopupReceiptError,
   type AdminBalanceOperation,
@@ -69,6 +62,19 @@ function buildPaymentInfoCard(
       },
     ],
     footer: options.footer,
+  });
+}
+
+function buildAdminWalletPrompt(
+  ctx: ConversationContext,
+  body: string,
+  options: { emoji?: string; title?: string; subtitle?: string } = {}
+): string {
+  return buildScreen({
+    emoji: options.emoji ?? '💳',
+    title: options.title ?? t(ctx, 'admin_user_wallet_section'),
+    subtitle: options.subtitle,
+    footer: body,
   });
 }
 
@@ -255,17 +261,72 @@ async function notifyAdminsOfReceipt(
       const adminLocale =
         (await ctx.services.userService.getLocale(adminId)) ??
         ctx.services.translationService.resolveLocale();
-      const caption = tmForLocale(
-        ctx.services.translationService,
-        adminLocale,
-        'admin_pending_receipt',
-        {
-          receipt_id: receiptId,
-          telegram_id: telegramId,
-          amount: localizedNumberForLocale(amount, adminLocale),
-          created_at: localizedDateForLocale(createdAt, adminLocale),
-        }
-      );
+      const caption = buildScreen({
+        emoji: '🧾',
+        title: tForLocale(
+          ctx.services.translationService,
+          adminLocale,
+          'admin_receipt_review_title'
+        ),
+        subtitle: tForLocale(
+          ctx.services.translationService,
+          adminLocale,
+          'admin_receipt_review_subtitle'
+        ),
+        primary: {
+          emoji: '⏳',
+          label: tForLocale(
+            ctx.services.translationService,
+            adminLocale,
+            'admin_receipt_queue_pending_label'
+          ),
+          value: tForLocale(ctx.services.translationService, adminLocale, 'ui_status_pending'),
+        },
+        sections: [
+          {
+            emoji: '💳',
+            title: tForLocale(
+              ctx.services.translationService,
+              adminLocale,
+              'admin_receipt_queue_section'
+            ),
+            fields: [
+              {
+                label: tForLocale(
+                  ctx.services.translationService,
+                  adminLocale,
+                  'admin_receipt_id_label'
+                ),
+                value: escapeTelegramMarkdown(receiptId),
+              },
+              {
+                label: tForLocale(
+                  ctx.services.translationService,
+                  adminLocale,
+                  'admin_receipt_user_label'
+                ),
+                value: localizedNumberForLocale(telegramId, adminLocale),
+              },
+              {
+                label: tForLocale(
+                  ctx.services.translationService,
+                  adminLocale,
+                  'admin_receipt_amount_label'
+                ),
+                value: `${localizedNumberForLocale(amount, adminLocale)} ${tForLocale(ctx.services.translationService, adminLocale, 'currency_toman')}`,
+              },
+              {
+                label: tForLocale(
+                  ctx.services.translationService,
+                  adminLocale,
+                  'admin_receipt_created_label'
+                ),
+                value: createdAt.toLocaleDateString(adminLocale === 'fa' ? 'fa-IR' : 'en-US'),
+              },
+            ],
+          },
+        ],
+      });
       const receiptMenu = new InlineKeyboard()
         .text(
           tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_approve'),
@@ -300,16 +361,38 @@ export async function adminSetBalanceConversation(
     return selected;
   });
   while (targetId === undefined) {
-    await promptInConversation(conversation, ctx, t(ctx, 'admin_target_telegram_id_prompt'));
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildAdminWalletPrompt(ctx, t(ctx, 'admin_target_telegram_id_prompt'), {
+        emoji: '👤',
+        title: t(ctx, 'admin_user_profile_title'),
+      }),
+      { parse_mode: 'Markdown' }
+    );
     const userInput = await waitForTextInput(conversation);
     if (userInput === undefined) return;
     targetId = parsePositiveSafeInteger(userInput);
     if (targetId === undefined) {
-      await promptInConversation(conversation, ctx, t(ctx, 'admin_invalid_telegram_id'));
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'admin_user_profile_title'),
+          t(ctx, 'admin_invalid_telegram_id')
+        ),
+        { parse_mode: 'Markdown' }
+      );
     }
   }
   if (!(await ctx.services.userService.exists(targetId))) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_user_not_found'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('📭', t(ctx, 'admin_user_profile_title'), t(ctx, 'admin_user_not_found')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
 
@@ -320,14 +403,25 @@ export async function adminSetBalanceConversation(
     .text(t(ctx, 'admin_balance_set'), 'balance-op:set')
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_balance_operation_prompt'), {
-    reply_markup: operationKeyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildAdminWalletPrompt(ctx, t(ctx, 'admin_balance_operation_prompt'), {
+      emoji: '💳',
+      title: t(ctx, 'admin_user_wallet_section'),
+    }),
+    { parse_mode: 'Markdown', reply_markup: operationKeyboard }
+  );
   const operationInput = await waitForCallbackInput(conversation, ['balance-op:']);
   if (!operationInput) return;
   const operationValue = operationInput.slice('balance-op:'.length);
   if (!['add', 'deduct', 'set'].includes(operationValue)) {
-    await replyInConversation(conversation, ctx, t(ctx, 'operation_failed'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_user_wallet_section'), t(ctx, 'operation_failed')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
   const operation = operationValue as AdminBalanceOperation;
@@ -343,22 +437,46 @@ export async function adminSearchUserConversation(
   const adminId = await requireAdmin(conversation, ctx);
   if (!adminId || !ctx.services) return;
 
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_search_prompt'));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildAdminWalletPrompt(ctx, t(ctx, 'admin_search_prompt'), {
+      emoji: '🔎',
+      title: t(ctx, 'admin_users_list_title'),
+      subtitle: t(ctx, 'admin_users_list_subtitle'),
+    }),
+    { parse_mode: 'Markdown' }
+  );
   const searchInput = await waitForTextInput(conversation);
   if (searchInput === undefined) return;
   const query = searchInput.trim().replace(/^@/, '');
 
   const u = await ctx.services.userService.findProfile(query);
   if (!u) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_user_not_found'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('📭', t(ctx, 'admin_users_list_title'), t(ctx, 'admin_user_not_found')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
 
   await replyInConversation(
     conversation,
     ctx,
-    t(ctx, 'admin_user_search_found', { telegram_id: u.telegramId }),
+    buildScreen({
+      emoji: '✅',
+      title: t(ctx, 'admin_user_profile_title'),
+      subtitle: t(ctx, 'admin_user_search_found', { telegram_id: u.telegramId }),
+      primary: {
+        emoji: '🆔',
+        label: t(ctx, 'admin_user_id_label'),
+        value: `\`${localizedNumber(u.telegramId, ctx)}\``,
+      },
+    }),
     {
+      parse_mode: 'Markdown',
       reply_markup: new InlineKeyboard()
         .text(t(ctx, 'admin_user_open_profile_button'), `admin:user:view:${u.telegramId}`)
         .row()
@@ -384,11 +502,16 @@ async function applyAdminBalanceOperation(
     await promptInConversation(
       conversation,
       ctx,
-      isSet
-        ? t(ctx, 'admin_new_balance_prompt')
-        : t(ctx, 'admin_balance_amount_prompt', {
-            operation: t(ctx, `admin_balance_${operation}`),
-          })
+      buildAdminWalletPrompt(
+        ctx,
+        isSet
+          ? t(ctx, 'admin_new_balance_prompt')
+          : t(ctx, 'admin_balance_amount_prompt', {
+              operation: t(ctx, `admin_balance_${operation}`),
+            }),
+        { title: t(ctx, 'admin_user_wallet_section') }
+      ),
+      { parse_mode: 'Markdown' }
     );
     const amountInput = await waitForTextInput(conversation);
     if (amountInput === undefined) return;
@@ -396,7 +519,12 @@ async function applyAdminBalanceOperation(
       ? parseNonnegativeSafeInteger(amountInput)
       : parsePositiveSafeInteger(amountInput);
     if (amount === undefined) {
-      await promptInConversation(conversation, ctx, t(ctx, 'admin_invalid_balance'));
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'admin_user_wallet_section'), t(ctx, 'admin_invalid_balance')),
+        { parse_mode: 'Markdown' }
+      );
     }
   }
 
@@ -408,13 +536,40 @@ async function applyAdminBalanceOperation(
   await promptInConversation(
     conversation,
     ctx,
-    t(ctx, 'admin_balance_confirm', {
-      telegram_id: telegramId,
-      operation: t(ctx, `admin_balance_${operation}`),
-      amount: localizedNumber(amount, ctx),
-      current_balance: localizedNumber(currentBalance, ctx),
+    buildScreen({
+      emoji: '⚠️',
+      title: t(ctx, 'admin_user_wallet_section'),
+      subtitle: t(ctx, 'admin_balance_confirm', {
+        telegram_id: telegramId,
+        operation: t(ctx, `admin_balance_${operation}`),
+        amount: localizedNumber(amount, ctx),
+        current_balance: localizedNumber(currentBalance, ctx),
+      }),
+      primary: {
+        emoji: operation === 'deduct' ? '➖' : '➕',
+        label: t(ctx, `admin_balance_${operation}`),
+        value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      },
+      sections: [
+        {
+          emoji: '👤',
+          title: t(ctx, 'admin_user_identity_section'),
+          fields: [
+            {
+              emoji: '🆔',
+              label: t(ctx, 'admin_user_id_label'),
+              value: `\`${localizedNumber(telegramId, ctx)}\``,
+            },
+            {
+              emoji: '💰',
+              label: t(ctx, 'admin_user_balance_label'),
+              value: `${localizedNumber(currentBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+            },
+          ],
+        },
+      ],
     }),
-    { reply_markup: confirmationKeyboard }
+    { parse_mode: 'Markdown', reply_markup: confirmationKeyboard }
   );
   if (!(await waitForCallbackInput(conversation, ['balance-confirm']))) return;
 
@@ -429,10 +584,20 @@ async function applyAdminBalanceOperation(
     await replyInConversation(
       conversation,
       ctx,
-      t(ctx, 'admin_balance_updated', {
-        telegram_id: telegramId,
-        balance: localizedNumber(updated, ctx),
-      })
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'admin_user_wallet_section'),
+        subtitle: t(ctx, 'admin_balance_updated', {
+          telegram_id: telegramId,
+          balance: localizedNumber(updated, ctx),
+        }),
+        primary: {
+          emoji: '💰',
+          label: t(ctx, 'admin_user_balance_label'),
+          value: `${localizedNumber(updated, ctx)} ${t(ctx, 'currency_toman')}`,
+        },
+      }),
+      { parse_mode: 'Markdown' }
     );
     try {
       const locale =
@@ -440,9 +605,34 @@ async function applyAdminBalanceOperation(
         ctx.services.translationService.resolveLocale();
       await ctx.api.sendMessage(
         telegramId,
-        tForLocale(ctx.services.translationService, locale, 'balance_adjusted_notification', {
-          balance: localizedNumberForLocale(updated, locale),
-        })
+        buildScreen({
+          emoji: '💳',
+          title: tForLocale(ctx.services.translationService, locale, 'wallet_dashboard_title'),
+          subtitle: tForLocale(
+            ctx.services.translationService,
+            locale,
+            'balance_adjusted_notification',
+            {
+              balance: localizedNumberForLocale(updated, locale),
+            }
+          ),
+          primary: {
+            emoji: '💰',
+            label: tForLocale(ctx.services.translationService, locale, 'wallet_available_balance'),
+            value: `${localizedNumberForLocale(updated, locale)} ${tForLocale(
+              ctx.services.translationService,
+              locale,
+              'currency_toman'
+            )}`,
+          },
+        }),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard().text(
+            tForLocale(ctx.services.translationService, locale, 'menu_wallet'),
+            'nav:wallet'
+          ),
+        }
       );
     } catch (notifyErr) {
       logger.warn({ notifyErr, telegramId }, 'Could not notify user about admin wallet adjustment');
@@ -451,9 +641,14 @@ async function applyAdminBalanceOperation(
     await replyInConversation(
       conversation,
       ctx,
-      err instanceof Error && err.message === 'ADMIN_BALANCE_BELOW_RESERVED'
-        ? t(ctx, 'admin_balance_below_reserved')
-        : t(ctx, 'admin_balance_update_failed')
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_user_wallet_section'),
+        err instanceof Error && err.message === 'ADMIN_BALANCE_BELOW_RESERVED'
+          ? t(ctx, 'admin_balance_below_reserved')
+          : t(ctx, 'admin_balance_update_failed')
+      ),
+      { parse_mode: 'Markdown' }
     );
   }
 }

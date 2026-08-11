@@ -7,12 +7,14 @@ import {
   renderHomeDashboard,
   renderShopMenuText,
   shopMenu,
+  renderWalletDashboard,
+  walletMenu,
 } from '../keyboards/mainMenu.js';
 import { adminMenu, renderAdminHome } from '../keyboards/adminMenu.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
-import { formatSubscriptionLink, observedContextLocale, t, tm } from '../locale.js';
-import { backKeyboard } from '../ui.js';
+import { formatSubscriptionLink, observedContextLocale, t } from '../locale.js';
+import { backKeyboard, buildEmptyState, buildScreen, rememberArtifactMessage } from '../ui.js';
 
 export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   // Menus (register submenus before registering the tree)
@@ -57,7 +59,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.command('admin', async (ctx) => {
     const telegramId = ctx.from?.id;
     if (!telegramId || !services.isAdmin(telegramId)) {
-      await ctx.reply(t(ctx, 'admin_access_denied'));
+      await ctx.reply(
+        buildEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
+        { parse_mode: 'Markdown', reply_markup: mainMenu }
+      );
       return;
     }
     await ctx.reply(renderAdminHome(ctx), { parse_mode: 'Markdown', reply_markup: adminMenu });
@@ -95,11 +100,16 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
         { err, telegramId, locale },
         'Failed to save selected Telegram language preference'
       );
-      await ctx.reply(t(ctx, 'language_update_failed'), { reply_markup: backKeyboard(ctx) });
+      await renderBaseScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'language_selection_title'), t(ctx, 'language_update_failed')),
+        backKeyboard(ctx),
+        'Markdown'
+      );
     }
   });
 
-  bot.callbackQuery(/^nav:(home|main|admin)$/u, async (ctx) => {
+  bot.callbackQuery(/^nav:(home|main|admin|wallet|shop)$/u, async (ctx) => {
     const requested = ctx.match[1];
     const telegramId = ctx.from.id;
     const showAdmin = requested === 'admin';
@@ -108,17 +118,23 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     ctx.session.adminPanelDraft = undefined;
     await ctx.answerCallbackQuery();
     if (showAdmin && !services.isAdmin(telegramId)) {
-      await ctx.reply(t(ctx, 'admin_access_denied'), { reply_markup: mainMenu });
+      await renderBaseScreen(
+        ctx,
+        buildEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
+        mainMenu,
+        'Markdown'
+      );
       return;
     }
     if (showAdmin) {
-      await ctx.reply(renderAdminHome(ctx), { parse_mode: 'Markdown', reply_markup: adminMenu });
+      await renderBaseScreen(ctx, renderAdminHome(ctx), adminMenu, 'Markdown');
+    } else if (requested === 'wallet') {
+      await renderBaseScreen(ctx, await renderWalletDashboard(ctx), walletMenu, 'Markdown');
+    } else if (requested === 'shop') {
+      await renderBaseScreen(ctx, await renderShopMenuText(ctx), shopMenu, 'Markdown');
     } else {
       const dashboardText = await renderHomeDashboard(ctx);
-      await ctx.reply(dashboardText, {
-        parse_mode: 'Markdown',
-        reply_markup: mainMenu,
-      });
+      await renderBaseScreen(ctx, dashboardText, mainMenu, 'Markdown');
     }
   });
 
@@ -145,22 +161,40 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       result = { success: false, messageKey: 'trial_creation_failed' };
     }
 
-    const msg = t(ctx, result.messageKey);
     if (!result.success) {
-      await ctx.reply(msg, { reply_markup: backKeyboard(ctx, 'main') });
+      await renderBaseScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'trial_preview_heading'), t(ctx, result.messageKey)),
+        backKeyboard(ctx, 'main'),
+        'Markdown'
+      );
       return;
     }
 
-    if (result.subUrl) {
-      await ctx.reply(
-        `${msg}\n\n${tm(ctx, 'trial_subscription_url', {
-          sub_url: formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable')),
-        })}`,
-        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
-      );
-    } else {
-      await ctx.reply(msg, { reply_markup: backKeyboard(ctx, 'main') });
-    }
+    const trialMessage = await ctx.reply(
+      buildScreen({
+        emoji: '🎉',
+        title: t(ctx, 'trial_preview_heading'),
+        subtitle: t(ctx, 'trial_success'),
+        sections: [
+          {
+            emoji: '🔗',
+            title: t(ctx, 'subscription_link_label'),
+            fields: [
+              {
+                label: t(ctx, 'subscription_link_label'),
+                value: result.subUrl
+                  ? formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable'))
+                  : t(ctx, 'subscription_link_unavailable'),
+              },
+            ],
+          },
+        ],
+        footer: t(ctx, 'trial_terms'),
+      }),
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+    );
+    rememberArtifactMessage(ctx.session, trialMessage.message_id);
   });
 
   // Direct top-up CTA from insufficient balance screen
@@ -183,10 +217,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.callbackQuery('shop:clear_promo', async (ctx) => {
     delete ctx.session.pendingPromo;
     await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable') });
-    await ctx.reply(await renderShopMenuText(ctx), {
-      parse_mode: 'Markdown',
-      reply_markup: shopMenu,
-    });
+    await renderBaseScreen(ctx, await renderShopMenuText(ctx), shopMenu, 'Markdown');
   });
 
   // Fallback for a stale Cancel button after a conversation has already ended.
@@ -195,6 +226,32 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     ctx.session.adminPanelId = undefined;
     ctx.session.adminPanelDraft = undefined;
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
-    await ctx.reply(t(ctx, 'operation_cancelled'), { reply_markup: backKeyboard(ctx) });
+    await renderBaseScreen(
+      ctx,
+      buildEmptyState('↩️', t(ctx, 'operation_cancelled'), t(ctx, 'operation_cancelled')),
+      backKeyboard(ctx),
+      'Markdown'
+    );
+  });
+}
+
+type ScreenReplyMarkup = NonNullable<Parameters<MenuContext['editMessageText']>[1]>['reply_markup'];
+
+async function renderBaseScreen(
+  ctx: MenuContext,
+  text: string,
+  replyMarkup: ScreenReplyMarkup,
+  parseMode?: 'Markdown'
+): Promise<void> {
+  if (ctx.callbackQuery?.message) {
+    await ctx.editMessageText(text, {
+      ...(parseMode ? { parse_mode: parseMode } : {}),
+      reply_markup: replyMarkup,
+    });
+    return;
+  }
+  await ctx.reply(text, {
+    ...(parseMode ? { parse_mode: parseMode } : {}),
+    reply_markup: replyMarkup,
   });
 }

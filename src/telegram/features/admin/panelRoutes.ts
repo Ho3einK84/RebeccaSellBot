@@ -7,6 +7,7 @@ import type { MenuContext } from '../../types.js';
 import { callbackData } from '../../callbackData.js';
 import { localizedNumber, t } from '../../locale.js';
 import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '../../ui.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 
 const PANEL_ID_CAPTURE = '([a-z0-9_-]{3,40})';
 type PanelEditAction = 'name' | 'url' | 'api_key' | 'add_service';
@@ -258,15 +259,21 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     const apiKey = ctx.message.text.trim();
     if (apiKey === '/cancel') {
       clearPendingPanelSecret(ctx);
-      await ctx.reply(t(ctx, 'operation_cancelled'), {
-        reply_markup: backKeyboard(ctx, 'admin'),
-      });
+      await renderPanelScreen(
+        ctx,
+        buildEmptyState('↩️', t(ctx, 'admin_panel_api_key_title'), t(ctx, 'operation_cancelled')),
+        backKeyboard(ctx, 'admin'),
+        'Markdown'
+      );
       return;
     }
     if (!apiKey || apiKey.startsWith('/') || apiKey.length > 512 || /\s/u.test(apiKey)) {
-      await ctx.reply(t(ctx, 'admin_setting_invalid'), {
-        reply_markup: backKeyboard(ctx, 'admin'),
-      });
+      await renderPanelScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'admin_panel_api_key_title'), t(ctx, 'admin_setting_invalid')),
+        backKeyboard(ctx, 'admin'),
+        'Markdown'
+      );
       return;
     }
 
@@ -281,14 +288,34 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
         await ctx.services.panelRegistry.updatePanel(panelId, { apiKey });
       }
       clearPendingPanelSecret(ctx);
-      await ctx.reply(t(ctx, 'admin_panel_saved'), {
-        reply_markup: backKeyboard(ctx, 'admin'),
-      });
+      await renderPanelScreen(
+        ctx,
+        buildScreen({
+          emoji: '✅',
+          title: t(ctx, 'admin_panel_saved_title'),
+          subtitle: t(ctx, 'admin_panel_saved_subtitle'),
+          primary: {
+            emoji: '🔐',
+            label: t(ctx, 'admin_panel_credential_label'),
+            value: buildStatusBadge(ctx, 'active'),
+          },
+        }),
+        backKeyboard(ctx, 'admin'),
+        'Markdown'
+      );
     } catch {
       // Retain only the non-secret draft/action for a corrected-key retry.
-      await ctx.reply(t(ctx, 'admin_panel_save_failed'), {
-        reply_markup: backKeyboard(ctx, 'admin'),
-      });
+      await renderPanelScreen(
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'admin_panel_save_failed_title'),
+          t(ctx, 'admin_panel_save_failed_subtitle'),
+          t(ctx, 'admin_panel_save_failed')
+        ),
+        backKeyboard(ctx, 'admin'),
+        'Markdown'
+      );
     }
   });
 }
@@ -310,9 +337,17 @@ async function beginPanelEdit(
   await ctx.answerCallbackQuery();
   if (action === 'api_key') {
     ctx.session.adminPanelAction = 'await_api_key';
-    await ctx.reply(t(ctx, 'admin_panel_api_key_prompt'), {
-      reply_markup: backKeyboard(ctx, 'admin'),
-    });
+    await renderPanelScreen(
+      ctx,
+      buildScreen({
+        emoji: '🔐',
+        title: t(ctx, 'admin_panel_api_key_title'),
+        subtitle: t(ctx, 'admin_panel_api_key_subtitle'),
+        footer: t(ctx, 'admin_panel_api_key_prompt'),
+      }),
+      backKeyboard(ctx, 'admin'),
+      'Markdown'
+    );
     return;
   }
   ctx.session.adminPanelAction = action;
@@ -324,13 +359,29 @@ async function testPanelConnection(ctx: MenuContext, panelId: string): Promise<v
   await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
   try {
     const healthy = await ctx.services.panelRegistry.testConnection(panelId);
-    await ctx.reply(t(ctx, healthy ? 'admin_panel_test_ok' : 'admin_panel_test_failed'), {
-      reply_markup: backKeyboard(ctx, 'admin'),
-    });
+    await renderPanelScreen(
+      ctx,
+      buildScreen({
+        emoji: healthy ? '✅' : '⚠️',
+        title: t(ctx, 'admin_panel_test_title'),
+        subtitle: t(ctx, 'admin_panel_test_subtitle'),
+        primary: {
+          emoji: healthy ? '🩺' : '⚠️',
+          label: t(ctx, 'admin_panel_status_label'),
+          value: buildStatusBadge(ctx, healthy ? 'healthy' : 'error'),
+        },
+        footer: t(ctx, healthy ? 'admin_panel_test_ok' : 'admin_panel_test_failed'),
+      }),
+      new InlineKeyboard().text(t(ctx, 'menu_back'), panelCallback('v', panelId)),
+      'Markdown'
+    );
   } catch {
-    await ctx.reply(t(ctx, 'admin_panel_test_failed'), {
-      reply_markup: backKeyboard(ctx, 'admin'),
-    });
+    await renderPanelScreen(
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_panel_test_title'), t(ctx, 'admin_panel_test_failed')),
+      new InlineKeyboard().text(t(ctx, 'menu_back'), panelCallback('v', panelId)),
+      'Markdown'
+    );
   }
 }
 
@@ -411,12 +462,25 @@ async function promptPanelServiceDeletion(
     : `admin:panel:service:delete_confirm:${panelId}:${serviceId}`;
   const cancel = compactCallbacks ? panelCallback('v', panelId) : `admin:panel:view:${panelId}`;
   await ctx.answerCallbackQuery();
-  await ctx.reply(t(ctx, 'admin_panel_service_delete_confirm', { service: service.name }), {
-    reply_markup: new InlineKeyboard()
+  await renderPanelScreen(
+    ctx,
+    buildScreen({
+      emoji: '⚠️',
+      title: t(ctx, 'admin_panel_service_delete_title'),
+      subtitle: t(ctx, 'admin_panel_service_delete_subtitle'),
+      primary: {
+        emoji: '📦',
+        label: t(ctx, 'admin_panel_services_section'),
+        value: escapeTelegramMarkdown(service.name),
+      },
+      footer: t(ctx, 'admin_panel_service_delete_consequence'),
+    }),
+    new InlineKeyboard()
       .text(t(ctx, 'admin_confirm_button'), confirm)
       .row()
       .text(t(ctx, 'menu_cancel'), cancel),
-  });
+    'Markdown'
+  );
 }
 
 async function deletePanelService(
@@ -444,7 +508,8 @@ async function promptPanelDeletion(
   compactCallbacks: boolean
 ): Promise<void> {
   if (!ctx.services) return;
-  if (!ctx.services.panelRegistry.getPanel(panelId)) {
+  const panel = ctx.services.panelRegistry.getPanel(panelId);
+  if (!panel) {
     await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_not_found'), show_alert: true });
     return;
   }
@@ -457,12 +522,25 @@ async function promptPanelDeletion(
     : `admin:panel:delete_confirm:${panelId}`;
   const cancel = compactCallbacks ? panelCallback('v', panelId) : `admin:panel:view:${panelId}`;
   await ctx.answerCallbackQuery();
-  await ctx.reply(t(ctx, 'admin_panel_delete_confirm'), {
-    reply_markup: new InlineKeyboard()
+  await renderPanelScreen(
+    ctx,
+    buildScreen({
+      emoji: '⚠️',
+      title: t(ctx, 'admin_panel_delete_title'),
+      subtitle: t(ctx, 'admin_panel_delete_subtitle'),
+      primary: {
+        emoji: '🖥️',
+        label: t(ctx, 'admin_panel_name_label'),
+        value: escapeTelegramMarkdown(panel.name),
+      },
+      footer: t(ctx, 'admin_panel_delete_consequence'),
+    }),
+    new InlineKeyboard()
       .text(t(ctx, 'admin_confirm_button'), confirm)
       .row()
       .text(t(ctx, 'menu_cancel'), cancel),
-  });
+    'Markdown'
+  );
 }
 
 async function deletePanel(ctx: MenuContext, panelId: string): Promise<void> {
@@ -497,7 +575,7 @@ function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
   return buildScreen({
     emoji: '🖥️',
     title: t(ctx, 'admin_panel_detail_title'),
-    subtitle: panel.name,
+    subtitle: escapeTelegramMarkdown(panel.name),
     primary: {
       emoji: panel.enabled ? '🟢' : '⚪️',
       label: t(ctx, 'admin_panel_status_label'),
@@ -512,7 +590,11 @@ function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
         emoji: '🔌',
         title: t(ctx, 'admin_panel_connection_section'),
         fields: [
-          { emoji: '🏷️', label: t(ctx, 'admin_panel_name_label'), value: panel.name },
+          {
+            emoji: '🏷️',
+            label: t(ctx, 'admin_panel_name_label'),
+            value: escapeTelegramMarkdown(panel.name),
+          },
           {
             emoji: '⭐',
             label: t(ctx, 'admin_panel_default_label'),
@@ -521,7 +603,7 @@ function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
           {
             emoji: '🌐',
             label: t(ctx, 'admin_panel_endpoint_label'),
-            value: panel.baseUrl ?? '—',
+            value: panel.baseUrl ? escapeTelegramMarkdown(panel.baseUrl) : '—',
           },
           {
             emoji: '🔐',
@@ -531,7 +613,9 @@ function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
           {
             emoji: '🎯',
             label: t(ctx, 'admin_panel_default_service_label'),
-            value: defaultService ? `${defaultService.name} · ${defaultService.serviceId}` : '—',
+            value: defaultService
+              ? `${escapeTelegramMarkdown(defaultService.name)} · ${localizedNumber(defaultService.serviceId, ctx)}`
+              : '—',
           },
         ],
       },
@@ -541,7 +625,7 @@ function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
         fields: panel.services.length
           ? panel.services.map((service) => ({
               emoji: service.isDefault ? '⭐' : '🔹',
-              label: service.name,
+              label: escapeTelegramMarkdown(service.name),
               value: `${t(ctx, 'admin_panel_service_id_label')}: ${localizedNumber(service.serviceId, ctx)}`,
             }))
           : [

@@ -1,10 +1,13 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
-import { t, tm } from '../../locale.js';
+import { localizedNumber, t, tm } from '../../locale.js';
 import { parsePackageOptionsJson } from '../../../domain/services/PricingService.js';
 import type { PackageOption } from '../../../domain/services/PricingService.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 import {
+  buildEmptyState,
+  buildPromptScreen,
+  buildScreen,
   promptInConversation,
   replyInConversation,
   waitForCallbackInput,
@@ -65,9 +68,13 @@ export async function adminEditSettingsConversation(
       await promptInConversation(
         conversation,
         ctx,
-        tm(ctx, 'admin_setting_naming_mode_prompt', {
-          current: displaySettingValue(ctx, 'naming_mode'),
-        }),
+        buildSettingsPrompt(
+          ctx,
+          tm(ctx, 'admin_setting_naming_mode_prompt', {
+            current: displaySettingValue(ctx, 'naming_mode'),
+          }),
+          { emoji: '🏷️' }
+        ),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
@@ -81,18 +88,23 @@ export async function adminEditSettingsConversation(
           await ctx.services.configService.syncCounters();
         } catch {
           await ctx.services.translationService.updateSetting('naming_mode', storedCurrentValue);
-          await replyInConversation(conversation, ctx, t(ctx, 'admin_setting_apply_failed'));
+          await replyInConversation(
+            conversation,
+            ctx,
+            buildEmptyState(
+              '⚠️',
+              t(ctx, 'admin_settings_title'),
+              t(ctx, 'admin_setting_apply_failed')
+            ),
+            { parse_mode: 'Markdown' }
+          );
           continue;
         }
         const settingLabel = t(ctx, SETTING_LABELS['naming_mode']);
         await replyInConversation(
           conversation,
           ctx,
-          tm(ctx, 'admin_setting_saved', {
-            setting: settingLabel,
-            key: settingLabel,
-            value: displaySettingValue(ctx, 'naming_mode'),
-          }),
+          buildSettingSavedScreen(ctx, settingLabel, displaySettingValue(ctx, 'naming_mode')),
           { parse_mode: 'Markdown' }
         );
       }
@@ -106,12 +118,16 @@ export async function adminEditSettingsConversation(
       await promptInConversation(
         conversation,
         ctx,
-        tm(
+        buildSettingsPrompt(
           ctx,
-          setting.key === 'trial_enabled'
-            ? 'admin_setting_trial_enabled_prompt'
-            : 'admin_setting_custom_volume_enabled_prompt',
-          { current: displaySettingValue(ctx, setting.key) }
+          tm(
+            ctx,
+            setting.key === 'trial_enabled'
+              ? 'admin_setting_trial_enabled_prompt'
+              : 'admin_setting_custom_volume_enabled_prompt',
+            { current: displaySettingValue(ctx, setting.key) }
+          ),
+          { emoji: '⚙️' }
         ),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
@@ -126,11 +142,7 @@ export async function adminEditSettingsConversation(
         await replyInConversation(
           conversation,
           ctx,
-          tm(ctx, 'admin_setting_saved', {
-            setting: settingLabel,
-            key: settingLabel,
-            value: displaySettingValue(ctx, setting.key),
-          }),
+          buildSettingSavedScreen(ctx, settingLabel, displaySettingValue(ctx, setting.key)),
           { parse_mode: 'Markdown' }
         );
       }
@@ -153,12 +165,22 @@ export async function adminEditSettingsConversation(
       });
     }
 
-    await promptInConversation(conversation, ctx, promptMsg, { parse_mode: 'Markdown' });
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildSettingsPrompt(ctx, promptMsg, { emoji: '✍️' }),
+      { parse_mode: 'Markdown' }
+    );
     const valueInput = await waitForTextInput(conversation);
     if (valueInput === undefined) return;
     const newValue = validateAdminSetting(setting.key, valueInput);
     if (newValue === undefined) {
-      await replyInConversation(conversation, ctx, t(ctx, 'admin_setting_invalid'));
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'admin_settings_title'), t(ctx, 'admin_setting_invalid')),
+        { parse_mode: 'Markdown' }
+      );
       continue;
     }
     await ctx.services.translationService.updateSetting(setting.key, newValue);
@@ -167,24 +189,54 @@ export async function adminEditSettingsConversation(
         await ctx.services.configService.syncCounters();
       } catch {
         await ctx.services.translationService.updateSetting(setting.key, storedCurrentValue);
-        await replyInConversation(conversation, ctx, t(ctx, 'admin_setting_apply_failed'));
+        await replyInConversation(
+          conversation,
+          ctx,
+          buildEmptyState(
+            '⚠️',
+            t(ctx, 'admin_settings_title'),
+            t(ctx, 'admin_setting_apply_failed')
+          ),
+          { parse_mode: 'Markdown' }
+        );
         continue;
       }
     }
     await replyInConversation(
       conversation,
       ctx,
-      tm(ctx, 'admin_setting_saved', {
-        setting: settingLabel,
-        key: settingLabel,
-        value: displaySettingValue(ctx, setting.key),
-      }),
+      buildSettingSavedScreen(ctx, settingLabel, displaySettingValue(ctx, setting.key)),
       { parse_mode: 'Markdown' }
     );
   }
 }
 
 // ── Group navigation ──────────────────────────────────────────────────────────
+
+function buildSettingsPrompt(
+  ctx: ConversationContext,
+  body: string,
+  options: { emoji?: string; title?: string; subtitle?: string } = {}
+): string {
+  return buildPromptScreen(
+    options.emoji ?? '⚙️',
+    options.title ?? t(ctx, 'admin_settings_title'),
+    body,
+    options.subtitle ?? t(ctx, 'admin_settings_subtitle')
+  );
+}
+
+function buildSettingSavedScreen(ctx: ConversationContext, setting: string, value: string): string {
+  return buildScreen({
+    emoji: '✅',
+    title: t(ctx, 'admin_setting_saved_title'),
+    primary: {
+      emoji: '⚙️',
+      label: setting,
+      value: escapeTelegramMarkdown(value),
+    },
+  });
+}
 
 export interface SelectionItem {
   id: string;
@@ -235,10 +287,12 @@ async function chooseSettingsGroup(
 ): Promise<SettingGroup | undefined> {
   const keyboard = buildSettingsGroupKeyboard(ctx);
 
-  await promptInConversation(conversation, ctx, tm(ctx, 'admin_settings_groups_prompt'), {
-    parse_mode: 'Markdown',
-    reply_markup: keyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(ctx, tm(ctx, 'admin_settings_groups_prompt'), { emoji: '⚙️' }),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
   const data = await waitForCallbackInput(conversation, ['set-group:', 'nav:main']);
   if (data === undefined || data === 'nav:main') return undefined;
   return SETTING_GROUPS.find((group) => group.id === data.slice('set-group:'.length));
@@ -257,10 +311,15 @@ async function chooseSettingInGroup(
   keyboard.text(t(ctx, 'admin_settings_back_groups'), 'set-groups').row();
   keyboard.text(t(ctx, 'admin_menu_back'), 'nav:main').row();
 
-  await promptInConversation(conversation, ctx, buildSettingsGroupPrompt(ctx, group.id), {
-    parse_mode: 'Markdown',
-    reply_markup: keyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(ctx, buildSettingsGroupPrompt(ctx, group.id), {
+      emoji: '📂',
+      title: t(ctx, group.labelKey),
+    }),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
   const data = await waitForCallbackInput(conversation, ['set-edit:', 'set-groups', 'nav:main']);
   if (data === undefined || data === 'nav:main') return undefined;
   if (data === 'set-groups') return 'back';
@@ -316,12 +375,10 @@ async function managePackages(conversation: MyConversation, ctx: ConversationCon
     keyboard.text(t(ctx, 'admin_settings_back_groups'), 'pkg-back').row();
     keyboard.text(t(ctx, 'admin_menu_back'), 'nav:main').row();
 
-    await promptInConversation(
-      conversation,
-      ctx,
-      t(ctx, 'admin_pkg_manager_prompt', { count: packages.length }),
-      { reply_markup: keyboard }
-    );
+    await promptInConversation(conversation, ctx, buildPackageManagerScreen(ctx, packages), {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
     const data = await waitForCallbackInput(conversation, [
       'pkg-edit:',
       'pkg-del:',
@@ -355,14 +412,36 @@ async function managePackages(conversation: MyConversation, ctx: ConversationCon
       const existing = packages[index];
       // Never leave the shop with zero packages.
       if (!existing || packages.length <= 1) {
-        await replyInConversation(conversation, ctx, t(ctx, 'admin_pkg_last_removed'));
+        await replyInConversation(
+          conversation,
+          ctx,
+          buildEmptyState(
+            '⚠️',
+            t(ctx, 'admin_package_manager_title'),
+            t(ctx, 'admin_pkg_last_removed')
+          ),
+          { parse_mode: 'Markdown' }
+        );
         continue;
       }
       await promptInConversation(
         conversation,
         ctx,
-        t(ctx, 'admin_pkg_delete_confirm', { name: existing.name }),
+        buildScreen({
+          emoji: '⚠️',
+          title: t(ctx, 'admin_package_manager_title'),
+          subtitle: t(ctx, 'admin_package_manager_subtitle'),
+          primary: {
+            emoji: '📦',
+            label: t(ctx, 'checkout_package_section'),
+            value: escapeTelegramMarkdown(existing.name),
+          },
+          footer: t(ctx, 'admin_pkg_delete_confirm', {
+            name: escapeTelegramMarkdown(existing.name),
+          }),
+        }),
         {
+          parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard()
             .text(t(ctx, 'admin_confirm_button'), `pkg-del-confirm:${index}`)
             .row()
@@ -378,7 +457,21 @@ async function managePackages(conversation: MyConversation, ctx: ConversationCon
     }
 
     await ctx.services.translationService.updateSetting('packages_json', JSON.stringify(packages));
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_pkg_saved'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'admin_package_saved_title'),
+        primary: {
+          emoji: '📦',
+          label: t(ctx, 'admin_promo_total_label'),
+          value: localizedNumber(packages.length, ctx),
+        },
+        footer: t(ctx, 'admin_pkg_saved'),
+      }),
+      { parse_mode: 'Markdown' }
+    );
   }
 }
 
@@ -449,7 +542,16 @@ async function choosePackageTarget(
     .listPanels()
     .filter((panel) => panel.enabled && panel.services.length > 0);
   if (!panels?.length) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_panel_required_first'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_package_manager_title'),
+        t(ctx, 'admin_panel_required_first')
+      ),
+      { parse_mode: 'Markdown' }
+    );
     return undefined;
   }
   const keyboard = new InlineKeyboard();
@@ -465,9 +567,16 @@ async function choosePackageTarget(
     }
   }
   keyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_pkg_target_prompt'), {
-    reply_markup: keyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(ctx, t(ctx, 'admin_pkg_target_prompt'), {
+      emoji: '🎯',
+      title: t(ctx, 'admin_package_manager_title'),
+      subtitle: t(ctx, 'admin_package_manager_subtitle'),
+    }),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
   const selected = await waitForCallbackInput(conversation, ['pkg-target:']);
   if (!selected) return undefined;
   const match = /^pkg-target:([a-z0-9_-]{3,40}):(\d+)$/iu.exec(selected);
@@ -482,12 +591,26 @@ async function askPackageString(
   current: string | undefined,
   validate: (value: string) => boolean
 ): Promise<string | undefined> {
-  await promptInConversation(conversation, ctx, t(ctx, promptKey, { current: current ?? '—' }));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(ctx, t(ctx, promptKey, { current: current ?? '—' }), {
+      emoji: '✍️',
+      title: t(ctx, 'admin_package_manager_title'),
+      subtitle: t(ctx, 'admin_package_manager_subtitle'),
+    }),
+    { parse_mode: 'Markdown' }
+  );
   const input = await waitForTextInput(conversation);
   if (input === undefined) return undefined;
   const value = input.trim();
   if (!validate(value)) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_setting_invalid'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_package_manager_title'), t(ctx, 'admin_setting_invalid')),
+      { parse_mode: 'Markdown' }
+    );
     return undefined;
   }
   return value;
@@ -501,12 +624,26 @@ async function askPackageInteger(
   minimum: number,
   maximum: number
 ): Promise<number | undefined> {
-  await promptInConversation(conversation, ctx, t(ctx, promptKey, { current: current ?? '—' }));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(ctx, t(ctx, promptKey, { current: current ?? '—' }), {
+      emoji: '🔢',
+      title: t(ctx, 'admin_package_manager_title'),
+      subtitle: t(ctx, 'admin_package_manager_subtitle'),
+    }),
+    { parse_mode: 'Markdown' }
+  );
   const input = await waitForTextInput(conversation);
   if (input === undefined) return undefined;
   const value = parsePositiveSafeInteger(input);
   if (value === undefined || value < minimum || value > maximum) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_setting_invalid'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_package_manager_title'), t(ctx, 'admin_setting_invalid')),
+      { parse_mode: 'Markdown' }
+    );
     return undefined;
   }
   return value;
@@ -520,6 +657,33 @@ function generatePackageId(name: string): string {
       .replace(/^_+|_+$/gu, '')
       .slice(0, 40) || 'pkg';
   return `pkg_${slug}_${Date.now().toString(36)}`;
+}
+
+function buildPackageManagerScreen(
+  ctx: ConversationContext,
+  packages: readonly PackageOption[]
+): string {
+  return buildScreen({
+    emoji: '📦',
+    title: t(ctx, 'admin_package_manager_title'),
+    subtitle: t(ctx, 'admin_package_manager_subtitle'),
+    primary: {
+      emoji: '📦',
+      label: t(ctx, 'admin_promo_total_label'),
+      value: localizedNumber(packages.length, ctx),
+    },
+    sections: [
+      {
+        emoji: '🛍️',
+        title: t(ctx, 'admin_pkg_manager_prompt', { count: localizedNumber(packages.length, ctx) }),
+        fields: packages.map((pkg) => ({
+          emoji: '📦',
+          label: escapeTelegramMarkdown(pkg.name),
+          value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')} · ${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')} · ${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
+        })),
+      },
+    ],
+  });
 }
 
 function currentPackages(ctx: ConversationContext): PackageOption[] {

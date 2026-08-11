@@ -5,9 +5,10 @@ import type { BotServices, MenuContext } from '../types.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { logger } from '../../infra/logger.js';
 import { observedContextLocale, t, tm } from '../locale.js';
-import { backKeyboard } from '../ui.js';
+import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '../ui.js';
 import { callbackData } from '../callbackData.js';
 import { buildSubscriptionActionKeyboard } from './subscriptions/routes.js';
+import { escapeTelegramMarkdown } from '../rendering.js';
 
 export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   bot.callbackQuery(/^config_(toggle|revoke):(.+)$/, async (ctx) => {
@@ -24,17 +25,26 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
     }
     if (action === 'revoke') {
       await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
-      await ctx.reply(
-        t(ctx, 'subscription_revoke_confirm', { username: localConfig.configUsername }),
-        {
-          reply_markup: new InlineKeyboard()
-            .text(
-              t(ctx, 'admin_confirm_button'),
-              callbackData('config', 'revoke_confirm', localConfig.id)
-            )
-            .row()
-            .text(t(ctx, 'menu_cancel'), callbackData('config', 'view', localConfig.id)),
-        }
+      await renderConfigScreen(
+        ctx,
+        buildScreen({
+          emoji: '🔑',
+          title: t(ctx, 'subscription_revoke_title'),
+          subtitle: t(ctx, 'subscription_revoke_subtitle'),
+          primary: {
+            emoji: '📱',
+            label: t(ctx, 'subscription_connection_section'),
+            value: escapeTelegramMarkdown(localConfig.configUsername),
+          },
+          footer: t(ctx, 'subscription_revoke_consequence'),
+        }),
+        new InlineKeyboard()
+          .text(
+            t(ctx, 'admin_confirm_button'),
+            callbackData('config', 'revoke_confirm', localConfig.id)
+          )
+          .row()
+          .text(t(ctx, 'menu_cancel'), callbackData('config', 'view', localConfig.id))
       );
       return;
     }
@@ -45,14 +55,28 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     try {
       const result = await services.configService.toggleConfig(configUsername, localConfig.panelId);
-      if (result === 'enabled') {
-        await ctx.reply(t(ctx, 'subscription_enabled'), { reply_markup: backKeyboard(ctx) });
-      } else {
-        await ctx.reply(t(ctx, 'subscription_disabled'), { reply_markup: backKeyboard(ctx) });
-      }
+      const enabled = result === 'enabled';
+      await renderConfigScreen(
+        ctx,
+        buildScreen({
+          emoji: enabled ? '✅' : '⏸️',
+          title: t(ctx, 'subscription_list_title'),
+          primary: {
+            emoji: enabled ? '🟢' : '⚪️',
+            label: t(ctx, 'subscription_status_label'),
+            value: buildStatusBadge(ctx, enabled ? 'active' : 'inactive'),
+          },
+          footer: t(ctx, enabled ? 'subscription_enabled' : 'subscription_disabled'),
+        }),
+        backKeyboard(ctx)
+      );
     } catch (err) {
       logger.warn({ err, telegramId, configUsername, action }, 'Config management action failed');
-      await ctx.reply(t(ctx, 'config_action_failed'), { reply_markup: backKeyboard(ctx) });
+      await renderConfigScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, 'config_action_failed')),
+        backKeyboard(ctx)
+      );
     }
   });
 
@@ -72,17 +96,34 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
 
     if (step === '_cancel' || step === 'prompt') {
       await ctx.answerCallbackQuery();
-      if (step === '_cancel') return;
+      if (step === '_cancel') {
+        await renderConfigScreen(
+          ctx,
+          buildEmptyState('↩️', t(ctx, 'config_delete_button'), t(ctx, 'operation_cancelled')),
+          backKeyboard(ctx, 'main')
+        );
+        return;
+      }
       // First tap only shows a warning; deletion requires an explicit confirm.
       const confirmMenu = new InlineKeyboard()
         .text(t(ctx, 'config_delete_confirm_button'), `config_delete_confirm:${configUsername}`)
         .text(t(ctx, 'config_delete_cancel_button'), `config_delete_cancel:${configUsername}`)
         .row()
         .text(t(ctx, 'menu_back'), 'nav:main');
-      await ctx.reply(tm(ctx, 'config_delete_warning', { username: configUsername }), {
-        parse_mode: 'Markdown',
-        reply_markup: confirmMenu,
-      });
+      await renderConfigScreen(
+        ctx,
+        buildScreen({
+          emoji: '⚠️',
+          title: t(ctx, 'config_delete_button'),
+          primary: {
+            emoji: '📱',
+            label: t(ctx, 'subscription_connection_section'),
+            value: escapeTelegramMarkdown(configUsername),
+          },
+          footer: tm(ctx, 'config_delete_warning', { username: configUsername }),
+        }),
+        confirmMenu
+      );
       return;
     }
 
@@ -97,15 +138,33 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
         configUsername,
         localConfig.panelId
       );
-      await ctx.reply(
+      await renderConfigScreen(
+        ctx,
         removed
-          ? tm(ctx, 'config_deleted', { username: configUsername })
-          : tm(ctx, 'config_delete_not_found', { username: configUsername }),
-        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
+          ? buildScreen({
+              emoji: '✅',
+              title: t(ctx, 'config_delete_button'),
+              primary: {
+                emoji: '📱',
+                label: t(ctx, 'subscription_connection_section'),
+                value: escapeTelegramMarkdown(configUsername),
+              },
+              footer: tm(ctx, 'config_deleted', { username: configUsername }),
+            })
+          : buildEmptyState(
+              '⚠️',
+              t(ctx, 'config_delete_button'),
+              tm(ctx, 'config_delete_not_found', { username: configUsername })
+            ),
+        backKeyboard(ctx)
       );
     } catch (err) {
       logger.warn({ err, telegramId, configUsername }, 'Config permanent delete failed');
-      await ctx.reply(t(ctx, 'config_action_failed'), { reply_markup: backKeyboard(ctx) });
+      await renderConfigScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'config_delete_button'), t(ctx, 'config_action_failed')),
+        backKeyboard(ctx)
+      );
     }
   });
 
@@ -128,7 +187,6 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
           observedContextLocale(ctx)
         );
         const res = await services.configService.claimSubLink(ctx.from.id, subUrl);
-        const msg = t(ctx, res.messageKey);
 
         if (res.success && res.username) {
           const owned = await services.configService.getOwnedConfigByUsername(
@@ -141,22 +199,50 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
                 .row()
                 .text(t(ctx, 'menu_back'), 'nav:main')
             : backKeyboard(ctx, 'main');
-          await ctx.reply(msg, { reply_markup: managementMenu });
+          await ctx.reply(
+            buildScreen({
+              emoji: '✅',
+              title: t(ctx, 'subscription_list_title'),
+              primary: {
+                emoji: '📱',
+                label: t(ctx, 'subscription_connection_section'),
+                value: escapeTelegramMarkdown(res.username),
+              },
+              footer: t(ctx, res.messageKey),
+            }),
+            { parse_mode: 'Markdown', reply_markup: managementMenu }
+          );
         } else {
-          await ctx.reply(msg, { reply_markup: backKeyboard(ctx, 'main') });
+          await ctx.reply(
+            buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, res.messageKey)),
+            { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+          );
         }
       } catch (err) {
         logger.warn(
           { telegramId: ctx.from.id, errorName: err instanceof Error ? err.name : typeof err },
           'Subscription link claim handler failed'
         );
-        await ctx.reply(t(ctx, 'claim_handler_failed'), {
-          reply_markup: backKeyboard(ctx, 'main'),
-        });
+        await ctx.reply(
+          buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, 'claim_handler_failed')),
+          { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+        );
       }
       return;
     }
 
     return next();
   });
+}
+
+async function renderConfigScreen(
+  ctx: MenuContext,
+  text: string,
+  keyboard: InlineKeyboard
+): Promise<void> {
+  if (ctx.callbackQuery?.message) {
+    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+    return;
+  }
+  await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }
