@@ -9,6 +9,14 @@ import { localizedNumber, t } from '../../locale.js';
 import { backKeyboard } from '../../ui.js';
 
 const PANEL_ID_CAPTURE = '([a-z0-9_-]{3,40})';
+type PanelEditAction = 'name' | 'url' | 'api_key' | 'add_service';
+type PanelServiceAction = 'default' | 'custom';
+const COMPACT_PANEL_EDIT_ACTIONS: Record<string, PanelEditAction> = {
+  n: 'name',
+  u: 'url',
+  k: 'api_key',
+  s: 'add_service',
+};
 
 export function panelCallback(...parts: Array<string | number>): string {
   return callbackData('a', 'p', ...parts);
@@ -123,92 +131,33 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     await renderPanelRegistry(ctx);
   });
   bot.callbackQuery('a:p:n', async (ctx) => ctx.answerCallbackQuery());
-  bot.callbackQuery('a:p:add', async (ctx) => {
-    ctx.session.adminPanelAction = 'add';
-    ctx.session.adminPanelId = undefined;
-    ctx.session.adminPanelDraft = undefined;
-    await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminPanelConversation');
-  });
+  bot.callbackQuery('a:p:add', startPanelAdd);
   bot.callbackQuery(new RegExp(`^a:p:v:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPanelDetail(ctx, ctx.match[1]!);
   });
   bot.callbackQuery(new RegExp(`^a:p:e:${PANEL_ID_CAPTURE}:([nuks])$`, 'u'), async (ctx) => {
-    const action = ({ n: 'name', u: 'url', k: 'api_key', s: 'add_service' } as const)[
-      ctx.match[2]!
-    ];
-    ctx.session.adminPanelId = ctx.match[1]!;
-    await ctx.answerCallbackQuery();
-    if (action === 'api_key') {
-      ctx.session.adminPanelAction = 'await_api_key';
-      await ctx.reply(t(ctx, 'admin_panel_api_key_prompt'), {
-        reply_markup: backKeyboard(ctx, 'admin'),
-      });
-      return;
-    }
-    ctx.session.adminPanelAction = action;
-    await ctx.conversation.enter('adminPanelConversation');
+    await beginPanelEdit(ctx, ctx.match[1]!, COMPACT_PANEL_EDIT_ACTIONS[ctx.match[2]!]!);
   });
   bot.callbackQuery(new RegExp(`^a:p:t:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
-    if (!ctx.services) return;
-    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-    const healthy = await ctx.services.panelRegistry.testConnection(ctx.match[1]!);
-    await ctx.reply(t(ctx, healthy ? 'admin_panel_test_ok' : 'admin_panel_test_failed'), {
-      reply_markup: backKeyboard(ctx, 'admin'),
-    });
+    await testPanelConnection(ctx, ctx.match[1]!);
   });
   bot.callbackQuery(new RegExp(`^a:p:g:${PANEL_ID_CAPTURE}:([01])$`, 'u'), async (ctx) => {
-    if (!ctx.services) return;
-    try {
-      await ctx.services.panelRegistry.setPanelEnabled(ctx.match[1]!, ctx.match[2] === '1');
-      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_saved') });
-      await renderPanelDetail(ctx, ctx.match[1]!);
-    } catch {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
-    }
+    await setPanelEnabled(ctx, ctx.match[1]!, ctx.match[2] === '1');
   });
   bot.callbackQuery(new RegExp(`^a:p:d:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
-    if (!ctx.services) return;
-    try {
-      await ctx.services.panelRegistry.setDefaultPanel(ctx.match[1]!);
-      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_saved') });
-      await renderPanelDetail(ctx, ctx.match[1]!);
-    } catch {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
-    }
+    await setDefaultPanel(ctx, ctx.match[1]!);
   });
   bot.callbackQuery(new RegExp(`^a:p:s:([dcx]):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const action = ctx.match[1]!;
     const panelId = ctx.match[2]!;
     const serviceId = Number(ctx.match[3]);
-    if (!isValidServiceId(serviceId)) {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
-      return;
-    }
     if (action === 'x') {
       await promptPanelServiceDeletion(ctx, panelId, serviceId, true);
       return;
     }
-    try {
-      if (action === 'd') {
-        await ctx.services.panelRegistry.setDefaultService(panelId, serviceId);
-      } else {
-        await ctx.services.panelRegistry.resolveTarget(panelId, serviceId);
-        await ctx.services.translationService.updateSettings({
-          custom_volume_target_json: JSON.stringify({ panelId, serviceId }),
-          custom_volume_panel_id: '',
-          custom_volume_service_id: '',
-        });
-      }
-      await ctx.answerCallbackQuery({
-        text: t(ctx, action === 'c' ? 'admin_panel_custom_target_saved' : 'admin_panel_saved'),
-      });
-      await renderPanelDetail(ctx, panelId);
-    } catch {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_in_use'), show_alert: true });
-    }
+    await updatePanelService(ctx, action === 'd' ? 'default' : 'custom', panelId, serviceId);
   });
   bot.callbackQuery(new RegExp(`^a:p:s:xc:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     await deletePanelService(ctx, ctx.match[1]!, Number(ctx.match[2]));
@@ -225,13 +174,7 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     await renderPanelRegistry(ctx);
   });
   bot.callbackQuery('admin:panel:noop', async (ctx) => ctx.answerCallbackQuery());
-  bot.callbackQuery('admin:panel:add', async (ctx) => {
-    ctx.session.adminPanelAction = 'add';
-    ctx.session.adminPanelId = undefined;
-    ctx.session.adminPanelDraft = undefined;
-    await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminPanelConversation');
-  });
+  bot.callbackQuery('admin:panel:add', startPanelAdd);
   bot.callbackQuery(new RegExp(`^admin:panel:view:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPanelDetail(ctx, ctx.match[1]!);
@@ -239,94 +182,33 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(
     new RegExp(`^admin:panel:edit:${PANEL_ID_CAPTURE}:(name|url|api_key|add_service)$`, 'u'),
     async (ctx) => {
-      ctx.session.adminPanelId = ctx.match[1]!;
-      await ctx.answerCallbackQuery();
-      if (ctx.match[2] === 'api_key') {
-        ctx.session.adminPanelAction = 'await_api_key';
-        await ctx.reply(t(ctx, 'admin_panel_api_key_prompt'), {
-          reply_markup: backKeyboard(ctx, 'admin'),
-        });
-        return;
-      }
-      ctx.session.adminPanelAction = ctx.match[2] as 'name' | 'url' | 'add_service';
-      await ctx.conversation.enter('adminPanelConversation');
+      await beginPanelEdit(ctx, ctx.match[1]!, ctx.match[2]! as PanelEditAction);
     }
   );
   bot.callbackQuery(new RegExp(`^admin:panel:test:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
-    if (!ctx.services) return;
-    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-    const healthy = await ctx.services.panelRegistry.testConnection(ctx.match[1]!);
-    await ctx.reply(t(ctx, healthy ? 'admin_panel_test_ok' : 'admin_panel_test_failed'), {
-      reply_markup: backKeyboard(ctx, 'admin'),
-    });
+    await testPanelConnection(ctx, ctx.match[1]!);
   });
   bot.callbackQuery(
     new RegExp(`^admin:panel:toggle:${PANEL_ID_CAPTURE}:([01])$`, 'u'),
     async (ctx) => {
-      if (!ctx.services) return;
-      try {
-        await ctx.services.panelRegistry.setPanelEnabled(ctx.match[1]!, ctx.match[2] === '1');
-        await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_saved') });
-        await renderPanelDetail(ctx, ctx.match[1]!);
-      } catch {
-        await ctx.answerCallbackQuery({
-          text: t(ctx, 'admin_panel_save_failed'),
-          show_alert: true,
-        });
-      }
+      await setPanelEnabled(ctx, ctx.match[1]!, ctx.match[2] === '1');
     }
   );
   bot.callbackQuery(new RegExp(`^admin:panel:default:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
-    if (!ctx.services) return;
-    try {
-      await ctx.services.panelRegistry.setDefaultPanel(ctx.match[1]!);
-      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_saved') });
-      await renderPanelDetail(ctx, ctx.match[1]!);
-    } catch {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
-    }
+    await setDefaultPanel(ctx, ctx.match[1]!);
   });
   bot.callbackQuery(
     new RegExp(`^admin:panel:service:(default|custom|delete):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'),
     async (ctx) => {
       if (!ctx.services) return;
-      const action = ctx.match[1]!;
+      const action = ctx.match[1]! as PanelServiceAction | 'delete';
       const panelId = ctx.match[2]!;
       const serviceId = Number(ctx.match[3]);
-      if (!isValidServiceId(serviceId)) {
-        await ctx.answerCallbackQuery({
-          text: t(ctx, 'admin_panel_save_failed'),
-          show_alert: true,
-        });
-        return;
-      }
       if (action === 'delete') {
         await promptPanelServiceDeletion(ctx, panelId, serviceId, false);
         return;
       }
-      try {
-        if (action === 'default') {
-          await ctx.services.panelRegistry.setDefaultService(panelId, serviceId);
-        } else {
-          // A stale callback must not persist a deleted, disabled or mismatched
-          // panel/service pair into the custom-volume setting.
-          await ctx.services.panelRegistry.resolveTarget(panelId, serviceId);
-          await ctx.services.translationService.updateSettings({
-            custom_volume_target_json: JSON.stringify({ panelId, serviceId }),
-            custom_volume_panel_id: '',
-            custom_volume_service_id: '',
-          });
-        }
-        await ctx.answerCallbackQuery({
-          text: t(
-            ctx,
-            action === 'custom' ? 'admin_panel_custom_target_saved' : 'admin_panel_saved'
-          ),
-        });
-        await renderPanelDetail(ctx, panelId);
-      } catch {
-        await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_in_use'), show_alert: true });
-      }
+      await updatePanelService(ctx, action, panelId, serviceId);
     }
   );
   bot.callbackQuery(
@@ -389,6 +271,102 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
       });
     }
   });
+}
+
+async function startPanelAdd(ctx: MenuContext): Promise<void> {
+  ctx.session.adminPanelAction = 'add';
+  ctx.session.adminPanelId = undefined;
+  ctx.session.adminPanelDraft = undefined;
+  await ctx.answerCallbackQuery();
+  await ctx.conversation.enter('adminPanelConversation');
+}
+
+async function beginPanelEdit(
+  ctx: MenuContext,
+  panelId: string,
+  action: PanelEditAction
+): Promise<void> {
+  ctx.session.adminPanelId = panelId;
+  await ctx.answerCallbackQuery();
+  if (action === 'api_key') {
+    ctx.session.adminPanelAction = 'await_api_key';
+    await ctx.reply(t(ctx, 'admin_panel_api_key_prompt'), {
+      reply_markup: backKeyboard(ctx, 'admin'),
+    });
+    return;
+  }
+  ctx.session.adminPanelAction = action;
+  await ctx.conversation.enter('adminPanelConversation');
+}
+
+async function testPanelConnection(ctx: MenuContext, panelId: string): Promise<void> {
+  if (!ctx.services) return;
+  await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+  try {
+    const healthy = await ctx.services.panelRegistry.testConnection(panelId);
+    await ctx.reply(t(ctx, healthy ? 'admin_panel_test_ok' : 'admin_panel_test_failed'), {
+      reply_markup: backKeyboard(ctx, 'admin'),
+    });
+  } catch {
+    await ctx.reply(t(ctx, 'admin_panel_test_failed'), {
+      reply_markup: backKeyboard(ctx, 'admin'),
+    });
+  }
+}
+
+async function setPanelEnabled(ctx: MenuContext, panelId: string, enabled: boolean): Promise<void> {
+  if (!ctx.services) return;
+  try {
+    await ctx.services.panelRegistry.setPanelEnabled(panelId, enabled);
+    await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_saved') });
+    await renderPanelDetail(ctx, panelId);
+  } catch {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
+  }
+}
+
+async function setDefaultPanel(ctx: MenuContext, panelId: string): Promise<void> {
+  if (!ctx.services) return;
+  try {
+    await ctx.services.panelRegistry.setDefaultPanel(panelId);
+    await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_saved') });
+    await renderPanelDetail(ctx, panelId);
+  } catch {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
+  }
+}
+
+async function updatePanelService(
+  ctx: MenuContext,
+  action: PanelServiceAction,
+  panelId: string,
+  serviceId: number
+): Promise<void> {
+  if (!ctx.services) return;
+  if (!isValidServiceId(serviceId)) {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
+    return;
+  }
+  try {
+    if (action === 'default') {
+      await ctx.services.panelRegistry.setDefaultService(panelId, serviceId);
+    } else {
+      // A stale callback must not persist a deleted, disabled or mismatched
+      // panel/service pair into the custom-volume setting.
+      await ctx.services.panelRegistry.resolveTarget(panelId, serviceId);
+      await ctx.services.translationService.updateSettings({
+        custom_volume_target_json: JSON.stringify({ panelId, serviceId }),
+        custom_volume_panel_id: '',
+        custom_volume_service_id: '',
+      });
+    }
+    await ctx.answerCallbackQuery({
+      text: t(ctx, action === 'custom' ? 'admin_panel_custom_target_saved' : 'admin_panel_saved'),
+    });
+    await renderPanelDetail(ctx, panelId);
+  } catch {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_in_use'), show_alert: true });
+  }
 }
 
 async function promptPanelServiceDeletion(
