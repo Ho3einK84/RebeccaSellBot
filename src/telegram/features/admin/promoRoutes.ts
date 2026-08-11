@@ -1,6 +1,7 @@
 import type { Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
-import { t, tm } from '../../locale.js';
+import { t } from '../../locale.js';
+import { buildScreen } from '../../ui.js';
 import {
   promoCenterKeyboard,
   promoDeleteConfirmKeyboard,
@@ -81,7 +82,17 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
     await ctx.answerCallbackQuery();
     await renderPromoScreen(
       ctx,
-      tm(ctx, 'admin_promo_delete_confirm', { code: promo.code }),
+      buildScreen({
+        emoji: '🗑️',
+        title: t(ctx, 'admin_promo_delete_title'),
+        subtitle: t(ctx, 'admin_promo_delete_subtitle'),
+        primary: {
+          emoji: '🎟️',
+          label: t(ctx, 'checkout_promo_section'),
+          value: `\`${promo.code}\``,
+        },
+        footer: `⚠️ ${t(ctx, 'admin_promo_delete_consequence')}`,
+      }),
       promoDeleteConfirmKeyboard(ctx, id),
       'Markdown'
     );

@@ -6,7 +6,7 @@ import {
 import type { MenuContext } from '../../types.js';
 import { callbackData } from '../../callbackData.js';
 import { localizedNumber, t } from '../../locale.js';
-import { backKeyboard } from '../../ui.js';
+import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '../../ui.js';
 
 const PANEL_ID_CAPTURE = '([a-z0-9_-]{3,40})';
 type PanelEditAction = 'name' | 'url' | 'api_key' | 'add_service';
@@ -38,11 +38,26 @@ export async function renderPanelRegistry(ctx: MenuContext): Promise<void> {
     .text(t(ctx, 'admin_panel_add_button'), panelCallback('add'))
     .row()
     .text(t(ctx, 'menu_back'), 'nav:admin');
-  await ctx.reply(
-    t(ctx, panels.length ? 'admin_panels_title' : 'admin_panels_empty', {
-      count: localizedNumber(panels.length, ctx),
-    }),
-    { reply_markup: keyboard }
+  await renderPanelScreen(
+    ctx,
+    panels.length
+      ? buildScreen({
+          emoji: '🖥️',
+          title: t(ctx, 'admin_panel_registry_title'),
+          subtitle: t(ctx, 'admin_panel_registry_subtitle'),
+          primary: {
+            emoji: '🖥️',
+            label: t(ctx, 'admin_panel_registry_total_label'),
+            value: localizedNumber(panels.length, ctx),
+          },
+        })
+      : buildEmptyState(
+          '🖥️',
+          t(ctx, 'admin_panel_registry_empty_title'),
+          t(ctx, 'admin_panel_registry_empty_subtitle')
+        ),
+    keyboard,
+    'Markdown'
   );
 }
 
@@ -50,12 +65,17 @@ async function renderPanelDetail(ctx: MenuContext, panelId: string): Promise<voi
   if (!ctx.services) return;
   const panel = ctx.services.panelRegistry.getPanel(panelId);
   if (!panel) {
-    await ctx.reply(t(ctx, 'admin_panel_not_found'), { reply_markup: backKeyboard(ctx, 'admin') });
+    await renderPanelScreen(
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_panel_detail_title'), t(ctx, 'admin_panel_not_found')),
+      backKeyboard(ctx, 'admin'),
+      'Markdown'
+    );
     return;
   }
   const keyboard = buildPanelDetailKeyboard(ctx, panel);
 
-  await ctx.reply(panelDetailText(ctx, panel), { reply_markup: keyboard });
+  await renderPanelScreen(ctx, panelDetailText(ctx, panel), keyboard, 'Markdown');
 }
 
 export function buildPanelDetailKeyboard(
@@ -474,12 +494,83 @@ function clearPendingPanelSecret(ctx: MenuContext): void {
 
 function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
   const defaultService = panel.services.find((service) => service.isDefault);
-  return t(ctx, 'admin_panel_detail', {
-    name: panel.name,
-    status: t(ctx, panel.enabled ? 'admin_panel_status_enabled' : 'admin_panel_status_disabled'),
-    default_status: panel.isDefault ? '⭐' : '—',
-    url: panel.baseUrl ?? '—',
-    credential: t(ctx, `admin_panel_credential_${panel.credentialMode}`),
-    service: defaultService ? `${defaultService.name} (${defaultService.serviceId})` : '—',
+  return buildScreen({
+    emoji: '🖥️',
+    title: t(ctx, 'admin_panel_detail_title'),
+    subtitle: panel.name,
+    primary: {
+      emoji: panel.enabled ? '🟢' : '⚪️',
+      label: t(ctx, 'admin_panel_status_label'),
+      value: buildStatusBadge(
+        ctx,
+        panel.enabled ? 'active' : 'inactive',
+        t(ctx, panel.enabled ? 'admin_panel_status_enabled' : 'admin_panel_status_disabled')
+      ),
+    },
+    sections: [
+      {
+        emoji: '🔌',
+        title: t(ctx, 'admin_panel_connection_section'),
+        fields: [
+          { emoji: '🏷️', label: t(ctx, 'admin_panel_name_label'), value: panel.name },
+          {
+            emoji: '⭐',
+            label: t(ctx, 'admin_panel_default_label'),
+            value: panel.isDefault ? t(ctx, 'admin_yes') : t(ctx, 'admin_no'),
+          },
+          {
+            emoji: '🌐',
+            label: t(ctx, 'admin_panel_endpoint_label'),
+            value: panel.baseUrl ?? '—',
+          },
+          {
+            emoji: '🔐',
+            label: t(ctx, 'admin_panel_credential_label'),
+            value: t(ctx, `admin_panel_credential_${panel.credentialMode}`),
+          },
+          {
+            emoji: '🎯',
+            label: t(ctx, 'admin_panel_default_service_label'),
+            value: defaultService ? `${defaultService.name} · ${defaultService.serviceId}` : '—',
+          },
+        ],
+      },
+      {
+        emoji: '📦',
+        title: t(ctx, 'admin_panel_services_section'),
+        fields: panel.services.length
+          ? panel.services.map((service) => ({
+              emoji: service.isDefault ? '⭐' : '🔹',
+              label: service.name,
+              value: `${t(ctx, 'admin_panel_service_id_label')}: ${localizedNumber(service.serviceId, ctx)}`,
+            }))
+          : [
+              {
+                emoji: '📭',
+                label: t(ctx, 'admin_panel_services_section'),
+                value: t(ctx, 'admin_panel_no_services_label'),
+              },
+            ],
+      },
+    ],
+  });
+}
+
+async function renderPanelScreen(
+  ctx: MenuContext,
+  text: string,
+  keyboard: InlineKeyboard,
+  parseMode?: 'Markdown'
+): Promise<void> {
+  if (ctx.callbackQuery?.message) {
+    await ctx.editMessageText(text, {
+      ...(parseMode ? { parse_mode: parseMode } : {}),
+      reply_markup: keyboard,
+    });
+    return;
+  }
+  await ctx.reply(text, {
+    ...(parseMode ? { parse_mode: parseMode } : {}),
+    reply_markup: keyboard,
   });
 }

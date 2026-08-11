@@ -8,7 +8,7 @@ import {
   renderShopMenuText,
   shopMenu,
 } from '../keyboards/mainMenu.js';
-import { adminMenu } from '../keyboards/adminMenu.js';
+import { adminMenu, renderAdminHome } from '../keyboards/adminMenu.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
 import { formatSubscriptionLink, observedContextLocale, t, tm } from '../locale.js';
@@ -60,7 +60,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       await ctx.reply(t(ctx, 'admin_access_denied'));
       return;
     }
-    await ctx.reply(t(ctx, 'admin_menu_title'), { reply_markup: adminMenu });
+    await ctx.reply(renderAdminHome(ctx), { parse_mode: 'Markdown', reply_markup: adminMenu });
   });
 
   bot.callbackQuery(/^locale:(fa|en)$/u, async (ctx) => {
@@ -112,7 +112,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       return;
     }
     if (showAdmin) {
-      await ctx.reply(t(ctx, 'admin_menu_title'), { reply_markup: adminMenu });
+      await ctx.reply(renderAdminHome(ctx), { parse_mode: 'Markdown', reply_markup: adminMenu });
     } else {
       const dashboardText = await renderHomeDashboard(ctx);
       await ctx.reply(dashboardText, {
@@ -167,6 +167,16 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.callbackQuery('topup:direct', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('topupConversation');
+  });
+
+  // Return from an ephemeral checkout or insufficient-balance screen to the
+  // live shop keyboard without discarding an active promo selection.
+  bot.callbackQuery('shop:open', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText(await renderShopMenuText(ctx), {
+      parse_mode: 'Markdown',
+      reply_markup: shopMenu,
+    });
   });
 
   // Clear pending promo code from shop

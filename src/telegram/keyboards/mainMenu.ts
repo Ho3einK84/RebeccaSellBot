@@ -15,8 +15,9 @@ import {
   t,
   tm,
 } from '../locale.js';
-import { backKeyboard, buildScreen, buildStatusBadge } from '../ui.js';
+import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
+import { renderAdminHome } from './adminMenu.js';
 import { customVolumeEnabled } from '../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 
@@ -171,6 +172,105 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
   });
 }
 
+function buildInsufficientBalanceScreen(
+  ctx: MenuContext,
+  packagePrice: number,
+  balance: number
+): string {
+  const deficit = packagePrice - balance;
+  return buildScreen({
+    emoji: '👛',
+    title: t(ctx, 'insufficient_balance_title'),
+    subtitle: t(ctx, 'insufficient_balance_subtitle'),
+    primary: {
+      emoji: '📉',
+      label: t(ctx, 'insufficient_balance_deficit_label'),
+      value: `${localizedNumber(deficit, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      {
+        emoji: '💰',
+        title: t(ctx, 'insufficient_balance_wallet_section'),
+        fields: [
+          {
+            emoji: '🛍️',
+            label: t(ctx, 'insufficient_balance_price_label'),
+            value: `${localizedNumber(packagePrice, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            emoji: '👛',
+            label: t(ctx, 'insufficient_balance_balance_label'),
+            value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      },
+    ],
+    footer: `ℹ️ ${t(ctx, 'insufficient_balance_hint')}`,
+  });
+}
+
+function buildPurchaseCheckoutScreen(
+  ctx: MenuContext,
+  pkg: { name: string; gbAmount: number; durationDays: number; price: number; id: string },
+  amount: number,
+  promoCode?: string
+): string {
+  return buildScreen({
+    emoji: '🛒',
+    title: t(ctx, 'purchase_review_title'),
+    subtitle: t(ctx, 'purchase_review_subtitle'),
+    primary: {
+      emoji: '💰',
+      label: t(ctx, 'checkout_total_label'),
+      value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      {
+        emoji: '📦',
+        title: t(ctx, 'checkout_package_section'),
+        fields: [
+          {
+            emoji: '📦',
+            label: t(ctx, 'renewal_success_package_label'),
+            value: localizedPackageName(ctx, pkg.id, pkg.name),
+          },
+          {
+            emoji: '📊',
+            label: t(ctx, 'checkout_traffic_label'),
+            value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+          },
+          {
+            emoji: '⏳',
+            label: t(ctx, 'checkout_duration_label'),
+            value: `${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
+          },
+          {
+            emoji: '💳',
+            label: t(ctx, 'checkout_unit_price_label'),
+            value: `${localizedNumber(Math.round(pkg.price / pkg.gbAmount), ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      },
+      ...(promoCode
+        ? [
+            {
+              emoji: '🎟️',
+              title: t(ctx, 'checkout_promo_section'),
+              fields: [
+                {
+                  emoji: '🎟️',
+                  label: t(ctx, 'shop_promo_section'),
+                  value: `\`${promoCode}\``,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+    footer: `ℹ️ ${t(ctx, 'purchase_confirmation_hint')}`,
+  });
+}
+
 // ── Main Menu ────────────────────────────────────────────────────────────────
 
 export const mainMenu = new Menu<MenuContext>('main-menu')
@@ -232,7 +332,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         footer: `ℹ️ ${t(ctx, 'trial_terms')}`,
       });
 
-      await ctx.reply(previewText, {
+      await ctx.editMessageText(previewText, {
         parse_mode: 'Markdown',
         reply_markup: previewKeyboard,
       });
@@ -256,8 +356,31 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       const refLink = `https://t.me/${botUsername}?start=${u.referralCode}`;
       const bonus = ctx.services.translationService.getSettingNum('referral_bonus_toman', 10_000);
 
-      await ctx.reply(
-        tm(ctx, 'referral_info', { bonus: localizedNumber(bonus, ctx), ref_link: refLink }),
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '👥',
+          title: t(ctx, 'referral_title'),
+          subtitle: t(ctx, 'referral_subtitle'),
+          primary: {
+            emoji: '🔗',
+            label: t(ctx, 'referral_link_label'),
+            value: `\`${refLink}\``,
+          },
+          sections: [
+            {
+              emoji: '🎁',
+              title: t(ctx, 'referral_title'),
+              fields: [
+                {
+                  emoji: '💰',
+                  label: t(ctx, 'referral_reward_label'),
+                  value: `${localizedNumber(bonus, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+              ],
+            },
+          ],
+          footer: `ℹ️ ${t(ctx, 'referral_hint')}`,
+        }),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
       );
     }
@@ -265,9 +388,14 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
   .text(
     (ctx) => t(ctx, 'menu_language'),
     async (ctx) => {
-      await ctx.reply(t(ctx, 'language_selection_prompt'), {
-        reply_markup: languageKeyboard(ctx, 'main'),
-      });
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '🌐',
+          title: t(ctx, 'language_selection_title'),
+          subtitle: t(ctx, 'language_selection_subtitle'),
+        }),
+        { parse_mode: 'Markdown', reply_markup: languageKeyboard(ctx, 'main') }
+      );
     }
   )
   .row()
@@ -275,7 +403,15 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     (ctx) => t(ctx, 'menu_support'),
     async (ctx) => {
       if (!ctx.services) return;
-      await ctx.reply(t(ctx, 'support_message'), { reply_markup: backKeyboard(ctx, 'main') });
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '💬',
+          title: t(ctx, 'support_title'),
+          subtitle: t(ctx, 'support_subtitle'),
+          footer: t(ctx, 'support_message'),
+        }),
+        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+      );
     }
   )
   .row()
@@ -285,7 +421,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         (c) => t(c, 'admin_menu_management'),
         async (c) => {
           c.menu.nav('admin-menu');
-          await c.editMessageText(t(c, 'admin_menu_title'));
+          await c.editMessageText(renderAdminHome(c), { parse_mode: 'Markdown' });
         }
       );
     }
@@ -335,48 +471,26 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
               pkg.gbAmount
             );
             if (pendingPromo.messageKey) {
-              await c.reply(t(c, pendingPromo.messageKey), {
-                reply_markup: backKeyboard(c, 'main'),
-              });
+              await c.editMessageText(
+                buildEmptyState('⚠️', t(c, 'purchase_review_title'), t(c, pendingPromo.messageKey)),
+                { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
+              );
               return;
             }
             const displayedPrice = pendingPromo.quote?.finalAmount ?? pkg.price;
             const balance = await c.services.walletService.getBalance(telegramId);
             if (balance < displayedPrice) {
-              const deficit = displayedPrice - balance;
-              const insufficientText = tm(c, 'insufficient_balance_detail', {
-                price: localizedNumber(displayedPrice, c),
-                balance: localizedNumber(balance, c),
-                deficit: localizedNumber(deficit, c),
-              });
-
               const insufficientKeyboard = new InlineKeyboard()
                 .text(t(c, 'direct_topup_button'), 'topup:direct')
                 .row()
-                .text(t(c, 'menu_back'), 'nav:main');
+                .text(t(c, 'menu_back'), 'shop:open');
 
-              await c.reply(insufficientText, {
+              await c.editMessageText(buildInsufficientBalanceScreen(c, displayedPrice, balance), {
                 parse_mode: 'Markdown',
                 reply_markup: insufficientKeyboard,
               });
               return;
             }
-
-            const pricePerGb = Math.round(pkg.price / pkg.gbAmount);
-            const summaryText = pendingPromo.quote
-              ? tm(c, 'purchase_quote_with_promo', {
-                  gb: localizedNumber(pkg.gbAmount, c),
-                  days: localizedNumber(pkg.durationDays, c),
-                  amount: localizedNumber(displayedPrice, c),
-                  price_per_gb: localizedNumber(pricePerGb, c),
-                  promo_code: pendingPromo.quote.code,
-                })
-              : tm(c, 'purchase_quote', {
-                  gb: localizedNumber(pkg.gbAmount, c),
-                  days: localizedNumber(pkg.durationDays, c),
-                  amount: localizedNumber(displayedPrice, c),
-                  price_per_gb: localizedNumber(pricePerGb, c),
-                });
 
             let checkout;
             try {
@@ -389,21 +503,29 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
               });
               trackFunnelEvent('checkout_start');
             } catch {
-              await c.reply(t(c, 'purchase_target_unavailable'), {
-                reply_markup: backKeyboard(c, 'main'),
-              });
+              await c.editMessageText(
+                buildEmptyState(
+                  '⚠️',
+                  t(c, 'purchase_review_title'),
+                  t(c, 'purchase_target_unavailable')
+                ),
+                { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
+              );
               return;
             }
 
             const confirmKeyboard = new InlineKeyboard()
               .text(t(c, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
               .row()
-              .text(t(c, 'menu_cancel'), 'conversation:cancel');
+              .text(t(c, 'menu_back'), 'shop:open');
 
-            await c.reply(summaryText, {
-              parse_mode: 'Markdown',
-              reply_markup: confirmKeyboard,
-            });
+            await c.editMessageText(
+              buildPurchaseCheckoutScreen(c, pkg, displayedPrice, pendingPromo.quote?.code),
+              {
+                parse_mode: 'Markdown',
+                reply_markup: confirmKeyboard,
+              }
+            );
           }
         )
         .row();

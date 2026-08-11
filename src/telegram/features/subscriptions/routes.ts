@@ -11,7 +11,14 @@ import {
   t,
   tm,
 } from '../../locale.js';
-import { backKeyboard, rememberArtifactMessage } from '../../ui.js';
+import {
+  backKeyboard,
+  buildEmptyState,
+  buildScreen,
+  buildStatusBadge,
+  rememberArtifactMessage,
+  type StatusType,
+} from '../../ui.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import { acquireUserActionCooldown } from '../../middleware/actionCooldown.js';
 import { clearPendingPromo, getPendingPromoPricing } from '../../promoSelection.js';
@@ -25,6 +32,25 @@ import type { RebeccaUserDetail } from '../../../domain/services/RebeccaService.
 const SUBSCRIPTION_PAGE_SIZE = 4;
 const CONFIG_ID_CAPTURE = '([a-zA-Z0-9_]{3,40})';
 type UserConfigRecord = NonNullable<Awaited<ReturnType<ConfigService['getConfigById']>>>;
+type SubscriptionSnapshot = {
+  remote?: RebeccaUserDetail;
+  status: string;
+  statusLabel: string;
+  remaining: string;
+  expiryInfo: string;
+  onlineInfo: string;
+  createdInfo: string;
+  subUrl?: string;
+  autoRenewPackageName?: string;
+};
+type DeleteQuote =
+  | {
+      eligible: true;
+      grossAmount: number;
+      cashbackWithheld: number;
+      refundAmount: number;
+    }
+  | { eligible: false; reason: string };
 
 export function buildRenewalSelectionKeyboard(
   ctx: MenuContext,
@@ -54,14 +80,23 @@ export function buildRenewalSelectionKeyboard(
       )
       .row();
   }
-  return keyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+  return keyboard.text(t(ctx, 'menu_back'), callbackData('config', 'view', configId));
 }
 
 export async function showUserSubscriptions(ctx: MenuContext, requestedPage = 1): Promise<void> {
   if (!ctx.services || !ctx.from?.id) return;
   const configs = await ctx.services.configService.listConfigsForOwner(ctx.from.id);
   if (configs.length === 0) {
-    await ctx.reply(t(ctx, 'no_subscriptions'), { reply_markup: backKeyboard(ctx, 'main') });
+    await renderSubscriptionScreen(
+      ctx,
+      buildEmptyState(
+        '📭',
+        t(ctx, 'subscription_list_empty_title'),
+        t(ctx, 'subscription_list_empty_body'),
+        `🛍️ ${t(ctx, 'subscription_list_empty_action')}`
+      ),
+      backKeyboard(ctx, 'main')
+    );
     return;
   }
   const totalPages = Math.max(1, Math.ceil(configs.length / SUBSCRIPTION_PAGE_SIZE));
@@ -71,12 +106,18 @@ export async function showUserSubscriptions(ctx: MenuContext, requestedPage = 1)
     page * SUBSCRIPTION_PAGE_SIZE
   );
   const cards = await Promise.all(
-    pageConfigs.map((config) => buildSubscriptionCard(ctx, config, false))
+    pageConfigs.map((config) => buildSubscriptionSnapshot(ctx, config))
   );
-  for (const card of cards) {
-    await ctx.reply(card.text, { parse_mode: 'Markdown', reply_markup: card.keyboard });
-  }
   const navigation = new InlineKeyboard();
+  for (const [index, config] of pageConfigs.entries()) {
+    const card = cards[index]!;
+    navigation
+      .text(
+        `${statusEmoji(card.status)} ${config.configUsername}`,
+        callbackData('config', 'view', config.id)
+      )
+      .row();
+  }
   if (totalPages > 1) {
     if (page > 1) navigation.text(t(ctx, 'pagination_previous'), `subs:page:${page - 1}`);
     navigation.text(
@@ -87,17 +128,45 @@ export async function showUserSubscriptions(ctx: MenuContext, requestedPage = 1)
     navigation.row();
   }
   navigation.text(t(ctx, 'menu_back'), 'nav:main');
-  await ctx.reply(
-    t(ctx, 'subscriptions_list_complete', {
-      count: localizedNumber(pageConfigs.length, ctx),
+  await renderSubscriptionScreen(
+    ctx,
+    buildScreen({
+      emoji: '📱',
+      title: t(ctx, 'subscription_list_title'),
+      subtitle: t(ctx, 'subscription_list_subtitle'),
+      primary: {
+        emoji: '📦',
+        label: t(ctx, 'subscription_list_total_label'),
+        value: localizedNumber(configs.length, ctx),
+      },
+      sections: pageConfigs.map((config, index) => {
+        const card = cards[index]!;
+        return {
+          emoji: statusEmoji(card.status),
+          title: config.configUsername,
+          fields: [
+            {
+              emoji: '⚡',
+              label: t(ctx, 'subscription_status_label'),
+              value: buildStatusBadge(ctx, statusBadgeType(card.status), card.statusLabel),
+            },
+            { emoji: '📊', label: t(ctx, 'remaining'), value: card.remaining },
+            { emoji: '⏳', label: t(ctx, 'expiry'), value: card.expiryInfo },
+          ],
+        };
+      }),
+      footer: t(ctx, 'subscription_list_page', {
+        page: localizedNumber(page, ctx),
+        total_pages: localizedNumber(totalPages, ctx),
+      }),
     }),
-    { reply_markup: navigation }
+    navigation
   );
 }
 
 export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(/^subs:page:(\d+)$/u, async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery({ text: t(ctx, 'subscriptions_loading') });
     await showUserSubscriptions(ctx, Number(ctx.match[1]) || 1);
   });
 
@@ -115,9 +184,21 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       config.panelId,
       config.serviceId
     );
-    await ctx.reply(t(ctx, 'renew_select_package', { username: config.configUsername }), {
-      reply_markup: keyboard,
-    });
+    await renderSubscriptionScreen(
+      ctx,
+      buildScreen({
+        emoji: '🔄',
+        title: t(ctx, 'renewal_selection_title'),
+        subtitle: t(ctx, 'renewal_selection_subtitle'),
+        primary: {
+          emoji: '📱',
+          label: t(ctx, 'renewal_selection_service_label'),
+          value: `\`${config.configUsername}\``,
+        },
+        footer: `ℹ️ ${t(ctx, 'renewal_selection_hint')}`,
+      }),
+      keyboard
+    );
   });
 
   bot.callbackQuery(new RegExp(`^renew:package:${CONFIG_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
@@ -144,14 +225,6 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       return;
     }
     await ctx.answerCallbackQuery();
-    const params = {
-      username: config.configUsername,
-      gb: localizedNumber(pkg.gbAmount, ctx),
-      days: localizedNumber(pkg.durationDays, ctx),
-      amount: localizedNumber(price, ctx),
-      price_per_gb: localizedNumber(Math.round(pkg.price / pkg.gbAmount), ctx),
-      promo_code: pendingPromo.quote?.code ?? '',
-    };
     const checkout = await ctx.services!.purchaseCheckoutService.create({
       telegramId: ctx.from.id,
       kind: 'renew_config',
@@ -162,15 +235,20 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       promoCode: pendingPromo.promoCode,
       quotedAmount: price,
     });
-    await ctx.reply(
-      tm(ctx, pendingPromo.quote ? 'renewal_quote_with_promo' : 'renewal_quote', params),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'renew_confirm_button'), callbackData('renew', 'confirm', checkout.id))
-          .row()
-          .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
-      }
+    await renderSubscriptionScreen(
+      ctx,
+      buildRenewalCheckoutScreen(ctx, {
+        username: config.configUsername,
+        gbAmount: pkg.gbAmount,
+        durationDays: pkg.durationDays,
+        amount: price,
+        pricePerGb: Math.round(pkg.price / pkg.gbAmount),
+        promoCode: pendingPromo.quote?.code,
+      }),
+      new InlineKeyboard()
+        .text(t(ctx, 'renew_confirm_button'), callbackData('renew', 'confirm', checkout.id))
+        .row()
+        .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
     );
   });
 
@@ -216,14 +294,33 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
       await ctx.services.purchaseCheckoutService.complete(checkout.id);
       if (checkout.promoCode) clearPendingPromo(ctx);
-      const sent = await ctx.reply(
-        t(ctx, 'renewal_success', {
-          username: result.configUsername,
-          package_name: localizedPackageName(ctx, checkout.packageId, checkout.packageName),
+      await renderSubscriptionScreen(
+        ctx,
+        buildScreen({
+          emoji: '✅',
+          title: t(ctx, 'renewal_success_title'),
+          subtitle: t(ctx, 'renewal_success_subtitle'),
+          primary: {
+            emoji: '📱',
+            label: t(ctx, 'renewal_success_service_label'),
+            value: `\`${result.configUsername}\``,
+          },
+          sections: [
+            {
+              emoji: '📦',
+              title: t(ctx, 'checkout_package_section'),
+              fields: [
+                {
+                  emoji: '✅',
+                  label: t(ctx, 'renewal_success_package_label'),
+                  value: localizedPackageName(ctx, checkout.packageId, checkout.packageName),
+                },
+              ],
+            },
+          ],
         }),
-        { reply_markup: backKeyboard(ctx, 'main') }
+        backKeyboard(ctx, 'main')
       );
-      rememberArtifactMessage(ctx.session, sent.message_id);
     } catch (err) {
       await ctx.services.purchaseCheckoutService.fail(checkout.id);
       await ctx.reply(
@@ -251,18 +348,18 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(new RegExp(`^config:view:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
+    await ctx.answerCallbackQuery({ text: t(ctx, 'subscriptions_loading') });
     trackFunnelEvent('service_first_view');
-    await ctx.answerCallbackQuery();
     const card = await buildSubscriptionCard(ctx, config, true);
-    await ctx.reply(card.text, { parse_mode: 'Markdown', reply_markup: card.keyboard });
+    await renderSubscriptionScreen(ctx, card.text, card.keyboard);
   });
 
   bot.callbackQuery(new RegExp(`^config:refresh:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
-    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await ctx.answerCallbackQuery({ text: t(ctx, 'subscription_refreshing') });
     const card = await buildSubscriptionCard(ctx, config, true);
-    await ctx.editMessageText(card.text, { parse_mode: 'Markdown', reply_markup: card.keyboard });
+    await renderSubscriptionScreen(ctx, card.text, card.keyboard);
   });
 
   bot.callbackQuery(new RegExp(`^autorenew:(on|off):${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
@@ -273,12 +370,24 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
 
     if (!enabled) {
       delete ctx.session.pendingAutoRenew;
-      await ctx.reply(t(ctx, 'auto_renew_disable_confirm', { username: config.configUsername }), {
-        reply_markup: new InlineKeyboard()
+      await renderSubscriptionScreen(
+        ctx,
+        buildScreen({
+          emoji: '♻️',
+          title: t(ctx, 'auto_renew_disable_title'),
+          subtitle: t(ctx, 'auto_renew_disable_subtitle'),
+          primary: {
+            emoji: '📱',
+            label: t(ctx, 'renewal_selection_service_label'),
+            value: `\`${config.configUsername}\``,
+          },
+          footer: `⚠️ ${t(ctx, 'auto_renew_disable_consequence')}`,
+        }),
+        new InlineKeyboard()
           .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'off_confirm', config.id))
           .row()
-          .text(t(ctx, 'menu_cancel'), callbackData('config', 'view', config.id)),
-      });
+          .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
+      );
       return;
     }
 
@@ -305,8 +414,22 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         )
         .row();
     }
-    keyboard.text(t(ctx, 'admin_menu_back'), `config:view:${config.id}`).row();
-    await ctx.reply(t(ctx, 'auto_renew_select_package'), { reply_markup: keyboard });
+    keyboard.text(t(ctx, 'menu_back'), `config:view:${config.id}`);
+    await renderSubscriptionScreen(
+      ctx,
+      buildScreen({
+        emoji: '♻️',
+        title: t(ctx, 'auto_renew_selection_title'),
+        subtitle: t(ctx, 'auto_renew_selection_subtitle'),
+        primary: {
+          emoji: '📱',
+          label: t(ctx, 'renewal_selection_service_label'),
+          value: `\`${config.configUsername}\``,
+        },
+        footer: `ℹ️ ${t(ctx, 'auto_renew_selection_hint')}`,
+      }),
+      keyboard
+    );
   });
 
   bot.callbackQuery(new RegExp(`^autorenew:custom:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
@@ -340,18 +463,47 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     }
     ctx.session.pendingAutoRenew = { configId: config.id, packageId: pkg.id, price: pkg.price };
     await ctx.answerCallbackQuery();
-    await ctx.reply(
-      t(ctx, 'auto_renew_confirm', {
-        username: config.configUsername,
-        package: localizedPackageName(ctx, pkg.id, pkg.name),
-        price: localizedNumber(pkg.price, ctx),
+    await renderSubscriptionScreen(
+      ctx,
+      buildScreen({
+        emoji: '♻️',
+        title: t(ctx, 'auto_renew_review_title'),
+        subtitle: t(ctx, 'auto_renew_review_subtitle'),
+        primary: {
+          emoji: '💰',
+          label: t(ctx, 'auto_renew_charge_label'),
+          value: `${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
+        },
+        sections: [
+          {
+            emoji: '📱',
+            title: t(ctx, 'renewal_selection_service_label'),
+            fields: [
+              {
+                emoji: '🆔',
+                label: t(ctx, 'checkout_service_label'),
+                value: `\`${config.configUsername}\``,
+              },
+            ],
+          },
+          {
+            emoji: '📦',
+            title: t(ctx, 'checkout_package_section'),
+            fields: [
+              {
+                emoji: '📦',
+                label: t(ctx, 'renewal_success_package_label'),
+                value: localizedPackageName(ctx, pkg.id, pkg.name),
+              },
+            ],
+          },
+        ],
+        footer: `ℹ️ ${t(ctx, 'auto_renew_review_hint')}`,
       }),
-      {
-        reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'confirm', config.id))
-          .row()
-          .text(t(ctx, 'menu_cancel'), callbackData('config', 'view', config.id)),
-      }
+      new InlineKeyboard()
+        .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'confirm', config.id))
+        .row()
+        .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
     );
   });
 
@@ -380,11 +532,20 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     await ctx.services!.configService.setAutoRenew(ctx.from.id, config.id, true, pkg.id, pkg.price);
-    const returnKeyboard = new InlineKeyboard().text(
-      t(ctx, 'admin_menu_back'),
-      callbackData('config', 'view', config.id)
+    await renderSubscriptionScreen(
+      ctx,
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'auto_renew_enabled_title'),
+        subtitle: t(ctx, 'auto_renew_enabled_subtitle'),
+        primary: {
+          emoji: '📱',
+          label: t(ctx, 'renewal_selection_service_label'),
+          value: `\`${config.configUsername}\``,
+        },
+      }),
+      new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
     );
-    await ctx.reply(t(ctx, 'auto_renew_enabled'), { reply_markup: returnKeyboard });
   });
 
   bot.callbackQuery(
@@ -398,11 +559,20 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       }
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
       await ctx.services!.configService.setAutoRenew(ctx.from.id, config.id, false);
-      const returnKeyboard = new InlineKeyboard().text(
-        t(ctx, 'admin_menu_back'),
-        callbackData('config', 'view', config.id)
+      await renderSubscriptionScreen(
+        ctx,
+        buildScreen({
+          emoji: '✅',
+          title: t(ctx, 'auto_renew_disabled_title'),
+          subtitle: t(ctx, 'auto_renew_disabled_subtitle'),
+          primary: {
+            emoji: '📱',
+            label: t(ctx, 'renewal_selection_service_label'),
+            value: `\`${config.configUsername}\``,
+          },
+        }),
+        new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
       );
-      await ctx.reply(t(ctx, 'auto_renew_disabled'), { reply_markup: returnKeyboard });
     }
   );
 
@@ -412,9 +582,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     try {
       await ctx.services!.configService.toggleConfig(config.configUsername, config.panelId);
-      await showUserSubscriptions(ctx);
+      const card = await buildSubscriptionCard(ctx, config, true);
+      await renderSubscriptionScreen(ctx, card.text, card.keyboard);
     } catch {
-      await ctx.reply(t(ctx, 'config_action_failed'), { reply_markup: backKeyboard(ctx) });
+      await renderSubscriptionScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'subscription_status_label'), t(ctx, 'config_action_failed')),
+        backKeyboard(ctx)
+      );
     }
   });
 
@@ -422,14 +597,23 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText(
-      t(ctx, 'subscription_revoke_confirm', { username: config.configUsername }),
-      {
-        reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'admin_confirm_button'), callbackData('config', 'revoke_confirm', config.id))
-          .row()
-          .text(t(ctx, 'menu_cancel'), callbackData('config', 'refresh', config.id)),
-      }
+    await renderSubscriptionScreen(
+      ctx,
+      buildScreen({
+        emoji: '🔐',
+        title: t(ctx, 'subscription_revoke_title'),
+        subtitle: t(ctx, 'subscription_revoke_subtitle'),
+        primary: {
+          emoji: '📱',
+          label: t(ctx, 'renewal_selection_service_label'),
+          value: `\`${config.configUsername}\``,
+        },
+        footer: `⚠️ ${t(ctx, 'subscription_revoke_consequence')}`,
+      }),
+      new InlineKeyboard()
+        .text(t(ctx, 'admin_confirm_button'), callbackData('config', 'revoke_confirm', config.id))
+        .row()
+        .text(t(ctx, 'menu_back'), callbackData('config', 'refresh', config.id))
     );
   });
 
@@ -444,15 +628,46 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           config.configUsername,
           config.panelId
         );
-        const sentMsg = await ctx.reply(
-          tm(ctx, 'subscription_link_revoked', {
-            sub_url: formatSubscriptionLink(url, t(ctx, 'subscription_link_unavailable')),
+        await renderSubscriptionScreen(
+          ctx,
+          buildScreen({
+            emoji: '✅',
+            title: t(ctx, 'subscription_revoke_success_title'),
+            subtitle: t(ctx, 'subscription_revoke_success_subtitle'),
+            primary: {
+              emoji: '🔗',
+              label: t(ctx, 'subscription_link_label'),
+              value: formatSubscriptionLink(url, t(ctx, 'subscription_link_unavailable')),
+            },
+            sections: [
+              {
+                emoji: '📱',
+                title: t(ctx, 'renewal_selection_service_label'),
+                fields: [
+                  {
+                    emoji: '🆔',
+                    label: t(ctx, 'checkout_service_label'),
+                    value: `\`${config.configUsername}\``,
+                  },
+                ],
+              },
+            ],
           }),
-          { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
+          backKeyboard(ctx, 'main')
         );
-        rememberArtifactMessage(ctx.session, sentMsg.message_id);
+        if (ctx.callbackQuery?.message) {
+          rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
+        }
       } catch {
-        await ctx.reply(t(ctx, 'config_action_failed'), { reply_markup: backKeyboard(ctx) });
+        await renderSubscriptionScreen(
+          ctx,
+          buildEmptyState(
+            '⚠️',
+            t(ctx, 'subscription_revoke_title'),
+            t(ctx, 'config_action_failed')
+          ),
+          backKeyboard(ctx)
+        );
       }
     }
   );
@@ -479,22 +694,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         callbackData('config', 'delete_confirm', config.id)
       )
       .row()
-      .text(t(ctx, 'menu_cancel'), callbackData('config', 'refresh', config.id));
+      .text(t(ctx, 'menu_back'), callbackData('config', 'refresh', config.id));
 
-    await ctx.editMessageText(
-      quote.eligible
-        ? tm(ctx, 'config_delete_refund_warning', {
-            username: config.configUsername,
-            gross_amount: localizedNumber(quote.grossAmount, ctx),
-            cashback_withheld: localizedNumber(quote.cashbackWithheld, ctx),
-            refund_amount: localizedNumber(quote.refundAmount, ctx),
-          })
-        : tm(ctx, 'config_delete_no_refund_warning', {
-            username: config.configUsername,
-            reason: t(ctx, `refund_reason_${quote.reason}`),
-          }),
-      { parse_mode: 'Markdown', reply_markup: keyboard }
-    );
+    await renderSubscriptionScreen(ctx, buildDeleteReviewScreen(ctx, config, quote), keyboard);
   });
 
   bot.callbackQuery(
@@ -513,30 +715,41 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           config.id
         );
         if (!result.eligible) {
-          await ctx.reply(
-            t(ctx, 'config_refund_not_eligible', {
-              reason: t(ctx, `refund_reason_${result.reason}`),
+          await renderSubscriptionScreen(
+            ctx,
+            buildScreen({
+              emoji: '⚠️',
+              title: t(ctx, 'config_delete_review_title'),
+              subtitle: t(ctx, 'config_delete_no_refund_subtitle'),
+              primary: {
+                emoji: '⚠️',
+                label: t(ctx, 'config_delete_eligibility_label'),
+                value: t(ctx, `refund_reason_${result.reason}`),
+              },
             }),
-            { reply_markup: backKeyboard(ctx, 'main') }
+            backKeyboard(ctx, 'main')
           );
           return;
         }
-        await ctx.reply(
-          tm(ctx, 'config_refunded_deleted', {
-            username: result.configUsername,
-            amount: localizedNumber(result.refundAmount, ctx),
-          }),
-          { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+        await renderSubscriptionScreen(
+          ctx,
+          buildDeleteResultScreen(ctx, result.configUsername, result.refundAmount, true),
+          backKeyboard(ctx, 'main')
         );
       } catch (err) {
-        await ctx.reply(
-          t(
-            ctx,
-            err instanceof RefundOutcomePendingError
-              ? 'config_refund_pending'
-              : 'config_refund_failed'
+        await renderSubscriptionScreen(
+          ctx,
+          buildEmptyState(
+            err instanceof RefundOutcomePendingError ? '⏳' : '⚠️',
+            t(ctx, 'config_delete_review_title'),
+            t(
+              ctx,
+              err instanceof RefundOutcomePendingError
+                ? 'config_refund_pending'
+                : 'config_refund_failed'
+            )
           ),
-          { reply_markup: backKeyboard(ctx, 'main') }
+          backKeyboard(ctx, 'main')
         );
       }
     }
@@ -552,11 +765,16 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         config.configUsername,
         config.panelId
       );
-      await ctx.reply(
-        tm(ctx, deleted ? 'config_deleted' : 'config_delete_not_found', {
-          username: config.configUsername,
-        }),
-        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
+      await renderSubscriptionScreen(
+        ctx,
+        deleted
+          ? buildDeleteResultScreen(ctx, config.configUsername, undefined, false)
+          : buildEmptyState(
+              '⚠️',
+              t(ctx, 'config_delete_review_title'),
+              tm(ctx, 'config_delete_not_found', { username: config.configUsername })
+            ),
+        backKeyboard(ctx, 'main')
       );
     }
   );
@@ -584,7 +802,17 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         errorCorrectionLevel: 'M',
       });
       const photo = await ctx.replyWithPhoto(new InputFile(image, `${config.configUsername}.png`), {
-        caption: t(ctx, 'subscription_qr_caption', { username: config.configUsername }),
+        caption: buildScreen({
+          emoji: '📷',
+          title: t(ctx, 'subscription_qr_title'),
+          subtitle: t(ctx, 'subscription_qr_subtitle'),
+          primary: {
+            emoji: '📱',
+            label: t(ctx, 'subscription_qr_service_label'),
+            value: `\`${config.configUsername}\``,
+          },
+        }),
+        parse_mode: 'Markdown',
         reply_markup: backKeyboard(ctx, 'main'),
       });
       rememberArtifactMessage(ctx.session, photo.message_id);
@@ -608,6 +836,113 @@ async function buildSubscriptionCard(
   config: UserConfigRecord,
   isDetailView = false
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
+  const snapshot = await buildSubscriptionSnapshot(ctx, config);
+  const keyboard = buildSubscriptionActionKeyboard(
+    ctx,
+    config.id,
+    snapshot.status,
+    config.autoRenewEnabled,
+    isDetailView
+  );
+
+  if (!isDetailView) {
+    return {
+      text: buildScreen({
+        emoji: '📱',
+        title: config.configUsername,
+        primary: {
+          emoji: statusEmoji(snapshot.status),
+          label: t(ctx, 'subscription_status_label'),
+          value: buildStatusBadge(ctx, statusBadgeType(snapshot.status), snapshot.statusLabel),
+        },
+        sections: [
+          {
+            emoji: '📊',
+            title: t(ctx, 'subscription_usage_section'),
+            fields: [
+              { emoji: '📶', label: t(ctx, 'remaining'), value: snapshot.remaining },
+              { emoji: '⏳', label: t(ctx, 'expiry'), value: snapshot.expiryInfo },
+            ],
+          },
+        ],
+        footer: snapshot.remoteAvailable ? undefined : `⚠️ ${t(ctx, 'subscription_cached_notice')}`,
+      }),
+      keyboard,
+    };
+  }
+
+  return {
+    text: buildScreen({
+      emoji: '📱',
+      title: tm(ctx, 'subscription_detail_heading', { username: config.configUsername }),
+      subtitle: t(
+        ctx,
+        snapshot.remoteAvailable
+          ? 'subscription_detail_live_subtitle'
+          : 'subscription_detail_cached_subtitle'
+      ),
+      primary: {
+        emoji: statusEmoji(snapshot.status),
+        label: t(ctx, 'subscription_status_label'),
+        value: buildStatusBadge(ctx, statusBadgeType(snapshot.status), snapshot.statusLabel),
+      },
+      sections: [
+        {
+          emoji: '📊',
+          title: t(ctx, 'subscription_usage_section'),
+          fields: [
+            { emoji: '📶', label: t(ctx, 'remaining'), value: snapshot.remaining },
+            { emoji: '⏳', label: t(ctx, 'expiry'), value: snapshot.expiryInfo },
+          ],
+        },
+        {
+          emoji: '🔗',
+          title: t(ctx, 'subscription_connection_section'),
+          fields: [
+            {
+              emoji: '🌐',
+              label: t(ctx, 'subscription_last_connection_label'),
+              value: snapshot.onlineInfo,
+            },
+            {
+              emoji: '📅',
+              label: t(ctx, 'subscription_created_label'),
+              value: snapshot.createdInfo,
+            },
+            {
+              emoji: '🔗',
+              label: t(ctx, 'subscription_link_label'),
+              value: formatSubscriptionLink(
+                snapshot.subUrl,
+                t(ctx, 'subscription_link_unavailable')
+              ),
+            },
+          ],
+        },
+        {
+          emoji: '♻️',
+          title: t(ctx, 'subscription_automation_section'),
+          fields: [
+            {
+              emoji: config.autoRenewEnabled ? '🟢' : '⚪️',
+              label: t(ctx, 'subscription_auto_renew_label'),
+              value: config.autoRenewEnabled
+                ? `${t(ctx, 'ui_status_active')} · ${snapshot.autoRenewPackageName ?? t(ctx, 'auto_renew_package_unavailable')}`
+                : t(ctx, 'ui_status_inactive'),
+            },
+          ],
+        },
+      ],
+      footer: snapshot.remoteAvailable ? undefined : `⚠️ ${t(ctx, 'subscription_cached_notice')}`,
+    }),
+    keyboard,
+  };
+}
+
+async function buildSubscriptionSnapshot(
+  ctx: MenuContext,
+  config: UserConfigRecord
+): Promise<SubscriptionSnapshot & { remoteAvailable: boolean }> {
   let remote: RebeccaUserDetail | undefined;
   try {
     remote = await ctx.services!.configService.getRemoteConfigDetail(config);
@@ -634,41 +969,23 @@ async function buildSubscriptionCard(
   const pkgOption = config.autoRenewPackageId
     ? ctx.services?.pricingService.getPackageById(config.autoRenewPackageId)
     : undefined;
-  const packageName = pkgOption
+  const autoRenewPackageName = pkgOption
     ? localizedPackageName(ctx, pkgOption.id, pkgOption.name)
     : undefined;
-  const autoRenewState = config.autoRenewEnabled
-    ? t(ctx, 'auto_renew_state_enabled', {
-        package: packageName ?? t(ctx, 'auto_renew_package_unavailable'),
-      })
-    : t(ctx, 'auto_renew_state_disabled');
-
-  let text: string;
-  if (!isDetailView) {
-    text = `📱 *${config.configUsername}* | ${localizedSubscriptionStatus(ctx, status)}\n📊 *${t(ctx, 'remaining') || 'حجم باقیمانده'}:* ${remaining}\n⏳ *${t(ctx, 'expiry') || 'اعتبار'}:* ${expiryInfo}`;
-  } else {
-    text = `${tm(ctx, remote ? 'subscription_status' : 'subscription_status_cached', {
-      username: config.configUsername,
-      status: localizedSubscriptionStatus(ctx, status),
-      remaining,
-      expiry_info: expiryInfo,
-      online_info: onlineInfo,
-      created_info: localizedDate(new Date(remote?.created_at || config.createdAt), ctx),
-      sub_url: formatSubscriptionLink(subUrl ?? undefined, t(ctx, 'subscription_link_unavailable')),
-    })}\n\n${autoRenewState}`;
-  }
-
-  const keyboard = buildSubscriptionActionKeyboard(
-    ctx,
-    config.id,
+  return {
+    remoteAvailable: remote !== undefined,
     status,
-    config.autoRenewEnabled,
-    isDetailView
-  );
-  return { text, keyboard };
+    statusLabel: localizedSubscriptionStatusLabel(ctx, status),
+    remaining,
+    expiryInfo,
+    onlineInfo,
+    createdInfo: localizedDate(new Date(remote?.created_at || config.createdAt), ctx),
+    subUrl: subUrl ?? undefined,
+    autoRenewPackageName,
+  };
 }
 
-/** Action-only keyboard; navigation is emitted once after the page of cards. */
+/** Action keyboard for a single subscription detail screen. */
 export function buildSubscriptionActionKeyboard(
   ctx: MenuContext,
   configId: string,
@@ -754,8 +1071,222 @@ function formatOnline(ctx: MenuContext, onlineAt: string | undefined): string {
   return `${localizedDate(date, ctx)} ${date.toLocaleTimeString(resolveContextLocale(ctx) === 'fa' ? 'fa-IR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function localizedSubscriptionStatus(ctx: MenuContext, status: string): string {
-  const key = `subscription_status_${status}`;
+function localizedSubscriptionStatusLabel(ctx: MenuContext, status: string): string {
+  const key = `subscription_state_${status}`;
   const translated = t(ctx, key);
-  return translated === key ? t(ctx, 'subscription_status_unknown', { status }) : translated;
+  return translated === key ? t(ctx, 'subscription_state_unknown', { status }) : translated;
+}
+
+function statusBadgeType(status: string): StatusType {
+  if (status === 'active') return 'active';
+  if (status === 'disabled') return 'inactive';
+  if (status === 'on_hold') return 'pending';
+  if (status === 'expired' || status === 'depleted') return 'expired';
+  return 'warning';
+}
+
+function statusEmoji(status: string): string {
+  if (status === 'active') return '🟢';
+  if (status === 'disabled') return '⚪️';
+  if (status === 'on_hold') return '⏳';
+  if (status === 'expired' || status === 'depleted') return '⌛';
+  return '⚠️';
+}
+
+function buildRenewalCheckoutScreen(
+  ctx: MenuContext,
+  input: {
+    username: string;
+    gbAmount: number;
+    durationDays: number;
+    amount: number;
+    pricePerGb: number;
+    promoCode?: string;
+  }
+): string {
+  return buildScreen({
+    emoji: '🔄',
+    title: t(ctx, 'renewal_review_title'),
+    subtitle: t(ctx, 'renewal_review_subtitle'),
+    primary: {
+      emoji: '💰',
+      label: t(ctx, 'checkout_total_label'),
+      value: `${localizedNumber(input.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      {
+        emoji: '📱',
+        title: t(ctx, 'renewal_selection_service_label'),
+        fields: [
+          { emoji: '🆔', label: t(ctx, 'checkout_service_label'), value: `\`${input.username}\`` },
+        ],
+      },
+      {
+        emoji: '📦',
+        title: t(ctx, 'checkout_package_section'),
+        fields: [
+          {
+            emoji: '📊',
+            label: t(ctx, 'checkout_traffic_label'),
+            value: `${localizedNumber(input.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+          },
+          {
+            emoji: '⏳',
+            label: t(ctx, 'checkout_duration_label'),
+            value: `${localizedNumber(input.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
+          },
+          {
+            emoji: '💳',
+            label: t(ctx, 'checkout_unit_price_label'),
+            value: `${localizedNumber(input.pricePerGb, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      },
+      ...(input.promoCode
+        ? [
+            {
+              emoji: '🎟️',
+              title: t(ctx, 'checkout_promo_section'),
+              fields: [
+                {
+                  emoji: '🎟️',
+                  label: t(ctx, 'shop_promo_section'),
+                  value: `\`${input.promoCode}\``,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+    footer: `ℹ️ ${t(ctx, 'checkout_confirmation_hint')}`,
+  });
+}
+
+function buildDeleteReviewScreen(
+  ctx: MenuContext,
+  config: UserConfigRecord,
+  quote: DeleteQuote
+): string {
+  const refundValue = quote.eligible
+    ? `${localizedNumber(quote.refundAmount, ctx)} ${t(ctx, 'currency_toman')}`
+    : undefined;
+  return buildScreen({
+    emoji: '🗑️',
+    title: t(ctx, 'config_delete_review_title'),
+    subtitle: t(
+      ctx,
+      quote.eligible ? 'config_delete_refund_subtitle' : 'config_delete_no_refund_subtitle'
+    ),
+    primary: quote.eligible
+      ? {
+          emoji: '💸',
+          label: t(ctx, 'config_delete_refund_label'),
+          value: refundValue!,
+        }
+      : {
+          emoji: '⚠️',
+          label: t(ctx, 'config_delete_eligibility_label'),
+          value: t(ctx, `refund_reason_${quote.reason}`),
+        },
+    sections: [
+      {
+        emoji: '📱',
+        title: t(ctx, 'config_delete_service_label'),
+        fields: [
+          {
+            emoji: '🆔',
+            label: t(ctx, 'checkout_service_label'),
+            value: `\`${config.configUsername}\``,
+          },
+        ],
+      },
+      ...(quote.eligible
+        ? [
+            {
+              emoji: '💰',
+              title: t(ctx, 'config_delete_refund_label'),
+              fields: [
+                {
+                  emoji: '💳',
+                  label: t(ctx, 'config_delete_original_charge_label'),
+                  value: `${localizedNumber(quote.grossAmount, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  emoji: '🎁',
+                  label: t(ctx, 'config_delete_cashback_label'),
+                  value: `${localizedNumber(quote.cashbackWithheld, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  emoji: '💸',
+                  label: t(ctx, 'config_delete_refund_label'),
+                  value: refundValue!,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+    footer: quote.eligible
+      ? `⚠️ ${t(ctx, 'config_delete_refund_consequence')}`
+      : `⚠️ ${t(ctx, 'config_delete_no_refund_consequence')}`,
+  });
+}
+
+function buildDeleteResultScreen(
+  ctx: MenuContext,
+  username: string,
+  refundAmount: number | undefined,
+  refunded: boolean
+): string {
+  return buildScreen({
+    emoji: '✅',
+    title: t(ctx, 'config_delete_success_title'),
+    subtitle: t(
+      ctx,
+      refunded
+        ? 'config_delete_success_refund_subtitle'
+        : 'config_delete_success_no_refund_subtitle'
+    ),
+    primary: refunded
+      ? {
+          emoji: '💸',
+          label: t(ctx, 'config_delete_refund_label'),
+          value: `${localizedNumber(refundAmount ?? 0, ctx)} ${t(ctx, 'currency_toman')}`,
+        }
+      : {
+          emoji: '🗑️',
+          label: t(ctx, 'config_delete_service_label'),
+          value: `\`${username}\``,
+        },
+    ...(refunded
+      ? {
+          sections: [
+            {
+              emoji: '📱',
+              title: t(ctx, 'config_delete_service_label'),
+              fields: [
+                {
+                  emoji: '🆔',
+                  label: t(ctx, 'checkout_service_label'),
+                  value: `\`${username}\``,
+                },
+              ],
+            },
+          ],
+        }
+      : {}),
+  });
+}
+
+async function renderSubscriptionScreen(
+  ctx: MenuContext,
+  text: string,
+  keyboard: InlineKeyboard
+): Promise<void> {
+  const options = { parse_mode: 'Markdown' as const, reply_markup: keyboard };
+  if (ctx.callbackQuery?.message) {
+    await ctx.editMessageText(text, options);
+    return;
+  }
+  await ctx.reply(text, options);
 }

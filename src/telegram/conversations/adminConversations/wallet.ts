@@ -7,7 +7,6 @@ import {
   localizedNumberForLocale,
   t,
   tForLocale,
-  tm,
   tmForLocale,
 } from '../../locale.js';
 import {
@@ -16,6 +15,8 @@ import {
 } from '../../../domain/services/WalletService.js';
 import {
   acceptConversationOwner,
+  buildEmptyState,
+  buildScreen,
   conversationOwnerId,
   handleConversationCancel,
   promptInConversation,
@@ -27,21 +28,48 @@ import {
 } from '../../ui.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import { parseNonnegativeSafeInteger, parsePositiveSafeInteger, requireAdmin } from './shared.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 
 function buildPaymentInfoCard(
   ctx: ConversationContext,
   cardNumber: string,
   cardHolder: string,
-  amountToman?: number
+  amountToman?: number,
+  options: { title?: string; subtitle?: string; footer?: string } = {}
 ): string {
-  const baseCard = t(ctx, 'topup_instructions', {
-    card_number: cardNumber,
-    card_holder: cardHolder,
+  return buildScreen({
+    emoji: '💳',
+    title: options.title ?? t(ctx, 'topup_title'),
+    subtitle: options.subtitle ?? t(ctx, 'topup_subtitle'),
+    ...(amountToman !== undefined
+      ? {
+          primary: {
+            emoji: '💰',
+            label: t(ctx, 'topup_selected_amount_label'),
+            value: `${localizedNumber(amountToman, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        }
+      : {}),
+    sections: [
+      {
+        emoji: '🏦',
+        title: t(ctx, 'topup_payment_section'),
+        fields: [
+          {
+            emoji: '💳',
+            label: t(ctx, 'topup_card_number_label'),
+            value: `\`${escapeTelegramMarkdown(cardNumber)}\``,
+          },
+          {
+            emoji: '👤',
+            label: t(ctx, 'topup_card_holder_label'),
+            value: escapeTelegramMarkdown(cardHolder),
+          },
+        ],
+      },
+    ],
+    footer: options.footer,
   });
-  if (amountToman !== undefined) {
-    return `${baseCard}\n💵 *مبلغ انتخابی:* ${localizedNumber(amountToman, ctx)} تومان`;
-  }
-  return baseCard;
 }
 
 export async function topupConversation(conversation: MyConversation, ctx: ConversationContext) {
@@ -53,10 +81,21 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
   // Check if user already has a pending receipt
   const pendingReceipt = await ctx.services.walletService.getPendingReceiptForUser?.(telegramId);
   if (pendingReceipt) {
-    const pendingMsg = tm(ctx, 'topup_pending_exists_detail', {
-      amount: localizedNumber(pendingReceipt.amount, ctx),
-    });
-    await replyInConversation(conversation, ctx, pendingMsg, { parse_mode: 'Markdown' });
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildScreen({
+        emoji: '⏳',
+        title: t(ctx, 'topup_pending_title'),
+        subtitle: t(ctx, 'topup_pending_subtitle'),
+        primary: {
+          emoji: '💰',
+          label: t(ctx, 'topup_selected_amount_label'),
+          value: `${localizedNumber(pendingReceipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+        },
+      }),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
 
@@ -64,19 +103,21 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
   const cardHolder = ctx.services.translationService.getSetting('card_holder', '—');
 
   const presetKeyboard = new InlineKeyboard()
-    .text(`۵۰٬۰۰۰ ${t(ctx, 'currency_toman')}`, 'amount:50000')
-    .text(`۱۰۰٬۰۰۰ ${t(ctx, 'currency_toman')}`, 'amount:100000')
+    .text(`${localizedNumber(50_000, ctx)} ${t(ctx, 'currency_toman')}`, 'amount:50000')
+    .text(`${localizedNumber(100_000, ctx)} ${t(ctx, 'currency_toman')}`, 'amount:100000')
     .row()
-    .text(`۲۰۰٬۰۰۰ ${t(ctx, 'currency_toman')}`, 'amount:200000')
-    .text(`۵۰۰٬۰۰۰ ${t(ctx, 'currency_toman')}`, 'amount:500000')
+    .text(`${localizedNumber(200_000, ctx)} ${t(ctx, 'currency_toman')}`, 'amount:200000')
+    .text(`${localizedNumber(500_000, ctx)} ${t(ctx, 'currency_toman')}`, 'amount:500000')
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
   await promptInConversation(
     conversation,
     ctx,
-    `${buildPaymentInfoCard(ctx, cardNumber, cardHolder)}\n\n${t(ctx, 'topup_preset_prompt')}`,
-    { reply_markup: presetKeyboard }
+    buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
+      footer: `ℹ️ ${t(ctx, 'topup_choose_amount_hint')}`,
+    }),
+    { parse_mode: 'Markdown', reply_markup: presetKeyboard }
   );
 
   const minimum = ctx.services.translationService.getSettingNum('topup_min_amount', 10_000);
@@ -111,22 +152,25 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     await promptInConversation(
       conversation,
       ctx,
-      `${buildPaymentInfoCard(ctx, cardNumber, cardHolder)}\n\n${t(
-        ctx,
-        'topup_amount_invalid_range',
-        {
+      buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
+        footer: `⚠️ ${t(ctx, 'topup_amount_invalid_range', {
           min: localizedNumber(minimum, ctx),
           max: localizedNumber(maximum, ctx),
-        }
-      )}`,
-      { reply_markup: presetKeyboard }
+        })}`,
+      }),
+      { parse_mode: 'Markdown', reply_markup: presetKeyboard }
     );
   }
 
   await promptInConversation(
     conversation,
     ctx,
-    `${buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman)}\n\n${t(ctx, 'topup_photo_prompt')}`
+    buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
+      title: t(ctx, 'topup_receipt_title'),
+      subtitle: t(ctx, 'topup_receipt_subtitle'),
+      footer: t(ctx, 'topup_photo_prompt'),
+    }),
+    { parse_mode: 'Markdown' }
   );
   const photoFileId = await waitForPhotoInput(conversation);
   if (photoFileId === undefined) return;
@@ -134,7 +178,11 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
   await promptInConversation(
     conversation,
     ctx,
-    `${buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman)}\n\n${tm(ctx, 'topup_confirmation', { amount: localizedNumber(amountToman, ctx) })}`,
+    buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
+      title: t(ctx, 'topup_review_title'),
+      subtitle: t(ctx, 'topup_review_subtitle'),
+      footer: `⚠️ ${t(ctx, 'topup_review_consequence')}`,
+    }),
     {
       parse_mode: 'Markdown',
       reply_markup: new InlineKeyboard()
@@ -161,16 +209,35 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     await sendArtifactInConversation(
       conversation,
       ctx,
-      `${t(ctx, 'topup_success')}\n\n🆔 *شناسه رسید:* \`${receiptId}\``,
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'topup_success_title'),
+        subtitle: t(ctx, 'topup_success_subtitle'),
+        primary: {
+          emoji: '🆔',
+          label: t(ctx, 'topup_receipt_id_label'),
+          value: `\`${receiptId}\``,
+        },
+      }),
       { parse_mode: 'Markdown' }
     );
   } catch (err) {
     if (err instanceof PendingTopupReceiptError) {
-      await replyInConversation(conversation, ctx, t(ctx, 'topup_pending_exists'));
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⏳', t(ctx, 'topup_pending_title'), t(ctx, 'topup_pending_subtitle')),
+        { parse_mode: 'Markdown' }
+      );
       return;
     }
     logger.error({ err, telegramId }, 'Topup receipt submission failed');
-    await replyInConversation(conversation, ctx, t(ctx, 'topup_failed'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'topup_receipt_title'), t(ctx, 'topup_failed')),
+      { parse_mode: 'Markdown' }
+    );
   }
 }
 

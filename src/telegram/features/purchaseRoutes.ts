@@ -1,19 +1,17 @@
 /** Durable purchase confirmation route. Renewal routes live with subscriptions. */
 
-import type { Bot } from 'grammy';
+import { InlineKeyboard, type Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
 import { PurchaseCheckoutUnavailableError } from '../../domain/services/PurchaseCheckoutService.js';
 import { clearPendingPromo } from '../promoSelection.js';
 import { purchaseFailureMessage } from '../purchaseFeedback.js';
-import { formatSubscriptionLink, localizedNumber, resolveContextLocale, t, tm } from '../locale.js';
-import { backKeyboard, rememberArtifactMessage } from '../ui.js';
+import { formatSubscriptionLink, resolveContextLocale, t } from '../locale.js';
+import { backKeyboard, buildEmptyState, buildScreen, rememberArtifactMessage } from '../ui.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 
 export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   bot.callbackQuery(/^buy:confirm:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
     const telegramId = ctx.from.id;
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
 
     let checkout;
     try {
@@ -34,18 +32,55 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
     if ((await services.walletService.getBalance(telegramId)) < checkout.quotedAmount) {
       await services.purchaseCheckoutService.fail(checkout.id);
       await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
+      await ctx.editMessageText(
+        buildEmptyState('⚠️', t(ctx, 'insufficient_balance_title'), t(ctx, 'insufficient_balance')),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard()
+            .text(t(ctx, 'direct_topup_button'), 'topup:direct')
+            .row()
+            .text(t(ctx, 'menu_back'), 'shop:open'),
+        }
+      );
       return;
     }
 
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-    const progressMessage = await ctx.reply(
-      checkout.promoCode
-        ? t(ctx, 'purchase_issuing_with_promo', {
-            package_name: checkout.packageName,
-            promo_code: checkout.promoCode,
-            amount: localizedNumber(checkout.quotedAmount, ctx),
-          })
-        : t(ctx, 'purchase_issuing', { package_name: checkout.packageName })
+    await ctx.editMessageText(
+      buildScreen({
+        emoji: '⏳',
+        title: t(ctx, 'purchase_issuing_title'),
+        subtitle: t(ctx, 'purchase_issuing_subtitle'),
+        primary: {
+          emoji: '📦',
+          label: t(ctx, 'purchase_issuing_package_label'),
+          value: checkout.packageName,
+        },
+        ...(checkout.promoCode
+          ? {
+              sections: [
+                {
+                  emoji: '🎟️',
+                  title: t(ctx, 'checkout_promo_section'),
+                  fields: [
+                    {
+                      emoji: '🎟️',
+                      label: t(ctx, 'shop_promo_section'),
+                      value: `\`${checkout.promoCode}\``,
+                    },
+                  ],
+                },
+              ],
+            }
+          : {}),
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(
+          t(ctx, 'operation_in_progress'),
+          'purchase:pending'
+        ),
+      }
     );
 
     try {
@@ -70,27 +105,38 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       if (checkout.promoCode) clearPendingPromo(ctx);
       trackFunnelEvent('purchase_confirm');
 
-      const createdMsg = await ctx.api.editMessageText(
-        chatId,
-        progressMessage.message_id,
-        tm(ctx, 'config_created', {
-          sub_url: formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable')),
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '🎉',
+          title: t(ctx, 'purchase_success_title'),
+          subtitle: t(ctx, 'purchase_success_subtitle'),
+          primary: {
+            emoji: '🔗',
+            label: t(ctx, 'purchase_success_link_label'),
+            value: formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable')),
+          },
         }),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
       );
-      if (typeof createdMsg === 'object' && createdMsg && 'message_id' in createdMsg) {
-        rememberArtifactMessage(ctx.session, createdMsg.message_id);
+      if (ctx.callbackQuery?.message) {
+        rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
       }
     } catch (error) {
       trackFunnelEvent('purchase_failed');
       await services.purchaseCheckoutService.fail(checkout.id);
-      await ctx.api.editMessageText(
-        chatId,
-        progressMessage.message_id,
-        purchaseFailureMessage(services.translationService, error, resolveContextLocale(ctx)),
-        { reply_markup: backKeyboard(ctx, 'main') }
+      await ctx.editMessageText(
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'purchase_failed_title'),
+          purchaseFailureMessage(services.translationService, error, resolveContextLocale(ctx))
+        ),
+        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
       );
     }
+  });
+
+  bot.callbackQuery('purchase:pending', async (ctx) => {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
   });
 
   // Buttons emitted by pre-upgrade deployments carried package indexes or

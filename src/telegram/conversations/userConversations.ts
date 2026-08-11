@@ -16,9 +16,10 @@ import {
   resolveContextLocale,
   t,
   tmForLocale,
-  tm,
 } from '../locale.js';
 import {
+  buildEmptyState,
+  buildScreen,
   promptInConversation,
   rememberArtifactMessage,
   replyInConversation,
@@ -48,6 +49,110 @@ async function requireCustomVolume(
     await replyInConversation(conversation, ctx, t(ctx, 'custom_volume_unavailable'));
   }
   return enabled;
+}
+
+function customPackageName(
+  ctx: ConversationContext,
+  gbAmount: number,
+  durationDays: number
+): string {
+  return t(ctx, 'custom_package_name', {
+    gb: localizedNumber(gbAmount, ctx),
+    days: localizedNumber(durationDays, ctx),
+  });
+}
+
+function buildCustomVolumeInputScreen(ctx: ConversationContext): string {
+  return buildScreen({
+    emoji: '✏️',
+    title: t(ctx, 'custom_volume_title'),
+    subtitle: t(ctx, 'custom_volume_subtitle'),
+    footer: `ℹ️ ${t(ctx, 'custom_volume_input_hint')}`,
+  });
+}
+
+function buildCustomCheckoutScreen(
+  ctx: ConversationContext,
+  input: {
+    mode: 'purchase' | 'renewal';
+    username?: string;
+    gbAmount: number;
+    durationDays: number;
+    amount: number;
+    pricePerGb: number;
+    promoCode?: string;
+  }
+): string {
+  const renewal = input.mode === 'renewal';
+  return buildScreen({
+    emoji: renewal ? '🔄' : '🛒',
+    title: t(ctx, renewal ? 'renewal_review_title' : 'purchase_review_title'),
+    subtitle: t(ctx, renewal ? 'renewal_review_subtitle' : 'purchase_review_subtitle'),
+    primary: {
+      emoji: '💰',
+      label: t(ctx, 'checkout_total_label'),
+      value: `${localizedNumber(input.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      ...(input.username
+        ? [
+            {
+              emoji: '📱',
+              title: t(ctx, 'checkout_service_label'),
+              fields: [
+                {
+                  emoji: '🆔',
+                  label: t(ctx, 'checkout_service_label'),
+                  value: `\`${input.username}\``,
+                },
+              ],
+            },
+          ]
+        : []),
+      {
+        emoji: '📦',
+        title: t(ctx, 'checkout_package_section'),
+        fields: [
+          {
+            emoji: '📦',
+            label: t(ctx, 'renewal_success_package_label'),
+            value: customPackageName(ctx, input.gbAmount, input.durationDays),
+          },
+          {
+            emoji: '📊',
+            label: t(ctx, 'checkout_traffic_label'),
+            value: `${localizedNumber(input.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+          },
+          {
+            emoji: '⏳',
+            label: t(ctx, 'checkout_duration_label'),
+            value: `${localizedNumber(input.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
+          },
+          {
+            emoji: '💳',
+            label: t(ctx, 'checkout_unit_price_label'),
+            value: `${localizedNumber(input.pricePerGb, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      },
+      ...(input.promoCode
+        ? [
+            {
+              emoji: '🎟️',
+              title: t(ctx, 'checkout_promo_section'),
+              fields: [
+                {
+                  emoji: '🎟️',
+                  label: t(ctx, 'shop_promo_section'),
+                  value: `\`${input.promoCode}\``,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+    footer: `ℹ️ ${t(ctx, renewal ? 'checkout_confirmation_hint' : 'purchase_confirmation_hint')}`,
+  });
 }
 
 // ── Shared helper ─────────────────────────────────────────────────────────────
@@ -83,7 +188,7 @@ async function executePurchaseFlow(
     return;
   }
 
-  const packageNameStr = `${gbAmount} GB (${durationDays} Days)`;
+  const packageNameStr = customPackageName(ctx, gbAmount, durationDays);
   const target = ctx.services.pricingService.getCustomVolumeTarget();
   let checkout: PurchaseCheckout;
   try {
@@ -113,25 +218,22 @@ async function executePurchaseFlow(
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
-  const summaryText = pendingPromo.quote
-    ? tm(ctx, 'purchase_quote_with_promo', {
-        gb: localizedNumber(gbAmount, ctx),
-        days: localizedNumber(durationDays, ctx),
-        amount: localizedNumber(displayedCost, ctx),
-        price_per_gb: localizedNumber(pricePerGb, ctx),
-        promo_code: pendingPromo.quote.code,
-      })
-    : tm(ctx, 'purchase_quote', {
-        gb: localizedNumber(gbAmount, ctx),
-        days: localizedNumber(durationDays, ctx),
-        amount: localizedNumber(displayedCost, ctx),
-        price_per_gb: localizedNumber(pricePerGb, ctx),
-      });
-
-  await promptInConversation(conversation, ctx, summaryText, {
-    parse_mode: 'Markdown',
-    reply_markup: confirmKeyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildCustomCheckoutScreen(ctx, {
+      mode: 'purchase',
+      gbAmount,
+      durationDays,
+      amount: displayedCost,
+      pricePerGb,
+      promoCode: pendingPromo.quote?.code,
+    }),
+    {
+      parse_mode: 'Markdown',
+      reply_markup: confirmKeyboard,
+    }
+  );
 
   const confirmChoice = await waitForCallbackInput(conversation, ['buy_confirm']);
   if (confirmChoice === undefined) return;
@@ -159,13 +261,17 @@ async function executePurchaseFlow(
   const progressMessage = await replyInConversation(
     conversation,
     ctx,
-    pendingPromo.quote
-      ? t(ctx, 'purchase_issuing_with_promo', {
-          package_name: packageNameStr,
-          promo_code: pendingPromo.quote.code,
-          amount: localizedNumber(displayedCost, ctx),
-        })
-      : t(ctx, 'purchase_issuing', { package_name: packageNameStr })
+    buildScreen({
+      emoji: '⏳',
+      title: t(ctx, 'purchase_issuing_title'),
+      subtitle: t(ctx, 'purchase_issuing_subtitle'),
+      primary: {
+        emoji: '📦',
+        label: t(ctx, 'purchase_issuing_package_label'),
+        value: packageNameStr,
+      },
+    }),
+    { parse_mode: 'Markdown' }
   );
 
   try {
@@ -205,8 +311,15 @@ async function executePurchaseFlow(
     const createdMsg = await ctx.api.editMessageText(
       ctx.chat!.id,
       progressMessage.message_id,
-      tm(ctx, 'config_created', {
-        sub_url: formatSubscriptionLink(res.subUrl, t(ctx, 'subscription_link_unavailable')),
+      buildScreen({
+        emoji: '🎉',
+        title: t(ctx, 'purchase_success_title'),
+        subtitle: t(ctx, 'purchase_success_subtitle'),
+        primary: {
+          emoji: '🔗',
+          label: t(ctx, 'purchase_success_link_label'),
+          value: formatSubscriptionLink(res.subUrl, t(ctx, 'subscription_link_unavailable')),
+        },
       }),
       { parse_mode: 'Markdown', reply_markup: progressMessage.reply_markup }
     );
@@ -222,8 +335,12 @@ async function executePurchaseFlow(
     await ctx.api.editMessageText(
       ctx.chat!.id,
       progressMessage.message_id,
-      purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx)),
-      { reply_markup: progressMessage.reply_markup }
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'purchase_failed_title'),
+        purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
+      ),
+      { parse_mode: 'Markdown', reply_markup: progressMessage.reply_markup }
     );
   }
 }
@@ -237,7 +354,9 @@ export async function buyConfigConversation(
   if (!ctx.from?.id || !ctx.services) return;
   if (!(await requireCustomVolume(conversation, ctx))) return;
 
-  await promptInConversation(conversation, ctx, t(ctx, 'custom_gb_prompt'));
+  await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
+    parse_mode: 'Markdown',
+  });
   const gbInput = await waitForTextInput(conversation);
   if (gbInput === undefined) return;
   const gbAmount = parseBoundedWholeNumber(gbInput, 10_000);
@@ -264,7 +383,9 @@ export async function customAmountConversation(
   if (!ctx.from?.id || !ctx.services) return;
   if (!(await requireCustomVolume(conversation, ctx))) return;
 
-  await promptInConversation(conversation, ctx, t(ctx, 'custom_gb_simple_prompt'));
+  await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
+    parse_mode: 'Markdown',
+  });
   const gbInput = await waitForTextInput(conversation);
   if (gbInput === undefined) return;
   const gbAmount = parseBoundedWholeNumber(gbInput, 10_000);
@@ -299,8 +420,10 @@ export async function renewConfigConversation(
     return;
   }
 
-  // Step 1: Prompt for custom traffic quota (GB)
-  await promptInConversation(conversation, ctx, t(ctx, 'custom_gb_prompt'));
+  // Step 1: prompt for a custom traffic quota in the same structured flow.
+  await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
+    parse_mode: 'Markdown',
+  });
   const gbInput = await waitForTextInput(conversation);
   if (gbInput === undefined) return;
   const gbAmount = parseBoundedWholeNumber(gbInput, 10_000);
@@ -336,23 +459,6 @@ export async function renewConfigConversation(
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
-  const summaryText = pendingPromo.quote
-    ? tm(ctx, 'renewal_quote_with_promo', {
-        username: config.configUsername,
-        gb: localizedNumber(gbAmount, ctx),
-        days: localizedNumber(durationDays, ctx),
-        amount: localizedNumber(displayedCost, ctx),
-        price_per_gb: localizedNumber(pricePerGb, ctx),
-        promo_code: pendingPromo.quote.code,
-      })
-    : tm(ctx, 'renewal_quote', {
-        username: config.configUsername,
-        gb: localizedNumber(gbAmount, ctx),
-        days: localizedNumber(durationDays, ctx),
-        amount: localizedNumber(displayedCost, ctx),
-        price_per_gb: localizedNumber(pricePerGb, ctx),
-      });
-
   let checkout: PurchaseCheckout;
   try {
     checkout = await conversation.external((outsideCtx) =>
@@ -362,7 +468,7 @@ export async function renewConfigConversation(
         configId: config.id,
         pkg: {
           id: `custom_${gbAmount}gb_${durationDays}d`,
-          name: `${gbAmount} GB (${durationDays} Days)`,
+          name: customPackageName(ctx, gbAmount, durationDays),
           gbAmount,
           durationDays,
           price: totalCost,
@@ -378,10 +484,20 @@ export async function renewConfigConversation(
     return;
   }
 
-  await promptInConversation(conversation, ctx, summaryText, {
-    parse_mode: 'Markdown',
-    reply_markup: confirmKeyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildCustomCheckoutScreen(ctx, {
+      mode: 'renewal',
+      username: config.configUsername,
+      gbAmount,
+      durationDays,
+      amount: displayedCost,
+      pricePerGb,
+      promoCode: pendingPromo.quote?.code,
+    }),
+    { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
+  );
 
   const confirmChoice = await waitForCallbackInput(conversation, ['renew_confirm']);
   if (confirmChoice === undefined) return;
@@ -406,7 +522,21 @@ export async function renewConfigConversation(
     return;
   }
 
-  const progressMessage = await replyInConversation(conversation, ctx, t(ctx, 'renewing'));
+  const progressMessage = await replyInConversation(
+    conversation,
+    ctx,
+    buildScreen({
+      emoji: '⏳',
+      title: t(ctx, 'renewal_processing_title'),
+      subtitle: t(ctx, 'renewal_processing_subtitle'),
+      primary: {
+        emoji: '📱',
+        label: t(ctx, 'renewal_selection_service_label'),
+        value: `\`${config.configUsername}\``,
+      },
+    }),
+    { parse_mode: 'Markdown' }
+  );
 
   try {
     // This is the authoritative last check: no awaited work may occur between
@@ -438,13 +568,31 @@ export async function renewConfigConversation(
       await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
     }
 
-    const packageNameStr = `${gbAmount} GB (${durationDays} Days)`;
     await ctx.api.editMessageText(
       ctx.chat!.id,
       progressMessage.message_id,
-      tm(ctx, 'renewal_success', {
-        username: res.configUsername,
-        package_name: packageNameStr,
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'renewal_success_title'),
+        subtitle: t(ctx, 'renewal_success_subtitle'),
+        primary: {
+          emoji: '📱',
+          label: t(ctx, 'renewal_success_service_label'),
+          value: `\`${res.configUsername}\``,
+        },
+        sections: [
+          {
+            emoji: '📦',
+            title: t(ctx, 'checkout_package_section'),
+            fields: [
+              {
+                emoji: '✅',
+                label: t(ctx, 'renewal_success_package_label'),
+                value: customPackageName(ctx, gbAmount, durationDays),
+              },
+            ],
+          },
+        ],
       }),
       { parse_mode: 'Markdown', reply_markup: progressMessage.reply_markup }
     );
@@ -455,8 +603,12 @@ export async function renewConfigConversation(
     await ctx.api.editMessageText(
       ctx.chat!.id,
       progressMessage.message_id,
-      purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx)),
-      { reply_markup: progressMessage.reply_markup }
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'renewal_failed_title'),
+        purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
+      ),
+      { parse_mode: 'Markdown', reply_markup: progressMessage.reply_markup }
     );
   }
 }
@@ -487,8 +639,10 @@ export async function autoRenewCustomConversation(
     return;
   }
 
-  // Step 1: Prompt for custom traffic quota (GB)
-  await promptInConversation(conversation, ctx, t(ctx, 'custom_gb_prompt'));
+  // Step 1: prompt for a custom traffic quota in the same structured flow.
+  await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
+    parse_mode: 'Markdown',
+  });
   const gbInput = await waitForTextInput(conversation);
   if (gbInput === undefined) return;
   const gbAmount = parseBoundedWholeNumber(gbInput, 10_000);
@@ -507,15 +661,43 @@ export async function autoRenewCustomConversation(
   await promptInConversation(
     conversation,
     ctx,
-    t(ctx, 'auto_renew_confirm', {
-      username: config.configUsername,
-      package: t(ctx, 'auto_renew_custom_package', {
-        gb: localizedNumber(gbAmount, ctx),
-        days: localizedNumber(durationDays, ctx),
-      }),
-      price: localizedNumber(approvedPrice, ctx),
+    buildScreen({
+      emoji: '♻️',
+      title: t(ctx, 'auto_renew_review_title'),
+      subtitle: t(ctx, 'auto_renew_review_subtitle'),
+      primary: {
+        emoji: '💰',
+        label: t(ctx, 'auto_renew_charge_label'),
+        value: `${localizedNumber(approvedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
+      },
+      sections: [
+        {
+          emoji: '📱',
+          title: t(ctx, 'renewal_selection_service_label'),
+          fields: [
+            {
+              emoji: '🆔',
+              label: t(ctx, 'checkout_service_label'),
+              value: `\`${config.configUsername}\``,
+            },
+          ],
+        },
+        {
+          emoji: '📦',
+          title: t(ctx, 'checkout_package_section'),
+          fields: [
+            {
+              emoji: '📦',
+              label: t(ctx, 'renewal_success_package_label'),
+              value: customPackageName(ctx, gbAmount, durationDays),
+            },
+          ],
+        },
+      ],
+      footer: `ℹ️ ${t(ctx, 'auto_renew_review_hint')}`,
     }),
     {
+      parse_mode: 'Markdown',
       reply_markup: new InlineKeyboard()
         .text(t(ctx, 'admin_confirm_button'), 'autorenew:custom_confirm')
         .row()
@@ -541,20 +723,39 @@ export async function autoRenewCustomConversation(
     )
   );
 
-  const backKeyboard = new InlineKeyboard().text(
-    t(ctx, 'admin_menu_back'),
-    `config:view:${config.id}`
+  const backKeyboard = new InlineKeyboard().text(t(ctx, 'menu_back'), `config:view:${config.id}`);
+  await replyInConversation(
+    conversation,
+    ctx,
+    buildScreen({
+      emoji: '✅',
+      title: t(ctx, 'auto_renew_enabled_title'),
+      subtitle: t(ctx, 'auto_renew_enabled_subtitle'),
+      primary: {
+        emoji: '📱',
+        label: t(ctx, 'renewal_selection_service_label'),
+        value: `\`${config.configUsername}\``,
+      },
+    }),
+    { parse_mode: 'Markdown', reply_markup: backKeyboard }
   );
-  await replyInConversation(conversation, ctx, t(ctx, 'auto_renew_enabled'), {
-    reply_markup: backKeyboard,
-  });
 }
 
 export async function promoConversation(conversation: MyConversation, ctx: ConversationContext) {
   const telegramId = ctx.from?.id;
   if (!telegramId || !ctx.services) return;
 
-  await promptInConversation(conversation, ctx, t(ctx, 'promo_prompt'));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildScreen({
+      emoji: '🎟️',
+      title: t(ctx, 'promo_title'),
+      subtitle: t(ctx, 'promo_subtitle'),
+      footer: `ℹ️ ${t(ctx, 'promo_input_hint')}`,
+    }),
+    { parse_mode: 'Markdown' }
+  );
   const codeInput = await waitForTextInput(conversation);
   if (codeInput === undefined) return;
   const code = codeInput.trim();
@@ -577,11 +778,33 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
     await replyInConversation(
       conversation,
       ctx,
-      `${text}\n\n${t(ctx, 'promo_selected_for_purchase', { promo_code: res.code })}`
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'promo_applied_title'),
+        subtitle: t(ctx, 'promo_applied_subtitle'),
+        primary: {
+          emoji: '🎟️',
+          label: t(ctx, 'checkout_promo_section'),
+          value: `\`${res.code}\``,
+        },
+        footer: text,
+      }),
+      { parse_mode: 'Markdown' }
     );
     return;
   }
-  await replyInConversation(conversation, ctx, text);
+  await replyInConversation(
+    conversation,
+    ctx,
+    res.success
+      ? buildScreen({
+          emoji: '✅',
+          title: t(ctx, 'promo_title'),
+          subtitle: text,
+        })
+      : buildEmptyState('⚠️', t(ctx, 'promo_title'), text),
+    { parse_mode: 'Markdown' }
+  );
 }
 
 function parseBoundedWholeNumber(value: string, maximum: number): number | undefined {
@@ -616,25 +839,55 @@ export async function transferConfigConversation(
     ownerTelegramId: outsideCtx.session.transferConfigOwnerTelegramId as number | undefined,
   }));
   if (!sessionState.configId) {
-    await replyInConversation(conversation, ctx, t(ctx, 'transfer_config_missing'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_config_missing')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
   const ownerTelegramId = sessionState.ownerTelegramId ?? actorTelegramId;
   if (ownerTelegramId !== actorTelegramId && !ctx.services.isAdmin(actorTelegramId)) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_access_denied'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'admin_access_denied')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
 
-  await promptInConversation(conversation, ctx, t(ctx, 'transfer_target_prompt'));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildScreen({
+      emoji: '🔁',
+      title: t(ctx, 'transfer_title'),
+      subtitle: t(ctx, 'transfer_subtitle'),
+      footer: `ℹ️ ${t(ctx, 'transfer_target_hint')}`,
+    }),
+    { parse_mode: 'Markdown' }
+  );
   const targetInput = await waitForTextInput(conversation);
   if (targetInput === undefined) return;
   const target = await ctx.services.userService.findProfile(targetInput);
   if (!target) {
-    await replyInConversation(conversation, ctx, t(ctx, 'transfer_target_not_found'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_not_found')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
   if (target.telegramId === ownerTelegramId) {
-    await replyInConversation(conversation, ctx, t(ctx, 'transfer_target_same_user'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_same_user')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
 
@@ -645,9 +898,31 @@ export async function transferConfigConversation(
   await promptInConversation(
     conversation,
     ctx,
-    tm(ctx, 'transfer_confirm_prompt', {
-      telegram_id: localizedNumber(target.telegramId, ctx),
-      username: target.username ? `@${target.username}` : '—',
+    buildScreen({
+      emoji: '🔁',
+      title: t(ctx, 'transfer_review_title'),
+      subtitle: t(ctx, 'transfer_review_subtitle'),
+      primary: {
+        emoji: '👤',
+        label: t(ctx, 'transfer_recipient_label'),
+        value: target.username
+          ? `@${target.username}`
+          : `\`${localizedNumber(target.telegramId, ctx)}\``,
+      },
+      sections: [
+        {
+          emoji: '🆔',
+          title: t(ctx, 'transfer_recipient_label'),
+          fields: [
+            {
+              emoji: '🆔',
+              label: t(ctx, 'transfer_recipient_id_label'),
+              value: `\`${localizedNumber(target.telegramId, ctx)}\``,
+            },
+          ],
+        },
+      ],
+      footer: `⚠️ ${t(ctx, 'transfer_consequence')}`,
     }),
     { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
   );
@@ -669,10 +944,30 @@ export async function transferConfigConversation(
     await replyInConversation(
       conversation,
       ctx,
-      t(ctx, 'transfer_success', {
-        username: result.configUsername,
-        telegram_id: target.telegramId,
-      })
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'transfer_success_title'),
+        subtitle: t(ctx, 'transfer_success_subtitle'),
+        primary: {
+          emoji: '📱',
+          label: t(ctx, 'transfer_service_label'),
+          value: `\`${result.configUsername}\``,
+        },
+        sections: [
+          {
+            emoji: '👤',
+            title: t(ctx, 'transfer_recipient_label'),
+            fields: [
+              {
+                emoji: '🆔',
+                label: t(ctx, 'transfer_recipient_id_label'),
+                value: `\`${localizedNumber(target.telegramId, ctx)}\``,
+              },
+            ],
+          },
+        ],
+      }),
+      { parse_mode: 'Markdown' }
     );
     try {
       const recipientLocale =
@@ -692,12 +987,17 @@ export async function transferConfigConversation(
     await replyInConversation(
       conversation,
       ctx,
-      t(
-        ctx,
-        err instanceof Error && err.message === 'TRANSFER_TARGET_BANNED'
-          ? 'transfer_target_banned'
-          : 'transfer_failed'
-      )
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'transfer_title'),
+        t(
+          ctx,
+          err instanceof Error && err.message === 'TRANSFER_TARGET_BANNED'
+            ? 'transfer_target_banned'
+            : 'transfer_failed'
+        )
+      ),
+      { parse_mode: 'Markdown' }
     );
   }
 }
