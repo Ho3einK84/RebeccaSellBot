@@ -108,6 +108,11 @@ export const FA_TEXTS: Record<string, string> = {
   auto_renew_enable_button: '♻️ فعالسازی تمدید خودکار',
   auto_renew_disable_button: '⏹ غیرفعالسازی تمدید خودکار',
   auto_renew_select_package: '💬 بسته تمدید خودکار را انتخاب کنید:',
+  auto_renew_confirm:
+    'آیا تمدید خودکار برای {username} با بسته {package} و مبلغ {price} تومان در هر تمدید فعال شود؟ هنگام سررسید تمدید، مبلغ از کیف پول شما کسر می‌شود.',
+  auto_renew_disable_confirm:
+    'آیا تمدید خودکار برای {username} غیرفعال شود؟ تمدیدهای برنامه‌ریزی‌شده از کیف پول متوقف می‌شوند.',
+  auto_renew_custom_package: '{gb} گیگابایت / {days} روز',
   auto_renew_enabled: '✅ تمدید خودکار برای این اشتراک فعال شد.',
   auto_renew_disabled: '⏹ تمدید خودکار برای این اشتراک غیرفعال شد.',
   auto_renew_state_enabled: '♻️ *تمدید خودکار:* فعال — بسته {package}',
@@ -399,6 +404,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_pkg_price_prompt: '💬 قیمت بسته را به تومان وارد کنید.\nمقدار فعلی: {current}',
   admin_pkg_saved: '✅ بسته ها ذخیره شدند.',
   admin_pkg_last_removed: '⚠️ حداقل یک بسته باید باقی بماند.',
+  admin_pkg_delete_confirm: 'آیا بسته «{name}» حذف شود؟ این عمل قابل بازگشت نیست.',
   config_delete_button: '🗑 حذف / بازگشت وجه',
   config_delete_confirm_button: '⚠️ حذف قطعی',
   config_delete_cancel_button: '❌ انصراف',
@@ -476,6 +482,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_text_edit_prompt: '⌨️ لطفاً متن جدید را به‌صورت پیام ارسال کنید یا لغو را بزنید:',
   admin_text_edit_button: '✏️ ویرایش متن',
   admin_text_reset_button: '🔄 بازگردانی به پیش‌فرض',
+  admin_text_reset_confirm:
+    'آیا متن سفارشی «{key}» به مقدار پیش‌فرض بازگردد؟ نسخه سفارشی شما حذف می‌شود.',
   admin_text_reset_success: '✅ متن `{key}` با موفقیت به مقدار پیش‌فرض بازگردانده شد.',
   admin_text_value_invalid: '⚠️ متن خالی یا بیش‌ازحد طولانی است.',
   admin_text_saved: '✅ متن `{key}` بدون نیاز به راه‌اندازی مجدد ذخیره شد.',
@@ -693,6 +701,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_panel_custom_target_selected_button: '✅ مقصد حجم دلخواه',
   admin_panel_custom_target_saved: '✅ مقصد حجم دلخواه ذخیره شد.',
   admin_panel_service_delete_button: '🗑 حذف',
+  admin_panel_service_delete_confirm:
+    'آیا سرویس «{service}» از این پنل حذف شود؟ این عمل قابل بازگشت نیست.',
   admin_panel_delete_button: '🗑 حذف پنل',
   admin_panel_delete_confirm:
     '⚠️ پنل حذف شود؟ اگر خرید، اشتراک یا سابقه‌ای به آن متصل باشد، حذف برای حفظ داده‌ها متوقف می‌شود.',

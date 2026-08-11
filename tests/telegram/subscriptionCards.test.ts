@@ -280,6 +280,72 @@ describe('subscription card actions', () => {
     expect(reply).toHaveBeenCalledWith('auto_renew_select_package', expect.anything());
   });
 
+  it('does not save auto-renew until the selected package is explicitly confirmed', async () => {
+    const listeners: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const fakeBot = {
+      callbackQuery: vi.fn((pattern: RegExp | string, handler: (ctx: unknown) => Promise<void>) => {
+        const key = pattern instanceof RegExp ? pattern.source : String(pattern);
+        listeners[key] = handler;
+      }),
+    };
+    registerSubscriptionRoutes(fakeBot as unknown as Bot<MenuContext>);
+
+    const packageHandler = Object.entries(listeners).find(([key]) =>
+      key.includes('autorenew:pkg:')
+    )?.[1];
+    const confirmHandler = Object.entries(listeners).find(([key]) =>
+      key.includes('autorenew:confirm:')
+    )?.[1];
+    expect(packageHandler).toBeDefined();
+    expect(confirmHandler).toBeDefined();
+
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const answerCallbackQuery = vi.fn().mockResolvedValue(true);
+    const setAutoRenew = vi.fn().mockResolvedValue(true);
+    const config = {
+      id: 'uc_confirm_456',
+      telegramId: 42,
+      configUsername: 'alice',
+      panelId: 'main',
+      serviceId: 1,
+    };
+    const ctx = {
+      ...context(),
+      match: ['autorenew:pkg:uc_confirm_456:0', 'uc_confirm_456', '0'],
+      from: { id: 42 },
+      session: {},
+      reply,
+      answerCallbackQuery,
+      services: {
+        translationService: {
+          get: vi.fn((key: string) => key),
+        },
+        configService: {
+          getOwnedConfigById: vi.fn().mockResolvedValue(config),
+          setAutoRenew,
+        },
+        pricingService: {
+          getPackages: vi.fn(() => [
+            { id: 'pkg_30gb', name: '30 GB', price: 100_000, gbAmount: 30, durationDays: 30 },
+          ]),
+        },
+      },
+    };
+
+    await packageHandler!(ctx);
+
+    expect(setAutoRenew).not.toHaveBeenCalled();
+    expect(ctx.session).toMatchObject({
+      pendingAutoRenew: { configId: config.id, packageId: 'pkg_30gb', price: 100_000 },
+    });
+    expect(reply).toHaveBeenCalledWith('auto_renew_confirm', expect.anything());
+
+    ctx.match = ['autorenew:confirm:uc_confirm_456', 'uc_confirm_456'];
+    await confirmHandler!(ctx);
+
+    expect(setAutoRenew).toHaveBeenCalledWith(42, config.id, true, 'pkg_30gb', 100_000);
+  });
+
   it('handles config:view by rendering the subscription card', async () => {
     const listeners: Record<string, (ctx: unknown) => Promise<void>> = {};
     const fakeBot = {

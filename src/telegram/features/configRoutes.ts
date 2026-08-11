@@ -28,7 +28,10 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
         t(ctx, 'subscription_revoke_confirm', { username: localConfig.configUsername }),
         {
           reply_markup: new InlineKeyboard()
-            .text(t(ctx, 'admin_confirm_button'), callbackData('config', 'revoke_confirm', localConfig.id))
+            .text(
+              t(ctx, 'admin_confirm_button'),
+              callbackData('config', 'revoke_confirm', localConfig.id)
+            )
             .row()
             .text(t(ctx, 'menu_cancel'), callbackData('config', 'view', localConfig.id)),
         }

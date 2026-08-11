@@ -91,7 +91,10 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
         amount: localizedNumber(amount, ctx),
       }),
       new InlineKeyboard()
-        .text(t(ctx, 'admin_confirm_button'), `admin:user:quick_topup_confirm:${targetId}:${amount}`)
+        .text(
+          t(ctx, 'admin_confirm_button'),
+          `admin:user:quick_topup_confirm:${targetId}:${amount}`
+        )
         .row()
         .text(t(ctx, 'menu_cancel'), `admin:user:view:${targetId}`),
       'Markdown'

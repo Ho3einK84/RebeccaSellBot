@@ -352,13 +352,29 @@ async function managePackages(conversation: MyConversation, ctx: ConversationCon
       if (updated) packages = packages.map((pkg, i) => (i === index ? updated : pkg));
     } else if (data.startsWith('pkg-del:')) {
       const index = Number(data.slice('pkg-del:'.length));
+      const existing = packages[index];
       // Never leave the shop with zero packages.
-      if (!Number.isNaN(index) && packages.length > 1) {
-        packages = packages.filter((_, i) => i !== index);
-      } else {
+      if (!existing || packages.length <= 1) {
         await replyInConversation(conversation, ctx, t(ctx, 'admin_pkg_last_removed'));
         continue;
       }
+      await promptInConversation(
+        conversation,
+        ctx,
+        t(ctx, 'admin_pkg_delete_confirm', { name: existing.name }),
+        {
+          reply_markup: new InlineKeyboard()
+            .text(t(ctx, 'admin_confirm_button'), `pkg-del-confirm:${index}`)
+            .row()
+            .text(t(ctx, 'menu_cancel'), 'pkg-del-cancel'),
+        }
+      );
+      const confirmation = await waitForCallbackInput(conversation, [
+        'pkg-del-confirm:',
+        'pkg-del-cancel',
+      ]);
+      if (confirmation !== `pkg-del-confirm:${index}`) continue;
+      packages = packages.filter((_, itemIndex) => itemIndex !== index);
     }
 
     await ctx.services.translationService.updateSetting('packages_json', JSON.stringify(packages));

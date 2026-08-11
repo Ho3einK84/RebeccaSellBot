@@ -272,12 +272,13 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     await ctx.answerCallbackQuery();
 
     if (!enabled) {
-      await ctx.services!.configService.setAutoRenew(ctx.from.id, config.id, false);
-      const backKeyboard = new InlineKeyboard().text(
-        t(ctx, 'admin_menu_back'),
-        `config:view:${config.id}`
-      );
-      await ctx.reply(t(ctx, 'auto_renew_disabled'), { reply_markup: backKeyboard });
+      delete ctx.session.pendingAutoRenew;
+      await ctx.reply(t(ctx, 'auto_renew_disable_confirm', { username: config.configUsername }), {
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'off_confirm', config.id))
+          .row()
+          .text(t(ctx, 'menu_cancel'), callbackData('config', 'view', config.id)),
+      });
       return;
     }
 
@@ -326,9 +327,10 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(new RegExp(`^autorenew:pkg:${CONFIG_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
-    const pkg = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId)[
-      Number(ctx.match[2])
-    ];
+    const packageIndex = Number(ctx.match[2]);
+    const pkg = Number.isSafeInteger(packageIndex)
+      ? ctx.services!.pricingService.getPackages(config.panelId, config.serviceId)[packageIndex]
+      : undefined;
     if (!pkg) {
       await ctx.answerCallbackQuery({
         text: t(ctx, 'auto_renew_package_unavailable'),
@@ -336,14 +338,73 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
       return;
     }
+    ctx.session.pendingAutoRenew = { configId: config.id, packageId: pkg.id, price: pkg.price };
     await ctx.answerCallbackQuery();
-    await ctx.services!.configService.setAutoRenew(ctx.from.id, config.id, true, pkg.id, pkg.price);
-    const backKeyboard = new InlineKeyboard().text(
-      t(ctx, 'admin_menu_back'),
-      `config:view:${config.id}`
+    await ctx.reply(
+      t(ctx, 'auto_renew_confirm', {
+        username: config.configUsername,
+        package: localizedPackageName(ctx, pkg.id, pkg.name),
+        price: localizedNumber(pkg.price, ctx),
+      }),
+      {
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'confirm', config.id))
+          .row()
+          .text(t(ctx, 'menu_cancel'), callbackData('config', 'view', config.id)),
+      }
     );
-    await ctx.reply(t(ctx, 'auto_renew_enabled'), { reply_markup: backKeyboard });
   });
+
+  bot.callbackQuery(new RegExp(`^autorenew:confirm:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
+    const config = await ownedConfig(ctx, ctx.match[1]!);
+    if (!config) return;
+    const pending = ctx.session.pendingAutoRenew;
+    delete ctx.session.pendingAutoRenew;
+    if (!pending || pending.configId !== config.id) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'button_action_failed'), show_alert: true });
+      return;
+    }
+    const pkg = ctx
+      .services!.pricingService.getPackages(config.panelId, config.serviceId)
+      .find((item) => item.id === pending.packageId && item.price === pending.price);
+    if (!pkg) {
+      await ctx.answerCallbackQuery({
+        text: t(ctx, 'auto_renew_package_unavailable'),
+        show_alert: true,
+      });
+      return;
+    }
+    if (!acquireUserActionCooldown(ctx.from.id, `autorenew:${config.id}`, 1_000)) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+      return;
+    }
+    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+    await ctx.services!.configService.setAutoRenew(ctx.from.id, config.id, true, pkg.id, pkg.price);
+    const returnKeyboard = new InlineKeyboard().text(
+      t(ctx, 'admin_menu_back'),
+      callbackData('config', 'view', config.id)
+    );
+    await ctx.reply(t(ctx, 'auto_renew_enabled'), { reply_markup: returnKeyboard });
+  });
+
+  bot.callbackQuery(
+    new RegExp(`^autorenew:off_confirm:${CONFIG_ID_CAPTURE}$`, 'u'),
+    async (ctx) => {
+      const config = await ownedConfig(ctx, ctx.match[1]!);
+      if (!config) return;
+      if (!acquireUserActionCooldown(ctx.from.id, `autorenew:${config.id}`, 1_000)) {
+        await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+        return;
+      }
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+      await ctx.services!.configService.setAutoRenew(ctx.from.id, config.id, false);
+      const returnKeyboard = new InlineKeyboard().text(
+        t(ctx, 'admin_menu_back'),
+        callbackData('config', 'view', config.id)
+      );
+      await ctx.reply(t(ctx, 'auto_renew_disabled'), { reply_markup: returnKeyboard });
+    }
+  );
 
   bot.callbackQuery(new RegExp(`^config:toggle:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);

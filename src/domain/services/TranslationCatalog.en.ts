@@ -104,6 +104,11 @@ export const EN_TEXTS: Record<string, string> = {
   auto_renew_enable_button: '♻️ Enable auto-renew',
   auto_renew_disable_button: '⏹ Disable auto-renew',
   auto_renew_select_package: '💬 Select an auto-renew package:',
+  auto_renew_confirm:
+    'Enable automatic renewal for {username} with {package} at {price} Toman per renewal? Your wallet will be charged when the renewal is due.',
+  auto_renew_disable_confirm:
+    'Disable automatic renewal for {username}? Scheduled wallet renewals will stop.',
+  auto_renew_custom_package: '{gb} GB / {days} days',
   auto_renew_enabled: '✅ Auto-renew is now enabled for this subscription.',
   auto_renew_disabled: '⏹ Auto-renew is now disabled for this subscription.',
   auto_renew_state_enabled: '♻️ *Auto-renew:* enabled — {package}',
@@ -392,6 +397,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_pkg_price_prompt: '💬 Enter the price in Toman.\nCurrent value: {current}',
   admin_pkg_saved: '✅ Packages saved.',
   admin_pkg_last_removed: '⚠️ At least one package must remain.',
+  admin_pkg_delete_confirm: 'Delete the “{name}” package? This cannot be undone.',
   config_delete_button: '🗑 Delete / Refund',
   config_delete_confirm_button: '⚠️ Delete permanently',
   config_delete_cancel_button: '❌ Cancel',
@@ -468,6 +474,8 @@ export const EN_TEXTS: Record<string, string> = {
   admin_text_edit_prompt: '⌨️ Please send the new text as a message or tap Cancel:',
   admin_text_edit_button: '✏️ Edit text',
   admin_text_reset_button: '🔄 Reset to default',
+  admin_text_reset_confirm:
+    'Reset the custom text for `{key}` to its default? Your custom version will be removed.',
   admin_text_reset_success: '✅ Text `{key}` has been reset to default successfully.',
   admin_text_value_invalid: '⚠️ The text is empty or too long.',
   admin_text_saved: '✅ Text `{key}` was saved without restarting the bot.',
@@ -693,6 +701,8 @@ export const EN_TEXTS: Record<string, string> = {
   admin_panel_custom_target_selected_button: '✅ Custom-volume target',
   admin_panel_custom_target_saved: '✅ Custom-volume target saved.',
   admin_panel_service_delete_button: '🗑 Delete',
+  admin_panel_service_delete_confirm:
+    'Delete the “{service}” service from this panel? This cannot be undone.',
   admin_panel_delete_button: '🗑 Delete panel',
   admin_panel_delete_confirm:
     '⚠️ Delete this panel? Deletion is blocked when purchases, subscriptions, or history reference it.',

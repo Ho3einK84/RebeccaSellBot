@@ -469,9 +469,11 @@ export async function autoRenewCustomConversation(
   if (!telegramId || !ctx.services) return;
   if (!(await requireCustomVolume(conversation, ctx, true))) return;
 
-  const configId = await conversation.external(
-    (outsideCtx) => outsideCtx.session.pendingConfigId as string | undefined
-  );
+  const configId = await conversation.external((outsideCtx) => {
+    const pendingConfigId = outsideCtx.session.pendingConfigId as string | undefined;
+    delete outsideCtx.session.pendingConfigId;
+    return pendingConfigId;
+  });
   if (!configId) {
     await replyInConversation(conversation, ctx, t(ctx, 'user_not_found'));
     return;
@@ -501,6 +503,33 @@ export async function autoRenewCustomConversation(
     gbAmount,
     durationDays
   ).totalPrice;
+
+  await promptInConversation(
+    conversation,
+    ctx,
+    t(ctx, 'auto_renew_confirm', {
+      username: config.configUsername,
+      package: t(ctx, 'auto_renew_custom_package', {
+        gb: localizedNumber(gbAmount, ctx),
+        days: localizedNumber(durationDays, ctx),
+      }),
+      price: localizedNumber(approvedPrice, ctx),
+    }),
+    {
+      reply_markup: new InlineKeyboard()
+        .text(t(ctx, 'admin_confirm_button'), 'autorenew:custom_confirm')
+        .row()
+        .text(t(ctx, 'menu_cancel'), 'autorenew:custom_cancel'),
+    }
+  );
+  const confirmation = await waitForCallbackInput(conversation, [
+    'autorenew:custom_confirm',
+    'autorenew:custom_cancel',
+  ]);
+  if (confirmation !== 'autorenew:custom_confirm') {
+    await replyInConversation(conversation, ctx, t(ctx, 'operation_cancelled'));
+    return;
+  }
 
   await conversation.external((outsideCtx) =>
     outsideCtx.services!.configService.setAutoRenew(

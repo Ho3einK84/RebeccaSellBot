@@ -130,6 +130,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
       (data.includes('admin-menu') ||
         data.startsWith('admin:') ||
         data.startsWith('admin_') ||
+        data.startsWith('a:p:') ||
         data.startsWith('receipt:') ||
         data.startsWith('receipt-') ||
         data.startsWith('promo:')) &&

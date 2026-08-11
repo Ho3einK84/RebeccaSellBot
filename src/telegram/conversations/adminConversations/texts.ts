@@ -81,6 +81,38 @@ export async function adminEditTextsConversation(
 
     if (input.callbackQuery?.data === 'text-act:reset') {
       await input.answerCallbackQuery();
+      await promptInConversation(
+        conversation,
+        ctx,
+        tm(ctx, 'admin_text_reset_confirm', { key: qualifiedKey }),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard()
+            .text(t(ctx, 'admin_confirm_button'), 'text-act:reset-confirm')
+            .row()
+            .text(t(ctx, 'menu_cancel'), 'text-act:reset-cancel'),
+        }
+      );
+      continue;
+    }
+
+    if (input.callbackQuery?.data === 'text-act:reset-cancel') {
+      await input.answerCallbackQuery();
+      await promptInConversation(
+        conversation,
+        ctx,
+        tm(ctx, 'admin_text_value_prompt', {
+          key: qualifiedKey,
+          current_value: currentValue,
+          default_value: defaultValue,
+        }),
+        { parse_mode: 'Markdown', reply_markup: actionKeyboard }
+      );
+      continue;
+    }
+
+    if (input.callbackQuery?.data === 'text-act:reset-confirm') {
+      await input.answerCallbackQuery();
       try {
         await ctx.services.translationService.deleteSetting(qualifiedKey);
         await replyInConversation(

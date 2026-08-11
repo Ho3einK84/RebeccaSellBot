@@ -9,17 +9,17 @@ The audit covered every TypeScript file under `src/` and `tests/`, all eight add
 
 Baseline results before any code changes:
 
-| Check | Result |
-| --- | --- |
-| `npm run architecture:check` | Pass |
-| `npm run typecheck` | Pass |
-| `npm run lint` | Pass |
-| `npm test` | Pass — 42 files, 231 tests |
-| `npm run build` | Pass |
-| `npm run verify` | Blocked only by Prettier: 144 tracked files differ from the configured formatter output |
-| `npm run test:integration` | Not runnable here: `TEST_DATABASE_URL` is unset and Docker is unavailable |
-| `npm audit --omit=dev` | No production dependency vulnerabilities |
-| `npm audit` | Two high-severity development-only transitive findings: `brace-expansion@5.0.8` via ESLint/minimatch and `nanoid@3.3.16` via Vitest/Vite/PostCSS |
+| Check                        | Result                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run architecture:check` | Pass                                                                                                                                             |
+| `npm run typecheck`          | Pass                                                                                                                                             |
+| `npm run lint`               | Pass                                                                                                                                             |
+| `npm test`                   | Pass — 42 files, 231 tests                                                                                                                       |
+| `npm run build`              | Pass                                                                                                                                             |
+| `npm run verify`             | Blocked only by Prettier: 144 tracked files differ from the configured formatter output                                                          |
+| `npm run test:integration`   | Not runnable here: `TEST_DATABASE_URL` is unset and Docker is unavailable                                                                        |
+| `npm audit --omit=dev`       | No production dependency vulnerabilities                                                                                                         |
+| `npm audit`                  | Two high-severity development-only transitive findings: `brace-expansion@5.0.8` via ESLint/minimatch and `nanoid@3.3.16` via Vitest/Vite/PostCSS |
 
 The worktree was clean before this report. No application behavior was changed during Phase 0.
 
@@ -141,4 +141,3 @@ The following inventory is the Phase 3 coverage checklist. Each item includes it
 2. Replace overlong panel callback shapes with compact, validated namespaces and tests.
 3. Make successful bindings update lifecycle cache and active-service aggregates atomically where remote state is already known; cover normal and reconciled paths.
 4. Apply the configured formatter, then run the complete release gate without weakening it.
-
