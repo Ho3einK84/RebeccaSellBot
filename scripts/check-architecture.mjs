@@ -94,6 +94,14 @@ for (const absolutePath of sourceFiles) {
   ) {
     failures.push(`${relativePath} accesses database infrastructure instead of a domain service.`);
   }
+  if (
+    relativePath.startsWith('src/telegram/') &&
+    /\bpanelRegistry\s*\.\s*getService\s*\(/.test(source)
+  ) {
+    failures.push(
+      `${relativePath} reaches through the panel registry; use a domain-level config or panel operation instead.`
+    );
+  }
   if (/\b(?:setWebhook|createWebhook|webhookCallback)\b/.test(source)) {
     failures.push(`${relativePath} configures a webhook; RSBot must use long polling only.`);
   }

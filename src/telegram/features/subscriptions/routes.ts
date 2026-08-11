@@ -411,14 +411,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     if (!config) return;
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     try {
-      const remote = await ctx
-        .services!.panelRegistry.getService(config.panelId)
-        .getUser(config.configUsername);
-      if (remote.status === 'disabled') {
-        await ctx.services!.configService.enableConfig(config.configUsername, config.panelId);
-      } else {
-        await ctx.services!.configService.disableConfig(config.configUsername, config.panelId);
-      }
+      await ctx.services!.configService.toggleConfig(config.configUsername, config.panelId);
       await showUserSubscriptions(ctx);
     } catch {
       await ctx.reply(t(ctx, 'config_action_failed'), { reply_markup: backKeyboard(ctx) });
@@ -582,9 +575,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     if (!config) return;
     await ctx.answerCallbackQuery({ text: t(ctx, 'subscription_qr_generating') });
     try {
-      const remote = await ctx
-        .services!.panelRegistry.getService(config.panelId)
-        .getUser(config.configUsername);
+      const remote = await ctx.services!.configService.getRemoteConfigDetail(config);
       const url = remote.subscription_url || config.subUrl;
       if (!url) throw new Error('SUBSCRIPTION_URL_UNAVAILABLE');
       const image = await QRCode.toBuffer(url, {
@@ -619,9 +610,7 @@ async function buildSubscriptionCard(
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
   let remote: RebeccaUserDetail | undefined;
   try {
-    remote = await ctx
-      .services!.panelRegistry.getService(config.panelId)
-      .getUser(config.configUsername);
+    remote = await ctx.services!.configService.getRemoteConfigDetail(config);
   } catch {
     remote = undefined;
   }

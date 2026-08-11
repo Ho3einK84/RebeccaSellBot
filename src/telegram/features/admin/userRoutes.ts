@@ -188,9 +188,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     const details = await Promise.all(
       configs.map(async (config) => {
         try {
-          return await ctx
-            .services!.panelRegistry.getService(config.panelId)
-            .getUser(config.configUsername);
+          return await ctx.services!.configService.getRemoteConfigDetail(config);
         } catch {
           return undefined;
         }

@@ -44,14 +44,10 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     try {
-      const remote = await services.panelRegistry
-        .getService(localConfig.panelId)
-        .getUser(configUsername);
-      if (remote.status === 'disabled') {
-        await services.configService.enableConfig(configUsername, localConfig.panelId);
+      const result = await services.configService.toggleConfig(configUsername, localConfig.panelId);
+      if (result === 'enabled') {
         await ctx.reply(t(ctx, 'subscription_enabled'), { reply_markup: backKeyboard(ctx) });
       } else {
-        await services.configService.disableConfig(configUsername, localConfig.panelId);
         await ctx.reply(t(ctx, 'subscription_disabled'), { reply_markup: backKeyboard(ctx) });
       }
     } catch (err) {

@@ -41,6 +41,9 @@ export type AutoRenewPreference = {
   autoRenewPrice: number | null;
 };
 
+type ConfigRecord = typeof userConfigs.$inferSelect;
+export type ConfigRemoteReference = Pick<ConfigRecord, 'panelId' | 'configUsername'>;
+
 export class ConfigService {
   private readonly claimCooldowns = new Map<number, number>();
   private readonly counterSyncedPanels = new Set<string>();
@@ -326,6 +329,15 @@ export class ConfigService {
   }
 
   /**
+   * Read the panel-authoritative subscription record for a known local binding.
+   * Telegram code uses this boundary instead of reaching through the panel
+   * registry to a RebeccaService instance itself.
+   */
+  async getRemoteConfigDetail(config: ConfigRemoteReference): Promise<RebeccaUserDetail> {
+    return this.panels.getService(config.panelId).getUser(config.configUsername);
+  }
+
+  /**
    * Extract a likely Rebecca subscription URL from a text message.
    *
    * This intentionally does not accept every ordinary HTTPS URL.  Rebecca
@@ -598,28 +610,29 @@ export class ConfigService {
     await this.panels.getService(config.panelId).resetUserTraffic(config.configUsername);
   }
 
+  /** Toggle a locally bound config according to its current remote state. */
+  async toggleConfig(configUsername: string, panelId?: string): Promise<'enabled' | 'disabled'> {
+    const config = await this.resolveLocalConfig(configUsername, panelId);
+    const remote = await this.getRemoteConfigDetail(config);
+    const enabled = remote.status === 'disabled';
+    await this.setConfigEnabled(config, enabled);
+    return enabled ? 'enabled' : 'disabled';
+  }
+
   async disableConfig(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    const remote = await this.panels.getService(config.panelId).disableUser(config.configUsername);
-    const observedAt = new Date();
-    await getDb().transaction(async (tx) => {
-      await tx
-        .update(userConfigs)
-        .set(observedConfigLifecycle(remote, observedAt))
-        .where(eq(userConfigs.id, config.id));
-      await tx
-        .update(users)
-        .set({
-          activeSubscriptionCount: activeConfigCountSql(config.telegramId),
-          updatedAt: observedAt,
-        })
-        .where(eq(users.telegramId, config.telegramId));
-    });
+    await this.setConfigEnabled(config, false);
   }
 
   async enableConfig(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    const remote = await this.panels.getService(config.panelId).enableUser(config.configUsername);
+    await this.setConfigEnabled(config, true);
+  }
+
+  private async setConfigEnabled(config: ConfigRecord, enabled: boolean): Promise<void> {
+    const remote = enabled
+      ? await this.panels.getService(config.panelId).enableUser(config.configUsername)
+      : await this.panels.getService(config.panelId).disableUser(config.configUsername);
     const observedAt = new Date();
     await getDb().transaction(async (tx) => {
       await tx
