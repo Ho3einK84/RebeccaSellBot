@@ -2,6 +2,25 @@
 
 All notable changes to RebeccaSellBot are documented here.
 
+## [0.3.0] - 2026-08-11
+
+### Added
+
+- Automated Persian catalog microcopy and ZWNJ standard verification suite (`tests/domain/TranslationCatalog.test.ts`).
+- Full bilingual key parity validation across 1,011 catalog entries in Persian and English.
+
+### Fixed
+
+- Sweep and eliminate all defensive string literal fallbacks (`t(ctx, 'key') !== 'key' ? ... : 'literal'`) across `src/telegram/`.
+- Correct 79 Persian microcopy instances missing ZWNJ (نیمفاصله `\u200c`) in compound words, plurals, and suffixes (`می‌توانید`, `سرویس‌های`, `اشتراک‌های`, `پنل‌ها`, `گروه‌های`, `پیش‌نمایش`, `امکان‌پذیر`, `بسته‌های`, `حساب‌های`, `یک‌بار`, `معرفی‌شده`).
+- Modernize formal verb forms in Persian catalog (replace `میباشد`/`می‌باشد` with `است`, replace `نموده` with direct action verbs).
+- Standardize all action button labels across customer and admin views to concise, 2-4 word phrasing.
+
+### Changed
+
+- Hardened 2-step confirmation flows for all financial and destructive actions (receipt decision, balance alteration, user ban/unban, subscription revocation/refund).
+- Verified Telegram callback data encoding limits (≤64 bytes) across all dynamic keyboards.
+
 ## [0.2.0] - 2026-08-08
 
 ### Security

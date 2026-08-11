@@ -10,7 +10,7 @@ export const FA_TEXTS: Record<string, string> = {
   ui_status_expired: 'منقضی شده',
   ui_status_error: 'خطا',
   welcome:
-    '👋 به ربات مدیریت و فروش سرویس خوش آمدید!\n\nاز طریق منوی هوشمند زیر میتوانید سرویسهای خود را خریداری، تمدید و مدیریت نموده یا کیف پول حساب کاربری خود را شارژ کنید.',
+    '👋 به ربات مدیریت و فروش سرویس خوش آمدید!\n\nاز طریق منوی هوشمند زیر می‌توانید سرویس‌های خود را خریداری، تمدید و مدیریت کنید یا کیف پول حساب کاربری خود را شارژ کنید.',
   subscription_view_detail: '👁 مشاهده سرویس',
   subscription_detail_title: '📱 *جزئیات سرویس:* `{username}`',
   subscription_advanced_section: '⚙️ *مدیریت بیشتر:*',
@@ -21,11 +21,11 @@ export const FA_TEXTS: Record<string, string> = {
   topup_preset_prompt:
     '💬 لطفاً یکی از مبالغ پیشنهادی را انتخاب کنید یا مبلغ دلخواه خود را وارد نمایید:',
   topup_pending_exists_detail:
-    '⚠️ شما یک رسید در انتظار بررسی دارید (مبلغ: {amount} تومان). ثبت رسید جدید تا تعیین تکلیف رسید قبلی امکانپذیر نیست.',
-  home_title: 'داشبورد کاربری سرویسها',
+    '⚠️ شما یک رسید در انتظار بررسی دارید (مبلغ: {amount} تومان). ثبت رسید جدید تا تعیین تکلیف رسید قبلی امکان‌پذیر نیست.',
+  home_title: 'داشبورد کاربری سرویس‌ها',
   home_subtitle: 'وضعیت کیف پول و سرویس‌ها، در یک نگاه',
   home_balance: 'موجودی کیف پول',
-  home_active_services: 'تعداد سرویسهای فعال',
+  home_active_services: 'تعداد سرویس‌های فعال',
   home_service_overview: 'نمای سرویس‌ها',
   home_near_expiry_warning: 'سرویس نیازمند توجه',
   home_near_expiry_detail: '`{username}` · {days} {days_unit} تا پایان اعتبار',
@@ -60,7 +60,7 @@ export const FA_TEXTS: Record<string, string> = {
   insufficient_balance_hint: 'کیف پول را شارژ کنید، سپس دوباره این بسته را انتخاب کنید.',
   trial_preview_title: '🎁 *تست رایگان ربکا*',
   trial_preview_text:
-    '🎁 *پیشنمایش تست رایگان*\n\n📊 *حجم هدیه:* {gb} گیگابایت\n⏳ *مدت زمان:* {days} روز\n\nℹ️ *شرایط:* این اشتراک تست کاملاً رایگان بوده و هر حساب کاربری تنها یکبار مجاز به دریافت آن میباشد.',
+    '🎁 *پیش‌نمایش تست رایگان*\n\n📊 *حجم هدیه:* {gb} گیگابایت\n⏳ *مدت زمان:* {days} روز\n\nℹ️ *شرایط:* این اشتراک تست کاملاً رایگان بوده و هر حساب کاربری تنها یک‌بار مجاز به دریافت آن است.',
   trial_start_button: '🎁 شروع تست رایگان',
   shop_clear_promo_button: '❌ حذف کد تخفیف',
   shop_promo_active: '🎟️ *کد تخفیف فعال:* `{code}`',
@@ -73,7 +73,7 @@ export const FA_TEXTS: Record<string, string> = {
     '👛 موجودی کیف پول\n\n💰 موجودی قابل استفاده: {balance} تومان\n\nجهت افزایش موجودی یا ثبت کد تخفیف، از گزینه‌های زیر استفاده کنید.',
   shop: '🛍️ فروشگاه اشتراک\nلطفاً بسته مورد نظر خود را انتخاب کنید تا سرویس شما صادر و فعال شود.',
   topup_instructions:
-    '💳 افزایش موجودی کیف پول\n\nلطفاً مبلغ مورد نظر را به کارت زیر واریز نموده و سپس تصویر واضح رسید پرداخت را ارسال کنید:\n\n💳 شماره کارت: {card_number}\n👤 صاحب حساب: {card_holder}',
+    '💳 افزایش موجودی کیف پول\n\nلطفاً مبلغ مورد نظر را به کارت زیر واریز کرده و سپس تصویر واضح رسید پرداخت را ارسال کنید:\n\n💳 شماره کارت: {card_number}\n👤 صاحب حساب: {card_holder}',
   topup_title: 'افزایش موجودی کیف پول',
   topup_subtitle:
     'مبلغ را به کارت زیر واریز کنید، سپس یک تصویر واضح از رسید برای بررسی ارسال کنید.',
@@ -104,7 +104,7 @@ export const FA_TEXTS: Record<string, string> = {
   insufficient_balance:
     '⚠️ موجودی کیف پول شما برای انجام این عملیات کافی نیست. لطفاً ابتدا حساب خود را شارژ کنید.',
   user_not_found: '⚠️ حساب کاربری شما یافت نشد.',
-  purchase_failed: '⚠️ تراکنش ناموفق بود و هزینه‌ای از موجودی شما کسر نگردید.',
+  purchase_failed: '⚠️ تراکنش ناموفق بود و هزینه‌ای از موجودی شما کسر نشد.',
   purchase_outcome_pending:
     '⏳ نتیجه تراکنش در حال استعلام است. مبلغ تا مشخص شدن نتیجه رزرو می‌ماند.',
   purchase_in_progress: '⏳ یک تراکنش مالی در حال پردازش است. لطفاً چند لحظه شکیبا باشید.',
@@ -131,7 +131,7 @@ export const FA_TEXTS: Record<string, string> = {
   rate_limited: '⚠️ تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.',
   admin_access_denied: '⚠️ این بخش اختصاصی مدیران است.',
   admin_menu_title:
-    '🛠️ پنل مدیریت ربات\nجهت مدیریت بخشهای مختلف، یکی از گزینههای زیر را انتخاب کنید:',
+    '🛠️ پنل مدیریت ربات\nجهت مدیریت بخش‌های مختلف، یکی از گزینه‌های زیر را انتخاب کنید:',
   admin_home_title: 'مدیریت',
   admin_home_subtitle: 'عملیات روزانه، فروش، سلامت پنل‌ها و تنظیمات ربات را از اینجا مدیریت کنید.',
   admin_home_hint:
@@ -146,10 +146,10 @@ export const FA_TEXTS: Record<string, string> = {
     'سلامت پنل‌ها و مقصدها را پایش و سرویس‌های بدون‌مالک را تعیین تکلیف کنید.',
   admin_system_title: 'سامانه و تنظیمات',
   admin_system_subtitle: 'رفتار ربات، مدیران و متن‌های قابل‌ویرایش مشتری را پیکربندی کنید.',
-  admin_menu_panels: '🖥 پنلهای ربکا',
+  admin_menu_panels: '🖥 پنل‌های ربکا',
   admin_group_daily: '⚡ عملیات روزانه',
   admin_group_sales: '🛍️ فروش و بسته‌ها',
-  admin_group_panels: '🖥 پنلهای ربکا',
+  admin_group_panels: '🖥 پنل‌های ربکا',
   admin_group_system: '⚙️ تنظیمات و سیستم',
   admin_menu_back_to_admin: '◀️ بازگشت به مدیریت',
   admin_sales_packages_button: '📦 مدیریت بستهها',
@@ -206,8 +206,8 @@ export const FA_TEXTS: Record<string, string> = {
   checkout_unit_price_label: 'قیمت هر گیگابایت',
   checkout_promo_section: 'کد تخفیف',
   checkout_confirmation_hint: 'تنها پس از زدن «تأیید و تمدید»، مبلغ از کیف پول شما کسر می‌شود.',
-  auto_renew_enable_button: '♻️ فعالسازی تمدید خودکار',
-  auto_renew_disable_button: '⏹ غیرفعالسازی تمدید خودکار',
+  auto_renew_enable_button: '♻️ فعال‌سازی تمدید خودکار',
+  auto_renew_disable_button: '⏹ غیرفعال‌سازی تمدید خودکار',
   auto_renew_select_package: '💬 بسته تمدید خودکار را انتخاب کنید:',
   auto_renew_selection_title: 'تنظیم تمدید خودکار',
   auto_renew_selection_subtitle:
@@ -246,7 +246,7 @@ export const FA_TEXTS: Record<string, string> = {
   auto_renew_required_label: 'هزینه تمدید',
   auto_renew_balance_label: 'موجودی کیف پول',
   auto_renew_success:
-    '✅ اشتراک `{username}` بهصورت خودکار تمدید شد. حجم جدید: {gb} گیگابایت؛ اعتبار تا {expiry}.',
+    '✅ اشتراک `{username}` به‌صورت خودکار تمدید شد. حجم جدید: {gb} گیگابایت؛ اعتبار تا {expiry}.',
   auto_renew_success_title: 'سرویس به‌صورت خودکار تمدید شد',
   auto_renew_success_subtitle: 'هزینه از کیف پول کسر شد و سرویس آماده استفاده است.',
   auto_renew_service_label: 'سرویس',
@@ -255,7 +255,7 @@ export const FA_TEXTS: Record<string, string> = {
   auto_renew_expiry_label: 'اعتبار تا',
   renew_custom_button: '✏️ حجم دلخواه (گیگی {price} تومان)',
   custom_volume_unavailable:
-    '🚫 انتخاب حجم دلخواه در حال حاضر غیرفعال است. لطفاً یکی از بسته های آماده را انتخاب کنید.',
+    '🚫 انتخاب حجم دلخواه در حال حاضر غیرفعال است. لطفاً یکی از بسته‌های آماده را انتخاب کنید.',
   custom_volume_title: 'انتخاب حجم دلخواه',
   custom_volume_subtitle:
     'حجم موردنظر سرویس را تعیین کنید؛ مدت اعتبار تنظیم‌شده برای آن اعمال می‌شود.',
@@ -267,9 +267,9 @@ export const FA_TEXTS: Record<string, string> = {
   custom_days_invalid:
     '⚠️ مدت زمان واردشده معتبر نیست. لطفاً یک عدد صحیح بین ۱ تا ۳۶۵۰ روز وارد کنید.',
   renewal_quote:
-    '🔄 پیشنمایش تمدید اشتراک `{username}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از انجام این تمدید مطمئن هستید؟',
+    '🔄 پیش‌نمایش تمدید اشتراک `{username}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از انجام این تمدید مطمئن هستید؟',
   renewal_quote_with_promo:
-    '🔄 پیشنمایش تمدید اشتراک `{username}`\n🎟️ *کد تخفیف:* `{promo_code}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از انجام این تمدید مطمئن هستید؟',
+    '🔄 پیش‌نمایش تمدید اشتراک `{username}`\n🎟️ *کد تخفیف:* `{promo_code}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از انجام این تمدید مطمئن هستید؟',
 
   menu_buy_subscription: '🛒 خرید اشتراک',
   menu_wallet: '👛 کیف پول',
@@ -333,21 +333,21 @@ export const FA_TEXTS: Record<string, string> = {
   subscription_status_cached:
     '📱 *اطلاعات ذخیره‌شده اشتراک:* `{username}`\n\n⚠️ پنل موقتاً در دسترس نیست؛ آخرین اطلاعات معتبر نمایش داده می‌شود.\n⚡ *وضعیت:* {status}\n📊 *حجم باقیمانده:* {remaining}\n⏳ *مهلت اعتبار:* {expiry_info}\n🌐 *آخرین اتصال:* {online_info}\n📅 *تاریخ ساخت:* {created_info}\n\n🔗 *لینک اتصال:*\n`{sub_url}`',
   subscription_status_failed: '⚠️ دریافت اطلاعات اشتراک {username} با خطا مواجه شد.',
-  subscription_enable_button: '✅ فعالسازی',
-  subscription_disable_button: '⏸️ غیرفعالسازی',
+  subscription_enable_button: '✅ فعال‌سازی',
+  subscription_disable_button: '⏸️ غیرفعال‌سازی',
   subscription_toggle_button: '🔄 تغییر وضعیت',
   subscription_revoke_button: '🔑 لغو لینک قبلی',
-  subscription_refresh_button: '🔄 بروزرسانی',
+  subscription_refresh_button: '🔄 به‌روزرسانی',
   subscription_qr_button: '📷 دریافت QR',
   subscription_status_active: '✅ فعال',
   subscription_status_disabled: '⏸️ غیرفعال',
   subscription_status_on_hold: '⏳ در انتظار',
-  subscription_status_expired: '⚠️ منقضیشده',
+  subscription_status_expired: '⚠️ منقضی‌شده',
   subscription_status_depleted: '📭 حجم تمام‌شده',
   subscription_status_unknown: 'نامشخص: {status}',
   subscription_expiry_never: '♾️ بدون انقضا',
   subscription_expiry_remaining: '{date} ({days} روز باقیمانده)',
-  subscription_expiry_expired: '{date} (منقضیشده)',
+  subscription_expiry_expired: '{date} (منقضی‌شده)',
   subscription_online_never: '❌ بدون اتصال',
   traffic_unit_gb: 'گیگابایت',
   subscription_revoke_confirm:
@@ -384,9 +384,9 @@ export const FA_TEXTS: Record<string, string> = {
   purchase_issuing_with_promo:
     '⏳ در حال صدور اشتراک {package_name} با کد {promo_code} (مبلغ: {amount} تومان)…',
   purchase_quote:
-    '🛒 پیشنمایش خرید اشتراک جدید\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از خرید این اشتراک مطمئن هستید؟',
+    '🛒 پیش‌نمایش خرید اشتراک جدید\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از خرید این اشتراک مطمئن هستید؟',
   purchase_quote_with_promo:
-    '🛒 پیشنمایش خرید اشتراک جدید\n🎟️ *کد تخفیف:* `{promo_code}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از خرید این اشتراک مطمئن هستید؟',
+    '🛒 پیش‌نمایش خرید اشتراک جدید\n🎟️ *کد تخفیف:* `{promo_code}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از خرید این اشتراک مطمئن هستید؟',
   purchase_review_title: 'بررسی خرید',
   purchase_review_subtitle: 'بستهٔ انتخاب‌شده و مبلغ نهایی کسر از کیف پول را بررسی کنید.',
   purchase_confirmation_hint: 'تنها پس از زدن «تأیید و خرید»، مبلغ از کیف پول شما کسر می‌شود.',
@@ -420,7 +420,7 @@ export const FA_TEXTS: Record<string, string> = {
   topup_failed: '⚠️ ثبت رسید با خطا مواجه شد. لطفاً دوباره تلاش کنید.',
 
   admin_menu_stats: '📊 آمار',
-  admin_menu_search_user: '🔎 جستوجوی کاربر',
+  admin_menu_search_user: '🔎 جست‌وجوی کاربر',
   admin_menu_users: '👥 مدیریت کاربران',
   admin_users_title: '👥 *مدیریت کاربران* (مجموع {total} کاربر)\nصفحه {page} از {total_pages}:',
   admin_users_list_title: 'مدیریت کاربران',
@@ -428,7 +428,7 @@ export const FA_TEXTS: Record<string, string> = {
     'یک مشتری را بیابید، حساب او را بررسی کنید یا یک اقدام مدیریتی ثبت‌شونده انجام دهید.',
   admin_users_total_label: 'تعداد کاربران سامانه',
   admin_users_page_label: 'صفحهٔ {page} از {total_pages}',
-  admin_user_search_button: '🔍 جستوجوی کاربر',
+  admin_user_search_button: '🔍 جست‌وجوی کاربر',
   admin_user_btn_format: '👤 {name} | 💰 {balance} تومان',
   admin_menu_settings: '⚙️ مرکز تنظیمات',
   admin_settings_title: 'مرکز تنظیمات',
@@ -587,7 +587,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_user_search_found: '✅ کاربر {telegram_id} پیدا شد.',
   admin_user_open_profile_button: '👤 نمایش پروفایل',
   admin_user_profile:
-    '👤 *خلاصه حساب کاربر:* `{telegram_id}`\n• *نام کاربری:* {username}\n• *نام:* {name}\n• *وضعیت حساب:* {ban_status}\n• *تاریخ عضویت:* {created_at}\n\n👛 *اطلاعات کیف پول:*\n• *موجودی فعلی:* {balance} تومان\n• *مبلغ رزروشده:* {reserved_balance} تومان\n• *مجموع خرید:* {total_spend} تومان\n\n📱 *سرویسها:*\n• *اشتراکهای فعال:* {active_subscription_count} سرویس\n• *استفاده از تست:* {has_used_trial}\n\n📜 *تاریخچه و معرفی:*\n• *کد دعوت:* `{referral_code}`\n• *معرف:* {referrer}\n• *کاربران معرفیشده:* {referred_user_count} نفر\n• *پاداش دعوت:* {referral_bonus_earned} تومان\n• *بازگشت وجه:* {cashback_earned} تومان\n• *تعداد تراکنش:* {transaction_count}',
+    '👤 *خلاصه حساب کاربر:* `{telegram_id}`\n• *نام کاربری:* {username}\n• *نام:* {name}\n• *وضعیت حساب:* {ban_status}\n• *تاریخ عضویت:* {created_at}\n\n👛 *اطلاعات کیف پول:*\n• *موجودی فعلی:* {balance} تومان\n• *مبلغ رزروشده:* {reserved_balance} تومان\n• *مجموع خرید:* {total_spend} تومان\n\n📱 *سرویس‌ها:*\n• *اشتراک‌های فعال:* {active_subscription_count} سرویس\n• *استفاده از تست:* {has_used_trial}\n\n📜 *تاریخچه و معرفی:*\n• *کد دعوت:* `{referral_code}`\n• *معرف:* {referrer}\n• *کاربران معرفی‌شده:* {referred_user_count} نفر\n• *پاداش دعوت:* {referral_bonus_earned} تومان\n• *بازگشت وجه:* {cashback_earned} تومان\n• *تعداد تراکنش:* {transaction_count}',
   admin_user_profile_title: 'پروفایل مشتری',
   admin_user_identity_section: 'هویت و حساب',
   admin_user_wallet_section: 'کیف پول',
@@ -655,7 +655,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_setting_price_per_gb: 'قیمت هر گیگابایت',
   admin_setting_card_number: 'شماره کارت',
   admin_setting_card_holder: 'صاحب کارت',
-  admin_setting_packages_json: '📦 بسته های آماده',
+  admin_setting_packages_json: '📦 بسته‌های آماده',
   admin_setting_custom_volume_enabled: '🎚️ انتخاب حجم دلخواه',
   admin_setting_low_traffic_threshold_gb: 'آستانه هشدار حجم کم (GB)',
   admin_setting_expiry_warning_days: 'روزهای هشدار انقضا',
@@ -663,35 +663,35 @@ export const FA_TEXTS: Record<string, string> = {
   admin_setting_trial_gb: 'حجم تست (GB)',
   admin_setting_trial_days: 'روزهای تست',
   admin_setting_referral_bonus_toman: 'پاداش دعوت',
-  admin_setting_cashback_percent: 'درصد کشبک',
-  admin_setting_naming_mode: 'حالت نامگذاری',
-  admin_setting_naming_prefix: 'پیشوند نامگذاری',
-  admin_setting_custom_naming_template: 'قالب نامگذاری',
+  admin_setting_cashback_percent: 'درصد کش‌بک',
+  admin_setting_naming_mode: 'حالت نام‌گذاری',
+  admin_setting_naming_prefix: 'پیشوند نام‌گذاری',
+  admin_setting_custom_naming_template: 'قالب نام‌گذاری',
   admin_setting_packages_summary: '{count} بسته آماده',
   admin_setting_custom_default_days: '⏳ اعتبار حجم دلخواه (روز)',
   admin_setting_custom_volume_enabled_prompt:
-    '🎚️ *انتخاب حجم دلخواه*\n\n📍 وضعیت فعلی: *{current}*\n\nاگر غیرفعال باشد، کاربران فقط از بسته های آماده برای خرید و تمدید استفاده می کنند.',
+    '🎚️ *انتخاب حجم دلخواه*\n\n📍 وضعیت فعلی: *{current}*\n\nاگر غیرفعال باشد، کاربران فقط از بسته‌های آماده برای خرید و تمدید استفاده می کنند.',
   admin_setting_group_pricing: '🛍️ فروش و بسته ها',
-  admin_setting_group_pricing_desc: 'بسته های آماده فروش، آستانه هشدار حجم کم و مهلت استرداد وجه.',
+  admin_setting_group_pricing_desc: 'بسته‌های آماده فروش، آستانه هشدار حجم کم و مهلت استرداد وجه.',
   admin_setting_group_custom_volume: '🎚️ حجم دلخواه',
   admin_setting_group_custom_volume_desc:
     'فعال یا غیرفعال کردن خرید حجم دلخواه، قیمت هر گیگابایت و اعتبار پیش فرض آن (روز).',
   admin_setting_group_payment: '💳 اطلاعات پرداخت',
   admin_setting_group_payment_desc:
-    '💳 مدیریت شماره کارت، نام صاحب حساب و پیام راهنمای پشتیبانی جهت پرداخت کارتبهکارت.',
+    '💳 مدیریت شماره کارت، نام صاحب حساب و پیام راهنمای پشتیبانی جهت پرداخت کارت‌به‌کارت.',
   admin_setting_group_trial: '🎁 تنظیمات تست',
   admin_setting_group_trial_desc:
     '🎁 مدیریت سرویس تست رایگان، میزان حجم هدیه (GB) و مدت زمان اعتبار آن.',
-  admin_setting_group_referral: '👥 دعوت و کشبک',
+  admin_setting_group_referral: '👥 دعوت و کش‌بک',
   admin_setting_group_referral_desc:
-    '👥 مدیریت میزان پاداش دعوت از دوستان (تومان) و درصد بازگشت وجه (کشبک) خریداران.',
+    '👥 مدیریت میزان پاداش دعوت از دوستان (تومان) و درصد بازگشت وجه (کش‌بک) خریداران.',
   admin_setting_group_naming: '🏷️ نام گذاری اشتراک ها',
   admin_setting_group_naming_desc: 'الگوی ساخت نام اشتراک های جدید در پنل ربکا را انتخاب کنید.',
   admin_settings_groups_prompt:
-    '⚙️ *مرکز تنظیمات ربات*\n\nبرای مدیریت هر بخش، یکی از دسته بندی های زیر را انتخاب کنید 👇',
+    '⚙️ *مرکز تنظیمات ربات*\n\nبرای مدیریت هر بخش، یکی از دسته‌بندی های زیر را انتخاب کنید 👇',
   admin_settings_group_prompt:
     '⚙️ *{group}*\n\n💡 {description}\n\n📋 *وضعیت فعلی*\n{settings}\n\n👇 گزینه موردنظر را انتخاب کنید.',
-  admin_settings_back_groups: '◀️ دسته بندی ها',
+  admin_settings_back_groups: '◀️ دسته‌بندی ها',
   admin_pkg_manager_prompt:
     '📦 مدیریت بسته ها ({count} بسته). روی یک بسته بزنید تا ویرایش یا حذف شود، یا بسته جدید اضافه کنید:',
   admin_pkg_add: '➕ افزودن بسته',
@@ -707,7 +707,7 @@ export const FA_TEXTS: Record<string, string> = {
   config_delete_confirm_button: '⚠️ حذف قطعی',
   config_delete_cancel_button: '❌ انصراف',
   config_delete_warning:
-    '⚠️ «حذف کامل» سرویس `{username}` را بهصورت دائمی هم از پنل ربکا و هم از حساب شما حذف میکند.\n\nاین عمل غیرقابل بازگشت است و هیچ مبلغی بابت موجودی/زمان باقیمانده روی این سرویس بازپرداخت نمیشود.\n\nآیا مطمئن هستید؟',
+    '⚠️ «حذف کامل» سرویس `{username}` را به‌صورت دائمی هم از پنل ربکا و هم از حساب شما حذف میکند.\n\nاین عمل غیرقابل بازگشت است و هیچ مبلغی بابت موجودی/زمان باقیمانده روی این سرویس بازپرداخت نمیشود.\n\nآیا مطمئن هستید؟',
   config_deleted: '✅ سرویس `{username}` به‌صورت کامل حذف شد.',
   config_delete_not_found:
     '⚠️ سرویس `{username}` در پایگاه داده یافت نشد؛ احتمالاً قبلاً حذف شده است.',
@@ -719,14 +719,14 @@ export const FA_TEXTS: Record<string, string> = {
   admin_rebecca_url_invalid: '⚠️ آدرس پنل باید یک URL معتبر با HTTPS باشد.',
   admin_setting_saved: '✅ تنظیم «{setting}» با مقدار `{value}` ذخیره شد.',
   admin_setting_naming_mode_prompt:
-    '🏷️ *تنظیم حالت نامگذاری اشتراکها*\n\nحالت فعلی: *{current}*\n\nنحوه ساخت نام اتوماتیک سرویسها در پنل را انتخاب کنید:',
+    '🏷️ *تنظیم حالت نام‌گذاری اشتراک‌ها*\n\nحالت فعلی: *{current}*\n\nنحوه ساخت نام اتوماتیک سرویس‌ها در پنل را انتخاب کنید:',
   admin_setting_naming_mode_prefix_number: '🏷️ پیشوند + شمارنده (مثال: rebecca_1)',
   admin_setting_naming_mode_telegramid_number: '👤 آیدی تلگرام + شمارنده (مثال: 123456789_1)',
   admin_setting_naming_mode_custom: '🎨 قالب سفارشی (مثال: rebecca_123456789_1)',
   admin_setting_custom_naming_template_prompt:
-    '🎨 *قالب نامگذاری سفارشی*\n\n📝 قالب فعلی: `{current}`\n\n🧩 *متغیرهای قابل استفاده*\n• `{code_prefix}` — پیشوند فعلی: `{prefix_value}`\n• `{code_telegram_id}` — شناسه تلگرام کاربر\n• `{code_counter}` — شمارنده خودکار\n• `{code_random4}` — کد تصادفی ۴ کاراکتری\n\n✨ *نمونههای پیشنهادی*\n• `{example_primary}`\n• `{example_random}`\n\n✍️ قالب جدید را ارسال کنید:',
+    '🎨 *قالب نام‌گذاری سفارشی*\n\n📝 قالب فعلی: `{current}`\n\n🧩 *متغیرهای قابل استفاده*\n• `{code_prefix}` — پیشوند فعلی: `{prefix_value}`\n• `{code_telegram_id}` — شناسه تلگرام کاربر\n• `{code_counter}` — شمارنده خودکار\n• `{code_random4}` — کد تصادفی ۴ کاراکتری\n\n✨ *نمونه‌های پیشنهادی*\n• `{example_primary}`\n• `{example_random}`\n\n✍️ قالب جدید را ارسال کنید:',
   admin_setting_naming_prefix_prompt:
-    '🏷️ *تنظیم پیشوند نامگذاری*\n\nمقدار فعلی: `{current}`\n\nاین پیشوند در ابتدای نام جدید اشتراکهای پنل قرار میگیرد.\n(فقط حروف انگلیسی، اعداد و خط تیره/زیرخط مجاز است)\n\nلطفاً پیشوند جدید را وارد کنید:',
+    '🏷️ *تنظیم پیشوند نام‌گذاری*\n\nمقدار فعلی: `{current}`\n\nاین پیشوند در ابتدای نام جدید اشتراک‌های پنل قرار میگیرد.\n(فقط حروف انگلیسی، اعداد و خط تیره/زیرخط مجاز است)\n\nلطفاً پیشوند جدید را وارد کنید:',
   admin_setting_trial_enabled_prompt:
     '🎁 *تنظیم وضعیت سرویس تست رایگان*\n\nوضعیت فعلی: *{current}*\n\nآیا سرویس تست رایگان برای کاربران جدید فعال باشد؟',
   admin_setting_trial_enabled_on: '🟢 فعال',
@@ -775,7 +775,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_promo_deleted: '✅ کد تخفیف `{code}` حذف شد.',
   admin_promo_not_found: '⚠️ کد تخفیف پیدا نشد.',
   admin_text_editor_intro:
-    '📝 ویرایش متن‌های ربات. زبان، دسته بندی و سپس کلید موردنظر را به‌صورت مرحله‌به‌مرحله انتخاب کنید.',
+    '📝 ویرایش متن‌های ربات. زبان، دسته‌بندی و سپس کلید موردنظر را به‌صورت مرحله‌به‌مرحله انتخاب کنید.',
   admin_text_editor_title: 'ویرایشگر ترجمه',
   admin_text_editor_subtitle:
     'متن‌های دوزبانهٔ ربات را بدون نیاز به راه‌اندازی مجدد، با بررسی امن ویرایش کنید.',
@@ -801,7 +801,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_text_value_invalid: '⚠️ متن خالی یا بیش‌ازحد طولانی است.',
   admin_text_saved: '✅ متن `{key}` بدون نیاز به راه‌اندازی مجدد ذخیره شد.',
   admin_text_language_prompt: '💬 زبان متنی که می‌خواهید ویرایش کنید را انتخاب کنید:',
-  admin_text_category_prompt: '💬 دسته بندی متن موردنظر را انتخاب کنید:',
+  admin_text_category_prompt: '💬 دسته‌بندی متن موردنظر را انتخاب کنید:',
   admin_text_key_prompt:
     '💬 کلید موردنظر را از دسته «{category}» انتخاب کنید ({count} کلید):\n📖 {description}',
   admin_text_key_prompt_search: '💬 کلیدهای دسته «{category}» شامل «{search}» ({count} مورد):',
@@ -811,7 +811,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_text_no_keys_found: '📭 هیچ کلیدی با جست‌وجوی شما پیدا نشد.',
   admin_text_next_page: 'بعدی ▶️',
   admin_text_prev_page: '◀️ قبلی',
-  admin_text_back_categories: '◀️ دسته بندی‌ها',
+  admin_text_back_categories: '◀️ دسته‌بندی‌ها',
   admin_text_category_admin_menu: '🛠️ منوی مدیریت',
   admin_text_category_admin_settings: '⚙️ تنظیمات مدیریت',
   admin_text_category_admin_balance: '💳 موجودی و کیف پول',
@@ -820,11 +820,11 @@ export const FA_TEXTS: Record<string, string> = {
   admin_text_category_admin_users: '👤 مدیریت کاربران',
   admin_text_category_admin_broadcast: '📣 پیام همگانی',
   admin_text_category_admin_direct: '✉️ پیام مستقیم',
-  admin_text_category_admin_other: '📦 سایر متنهای مدیریت',
+  admin_text_category_admin_other: '📦 سایر متن‌های مدیریت',
   admin_text_category_menus: '📱 منوها',
-  admin_text_category_user_purchase: '🛒 خرید و اشتراکها',
+  admin_text_category_user_purchase: '🛒 خرید و اشتراک‌ها',
   admin_text_category_user_wallet: '👛 کیف پول و شارژ',
-  admin_text_category_user_general: '💬 پیامهای عمومی کاربران',
+  admin_text_category_user_general: '💬 پیام‌های عمومی کاربران',
   admin_text_cat_desc_admin_menu: '📝 متن عنوان‌ها و گزینه‌های اصلی منوی مدیریت',
   admin_text_cat_desc_admin_settings: '📝 پیام‌ها و راهنماهای بخش ویرایش تنظیمات ربات',
   admin_text_cat_desc_admin_balance: '📝 پیام‌های شارژ دستی و تغییر موجودی کاربر توسط مدیر',
@@ -877,7 +877,7 @@ export const FA_TEXTS: Record<string, string> = {
     '📣 پیام برای {recipient_count} کاربر در صف قرار گرفت و ارسال در پس‌زمینه به‌صورت پایدار ادامه پیدا می‌کند.',
   admin_broadcast_status_button: '📊 وضعیت',
   admin_broadcast_cancel_button: '⛔ لغو ارسال',
-  admin_broadcast_refresh_button: '🔄 بروزرسانی',
+  admin_broadcast_refresh_button: '🔄 به‌روزرسانی',
   admin_broadcast_job_missing: '⚠️ عملیات ارسال پیدا نشد.',
   admin_broadcast_cancel_requested: '⛔ درخواست لغو ثبت شد.',
   admin_broadcast_cancel_unavailable: 'ℹ️ این ارسال قبلاً تمام/لغو شده یا در دسترس نیست.',
@@ -1022,28 +1022,28 @@ export const FA_TEXTS: Record<string, string> = {
   admin_admin_removed: '✅ دسترسی ادمین {telegram_id} حذف شد.',
   admin_admin_not_found: '⚠️ ادمین {telegram_id} پیدا نشد.',
   admin_last_admin_cannot_remove: '⚠️ آخرین ادمین قابل حذف نیست؛ ابتدا یک ادمین دیگر اضافه کنید.',
-  admin_orphan_none: '✅ هیچ اختلاف باز بین پنلهای ربکا و دیتابیس ربات وجود ندارد.',
+  admin_orphan_none: '✅ هیچ اختلاف باز بین پنل‌های ربکا و دیتابیس ربات وجود ندارد.',
   admin_orphan_scan_button: '🔄 اسکن الآن',
-  admin_orphan_scanning: '🔄 اسکن پنلهای ربکا آغاز شد…',
+  admin_orphan_scanning: '🔄 اسکن پنل‌های ربکا آغاز شد…',
   admin_orphan_scan_done:
-    '✅ اسکن کامل شد. محلی ناپدیدشده: {local} | پنل متصلنشده: {remote} | مبنای نادیدهگرفتهشده: {ignored}',
+    '✅ اسکن کامل شد. محلی ناپدیدشده: {local} | پنل متصل‌نشده: {remote} | مبنای نادیده‌گرفته‌شده: {ignored}',
   admin_orphan_scan_partial:
-    '⚠️ اسکن پنلهای سالم انجام شد؛ {failed} پنل در دسترس نبود. محلی حذفشده: {local} | سرویس متصلنشده: {remote} | نادیدهگرفتهشده: {ignored}',
-  admin_orphan_scan_failed: '⚠️ اسکن کامل نشد؛ اتصال پنلهای ربکا یا دیتابیس را بررسی کنید.',
+    '⚠️ اسکن پنل‌های سالم انجام شد؛ {failed} پنل در دسترس نبود. محلی حذفشده: {local} | سرویس متصل‌نشده: {remote} | نادیده‌گرفته‌شده: {ignored}',
+  admin_orphan_scan_failed: '⚠️ اسکن کامل نشد؛ اتصال پنل‌های ربکا یا دیتابیس را بررسی کنید.',
   admin_orphan_baseline_button: '🧱 ثبت وضعیت فعلی بهعنوان مبنای پایه',
   admin_orphan_baseline_confirm:
-    '🧱 *وضعیت فعلی پنلهای ربکا بهعنوان مبنای پایه ثبت شود؟*\n\nتمام سرویسهایی که *همین الآن* در پنلهای ربکا وجود دارند ولی به ربات متصل نیستند، بهعنوان سرویس قدیمی/دستی علامت میخورند و در اسکنهای بعدی نادیده گرفته میشوند.\n\nهیچ سرویسی حذف، بازگشت وجه، یا متصل نمیشود. سرویسهای جدیدی که بعداً ساخته شوند همچنان شناسایی خواهند شد. این گزینه برای زمانی است که قبل از نصب این قابلیت، کانفیگهای دستی زیادی روی پنل داشتهاید.',
+    '🧱 *وضعیت فعلی پنل‌های ربکا بهعنوان مبنای پایه ثبت شود؟*\n\nتمام سرویس‌هایی که *همین الآن* در پنل‌های ربکا وجود دارند ولی به ربات متصل نیستند، بهعنوان سرویس قدیمی/دستی علامت میخورند و در اسکنهای بعدی نادیده گرفته میشوند.\n\nهیچ سرویسی حذف، بازگشت وجه، یا متصل نمیشود. سرویس‌های جدیدی که بعداً ساخته شوند همچنان شناسایی خواهند شد. این گزینه برای زمانی است که قبل از نصب این قابلیت، کانفیگهای دستی زیادی روی پنل داشتهاید.',
   admin_orphan_baseline_confirm_button: '✅ ثبت مبنای پایه',
-  admin_orphan_baseline_running: '🧱 در حال دریافت لیست فعلی سرویسهای ربکا…',
+  admin_orphan_baseline_running: '🧱 در حال دریافت لیست فعلی سرویس‌های ربکا…',
   admin_orphan_baseline_done:
-    '✅ مبنای پایه ثبت شد. سرویسهای ربکا: {remote} | از قبل متصل به ربات: {bound} | ثبتشده بهعنوان قدیمی/دستی: {ignored}',
+    '✅ مبنای پایه ثبت شد. سرویس‌های ربکا: {remote} | از قبل متصل به ربات: {bound} | ثبت‌شده بهعنوان قدیمی/دستی: {ignored}',
   admin_orphan_baseline_failed:
-    '⚠️ ثبت مبنای پایه انجام نشد. هیچ سرویسی تغییر نکرد؛ اتصال پنلهای ربکا/دیتابیس را بررسی و دوباره تلاش کنید.',
+    '⚠️ ثبت مبنای پایه انجام نشد. هیچ سرویسی تغییر نکرد؛ اتصال پنل‌های ربکا/دیتابیس را بررسی و دوباره تلاش کنید.',
   admin_orphan_summary: '🧩 مجموع موارد باز: {total}',
   admin_orphan_card:
     '🧩 *اختلاف سرویس*\nنوع: {kind}\nسرویس: `{username}`\nمالک محلی: `{owner}`\nاولین مشاهده: {first_seen}',
   admin_orphan_kind_local: 'سرویس محلی ──► ناپدیدشده در پنل ربکا',
-  admin_orphan_kind_remote: 'سرویس پنل ربکا ──► متصلنشده به ربات',
+  admin_orphan_kind_remote: 'سرویس پنل ربکا ──► متصل‌نشده به ربات',
   admin_orphan_remove_local_button: '🗑 پاک کردن رکورد محلی',
   admin_orphan_assign_button: '👤 اتصال به کاربر',
   admin_orphan_ignore_button: '🙈 نادیده گرفتن',
@@ -1092,7 +1092,7 @@ export const FA_TEXTS: Record<string, string> = {
     'این عملیات سرویس ربکا را حذف نمی‌کند و بازگشت وجهی هم انجام نمی‌دهد.',
   purchase_confirmation_expired:
     '⌛️ این تأیید منقضی یا قبلاً استفاده شده است. خرید را دوباره از فروشگاه آغاز کنید.',
-  admin_panels_title: '🖥 مدیریت پنلهای ربکا\n\nتعداد پنلها: {count}',
+  admin_panels_title: '🖥 مدیریت پنل‌های ربکا\n\nتعداد پنل‌ها: {count}',
   admin_panel_registry_title: 'پنل‌های ربکا',
   admin_panel_registry_subtitle:
     'یک پنل را برای بررسی اتصال، سرویس‌ها و تنظیمات عملیاتی انتخاب کنید.',
