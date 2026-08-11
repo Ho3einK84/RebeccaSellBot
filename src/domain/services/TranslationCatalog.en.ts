@@ -305,6 +305,8 @@ export const EN_TEXTS: Record<string, string> = {
   admin_user_quick_topup_50k: '➕ 50k',
   admin_user_quick_topup_100k: '➕ 100k',
   admin_user_quick_topup_200k: '➕ 200k',
+  admin_user_quick_topup_confirm:
+    'Credit {amount} Toman to user {telegram_id}? This immediately increases their wallet balance.',
   admin_user_quick_topup_success: '✅ User balance credited by {amount} Toman.',
   admin_user_balance_button: '💳 Custom balance',
   admin_user_subscriptions_button: '📱 Subscriptions',

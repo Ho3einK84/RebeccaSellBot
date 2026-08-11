@@ -79,6 +79,70 @@ describe('legacy admin callback compatibility', () => {
     );
   });
 
+  it('turns the current receipt approval button into confirmation before crediting a wallet', async () => {
+    const approveTopup = vi.fn();
+    const rejectTopup = vi.fn();
+    const getPendingTopup = vi.fn().mockResolvedValue({
+      id: 'receipt_1',
+      telegramId: 42,
+      amount: 125_000,
+    });
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+    const route = matchRoute(
+      collectRoutes(registerReceiptAdminRoutes),
+      'receipt:approve_prompt:receipt_1'
+    );
+    const ctx = {
+      match: route.match,
+      from: { id: 1, is_bot: false, first_name: 'Admin' },
+      reply,
+      answerCallbackQuery,
+      services: {
+        translationService: translationServiceStub(),
+        walletService: { getPendingTopup, approveTopup, rejectTopup },
+      },
+    } as unknown as MenuContext & { match: RegExpMatchArray };
+
+    await route.handler(ctx);
+
+    expect(getPendingTopup).toHaveBeenCalledWith('receipt_1');
+    expect(approveTopup).not.toHaveBeenCalled();
+    expect(rejectTopup).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(
+      'admin_receipt_approve_confirm',
+      expect.objectContaining({ reply_markup: expect.anything() })
+    );
+  });
+
+  it('shows a confirmation before a quick top-up changes a user wallet', async () => {
+    const adjustBalanceAdmin = vi.fn();
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+    const route = matchRoute(
+      collectRoutes(registerAdminUserRoutes),
+      'admin:user:quick_topup:42:50000'
+    );
+    const ctx = {
+      match: route.match,
+      from: { id: 1, is_bot: false, first_name: 'Admin' },
+      reply,
+      answerCallbackQuery,
+      services: {
+        translationService: translationServiceStub(),
+        walletService: { adjustBalanceAdmin },
+      },
+    } as unknown as MenuContext & { match: RegExpMatchArray };
+
+    await route.handler(ctx);
+
+    expect(adjustBalanceAdmin).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(
+      'admin_user_quick_topup_confirm',
+      expect.objectContaining({ reply_markup: expect.anything() })
+    );
+  });
+
   it('refreshes a legacy ban toggle into confirmation without changing ban state', async () => {
     const setBanned = vi.fn();
     const findProfile = vi.fn().mockResolvedValue({ telegramId: 42, isBanned: false });

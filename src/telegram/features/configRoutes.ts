@@ -4,8 +4,9 @@ import { InlineKeyboard, type Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { logger } from '../../infra/logger.js';
-import { formatSubscriptionLink, observedContextLocale, t, tm } from '../locale.js';
+import { observedContextLocale, t, tm } from '../locale.js';
 import { backKeyboard } from '../ui.js';
+import { callbackData } from '../callbackData.js';
 import { buildSubscriptionActionKeyboard } from './subscriptions/routes.js';
 
 export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotServices): void {
@@ -21,34 +22,34 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
       await ctx.answerCallbackQuery({ text: t(ctx, 'config_not_owned'), show_alert: true });
       return;
     }
+    if (action === 'revoke') {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+      await ctx.reply(
+        t(ctx, 'subscription_revoke_confirm', { username: localConfig.configUsername }),
+        {
+          reply_markup: new InlineKeyboard()
+            .text(t(ctx, 'admin_confirm_button'), callbackData('config', 'revoke_confirm', localConfig.id))
+            .row()
+            .text(t(ctx, 'menu_cancel'), callbackData('config', 'view', localConfig.id)),
+        }
+      );
+      return;
+    }
     if (!acquireUserActionCooldown(telegramId, `config-${action}`, 1_000)) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress'), show_alert: false });
       return;
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     try {
-      if (action === 'revoke') {
-        const url = await services.configService.revokeSubscription(
-          configUsername,
-          localConfig.panelId
-        );
-        await ctx.reply(
-          tm(ctx, 'subscription_link_revoked', {
-            sub_url: formatSubscriptionLink(url, t(ctx, 'subscription_link_unavailable')),
-          }),
-          { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
-        );
+      const remote = await services.panelRegistry
+        .getService(localConfig.panelId)
+        .getUser(configUsername);
+      if (remote.status === 'disabled') {
+        await services.configService.enableConfig(configUsername, localConfig.panelId);
+        await ctx.reply(t(ctx, 'subscription_enabled'), { reply_markup: backKeyboard(ctx) });
       } else {
-        const remote = await services.panelRegistry
-          .getService(localConfig.panelId)
-          .getUser(configUsername);
-        if (remote.status === 'disabled') {
-          await services.configService.enableConfig(configUsername, localConfig.panelId);
-          await ctx.reply(t(ctx, 'subscription_enabled'), { reply_markup: backKeyboard(ctx) });
-        } else {
-          await services.configService.disableConfig(configUsername, localConfig.panelId);
-          await ctx.reply(t(ctx, 'subscription_disabled'), { reply_markup: backKeyboard(ctx) });
-        }
+        await services.configService.disableConfig(configUsername, localConfig.panelId);
+        await ctx.reply(t(ctx, 'subscription_disabled'), { reply_markup: backKeyboard(ctx) });
       }
     } catch (err) {
       logger.warn({ err, telegramId, configUsername, action }, 'Config management action failed');

@@ -75,48 +75,7 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
   });
 
   bot.callbackQuery(/^receipt:(approve|reject)_prompt:([a-zA-Z0-9_-]+)$/u, async (ctx) => {
-    if (!ctx.services) return;
-    const action = ctx.match[1]!;
-    const receiptId = ctx.match[2]!;
-    if (action === 'approve') {
-      const result = await ctx.services.walletService.approveTopup(receiptId, ctx.from.id);
-      if (!result) {
-        await ctx.answerCallbackQuery({
-          text: t(ctx, 'receipt_already_reviewed'),
-          show_alert: true,
-        });
-        return;
-      }
-      await notifyReceiptResult(ctx, result.telegramId, true, result.amount, receiptId);
-      await ctx.answerCallbackQuery({ text: t(ctx, 'receipt_approved') });
-      if (ctx.callbackQuery.message?.caption) {
-        await ctx
-          .editMessageCaption({
-            caption: `${ctx.callbackQuery.message.caption}\n\n✅ *تأیید شد*`,
-            parse_mode: 'Markdown',
-          })
-          .catch(() => null);
-      }
-    } else {
-      const result = await ctx.services.walletService.rejectTopup(receiptId, ctx.from.id);
-      if (!result) {
-        await ctx.answerCallbackQuery({
-          text: t(ctx, 'receipt_already_reviewed'),
-          show_alert: true,
-        });
-        return;
-      }
-      await notifyReceiptResult(ctx, result.telegramId, false, undefined, receiptId);
-      await ctx.answerCallbackQuery({ text: t(ctx, 'receipt_rejected') });
-      if (ctx.callbackQuery.message?.caption) {
-        await ctx
-          .editMessageCaption({
-            caption: `${ctx.callbackQuery.message.caption}\n\n❌ *رد شد*`,
-            parse_mode: 'Markdown',
-          })
-          .catch(() => null);
-      }
-    }
+    await promptReceiptReview(ctx, ctx.match[1]!, ctx.match[2]!);
   });
 
   bot.callbackQuery(/^receipt:(approve|reject)_confirm:([a-zA-Z0-9_-]+)$/u, async (ctx) => {
@@ -179,33 +138,39 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
 
   // Convert buttons emitted before this refactor into confirmation screens.
   bot.callbackQuery(/^receipt-(approve|reject):([a-zA-Z0-9_-]+)$/u, async (ctx) => {
-    if (!ctx.services) return;
-    const action = ctx.match[1]!;
-    const receiptId = ctx.match[2]!;
-    const receipt = await ctx.services.walletService.getPendingTopup(receiptId);
-    if (!receipt) {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'receipt_already_reviewed'), show_alert: true });
-      return;
-    }
-    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
-    await ctx.reply(
-      t(
-        ctx,
-        action === 'approve' ? 'admin_receipt_approve_confirm' : 'admin_receipt_reject_confirm',
-        {
-          receipt_id: receipt.id,
-          telegram_id: receipt.telegramId,
-          amount: localizedNumber(receipt.amount, ctx),
-        }
-      ),
-      {
-        reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'admin_confirm_button'), `receipt:${action}_confirm:${receipt.id}`)
-          .row()
-          .text(t(ctx, 'menu_cancel'), 'receipt:page:1'),
-      }
-    );
+    await promptReceiptReview(ctx, ctx.match[1]!, ctx.match[2]!);
   });
+}
+
+async function promptReceiptReview(
+  ctx: MenuContext,
+  action: 'approve' | 'reject' | string,
+  receiptId: string
+): Promise<void> {
+  if (!ctx.services) return;
+  const receipt = await ctx.services.walletService.getPendingTopup(receiptId);
+  if (!receipt) {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'receipt_already_reviewed'), show_alert: true });
+    return;
+  }
+  await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+  await ctx.reply(
+    t(
+      ctx,
+      action === 'approve' ? 'admin_receipt_approve_confirm' : 'admin_receipt_reject_confirm',
+      {
+        receipt_id: receipt.id,
+        telegram_id: receipt.telegramId,
+        amount: localizedNumber(receipt.amount, ctx),
+      }
+    ),
+    {
+      reply_markup: new InlineKeyboard()
+        .text(t(ctx, 'admin_confirm_button'), `receipt:${action}_confirm:${receipt.id}`)
+        .row()
+        .text(t(ctx, 'menu_cancel'), 'receipt:page:1'),
+    }
+  );
 }
 
 async function notifyReceiptResult(

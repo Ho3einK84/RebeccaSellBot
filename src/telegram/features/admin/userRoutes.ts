@@ -77,9 +77,35 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
   });
 
   bot.callbackQuery(/^admin:user:quick_topup:(\d+):(\d+)$/u, async (ctx) => {
+    const targetId = Number(ctx.match[1]);
+    const amount = Number(ctx.match[2]);
+    if (!isSafePositiveInteger(targetId) || !isSafePositiveInteger(amount)) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_failed'), show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await renderUserScreen(
+      ctx,
+      tm(ctx, 'admin_user_quick_topup_confirm', {
+        telegram_id: targetId,
+        amount: localizedNumber(amount, ctx),
+      }),
+      new InlineKeyboard()
+        .text(t(ctx, 'admin_confirm_button'), `admin:user:quick_topup_confirm:${targetId}:${amount}`)
+        .row()
+        .text(t(ctx, 'menu_cancel'), `admin:user:view:${targetId}`),
+      'Markdown'
+    );
+  });
+
+  bot.callbackQuery(/^admin:user:quick_topup_confirm:(\d+):(\d+)$/u, async (ctx) => {
     if (!ctx.services) return;
     const targetId = Number(ctx.match[1]);
     const amount = Number(ctx.match[2]);
+    if (!isSafePositiveInteger(targetId) || !isSafePositiveInteger(amount)) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_failed'), show_alert: true });
+      return;
+    }
     try {
       await ctx.services.walletService.adjustBalanceAdmin({
         telegramId: targetId,
@@ -328,6 +354,10 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
     .row()
     .text(t(ctx, 'admin_users_back_button'), 'admin:users:page:1');
   await renderUserScreen(ctx, text, keyboard, 'Markdown');
+}
+
+function isSafePositiveInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0;
 }
 
 async function renderUserScreen(

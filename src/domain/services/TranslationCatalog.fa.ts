@@ -313,6 +313,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_user_quick_topup_50k: '➕ ۵۰,۰۰۰',
   admin_user_quick_topup_100k: '➕ ۱۰۰,۰۰۰',
   admin_user_quick_topup_200k: '➕ ۲۰۰,۰۰۰',
+  admin_user_quick_topup_confirm:
+    'آیا {amount} تومان به موجودی کاربر {telegram_id} اضافه شود؟ این مبلغ بلافاصله به کیف پول کاربر افزوده می‌شود.',
   admin_user_quick_topup_success: '✅ موجودی کاربر به میزان {amount} تومان افزایش یافت.',
   admin_user_balance_button: '💳 تغییر موجودی دلخواه',
   admin_user_subscriptions_button: '📱 اشتراک‌ها',
