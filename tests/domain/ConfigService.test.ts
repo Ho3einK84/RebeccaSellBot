@@ -33,7 +33,11 @@ const dbMock = {
   insert: vi.fn().mockReturnValue(insertQueryMock),
   delete: vi.fn().mockReturnValue(deleteQueryMock),
   update: vi.fn().mockReturnValue(updateQueryMock),
+  transaction: vi.fn(),
 };
+dbMock.transaction.mockImplementation(async (callback: (tx: typeof dbMock) => unknown) =>
+  callback(dbMock)
+);
 
 vi.mock('../../src/infra/db.js', () => ({
   getDb: vi.fn(() => dbMock),
@@ -142,6 +146,19 @@ describe('ConfigService subscription claims', () => {
     expect(rebeccaService.getUsers).toHaveBeenCalledWith(0, 10, OPAQUE_SUB_URL, undefined, true);
     expect(rebeccaService.getUser).toHaveBeenCalledWith('alice');
     expect(insertQueryMock.onConflictDoNothing).toHaveBeenCalledOnce();
+    expect(insertQueryMock.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telegramId: 41,
+        configUsername: 'alice',
+        panelStatus: 'active',
+        panelDataLimit: 1024,
+        panelExpire: null,
+        lastSyncedAt: expect.any(Date),
+      })
+    );
+    expect(updateQueryMock.set).toHaveBeenCalledWith(
+      expect.objectContaining({ activeSubscriptionCount: expect.anything() })
+    );
   });
 
   it('uses direct GET verification for username/key links before the targeted search fallback', async () => {
@@ -242,18 +259,21 @@ describe('ConfigService subscription claims', () => {
 
   it('permanently deletes a config from the panel and the local table', async () => {
     rebeccaService.deleteUser.mockResolvedValue({ username: 'alice', status: 'deleted' });
-    deleteQueryMock.returning.mockResolvedValue([{ configUsername: 'alice' }]);
+    deleteQueryMock.returning.mockResolvedValue([{ configUsername: 'alice', telegramId: 41 }]);
 
     await expect(service.deleteConfigCompletely('alice')).resolves.toBe(true);
     expect(rebeccaService.deleteUser).toHaveBeenCalledWith('alice');
     expect(dbMock.delete).toHaveBeenCalled();
+    expect(updateQueryMock.set).toHaveBeenCalledWith(
+      expect.objectContaining({ activeSubscriptionCount: expect.anything() })
+    );
   });
 
   it('treats an already-deleted remote config (404) as a successful full removal', async () => {
     rebeccaService.deleteUser.mockRejectedValue(
       new RebeccaApiError(404, 'DELETE /api/user/alice', '{}')
     );
-    deleteQueryMock.returning.mockResolvedValue([{ configUsername: 'alice' }]);
+    deleteQueryMock.returning.mockResolvedValue([{ configUsername: 'alice', telegramId: 41 }]);
 
     await expect(service.deleteConfigCompletely('alice')).resolves.toBe(true);
     expect(rebeccaService.deleteUser).toHaveBeenCalledWith('alice');

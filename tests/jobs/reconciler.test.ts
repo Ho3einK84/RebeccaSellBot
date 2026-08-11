@@ -363,6 +363,16 @@ describe('purchase intent reconciliation', () => {
     expect(
       state.insertValues.some((values) => values.subUrl === 'vless://not-a-subscription-link')
     ).toBe(false);
+    expect(
+      state.insertValues.some(
+        (values) =>
+          values.configUsername === 'new_user' &&
+          values.panelStatus === 'active' &&
+          values.panelDataLimit === 10_737_419_240 &&
+          values.panelExpire === 1_700_002_592
+      )
+    ).toBe(true);
+    expect(state.setCalls.some((values) => 'activeSubscriptionCount' in values)).toBe(true);
   });
 });
 

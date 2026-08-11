@@ -413,6 +413,16 @@ describe('WalletService reserve → remote → commit saga', () => {
     expect(
       state.setCalls.some((values) => values.amount === 40_000 && values.gbAmount === 15)
     ).toBe(true);
+    expect(state.insertValues).toContainEqual(
+      expect.objectContaining({
+        configUsername: purchase.configUsername,
+        panelStatus: 'active',
+        panelDataLimit: 15 * 1024 * 1024 * 1024,
+        panelExpire: expect.any(Number),
+        lastSyncedAt: expect.any(Date),
+      })
+    );
+    expect(state.setCalls.some((values) => 'activeSubscriptionCount' in values)).toBe(true);
   });
 
   it('resets Rebecca data limit and duration explicitly during renewal', async () => {
@@ -461,6 +471,11 @@ describe('WalletService reserve → remote → commit saga', () => {
     expect(payload).toHaveProperty('data_limit', expectedBytes);
     expect(mockRebeccaService.resetUserTraffic).toHaveBeenCalledWith(renewal.configUsername);
     expect(state.setCalls.some((values) => values.expectedDataLimit === expectedBytes)).toBe(true);
+    expect(
+      state.setCalls.some(
+        (values) => values.panelStatus === 'active' && values.panelDataLimit === expectedBytes
+      )
+    ).toBe(true);
   });
 
   it('handles limited-to-limited and expired renewal correctly', async () => {

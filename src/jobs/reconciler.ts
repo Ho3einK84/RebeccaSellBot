@@ -19,6 +19,10 @@ import {
 } from '../infra/schema.js';
 import type { RebeccaService, RebeccaUserDetail } from '../domain/services/RebeccaService.js';
 import { RebeccaApiError, RebeccaOriginDownError } from '../domain/services/RebeccaService.js';
+import {
+  activeConfigCountSql,
+  observedConfigLifecycle,
+} from '../domain/services/ConfigLifecycle.js';
 import { logger } from '../infra/logger.js';
 import { forEachConcurrent, jobRunner } from './workerRuntime.js';
 import crypto from 'crypto';
@@ -132,7 +136,7 @@ export async function reconcilePendingIntents(
           const completed = await completePendingIntent(
             db,
             intent,
-            subscriptionUrl(remote.user),
+            remote.user,
             services.promoService,
             isRebeccaPanelRegistryAccess(panels)
           );
@@ -167,7 +171,7 @@ export async function reconcilePendingIntents(
         const completed = await completePendingIntent(
           db,
           intent,
-          undefined,
+          remote.user!,
           services.promoService,
           isRebeccaPanelRegistryAccess(panels)
         );
@@ -374,11 +378,13 @@ function determineRenewalOutcome(
 async function completePendingIntent(
   db: ReturnType<typeof getDb>,
   intent: PurchaseIntent,
-  subUrl?: string,
+  remote: RebeccaUserDetail,
   promoService?: PromoService,
   verifyBindingConflict = true
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
+    const observedAt = new Date();
+    const subUrl = subscriptionUrl(remote);
     // Claim the intent first. If another worker or the original saga settled
     // it, its transaction owns the only possible debit and we do nothing.
     const transitioned = await tx
@@ -434,8 +440,7 @@ async function completePendingIntent(
           subUrl,
           isClaimed: true,
           claimedAt: new Date(),
-          panelStatus: 'active',
-          lastSyncedAt: new Date(),
+          ...observedConfigLifecycle(remote, observedAt),
         })
         .onConflictDoNothing();
       if (verifyBindingConflict) {
@@ -465,6 +470,30 @@ async function completePendingIntent(
           )
         );
     }
+
+    if (intent.configUsername) {
+      await tx
+        .update(userConfigs)
+        .set({
+          ...(subUrl ? { subUrl } : {}),
+          serviceId: remote.service_id ?? intent.serviceId,
+          ...observedConfigLifecycle(remote, observedAt),
+        })
+        .where(
+          and(
+            eq(userConfigs.panelId, intent.panelId),
+            eq(userConfigs.configUsername, intent.configUsername),
+            eq(userConfigs.telegramId, intent.telegramId)
+          )
+        );
+    }
+    await tx
+      .update(users)
+      .set({
+        activeSubscriptionCount: activeConfigCountSql(intent.telegramId),
+        updatedAt: observedAt,
+      })
+      .where(eq(users.telegramId, intent.telegramId));
 
     if (promoService) {
       await promoService.finalizeReservedPurchasePromo(tx, intent.id);
