@@ -1,16 +1,21 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { logger } from '../../../infra/logger.js';
-import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
+import { localizedDate, localizedNumber, t } from '../../locale.js';
 import type { PromoType } from '../../../domain/services/PromoService.js';
 import { callbackData } from '../../callbackData.js';
 import {
+  buildEmptyState,
+  buildPromptScreen,
+  buildScreen,
+  buildStatusBadge,
   promptInConversation,
   replyInConversation,
   waitForCallbackInput,
   waitForTextInput,
 } from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 
 export async function adminCreatePromoConversation(
   conversation: MyConversation,
@@ -33,12 +38,22 @@ export async function adminEditPromoConversation(
     return selected;
   });
   if (!id) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_promo_not_found'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_not_found')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
   const promo = await ctx.services.promoService.getPromoCodeById(id);
   if (!promo) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_promo_not_found'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_not_found')),
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
   await runPromoEditor(conversation, ctx, promo.code, promo);
@@ -49,23 +64,39 @@ export async function adminSearchPromoConversation(
   ctx: ConversationContext
 ) {
   if (!(await requireAdmin(conversation, ctx)) || !ctx.services) return;
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_promo_search_prompt'));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '🔎',
+      t(ctx, 'admin_promo_center_title'),
+      t(ctx, 'admin_promo_search_prompt'),
+      t(ctx, 'admin_promo_center_subtitle')
+    ),
+    { parse_mode: 'Markdown' }
+  );
   const input = await waitForTextInput(conversation);
   if (input === undefined) return;
   const result = await ctx.services.promoService.listCodes(1, 10, input);
   if (result.items.length === 0) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_no_promo_codes'), {
-      reply_markup: new InlineKeyboard()
-        .text(t(ctx, 'admin_promo_back_to_list'), callbackData('promo', 'list'))
-        .row()
-        .text(t(ctx, 'menu_back'), 'nav:admin'),
-    });
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('📭', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_no_promo_codes')),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_promo_back_to_list'), callbackData('promo', 'list'))
+          .row()
+          .text(t(ctx, 'menu_back'), 'nav:admin'),
+      }
+    );
     return;
   }
   const keyboard = new InlineKeyboard();
   for (const promo of result.items) {
     keyboard
-      .text(`${promo.active ? '🟢' : '⚪'} ${promo.code}`, callbackData('promo', 'open', promo.id))
+      .text(`${promo.active ? '🟢' : '⚪️'} ${promo.code}`, callbackData('promo', 'open', promo.id))
       .row();
   }
   keyboard
@@ -75,8 +106,28 @@ export async function adminSearchPromoConversation(
   await replyInConversation(
     conversation,
     ctx,
-    t(ctx, 'admin_promo_search_results', { count: localizedNumber(result.total, ctx) }),
-    { reply_markup: keyboard }
+    buildScreen({
+      emoji: '🔎',
+      title: t(ctx, 'admin_promo_center_title'),
+      subtitle: t(ctx, 'admin_promo_search_results', { count: localizedNumber(result.total, ctx) }),
+      primary: {
+        emoji: '🎟️',
+        label: t(ctx, 'admin_promo_total_label'),
+        value: localizedNumber(result.total, ctx),
+      },
+      sections: [
+        {
+          emoji: '📋',
+          title: t(ctx, 'admin_promo_center_title'),
+          fields: result.items.map((promo) => ({
+            emoji: promo.active ? '🟢' : '⚪️',
+            label: escapeTelegramMarkdown(promo.code),
+            value: `${localizedNumber(promo.currentUses, ctx)} / ${localizedNumber(promo.maxUses, ctx)}`,
+          })),
+        },
+      ],
+    }),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
   );
 }
 
@@ -130,15 +181,54 @@ async function runPromoEditor(
   await promptInConversation(
     conversation,
     ctx,
-    tm(ctx, 'admin_promo_save_summary', {
-      code,
-      type: promoTypeLabel(ctx, type),
-      value: localizedNumber(value, ctx),
-      max_uses: localizedNumber(maxUses, ctx),
-      max_uses_per_user: localizedNumber(maxUsesPerUser, ctx),
-      min_purchase_amount: localizedNumber(minPurchaseAmount, ctx),
-      expires_at: expiresAt ? localizedDate(expiresAt, ctx) : t(ctx, 'admin_promo_never_expires'),
-      active: t(ctx, active ? 'admin_promo_active' : 'admin_promo_inactive'),
+    buildScreen({
+      emoji: '🎟️',
+      title: t(ctx, 'admin_promo_detail_title'),
+      subtitle: escapeTelegramMarkdown(code),
+      primary: {
+        emoji: active ? '🟢' : '⚪️',
+        label: t(ctx, 'admin_promo_status_label'),
+        value: buildStatusBadge(
+          ctx,
+          active ? 'active' : 'inactive',
+          t(ctx, active ? 'admin_promo_active' : 'admin_promo_inactive')
+        ),
+      },
+      sections: [
+        {
+          emoji: '⚙️',
+          title: t(ctx, 'admin_promo_configuration_section'),
+          fields: [
+            { label: t(ctx, 'admin_promo_type_label'), value: promoTypeLabel(ctx, type) },
+            { label: t(ctx, 'admin_promo_value_label'), value: localizedNumber(value, ctx) },
+            {
+              label: t(ctx, 'admin_promo_min_purchase_label'),
+              value: `${localizedNumber(minPurchaseAmount, ctx)} ${t(ctx, 'currency_toman')}`,
+            },
+            {
+              label: t(ctx, 'admin_promo_expiry_label'),
+              value: expiresAt
+                ? localizedDate(expiresAt, ctx)
+                : t(ctx, 'admin_promo_never_expires'),
+            },
+          ],
+        },
+        {
+          emoji: '📈',
+          title: t(ctx, 'admin_promo_usage_section'),
+          fields: [
+            {
+              label: t(ctx, 'admin_promo_uses_label'),
+              value: localizedNumber(maxUses, ctx),
+            },
+            {
+              label: t(ctx, 'admin_promo_per_user_label'),
+              value: localizedNumber(maxUsesPerUser, ctx),
+            },
+          ],
+        },
+      ],
+      footer: t(ctx, 'admin_promo_save_consequence'),
     }),
     { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
   );
@@ -163,7 +253,18 @@ async function runPromoEditor(
     await replyInConversation(
       conversation,
       ctx,
-      tm(ctx, existing ? 'admin_promo_updated' : 'admin_promo_created', { code }),
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'admin_promo_detail_title'),
+        primary: {
+          emoji: '🎟️',
+          label: t(ctx, 'checkout_promo_section'),
+          value: escapeTelegramMarkdown(code),
+        },
+        footer: t(ctx, existing ? 'admin_promo_updated' : 'admin_promo_created', {
+          code: escapeTelegramMarkdown(code),
+        }),
+      }),
       {
         parse_mode: 'Markdown',
         reply_markup: new InlineKeyboard()
@@ -174,7 +275,16 @@ async function runPromoEditor(
     );
   } catch (err) {
     logger.warn({ err, code }, 'Promo admin save failed');
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_promo_create_failed'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_promo_detail_title'),
+        t(ctx, 'admin_promo_create_failed')
+      ),
+      { parse_mode: 'Markdown' }
+    );
   }
 }
 
@@ -183,12 +293,27 @@ async function promptPromoCode(
   ctx: ConversationContext
 ): Promise<string | undefined> {
   for (;;) {
-    await promptInConversation(conversation, ctx, t(ctx, 'admin_promo_code_prompt'));
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPromptScreen(
+        '🎟️',
+        t(ctx, 'admin_promo_center_title'),
+        t(ctx, 'admin_promo_code_prompt'),
+        t(ctx, 'admin_promo_center_subtitle')
+      ),
+      { parse_mode: 'Markdown' }
+    );
     const input = await waitForTextInput(conversation);
     if (input === undefined) return undefined;
     const code = input.trim().toUpperCase();
     if (/^[A-Z0-9_-]{3,128}$/u.test(code)) return code;
-    await promptInConversation(conversation, ctx, t(ctx, 'admin_promo_code_invalid'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_code_invalid')),
+      { parse_mode: 'Markdown' }
+    );
   }
 }
 
@@ -204,9 +329,17 @@ async function promptPromoType(
     .text(t(ctx, 'admin_promo_type_gb'), 'promo-type:gift_gb')
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_promo_type_prompt'), {
-    reply_markup: keyboard,
-  });
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '⚙️',
+      t(ctx, 'admin_promo_detail_title'),
+      t(ctx, 'admin_promo_type_prompt'),
+      t(ctx, 'admin_promo_center_subtitle')
+    ),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
   const data = await waitForCallbackInput(conversation, ['promo-type:']);
   if (!data) return undefined;
   const type = data.slice('promo-type:'.length);
@@ -223,12 +356,22 @@ async function promptPromoPositiveNumber(
   maximum = 2_147_483_647
 ): Promise<number | undefined> {
   for (;;) {
-    await promptInConversation(conversation, ctx, prompt);
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPromptScreen('🔢', t(ctx, 'admin_promo_detail_title'), prompt),
+      { parse_mode: 'Markdown' }
+    );
     const input = await waitForTextInput(conversation);
     if (input === undefined) return undefined;
     const value = parsePositiveSafeInteger(input);
     if (value !== undefined && value <= maximum) return value;
-    await promptInConversation(conversation, ctx, invalid);
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_promo_detail_title'), invalid),
+      { parse_mode: 'Markdown' }
+    );
   }
 }
 
@@ -237,14 +380,32 @@ async function promptPromoNonNegativeNumber(
   ctx: ConversationContext
 ): Promise<number | undefined> {
   for (;;) {
-    await promptInConversation(conversation, ctx, t(ctx, 'admin_promo_min_purchase_prompt'));
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPromptScreen(
+        '🔢',
+        t(ctx, 'admin_promo_detail_title'),
+        t(ctx, 'admin_promo_min_purchase_prompt')
+      ),
+      { parse_mode: 'Markdown' }
+    );
     const input = await waitForTextInput(conversation);
     if (input === undefined) return undefined;
     if (/^\d+$/u.test(input.trim())) {
       const value = Number(input.trim());
       if (Number.isSafeInteger(value) && value >= 0) return value;
     }
-    await promptInConversation(conversation, ctx, t(ctx, 'admin_invalid_promo_min_purchase'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_promo_detail_title'),
+        t(ctx, 'admin_invalid_promo_min_purchase')
+      ),
+      { parse_mode: 'Markdown' }
+    );
   }
 }
 
@@ -253,7 +414,16 @@ async function promptPromoExpiry(
   ctx: ConversationContext
 ): Promise<Date | null | undefined> {
   for (;;) {
-    await promptInConversation(conversation, ctx, t(ctx, 'admin_promo_expiry_prompt'));
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPromptScreen(
+        '📅',
+        t(ctx, 'admin_promo_detail_title'),
+        t(ctx, 'admin_promo_expiry_prompt')
+      ),
+      { parse_mode: 'Markdown' }
+    );
     const input = await waitForTextInput(conversation);
     if (input === undefined) return undefined;
     const value = input.trim().toLowerCase();
@@ -262,7 +432,16 @@ async function promptPromoExpiry(
       const date = new Date(`${value}T23:59:59.999Z`);
       if (!Number.isNaN(date.getTime()) && date.getTime() > Date.now()) return date;
     }
-    await promptInConversation(conversation, ctx, t(ctx, 'admin_invalid_promo_expiry'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_promo_detail_title'),
+        t(ctx, 'admin_invalid_promo_expiry')
+      ),
+      { parse_mode: 'Markdown' }
+    );
   }
 }
 
@@ -279,10 +458,23 @@ async function promptPromoActive(
   await promptInConversation(
     conversation,
     ctx,
-    t(ctx, 'admin_promo_active_prompt', {
-      active: t(ctx, current ? 'admin_promo_active' : 'admin_promo_inactive'),
+    buildScreen({
+      emoji: '⚙️',
+      title: t(ctx, 'admin_promo_detail_title'),
+      primary: {
+        emoji: current ? '🟢' : '⚪️',
+        label: t(ctx, 'admin_promo_status_label'),
+        value: buildStatusBadge(
+          ctx,
+          current ? 'active' : 'inactive',
+          t(ctx, current ? 'admin_promo_active' : 'admin_promo_inactive')
+        ),
+      },
+      footer: t(ctx, 'admin_promo_active_prompt', {
+        active: t(ctx, current ? 'admin_promo_active' : 'admin_promo_inactive'),
+      }),
     }),
-    { reply_markup: keyboard }
+    { parse_mode: 'Markdown', reply_markup: keyboard }
   );
   const data = await waitForCallbackInput(conversation, ['promo-active:']);
   return data === 'promo-active:true' ? true : data === 'promo-active:false' ? false : undefined;
@@ -298,68 +490,4 @@ function promoTypeLabel(ctx: ConversationContext, type: PromoType): string {
           ? 'admin_promo_type_credit'
           : 'admin_promo_type_gb';
   return t(ctx, key);
-}
-
-export async function adminManagePromoConversation(
-  conversation: MyConversation,
-  ctx: ConversationContext
-) {
-  if (!(await requireAdmin(conversation, ctx)) || !ctx.services) return;
-
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_promo_manage_prompt'));
-  const codeInput = await waitForTextInput(conversation);
-  if (codeInput === undefined) return;
-  const code = codeInput.trim();
-
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_promo_toggle_prompt'));
-  const stateInput = await waitForTextInput(conversation);
-  if (stateInput === undefined) return;
-  if (['3', 'delete', 'remove', 'حذف'].includes(stateInput.trim().toLowerCase())) {
-    try {
-      const deleted = await ctx.services.promoService.deletePromoCode(code);
-      await replyInConversation(
-        conversation,
-        ctx,
-        tm(ctx, deleted ? 'admin_promo_deleted' : 'admin_promo_not_found', {
-          code: code.toUpperCase(),
-        }),
-        { parse_mode: 'Markdown' }
-      );
-    } catch {
-      await replyInConversation(conversation, ctx, t(ctx, 'admin_promo_not_found'));
-    }
-    return;
-  }
-  const active = promoActiveFromInput(stateInput);
-  if (active === undefined) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_cancelled'));
-    return;
-  }
-
-  try {
-    const updated = await ctx.services.promoService.setPromoActive(code, active);
-    if (!updated) {
-      await replyInConversation(conversation, ctx, t(ctx, 'admin_promo_not_found'));
-      return;
-    }
-    await replyInConversation(
-      conversation,
-      ctx,
-      tm(ctx, 'admin_promo_toggled', {
-        code: code.toUpperCase(),
-        active: t(ctx, active ? 'admin_promo_active' : 'admin_promo_inactive'),
-      }),
-      { parse_mode: 'Markdown' }
-    );
-  } catch {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_promo_not_found'));
-  }
-}
-
-// ── Admin: broadcast message ──────────────────────────────────────────────────
-
-function promoActiveFromInput(value: string): boolean | undefined {
-  if (value.trim() === '1') return true;
-  if (value.trim() === '2') return false;
-  return undefined;
 }

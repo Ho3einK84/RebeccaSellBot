@@ -1,6 +1,13 @@
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { t } from '../../locale.js';
-import { promptInConversation, replyInConversation, waitForTextInput } from '../../ui.js';
+import {
+  buildEmptyState,
+  buildPromptScreen,
+  buildScreen,
+  promptInConversation,
+  replyInConversation,
+  waitForTextInput,
+} from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
 import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
 
@@ -40,7 +47,17 @@ export async function adminPanelConversation(
         };
         outsideCtx.session.adminPanelAction = 'await_add_key';
       });
-      await replyInConversation(conversation, ctx, t(ctx, 'admin_panel_api_key_prompt'));
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildPromptScreen(
+          '🔐',
+          t(ctx, 'admin_panel_api_key_title'),
+          t(ctx, 'admin_panel_api_key_prompt'),
+          t(ctx, 'admin_panel_api_key_subtitle')
+        ),
+        { parse_mode: 'Markdown' }
+      );
       return;
     } else {
       if (!state.panelId) return;
@@ -71,9 +88,28 @@ export async function adminPanelConversation(
       outsideCtx.session.adminPanelId = undefined;
       outsideCtx.session.adminPanelDraft = undefined;
     });
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_panel_saved'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'admin_panel_saved_title'),
+        subtitle: t(ctx, 'admin_panel_saved_subtitle'),
+      }),
+      { parse_mode: 'Markdown' }
+    );
   } catch {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_panel_save_failed'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_panel_save_failed_title'),
+        t(ctx, 'admin_panel_save_failed_subtitle'),
+        t(ctx, 'admin_panel_save_failed')
+      ),
+      { parse_mode: 'Markdown' }
+    );
   } finally {
     // Cancellation, invalid input and failed edits must not leave a stale
     // action in the durable session. The API-key handoff is the sole state
@@ -100,7 +136,16 @@ async function askPanelUrl(
   try {
     return validateRebeccaBaseUrl(value);
   } catch {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_rebecca_url_invalid'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_panel_detail_title'),
+        t(ctx, 'admin_rebecca_url_invalid')
+      ),
+      { parse_mode: 'Markdown' }
+    );
     return undefined;
   }
 }
@@ -111,12 +156,27 @@ async function askText(
   promptKey: string,
   maxLength: number
 ): Promise<string | undefined> {
-  await promptInConversation(conversation, ctx, t(ctx, promptKey));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '✍️',
+      t(ctx, 'admin_panel_detail_title'),
+      t(ctx, promptKey),
+      t(ctx, 'admin_panel_registry_subtitle')
+    ),
+    { parse_mode: 'Markdown' }
+  );
   const input = await waitForTextInput(conversation);
   if (input === undefined) return undefined;
   const value = input.trim();
   if (!value || value.length > maxLength) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_setting_invalid'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_panel_detail_title'), t(ctx, 'admin_setting_invalid')),
+      { parse_mode: 'Markdown' }
+    );
     return undefined;
   }
   return value;
@@ -126,12 +186,27 @@ async function askServiceId(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<number | undefined> {
-  await promptInConversation(conversation, ctx, t(ctx, 'admin_panel_service_id_prompt'));
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '🔢',
+      t(ctx, 'admin_panel_detail_title'),
+      t(ctx, 'admin_panel_service_id_prompt'),
+      t(ctx, 'admin_panel_registry_subtitle')
+    ),
+    { parse_mode: 'Markdown' }
+  );
   const input = await waitForTextInput(conversation);
   if (input === undefined) return undefined;
   const value = parsePositiveSafeInteger(input);
   if (!value || value > MAX_SERVICE_ID) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_setting_invalid'));
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_panel_detail_title'), t(ctx, 'admin_setting_invalid')),
+      { parse_mode: 'Markdown' }
+    );
     return undefined;
   }
   return value;

@@ -209,8 +209,9 @@ describe('notifier thresholds and dedupe behavior', () => {
       NOW
     );
 
-    expect(translations.get).toHaveBeenCalledWith('renewal_button', 'en');
-    expect(String(sendMessage.mock.calls[0]?.[1])).toContain('Subscription alice needs renewal.');
+    expect(translations.get).toHaveBeenCalledWith('renewal_button', 'en', undefined);
+    expect(translations.get).toHaveBeenCalledWith('renewal_notification_title', 'en', undefined);
+    expect(String(sendMessage.mock.calls[0]?.[1])).toContain('renewal_notification_title');
   });
 
   it('excludes configs with autoRenewEnabled = true from notifier sweep', async () => {

@@ -16,6 +16,11 @@ import {
   normalizeRebeccaPanelAccess,
   type NormalizedRebeccaPanelAccess,
 } from './RebeccaPanelAccess.js';
+import {
+  activeConfigCountSql,
+  deletedConfigLifecycle,
+  observedConfigLifecycle,
+} from './ConfigLifecycle.js';
 import { logger } from '../../infra/logger.js';
 
 export type ConfigReconciliationIssue = typeof configReconciliationIssues.$inferSelect;
@@ -189,11 +194,7 @@ export class ConfigReconciliationService {
         await tx
           .update(users)
           .set({
-            activeSubscriptionCount: sql`(
-              SELECT COUNT(*)::integer FROM ${userConfigs}
-              WHERE ${userConfigs.telegramId} = ${issue.localOwnerTelegramId}
-                AND ${userConfigs.panelStatus} = 'active'
-            )`,
+            activeSubscriptionCount: activeConfigCountSql(issue.localOwnerTelegramId),
             updatedAt: new Date(),
           })
           .where(eq(users.telegramId, issue.localOwnerTelegramId));
@@ -241,6 +242,7 @@ export class ConfigReconciliationService {
     if (remote.status === 'deleted') throw new Error('ORPHAN_REMOTE_DELETED');
     const configId = `uc_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
     const subUrl = remote.subscription_url || Object.values(remote.subscription_urls ?? {})[0];
+    const observedAt = new Date();
 
     return db.transaction(async (tx) => {
       const [existing] = await tx
@@ -263,25 +265,18 @@ export class ConfigReconciliationService {
         configUsername: issue.configUsername,
         subUrl,
         isClaimed: true,
-        claimedAt: new Date(),
-        panelStatus: remote.status,
-        panelDataLimit: remote.data_limit,
-        panelExpire: remote.expire,
-        lastSyncedAt: new Date(),
+        claimedAt: observedAt,
+        ...observedConfigLifecycle(remote, observedAt),
       });
       await tx
         .update(configReconciliationIssues)
-        .set({ status: 'resolved', resolvedAt: new Date(), lastSeenAt: new Date() })
+        .set({ status: 'resolved', resolvedAt: observedAt, lastSeenAt: observedAt })
         .where(eq(configReconciliationIssues.id, issue.id));
       await tx
         .update(users)
         .set({
-          activeSubscriptionCount: sql`(
-            SELECT COUNT(*)::integer FROM ${userConfigs}
-            WHERE ${userConfigs.telegramId} = ${targetTelegramId}
-              AND ${userConfigs.panelStatus} = 'active'
-          )`,
-          updatedAt: new Date(),
+          activeSubscriptionCount: activeConfigCountSql(targetTelegramId),
+          updatedAt: observedAt,
         })
         .where(eq(users.telegramId, targetTelegramId));
       await tx.insert(auditLogs).values({
@@ -440,7 +435,7 @@ export class ConfigReconciliationService {
         missing += 1;
         await db
           .update(userConfigs)
-          .set({ panelStatus: 'deleted', lastSyncedAt: scanStartedAt, updatedAt: scanStartedAt })
+          .set(deletedConfigLifecycle(scanStartedAt))
           .where(eq(userConfigs.id, config.id));
         await this.upsertIssue({
           panelId,
@@ -457,12 +452,8 @@ export class ConfigReconciliationService {
         db
           .update(userConfigs)
           .set({
-            panelStatus: remote.status,
-            panelDataLimit: remote.data_limit,
-            panelExpire: remote.expire,
+            ...observedConfigLifecycle(remote, scanStartedAt),
             subUrl: remote.subscription_url || config.subUrl,
-            lastSyncedAt: scanStartedAt,
-            updatedAt: scanStartedAt,
           })
           .where(eq(userConfigs.id, config.id)),
         db

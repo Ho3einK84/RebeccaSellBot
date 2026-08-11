@@ -1,6 +1,7 @@
 import type { Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
-import { t, tm } from '../../locale.js';
+import { t } from '../../locale.js';
+import { buildEmptyState, buildScreen } from '../../ui.js';
 import {
   promoCenterKeyboard,
   promoDeleteConfirmKeyboard,
@@ -15,7 +16,12 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
   async function renderDetail(ctx: MenuContext, id: string): Promise<void> {
     const view = await promoDetailView(ctx, id);
     if (!view) {
-      await ctx.reply(t(ctx, 'admin_promo_not_found'), { reply_markup: promoCenterKeyboard(ctx) });
+      await renderPromoScreen(
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_not_found')),
+        promoCenterKeyboard(ctx),
+        'Markdown'
+      );
       return;
     }
     await renderPromoScreen(ctx, view.text, view.keyboard, 'Markdown');
@@ -81,7 +87,17 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
     await ctx.answerCallbackQuery();
     await renderPromoScreen(
       ctx,
-      tm(ctx, 'admin_promo_delete_confirm', { code: promo.code }),
+      buildScreen({
+        emoji: '🗑️',
+        title: t(ctx, 'admin_promo_delete_title'),
+        subtitle: t(ctx, 'admin_promo_delete_subtitle'),
+        primary: {
+          emoji: '🎟️',
+          label: t(ctx, 'checkout_promo_section'),
+          value: `\`${promo.code}\``,
+        },
+        footer: `⚠️ ${t(ctx, 'admin_promo_delete_consequence')}`,
+      }),
       promoDeleteConfirmKeyboard(ctx, id),
       'Markdown'
     );

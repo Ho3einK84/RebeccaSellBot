@@ -6,6 +6,7 @@ import { RebeccaApiError, type RebeccaService, type RebeccaUserDetail } from './
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { TranslationService } from './TranslationService.js';
 import { logger } from '../../infra/logger.js';
+import { activeConfigCountSql, observedConfigLifecycle } from './ConfigLifecycle.js';
 import { remoteMatchesOwnershipMarker, trialOwnershipMarker } from './RebeccaOwnership.js';
 import {
   normalizeRebeccaPanelAccess,
@@ -423,6 +424,7 @@ export class TrialService {
     compensateOnFailure = true
   ): Promise<TrialClaimResult> {
     const subUrl = subscriptionUrl(remote);
+    const observedAt = new Date();
     try {
       const finalization = await getDb().transaction(async (tx) => {
         const [currentClaim] = await tx
@@ -469,6 +471,7 @@ export class TrialService {
             subUrl,
             isClaimed: true,
             claimedAt: new Date(),
+            ...observedConfigLifecycle(remote, observedAt),
           })
           .onConflictDoNothing()
           .returning({ telegramId: userConfigs.telegramId });
@@ -487,6 +490,28 @@ export class TrialService {
             throw new Error('TRIAL_CONFIG_ALREADY_BOUND');
           }
         }
+
+        await tx
+          .update(userConfigs)
+          .set({
+            subUrl,
+            serviceId: claim.serviceId,
+            ...observedConfigLifecycle(remote, observedAt),
+          })
+          .where(
+            and(
+              eq(userConfigs.panelId, claim.panelId),
+              eq(userConfigs.configUsername, claim.configUsername),
+              eq(userConfigs.telegramId, claim.telegramId)
+            )
+          );
+        await tx
+          .update(users)
+          .set({
+            activeSubscriptionCount: activeConfigCountSql(claim.telegramId),
+            updatedAt: observedAt,
+          })
+          .where(eq(users.telegramId, claim.telegramId));
 
         const [audit] = await tx
           .insert(walletTransactions)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { callbackData, isUuidCallbackValue } from '../../src/telegram/callbackData.js';
+import { panelCallback } from '../../src/telegram/features/admin/panelRoutes.js';
 
 describe('Telegram callback data', () => {
   it('keeps stable UUID actions within Telegram UTF-8 limits', () => {
@@ -22,5 +23,30 @@ describe('Telegram callback data', () => {
   it('rejects oversized or control-character payloads before rendering', () => {
     expect(() => callbackData('x', 'a'.repeat(64))).toThrow('TELEGRAM_CALLBACK_DATA_TOO_LONG');
     expect(() => callbackData('x', '\n')).toThrow('TELEGRAM_CALLBACK_DATA_INVALID');
+  });
+
+  it('keeps every panel action within the callback limit at maximum valid IDs', () => {
+    const panelId = 'p'.repeat(40);
+    const serviceId = 2_147_483_647;
+    const callbacks = [
+      panelCallback('v', panelId),
+      panelCallback('t', panelId),
+      panelCallback('g', panelId, 1),
+      panelCallback('d', panelId),
+      panelCallback('e', panelId, 'n'),
+      panelCallback('e', panelId, 'u'),
+      panelCallback('e', panelId, 'k'),
+      panelCallback('e', panelId, 's'),
+      panelCallback('s', 'd', panelId, serviceId),
+      panelCallback('s', 'c', panelId, serviceId),
+      panelCallback('s', 'x', panelId, serviceId),
+      panelCallback('s', 'xc', panelId, serviceId),
+      panelCallback('x', panelId),
+      panelCallback('xc', panelId),
+    ];
+
+    expect(
+      Math.max(...callbacks.map((value) => Buffer.byteLength(value, 'utf8')))
+    ).toBeLessThanOrEqual(64);
   });
 });

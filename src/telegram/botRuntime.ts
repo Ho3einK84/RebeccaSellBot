@@ -31,9 +31,9 @@ import {
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { registerAdminAlertHook } from '../domain/services/RebeccaService.js';
 import { logger } from '../infra/logger.js';
-import { observedContextLocale, resolveServiceLocale, t, tmForLocale } from './locale.js';
-import { cleanChatUiMiddleware, uiMessageTrackingTransformer } from './ui.js';
-import { safeFormattingTransformer } from './rendering.js';
+import { observedContextLocale, resolveServiceLocale, t, tForLocale } from './locale.js';
+import { buildScreen, cleanChatUiMiddleware, uiMessageTrackingTransformer } from './ui.js';
+import { escapeTelegramMarkdown, safeFormattingTransformer } from './rendering.js';
 
 export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices): void {
   // API-level rate throttler (respects Telegram flood limits)
@@ -51,11 +51,13 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
           resolveServiceLocale(services.translationService);
         await bot.api.sendMessage(
           adminId,
-          tmForLocale(services.translationService, locale, 'admin_panel_outage', {
-            panel: alert.panelName ?? alert.panelId ?? '—',
-            endpoint: alert.endpoint,
-            attempts: alert.attempts,
-          }),
+          buildAdminPanelOutageScreen(
+            services,
+            locale,
+            alert.panelName ?? alert.panelId ?? '—',
+            alert.endpoint,
+            alert.attempts
+          ),
           {
             parse_mode: 'Markdown',
           }
@@ -130,6 +132,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
       (data.includes('admin-menu') ||
         data.startsWith('admin:') ||
         data.startsWith('admin_') ||
+        data.startsWith('a:p:') ||
         data.startsWith('receipt:') ||
         data.startsWith('receipt-') ||
         data.startsWith('promo:')) &&
@@ -233,4 +236,47 @@ export function conversationContextMiddleware(services: BotServices) {
     }
     await next();
   };
+}
+
+function buildAdminPanelOutageScreen(
+  services: BotServices,
+  locale: 'fa' | 'en',
+  panel: string,
+  endpoint: string,
+  attempts: number
+): string {
+  return buildScreen({
+    emoji: '🚨',
+    title: tForLocale(services.translationService, locale, 'admin_panel_outage_title'),
+    subtitle: tForLocale(services.translationService, locale, 'admin_panel_outage_subtitle'),
+    primary: {
+      emoji: '🔴',
+      label: tForLocale(services.translationService, locale, 'admin_panel_status_label'),
+      value: tForLocale(services.translationService, locale, 'ui_status_error'),
+    },
+    sections: [
+      {
+        emoji: '🔌',
+        title: tForLocale(services.translationService, locale, 'admin_panel_connection_section'),
+        fields: [
+          {
+            label: tForLocale(services.translationService, locale, 'admin_panel_name_label'),
+            value: escapeTelegramMarkdown(panel),
+          },
+          {
+            label: tForLocale(services.translationService, locale, 'admin_panel_endpoint_label'),
+            value: escapeTelegramMarkdown(endpoint),
+          },
+          {
+            label: tForLocale(
+              services.translationService,
+              locale,
+              'admin_panel_outage_attempts_label'
+            ),
+            value: attempts.toLocaleString(locale === 'fa' ? 'fa-IR' : 'en-US'),
+          },
+        ],
+      },
+    ],
+  });
 }

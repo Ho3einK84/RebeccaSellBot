@@ -20,7 +20,7 @@ function context(): MenuContext {
 }
 
 describe('subscription card actions', () => {
-  it('hides custom renewal while keeping packages and cancel when disabled', () => {
+  it('hides custom renewal while keeping packages and detail navigation when disabled', () => {
     const ctx = {
       ...context(),
       services: {
@@ -44,7 +44,7 @@ describe('subscription card actions', () => {
       .map((button) => (button as { callback_data?: string }).callback_data);
 
     expect(callbacks).toContain('renew:package:uc_alice_123:0');
-    expect(callbacks).toContain('conversation:cancel');
+    expect(callbacks).toContain('config:view:uc_alice_123');
     expect(callbacks).not.toContain('renew:custom:uc_alice_123');
   });
 
@@ -108,7 +108,7 @@ describe('subscription card actions', () => {
     );
   });
 
-  it('sends separate cards and exactly one final Back navigation message', async () => {
+  it('renders one paginated service screen with selector and back navigation', async () => {
     const reply = vi.fn().mockResolvedValue({ message_id: 1 });
     const configs = ['one', 'two'].map((suffix) => ({
       id: `uc_${suffix}_123`,
@@ -161,19 +161,19 @@ describe('subscription card actions', () => {
 
     await showUserSubscriptions(ctx);
 
-    expect(reply).toHaveBeenCalledTimes(3);
-    const replyMarkups = reply.mock.calls.map(
-      (call) => (call[1] as { reply_markup?: { inline_keyboard: unknown[][] } }).reply_markup
+    expect(reply).toHaveBeenCalledTimes(1);
+    const text = reply.mock.calls[0]?.[0] as string;
+    const keyboard = (
+      reply.mock.calls[0]?.[1] as { reply_markup: { inline_keyboard: unknown[][] } }
+    ).reply_markup;
+    const callbacks = (keyboard.inline_keyboard.flat() as Array<{ callback_data?: string }>).map(
+      (button) => button.callback_data
     );
-    const navigationCallbacks = replyMarkups.map((markup) =>
-      (markup?.inline_keyboard.flat() as Array<{ callback_data?: string }>).map(
-        (button) => button.callback_data
-      )
-    );
-    expect(navigationCallbacks[0]).not.toContain('nav:main');
-    expect(navigationCallbacks[1]).not.toContain('nav:main');
-    expect(navigationCallbacks[2]).toContain('nav:main');
-    expect(reply.mock.calls[0]?.[0]).toContain('config_one');
+    expect(text).toContain('config_one');
+    expect(text).toContain('config_two');
+    expect(callbacks).toContain('config:view:uc_one_123');
+    expect(callbacks).toContain('config:view:uc_two_123');
+    expect(callbacks).toContain('nav:main');
   });
 
   it('re-renders user subscriptions when config:refresh is triggered', async () => {
@@ -221,8 +221,44 @@ describe('subscription card actions', () => {
 
     await showUserSubscriptions(ctx);
 
-    expect(reply).toHaveBeenCalledTimes(2);
+    expect(reply).toHaveBeenCalledTimes(1);
     expect(answerCallbackQuery).not.toHaveBeenCalled();
+  });
+
+  it('edits the existing service screen when pagination is invoked from a callback', async () => {
+    const editMessageText = vi.fn().mockResolvedValue(true);
+    const ctx = {
+      ...context(),
+      from: { id: 42, is_bot: false, first_name: 'Test' },
+      callbackQuery: { message: { message_id: 1 } },
+      editMessageText,
+      reply: vi.fn(),
+      services: {
+        translationService: { get: vi.fn((key: string) => key) },
+        configService: {
+          listConfigsForOwner: vi.fn().mockResolvedValue([
+            {
+              id: 'uc_edit_123',
+              telegramId: 42,
+              configUsername: 'config_edit',
+              panelStatus: 'active',
+              panelDataLimit: 10 * 1024 ** 3,
+              panelExpire: Math.floor(Date.now() / 1000) + 86_400,
+              createdAt: new Date(),
+            },
+          ]),
+        },
+        pricingService: { getPackageById: vi.fn() },
+      },
+    } as unknown as MenuContext;
+
+    await showUserSubscriptions(ctx);
+
+    expect(editMessageText).toHaveBeenCalledWith(
+      expect.stringContaining('config_edit'),
+      expect.objectContaining({ parse_mode: 'Markdown' })
+    );
+    expect(ctx.reply).not.toHaveBeenCalled();
   });
 
   it('shows package selection keyboard when enabling auto-renew regardless of existing package ID', async () => {
@@ -277,7 +313,86 @@ describe('subscription card actions', () => {
     await autoRenewHandler!(ctx);
 
     expect(ctx.services.configService.setAutoRenew).not.toHaveBeenCalled();
-    expect(reply).toHaveBeenCalledWith('auto_renew_select_package', expect.anything());
+    expect(reply).toHaveBeenCalledWith(
+      expect.stringContaining('auto_renew_selection_title'),
+      expect.objectContaining({ parse_mode: 'Markdown' })
+    );
+    const callbacks = (
+      (
+        reply.mock.calls[0]?.[1] as { reply_markup: { inline_keyboard: unknown[][] } }
+      ).reply_markup.inline_keyboard.flat() as Array<{ callback_data?: string }>
+    ).map((button) => button.callback_data);
+    expect(callbacks).toContain('autorenew:pkg:uc_alice_123:0');
+    expect(callbacks).toContain('config:view:uc_alice_123');
+  });
+
+  it('does not save auto-renew until the selected package is explicitly confirmed', async () => {
+    const listeners: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const fakeBot = {
+      callbackQuery: vi.fn((pattern: RegExp | string, handler: (ctx: unknown) => Promise<void>) => {
+        const key = pattern instanceof RegExp ? pattern.source : String(pattern);
+        listeners[key] = handler;
+      }),
+    };
+    registerSubscriptionRoutes(fakeBot as unknown as Bot<MenuContext>);
+
+    const packageHandler = Object.entries(listeners).find(([key]) =>
+      key.includes('autorenew:pkg:')
+    )?.[1];
+    const confirmHandler = Object.entries(listeners).find(([key]) =>
+      key.includes('autorenew:confirm:')
+    )?.[1];
+    expect(packageHandler).toBeDefined();
+    expect(confirmHandler).toBeDefined();
+
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const answerCallbackQuery = vi.fn().mockResolvedValue(true);
+    const setAutoRenew = vi.fn().mockResolvedValue(true);
+    const config = {
+      id: 'uc_confirm_456',
+      telegramId: 42,
+      configUsername: 'alice',
+      panelId: 'main',
+      serviceId: 1,
+    };
+    const ctx = {
+      ...context(),
+      match: ['autorenew:pkg:uc_confirm_456:0', 'uc_confirm_456', '0'],
+      from: { id: 42 },
+      session: {},
+      reply,
+      answerCallbackQuery,
+      services: {
+        translationService: {
+          get: vi.fn((key: string) => key),
+        },
+        configService: {
+          getOwnedConfigById: vi.fn().mockResolvedValue(config),
+          setAutoRenew,
+        },
+        pricingService: {
+          getPackages: vi.fn(() => [
+            { id: 'pkg_30gb', name: '30 GB', price: 100_000, gbAmount: 30, durationDays: 30 },
+          ]),
+        },
+      },
+    };
+
+    await packageHandler!(ctx);
+
+    expect(setAutoRenew).not.toHaveBeenCalled();
+    expect(ctx.session).toMatchObject({
+      pendingAutoRenew: { configId: config.id, packageId: 'pkg_30gb', price: 100_000 },
+    });
+    expect(reply).toHaveBeenCalledWith(
+      expect.stringContaining('auto_renew_review_title'),
+      expect.objectContaining({ parse_mode: 'Markdown' })
+    );
+
+    ctx.match = ['autorenew:confirm:uc_confirm_456', 'uc_confirm_456'];
+    await confirmHandler!(ctx);
+
+    expect(setAutoRenew).toHaveBeenCalledWith(42, config.id, true, 'pkg_30gb', 100_000);
   });
 
   it('handles config:view by rendering the subscription card', async () => {

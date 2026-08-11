@@ -17,6 +17,7 @@ import type { TranslationService } from './TranslationService.js';
 import { logger } from '../../infra/logger.js';
 import crypto from 'crypto';
 import { and, eq, sql } from 'drizzle-orm';
+import { activeConfigCountSql, observedConfigLifecycle } from './ConfigLifecycle.js';
 
 const CREDENTIAL_KEY_RE = /^[a-f0-9-]{16,128}$/i;
 const OPAQUE_SUBSCRIPTION_TOKEN_RE = /^(?=.*[a-z])(?=.*[A-Z])[A-Za-z0-9_-]{15,}$/;
@@ -39,6 +40,9 @@ export type AutoRenewPreference = {
   autoRenewPackageId: string | null;
   autoRenewPrice: number | null;
 };
+
+type ConfigRecord = typeof userConfigs.$inferSelect;
+export type ConfigRemoteReference = Pick<ConfigRecord, 'panelId' | 'configUsername'>;
 
 export class ConfigService {
   private readonly claimCooldowns = new Map<number, number>();
@@ -325,6 +329,15 @@ export class ConfigService {
   }
 
   /**
+   * Read the panel-authoritative subscription record for a known local binding.
+   * Telegram code uses this boundary instead of reaching through the panel
+   * registry to a RebeccaService instance itself.
+   */
+  async getRemoteConfigDetail(config: ConfigRemoteReference): Promise<RebeccaUserDetail> {
+    return this.panels.getService(config.panelId).getUser(config.configUsername);
+  }
+
+  /**
    * Extract a likely Rebecca subscription URL from a text message.
    *
    * This intentionally does not accept every ordinary HTTPS URL.  Rebecca
@@ -409,20 +422,36 @@ export class ConfigService {
       // New claim — INSERT only. onConflictDoNothing makes the UNIQUE
       // config_username constraint the final permanent-owner guard.
       const id = `uc_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
-      const inserted = await db
-        .insert(userConfigs)
-        .values({
-          id,
-          telegramId,
-          panelId,
-          serviceId: matchedUser.service_id ?? (await this.panels.resolveTarget(panelId)).serviceId,
-          configUsername: matchedUsername,
-          subUrl: normalizedSubUrl.toString(),
-          isClaimed: true,
-          claimedAt: new Date(),
-        })
-        .onConflictDoNothing({ target: [userConfigs.panelId, userConfigs.configUsername] })
-        .returning({ telegramId: userConfigs.telegramId });
+      const serviceId =
+        matchedUser.service_id ?? (await this.panels.resolveTarget(panelId)).serviceId;
+      const observedAt = new Date();
+      const inserted = await db.transaction(async (tx) => {
+        const created = await tx
+          .insert(userConfigs)
+          .values({
+            id,
+            telegramId,
+            panelId,
+            serviceId,
+            configUsername: matchedUsername,
+            subUrl: normalizedSubUrl.toString(),
+            isClaimed: true,
+            claimedAt: new Date(),
+            ...observedConfigLifecycle(matchedUser, observedAt),
+          })
+          .onConflictDoNothing({ target: [userConfigs.panelId, userConfigs.configUsername] })
+          .returning({ telegramId: userConfigs.telegramId });
+        if (created.length > 0) {
+          await tx
+            .update(users)
+            .set({
+              activeSubscriptionCount: activeConfigCountSql(telegramId),
+              updatedAt: observedAt,
+            })
+            .where(eq(users.telegramId, telegramId));
+        }
+        return created;
+      });
 
       if (inserted.length === 0) {
         const [ownerAfterConflict] = await db
@@ -556,13 +585,23 @@ export class ConfigService {
       .getService(config.panelId)
       .revokeSubscription(config.configUsername);
     const newSubUrl = canonicalSubscriptionUrls(updated)[0];
-    const db = getDb();
-    if (newSubUrl) {
-      await db
+    const observedAt = new Date();
+    await getDb().transaction(async (tx) => {
+      await tx
         .update(userConfigs)
-        .set({ subUrl: newSubUrl, updatedAt: new Date() })
+        .set({
+          ...(newSubUrl ? { subUrl: newSubUrl } : {}),
+          ...observedConfigLifecycle(updated, observedAt),
+        })
         .where(eq(userConfigs.id, config.id));
-    }
+      await tx
+        .update(users)
+        .set({
+          activeSubscriptionCount: activeConfigCountSql(config.telegramId),
+          updatedAt: observedAt,
+        })
+        .where(eq(users.telegramId, config.telegramId));
+    });
     return newSubUrl;
   }
 
@@ -571,14 +610,43 @@ export class ConfigService {
     await this.panels.getService(config.panelId).resetUserTraffic(config.configUsername);
   }
 
+  /** Toggle a locally bound config according to its current remote state. */
+  async toggleConfig(configUsername: string, panelId?: string): Promise<'enabled' | 'disabled'> {
+    const config = await this.resolveLocalConfig(configUsername, panelId);
+    const remote = await this.getRemoteConfigDetail(config);
+    const enabled = remote.status === 'disabled';
+    await this.setConfigEnabled(config, enabled);
+    return enabled ? 'enabled' : 'disabled';
+  }
+
   async disableConfig(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    await this.panels.getService(config.panelId).disableUser(config.configUsername);
+    await this.setConfigEnabled(config, false);
   }
 
   async enableConfig(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    await this.panels.getService(config.panelId).enableUser(config.configUsername);
+    await this.setConfigEnabled(config, true);
+  }
+
+  private async setConfigEnabled(config: ConfigRecord, enabled: boolean): Promise<void> {
+    const remote = enabled
+      ? await this.panels.getService(config.panelId).enableUser(config.configUsername)
+      : await this.panels.getService(config.panelId).disableUser(config.configUsername);
+    const observedAt = new Date();
+    await getDb().transaction(async (tx) => {
+      await tx
+        .update(userConfigs)
+        .set(observedConfigLifecycle(remote, observedAt))
+        .where(eq(userConfigs.id, config.id));
+      await tx
+        .update(users)
+        .set({
+          activeSubscriptionCount: activeConfigCountSql(config.telegramId),
+          updatedAt: observedAt,
+        })
+        .where(eq(users.telegramId, config.telegramId));
+    });
   }
 
   /**
@@ -598,14 +666,27 @@ export class ConfigService {
       } catch (err) {
         if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
       }
-      const [deleted] = await db
-        .delete(userConfigs)
-        .where(eq(userConfigs.configUsername, configUsername))
-        .returning({ configUsername: userConfigs.configUsername });
-      await db
-        .delete(notificationDeliveries)
-        .where(eq(notificationDeliveries.configUsername, configUsername));
-      return deleted !== undefined;
+      return db.transaction(async (tx) => {
+        const [deleted] = await tx
+          .delete(userConfigs)
+          .where(eq(userConfigs.configUsername, configUsername))
+          .returning({
+            configUsername: userConfigs.configUsername,
+            telegramId: userConfigs.telegramId,
+          });
+        if (!deleted) return false;
+        await tx
+          .delete(notificationDeliveries)
+          .where(eq(notificationDeliveries.configUsername, configUsername));
+        await tx
+          .update(users)
+          .set({
+            activeSubscriptionCount: activeConfigCountSql(deleted.telegramId),
+            updatedAt: new Date(),
+          })
+          .where(eq(users.telegramId, deleted.telegramId));
+        return true;
+      });
     }
     const config = await this.resolveLocalConfig(configUsername, panelId);
     try {
@@ -631,11 +712,7 @@ export class ConfigService {
       await tx
         .update(users)
         .set({
-          activeSubscriptionCount: sql`(
-            SELECT COUNT(*)::integer FROM ${userConfigs}
-            WHERE ${userConfigs.telegramId} = ${config.telegramId}
-              AND ${userConfigs.panelStatus} = 'active'
-          )`,
+          activeSubscriptionCount: activeConfigCountSql(config.telegramId),
           updatedAt: new Date(),
         })
         .where(eq(users.telegramId, config.telegramId));

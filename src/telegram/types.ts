@@ -49,6 +49,8 @@ export interface SessionData {
   transferConfigOwnerTelegramId?: number;
   orphanAssignIssueId?: string;
   renewConfigId?: string;
+  /** Package terms awaiting the user's explicit auto-renew confirmation. */
+  pendingAutoRenew?: { configId: string; packageId: string; price: number };
   adminPanelId?: string;
   adminPanelAction?: 'add' | 'name' | 'url' | 'add_service' | 'await_add_key' | 'await_api_key';
   /** Non-secret panel fields waiting for a one-shot API-key message. */

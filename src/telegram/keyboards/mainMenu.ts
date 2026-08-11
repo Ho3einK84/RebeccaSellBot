@@ -15,8 +15,9 @@ import {
   t,
   tm,
 } from '../locale.js';
-import { backKeyboard, buildHeader } from '../ui.js';
+import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
+import { renderAdminHome } from './adminMenu.js';
 import { customVolumeEnabled } from '../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 
@@ -59,32 +60,46 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
     // If config fetch fails gracefully default to 0 count
   }
 
-  const titleKey = t(ctx, 'home_title');
-  const title = titleKey !== 'home_title' ? titleKey : 'داشبورد کاربری سرویسها';
-  const header = buildHeader('🏠', title);
-
-  const balanceLabel =
-    t(ctx, 'home_balance') !== 'home_balance' ? t(ctx, 'home_balance') : 'موجودی کیف پول';
-  const activeLabel =
-    t(ctx, 'home_active_services') !== 'home_active_services'
-      ? t(ctx, 'home_active_services')
-      : 'تعداد سرویسهای فعال';
-  const tomanLabel =
-    t(ctx, 'currency_toman') !== 'currency_toman' ? t(ctx, 'currency_toman') : 'تومان';
-  const serviceLabel = t(ctx, 'service_unit') !== 'service_unit' ? t(ctx, 'service_unit') : 'سرویس';
-  const daysLabel = t(ctx, 'days_unit') !== 'days_unit' ? t(ctx, 'days_unit') : 'روز';
-
-  let summary = `👛 *${balanceLabel}:* ${localizedNumber(balance, ctx)} ${tomanLabel}\n📱 *${activeLabel}:* ${localizedNumber(activeCount, ctx)} ${serviceLabel}`;
-
+  const notices: string[] = [];
+  if (activeCount === 0) notices.push(`📭 ${t(ctx, 'home_no_active_services_hint')}`);
   if (nearExpiryInfo) {
-    const warningLabel =
-      t(ctx, 'home_near_expiry_warning') !== 'home_near_expiry_warning'
-        ? t(ctx, 'home_near_expiry_warning')
-        : 'سرویس نیازمند توجه';
-    summary += `\n\n⚠️ *${warningLabel}:* \`${nearExpiryInfo.username}\` (${localizedNumber(nearExpiryInfo.daysLeft, ctx)} ${daysLabel})`;
+    notices.push(
+      `${buildStatusBadge(ctx, 'warning', t(ctx, 'home_near_expiry_warning'))}\n${tm(
+        ctx,
+        'home_near_expiry_detail',
+        {
+          username: nearExpiryInfo.username,
+          days: localizedNumber(nearExpiryInfo.daysLeft, ctx),
+          days_unit: t(ctx, 'days_unit'),
+        }
+      )}`
+    );
   }
 
-  return `${header}\n${summary}`;
+  return buildScreen({
+    emoji: '🏠',
+    title: t(ctx, 'home_title'),
+    subtitle: t(ctx, 'home_subtitle'),
+    primary: {
+      emoji: '👛',
+      label: t(ctx, 'home_balance'),
+      value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      {
+        emoji: '📱',
+        title: t(ctx, 'home_service_overview'),
+        fields: [
+          {
+            emoji: activeCount > 0 ? '🟢' : '⚪️',
+            label: t(ctx, 'home_active_services'),
+            value: `${localizedNumber(activeCount, ctx)} ${t(ctx, 'service_unit')}`,
+          },
+        ],
+      },
+    ],
+    footer: notices.join('\n\n'),
+  });
 }
 
 /**
@@ -97,35 +112,163 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
   const balance = await ctx.services.walletService.getBalance(telegramId);
   const pendingReceipt = await ctx.services.walletService.getPendingReceiptForUser?.(telegramId);
 
-  const titleKey = t(ctx, 'wallet_dashboard_title');
-  const title = titleKey !== 'wallet_dashboard_title' ? titleKey : 'کیف پول حساب کاربری';
-  const header = buildHeader('👛', title);
-  let text = `${header}\n💰 *موجودی قابل استفاده:* ${localizedNumber(balance, ctx)} تومان`;
-
-  if (pendingReceipt) {
-    const formattedAmount = localizedNumber(pendingReceipt.amount, ctx);
-    const formattedDate = localizedDate(pendingReceipt.createdAt, ctx);
-    text += `\n\n${tm(ctx, 'wallet_pending_receipt_detail', {
-      amount: formattedAmount,
-      date: formattedDate,
-    })}`;
-  } else {
-    text += `\n\nجهت افزایش موجودی یا ثبت کد تخفیف، از گزینههای زیر استفاده کنید.`;
-  }
-
-  return text;
+  return buildScreen({
+    emoji: '👛',
+    title: t(ctx, 'wallet_dashboard_title'),
+    subtitle: t(ctx, 'wallet_dashboard_subtitle'),
+    primary: {
+      emoji: '💰',
+      label: t(ctx, 'wallet_available_balance'),
+      value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: pendingReceipt
+      ? [
+          {
+            emoji: '⏳',
+            title: t(ctx, 'wallet_pending_section'),
+            fields: [
+              {
+                emoji: '💰',
+                label: t(ctx, 'wallet_pending_amount'),
+                value: `${localizedNumber(pendingReceipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+              },
+              {
+                emoji: '📅',
+                label: t(ctx, 'wallet_pending_submitted'),
+                value: localizedDate(pendingReceipt.createdAt, ctx),
+              },
+              {
+                emoji: '⏳',
+                label: t(ctx, 'wallet_pending_status'),
+                value: t(ctx, 'wallet_pending_status_detail'),
+              },
+            ],
+          },
+        ]
+      : undefined,
+    footer: pendingReceipt ? undefined : `ℹ️ ${t(ctx, 'wallet_dashboard_empty_hint')}`,
+  });
 }
 
 /**
  * Render shop header text including active promo code if set in session.
  */
 export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
-  const baseShop = t(ctx, 'shop');
-  if (ctx.session.pendingPromo?.code) {
-    const promoLine = tm(ctx, 'shop_promo_active', { code: ctx.session.pendingPromo.code });
-    return `${baseShop}\n\n${promoLine}`;
-  }
-  return baseShop;
+  const promoCode = ctx.session.pendingPromo?.code;
+  return buildScreen({
+    emoji: '🛍️',
+    title: t(ctx, 'shop_title'),
+    subtitle: t(ctx, 'shop_subtitle'),
+    ...(promoCode
+      ? {
+          primary: {
+            emoji: '🎟️',
+            label: t(ctx, 'shop_promo_section'),
+            value: `\`${promoCode}\``,
+          },
+        }
+      : {}),
+    footer: `ℹ️ ${t(ctx, 'shop_hint')}`,
+  });
+}
+
+function buildInsufficientBalanceScreen(
+  ctx: MenuContext,
+  packagePrice: number,
+  balance: number
+): string {
+  const deficit = packagePrice - balance;
+  return buildScreen({
+    emoji: '👛',
+    title: t(ctx, 'insufficient_balance_title'),
+    subtitle: t(ctx, 'insufficient_balance_subtitle'),
+    primary: {
+      emoji: '📉',
+      label: t(ctx, 'insufficient_balance_deficit_label'),
+      value: `${localizedNumber(deficit, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      {
+        emoji: '💰',
+        title: t(ctx, 'insufficient_balance_wallet_section'),
+        fields: [
+          {
+            emoji: '🛍️',
+            label: t(ctx, 'insufficient_balance_price_label'),
+            value: `${localizedNumber(packagePrice, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            emoji: '👛',
+            label: t(ctx, 'insufficient_balance_balance_label'),
+            value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      },
+    ],
+    footer: `ℹ️ ${t(ctx, 'insufficient_balance_hint')}`,
+  });
+}
+
+function buildPurchaseCheckoutScreen(
+  ctx: MenuContext,
+  pkg: { name: string; gbAmount: number; durationDays: number; price: number; id: string },
+  amount: number,
+  promoCode?: string
+): string {
+  return buildScreen({
+    emoji: '🛒',
+    title: t(ctx, 'purchase_review_title'),
+    subtitle: t(ctx, 'purchase_review_subtitle'),
+    primary: {
+      emoji: '💰',
+      label: t(ctx, 'checkout_total_label'),
+      value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      {
+        emoji: '📦',
+        title: t(ctx, 'checkout_package_section'),
+        fields: [
+          {
+            emoji: '📦',
+            label: t(ctx, 'renewal_success_package_label'),
+            value: localizedPackageName(ctx, pkg.id, pkg.name),
+          },
+          {
+            emoji: '📊',
+            label: t(ctx, 'checkout_traffic_label'),
+            value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+          },
+          {
+            emoji: '⏳',
+            label: t(ctx, 'checkout_duration_label'),
+            value: `${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
+          },
+          {
+            emoji: '💳',
+            label: t(ctx, 'checkout_unit_price_label'),
+            value: `${localizedNumber(Math.round(pkg.price / pkg.gbAmount), ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      },
+      ...(promoCode
+        ? [
+            {
+              emoji: '🎟️',
+              title: t(ctx, 'checkout_promo_section'),
+              fields: [
+                {
+                  emoji: '🎟️',
+                  label: t(ctx, 'shop_promo_section'),
+                  value: `\`${promoCode}\``,
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
+    footer: `ℹ️ ${t(ctx, 'purchase_confirmation_hint')}`,
+  });
 }
 
 // ── Main Menu ────────────────────────────────────────────────────────────────
@@ -164,12 +307,32 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         .row()
         .text(t(ctx, 'menu_back'), 'nav:main');
 
-      const previewText = tm(ctx, 'trial_preview_text', {
-        gb: localizedNumber(trialGb, ctx),
-        days: localizedNumber(trialDays, ctx),
+      const previewText = buildScreen({
+        emoji: '🎁',
+        title: t(ctx, 'trial_preview_heading'),
+        subtitle: t(ctx, 'trial_preview_subtitle'),
+        primary: {
+          emoji: '📊',
+          label: t(ctx, 'trial_traffic_label'),
+          value: `${localizedNumber(trialGb, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+        },
+        sections: [
+          {
+            emoji: '⏳',
+            title: t(ctx, 'trial_terms_label'),
+            fields: [
+              {
+                emoji: '📅',
+                label: t(ctx, 'trial_duration_label'),
+                value: `${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')}`,
+              },
+            ],
+          },
+        ],
+        footer: `ℹ️ ${t(ctx, 'trial_terms')}`,
       });
 
-      await ctx.reply(previewText, {
+      await ctx.editMessageText(previewText, {
         parse_mode: 'Markdown',
         reply_markup: previewKeyboard,
       });
@@ -193,8 +356,31 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       const refLink = `https://t.me/${botUsername}?start=${u.referralCode}`;
       const bonus = ctx.services.translationService.getSettingNum('referral_bonus_toman', 10_000);
 
-      await ctx.reply(
-        tm(ctx, 'referral_info', { bonus: localizedNumber(bonus, ctx), ref_link: refLink }),
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '👥',
+          title: t(ctx, 'referral_title'),
+          subtitle: t(ctx, 'referral_subtitle'),
+          primary: {
+            emoji: '🔗',
+            label: t(ctx, 'referral_link_label'),
+            value: `\`${refLink}\``,
+          },
+          sections: [
+            {
+              emoji: '🎁',
+              title: t(ctx, 'referral_title'),
+              fields: [
+                {
+                  emoji: '💰',
+                  label: t(ctx, 'referral_reward_label'),
+                  value: `${localizedNumber(bonus, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+              ],
+            },
+          ],
+          footer: `ℹ️ ${t(ctx, 'referral_hint')}`,
+        }),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
       );
     }
@@ -202,9 +388,14 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
   .text(
     (ctx) => t(ctx, 'menu_language'),
     async (ctx) => {
-      await ctx.reply(t(ctx, 'language_selection_prompt'), {
-        reply_markup: languageKeyboard(ctx, 'main'),
-      });
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '🌐',
+          title: t(ctx, 'language_selection_title'),
+          subtitle: t(ctx, 'language_selection_subtitle'),
+        }),
+        { parse_mode: 'Markdown', reply_markup: languageKeyboard(ctx, 'main') }
+      );
     }
   )
   .row()
@@ -212,7 +403,15 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     (ctx) => t(ctx, 'menu_support'),
     async (ctx) => {
       if (!ctx.services) return;
-      await ctx.reply(t(ctx, 'support_message'), { reply_markup: backKeyboard(ctx, 'main') });
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '💬',
+          title: t(ctx, 'support_title'),
+          subtitle: t(ctx, 'support_subtitle'),
+          footer: t(ctx, 'support_message'),
+        }),
+        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+      );
     }
   )
   .row()
@@ -222,7 +421,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         (c) => t(c, 'admin_menu_management'),
         async (c) => {
           c.menu.nav('admin-menu');
-          await c.editMessageText(t(c, 'admin_menu_title'));
+          await c.editMessageText(renderAdminHome(c), { parse_mode: 'Markdown' });
         }
       );
     }
@@ -272,48 +471,26 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
               pkg.gbAmount
             );
             if (pendingPromo.messageKey) {
-              await c.reply(t(c, pendingPromo.messageKey), {
-                reply_markup: backKeyboard(c, 'main'),
-              });
+              await c.editMessageText(
+                buildEmptyState('⚠️', t(c, 'purchase_review_title'), t(c, pendingPromo.messageKey)),
+                { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
+              );
               return;
             }
             const displayedPrice = pendingPromo.quote?.finalAmount ?? pkg.price;
             const balance = await c.services.walletService.getBalance(telegramId);
             if (balance < displayedPrice) {
-              const deficit = displayedPrice - balance;
-              const insufficientText = tm(c, 'insufficient_balance_detail', {
-                price: localizedNumber(displayedPrice, c),
-                balance: localizedNumber(balance, c),
-                deficit: localizedNumber(deficit, c),
-              });
-
               const insufficientKeyboard = new InlineKeyboard()
                 .text(t(c, 'direct_topup_button'), 'topup:direct')
                 .row()
-                .text(t(c, 'menu_back'), 'nav:main');
+                .text(t(c, 'menu_back'), 'shop:open');
 
-              await c.reply(insufficientText, {
+              await c.editMessageText(buildInsufficientBalanceScreen(c, displayedPrice, balance), {
                 parse_mode: 'Markdown',
                 reply_markup: insufficientKeyboard,
               });
               return;
             }
-
-            const pricePerGb = Math.round(pkg.price / pkg.gbAmount);
-            const summaryText = pendingPromo.quote
-              ? tm(c, 'purchase_quote_with_promo', {
-                  gb: localizedNumber(pkg.gbAmount, c),
-                  days: localizedNumber(pkg.durationDays, c),
-                  amount: localizedNumber(displayedPrice, c),
-                  price_per_gb: localizedNumber(pricePerGb, c),
-                  promo_code: pendingPromo.quote.code,
-                })
-              : tm(c, 'purchase_quote', {
-                  gb: localizedNumber(pkg.gbAmount, c),
-                  days: localizedNumber(pkg.durationDays, c),
-                  amount: localizedNumber(displayedPrice, c),
-                  price_per_gb: localizedNumber(pricePerGb, c),
-                });
 
             let checkout;
             try {
@@ -326,21 +503,29 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
               });
               trackFunnelEvent('checkout_start');
             } catch {
-              await c.reply(t(c, 'purchase_target_unavailable'), {
-                reply_markup: backKeyboard(c, 'main'),
-              });
+              await c.editMessageText(
+                buildEmptyState(
+                  '⚠️',
+                  t(c, 'purchase_review_title'),
+                  t(c, 'purchase_target_unavailable')
+                ),
+                { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
+              );
               return;
             }
 
             const confirmKeyboard = new InlineKeyboard()
               .text(t(c, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
               .row()
-              .text(t(c, 'menu_cancel'), 'conversation:cancel');
+              .text(t(c, 'menu_back'), 'shop:open');
 
-            await c.reply(summaryText, {
-              parse_mode: 'Markdown',
-              reply_markup: confirmKeyboard,
-            });
+            await c.editMessageText(
+              buildPurchaseCheckoutScreen(c, pkg, displayedPrice, pendingPromo.quote?.code),
+              {
+                parse_mode: 'Markdown',
+                reply_markup: confirmKeyboard,
+              }
+            );
           }
         )
         .row();

@@ -13,13 +13,34 @@
  */
 import { Menu } from '@grammyjs/menu';
 import type { MenuContext } from '../types.js';
-import { localizedNumber, t, tm } from '../locale.js';
-import { backKeyboard } from '../ui.js';
+import { localizedNumber, t } from '../locale.js';
+import { backKeyboard, buildScreen, buildStatusBadge } from '../ui.js';
 import { showPromoCenter } from '../promoAdminUi.js';
 import { renderUserListPage } from '../features/admin/userRoutes.js';
 import { showReceiptQueue } from '../features/admin/receiptRoutes.js';
 import { renderAdminRegistry, renderOrphanIssues } from '../features/admin/maintenanceRoutes.js';
 import { renderPanelRegistry } from '../features/admin/panelRoutes.js';
+
+export function renderAdminHome(ctx: MenuContext): string {
+  return buildScreen({
+    emoji: '🛠️',
+    title: t(ctx, 'admin_home_title'),
+    subtitle: t(ctx, 'admin_home_subtitle'),
+    footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+  });
+}
+
+function renderAdminGroup(
+  ctx: MenuContext,
+  input: { emoji: string; titleKey: string; subtitleKey: string }
+): string {
+  return buildScreen({
+    emoji: input.emoji,
+    title: t(ctx, input.titleKey),
+    subtitle: t(ctx, input.subtitleKey),
+    footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+  });
+}
 
 // ── Daily Operations Submenu ──────────────────────────────────────────────────
 
@@ -69,7 +90,7 @@ export const adminDailyMenu = new Menu<MenuContext>('admin-daily-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -106,7 +127,7 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -130,7 +151,7 @@ export const adminPanelsMenu = new Menu<MenuContext>('admin-panels-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -161,7 +182,7 @@ export const adminSystemMenu = new Menu<MenuContext>('admin-system-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -195,22 +216,97 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
         panelPromise,
       ]);
 
-      await ctx.reply(
-        tm(ctx, 'admin_dashboard_stats', {
-          total_users: localizedNumber(stats.totalUsers, ctx),
-          total_sales: localizedNumber(stats.totalSales, ctx),
-          daily_revenue: localizedNumber(stats.dailyRevenue, ctx),
-          weekly_revenue: localizedNumber(stats.weeklyRevenue, ctx),
-          monthly_revenue: localizedNumber(stats.monthlyRevenue, ctx),
-          active_subscriptions: localizedNumber(stats.activeSubscriptions, ctx),
-          inactive_subscriptions: localizedNumber(stats.inactiveSubscriptions, ctx),
-          pending_receipts: localizedNumber(stats.pendingReceipts, ctx),
-          panel_health: panel.healthy ? '✅' : '⚠️',
-          panel_latency: localizedNumber(panel.latency, ctx),
-          database_health: '✅',
-          database_latency: localizedNumber(databaseLatency, ctx),
-          total_referral_bonus: localizedNumber(stats.totalReferralBonus, ctx),
-          total_cashback: localizedNumber(stats.totalCashback, ctx),
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '📊',
+          title: t(ctx, 'admin_stats_title'),
+          subtitle: t(ctx, 'admin_stats_subtitle'),
+          primary: {
+            emoji: '🧾',
+            label: t(ctx, 'admin_stats_pending_receipts_label'),
+            value: localizedNumber(stats.pendingReceipts, ctx),
+          },
+          sections: [
+            {
+              emoji: '💳',
+              title: t(ctx, 'admin_stats_revenue_section'),
+              fields: [
+                {
+                  emoji: '📅',
+                  label: t(ctx, 'admin_stats_today_label'),
+                  value: `${localizedNumber(stats.dailyRevenue, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  emoji: '🗓️',
+                  label: t(ctx, 'admin_stats_week_label'),
+                  value: `${localizedNumber(stats.weeklyRevenue, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  emoji: '📆',
+                  label: t(ctx, 'admin_stats_month_label'),
+                  value: `${localizedNumber(stats.monthlyRevenue, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+              ],
+            },
+            {
+              emoji: '👥',
+              title: t(ctx, 'admin_stats_customers_section'),
+              fields: [
+                {
+                  emoji: '👤',
+                  label: t(ctx, 'admin_stats_total_users_label'),
+                  value: localizedNumber(stats.totalUsers, ctx),
+                },
+                {
+                  emoji: '💰',
+                  label: t(ctx, 'admin_stats_total_sales_label'),
+                  value: `${localizedNumber(stats.totalSales, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  emoji: '🟢',
+                  label: t(ctx, 'admin_stats_active_label'),
+                  value: localizedNumber(stats.activeSubscriptions, ctx),
+                },
+                {
+                  emoji: '⚪️',
+                  label: t(ctx, 'admin_stats_inactive_label'),
+                  value: localizedNumber(stats.inactiveSubscriptions, ctx),
+                },
+              ],
+            },
+            {
+              emoji: '🎁',
+              title: t(ctx, 'admin_stats_rewards_section'),
+              fields: [
+                {
+                  emoji: '🎁',
+                  label: t(ctx, 'admin_stats_referral_label'),
+                  value: `${localizedNumber(stats.totalReferralBonus, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  emoji: '💸',
+                  label: t(ctx, 'admin_stats_cashback_label'),
+                  value: `${localizedNumber(stats.totalCashback, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+              ],
+            },
+            {
+              emoji: '🩺',
+              title: t(ctx, 'admin_stats_health_section'),
+              fields: [
+                {
+                  emoji: panel.healthy ? '🟢' : '⚠️',
+                  label: t(ctx, 'admin_stats_panel_label'),
+                  value: `${buildStatusBadge(ctx, panel.healthy ? 'healthy' : 'warning')} · ${localizedNumber(panel.latency, ctx)} ${t(ctx, 'admin_stats_latency_unit')}`,
+                },
+                {
+                  emoji: '🟢',
+                  label: t(ctx, 'admin_stats_database_label'),
+                  value: `${buildStatusBadge(ctx, 'healthy')} · ${localizedNumber(databaseLatency, ctx)} ${t(ctx, 'admin_stats_latency_unit')}`,
+                },
+              ],
+            },
+          ],
         }),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'admin') }
       );
@@ -229,14 +325,28 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     },
     async (ctx) => {
       ctx.menu.nav('admin-daily-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(
+        renderAdminGroup(ctx, {
+          emoji: '⚡',
+          titleKey: 'admin_daily_title',
+          subtitleKey: 'admin_daily_subtitle',
+        }),
+        { parse_mode: 'Markdown' }
+      );
     }
   )
   .text(
     (ctx) => t(ctx, 'admin_group_sales'),
     async (ctx) => {
       ctx.menu.nav('admin-sales-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(
+        renderAdminGroup(ctx, {
+          emoji: '🛍️',
+          titleKey: 'admin_sales_title',
+          subtitleKey: 'admin_sales_subtitle',
+        }),
+        { parse_mode: 'Markdown' }
+      );
     }
   )
   .row()
@@ -253,14 +363,28 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     },
     async (ctx) => {
       ctx.menu.nav('admin-panels-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(
+        renderAdminGroup(ctx, {
+          emoji: '🖥️',
+          titleKey: 'admin_panels_group_title',
+          subtitleKey: 'admin_panels_group_subtitle',
+        }),
+        { parse_mode: 'Markdown' }
+      );
     }
   )
   .text(
     (ctx) => t(ctx, 'admin_group_system'),
     async (ctx) => {
       ctx.menu.nav('admin-system-menu');
-      await ctx.editMessageText(t(ctx, 'admin_menu_title'));
+      await ctx.editMessageText(
+        renderAdminGroup(ctx, {
+          emoji: '⚙️',
+          titleKey: 'admin_system_title',
+          subtitleKey: 'admin_system_subtitle',
+        }),
+        { parse_mode: 'Markdown' }
+      );
     }
   )
   .row()
@@ -268,7 +392,14 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     (ctx) => t(ctx, 'admin_menu_back'),
     async (ctx) => {
       ctx.menu.nav('main-menu');
-      await ctx.editMessageText(t(ctx, 'main_menu'));
+      await ctx.editMessageText(
+        buildScreen({
+          emoji: '🏠',
+          title: t(ctx, 'home_title'),
+          subtitle: t(ctx, 'home_subtitle'),
+        }),
+        { parse_mode: 'Markdown' }
+      );
     }
   );
 

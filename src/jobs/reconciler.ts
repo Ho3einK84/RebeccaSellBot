@@ -19,6 +19,11 @@ import {
 } from '../infra/schema.js';
 import type { RebeccaService, RebeccaUserDetail } from '../domain/services/RebeccaService.js';
 import { RebeccaApiError, RebeccaOriginDownError } from '../domain/services/RebeccaService.js';
+import {
+  activeConfigCountSql,
+  deletedConfigLifecycle,
+  observedConfigLifecycle,
+} from '../domain/services/ConfigLifecycle.js';
 import { logger } from '../infra/logger.js';
 import { forEachConcurrent, jobRunner } from './workerRuntime.js';
 import crypto from 'crypto';
@@ -132,7 +137,7 @@ export async function reconcilePendingIntents(
           const completed = await completePendingIntent(
             db,
             intent,
-            subscriptionUrl(remote.user),
+            remote.user,
             services.promoService,
             isRebeccaPanelRegistryAccess(panels)
           );
@@ -167,7 +172,7 @@ export async function reconcilePendingIntents(
         const completed = await completePendingIntent(
           db,
           intent,
-          undefined,
+          remote.user!,
           services.promoService,
           isRebeccaPanelRegistryAccess(panels)
         );
@@ -245,15 +250,10 @@ export async function syncSubscriptionStatuses(
         const remote = await getRebeccaService(panels, config.panelId).getUser(
           config.configUsername
         );
+        const observedAt = new Date();
         await db
           .update(userConfigs)
-          .set({
-            panelStatus: remote.status,
-            panelDataLimit: remote.data_limit,
-            panelExpire: remote.expire,
-            lastSyncedAt: new Date(),
-            updatedAt: new Date(),
-          })
+          .set(observedConfigLifecycle(remote, observedAt))
           .where(eq(userConfigs.id, config.id));
         affectedOwners.add(config.telegramId);
         synced += 1;
@@ -261,9 +261,10 @@ export async function syncSubscriptionStatuses(
         // A deleted config is still a useful terminal state. Any other panel
         // error must not overwrite an otherwise valid cached observation.
         if (err instanceof RebeccaApiError && err.status === 404) {
+          const observedAt = new Date();
           await db
             .update(userConfigs)
-            .set({ panelStatus: 'deleted', lastSyncedAt: new Date(), updatedAt: new Date() })
+            .set(deletedConfigLifecycle(observedAt))
             .where(eq(userConfigs.id, config.id));
           affectedOwners.add(config.telegramId);
           synced += 1;
@@ -284,11 +285,7 @@ export async function syncSubscriptionStatuses(
     await db
       .update(users)
       .set({
-        activeSubscriptionCount: sql`(
-          SELECT COUNT(*)::integer FROM ${userConfigs}
-          WHERE ${userConfigs.telegramId} = ${telegramId}
-            AND ${userConfigs.panelStatus} = 'active'
-        )`,
+        activeSubscriptionCount: activeConfigCountSql(telegramId),
         updatedAt: new Date(),
       })
       .where(eq(users.telegramId, telegramId));
@@ -374,11 +371,13 @@ function determineRenewalOutcome(
 async function completePendingIntent(
   db: ReturnType<typeof getDb>,
   intent: PurchaseIntent,
-  subUrl?: string,
+  remote: RebeccaUserDetail,
   promoService?: PromoService,
   verifyBindingConflict = true
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
+    const observedAt = new Date();
+    const subUrl = subscriptionUrl(remote);
     // Claim the intent first. If another worker or the original saga settled
     // it, its transaction owns the only possible debit and we do nothing.
     const transitioned = await tx
@@ -434,8 +433,7 @@ async function completePendingIntent(
           subUrl,
           isClaimed: true,
           claimedAt: new Date(),
-          panelStatus: 'active',
-          lastSyncedAt: new Date(),
+          ...observedConfigLifecycle(remote, observedAt),
         })
         .onConflictDoNothing();
       if (verifyBindingConflict) {
@@ -465,6 +463,30 @@ async function completePendingIntent(
           )
         );
     }
+
+    if (intent.configUsername) {
+      await tx
+        .update(userConfigs)
+        .set({
+          ...(subUrl ? { subUrl } : {}),
+          serviceId: remote.service_id ?? intent.serviceId,
+          ...observedConfigLifecycle(remote, observedAt),
+        })
+        .where(
+          and(
+            eq(userConfigs.panelId, intent.panelId),
+            eq(userConfigs.configUsername, intent.configUsername),
+            eq(userConfigs.telegramId, intent.telegramId)
+          )
+        );
+    }
+    await tx
+      .update(users)
+      .set({
+        activeSubscriptionCount: activeConfigCountSql(intent.telegramId),
+        updatedAt: observedAt,
+      })
+      .where(eq(users.telegramId, intent.telegramId));
 
     if (promoService) {
       await promoService.finalizeReservedPurchasePromo(tx, intent.id);

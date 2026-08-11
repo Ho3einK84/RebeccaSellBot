@@ -11,7 +11,13 @@ import {
   walletTransactions,
 } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
-import { RebeccaApiError, RebeccaContractError, RebeccaOriginDownError } from './RebeccaService.js';
+import {
+  RebeccaApiError,
+  RebeccaContractError,
+  RebeccaOriginDownError,
+  type RebeccaUserDetail,
+} from './RebeccaService.js';
+import { activeConfigCountSql, observedConfigLifecycle } from './ConfigLifecycle.js';
 import type { ReferralService } from './ReferralService.js';
 import type { PromoService } from './PromoService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
@@ -215,6 +221,7 @@ export class WalletPurchaseSaga {
     const expireTimestamp = Math.floor(Date.now() / 1000) + params.durationDays * 86400;
 
     let subUrl: string | undefined;
+    let confirmedRemote: RebeccaUserDetail | undefined;
     let renewalBefore:
       | {
           dataLimit: number | null;
@@ -264,6 +271,7 @@ export class WalletPurchaseSaga {
           throw new PanelPurchaseVerificationError();
         }
         assertPanelPurchaseApplied(res, dataLimitBytes, expireTimestamp);
+        confirmedRemote = res;
         subUrl = res.subscription_url || Object.values(res.subscription_urls ?? {})[0];
       } else {
         const existing = await rebeccaService.getUser(params.configUsername);
@@ -312,6 +320,7 @@ export class WalletPurchaseSaga {
           })
         );
         assertPanelPurchaseApplied(res, expectedDataLimit, expectedExpire);
+        confirmedRemote = res;
         subUrl = res.subscription_url || Object.values(res.subscription_urls ?? {})[0];
       }
     } catch (err: unknown) {
@@ -350,6 +359,9 @@ export class WalletPurchaseSaga {
       if (err instanceof RebeccaOriginDownError) throw err;
       throw new Error(`VPN Panel operation failed: ${errMsg}`, { cause: err });
     }
+
+    if (!confirmedRemote) throw new Error('PANEL_PURCHASE_RESULT_MISSING');
+    const observedAt = new Date();
 
     // Step 3: atomically claim the pending intent, debit the reservation, write
     // one audit row, and bind a new config. Claiming the intent first prevents a
@@ -409,6 +421,7 @@ export class WalletPurchaseSaga {
               subUrl,
               isClaimed: true,
               claimedAt: new Date(),
+              ...observedConfigLifecycle(confirmedRemote, observedAt),
             })
             .onConflictDoNothing();
           if (!this.verifyBindingConflict) {
@@ -433,7 +446,11 @@ export class WalletPurchaseSaga {
               }
               await tx
                 .update(userConfigs)
-                .set({ subUrl, serviceId, updatedAt: new Date() })
+                .set({
+                  ...(subUrl ? { subUrl } : {}),
+                  serviceId,
+                  ...observedConfigLifecycle(confirmedRemote, observedAt),
+                })
                 .where(
                   and(
                     eq(userConfigs.panelId, panelId),
@@ -456,7 +473,29 @@ export class WalletPurchaseSaga {
                 eq(trialClaims.status, 'completed')
               )
             );
+          await tx
+            .update(userConfigs)
+            .set({
+              ...(subUrl ? { subUrl } : {}),
+              serviceId,
+              ...observedConfigLifecycle(confirmedRemote, observedAt),
+            })
+            .where(
+              and(
+                eq(userConfigs.panelId, panelId),
+                eq(userConfigs.configUsername, params.configUsername),
+                eq(userConfigs.telegramId, params.telegramId)
+              )
+            );
         }
+
+        await tx
+          .update(users)
+          .set({
+            activeSubscriptionCount: activeConfigCountSql(params.telegramId),
+            updatedAt: observedAt,
+          })
+          .where(eq(users.telegramId, params.telegramId));
 
         await this.promoService.finalizeReservedPurchasePromo(tx, intentId);
         return true;

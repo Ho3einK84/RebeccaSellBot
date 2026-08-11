@@ -18,7 +18,11 @@ describe('Home Dashboard & Main Menu (Phase 2)', () => {
         walletService: { getBalance },
         configService: { listConfigsForOwner },
         translationService: {
-          get: vi.fn((key: string) => key),
+          get: vi.fn((key: string, _locale?: string, params?: Record<string, string>) =>
+            key === 'home_near_expiry_detail'
+              ? `${params?.username} · ${params?.days} ${params?.days_unit}`
+              : key
+          ),
           resolveLocale: vi.fn(() => 'fa'),
         },
       },
@@ -51,7 +55,11 @@ describe('Home Dashboard & Main Menu (Phase 2)', () => {
         walletService: { getBalance },
         configService: { listConfigsForOwner },
         translationService: {
-          get: vi.fn((key: string) => key),
+          get: vi.fn((key: string, _locale?: string, params?: Record<string, string>) =>
+            key === 'home_near_expiry_detail'
+              ? `${params?.username} · ${params?.days} ${params?.days_unit}`
+              : key
+          ),
           resolveLocale: vi.fn(() => 'fa'),
         },
       },

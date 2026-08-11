@@ -1,13 +1,26 @@
 import { InlineKeyboard } from 'grammy';
 import type { MenuContext } from './types.js';
 import { callbackData } from './callbackData.js';
-import { localizedDate, localizedNumber, t, tm } from './locale.js';
+import { localizedDate, localizedNumber, t } from './locale.js';
+import { buildEmptyState, buildScreen, buildStatusBadge } from './ui.js';
 
 const PROMO_PAGE_SIZE = 8;
 
 export async function showPromoCenter(ctx: MenuContext, requestedPage = 1): Promise<void> {
   if (!ctx.services) return;
   const result = await ctx.services.promoService.listCodes(requestedPage, PROMO_PAGE_SIZE);
+  if (result.items.length === 0) {
+    await renderPromoScreen(
+      ctx,
+      buildEmptyState('🎟️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_no_promo_codes')),
+      new InlineKeyboard()
+        .text(t(ctx, 'admin_promo_create_button'), callbackData('promo', 'create'))
+        .row()
+        .text(t(ctx, 'menu_back'), 'nav:admin'),
+      'Markdown'
+    );
+    return;
+  }
   const keyboard = new InlineKeyboard();
 
   for (const promo of result.items) {
@@ -46,12 +59,21 @@ export async function showPromoCenter(ctx: MenuContext, requestedPage = 1): Prom
     .row()
     .text(t(ctx, 'menu_back'), 'nav:admin');
 
-  const text = t(ctx, result.total === 0 ? 'admin_no_promo_codes' : 'admin_promo_center', {
-    count: localizedNumber(result.total, ctx),
-    page: localizedNumber(result.page, ctx),
-    total_pages: localizedNumber(result.totalPages, ctx),
+  const text = buildScreen({
+    emoji: '🎟️',
+    title: t(ctx, 'admin_promo_center_title'),
+    subtitle: t(ctx, 'admin_promo_center_subtitle'),
+    primary: {
+      emoji: '🎟️',
+      label: t(ctx, 'admin_promo_total_label'),
+      value: localizedNumber(result.total, ctx),
+    },
+    footer: t(ctx, 'admin_promo_page_label', {
+      page: localizedNumber(result.page, ctx),
+      total_pages: localizedNumber(result.totalPages, ctx),
+    }),
   });
-  await renderPromoScreen(ctx, text, keyboard);
+  await renderPromoScreen(ctx, text, keyboard, 'Markdown');
 }
 
 export async function promoDetailView(
@@ -61,18 +83,65 @@ export async function promoDetailView(
   if (!ctx.services) return undefined;
   const promo = await ctx.services.promoService.getPromoCodeById(id);
   if (!promo) return undefined;
-  const text = tm(ctx, 'admin_promo_detail', {
-    code: promo.code,
-    type: promoTypeLabel(ctx, promo.type),
-    value: localizedNumber(promo.value, ctx),
-    current_uses: localizedNumber(promo.currentUses, ctx),
-    max_uses: localizedNumber(promo.maxUses, ctx),
-    max_uses_per_user: localizedNumber(promo.maxUsesPerUser, ctx),
-    min_purchase_amount: localizedNumber(promo.minPurchaseAmount, ctx),
-    expires_at: promo.expiresAt
-      ? localizedDate(promo.expiresAt, ctx)
-      : t(ctx, 'admin_promo_never_expires'),
-    active: t(ctx, promo.active ? 'admin_promo_active' : 'admin_promo_inactive'),
+  const text = buildScreen({
+    emoji: '🎟️',
+    title: t(ctx, 'admin_promo_detail_title'),
+    subtitle: `\`${promo.code}\``,
+    primary: {
+      emoji: promo.active ? '🟢' : '⚪️',
+      label: t(ctx, 'admin_promo_status_label'),
+      value: buildStatusBadge(
+        ctx,
+        promo.active ? 'active' : 'inactive',
+        t(ctx, promo.active ? 'admin_promo_active' : 'admin_promo_inactive')
+      ),
+    },
+    sections: [
+      {
+        emoji: '⚙️',
+        title: t(ctx, 'admin_promo_configuration_section'),
+        fields: [
+          {
+            emoji: '🏷️',
+            label: t(ctx, 'admin_promo_type_label'),
+            value: promoTypeLabel(ctx, promo.type),
+          },
+          {
+            emoji: '💰',
+            label: t(ctx, 'admin_promo_value_label'),
+            value: localizedNumber(promo.value, ctx),
+          },
+          {
+            emoji: '🛍️',
+            label: t(ctx, 'admin_promo_min_purchase_label'),
+            value: `${localizedNumber(promo.minPurchaseAmount, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            emoji: '📅',
+            label: t(ctx, 'admin_promo_expiry_label'),
+            value: promo.expiresAt
+              ? localizedDate(promo.expiresAt, ctx)
+              : t(ctx, 'admin_promo_never_expires'),
+          },
+        ],
+      },
+      {
+        emoji: '📈',
+        title: t(ctx, 'admin_promo_usage_section'),
+        fields: [
+          {
+            emoji: '🧾',
+            label: t(ctx, 'admin_promo_uses_label'),
+            value: `${localizedNumber(promo.currentUses, ctx)} / ${localizedNumber(promo.maxUses, ctx)}`,
+          },
+          {
+            emoji: '👤',
+            label: t(ctx, 'admin_promo_per_user_label'),
+            value: localizedNumber(promo.maxUsesPerUser, ctx),
+          },
+        ],
+      },
+    ],
   });
   const keyboard = new InlineKeyboard()
     .text(

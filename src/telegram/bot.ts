@@ -7,7 +7,7 @@ import type { BotServices, MenuContext } from './types.js';
 import { configureBotRuntime } from './botRuntime.js';
 import { registerCoreRoutes } from './features/coreRoutes.js';
 import { t } from './locale.js';
-import { backKeyboard } from './ui.js';
+import { backKeyboard, buildEmptyState } from './ui.js';
 
 export { conversationContextMiddleware } from './botRuntime.js';
 
@@ -35,7 +35,10 @@ export function setupBot(config: Config, services: BotServices): Bot<MenuContext
         .catch(() => undefined);
     } else if (err.ctx.chat?.type === 'private') {
       await err.ctx
-        .reply(t(err.ctx, 'operation_failed'), { reply_markup: backKeyboard(err.ctx, 'main') })
+        .reply(
+          buildEmptyState('⚠️', t(err.ctx, 'operation_failed'), t(err.ctx, 'operation_failed')),
+          { parse_mode: 'Markdown', reply_markup: backKeyboard(err.ctx, 'main') }
+        )
         .catch(() => undefined);
     }
   });
