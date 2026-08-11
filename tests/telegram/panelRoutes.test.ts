@@ -64,9 +64,11 @@ describe('admin panel routes', () => {
       await route(ctx);
 
       expect(deleteService).not.toHaveBeenCalled();
-      expect(reply).toHaveBeenCalledWith(
-        'admin_panel_service_delete_confirm',
-        expect.objectContaining({ reply_markup: expect.anything() })
+      const [confirmationText, confirmationOptions] = reply.mock.calls[0] ?? [];
+      expect(String(confirmationText)).toContain('admin_panel_service_delete_title');
+      expect(String(confirmationText)).toContain('admin_panel_service_delete_consequence');
+      expect(confirmationOptions).toEqual(
+        expect.objectContaining({ parse_mode: 'Markdown', reply_markup: expect.anything() })
       );
     }
   );
