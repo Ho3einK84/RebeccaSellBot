@@ -21,6 +21,7 @@ import type { RebeccaService, RebeccaUserDetail } from '../domain/services/Rebec
 import { RebeccaApiError, RebeccaOriginDownError } from '../domain/services/RebeccaService.js';
 import {
   activeConfigCountSql,
+  deletedConfigLifecycle,
   observedConfigLifecycle,
 } from '../domain/services/ConfigLifecycle.js';
 import { logger } from '../infra/logger.js';
@@ -249,15 +250,10 @@ export async function syncSubscriptionStatuses(
         const remote = await getRebeccaService(panels, config.panelId).getUser(
           config.configUsername
         );
+        const observedAt = new Date();
         await db
           .update(userConfigs)
-          .set({
-            panelStatus: remote.status,
-            panelDataLimit: remote.data_limit,
-            panelExpire: remote.expire,
-            lastSyncedAt: new Date(),
-            updatedAt: new Date(),
-          })
+          .set(observedConfigLifecycle(remote, observedAt))
           .where(eq(userConfigs.id, config.id));
         affectedOwners.add(config.telegramId);
         synced += 1;
@@ -265,9 +261,10 @@ export async function syncSubscriptionStatuses(
         // A deleted config is still a useful terminal state. Any other panel
         // error must not overwrite an otherwise valid cached observation.
         if (err instanceof RebeccaApiError && err.status === 404) {
+          const observedAt = new Date();
           await db
             .update(userConfigs)
-            .set({ panelStatus: 'deleted', lastSyncedAt: new Date(), updatedAt: new Date() })
+            .set(deletedConfigLifecycle(observedAt))
             .where(eq(userConfigs.id, config.id));
           affectedOwners.add(config.telegramId);
           synced += 1;
@@ -288,11 +285,7 @@ export async function syncSubscriptionStatuses(
     await db
       .update(users)
       .set({
-        activeSubscriptionCount: sql`(
-          SELECT COUNT(*)::integer FROM ${userConfigs}
-          WHERE ${userConfigs.telegramId} = ${telegramId}
-            AND ${userConfigs.panelStatus} = 'active'
-        )`,
+        activeSubscriptionCount: activeConfigCountSql(telegramId),
         updatedAt: new Date(),
       })
       .where(eq(users.telegramId, telegramId));
