@@ -1,6 +1,14 @@
 /** English stock bot copy. */
 
 export const EN_TEXTS: Record<string, string> = {
+  onboarding_welcome:
+    '👋 *Welcome to Rebecca*\n\nBuy, renew, and manage your VPN service securely in this chat.\n\nChoose your preferred language to get started:',
+  ui_status_active: 'Active',
+  ui_status_inactive: 'Inactive',
+  ui_status_pending: 'Pending',
+  ui_status_attention: 'Needs attention',
+  ui_status_expired: 'Expired',
+  ui_status_error: 'Error',
   welcome:
     '👋 Welcome to Rebecca VPN Bot!\nUse the menu below to buy subscriptions, manage your wallet, and track your services.',
   subscription_view_detail: '👁 View Service',
@@ -14,9 +22,33 @@ export const EN_TEXTS: Record<string, string> = {
   topup_pending_exists_detail:
     '⚠️ You already have a pending topup receipt ({amount} Toman). You cannot submit another receipt until it is processed.',
   home_title: 'Home — Rebecca Sales Bot',
+  home_subtitle: 'Your wallet and service status at a glance',
   home_balance: 'Wallet Balance',
   home_active_services: 'Active Subscriptions',
+  home_service_overview: 'Service Overview',
   home_near_expiry_warning: 'Service Requiring Attention',
+  home_near_expiry_detail: '`{username}` · {days} {days_unit} remaining',
+  home_no_active_services_hint:
+    'You do not have a subscription yet. Start with “Buy Subscription”.',
+  wallet_dashboard_subtitle: 'Manage top-ups, payment receipts, and gift codes here',
+  wallet_available_balance: 'Available Balance',
+  wallet_pending_section: 'Receipt Under Review',
+  wallet_pending_amount: 'Amount',
+  wallet_pending_submitted: 'Submitted',
+  wallet_pending_status: 'Status',
+  wallet_pending_status_detail: 'Awaiting admin review',
+  wallet_dashboard_empty_hint:
+    'Choose “Top Up” to add funds, or “Promo Code” to redeem a gift or discount.',
+  shop_title: 'Subscription Shop',
+  shop_subtitle: 'Choose a plan; you will see the final price before confirming.',
+  shop_promo_section: 'Active Promo Code',
+  shop_hint: 'Review the plan details and final amount before any purchase is confirmed.',
+  trial_preview_heading: 'Rebecca Free Trial',
+  trial_preview_subtitle: 'Try the service with a complimentary subscription before you buy',
+  trial_traffic_label: 'Included Traffic',
+  trial_duration_label: 'Validity',
+  trial_terms_label: 'Terms',
+  trial_terms: 'Each account can claim this complimentary trial subscription once.',
   insufficient_balance_detail:
     '⚠️ *Insufficient wallet balance.*\n\n💰 *Package price:* {price} Toman\n👛 *Your balance:* {balance} Toman\n📉 *Deficit:* {deficit} Toman',
   trial_preview_title: '🎁 *Rebecca Free Trial*',

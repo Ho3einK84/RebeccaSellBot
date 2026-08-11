@@ -1,6 +1,14 @@
 /** Persian stock bot copy. */
 
 export const FA_TEXTS: Record<string, string> = {
+  onboarding_welcome:
+    '👋 *به ربکا خوش آمدید*\n\nخرید، تمدید و مدیریت امن سرویس VPN شما در همین گفتگو انجام می‌شود.\n\nبرای شروع، زبان دلخواهتان را انتخاب کنید:',
+  ui_status_active: 'فعال',
+  ui_status_inactive: 'غیرفعال',
+  ui_status_pending: 'در انتظار',
+  ui_status_attention: 'نیازمند توجه',
+  ui_status_expired: 'منقضی شده',
+  ui_status_error: 'خطا',
   welcome:
     '👋 به ربات مدیریت و فروش سرویس خوش آمدید!\n\nاز طریق منوی هوشمند زیر میتوانید سرویسهای خود را خریداری، تمدید و مدیریت نموده یا کیف پول حساب کاربری خود را شارژ کنید.',
   subscription_view_detail: '👁 مشاهده سرویس',
@@ -15,9 +23,32 @@ export const FA_TEXTS: Record<string, string> = {
   topup_pending_exists_detail:
     '⚠️ شما یک رسید در انتظار بررسی دارید (مبلغ: {amount} تومان). ثبت رسید جدید تا تعیین تکلیف رسید قبلی امکانپذیر نیست.',
   home_title: 'داشبورد کاربری سرویسها',
+  home_subtitle: 'وضعیت کیف پول و سرویس‌ها، در یک نگاه',
   home_balance: 'موجودی کیف پول',
   home_active_services: 'تعداد سرویسهای فعال',
+  home_service_overview: 'نمای سرویس‌ها',
   home_near_expiry_warning: 'سرویس نیازمند توجه',
+  home_near_expiry_detail: '`{username}` · {days} {days_unit} تا پایان اعتبار',
+  home_no_active_services_hint: 'هنوز سرویسی ندارید. از «خرید اشتراک» شروع کنید.',
+  wallet_dashboard_subtitle: 'شارژ، رسیدهای پرداخت و کدهای هدیه را اینجا مدیریت کنید',
+  wallet_available_balance: 'موجودی قابل استفاده',
+  wallet_pending_section: 'رسید در انتظار',
+  wallet_pending_amount: 'مبلغ',
+  wallet_pending_submitted: 'زمان ثبت',
+  wallet_pending_status: 'وضعیت',
+  wallet_pending_status_detail: 'در انتظار بررسی مدیریت',
+  wallet_dashboard_empty_hint:
+    'برای شارژ موجودی، «افزایش موجودی» را انتخاب کنید؛ برای استفاده از کد، «کد تخفیف» را بزنید.',
+  shop_title: 'فروشگاه اشتراک',
+  shop_subtitle: 'بسته مناسب را انتخاب کنید؛ قیمت نهایی پیش از تأیید به شما نمایش داده می‌شود.',
+  shop_promo_section: 'کد تخفیف فعال',
+  shop_hint: 'پس از انتخاب بسته، جزئیات و مبلغ نهایی را پیش از پرداخت بررسی می‌کنید.',
+  trial_preview_heading: 'آزمایش رایگان ربکا',
+  trial_preview_subtitle: 'پیش از خرید، کیفیت سرویس را با یک اشتراک هدیه امتحان کنید',
+  trial_traffic_label: 'حجم هدیه',
+  trial_duration_label: 'مدت اعتبار',
+  trial_terms_label: 'شرایط استفاده',
+  trial_terms: 'هر حساب کاربری فقط یک‌بار می‌تواند این اشتراک آزمایشی را دریافت کند.',
   insufficient_balance_detail:
     '⚠️ *موجودی کیف پول شما کافی نیست.*\n\n💰 *مبلغ بسته:* {price} تومان\n👛 *موجودی شما:* {balance} تومان\n📉 *کسری موجودی:* {deficit} تومان',
   trial_preview_title: '🎁 *تست رایگان ربکا*',

@@ -15,7 +15,7 @@ import {
   t,
   tm,
 } from '../locale.js';
-import { backKeyboard, buildHeader } from '../ui.js';
+import { backKeyboard, buildScreen, buildStatusBadge } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { customVolumeEnabled } from '../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
@@ -59,32 +59,46 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
     // If config fetch fails gracefully default to 0 count
   }
 
-  const titleKey = t(ctx, 'home_title');
-  const title = titleKey !== 'home_title' ? titleKey : 'داشبورد کاربری سرویسها';
-  const header = buildHeader('🏠', title);
-
-  const balanceLabel =
-    t(ctx, 'home_balance') !== 'home_balance' ? t(ctx, 'home_balance') : 'موجودی کیف پول';
-  const activeLabel =
-    t(ctx, 'home_active_services') !== 'home_active_services'
-      ? t(ctx, 'home_active_services')
-      : 'تعداد سرویسهای فعال';
-  const tomanLabel =
-    t(ctx, 'currency_toman') !== 'currency_toman' ? t(ctx, 'currency_toman') : 'تومان';
-  const serviceLabel = t(ctx, 'service_unit') !== 'service_unit' ? t(ctx, 'service_unit') : 'سرویس';
-  const daysLabel = t(ctx, 'days_unit') !== 'days_unit' ? t(ctx, 'days_unit') : 'روز';
-
-  let summary = `👛 *${balanceLabel}:* ${localizedNumber(balance, ctx)} ${tomanLabel}\n📱 *${activeLabel}:* ${localizedNumber(activeCount, ctx)} ${serviceLabel}`;
-
+  const notices: string[] = [];
+  if (activeCount === 0) notices.push(`📭 ${t(ctx, 'home_no_active_services_hint')}`);
   if (nearExpiryInfo) {
-    const warningLabel =
-      t(ctx, 'home_near_expiry_warning') !== 'home_near_expiry_warning'
-        ? t(ctx, 'home_near_expiry_warning')
-        : 'سرویس نیازمند توجه';
-    summary += `\n\n⚠️ *${warningLabel}:* \`${nearExpiryInfo.username}\` (${localizedNumber(nearExpiryInfo.daysLeft, ctx)} ${daysLabel})`;
+    notices.push(
+      `${buildStatusBadge(ctx, 'warning', t(ctx, 'home_near_expiry_warning'))}\n${tm(
+        ctx,
+        'home_near_expiry_detail',
+        {
+          username: nearExpiryInfo.username,
+          days: localizedNumber(nearExpiryInfo.daysLeft, ctx),
+          days_unit: t(ctx, 'days_unit'),
+        }
+      )}`
+    );
   }
 
-  return `${header}\n${summary}`;
+  return buildScreen({
+    emoji: '🏠',
+    title: t(ctx, 'home_title'),
+    subtitle: t(ctx, 'home_subtitle'),
+    primary: {
+      emoji: '👛',
+      label: t(ctx, 'home_balance'),
+      value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      {
+        emoji: '📱',
+        title: t(ctx, 'home_service_overview'),
+        fields: [
+          {
+            emoji: activeCount > 0 ? '🟢' : '⚪️',
+            label: t(ctx, 'home_active_services'),
+            value: `${localizedNumber(activeCount, ctx)} ${t(ctx, 'service_unit')}`,
+          },
+        ],
+      },
+    ],
+    footer: notices.join('\n\n'),
+  });
 }
 
 /**
@@ -97,35 +111,64 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
   const balance = await ctx.services.walletService.getBalance(telegramId);
   const pendingReceipt = await ctx.services.walletService.getPendingReceiptForUser?.(telegramId);
 
-  const titleKey = t(ctx, 'wallet_dashboard_title');
-  const title = titleKey !== 'wallet_dashboard_title' ? titleKey : 'کیف پول حساب کاربری';
-  const header = buildHeader('👛', title);
-  let text = `${header}\n💰 *موجودی قابل استفاده:* ${localizedNumber(balance, ctx)} تومان`;
-
-  if (pendingReceipt) {
-    const formattedAmount = localizedNumber(pendingReceipt.amount, ctx);
-    const formattedDate = localizedDate(pendingReceipt.createdAt, ctx);
-    text += `\n\n${tm(ctx, 'wallet_pending_receipt_detail', {
-      amount: formattedAmount,
-      date: formattedDate,
-    })}`;
-  } else {
-    text += `\n\nجهت افزایش موجودی یا ثبت کد تخفیف، از گزینههای زیر استفاده کنید.`;
-  }
-
-  return text;
+  return buildScreen({
+    emoji: '👛',
+    title: t(ctx, 'wallet_dashboard_title'),
+    subtitle: t(ctx, 'wallet_dashboard_subtitle'),
+    primary: {
+      emoji: '💰',
+      label: t(ctx, 'wallet_available_balance'),
+      value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: pendingReceipt
+      ? [
+          {
+            emoji: '⏳',
+            title: t(ctx, 'wallet_pending_section'),
+            fields: [
+              {
+                emoji: '💰',
+                label: t(ctx, 'wallet_pending_amount'),
+                value: `${localizedNumber(pendingReceipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+              },
+              {
+                emoji: '📅',
+                label: t(ctx, 'wallet_pending_submitted'),
+                value: localizedDate(pendingReceipt.createdAt, ctx),
+              },
+              {
+                emoji: '⏳',
+                label: t(ctx, 'wallet_pending_status'),
+                value: t(ctx, 'wallet_pending_status_detail'),
+              },
+            ],
+          },
+        ]
+      : undefined,
+    footer: pendingReceipt ? undefined : `ℹ️ ${t(ctx, 'wallet_dashboard_empty_hint')}`,
+  });
 }
 
 /**
  * Render shop header text including active promo code if set in session.
  */
 export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
-  const baseShop = t(ctx, 'shop');
-  if (ctx.session.pendingPromo?.code) {
-    const promoLine = tm(ctx, 'shop_promo_active', { code: ctx.session.pendingPromo.code });
-    return `${baseShop}\n\n${promoLine}`;
-  }
-  return baseShop;
+  const promoCode = ctx.session.pendingPromo?.code;
+  return buildScreen({
+    emoji: '🛍️',
+    title: t(ctx, 'shop_title'),
+    subtitle: t(ctx, 'shop_subtitle'),
+    ...(promoCode
+      ? {
+          primary: {
+            emoji: '🎟️',
+            label: t(ctx, 'shop_promo_section'),
+            value: `\`${promoCode}\``,
+          },
+        }
+      : {}),
+    footer: `ℹ️ ${t(ctx, 'shop_hint')}`,
+  });
 }
 
 // ── Main Menu ────────────────────────────────────────────────────────────────
@@ -164,9 +207,29 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         .row()
         .text(t(ctx, 'menu_back'), 'nav:main');
 
-      const previewText = tm(ctx, 'trial_preview_text', {
-        gb: localizedNumber(trialGb, ctx),
-        days: localizedNumber(trialDays, ctx),
+      const previewText = buildScreen({
+        emoji: '🎁',
+        title: t(ctx, 'trial_preview_heading'),
+        subtitle: t(ctx, 'trial_preview_subtitle'),
+        primary: {
+          emoji: '📊',
+          label: t(ctx, 'trial_traffic_label'),
+          value: `${localizedNumber(trialGb, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+        },
+        sections: [
+          {
+            emoji: '⏳',
+            title: t(ctx, 'trial_terms_label'),
+            fields: [
+              {
+                emoji: '📅',
+                label: t(ctx, 'trial_duration_label'),
+                value: `${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')}`,
+              },
+            ],
+          },
+        ],
+        footer: `ℹ️ ${t(ctx, 'trial_terms')}`,
       });
 
       await ctx.reply(previewText, {

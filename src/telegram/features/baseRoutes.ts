@@ -2,10 +2,16 @@
 
 import type { Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
-import { mainMenu, renderHomeDashboard, shopMenu } from '../keyboards/mainMenu.js';
+import {
+  mainMenu,
+  renderHomeDashboard,
+  renderShopMenuText,
+  shopMenu,
+} from '../keyboards/mainMenu.js';
 import { adminMenu } from '../keyboards/adminMenu.js';
+import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
-import { formatSubscriptionLink, observedContextLocale, t, tm, tForLocale } from '../locale.js';
+import { formatSubscriptionLink, observedContextLocale, t, tm } from '../locale.js';
 import { backKeyboard } from '../ui.js';
 
 export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
@@ -20,6 +26,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
 
     const payload = ctx.match;
     const referralCode = payload?.startsWith('ref_') ? payload : undefined;
+    const isFirstVisit = !(await services.userService.exists(telegramId));
 
     await services.walletService.getOrCreateUser(
       telegramId,
@@ -30,6 +37,14 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       observedContextLocale(ctx),
       referralCode ? 'telegram_referral_start' : 'telegram_start'
     );
+
+    if (isFirstVisit) {
+      await ctx.reply(t(ctx, 'onboarding_welcome'), {
+        parse_mode: 'Markdown',
+        reply_markup: languageKeyboard(ctx, 'main'),
+      });
+      return;
+    }
 
     const dashboardText = await renderHomeDashboard(ctx);
     await ctx.reply(dashboardText, {
@@ -66,9 +81,15 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       );
       await services.userService.updateLocale(telegramId, locale);
       ctx.userLocale = locale;
-      await ctx.reply(tForLocale(services.translationService, locale, 'language_changed'), {
-        reply_markup: mainMenu,
-      });
+      const dashboardText = await renderHomeDashboard(ctx);
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(dashboardText, {
+          parse_mode: 'Markdown',
+          reply_markup: mainMenu,
+        });
+      } else {
+        await ctx.reply(dashboardText, { parse_mode: 'Markdown', reply_markup: mainMenu });
+      }
     } catch (err) {
       logger.error(
         { err, telegramId, locale },
@@ -152,7 +173,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.callbackQuery('shop:clear_promo', async (ctx) => {
     delete ctx.session.pendingPromo;
     await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable') });
-    await ctx.reply(t(ctx, 'shop'), { reply_markup: shopMenu });
+    await ctx.reply(await renderShopMenuText(ctx), {
+      parse_mode: 'Markdown',
+      reply_markup: shopMenu,
+    });
   });
 
   // Fallback for a stale Cancel button after a conversation has already ended.

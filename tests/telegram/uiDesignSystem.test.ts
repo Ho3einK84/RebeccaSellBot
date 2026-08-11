@@ -3,6 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MenuContext } from '../../src/telegram/types.js';
 import {
   buildConfirmationKeyboard,
+  buildScreen,
   buildHeader,
   buildSectionCard,
   buildStatusBadge,
@@ -54,10 +55,26 @@ ABC_456`;
       '🏠 *منوی اصلی*\n_داشبورد کاربر_\n'
     );
 
-    expect(buildStatusBadge('active')).toBe('🟢 فعال');
-    expect(buildStatusBadge('inactive')).toBe('⏸️ غیرفعال');
-    expect(buildStatusBadge('pending')).toBe('⏳ در انتظار');
-    expect(buildStatusBadge('expired')).toBe('⚠️ منقضیشده');
+    const ctx = {
+      services: {
+        translationService: {
+          get: vi.fn(
+            (key: string) =>
+              ({
+                ui_status_active: 'فعال',
+                ui_status_inactive: 'غیرفعال',
+                ui_status_pending: 'در انتظار',
+                ui_status_expired: 'منقضی شده',
+              })[key] ?? key
+          ),
+          resolveLocale: vi.fn(() => 'fa'),
+        },
+      },
+    } as unknown as ConversationContext;
+    expect(buildStatusBadge(ctx, 'active')).toBe('🟢 فعال');
+    expect(buildStatusBadge(ctx, 'inactive')).toBe('⚪️ غیرفعال');
+    expect(buildStatusBadge(ctx, 'pending')).toBe('⏳ در انتظار');
+    expect(buildStatusBadge(ctx, 'expired')).toBe('⌛ منقضی شده');
   });
 
   it('renders section card properly', () => {
@@ -66,6 +83,27 @@ ABC_456`;
       { label: 'شناسه', value: 'cfg_101', emoji: '🆔' },
     ]);
     expect(card).toBe('📌 *اطلاعات سرویس*\n\n🟢 *وضعیت:* فعال\n🆔 *شناسه:* cfg_101');
+  });
+
+  it('composes a consistent screen around one primary state and supporting cards', () => {
+    expect(
+      buildScreen({
+        emoji: '🏠',
+        title: 'Home',
+        subtitle: 'At a glance',
+        primary: { emoji: '👛', label: 'Balance', value: '100 Toman' },
+        sections: [
+          {
+            emoji: '📱',
+            title: 'Services',
+            fields: [{ emoji: '🟢', label: 'Active', value: '1' }],
+          },
+        ],
+        footer: 'Ready to go.',
+      })
+    ).toBe(
+      '🏠 *Home*\n_At a glance_\n\n👛 *Balance*\n100 Toman\n\n📌 *📱 Services*\n\n🟢 *Active:* 1\n\nReady to go.'
+    );
   });
 
   it('builds standard confirmation keyboard', () => {
