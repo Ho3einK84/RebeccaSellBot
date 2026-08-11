@@ -16,6 +16,7 @@ import {
   buildEmptyState,
   buildScreen,
   buildStatusBadge,
+  dismissKeyboard,
   rememberArtifactMessage,
   type StatusType,
 } from '../../ui.js';
@@ -804,6 +805,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(new RegExp(`^config:qr:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
+    if (ctx.callbackQuery?.message) {
+      rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
+    }
     await ctx.answerCallbackQuery({ text: t(ctx, 'subscription_qr_generating') });
     try {
       const remote = await ctx.services!.configService.getRemoteConfigDetail(config);
@@ -826,14 +830,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           },
         }),
         parse_mode: 'Markdown',
-        reply_markup: backKeyboard(ctx, 'main'),
+        reply_markup: dismissKeyboard(ctx),
       });
       rememberArtifactMessage(ctx.session, photo.message_id);
     } catch {
       await renderSubscriptionScreen(
         ctx,
         buildEmptyState('⚠️', t(ctx, 'subscription_qr_title'), t(ctx, 'subscription_qr_failed')),
-        backKeyboard(ctx)
+        dismissKeyboard(ctx)
       );
     }
   });

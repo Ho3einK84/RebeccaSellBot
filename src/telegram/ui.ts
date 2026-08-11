@@ -132,6 +132,10 @@ export function backKeyboard(
   return new InlineKeyboard().text(t(ctx, 'menu_back'), `nav:${destination}`);
 }
 
+export function dismissKeyboard(ctx: ConversationContext): InlineKeyboard {
+  return new InlineKeyboard().text(t(ctx, 'menu_back'), 'ui:dismiss');
+}
+
 export function cancelKeyboard(ctx: ConversationContext): InlineKeyboard {
   return new InlineKeyboard().text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 }

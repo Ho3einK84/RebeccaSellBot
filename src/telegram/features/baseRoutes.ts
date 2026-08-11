@@ -14,7 +14,13 @@ import { adminMenu, renderAdminHome } from '../keyboards/adminMenu.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
 import { formatSubscriptionLink, observedContextLocale, t } from '../locale.js';
-import { backKeyboard, buildEmptyState, buildScreen, rememberArtifactMessage } from '../ui.js';
+import {
+  backKeyboard,
+  buildEmptyState,
+  buildScreen,
+  rememberArtifactMessage,
+  safelyDeleteMessage,
+} from '../ui.js';
 
 export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   // Menus (register submenus before registering the tree)
@@ -218,6 +224,14 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     delete ctx.session.pendingPromo;
     await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable') });
     await renderBaseScreen(ctx, await renderShopMenuText(ctx), shopMenu, 'Markdown');
+  });
+
+  // Dismiss / delete temporary popover message (e.g. QR photo)
+  bot.callbackQuery('ui:dismiss', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (ctx.callbackQuery.message) {
+      await safelyDeleteMessage(ctx, ctx.callbackQuery.message.message_id);
+    }
   });
 
   // Fallback for a stale Cancel button after a conversation has already ended.

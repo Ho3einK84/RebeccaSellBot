@@ -735,13 +735,18 @@ export const SETTING_GROUPS: readonly SettingGroup[] = [
     id: 'pricing',
     labelKey: 'admin_setting_group_pricing',
     descriptionKey: 'admin_setting_group_pricing_desc',
-    settings: ['price_per_gb', 'packages_json', 'expiry_warning_days', 'refund_window_hours'],
+    settings: [
+      'packages_json',
+      'low_traffic_threshold_gb',
+      'expiry_warning_days',
+      'refund_window_hours',
+    ],
   },
   {
     id: 'custom_volume',
     labelKey: 'admin_setting_group_custom_volume',
     descriptionKey: 'admin_setting_group_custom_volume_desc',
-    settings: ['custom_volume_enabled', 'custom_default_days', 'low_traffic_threshold_gb'],
+    settings: ['custom_volume_enabled', 'price_per_gb', 'custom_default_days'],
   },
   {
     id: 'payment',

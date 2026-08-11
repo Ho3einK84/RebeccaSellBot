@@ -672,10 +672,10 @@ export const FA_TEXTS: Record<string, string> = {
   admin_setting_custom_volume_enabled_prompt:
     '🎚️ *انتخاب حجم دلخواه*\n\n📍 وضعیت فعلی: *{current}*\n\nاگر غیرفعال باشد، کاربران فقط از بسته های آماده برای خرید و تمدید استفاده می کنند.',
   admin_setting_group_pricing: '🛍️ فروش و بسته ها',
-  admin_setting_group_pricing_desc: 'قیمت هر گیگابایت، بسته های آماده فروش و مهلت استرداد وجه.',
+  admin_setting_group_pricing_desc: 'بسته های آماده فروش، آستانه هشدار حجم کم و مهلت استرداد وجه.',
   admin_setting_group_custom_volume: '🎚️ حجم دلخواه',
   admin_setting_group_custom_volume_desc:
-    'فعال یا غیرفعال کردن خرید حجم دلخواه، اعتبار پیش‌فرض آن (روز) و آستانه هشدار حجم کم.',
+    'فعال یا غیرفعال کردن خرید حجم دلخواه، قیمت هر گیگابایت و اعتبار پیش فرض آن (روز).',
   admin_setting_group_payment: '💳 اطلاعات پرداخت',
   admin_setting_group_payment_desc:
     '💳 مدیریت شماره کارت، نام صاحب حساب و پیام راهنمای پشتیبانی جهت پرداخت کارتبهکارت.',

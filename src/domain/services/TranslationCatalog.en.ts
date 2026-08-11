@@ -672,10 +672,10 @@ export const EN_TEXTS: Record<string, string> = {
     '🎚️ *Custom Volume Selection*\n\n📍 Current status: *{current}*\n\nWhen disabled, users can only purchase and renew predefined packages.',
   admin_setting_group_pricing: '🛍️ Sales & Packages',
   admin_setting_group_pricing_desc:
-    '⚙️ Manage price per GB, default shop packages, and the refund window.',
+    '⚙️ Manage default shop packages, low-traffic warning threshold, and the refund window.',
   admin_setting_group_custom_volume: '🎚️ Custom Volume',
   admin_setting_group_custom_volume_desc:
-    '🎚️ Toggle custom-volume purchases, their default validity (days), and the low-traffic warning threshold.',
+    '🎚️ Toggle custom-volume purchases, price per GB, and their default validity (days).',
   admin_setting_group_payment: '💳 Payment info',
   admin_setting_group_payment_desc:
     '💳 Manage card number, cardholder name, and support guide for card transfers.',

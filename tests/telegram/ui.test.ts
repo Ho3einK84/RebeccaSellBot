@@ -3,6 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MenuContext, MyConversation } from '../../src/telegram/types.js';
 import {
   cleanChatUiMiddleware,
+  dismissKeyboard,
   promptInConversation,
   rememberUiMessage,
   waitForTextInput,
@@ -115,5 +116,22 @@ describe('promptInConversation inline keyboard', () => {
       callback_data?: string;
     };
     expect(button.callback_data).toBe('conversation:cancel');
+  });
+
+  it('builds a dismiss keyboard with ui:dismiss callback target', () => {
+    const fakeCtx = {
+      services: {
+        translationService: {
+          get: vi.fn((key: string) => key),
+        },
+      },
+    } as unknown as ConversationContext;
+
+    const keyboard = dismissKeyboard(fakeCtx);
+    expect(keyboard).toBeInstanceOf(InlineKeyboard);
+    const buttons = keyboard.inline_keyboard.flat();
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.text).toBe('menu_back');
+    expect((buttons[0] as { callback_data?: string })?.callback_data).toBe('ui:dismiss');
   });
 });
