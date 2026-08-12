@@ -676,8 +676,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_setting_packages_summary: '{count} بسته آماده',
   admin_setting_custom_default_days: '⏳ اعتبار حجم دلخواه (روز)',
   admin_setting_custom_volume_enabled_prompt:
-    '🎚️ *انتخاب حجم دلخواه*\n\n📍 وضعیت فعلی: *{current}*\n\nاگر غیرفعال باشد، کاربران فقط از بسته های آماده برای خرید و تمدید استفاده می کنند.',
-  admin_setting_group_pricing: '🛍️ فروش و بسته ها',
+    '🎚️ *انتخاب حجم دلخواه*\n\n📍 وضعیت فعلی: *{current}*\n\nاگر غیرفعال باشد، کاربران فقط از بسته‌های آماده برای خرید و تمدید استفاده می‌کنند.',
+  admin_setting_group_pricing: '🛍️ فروش و بسته‌ها',
   admin_setting_group_pricing_desc: 'بسته‌های آماده فروش، آستانه هشدار حجم کم و مهلت استرداد وجه.',
   admin_setting_group_custom_volume: '🎚️ حجم دلخواه',
   admin_setting_group_custom_volume_desc:

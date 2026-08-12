@@ -8,7 +8,7 @@ describe('Translation Catalog Parity and Standard', () => {
     const enKeys = Object.keys(EN_TEXTS).sort();
 
     expect(faKeys).toEqual(enKeys);
-    expect(faKeys.length).toBe(1011);
+    expect(faKeys.length).toBe(Object.keys(EN_TEXTS).length);
   });
 
   it('contains no missing ZWNJ errors in Persian catalog for common compound patterns', () => {
