@@ -472,4 +472,69 @@ describe('subscription card actions', () => {
       expect.objectContaining({ parse_mode: 'Markdown' })
     );
   });
+
+  it('handles config:qr by replying with a single photo popover and dismiss keyboard', async () => {
+    const listeners: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const fakeBot = {
+      callbackQuery: vi.fn((pattern: RegExp | string, handler: (ctx: unknown) => Promise<void>) => {
+        const key = pattern instanceof RegExp ? pattern.source : String(pattern);
+        listeners[key] = handler;
+      }),
+    };
+
+    registerSubscriptionRoutes(fakeBot as never);
+    const qrHandlerKey = Object.keys(listeners).find((key) => key.includes('config:qr:'));
+    expect(qrHandlerKey).toBeDefined();
+
+    const qrHandler = listeners[qrHandlerKey!];
+    const replyWithPhoto = vi.fn().mockResolvedValue({ message_id: 100 });
+    const reply = vi.fn();
+    const answerCallbackQuery = vi.fn().mockResolvedValue(true);
+    const config = {
+      id: 'cfg_qr_1',
+      telegramId: 42,
+      configUsername: 'qr_user',
+      subUrl: 'https://example.com/sub/qr_user',
+    };
+    const session: Record<string, unknown> = {};
+
+    const ctx = {
+      match: ['config:qr:cfg_qr_1', 'cfg_qr_1'],
+      session,
+      callbackQuery: { message: { message_id: 50 } },
+      from: { id: 42 },
+      replyWithPhoto,
+      reply,
+      answerCallbackQuery,
+      services: {
+        translationService: {
+          get: vi.fn((key: string) => key),
+          resolveLocale: vi.fn(() => 'fa'),
+        },
+        configService: {
+          getOwnedConfigById: vi.fn().mockResolvedValue(config),
+          getRemoteConfigDetail: vi
+            .fn()
+            .mockResolvedValue({ subscription_url: 'https://example.com/sub/qr_user' }),
+        },
+      },
+    };
+
+    await qrHandler!(ctx);
+
+    expect(answerCallbackQuery).toHaveBeenCalledWith({ text: 'subscription_qr_generating' });
+    expect(replyWithPhoto).toHaveBeenCalledTimes(1);
+    expect(replyWithPhoto).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        parse_mode: 'Markdown',
+        reply_markup: expect.objectContaining({
+          inline_keyboard: [[expect.objectContaining({ callback_data: 'ui:dismiss' })]],
+        }),
+      })
+    );
+    expect(reply).not.toHaveBeenCalled();
+    expect(session.artifactMessageIds as number[]).toContain(50);
+    expect(session.artifactMessageIds as number[]).toContain(100);
+  });
 });

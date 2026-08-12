@@ -815,6 +815,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(new RegExp(`^config:qr:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
+    if (ctx.callbackQuery?.message?.message_id) {
+      rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
+    }
     await ctx.answerCallbackQuery({ text: t(ctx, 'subscription_qr_generating') });
     try {
       const remote = await ctx.services!.configService.getRemoteConfigDetail(config);
@@ -840,12 +843,6 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         reply_markup: dismissKeyboard(ctx),
       });
       rememberArtifactMessage(ctx.session, photo.message_id);
-      await ctx.reply(t(ctx, 'navigation_continue_hint'), {
-        reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
-          .row()
-          .text(t(ctx, 'menu_my_configs'), 'subs:page:1'),
-      });
     } catch {
       await renderSubscriptionScreen(
         ctx,
