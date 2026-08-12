@@ -10,6 +10,8 @@ import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '..
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
 const PANEL_ID_CAPTURE = '([a-z0-9_-]{3,40})';
+const PANEL_PAGE_SIZE = 7;
+const PANEL_SERVICE_PAGE_SIZE = 4;
 type PanelEditAction = 'name' | 'url' | 'api_key' | 'add_service';
 type PanelServiceAction = 'default' | 'custom';
 const COMPACT_PANEL_EDIT_ACTIONS: Record<string, PanelEditAction> = {
@@ -23,17 +25,27 @@ export function panelCallback(...parts: Array<string | number>): string {
   return callbackData('a', 'p', ...parts);
 }
 
-export async function renderPanelRegistry(ctx: MenuContext): Promise<void> {
+export async function renderPanelRegistry(ctx: MenuContext, requestedPage = 1): Promise<void> {
   if (!ctx.services) return;
   const panels = ctx.services.panelRegistry.listPanels();
+  const totalPages = Math.max(1, Math.ceil(panels.length / PANEL_PAGE_SIZE));
+  const page = Math.min(Math.max(1, Math.trunc(requestedPage)), totalPages);
+  const pagePanels = panels.slice((page - 1) * PANEL_PAGE_SIZE, page * PANEL_PAGE_SIZE);
   const keyboard = new InlineKeyboard();
-  for (const panel of panels) {
+  for (const panel of pagePanels) {
     keyboard
       .text(
         `${panel.isDefault ? '⭐ ' : ''}${panel.enabled ? '🟢' : '⚪️'} ${panel.name}`,
         panelCallback('v', panel.id)
       )
       .row();
+  }
+  if (totalPages > 1) {
+    if (page > 1) keyboard.text(t(ctx, 'pagination_previous'), panelCallback('page', page - 1));
+    keyboard.text(`${localizedNumber(page, ctx)} / ${localizedNumber(totalPages, ctx)}`, 'ui:noop');
+    if (page < totalPages)
+      keyboard.text(t(ctx, 'pagination_next'), panelCallback('page', page + 1));
+    keyboard.row();
   }
   keyboard
     .text(t(ctx, 'admin_panel_add_button'), panelCallback('add'))
@@ -51,6 +63,10 @@ export async function renderPanelRegistry(ctx: MenuContext): Promise<void> {
             label: t(ctx, 'admin_panel_registry_total_label'),
             value: localizedNumber(panels.length, ctx),
           },
+          footer:
+            totalPages > 1
+              ? `${localizedNumber(page, ctx)} / ${localizedNumber(totalPages, ctx)}`
+              : undefined,
         })
       : buildEmptyState(
           '🖥️',
@@ -62,7 +78,11 @@ export async function renderPanelRegistry(ctx: MenuContext): Promise<void> {
   );
 }
 
-async function renderPanelDetail(ctx: MenuContext, panelId: string): Promise<void> {
+async function renderPanelDetail(
+  ctx: MenuContext,
+  panelId: string,
+  requestedServicePage = 1
+): Promise<void> {
   if (!ctx.services) return;
   const panel = ctx.services.panelRegistry.getPanel(panelId);
   if (!panel) {
@@ -74,14 +94,20 @@ async function renderPanelDetail(ctx: MenuContext, panelId: string): Promise<voi
     );
     return;
   }
-  const keyboard = buildPanelDetailKeyboard(ctx, panel);
+  const keyboard = buildPanelDetailKeyboard(ctx, panel, requestedServicePage);
 
-  await renderPanelScreen(ctx, panelDetailText(ctx, panel), keyboard, 'Markdown');
+  await renderPanelScreen(
+    ctx,
+    panelDetailText(ctx, panel, requestedServicePage),
+    keyboard,
+    'Markdown'
+  );
 }
 
 export function buildPanelDetailKeyboard(
   ctx: MenuContext,
-  panel: RebeccaPanelSummary
+  panel: RebeccaPanelSummary,
+  requestedServicePage = 1
 ): InlineKeyboard {
   if (!ctx.services) throw new Error('BOT_SERVICES_UNAVAILABLE');
   const keyboard = new InlineKeyboard()
@@ -103,14 +129,17 @@ export function buildPanelDetailKeyboard(
     .row();
 
   const customTarget = ctx.services.pricingService.getCustomVolumeTarget();
-  for (const service of panel.services) {
+  const servicePages = Math.max(1, Math.ceil(panel.services.length / PANEL_SERVICE_PAGE_SIZE));
+  const servicePage = Math.min(Math.max(1, Math.trunc(requestedServicePage)), servicePages);
+  const visibleServices = panel.services.slice(
+    (servicePage - 1) * PANEL_SERVICE_PAGE_SIZE,
+    servicePage * PANEL_SERVICE_PAGE_SIZE
+  );
+  for (const service of visibleServices) {
     const isCustomTarget =
       customTarget.panelId === panel.id && customTarget.serviceId === service.serviceId;
     keyboard
-      .text(
-        `${service.isDefault ? '⭐' : '🔹'} ${service.name} · ${service.serviceId}`,
-        panelCallback('n')
-      )
+      .text(`${service.isDefault ? '⭐' : '🔹'} ${service.name} · ${service.serviceId}`, 'ui:noop')
       .row();
     if (!service.isDefault) {
       keyboard.text(
@@ -135,6 +164,19 @@ export function buildPanelDetailKeyboard(
     }
     keyboard.row();
   }
+  if (servicePages > 1) {
+    if (servicePage > 1) {
+      keyboard.text(t(ctx, 'pagination_previous'), panelCallback('v', panel.id, servicePage - 1));
+    }
+    keyboard.text(
+      `${localizedNumber(servicePage, ctx)} / ${localizedNumber(servicePages, ctx)}`,
+      'ui:noop'
+    );
+    if (servicePage < servicePages) {
+      keyboard.text(t(ctx, 'pagination_next'), panelCallback('v', panel.id, servicePage + 1));
+    }
+    keyboard.row();
+  }
   keyboard
     .text(t(ctx, 'admin_panel_delete_button'), panelCallback('x', panel.id))
     .row()
@@ -152,10 +194,14 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     await renderPanelRegistry(ctx);
   });
   bot.callbackQuery('a:p:n', async (ctx) => ctx.answerCallbackQuery());
-  bot.callbackQuery('a:p:add', startPanelAdd);
-  bot.callbackQuery(new RegExp(`^a:p:v:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  bot.callbackQuery(/^a:p:page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await renderPanelDetail(ctx, ctx.match[1]!);
+    await renderPanelRegistry(ctx, Number(ctx.match[1]) || 1);
+  });
+  bot.callbackQuery('a:p:add', startPanelAdd);
+  bot.callbackQuery(new RegExp(`^a:p:v:${PANEL_ID_CAPTURE}(?::(\\d+))?$`, 'u'), async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderPanelDetail(ctx, ctx.match[1]!, Number(ctx.match[2]) || 1);
   });
   bot.callbackQuery(new RegExp(`^a:p:e:${PANEL_ID_CAPTURE}:([nuks])$`, 'u'), async (ctx) => {
     await beginPanelEdit(ctx, ctx.match[1]!, COMPACT_PANEL_EDIT_ACTIONS[ctx.match[2]!]!);
@@ -196,10 +242,13 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
   });
   bot.callbackQuery('admin:panel:noop', async (ctx) => ctx.answerCallbackQuery());
   bot.callbackQuery('admin:panel:add', startPanelAdd);
-  bot.callbackQuery(new RegExp(`^admin:panel:view:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
-    await ctx.answerCallbackQuery();
-    await renderPanelDetail(ctx, ctx.match[1]!);
-  });
+  bot.callbackQuery(
+    new RegExp(`^admin:panel:view:${PANEL_ID_CAPTURE}(?::(\\d+))?$`, 'u'),
+    async (ctx) => {
+      await ctx.answerCallbackQuery();
+      await renderPanelDetail(ctx, ctx.match[1]!, Number(ctx.match[2]) || 1);
+    }
+  );
   bot.callbackQuery(
     new RegExp(`^admin:panel:edit:${PANEL_ID_CAPTURE}:(name|url|api_key|add_service)$`, 'u'),
     async (ctx) => {
@@ -570,8 +619,18 @@ function clearPendingPanelSecret(ctx: MenuContext): void {
   ctx.session.adminPanelDraft = undefined;
 }
 
-function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
+function panelDetailText(
+  ctx: MenuContext,
+  panel: RebeccaPanelSummary,
+  requestedServicePage = 1
+): string {
   const defaultService = panel.services.find((service) => service.isDefault);
+  const servicePages = Math.max(1, Math.ceil(panel.services.length / PANEL_SERVICE_PAGE_SIZE));
+  const servicePage = Math.min(Math.max(1, Math.trunc(requestedServicePage)), servicePages);
+  const visibleServices = panel.services.slice(
+    (servicePage - 1) * PANEL_SERVICE_PAGE_SIZE,
+    servicePage * PANEL_SERVICE_PAGE_SIZE
+  );
   return buildScreen({
     emoji: '🖥️',
     title: t(ctx, 'admin_panel_detail_title'),
@@ -623,7 +682,7 @@ function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
         emoji: '📦',
         title: t(ctx, 'admin_panel_services_section'),
         fields: panel.services.length
-          ? panel.services.map((service) => ({
+          ? visibleServices.map((service) => ({
               emoji: service.isDefault ? '⭐' : '🔹',
               label: escapeTelegramMarkdown(service.name),
               value: `${t(ctx, 'admin_panel_service_id_label')}: ${localizedNumber(service.serviceId, ctx)}`,
@@ -637,6 +696,10 @@ function panelDetailText(ctx: MenuContext, panel: RebeccaPanelSummary): string {
             ],
       },
     ],
+    footer:
+      servicePages > 1
+        ? `${localizedNumber(servicePage, ctx)} / ${localizedNumber(servicePages, ctx)}`
+        : undefined,
   });
 }
 

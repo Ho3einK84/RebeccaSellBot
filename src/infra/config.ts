@@ -92,6 +92,11 @@ const configSchema = z
     PANEL_CREDENTIALS_KEY: panelCredentialsKeySchema,
     HEALTH_CHECK_PORT: healthCheckPortSchema,
     DEFAULT_LOCALE: z.enum(['fa', 'en']).default('fa'),
+    SUPPORT_URL: z
+      .string()
+      .url('SUPPORT_URL must be a valid URL')
+      .startsWith('https://')
+      .optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.REBECCA_API_URL) return;

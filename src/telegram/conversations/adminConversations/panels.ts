@@ -5,8 +5,8 @@ import {
   buildPromptScreen,
   buildScreen,
   promptInConversation,
-  replyInConversation,
-  waitForTextInput,
+  replyInAdminConversation,
+  waitForAdminTextInput,
 } from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
 import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
@@ -47,7 +47,7 @@ export async function adminPanelConversation(
         };
         outsideCtx.session.adminPanelAction = 'await_add_key';
       });
-      await replyInConversation(
+      await replyInAdminConversation(
         conversation,
         ctx,
         buildPromptScreen(
@@ -88,7 +88,7 @@ export async function adminPanelConversation(
       outsideCtx.session.adminPanelId = undefined;
       outsideCtx.session.adminPanelDraft = undefined;
     });
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildScreen({
@@ -99,7 +99,7 @@ export async function adminPanelConversation(
       { parse_mode: 'Markdown' }
     );
   } catch {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -136,7 +136,7 @@ async function askPanelUrl(
   try {
     return validateRebeccaBaseUrl(value);
   } catch {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -167,11 +167,11 @@ async function askText(
     ),
     { parse_mode: 'Markdown' }
   );
-  const input = await waitForTextInput(conversation);
+  const input = await waitForAdminTextInput(conversation);
   if (input === undefined) return undefined;
   const value = input.trim();
   if (!value || value.length > maxLength) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_panel_detail_title'), t(ctx, 'admin_setting_invalid')),
@@ -197,11 +197,11 @@ async function askServiceId(
     ),
     { parse_mode: 'Markdown' }
   );
-  const input = await waitForTextInput(conversation);
+  const input = await waitForAdminTextInput(conversation);
   if (input === undefined) return undefined;
   const value = parsePositiveSafeInteger(input);
   if (!value || value > MAX_SERVICE_ID) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_panel_detail_title'), t(ctx, 'admin_setting_invalid')),

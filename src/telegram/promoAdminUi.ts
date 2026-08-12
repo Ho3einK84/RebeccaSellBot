@@ -42,7 +42,7 @@ export async function showPromoCenter(ctx: MenuContext, requestedPage = 1): Prom
     }
     keyboard.text(
       `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
-      callbackData('promo', 'page', result.page)
+      'ui:noop'
     );
     if (result.page < result.totalPages) {
       keyboard.text(

@@ -18,6 +18,8 @@ import {
   backKeyboard,
   buildEmptyState,
   buildScreen,
+  forgetUiMessage,
+  isArtifactMessage,
   rememberArtifactMessage,
   safelyDeleteMessage,
 } from '../ui.js';
@@ -198,9 +200,12 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
         ],
         footer: t(ctx, 'trial_terms'),
       }),
-      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+      { parse_mode: 'Markdown' }
     );
     rememberArtifactMessage(ctx.session, trialMessage.message_id);
+    await ctx.reply(t(ctx, 'navigation_continue_hint'), {
+      reply_markup: backKeyboard(ctx, 'main'),
+    });
   });
 
   // Direct top-up CTA from insufficient balance screen
@@ -213,10 +218,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   // live shop keyboard without discarding an active promo selection.
   bot.callbackQuery('shop:open', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText(await renderShopMenuText(ctx), {
-      parse_mode: 'Markdown',
-      reply_markup: shopMenu,
-    });
+    await renderBaseScreen(ctx, await renderShopMenuText(ctx), shopMenu, 'Markdown');
   });
 
   // Clear pending promo code from shop
@@ -230,8 +232,14 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.callbackQuery('ui:dismiss', async (ctx) => {
     await ctx.answerCallbackQuery();
     if (ctx.callbackQuery.message) {
-      await safelyDeleteMessage(ctx, ctx.callbackQuery.message.message_id);
+      const messageId = ctx.callbackQuery.message.message_id;
+      await safelyDeleteMessage(ctx, messageId);
+      forgetUiMessage(ctx.session, messageId);
     }
+  });
+
+  bot.callbackQuery('ui:noop', async (ctx) => {
+    await ctx.answerCallbackQuery();
   });
 
   // Fallback for a stale Cancel button after a conversation has already ended.
@@ -258,11 +266,14 @@ async function renderBaseScreen(
   parseMode?: 'Markdown'
 ): Promise<void> {
   if (ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, {
-      ...(parseMode ? { parse_mode: parseMode } : {}),
-      reply_markup: replyMarkup,
-    });
-    return;
+    const messageId = ctx.callbackQuery.message.message_id;
+    if (!isArtifactMessage(ctx.session, messageId)) {
+      await ctx.editMessageText(text, {
+        ...(parseMode ? { parse_mode: parseMode } : {}),
+        reply_markup: replyMarkup,
+      });
+      return;
+    }
   }
   await ctx.reply(text, {
     ...(parseMode ? { parse_mode: parseMode } : {}),

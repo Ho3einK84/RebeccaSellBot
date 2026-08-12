@@ -10,9 +10,9 @@ import {
   buildScreen,
   buildStatusBadge,
   promptInConversation,
-  replyInConversation,
-  waitForCallbackInput,
-  waitForTextInput,
+  replyInAdminConversation,
+  waitForAdminCallbackInput,
+  waitForAdminTextInput,
 } from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
@@ -38,7 +38,7 @@ export async function adminEditPromoConversation(
     return selected;
   });
   if (!id) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_not_found')),
@@ -48,7 +48,7 @@ export async function adminEditPromoConversation(
   }
   const promo = await ctx.services.promoService.getPromoCodeById(id);
   if (!promo) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_not_found')),
@@ -75,11 +75,11 @@ export async function adminSearchPromoConversation(
     ),
     { parse_mode: 'Markdown' }
   );
-  const input = await waitForTextInput(conversation);
+  const input = await waitForAdminTextInput(conversation);
   if (input === undefined) return;
   const result = await ctx.services.promoService.listCodes(1, 10, input);
   if (result.items.length === 0) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('📭', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_no_promo_codes')),
@@ -103,7 +103,7 @@ export async function adminSearchPromoConversation(
     .text(t(ctx, 'admin_promo_back_to_list'), callbackData('promo', 'list'))
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
-  await replyInConversation(
+  await replyInAdminConversation(
     conversation,
     ctx,
     buildScreen({
@@ -232,7 +232,7 @@ async function runPromoEditor(
     }),
     { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
   );
-  const confirmation = await waitForCallbackInput(conversation, ['promo-save:confirm']);
+  const confirmation = await waitForAdminCallbackInput(conversation, ['promo-save:confirm']);
   if (!confirmation) return;
 
   try {
@@ -250,7 +250,7 @@ async function runPromoEditor(
     if (saved.active !== active) {
       await ctx.services.promoService.setPromoActiveById(saved.id, active);
     }
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildScreen({
@@ -275,7 +275,7 @@ async function runPromoEditor(
     );
   } catch (err) {
     logger.warn({ err, code }, 'Promo admin save failed');
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -304,11 +304,11 @@ async function promptPromoCode(
       ),
       { parse_mode: 'Markdown' }
     );
-    const input = await waitForTextInput(conversation);
+    const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
     const code = input.trim().toUpperCase();
     if (/^[A-Z0-9_-]{3,128}$/u.test(code)) return code;
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_code_invalid')),
@@ -340,7 +340,7 @@ async function promptPromoType(
     ),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
-  const data = await waitForCallbackInput(conversation, ['promo-type:']);
+  const data = await waitForAdminCallbackInput(conversation, ['promo-type:']);
   if (!data) return undefined;
   const type = data.slice('promo-type:'.length);
   return ['discount_percent', 'discount_fixed', 'gift_credit', 'gift_gb'].includes(type)
@@ -362,11 +362,11 @@ async function promptPromoPositiveNumber(
       buildPromptScreen('🔢', t(ctx, 'admin_promo_detail_title'), prompt),
       { parse_mode: 'Markdown' }
     );
-    const input = await waitForTextInput(conversation);
+    const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
     const value = parsePositiveSafeInteger(input);
     if (value !== undefined && value <= maximum) return value;
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_promo_detail_title'), invalid),
@@ -390,13 +390,13 @@ async function promptPromoNonNegativeNumber(
       ),
       { parse_mode: 'Markdown' }
     );
-    const input = await waitForTextInput(conversation);
+    const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
     if (/^\d+$/u.test(input.trim())) {
       const value = Number(input.trim());
       if (Number.isSafeInteger(value) && value >= 0) return value;
     }
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -424,7 +424,7 @@ async function promptPromoExpiry(
       ),
       { parse_mode: 'Markdown' }
     );
-    const input = await waitForTextInput(conversation);
+    const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
     const value = input.trim().toLowerCase();
     if (['0', 'never', 'none', 'بدون'].includes(value)) return null;
@@ -432,7 +432,7 @@ async function promptPromoExpiry(
       const date = new Date(`${value}T23:59:59.999Z`);
       if (!Number.isNaN(date.getTime()) && date.getTime() > Date.now()) return date;
     }
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -476,7 +476,7 @@ async function promptPromoActive(
     }),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
-  const data = await waitForCallbackInput(conversation, ['promo-active:']);
+  const data = await waitForAdminCallbackInput(conversation, ['promo-active:']);
   return data === 'promo-active:true' ? true : data === 'promo-active:false' ? false : undefined;
 }
 

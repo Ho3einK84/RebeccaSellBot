@@ -13,11 +13,13 @@ import {
   conversationOwnerId,
   handleConversationCancel,
   promptInConversation,
+  replyInAdminConversation,
   replyInConversation,
   sendArtifactInConversation,
+  waitForAdminCallbackInput,
   waitForCallbackInput,
   waitForPhotoInput,
-  waitForTextInput,
+  waitForAdminTextInput,
 } from '../../ui.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import { parseNonnegativeSafeInteger, parsePositiveSafeInteger, requireAdmin } from './shared.js';
@@ -227,6 +229,12 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       }),
       { parse_mode: 'Markdown' }
     );
+    await replyInConversation(conversation, ctx, t(ctx, 'navigation_continue_hint'), {
+      reply_markup: new InlineKeyboard()
+        .text(t(ctx, 'menu_wallet'), 'nav:wallet')
+        .row()
+        .text(t(ctx, 'menu_back'), 'nav:main'),
+    });
   } catch (err) {
     if (err instanceof PendingTopupReceiptError) {
       await replyInConversation(
@@ -370,7 +378,7 @@ export async function adminSetBalanceConversation(
       }),
       { parse_mode: 'Markdown' }
     );
-    const userInput = await waitForTextInput(conversation);
+    const userInput = await waitForAdminTextInput(conversation);
     if (userInput === undefined) return;
     targetId = parsePositiveSafeInteger(userInput);
     if (targetId === undefined) {
@@ -387,7 +395,7 @@ export async function adminSetBalanceConversation(
     }
   }
   if (!(await ctx.services.userService.exists(targetId))) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('📭', t(ctx, 'admin_user_profile_title'), t(ctx, 'admin_user_not_found')),
@@ -412,11 +420,11 @@ export async function adminSetBalanceConversation(
     }),
     { parse_mode: 'Markdown', reply_markup: operationKeyboard }
   );
-  const operationInput = await waitForCallbackInput(conversation, ['balance-op:']);
+  const operationInput = await waitForAdminCallbackInput(conversation, ['balance-op:']);
   if (!operationInput) return;
   const operationValue = operationInput.slice('balance-op:'.length);
   if (!['add', 'deduct', 'set'].includes(operationValue)) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_user_wallet_section'), t(ctx, 'operation_failed')),
@@ -447,13 +455,13 @@ export async function adminSearchUserConversation(
     }),
     { parse_mode: 'Markdown' }
   );
-  const searchInput = await waitForTextInput(conversation);
+  const searchInput = await waitForAdminTextInput(conversation);
   if (searchInput === undefined) return;
   const query = searchInput.trim().replace(/^@/, '');
 
   const u = await ctx.services.userService.findProfile(query);
   if (!u) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('📭', t(ctx, 'admin_users_list_title'), t(ctx, 'admin_user_not_found')),
@@ -462,7 +470,7 @@ export async function adminSearchUserConversation(
     return;
   }
 
-  await replyInConversation(
+  await replyInAdminConversation(
     conversation,
     ctx,
     buildScreen({
@@ -513,7 +521,7 @@ async function applyAdminBalanceOperation(
       ),
       { parse_mode: 'Markdown' }
     );
-    const amountInput = await waitForTextInput(conversation);
+    const amountInput = await waitForAdminTextInput(conversation);
     if (amountInput === undefined) return;
     amount = isSet
       ? parseNonnegativeSafeInteger(amountInput)
@@ -571,7 +579,7 @@ async function applyAdminBalanceOperation(
     }),
     { parse_mode: 'Markdown', reply_markup: confirmationKeyboard }
   );
-  if (!(await waitForCallbackInput(conversation, ['balance-confirm']))) return;
+  if (!(await waitForAdminCallbackInput(conversation, ['balance-confirm']))) return;
 
   try {
     const updated = await ctx.services.walletService.adjustBalanceAdmin({
@@ -581,7 +589,7 @@ async function applyAdminBalanceOperation(
       adminId,
       description: `Admin dashboard ${source}`,
     });
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildScreen({
@@ -638,7 +646,7 @@ async function applyAdminBalanceOperation(
       logger.warn({ notifyErr, telegramId }, 'Could not notify user about admin wallet adjustment');
     }
   } catch (err) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(

@@ -5,8 +5,8 @@ import {
   buildPromptScreen,
   buildScreen,
   promptInConversation,
-  replyInConversation,
-  waitForTextInput,
+  replyInAdminConversation,
+  waitForAdminTextInput,
 } from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
@@ -28,11 +28,11 @@ export async function adminAddAdminConversation(
     ),
     { parse_mode: 'Markdown' }
   );
-  const input = await waitForTextInput(conversation);
+  const input = await waitForAdminTextInput(conversation);
   if (input === undefined) return;
   const telegramId = parsePositiveSafeInteger(input);
   if (!telegramId) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_registry_title'), t(ctx, 'admin_invalid_telegram_id')),
@@ -41,7 +41,7 @@ export async function adminAddAdminConversation(
     return;
   }
   const added = await ctx.services.adminService.addAdmin(telegramId, actorTelegramId);
-  await replyInConversation(
+  await replyInAdminConversation(
     conversation,
     ctx,
     buildScreen({
@@ -70,7 +70,7 @@ export async function adminAssignOrphanConversation(
     (outsideCtx) => outsideCtx.session.orphanAssignIssueId as string | undefined
   );
   if (!issueId) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -93,11 +93,11 @@ export async function adminAssignOrphanConversation(
     ),
     { parse_mode: 'Markdown' }
   );
-  const query = await waitForTextInput(conversation);
+  const query = await waitForAdminTextInput(conversation);
   if (query === undefined) return;
   const target = await ctx.services.userService.findProfile(query);
   if (!target) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_orphan_detail_title'), t(ctx, 'admin_user_not_found')),
@@ -114,7 +114,7 @@ export async function adminAssignOrphanConversation(
     await conversation.external((outsideCtx) => {
       outsideCtx.session.orphanAssignIssueId = undefined;
     });
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       result
@@ -151,7 +151,7 @@ export async function adminAssignOrphanConversation(
       { parse_mode: 'Markdown' }
     );
   } catch {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(

@@ -102,8 +102,24 @@ ABC_456`;
         footer: 'Ready to go.',
       })
     ).toBe(
-      '🏠 *Home*\n_At a glance_\n\n👛 *Balance*\n100 Toman\n\n📌 *📱 Services*\n\n🟢 *Active:* 1\n\nReady to go.'
+      '🏠 *Home*\n_At a glance_\n\n👛 *Balance*\n100 Toman\n\n📱 *Services*\n\n🟢 *Active:* 1\n\nReady to go.'
     );
+  });
+
+  it('does not duplicate a primary status emoji already present in its value', () => {
+    const screen = buildScreen({
+      emoji: '🖥️',
+      title: 'Panel',
+      primary: { emoji: '🟢', label: 'Status', value: '🟢 Active' },
+    });
+    expect(screen).toContain('*Status*\n🟢 Active');
+    expect(screen).not.toContain('🟢 *Status*\n🟢 Active');
+  });
+
+  it('does not duplicate a status emoji already present in a field value', () => {
+    expect(
+      buildSectionCard('Status', [{ label: 'State', value: '🟢 Active', emoji: '🟢' }], '📱')
+    ).toBe('📱 *Status*\n\n*State:* 🟢 Active');
   });
 
   it('builds standard confirmation keyboard', () => {
@@ -156,6 +172,34 @@ describe('UI Cleanup with Message Roles & Artifact Retention', () => {
     expect(deleteMessage).toHaveBeenCalledWith(123, 10);
     expect(deleteMessage).toHaveBeenCalledWith(123, 12);
     expect(deleteMessage).not.toHaveBeenCalledWith(123, 11);
+  });
+
+  it('re-reads artifacts created by the active handler before deleting its callback message', async () => {
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const session = {
+      uiMessageIds: [20],
+      promptMessageIds: [],
+      artifactMessageIds: [] as number[],
+    };
+    const ctx = {
+      chat: { id: 123, type: 'private' },
+      callbackQuery: { message: { message_id: 20 } },
+      session,
+      api: { deleteMessage, config: { use: vi.fn() } },
+    } as unknown as MenuContext;
+    const middleware = cleanChatUiMiddleware() as (
+      ctx: MenuContext,
+      next: () => Promise<unknown>
+    ) => Promise<unknown>;
+
+    await middleware(ctx, async () => {
+      rememberArtifactMessage(ctx.session, 20);
+      rememberUiMessage(ctx.session, 21, 'screen');
+    });
+
+    expect(deleteMessage).not.toHaveBeenCalledWith(123, 20);
+    expect(ctx.session.artifactMessageIds).toContain(20);
+    expect(ctx.session.uiMessageIds).not.toContain(20);
   });
 
   it('stores message IDs in role-specific session stores', () => {

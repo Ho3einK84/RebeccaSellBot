@@ -80,6 +80,8 @@ export type BotServices = {
   configTransferService: ConfigTransferService;
   configReconciliationService: ConfigReconciliationService;
   broadcastService: BroadcastService;
+  /** Optional Telegram-compatible support destination rendered as a URL button. */
+  supportUrl?: string;
   /** Telegram IDs authorized to use the administrative dashboard. */
   adminIds: number[];
   /** Sole authorization source for Telegram administrative operations. */

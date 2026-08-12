@@ -6,6 +6,7 @@ import { InlineKeyboard } from 'grammy';
 import { Menu } from '@grammyjs/menu';
 import type { MenuContext, MyConversation } from '../types.js';
 import { languageKeyboard } from './language.js';
+import { renderHomeDashboard } from './homeDashboard.js';
 import { clearPendingPromo, getPendingPromoPricing } from '../promoSelection.js';
 import {
   localizedDate,
@@ -13,13 +14,13 @@ import {
   localizedPackageName,
   observedContextLocale,
   t,
-  tm,
 } from '../locale.js';
-import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '../ui.js';
+import { backKeyboard, buildEmptyState, buildScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderAdminHome } from './adminMenu.js';
 import { customVolumeEnabled } from '../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
+import { escapeTelegramMarkdown } from '../rendering.js';
 
 // Re-export so conversations can import from one place
 export type { MenuContext, MyConversation };
@@ -30,77 +31,7 @@ export type { MenuContext, MyConversation };
  */
 export { buildSubscriptionActionKeyboard } from '../features/subscriptions/routes.js';
 
-/**
- * Render personalized state-aware dashboard summary text for the main home screen.
- */
-export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
-  const telegramId = ctx.from?.id;
-  if (!telegramId || !ctx.services) return t(ctx, 'main_menu');
-
-  const balance = await ctx.services.walletService.getBalance(telegramId);
-  let activeCount = 0;
-  let nearExpiryInfo: { username: string; daysLeft: number } | undefined;
-
-  try {
-    const configs = await ctx.services.configService.listConfigsForOwner(telegramId);
-    const activeConfigs = configs.filter((c) => !c.panelStatus || c.panelStatus === 'active');
-    activeCount = activeConfigs.length;
-
-    const now = Math.floor(Date.now() / 1000);
-    for (const config of activeConfigs) {
-      if (config.panelExpire && config.panelExpire > now) {
-        const daysLeft = Math.ceil((config.panelExpire - now) / 86400);
-        if (daysLeft <= 3) {
-          nearExpiryInfo = { username: config.configUsername, daysLeft };
-          break;
-        }
-      }
-    }
-  } catch {
-    // If config fetch fails gracefully default to 0 count
-  }
-
-  const notices: string[] = [];
-  if (activeCount === 0) notices.push(`📭 ${t(ctx, 'home_no_active_services_hint')}`);
-  if (nearExpiryInfo) {
-    notices.push(
-      `${buildStatusBadge(ctx, 'warning', t(ctx, 'home_near_expiry_warning'))}\n${tm(
-        ctx,
-        'home_near_expiry_detail',
-        {
-          username: nearExpiryInfo.username,
-          days: localizedNumber(nearExpiryInfo.daysLeft, ctx),
-          days_unit: t(ctx, 'days_unit'),
-        }
-      )}`
-    );
-  }
-
-  return buildScreen({
-    emoji: '🏠',
-    title: t(ctx, 'home_title'),
-    subtitle: t(ctx, 'home_subtitle'),
-    primary: {
-      emoji: '👛',
-      label: t(ctx, 'home_balance'),
-      value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
-    },
-    sections: [
-      {
-        emoji: '📱',
-        title: t(ctx, 'home_service_overview'),
-        fields: [
-          {
-            emoji: activeCount > 0 ? '🟢' : '⚪️',
-            label: t(ctx, 'home_active_services'),
-            value: `${localizedNumber(activeCount, ctx)} ${t(ctx, 'service_unit')}`,
-          },
-        ],
-      },
-    ],
-    footer: notices.join('\n\n'),
-  });
-}
+export { renderHomeDashboard };
 
 /**
  * Render wallet dashboard summary with available balance and pending topup receipt status.
@@ -164,7 +95,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           primary: {
             emoji: '🎟️',
             label: t(ctx, 'shop_promo_section'),
-            value: `\`${promoCode}\``,
+            value: `\`${escapeTelegramMarkdown(promoCode)}\``,
           },
         }
       : {}),
@@ -232,7 +163,7 @@ function buildPurchaseCheckoutScreen(
           {
             emoji: '📦',
             label: t(ctx, 'renewal_success_package_label'),
-            value: localizedPackageName(ctx, pkg.id, pkg.name),
+            value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
           },
           {
             emoji: '📊',
@@ -260,7 +191,7 @@ function buildPurchaseCheckoutScreen(
                 {
                   emoji: '🎟️',
                   label: t(ctx, 'shop_promo_section'),
-                  value: `\`${promoCode}\``,
+                  value: `\`${escapeTelegramMarkdown(promoCode)}\``,
                 },
               ],
             },
@@ -403,6 +334,11 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     (ctx) => t(ctx, 'menu_support'),
     async (ctx) => {
       if (!ctx.services) return;
+      const keyboard = new InlineKeyboard();
+      if (ctx.services.supportUrl) {
+        keyboard.url(t(ctx, 'support_contact_button'), ctx.services.supportUrl).row();
+      }
+      keyboard.text(t(ctx, 'menu_back'), 'nav:main');
       await ctx.editMessageText(
         buildScreen({
           emoji: '💬',
@@ -410,7 +346,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           subtitle: t(ctx, 'support_subtitle'),
           footer: t(ctx, 'support_message'),
         }),
-        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+        { parse_mode: 'Markdown', reply_markup: keyboard }
       );
     }
   )

@@ -6,6 +6,8 @@ import {
   dismissKeyboard,
   promptInConversation,
   rememberUiMessage,
+  waitForCallbackInput,
+  waitForPhotoInput,
   waitForTextInput,
 } from '../../src/telegram/ui.js';
 
@@ -59,6 +61,46 @@ describe('private-chat UI cleanup', () => {
     await expect(waitForTextInput(conversation)).resolves.toBeUndefined();
     expect(answerCallbackQuery).toHaveBeenCalled();
     expect(reply).toHaveBeenCalledWith('operation_cancelled', expect.any(Object));
+  });
+
+  it('accepts an image document when a receipt is sent as a file', async () => {
+    const input = {
+      from: { id: 123, is_bot: false, first_name: 'Test' },
+      message: { document: { file_id: 'image-file', mime_type: 'image/png' } },
+    } as unknown as ConversationContext;
+    const outsideCtx = { from: { id: 123 }, session: {} };
+    const conversation = {
+      wait: vi.fn().mockResolvedValue(input),
+      external: vi.fn(async (task: (ctx: typeof outsideCtx) => unknown) => task(outsideCtx)),
+    } as unknown as MyConversation;
+
+    await expect(waitForPhotoInput(conversation)).resolves.toBe('image-file');
+  });
+
+  it('answers an unrelated callback instead of leaving Telegram spinner active', async () => {
+    const answerCallbackQuery = vi.fn().mockResolvedValue(true);
+    const validInput = {
+      from: { id: 123, is_bot: false, first_name: 'Test' },
+      callbackQuery: { data: 'valid:choice' },
+      answerCallbackQuery,
+    } as unknown as ConversationContext;
+    const invalidInput = {
+      from: { id: 123, is_bot: false, first_name: 'Test' },
+      callbackQuery: { data: 'other:choice' },
+      answerCallbackQuery,
+      services: {
+        translationService: { get: vi.fn((key: string) => key) },
+      },
+    } as unknown as ConversationContext;
+    const outsideCtx = { from: { id: 123 }, session: {} };
+    const conversation = {
+      wait: vi.fn().mockResolvedValueOnce(invalidInput).mockResolvedValueOnce(validInput),
+      external: vi.fn(async (task: (ctx: typeof outsideCtx) => unknown) => task(outsideCtx)),
+    } as unknown as MyConversation;
+
+    await expect(waitForCallbackInput(conversation, ['valid:'])).resolves.toBe('valid:choice');
+    expect(answerCallbackQuery).toHaveBeenCalledTimes(2);
+    expect(answerCallbackQuery).toHaveBeenNthCalledWith(1, { text: 'button_action_failed' });
   });
 });
 
@@ -131,7 +173,7 @@ describe('promptInConversation inline keyboard', () => {
     expect(keyboard).toBeInstanceOf(InlineKeyboard);
     const buttons = keyboard.inline_keyboard.flat();
     expect(buttons).toHaveLength(1);
-    expect(buttons[0]?.text).toBe('menu_back');
+    expect(buttons[0]?.text).toBe('menu_close');
     expect((buttons[0] as { callback_data?: string })?.callback_data).toBe('ui:dismiss');
   });
 });

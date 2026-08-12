@@ -161,15 +161,16 @@ rsbot main logs -f
 The installer writes the selected values to the instance’s `.env` file with
 mode `0600`.
 
-| Variable                            | Purpose                                                                  |
-| ----------------------------------- | ------------------------------------------------------------------------ |
-| `BOT_TOKEN`                         | Telegram Bot API token                                                   |
-| `ADMIN_IDS`                         | Bootstrap admin IDs used only while the database admin registry is empty |
-| `INSTANCE_NAME`                     | Container, network, volume, and Compose namespace                        |
-| `PANEL_CREDENTIALS_KEY`             | Stable local key used to encrypt panel credentials in PostgreSQL         |
-| `REBECCA_*`                         | Optional one-time legacy single-panel import only                        |
-| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Instance-local PostgreSQL credentials                                    |
-| `DEFAULT_LOCALE`                    | Initial bot locale: `fa` or `en`                                         |
+| Variable                            | Purpose                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| `BOT_TOKEN`                         | Telegram Bot API token                                                         |
+| `ADMIN_IDS`                         | Bootstrap admin IDs used only while the database admin registry is empty       |
+| `SUPPORT_URL`                       | Optional HTTPS support URL; falls back to the first bootstrap admin when unset |
+| `INSTANCE_NAME`                     | Container, network, volume, and Compose namespace                              |
+| `PANEL_CREDENTIALS_KEY`             | Stable local key used to encrypt panel credentials in PostgreSQL               |
+| `REBECCA_*`                         | Optional one-time legacy single-panel import only                              |
+| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Instance-local PostgreSQL credentials                                          |
+| `DEFAULT_LOCALE`                    | Initial bot locale: `fa` or `en`                                               |
 
 > [!IMPORTANT]
 > `REBECCA_API_URL` is the Rebecca API origin, not the dashboard path. If your

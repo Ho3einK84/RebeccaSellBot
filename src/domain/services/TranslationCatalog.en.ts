@@ -28,6 +28,8 @@ export const EN_TEXTS: Record<string, string> = {
   home_service_overview: 'Service Overview',
   home_near_expiry_warning: 'Service Requiring Attention',
   home_near_expiry_detail: '`{username}` · {days} {days_unit} remaining',
+  home_services_unavailable_hint:
+    'Service information is temporarily unavailable. Please try again shortly.',
   home_no_active_services_hint:
     'You do not have a subscription yet. Start with “Buy Subscription”.',
   wallet_dashboard_subtitle: 'Manage top-ups, payment receipts, and gift codes here',
@@ -278,6 +280,8 @@ export const EN_TEXTS: Record<string, string> = {
   menu_custom_amount: '✏️ Custom volume ({price} Toman/GB)',
   buy_confirm_button: '✅ Confirm and purchase',
   menu_back: '◀️ Back',
+  menu_close: '✖️ Close',
+  navigation_continue_hint: 'Use the button below to continue.',
   menu_cancel: '❌ Cancel',
   menu_top_up: '➕ Top up wallet',
   menu_use_promo: '🎟️ Redeem promo code',
@@ -293,6 +297,7 @@ export const EN_TEXTS: Record<string, string> = {
   button_expired_help: '🔄 This page is outdated. Please start the action again from the new menu.',
   operation_cancelled: '✅ Operation cancelled.',
   text_input_required: '⌨️ Please send your text response or tap Cancel.',
+  button_input_required: 'Please use one of the buttons shown for this step.',
   photo_input_required: '🖼️ Please send a clear receipt photo or tap Cancel.',
   no_subscriptions: '📭 No subscriptions found in your account.',
   subscriptions_list_complete:
@@ -596,6 +601,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_user_username_label: 'Username',
   admin_user_name_label: 'Name',
   admin_user_status_label: 'Account status',
+  admin_user_result_status_label: 'Status after confirmation',
   admin_user_joined_label: 'Member since',
   admin_user_balance_label: 'Available balance',
   admin_user_reserved_balance_label: 'Reserved balance',
@@ -927,8 +933,9 @@ export const EN_TEXTS: Record<string, string> = {
   renewal_attention_section: 'What needs attention',
   renewal_reason_low_traffic: 'Remaining data: {remaining}',
   renewal_reason_near_expiry: 'Time remaining: {remaining} days',
-  support_message: '💬 Contact the support team for assistance.',
+  support_message: '💬 Use the button below to contact support directly.',
   support_title: 'Support',
+  support_contact_button: '💬 Contact support',
   support_subtitle: 'Need help with a purchase, payment, or connection?',
 
   admin_setting_refund_window_hours: 'Unused-service refund window (hours; 0 = unlimited)',

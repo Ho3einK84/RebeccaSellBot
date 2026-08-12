@@ -17,6 +17,7 @@ import {
   buildScreen,
   buildStatusBadge,
   dismissKeyboard,
+  isArtifactMessage,
   rememberArtifactMessage,
   type StatusType,
 } from '../../ui.js';
@@ -29,6 +30,7 @@ import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js
 import { RefundOutcomePendingError } from '../../../domain/services/RefundService.js';
 import { PurchaseCheckoutUnavailableError } from '../../../domain/services/PurchaseCheckoutService.js';
 import type { RebeccaUserDetail } from '../../../domain/services/RebeccaService.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 
 const SUBSCRIPTION_PAGE_SIZE = 4;
 const CONFIG_ID_CAPTURE = '([a-zA-Z0-9_]{3,40})';
@@ -123,7 +125,7 @@ export async function showUserSubscriptions(ctx: MenuContext, requestedPage = 1)
     if (page > 1) navigation.text(t(ctx, 'pagination_previous'), `subs:page:${page - 1}`);
     navigation.text(
       `${localizedNumber(page, ctx)} / ${localizedNumber(totalPages, ctx)}`,
-      `subs:page:${page}`
+      'ui:noop'
     );
     if (page < totalPages) navigation.text(t(ctx, 'pagination_next'), `subs:page:${page + 1}`);
     navigation.row();
@@ -144,7 +146,7 @@ export async function showUserSubscriptions(ctx: MenuContext, requestedPage = 1)
         const card = cards[index]!;
         return {
           emoji: statusEmoji(card.status),
-          title: config.configUsername,
+          title: escapeTelegramMarkdown(config.configUsername),
           fields: [
             {
               emoji: '⚡',
@@ -194,7 +196,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         primary: {
           emoji: '📱',
           label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${config.configUsername}\``,
+          value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
         },
         footer: `ℹ️ ${t(ctx, 'renewal_selection_hint')}`,
       }),
@@ -317,7 +319,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           primary: {
             emoji: '📱',
             label: t(ctx, 'renewal_success_service_label'),
-            value: `\`${result.configUsername}\``,
+            value: `\`${escapeTelegramMarkdown(result.configUsername)}\``,
           },
           sections: [
             {
@@ -327,7 +329,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
                 {
                   emoji: '✅',
                   label: t(ctx, 'renewal_success_package_label'),
-                  value: localizedPackageName(ctx, checkout.packageId, checkout.packageName),
+                  value: escapeTelegramMarkdown(
+                    localizedPackageName(ctx, checkout.packageId, checkout.packageName)
+                  ),
                 },
               ],
             },
@@ -393,7 +397,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           primary: {
             emoji: '📱',
             label: t(ctx, 'renewal_selection_service_label'),
-            value: `\`${config.configUsername}\``,
+            value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
           },
           footer: `⚠️ ${t(ctx, 'auto_renew_disable_consequence')}`,
         }),
@@ -438,7 +442,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         primary: {
           emoji: '📱',
           label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${config.configUsername}\``,
+          value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
         },
         footer: `ℹ️ ${t(ctx, 'auto_renew_selection_hint')}`,
       }),
@@ -496,7 +500,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
               {
                 emoji: '🆔',
                 label: t(ctx, 'checkout_service_label'),
-                value: `\`${config.configUsername}\``,
+                value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
               },
             ],
           },
@@ -507,7 +511,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
               {
                 emoji: '📦',
                 label: t(ctx, 'renewal_success_package_label'),
-                value: localizedPackageName(ctx, pkg.id, pkg.name),
+                value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
               },
             ],
           },
@@ -555,7 +559,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         primary: {
           emoji: '📱',
           label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${config.configUsername}\``,
+          value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
         },
       }),
       new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
@@ -582,7 +586,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           primary: {
             emoji: '📱',
             label: t(ctx, 'renewal_selection_service_label'),
-            value: `\`${config.configUsername}\``,
+            value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
           },
         }),
         new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
@@ -620,7 +624,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         primary: {
           emoji: '📱',
           label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${config.configUsername}\``,
+          value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
         },
         footer: `⚠️ ${t(ctx, 'subscription_revoke_consequence')}`,
       }),
@@ -661,17 +665,23 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
                   {
                     emoji: '🆔',
                     label: t(ctx, 'checkout_service_label'),
-                    value: `\`${config.configUsername}\``,
+                    value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
                   },
                 ],
               },
             ],
           }),
-          backKeyboard(ctx, 'main')
+          new InlineKeyboard()
         );
         if (ctx.callbackQuery?.message) {
           rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
         }
+        await ctx.reply(t(ctx, 'navigation_continue_hint'), {
+          reply_markup: new InlineKeyboard()
+            .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
+            .row()
+            .text(t(ctx, 'menu_back'), 'nav:main'),
+        });
       } catch {
         await renderSubscriptionScreen(
           ctx,
@@ -805,9 +815,6 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(new RegExp(`^config:qr:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
-    if (ctx.callbackQuery?.message) {
-      rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
-    }
     await ctx.answerCallbackQuery({ text: t(ctx, 'subscription_qr_generating') });
     try {
       const remote = await ctx.services!.configService.getRemoteConfigDetail(config);
@@ -826,18 +833,24 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           primary: {
             emoji: '📱',
             label: t(ctx, 'subscription_qr_service_label'),
-            value: `\`${config.configUsername}\``,
+            value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
           },
         }),
         parse_mode: 'Markdown',
         reply_markup: dismissKeyboard(ctx),
       });
       rememberArtifactMessage(ctx.session, photo.message_id);
+      await ctx.reply(t(ctx, 'navigation_continue_hint'), {
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
+          .row()
+          .text(t(ctx, 'menu_my_configs'), 'subs:page:1'),
+      });
     } catch {
       await renderSubscriptionScreen(
         ctx,
         buildEmptyState('⚠️', t(ctx, 'subscription_qr_title'), t(ctx, 'subscription_qr_failed')),
-        dismissKeyboard(ctx)
+        new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
       );
     }
   });
@@ -870,7 +883,7 @@ async function buildSubscriptionCard(
     return {
       text: buildScreen({
         emoji: '📱',
-        title: config.configUsername,
+        title: escapeTelegramMarkdown(config.configUsername),
         primary: {
           emoji: statusEmoji(snapshot.status),
           label: t(ctx, 'subscription_status_label'),
@@ -991,7 +1004,7 @@ async function buildSubscriptionSnapshot(
     ? ctx.services?.pricingService.getPackageById(config.autoRenewPackageId)
     : undefined;
   const autoRenewPackageName = pkgOption
-    ? localizedPackageName(ctx, pkgOption.id, pkgOption.name)
+    ? escapeTelegramMarkdown(localizedPackageName(ctx, pkgOption.id, pkgOption.name))
     : undefined;
   return {
     remoteAvailable: remote !== undefined,
@@ -1139,7 +1152,11 @@ function buildRenewalCheckoutScreen(
         emoji: '📱',
         title: t(ctx, 'renewal_selection_service_label'),
         fields: [
-          { emoji: '🆔', label: t(ctx, 'checkout_service_label'), value: `\`${input.username}\`` },
+          {
+            emoji: '🆔',
+            label: t(ctx, 'checkout_service_label'),
+            value: `\`${escapeTelegramMarkdown(input.username)}\``,
+          },
         ],
       },
       {
@@ -1172,7 +1189,7 @@ function buildRenewalCheckoutScreen(
                 {
                   emoji: '🎟️',
                   label: t(ctx, 'shop_promo_section'),
-                  value: `\`${input.promoCode}\``,
+                  value: `\`${escapeTelegramMarkdown(input.promoCode)}\``,
                 },
               ],
             },
@@ -1217,7 +1234,7 @@ function buildDeleteReviewScreen(
           {
             emoji: '🆔',
             label: t(ctx, 'checkout_service_label'),
-            value: `\`${config.configUsername}\``,
+            value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
           },
         ],
       },
@@ -1277,7 +1294,7 @@ function buildDeleteResultScreen(
       : {
           emoji: '🗑️',
           label: t(ctx, 'config_delete_service_label'),
-          value: `\`${username}\``,
+          value: `\`${escapeTelegramMarkdown(username)}\``,
         },
     ...(refunded
       ? {
@@ -1289,7 +1306,7 @@ function buildDeleteResultScreen(
                 {
                   emoji: '🆔',
                   label: t(ctx, 'checkout_service_label'),
-                  value: `\`${username}\``,
+                  value: `\`${escapeTelegramMarkdown(username)}\``,
                 },
               ],
             },
@@ -1306,8 +1323,11 @@ async function renderSubscriptionScreen(
 ): Promise<void> {
   const options = { parse_mode: 'Markdown' as const, reply_markup: keyboard };
   if (ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, options);
-    return;
+    const messageId = ctx.callbackQuery.message.message_id;
+    if (!isArtifactMessage(ctx.session, messageId)) {
+      await ctx.editMessageText(text, options);
+      return;
+    }
   }
   await ctx.reply(text, options);
 }

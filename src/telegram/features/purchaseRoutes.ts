@@ -8,6 +8,7 @@ import { purchaseFailureMessage } from '../purchaseFeedback.js';
 import { formatSubscriptionLink, resolveContextLocale, t } from '../locale.js';
 import { backKeyboard, buildEmptyState, buildScreen, rememberArtifactMessage } from '../ui.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
+import { escapeTelegramMarkdown } from '../rendering.js';
 
 export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   bot.callbackQuery(/^buy:confirm:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
@@ -54,7 +55,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
         primary: {
           emoji: '📦',
           label: t(ctx, 'purchase_issuing_package_label'),
-          value: checkout.packageName,
+          value: escapeTelegramMarkdown(checkout.packageName),
         },
         ...(checkout.promoCode
           ? {
@@ -66,7 +67,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
                     {
                       emoji: '🎟️',
                       label: t(ctx, 'shop_promo_section'),
-                      value: `\`${checkout.promoCode}\``,
+                      value: `\`${escapeTelegramMarkdown(checkout.promoCode)}\``,
                     },
                   ],
                 },
@@ -116,11 +117,14 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
             value: formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable')),
           },
         }),
-        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+        { parse_mode: 'Markdown' }
       );
       if (ctx.callbackQuery?.message) {
         rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
       }
+      await ctx.reply(t(ctx, 'navigation_continue_hint'), {
+        reply_markup: backKeyboard(ctx, 'main'),
+      });
     } catch (error) {
       trackFunnelEvent('purchase_failed');
       await services.purchaseCheckoutService.fail(checkout.id);

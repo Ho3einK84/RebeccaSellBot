@@ -1,6 +1,9 @@
 import type { Bot } from 'grammy';
 import { describe, expect, it, vi } from 'vitest';
-import { registerAdminPanelRoutes } from '../../src/telegram/features/admin/panelRoutes.js';
+import {
+  buildPanelDetailKeyboard,
+  registerAdminPanelRoutes,
+} from '../../src/telegram/features/admin/panelRoutes.js';
 import type { MenuContext } from '../../src/telegram/types.js';
 
 type CallbackHandler = (ctx: MenuContext & { match: RegExpMatchArray }) => Promise<void>;
@@ -72,4 +75,40 @@ describe('admin panel routes', () => {
       );
     }
   );
+
+  it('paginates large panel service lists and uses a no-op page indicator', () => {
+    const services = Array.from({ length: 9 }, (_, index) => ({
+      serviceId: index + 1,
+      name: `Service ${index + 1}`,
+      isDefault: index === 0,
+    }));
+    const ctx = {
+      services: {
+        translationService: { get: vi.fn((key: string) => key) },
+        pricingService: {
+          getCustomVolumeTarget: vi.fn(() => ({ panelId: 'other', serviceId: 99 })),
+        },
+      },
+    } as unknown as MenuContext;
+    const panel = {
+      id: 'panel_123',
+      name: 'Panel',
+      enabled: true,
+      isDefault: true,
+      credentialMode: 'api_key',
+      services,
+    } as never;
+
+    const keyboard = buildPanelDetailKeyboard(ctx, panel, 2);
+    const rows = keyboard.inline_keyboard.flat();
+    const labels = rows.map((button) => button.text);
+    const callbacks = rows.map((button) => (button as { callback_data?: string }).callback_data);
+
+    expect(labels).toContain('🔹 Service 5 · 5');
+    expect(labels).toContain('🔹 Service 8 · 8');
+    expect(labels).not.toContain('⭐ Service 1 · 1');
+    expect(callbacks).toContain('a:p:v:panel_123:1');
+    expect(callbacks).toContain('a:p:v:panel_123:3');
+    expect(callbacks).toContain('ui:noop');
+  });
 });

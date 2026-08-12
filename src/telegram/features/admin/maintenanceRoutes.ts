@@ -486,7 +486,7 @@ function buildOrphanQueueKeyboard(ctx: MenuContext, result: OrphanIssuePage): In
     }
     keyboard.text(
       `${localizedNumber(result.page, ctx)}/${localizedNumber(result.totalPages, ctx)}`,
-      callbackData('admin', 'orphans', 'page', result.page)
+      'ui:noop'
     );
     if (result.page < result.totalPages) {
       keyboard.text(

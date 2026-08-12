@@ -7,11 +7,11 @@ import {
   buildEmptyState,
   buildPromptScreen,
   buildScreen,
-  handleConversationCancel,
+  handleAdminConversationCancel,
   promptInConversation,
-  replyInConversation,
-  waitForCallbackInput,
-  waitForTextInput,
+  replyInAdminConversation,
+  waitForAdminCallbackInput,
+  waitForAdminTextInput,
 } from '../../ui.js';
 import { buildSelectionKeyboard } from './settings.js';
 import { requireAdmin } from './shared.js';
@@ -29,7 +29,7 @@ export async function adminEditTextsConversation(
     .text('🦁 فارسی', 'text-lang:fa')
     .text('🇬🇧 English', 'text-lang:en')
     .row()
-    .text(t(ctx, 'admin_menu_back'), 'nav:main')
+    .text(t(ctx, 'admin_menu_back'), 'nav:admin')
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
   await promptInConversation(
@@ -43,8 +43,8 @@ export async function adminEditTextsConversation(
     ),
     { parse_mode: 'Markdown', reply_markup: languageKeyboard }
   );
-  const languageData = await waitForCallbackInput(conversation, ['text-lang:', 'nav:main']);
-  if (languageData === undefined || languageData === 'nav:main') return;
+  const languageData = await waitForAdminCallbackInput(conversation, ['text-lang:', 'nav:admin']);
+  if (languageData === undefined || languageData === 'nav:admin') return;
   const locale = languageData.slice('text-lang:'.length) as 'fa' | 'en';
 
   // Step 2: choose a category.
@@ -60,7 +60,7 @@ export async function adminEditTextsConversation(
     ),
     { parse_mode: 'Markdown', reply_markup: categoryKeyboard }
   );
-  const categoryData = await waitForCallbackInput(conversation, ['text-cat:']);
+  const categoryData = await waitForAdminCallbackInput(conversation, ['text-cat:']);
   if (categoryData === undefined) return;
   const categoryId = categoryData.slice('text-cat:'.length);
 
@@ -91,7 +91,7 @@ export async function adminEditTextsConversation(
 
   for (;;) {
     const input = await conversation.wait();
-    if (await handleConversationCancel(conversation, input)) return;
+    if (await handleAdminConversationCancel(conversation, input)) return;
 
     if (input.callbackQuery?.data === 'text-act:reset') {
       await input.answerCallbackQuery();
@@ -135,7 +135,7 @@ export async function adminEditTextsConversation(
       await input.answerCallbackQuery();
       try {
         await ctx.services.translationService.deleteSetting(qualifiedKey);
-        await replyInConversation(
+        await replyInAdminConversation(
           conversation,
           ctx,
           buildScreen({
@@ -169,7 +169,7 @@ export async function adminEditTextsConversation(
           { err: resetErr, key: qualifiedKey },
           'Failed to reset text setting to default'
         );
-        await replyInConversation(
+        await replyInAdminConversation(
           conversation,
           ctx,
           buildEmptyState('⚠️', t(ctx, 'admin_text_editor_title'), t(ctx, 'operation_failed')),
@@ -193,11 +193,11 @@ export async function adminEditTextsConversation(
         ),
         { parse_mode: 'Markdown' }
       );
-      const valueInput = await waitForTextInput(conversation);
+      const valueInput = await waitForAdminTextInput(conversation);
       if (valueInput === undefined) return;
       const value = valueInput.trim();
       if (!value || value.length > 3_500) {
-        await replyInConversation(
+        await replyInAdminConversation(
           conversation,
           ctx,
           buildEmptyState(
@@ -210,7 +210,7 @@ export async function adminEditTextsConversation(
         return;
       }
       await ctx.services.translationService.updateSetting(qualifiedKey, value);
-      await replyInConversation(
+      await replyInAdminConversation(
         conversation,
         ctx,
         buildScreen({
@@ -231,7 +231,7 @@ export async function adminEditTextsConversation(
     if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
       const value = input.message.text.trim();
       if (!value || value.length > 3_500) {
-        await replyInConversation(
+        await replyInAdminConversation(
           conversation,
           ctx,
           buildEmptyState(
@@ -244,7 +244,7 @@ export async function adminEditTextsConversation(
         return;
       }
       await ctx.services.translationService.updateSetting(qualifiedKey, value);
-      await replyInConversation(
+      await replyInAdminConversation(
         conversation,
         ctx,
         buildScreen({
@@ -326,7 +326,7 @@ async function pickTextKey(
   if (!ctx.services) return undefined;
   const category = TEXT_CATEGORIES.find((c) => c.id === categoryId);
   if (!category) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_text_editor_title'), t(ctx, 'admin_text_key_invalid')),
@@ -346,7 +346,7 @@ async function pickTextKey(
       .sort();
 
     if (keys.length === 0) {
-      await replyInConversation(
+      await replyInAdminConversation(
         conversation,
         ctx,
         buildEmptyState(
@@ -421,7 +421,7 @@ async function pickTextKey(
       }),
       { parse_mode: 'Markdown', reply_markup: keyboard }
     );
-    const data = await waitForCallbackInput(conversation, [
+    const data = await waitForAdminCallbackInput(conversation, [
       'text-key:',
       'text-search',
       'text-search-clear',
@@ -433,7 +433,7 @@ async function pickTextKey(
     if (data.startsWith('text-key:')) {
       const key = data.slice('text-key:'.length);
       if (ctx.services.translationService.hasTranslationKey(key)) return key;
-      await replyInConversation(
+      await replyInAdminConversation(
         conversation,
         ctx,
         buildEmptyState('⚠️', t(ctx, 'admin_text_editor_title'), t(ctx, 'admin_text_key_invalid')),
@@ -453,7 +453,7 @@ async function pickTextKey(
         ),
         { parse_mode: 'Markdown' }
       );
-      const searchInput = await waitForTextInput(conversation);
+      const searchInput = await waitForAdminTextInput(conversation);
       if (searchInput === undefined) return undefined;
       search = searchInput.trim();
       page = 0;

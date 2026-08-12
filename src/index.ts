@@ -101,6 +101,7 @@ async function main() {
     configTransferService,
     configReconciliationService,
     broadcastService,
+    supportUrl: config.SUPPORT_URL ?? `tg://user?id=${config.ADMIN_IDS[0]}`,
     adminIds: adminService.adminIds,
     isAdmin: (telegramId: number) => adminService.isAdmin(telegramId),
   };

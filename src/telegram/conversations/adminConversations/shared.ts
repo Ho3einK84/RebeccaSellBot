@@ -1,6 +1,6 @@
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { normalizeInputDigits, t } from '../../locale.js';
-import { replyInConversation } from '../../ui.js';
+import { replyInAdminConversation } from '../../ui.js';
 
 export function parsePositiveSafeInteger(value: string): number | undefined {
   const trimmed = normalizeInputDigits(value);
@@ -23,7 +23,7 @@ export async function requireAdmin(
   const telegramId = ctx.from?.id;
   if (telegramId && ctx.services?.isAdmin(telegramId)) return telegramId;
   if (ctx.services) {
-    await replyInConversation(conversation, ctx, t(ctx, 'admin_access_denied'));
+    await replyInAdminConversation(conversation, ctx, t(ctx, 'admin_access_denied'));
   }
   return undefined;
 }

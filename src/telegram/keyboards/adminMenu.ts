@@ -20,6 +20,7 @@ import { renderUserListPage } from '../features/admin/userRoutes.js';
 import { showReceiptQueue } from '../features/admin/receiptRoutes.js';
 import { renderAdminRegistry, renderOrphanIssues } from '../features/admin/maintenanceRoutes.js';
 import { renderPanelRegistry } from '../features/admin/panelRoutes.js';
+import { renderHomeDashboard } from './homeDashboard.js';
 
 export function renderAdminHome(ctx: MenuContext): string {
   return buildScreen({
@@ -392,14 +393,7 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     (ctx) => t(ctx, 'admin_menu_back'),
     async (ctx) => {
       ctx.menu.nav('main-menu');
-      await ctx.editMessageText(
-        buildScreen({
-          emoji: '🏠',
-          title: t(ctx, 'home_title'),
-          subtitle: t(ctx, 'home_subtitle'),
-        }),
-        { parse_mode: 'Markdown' }
-      );
+      await ctx.editMessageText(await renderHomeDashboard(ctx), { parse_mode: 'Markdown' });
     }
   );
 

@@ -70,4 +70,50 @@ describe('Home Dashboard & Main Menu (Phase 2)', () => {
     expect(dashboardText).toContain('expiring_user');
     expect(dashboardText).toContain(localizedNumber(2, ctx));
   });
+
+  it('shows service data as unavailable instead of pretending there are zero services', async () => {
+    const ctx = {
+      from: { id: 777 },
+      userLocale: 'en',
+      services: {
+        walletService: { getBalance: vi.fn().mockResolvedValue(1000) },
+        configService: { listConfigsForOwner: vi.fn().mockRejectedValue(new Error('panel down')) },
+        translationService: {
+          get: vi.fn((key: string) => key),
+          resolveLocale: vi.fn(() => 'en'),
+        },
+      },
+    } as unknown as MenuContext;
+
+    const dashboardText = await renderHomeDashboard(ctx);
+    expect(dashboardText).toContain('home_services_unavailable_hint');
+    expect(dashboardText).not.toContain('home_no_active_services_hint');
+  });
+
+  it('shows the service with the nearest expiry rather than the first expiring item', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const ctx = {
+      from: { id: 888 },
+      userLocale: 'en',
+      services: {
+        walletService: { getBalance: vi.fn().mockResolvedValue(1000) },
+        configService: {
+          listConfigsForOwner: vi.fn().mockResolvedValue([
+            { configUsername: 'later', panelStatus: 'active', panelExpire: nowSec + 3 * 86400 },
+            { configUsername: 'sooner', panelStatus: 'active', panelExpire: nowSec + 86400 },
+          ]),
+        },
+        translationService: {
+          get: vi.fn((key: string, _locale?: string, params?: Record<string, string>) =>
+            key === 'home_near_expiry_detail' ? `${params?.username}:${params?.days}` : key
+          ),
+          resolveLocale: vi.fn(() => 'en'),
+        },
+      },
+    } as unknown as MenuContext;
+
+    const dashboardText = await renderHomeDashboard(ctx);
+    expect(dashboardText).toContain('sooner');
+    expect(dashboardText).not.toContain('later');
+  });
 });

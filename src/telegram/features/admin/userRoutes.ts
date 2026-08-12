@@ -6,6 +6,7 @@ import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
 const USER_PAGE_SIZE = 7;
+const USER_SERVICE_PAGE_SIZE = 4;
 
 export async function renderUserListPage(ctx: MenuContext, requestedPage = 1): Promise<void> {
   if (!ctx.services) return;
@@ -41,7 +42,7 @@ export async function renderUserListPage(ctx: MenuContext, requestedPage = 1): P
     }
     keyboard.text(
       `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
-      `admin:users:page:${result.page}`
+      'ui:noop'
     );
     if (result.page < result.totalPages) {
       keyboard.text(t(ctx, 'pagination_next'), `admin:users:page:${result.page + 1}`);
@@ -194,7 +195,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
         }),
         primary: {
           emoji: user.isBanned ? '🟢' : '⚠️',
-          label: t(ctx, 'admin_user_status_label'),
+          label: t(ctx, 'admin_user_result_status_label'),
           value: user.isBanned ? t(ctx, 'admin_active') : t(ctx, 'admin_banned'),
         },
         footer: `⚠️ ${t(ctx, 'admin_confirm_button')}`,
@@ -224,9 +225,10 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     if (updated) await renderUserProfile(ctx, targetId);
   });
 
-  bot.callbackQuery(/^admin:user:subscriptions:(\d+)$/u, async (ctx) => {
+  bot.callbackQuery(/^admin:user:subscriptions:(\d+)(?::(\d+))?$/u, async (ctx) => {
     if (!ctx.services) return;
     const targetId = Number(ctx.match[1]);
+    const requestedPage = Number(ctx.match[2]) || 1;
     await ctx.answerCallbackQuery();
     const configs = await ctx.services.configService.listConfigsForOwner(targetId);
     if (configs.length === 0) {
@@ -242,8 +244,15 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       );
       return;
     }
+
+    const totalPages = Math.max(1, Math.ceil(configs.length / USER_SERVICE_PAGE_SIZE));
+    const page = Math.min(Math.max(1, Math.trunc(requestedPage)), totalPages);
+    const pageConfigs = configs.slice(
+      (page - 1) * USER_SERVICE_PAGE_SIZE,
+      page * USER_SERVICE_PAGE_SIZE
+    );
     const details = await Promise.all(
-      configs.map(async (config) => {
+      pageConfigs.map(async (config) => {
         try {
           return await ctx.services!.configService.getRemoteConfigDetail(config);
         } catch {
@@ -252,13 +261,32 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       })
     );
     const keyboard = new InlineKeyboard();
-    for (const config of configs) {
+    for (const config of pageConfigs) {
       keyboard
         .text(
           `${t(ctx, 'subscription_transfer_button')} · ${config.configUsername}`,
           callbackData('admin', 'config', 'transfer', config.id)
         )
         .row();
+    }
+    if (totalPages > 1) {
+      if (page > 1) {
+        keyboard.text(
+          t(ctx, 'pagination_previous'),
+          `admin:user:subscriptions:${targetId}:${page - 1}`
+        );
+      }
+      keyboard.text(
+        `${localizedNumber(page, ctx)} / ${localizedNumber(totalPages, ctx)}`,
+        'ui:noop'
+      );
+      if (page < totalPages) {
+        keyboard.text(
+          t(ctx, 'pagination_next'),
+          `admin:user:subscriptions:${targetId}:${page + 1}`
+        );
+      }
+      keyboard.row();
     }
     keyboard.text(t(ctx, 'menu_back'), `admin:user:view:${targetId}`);
     await renderUserScreen(
@@ -272,7 +300,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
           label: t(ctx, 'admin_user_active_services_label'),
           value: localizedNumber(configs.length, ctx),
         },
-        sections: configs.map((config, index) => {
+        sections: pageConfigs.map((config, index) => {
           const remote = details[index];
           return {
             emoji: remote?.status === 'active' ? '🟢' : '⚪️',
@@ -303,6 +331,10 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
             ],
           };
         }),
+        footer:
+          totalPages > 1
+            ? `${localizedNumber(page, ctx)} / ${localizedNumber(totalPages, ctx)}`
+            : undefined,
       }),
       keyboard,
       'Markdown'
@@ -404,7 +436,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
         }),
         primary: {
           emoji: user.isBanned ? '🟢' : '⚠️',
-          label: t(ctx, 'admin_user_status_label'),
+          label: t(ctx, 'admin_user_result_status_label'),
           value: user.isBanned ? t(ctx, 'admin_active') : t(ctx, 'admin_banned'),
         },
         footer: `⚠️ ${t(ctx, 'admin_confirm_button')}`,

@@ -48,7 +48,7 @@ describe('admin category and settings group keyboards', () => {
       expect(match?.text).toBe(group.labelKey);
     }
 
-    const backBtn = buttons.find((btn) => btn.callback_data === 'nav:main');
+    const backBtn = buttons.find((btn) => btn.callback_data === 'nav:admin');
     expect(backBtn).toBeDefined();
     expect(backBtn?.text).toBe('admin_menu_back');
   });

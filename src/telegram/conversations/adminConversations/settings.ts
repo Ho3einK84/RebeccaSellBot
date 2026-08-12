@@ -9,9 +9,9 @@ import {
   buildPromptScreen,
   buildScreen,
   promptInConversation,
-  replyInConversation,
-  waitForCallbackInput,
-  waitForTextInput,
+  replyInAdminConversation,
+  waitForAdminCallbackInput,
+  waitForAdminTextInput,
 } from '../../ui.js';
 import { parseNonnegativeSafeInteger, parsePositiveSafeInteger, requireAdmin } from './shared.js';
 
@@ -78,7 +78,7 @@ export async function adminEditSettingsConversation(
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
-      const data = await waitForCallbackInput(conversation, ['set-nm:']);
+      const data = await waitForAdminCallbackInput(conversation, ['set-nm:']);
       if (!data || data === 'set-nm:back') continue;
 
       const selectedMode = data.slice('set-nm:'.length);
@@ -88,7 +88,7 @@ export async function adminEditSettingsConversation(
           await ctx.services.configService.syncCounters();
         } catch {
           await ctx.services.translationService.updateSetting('naming_mode', storedCurrentValue);
-          await replyInConversation(
+          await replyInAdminConversation(
             conversation,
             ctx,
             buildEmptyState(
@@ -101,7 +101,7 @@ export async function adminEditSettingsConversation(
           continue;
         }
         const settingLabel = t(ctx, SETTING_LABELS['naming_mode']);
-        await replyInConversation(
+        await replyInAdminConversation(
           conversation,
           ctx,
           buildSettingSavedScreen(ctx, settingLabel, displaySettingValue(ctx, 'naming_mode')),
@@ -132,14 +132,14 @@ export async function adminEditSettingsConversation(
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
-      const data = await waitForCallbackInput(conversation, [callbackPrefix]);
+      const data = await waitForAdminCallbackInput(conversation, [callbackPrefix]);
       if (!data || data === `${callbackPrefix}back`) continue;
 
       const selectedValue = data.slice(callbackPrefix.length);
       if (selectedValue === 'true' || selectedValue === 'false') {
         await ctx.services.translationService.updateSetting(setting.key, selectedValue);
         const settingLabel = t(ctx, SETTING_LABELS[setting.key]);
-        await replyInConversation(
+        await replyInAdminConversation(
           conversation,
           ctx,
           buildSettingSavedScreen(ctx, settingLabel, displaySettingValue(ctx, setting.key)),
@@ -171,11 +171,11 @@ export async function adminEditSettingsConversation(
       buildSettingsPrompt(ctx, promptMsg, { emoji: '✍️' }),
       { parse_mode: 'Markdown' }
     );
-    const valueInput = await waitForTextInput(conversation);
+    const valueInput = await waitForAdminTextInput(conversation);
     if (valueInput === undefined) return;
     const newValue = validateAdminSetting(setting.key, valueInput);
     if (newValue === undefined) {
-      await replyInConversation(
+      await replyInAdminConversation(
         conversation,
         ctx,
         buildEmptyState('⚠️', t(ctx, 'admin_settings_title'), t(ctx, 'admin_setting_invalid')),
@@ -189,7 +189,7 @@ export async function adminEditSettingsConversation(
         await ctx.services.configService.syncCounters();
       } catch {
         await ctx.services.translationService.updateSetting(setting.key, storedCurrentValue);
-        await replyInConversation(
+        await replyInAdminConversation(
           conversation,
           ctx,
           buildEmptyState(
@@ -202,7 +202,7 @@ export async function adminEditSettingsConversation(
         continue;
       }
     }
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildSettingSavedScreen(ctx, settingLabel, displaySettingValue(ctx, setting.key)),
@@ -262,7 +262,7 @@ export function buildSettingsGroupKeyboard(ctx: ConversationContext): InlineKeyb
   for (const item of SETTING_GROUPS) {
     keyboard.text(t(ctx, item.labelKey), `set-group:${item.id}`).row();
   }
-  keyboard.text(t(ctx, 'admin_menu_back'), 'nav:main').row();
+  keyboard.text(t(ctx, 'admin_menu_back'), 'nav:admin').row();
   return keyboard;
 }
 
@@ -293,8 +293,8 @@ async function chooseSettingsGroup(
     buildSettingsPrompt(ctx, tm(ctx, 'admin_settings_groups_prompt'), { emoji: '⚙️' }),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
-  const data = await waitForCallbackInput(conversation, ['set-group:', 'nav:main']);
-  if (data === undefined || data === 'nav:main') return undefined;
+  const data = await waitForAdminCallbackInput(conversation, ['set-group:', 'nav:admin']);
+  if (data === undefined || data === 'nav:admin') return undefined;
   return SETTING_GROUPS.find((group) => group.id === data.slice('set-group:'.length));
 }
 
@@ -309,7 +309,7 @@ async function chooseSettingInGroup(
     keyboard.text(t(ctx, SETTING_LABELS[key]), `set-edit:${key}`).row();
   }
   keyboard.text(t(ctx, 'admin_settings_back_groups'), 'set-groups').row();
-  keyboard.text(t(ctx, 'admin_menu_back'), 'nav:main').row();
+  keyboard.text(t(ctx, 'admin_menu_back'), 'nav:admin').row();
 
   await promptInConversation(
     conversation,
@@ -320,8 +320,12 @@ async function chooseSettingInGroup(
     }),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
-  const data = await waitForCallbackInput(conversation, ['set-edit:', 'set-groups', 'nav:main']);
-  if (data === undefined || data === 'nav:main') return undefined;
+  const data = await waitForAdminCallbackInput(conversation, [
+    'set-edit:',
+    'set-groups',
+    'nav:admin',
+  ]);
+  if (data === undefined || data === 'nav:admin') return undefined;
   if (data === 'set-groups') return 'back';
   const key = data.slice('set-edit:'.length);
   if (!SETTING_LABELS[key]) return undefined;
@@ -373,20 +377,20 @@ async function managePackages(conversation: MyConversation, ctx: ConversationCon
     });
     keyboard.text(t(ctx, 'admin_pkg_add'), 'pkg-add').row();
     keyboard.text(t(ctx, 'admin_settings_back_groups'), 'pkg-back').row();
-    keyboard.text(t(ctx, 'admin_menu_back'), 'nav:main').row();
+    keyboard.text(t(ctx, 'admin_menu_back'), 'nav:admin').row();
 
     await promptInConversation(conversation, ctx, buildPackageManagerScreen(ctx, packages), {
       parse_mode: 'Markdown',
       reply_markup: keyboard,
     });
-    const data = await waitForCallbackInput(conversation, [
+    const data = await waitForAdminCallbackInput(conversation, [
       'pkg-edit:',
       'pkg-del:',
       'pkg-add',
       'pkg-back',
-      'nav:main',
+      'nav:admin',
     ]);
-    if (data === undefined || data === 'nav:main') return;
+    if (data === undefined || data === 'nav:admin') return;
     if (data === 'pkg-back') return;
 
     if (data === 'pkg-add') {
@@ -412,7 +416,7 @@ async function managePackages(conversation: MyConversation, ctx: ConversationCon
       const existing = packages[index];
       // Never leave the shop with zero packages.
       if (!existing || packages.length <= 1) {
-        await replyInConversation(
+        await replyInAdminConversation(
           conversation,
           ctx,
           buildEmptyState(
@@ -448,7 +452,7 @@ async function managePackages(conversation: MyConversation, ctx: ConversationCon
             .text(t(ctx, 'menu_cancel'), 'pkg-del-cancel'),
         }
       );
-      const confirmation = await waitForCallbackInput(conversation, [
+      const confirmation = await waitForAdminCallbackInput(conversation, [
         'pkg-del-confirm:',
         'pkg-del-cancel',
       ]);
@@ -457,7 +461,7 @@ async function managePackages(conversation: MyConversation, ctx: ConversationCon
     }
 
     await ctx.services.translationService.updateSetting('packages_json', JSON.stringify(packages));
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildScreen({
@@ -542,7 +546,7 @@ async function choosePackageTarget(
     .listPanels()
     .filter((panel) => panel.enabled && panel.services.length > 0);
   if (!panels?.length) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -577,7 +581,7 @@ async function choosePackageTarget(
     }),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
-  const selected = await waitForCallbackInput(conversation, ['pkg-target:']);
+  const selected = await waitForAdminCallbackInput(conversation, ['pkg-target:']);
   if (!selected) return undefined;
   const match = /^pkg-target:([a-z0-9_-]{3,40}):(\d+)$/iu.exec(selected);
   if (!match) return undefined;
@@ -601,11 +605,11 @@ async function askPackageString(
     }),
     { parse_mode: 'Markdown' }
   );
-  const input = await waitForTextInput(conversation);
+  const input = await waitForAdminTextInput(conversation);
   if (input === undefined) return undefined;
   const value = input.trim();
   if (!validate(value)) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_package_manager_title'), t(ctx, 'admin_setting_invalid')),
@@ -634,11 +638,11 @@ async function askPackageInteger(
     }),
     { parse_mode: 'Markdown' }
   );
-  const input = await waitForTextInput(conversation);
+  const input = await waitForAdminTextInput(conversation);
   if (input === undefined) return undefined;
   const value = parsePositiveSafeInteger(input);
   if (value === undefined || value < minimum || value > maximum) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_package_manager_title'), t(ctx, 'admin_setting_invalid')),

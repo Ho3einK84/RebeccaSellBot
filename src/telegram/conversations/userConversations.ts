@@ -104,7 +104,7 @@ function buildCustomCheckoutScreen(
                 {
                   emoji: '🆔',
                   label: t(ctx, 'checkout_service_label'),
-                  value: `\`${input.username}\``,
+                  value: `\`${escapeTelegramMarkdown(input.username)}\``,
                 },
               ],
             },
@@ -145,7 +145,7 @@ function buildCustomCheckoutScreen(
                 {
                   emoji: '🎟️',
                   label: t(ctx, 'shop_promo_section'),
-                  value: `\`${input.promoCode}\``,
+                  value: `\`${escapeTelegramMarkdown(input.promoCode)}\``,
                 },
               ],
             },
@@ -269,10 +269,13 @@ async function executePurchaseFlow(
       primary: {
         emoji: '📦',
         label: t(ctx, 'purchase_issuing_package_label'),
-        value: packageNameStr,
+        value: escapeTelegramMarkdown(packageNameStr),
       },
     }),
-    { parse_mode: 'Markdown' }
+    {
+      parse_mode: 'Markdown',
+      reply_markup: new InlineKeyboard().text(t(ctx, 'operation_in_progress'), 'ui:noop'),
+    }
   );
 
   try {
@@ -322,13 +325,19 @@ async function executePurchaseFlow(
           value: formatSubscriptionLink(res.subUrl, t(ctx, 'subscription_link_unavailable')),
         },
       }),
-      { parse_mode: 'Markdown', reply_markup: progressMessage.reply_markup }
+      { parse_mode: 'Markdown' }
     );
     if (typeof createdMsg === 'object' && createdMsg && 'message_id' in createdMsg) {
       await conversation.external((outsideCtx) => {
         rememberArtifactMessage(outsideCtx.session, createdMsg.message_id);
       });
     }
+    await replyInConversation(conversation, ctx, t(ctx, 'navigation_continue_hint'), {
+      reply_markup: new InlineKeyboard()
+        .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
+        .row()
+        .text(t(ctx, 'menu_back'), 'nav:main'),
+    });
   } catch (err: unknown) {
     await conversation.external((outsideCtx) =>
       outsideCtx.services!.purchaseCheckoutService.fail(checkout.id)
@@ -341,7 +350,10 @@ async function executePurchaseFlow(
         t(ctx, 'purchase_failed_title'),
         purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
       ),
-      { parse_mode: 'Markdown', reply_markup: progressMessage.reply_markup }
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'nav:main'),
+      }
     );
   }
 }
@@ -533,10 +545,13 @@ export async function renewConfigConversation(
       primary: {
         emoji: '📱',
         label: t(ctx, 'renewal_selection_service_label'),
-        value: `\`${config.configUsername}\``,
+        value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
       },
     }),
-    { parse_mode: 'Markdown' }
+    {
+      parse_mode: 'Markdown',
+      reply_markup: new InlineKeyboard().text(t(ctx, 'operation_in_progress'), 'ui:noop'),
+    }
   );
 
   try {
@@ -579,7 +594,7 @@ export async function renewConfigConversation(
         primary: {
           emoji: '📱',
           label: t(ctx, 'renewal_success_service_label'),
-          value: `\`${res.configUsername}\``,
+          value: `\`${escapeTelegramMarkdown(res.configUsername)}\``,
         },
         sections: [
           {
@@ -595,7 +610,10 @@ export async function renewConfigConversation(
           },
         ],
       }),
-      { parse_mode: 'Markdown', reply_markup: progressMessage.reply_markup }
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
+      }
     );
   } catch (err: unknown) {
     await conversation.external((outsideCtx) =>
@@ -609,7 +627,10 @@ export async function renewConfigConversation(
         t(ctx, 'renewal_failed_title'),
         purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
       ),
-      { parse_mode: 'Markdown', reply_markup: progressMessage.reply_markup }
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
+      }
     );
   }
 }
@@ -679,7 +700,7 @@ export async function autoRenewCustomConversation(
             {
               emoji: '🆔',
               label: t(ctx, 'checkout_service_label'),
-              value: `\`${config.configUsername}\``,
+              value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
             },
           ],
         },
@@ -735,7 +756,7 @@ export async function autoRenewCustomConversation(
       primary: {
         emoji: '📱',
         label: t(ctx, 'renewal_selection_service_label'),
-        value: `\`${config.configUsername}\``,
+        value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
       },
     }),
     { parse_mode: 'Markdown', reply_markup: backKeyboard }
@@ -786,7 +807,7 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
         primary: {
           emoji: '🎟️',
           label: t(ctx, 'checkout_promo_section'),
-          value: `\`${res.code}\``,
+          value: `\`${escapeTelegramMarkdown(res.code)}\``,
         },
         footer: text,
       }),
@@ -907,7 +928,7 @@ export async function transferConfigConversation(
         emoji: '👤',
         label: t(ctx, 'transfer_recipient_label'),
         value: target.username
-          ? `@${target.username}`
+          ? `@${escapeTelegramMarkdown(target.username)}`
           : `\`${localizedNumber(target.telegramId, ctx)}\``,
       },
       sections: [
@@ -952,7 +973,7 @@ export async function transferConfigConversation(
         primary: {
           emoji: '📱',
           label: t(ctx, 'transfer_service_label'),
-          value: `\`${result.configUsername}\``,
+          value: `\`${escapeTelegramMarkdown(result.configUsername)}\``,
         },
         sections: [
           {

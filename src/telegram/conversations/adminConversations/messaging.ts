@@ -7,9 +7,9 @@ import {
   buildPromptScreen,
   buildScreen,
   promptInConversation,
-  replyInConversation,
-  waitForCallbackInput,
-  waitForTextInput,
+  replyInAdminConversation,
+  waitForAdminCallbackInput,
+  waitForAdminTextInput,
 } from '../../ui.js';
 import { requireAdmin } from './shared.js';
 import { callbackData } from '../../callbackData.js';
@@ -48,12 +48,12 @@ export async function adminBroadcastConversation(
     ),
     { parse_mode: 'Markdown', reply_markup: audienceKeyboard }
   );
-  const audienceChoice = await waitForCallbackInput(conversation, ['broadcast:audience:']);
+  const audienceChoice = await waitForAdminCallbackInput(conversation, ['broadcast:audience:']);
   if (!audienceChoice) return;
   const audience = audienceChoice.slice('broadcast:audience:'.length) as BroadcastAudience;
   const recipientCount = await ctx.services.broadcastService.countAudience(audience);
   if (recipientCount === 0) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -93,10 +93,10 @@ export async function adminBroadcastConversation(
     }),
     { parse_mode: 'Markdown' }
   );
-  const broadcastText = await waitForTextInput(conversation);
+  const broadcastText = await waitForAdminTextInput(conversation);
   if (broadcastText === undefined) return;
   if ([...broadcastText].length > 4_096) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
@@ -144,14 +144,14 @@ export async function adminBroadcastConversation(
         .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
     }
   );
-  if ((await waitForCallbackInput(conversation, ['broadcast:confirm'])) === undefined) return;
+  if ((await waitForAdminCallbackInput(conversation, ['broadcast:confirm'])) === undefined) return;
 
   const job = await ctx.services.broadcastService.createJob({
     actorTelegramId: adminId,
     audience,
     message: broadcastText,
   });
-  await replyInConversation(
+  await replyInAdminConversation(
     conversation,
     ctx,
     buildScreen({
@@ -184,7 +184,9 @@ export async function adminBroadcastConversation(
         .text(
           t(ctx, 'admin_broadcast_cancel_button'),
           callbackData('admin', 'broadcast', 'cancel', job.id)
-        ),
+        )
+        .row()
+        .text(t(ctx, 'menu_back'), 'nav:admin'),
     }
   );
 }
@@ -212,12 +214,12 @@ export async function adminDirectMessageConversation(
       ),
       { parse_mode: 'Markdown' }
     );
-    const idInput = await waitForTextInput(conversation);
+    const idInput = await waitForAdminTextInput(conversation);
     if (idInput === undefined) return;
     const parsed = Number(idInput.trim());
     if (Number.isSafeInteger(parsed) && parsed > 0) telegramId = parsed;
     else {
-      await replyInConversation(
+      await replyInAdminConversation(
         conversation,
         ctx,
         buildEmptyState(
@@ -230,7 +232,7 @@ export async function adminDirectMessageConversation(
     }
   }
   if (!(await ctx.services.userService.exists(telegramId))) {
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_direct_title'), t(ctx, 'admin_direct_user_not_found')),
@@ -254,7 +256,7 @@ export async function adminDirectMessageConversation(
     }),
     { parse_mode: 'Markdown' }
   );
-  const directMessage = await waitForTextInput(conversation);
+  const directMessage = await waitForAdminTextInput(conversation);
   if (directMessage === undefined) return;
   const preview = markdownSafePreview(directMessage);
   await promptInConversation(
@@ -286,7 +288,7 @@ export async function adminDirectMessageConversation(
         .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
     }
   );
-  if (!(await waitForCallbackInput(conversation, ['direct-confirm']))) return;
+  if (!(await waitForAdminCallbackInput(conversation, ['direct-confirm']))) return;
   try {
     // Operator-authored broadcasts and direct messages intentionally retain their
     // exact plaintext; wrapping or forcing a parse mode would change their meaning.
@@ -299,7 +301,7 @@ export async function adminDirectMessageConversation(
       targetTelegramId: telegramId,
       metadata: { messageLength: directMessage.length },
     });
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildScreen({
@@ -316,7 +318,7 @@ export async function adminDirectMessageConversation(
     );
   } catch (err) {
     logger.warn({ err, telegramId }, 'Direct admin message failed');
-    await replyInConversation(
+    await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_direct_title'), t(ctx, 'admin_direct_failed')),

@@ -1,6 +1,6 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext } from './types.js';
-import { t } from './locale.js';
+import { ensurePersianLineDirection, t } from './locale.js';
 
 export type StatusType =
   'active' | 'inactive' | 'pending' | 'expired' | 'disabled' | 'healthy' | 'warning' | 'error';
@@ -93,12 +93,19 @@ export function buildConfirmationKeyboard(
 /**
  * Format a clean structured section card with label-value fields.
  */
-export function buildSectionCard(title: string, fields: ScreenField[]): string {
+export function buildSectionCard(
+  title: string,
+  fields: ScreenField[],
+  sectionEmoji = '📌'
+): string {
   const lines = fields.map(({ label, value, emoji }) => {
-    const prefix = emoji ? `${emoji} ` : '';
-    return `${prefix}*${label}:* ${value}`;
+    const renderedValue = String(value);
+    const hasSameStatusPrefix = emoji ? renderedValue.trimStart().startsWith(emoji) : false;
+    const prefix = emoji && !hasSameStatusPrefix ? `${emoji} ` : '';
+    return `${prefix}*${label}:* ${renderedValue}`;
   });
-  return `📌 *${title}*\n\n${lines.join('\n')}`;
+  const heading = sectionEmoji ? `${sectionEmoji} *${title}*` : `*${title}*`;
+  return `${heading}\n\n${lines.join('\n')}`;
 }
 
 /**
@@ -109,15 +116,19 @@ export function buildSectionCard(title: string, fields: ScreenField[]): string {
 export function buildScreen(definition: ScreenDefinition): string {
   const blocks = [buildHeader(definition.emoji, definition.title, definition.subtitle).trimEnd()];
   if (definition.primary) {
-    const icon = definition.primary.emoji ? `${definition.primary.emoji} ` : '';
-    blocks.push(`${icon}*${definition.primary.label}*\n${definition.primary.value}`);
+    const primaryValue = String(definition.primary.value);
+    const repeatsPrimaryEmoji = definition.primary.emoji
+      ? primaryValue.trimStart().startsWith(definition.primary.emoji)
+      : false;
+    const icon =
+      definition.primary.emoji && !repeatsPrimaryEmoji ? `${definition.primary.emoji} ` : '';
+    blocks.push(`${icon}*${definition.primary.label}*\n${primaryValue}`);
   }
   for (const section of definition.sections ?? []) {
-    const title = section.emoji ? `${section.emoji} ${section.title}` : section.title;
-    blocks.push(buildSectionCard(title, section.fields));
+    blocks.push(buildSectionCard(section.title, section.fields, section.emoji ?? '📌'));
   }
   if (definition.footer) blocks.push(definition.footer);
-  return blocks.join('\n\n');
+  return ensurePersianLineDirection(blocks.join('\n\n'));
 }
 
 /** A friendly, actionable empty state built with the same screen hierarchy. */

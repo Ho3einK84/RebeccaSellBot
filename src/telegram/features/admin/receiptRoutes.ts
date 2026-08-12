@@ -68,35 +68,42 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
     await showReceiptReview(ctx, ctx.match[1]!, Number(ctx.match[2]) || 1);
   });
 
-  bot.callbackQuery(/^receipt:(approve|reject)_prompt:([a-zA-Z0-9_-]+)$/u, async (ctx) => {
-    await promptReceiptReview(ctx, ctx.match[1]!, ctx.match[2]!);
-  });
+  bot.callbackQuery(
+    /^receipt:(approve|reject)_prompt:([a-zA-Z0-9_-]+)(?::(\d+))?$/u,
+    async (ctx) => {
+      await promptReceiptReview(ctx, ctx.match[1]!, ctx.match[2]!, Number(ctx.match[3]) || 1);
+    }
+  );
 
-  bot.callbackQuery(/^receipt:(approve|reject)_confirm:([a-zA-Z0-9_-]+)$/u, async (ctx) => {
-    if (!ctx.services) return;
-    const action = ctx.match[1]! as 'approve' | 'reject';
-    const receiptId = ctx.match[2]!;
-    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+  bot.callbackQuery(
+    /^receipt:(approve|reject)_confirm:([a-zA-Z0-9_-]+)(?::(\d+))?$/u,
+    async (ctx) => {
+      if (!ctx.services) return;
+      const action = ctx.match[1]! as 'approve' | 'reject';
+      const receiptId = ctx.match[2]!;
+      const page = Number(ctx.match[3]) || 1;
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
 
-    if (action === 'approve') {
-      const result = await ctx.services.walletService.approveTopup(receiptId, ctx.from.id);
-      if (result) {
-        await notifyReceiptResult(ctx, result.telegramId, true, result.amount, receiptId);
-        await renderReceiptResult(ctx, 'approve');
-      } else {
-        await renderReceiptAlreadyReviewed(ctx);
+      if (action === 'approve') {
+        const result = await ctx.services.walletService.approveTopup(receiptId, ctx.from.id);
+        if (result) {
+          await notifyReceiptResult(ctx, result.telegramId, true, result.amount, receiptId);
+          await renderReceiptResult(ctx, 'approve', page);
+        } else {
+          await renderReceiptAlreadyReviewed(ctx, page);
+        }
+        return;
       }
-      return;
-    }
 
-    const result = await ctx.services.walletService.rejectTopup(receiptId, ctx.from.id);
-    if (result) {
-      await notifyReceiptResult(ctx, result.telegramId, false, undefined, receiptId);
-      await renderReceiptResult(ctx, 'reject');
-    } else {
-      await renderReceiptAlreadyReviewed(ctx);
+      const result = await ctx.services.walletService.rejectTopup(receiptId, ctx.from.id);
+      if (result) {
+        await notifyReceiptResult(ctx, result.telegramId, false, undefined, receiptId);
+        await renderReceiptResult(ctx, 'reject', page);
+      } else {
+        await renderReceiptAlreadyReviewed(ctx, page);
+      }
     }
-  });
+  );
 
   bot.callbackQuery(/^receipt:batch_prompt:(\d+)$/u, async (ctx) => {
     if (!ctx.services) return;
@@ -191,8 +198,8 @@ async function showReceiptReview(ctx: MenuContext, receiptId: string, page: numb
 
   await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
   const keyboard = new InlineKeyboard()
-    .text(t(ctx, 'admin_receipt_approve'), `receipt:approve_prompt:${receipt.id}`)
-    .text(t(ctx, 'admin_receipt_reject'), `receipt:reject_prompt:${receipt.id}`)
+    .text(t(ctx, 'admin_receipt_approve'), `receipt:approve_prompt:${receipt.id}:${page}`)
+    .text(t(ctx, 'admin_receipt_reject'), `receipt:reject_prompt:${receipt.id}:${page}`)
     .row()
     .text(t(ctx, 'menu_back'), `receipt:page:${page}`);
   const text = buildReceiptReviewScreen(ctx, receipt);
@@ -211,7 +218,8 @@ async function showReceiptReview(ctx: MenuContext, receiptId: string, page: numb
 async function promptReceiptReview(
   ctx: MenuContext,
   action: 'approve' | 'reject' | string,
-  receiptId: string
+  receiptId: string,
+  page = 1
 ): Promise<void> {
   if (!ctx.services) return;
   const receipt = (await ctx.services.walletService.getPendingTopup(receiptId)) as
@@ -259,9 +267,12 @@ async function promptReceiptReview(
     ),
   });
   const keyboard = new InlineKeyboard()
-    .text(t(ctx, 'admin_confirm_button'), `receipt:${normalizedAction}_confirm:${receipt.id}`)
+    .text(
+      t(ctx, 'admin_confirm_button'),
+      `receipt:${normalizedAction}_confirm:${receipt.id}:${page}`
+    )
     .row()
-    .text(t(ctx, 'menu_cancel'), `receipt:view:${receipt.id}:1`);
+    .text(t(ctx, 'menu_cancel'), `receipt:view:${receipt.id}:${page}`);
   await renderReceiptCaptionOrText(ctx, text, keyboard);
 }
 
@@ -308,7 +319,7 @@ function buildReceiptQueueKeyboard(ctx: MenuContext, result: ReceiptPage): Inlin
     }
     keyboard.text(
       `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
-      `receipt:page:${result.page}`
+      'ui:noop'
     );
     if (result.page < result.totalPages) {
       keyboard.text(t(ctx, 'pagination_next'), `receipt:page:${result.page + 1}`);
@@ -358,7 +369,11 @@ function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): st
   });
 }
 
-async function renderReceiptResult(ctx: MenuContext, action: 'approve' | 'reject'): Promise<void> {
+async function renderReceiptResult(
+  ctx: MenuContext,
+  action: 'approve' | 'reject',
+  page: number
+): Promise<void> {
   await renderReceiptCaptionOrText(
     ctx,
     buildScreen({
@@ -376,11 +391,11 @@ async function renderReceiptResult(ctx: MenuContext, action: 'approve' | 'reject
         value: buildStatusBadge(ctx, action === 'approve' ? 'active' : 'inactive'),
       },
     }),
-    new InlineKeyboard().text(t(ctx, 'menu_back'), 'receipt:page:1')
+    new InlineKeyboard().text(t(ctx, 'menu_back'), `receipt:page:${page}`)
   );
 }
 
-async function renderReceiptAlreadyReviewed(ctx: MenuContext): Promise<void> {
+async function renderReceiptAlreadyReviewed(ctx: MenuContext, page: number): Promise<void> {
   await renderReceiptCaptionOrText(
     ctx,
     buildEmptyState(
@@ -388,7 +403,7 @@ async function renderReceiptAlreadyReviewed(ctx: MenuContext): Promise<void> {
       t(ctx, 'admin_receipt_already_reviewed_title'),
       t(ctx, 'receipt_already_reviewed')
     ),
-    new InlineKeyboard().text(t(ctx, 'menu_back'), 'receipt:page:1')
+    new InlineKeyboard().text(t(ctx, 'menu_back'), `receipt:page:${page}`)
   );
 }
 
