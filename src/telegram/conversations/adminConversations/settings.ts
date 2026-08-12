@@ -732,6 +732,7 @@ const SETTING_LABELS: Readonly<Record<string, string>> = {
   naming_mode: 'admin_setting_naming_mode',
   naming_prefix: 'admin_setting_naming_prefix',
   custom_naming_template: 'admin_setting_custom_naming_template',
+  support_destination: 'admin_setting_support_destination',
 };
 
 export const SETTING_GROUPS: readonly SettingGroup[] = [
@@ -757,6 +758,12 @@ export const SETTING_GROUPS: readonly SettingGroup[] = [
     labelKey: 'admin_setting_group_payment',
     descriptionKey: 'admin_setting_group_payment_desc',
     settings: ['card_number', 'card_holder'],
+  },
+  {
+    id: 'support',
+    labelKey: 'admin_setting_group_support',
+    descriptionKey: 'admin_setting_group_support_desc',
+    settings: ['support_destination'],
   },
   {
     id: 'trial',
@@ -799,6 +806,14 @@ export function displayAdminSettingValue(ctx: ConversationContext, key: string):
       custom: 'admin_setting_naming_mode_val_custom',
     };
     return labels[mode] ? t(ctx, labels[mode]) : mode;
+  }
+  if (key === 'support_destination') {
+    const val = ctx.services.translationService.getSetting(key)?.trim();
+    if (!val) return t(ctx, 'admin_setting_not_configured');
+    if (val.startsWith('@') || /^[a-zA-Z0-9_]{5,32}$/.test(val)) {
+      return val.startsWith('@') ? val : `@${val}`;
+    }
+    return val;
   }
   if (key === 'trial_enabled' || key === 'custom_volume_enabled') {
     return t(
@@ -855,6 +870,16 @@ function editableSettingValue(ctx: ConversationContext, key: string): string {
 function validateAdminSetting(key: string, rawValue: string): string | undefined {
   const value = rawValue.trim();
   switch (key) {
+    case 'support_destination': {
+      if (value === '' || value === 'remove' || value === 'none' || value === 'clear') return '';
+      if (value.startsWith('@') || /^[a-zA-Z0-9_]{5,32}$/.test(value)) {
+        return value.startsWith('@') ? value : `@${value}`;
+      }
+      if (/^[1-9]\d{4,16}$/.test(value)) {
+        return value;
+      }
+      return undefined;
+    }
     case 'price_per_gb':
     case 'referral_bonus_toman':
       return normalizedPositiveInteger(value, Number.MAX_SAFE_INTEGER);

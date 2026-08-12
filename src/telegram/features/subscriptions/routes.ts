@@ -27,6 +27,7 @@ import { clearPendingPromo, getPendingPromoPricing } from '../../promoSelection.
 import { purchaseFailureMessage } from '../../purchaseFeedback.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
 import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js';
+import { calculateTraffic } from '../../../domain/services/ConfigLifecycle.js';
 import { RefundOutcomePendingError } from '../../../domain/services/RefundService.js';
 import { PurchaseCheckoutUnavailableError } from '../../../domain/services/PurchaseCheckoutService.js';
 import type { RebeccaUserDetail } from '../../../domain/services/RebeccaService.js';
@@ -86,8 +87,12 @@ export function buildRenewalSelectionKeyboard(
   return keyboard.text(t(ctx, 'menu_back'), callbackData('config', 'view', configId));
 }
 
-export async function showUserSubscriptions(ctx: MenuContext, requestedPage = 1): Promise<void> {
+export async function showUserSubscriptions(
+  ctx: MenuContext,
+  requestedPage?: number
+): Promise<void> {
   if (!ctx.services || !ctx.from?.id) return;
+  const targetPage = requestedPage ?? ctx.session?.subscriptionListPage ?? 1;
   const configs = await ctx.services.configService.listConfigsForOwner(ctx.from.id);
   if (configs.length === 0) {
     await renderSubscriptionScreen(
@@ -98,12 +103,18 @@ export async function showUserSubscriptions(ctx: MenuContext, requestedPage = 1)
         t(ctx, 'subscription_list_empty_body'),
         `🛍️ ${t(ctx, 'subscription_list_empty_action')}`
       ),
-      backKeyboard(ctx, 'main')
+      new InlineKeyboard()
+        .text(t(ctx, 'menu_shop'), 'nav:shop')
+        .row()
+        .text(t(ctx, 'menu_back'), 'nav:main')
     );
     return;
   }
   const totalPages = Math.max(1, Math.ceil(configs.length / SUBSCRIPTION_PAGE_SIZE));
-  const page = Math.min(Math.max(1, Math.trunc(requestedPage)), totalPages);
+  const page = Math.min(Math.max(1, Math.trunc(targetPage)), totalPages);
+  if (ctx.session) {
+    ctx.session.subscriptionListPage = page;
+  }
   const pageConfigs = configs.slice(
     (page - 1) * SUBSCRIPTION_PAGE_SIZE,
     page * SUBSCRIPTION_PAGE_SIZE
@@ -236,7 +247,10 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           t(ctx, 'insufficient_balance'),
           t(ctx, 'insufficient_balance_hint')
         ),
-        backKeyboard(ctx)
+        new InlineKeyboard()
+          .text(t(ctx, 'topup_title') ?? '💳 Top Up Wallet', 'nav:topup')
+          .row()
+          .text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id))
       );
       return;
     }
@@ -258,7 +272,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         gbAmount: pkg.gbAmount,
         durationDays: pkg.durationDays,
         amount: price,
-        pricePerGb: Math.round(pkg.price / pkg.gbAmount),
+        pricePerGb: Math.round(price / pkg.gbAmount),
         promoCode: pendingPromo.quote?.code,
       }),
       new InlineKeyboard()
@@ -597,6 +611,10 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(new RegExp(`^config:toggle:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
+    if (!acquireUserActionCooldown(ctx.from.id, `toggle:${config.id}`, 3_000)) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress'), show_alert: true });
+      return;
+    }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     try {
       await ctx.services!.configService.toggleConfig(config.configUsername, config.panelId);
@@ -640,6 +658,10 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     async (ctx) => {
       const config = await ownedConfig(ctx, ctx.match[1]!);
       if (!config) return;
+      if (!acquireUserActionCooldown(ctx.from.id, `revoke:${config.id}`, 5_000)) {
+        await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress'), show_alert: true });
+        return;
+      }
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
       try {
         const url = await ctx.services!.configService.revokeSubscription(
@@ -678,7 +700,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         }
         await ctx.reply(t(ctx, 'navigation_continue_hint'), {
           reply_markup: new InlineKeyboard()
-            .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
+            .text(t(ctx, 'menu_my_configs'), `subs:page:${ctx.session.subscriptionListPage ?? 1}`)
             .row()
             .text(t(ctx, 'menu_back'), 'nav:main'),
         });
@@ -815,9 +837,6 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(new RegExp(`^config:qr:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
-    if (ctx.callbackQuery?.message?.message_id) {
-      rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
-    }
     await ctx.answerCallbackQuery({ text: t(ctx, 'subscription_qr_generating') });
     try {
       const remote = await ctx.services!.configService.getRemoteConfigDetail(config);
@@ -981,19 +1000,24 @@ async function buildSubscriptionSnapshot(
     remote = undefined;
   }
 
-  const dataLimit = remote?.data_limit ?? config.panelDataLimit;
-  const usedTraffic = remote?.used_traffic ?? 0;
-  const remainingBytes = dataLimit == null ? undefined : Math.max(0, dataLimit - usedTraffic);
+  const traffic = calculateTraffic(remote, config);
   const expire = remote?.expire ?? config.panelExpire;
   const status = effectiveStatus(
     remote?.status ?? config.panelStatus ?? 'unknown',
-    remainingBytes,
+    traffic.remainingBytes ?? undefined,
     expire
   );
-  const remaining =
-    remainingBytes === undefined
-      ? t(ctx, 'unlimited')
-      : `${localizedNumber(Number((remainingBytes / 1024 ** 3).toFixed(2)), ctx)} ${t(ctx, 'traffic_unit_gb')}`;
+  let remaining: string;
+  if (traffic.isUnavailable) {
+    remaining = t(ctx, 'traffic_unavailable');
+  } else if (traffic.isUnlimited) {
+    remaining = t(ctx, 'unlimited');
+  } else if (traffic.remainingBytes != null) {
+    const gb = Number((traffic.remainingBytes / 1024 ** 3).toFixed(2));
+    remaining = `${localizedNumber(gb, ctx)} ${t(ctx, 'traffic_unit_gb')}${traffic.isCached ? ' (cached)' : ''}`;
+  } else {
+    remaining = t(ctx, 'traffic_unavailable');
+  }
   const expiryInfo = formatExpiry(ctx, expire);
   const onlineInfo = formatOnline(ctx, remote?.online_at ?? undefined);
   const subUrl = remote?.subscription_url || config.subUrl;

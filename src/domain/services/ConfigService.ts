@@ -16,7 +16,7 @@ import {
 import type { TranslationService } from './TranslationService.js';
 import { logger } from '../../infra/logger.js';
 import crypto from 'crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { activeConfigCountSql, observedConfigLifecycle } from './ConfigLifecycle.js';
 
 const CREDENTIAL_KEY_RE = /^[a-f0-9-]{16,128}$/i;
@@ -255,7 +255,11 @@ export class ConfigService {
 
   async listConfigsForOwner(telegramId: number) {
     const db = getDb();
-    return db.select().from(userConfigs).where(eq(userConfigs.telegramId, telegramId));
+    return db
+      .select()
+      .from(userConfigs)
+      .where(eq(userConfigs.telegramId, telegramId))
+      .orderBy(desc(userConfigs.createdAt), desc(userConfigs.id));
   }
 
   async isOwnedBy(telegramId: number, configUsername: string, panelId?: string): Promise<boolean> {

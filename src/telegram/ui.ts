@@ -249,10 +249,16 @@ export function waitForAdminTextInput(conversation: MyConversation): Promise<str
   return waitForTextInput(conversation, 'admin');
 }
 
-export async function waitForPhotoInput(
+export interface ReceiptMediaInput {
+  fileId: string;
+  type: 'photo' | 'document';
+  mimeType?: string;
+}
+
+export async function waitForReceiptMediaInput(
   conversation: MyConversation,
   cancelDestination: BackDestination = 'home'
-): Promise<string | undefined> {
+): Promise<ReceiptMediaInput | undefined> {
   const ownerId = await conversationOwnerId(conversation);
   for (;;) {
     const input = await conversation.wait();
@@ -260,13 +266,23 @@ export async function waitForPhotoInput(
     if (await handleConversationCancel(conversation, input, cancelDestination)) return undefined;
     const photos = input.message && 'photo' in input.message ? input.message.photo : undefined;
     if (photos && photos.length > 0) {
-      return photos[photos.length - 1]!.file_id;
+      return { fileId: photos[photos.length - 1]!.file_id, type: 'photo' };
     }
     const document =
       input.message && 'document' in input.message ? input.message.document : undefined;
-    if (document?.mime_type?.startsWith('image/')) return document.file_id;
+    if (document) {
+      return { fileId: document.file_id, type: 'document', mimeType: document.mime_type };
+    }
     await promptInConversation(conversation, input, t(input, 'photo_input_required'));
   }
+}
+
+export async function waitForPhotoInput(
+  conversation: MyConversation,
+  cancelDestination: BackDestination = 'home'
+): Promise<string | undefined> {
+  const res = await waitForReceiptMediaInput(conversation, cancelDestination);
+  return res?.fileId;
 }
 
 /**

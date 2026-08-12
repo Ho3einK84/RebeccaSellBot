@@ -178,7 +178,7 @@ function buildPurchaseCheckoutScreen(
           {
             emoji: '💳',
             label: t(ctx, 'checkout_unit_price_label'),
-            value: `${localizedNumber(Math.round(pkg.price / pkg.gbAmount), ctx)} ${t(ctx, 'currency_toman')}`,
+            value: `${localizedNumber(Math.round(amount / pkg.gbAmount), ctx)} ${t(ctx, 'currency_toman')}`,
           },
         ],
       },
@@ -200,6 +200,27 @@ function buildPurchaseCheckoutScreen(
     ],
     footer: `ℹ️ ${t(ctx, 'purchase_confirmation_hint')}`,
   });
+}
+
+export function resolveSupportInfo(ctx: MenuContext): {
+  url?: string;
+  rawValue: string;
+  isConfigured: boolean;
+} {
+  const dest = ctx.services?.translationService.getSetting('support_destination')?.trim() || '';
+  if (dest) {
+    if (dest.startsWith('@') || /^[a-zA-Z0-9_]{5,32}$/.test(dest)) {
+      const username = dest.replace(/^@/, '');
+      return { url: `https://t.me/${username}`, rawValue: `@${username}`, isConfigured: true };
+    }
+    if (/^[1-9]\d{4,16}$/.test(dest)) {
+      return { url: `tg://user?id=${dest}`, rawValue: dest, isConfigured: true };
+    }
+  }
+  if (ctx.services?.supportUrl) {
+    return { url: ctx.services.supportUrl, rawValue: ctx.services.supportUrl, isConfigured: true };
+  }
+  return { isConfigured: false, rawValue: '' };
 }
 
 // ── Main Menu ────────────────────────────────────────────────────────────────
@@ -286,6 +307,11 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       const botUsername = ctx.me?.username ?? 'RebeccaSellBot';
       const refLink = `https://t.me/${botUsername}?start=${u.referralCode}`;
       const bonus = ctx.services.translationService.getSettingNum('referral_bonus_toman', 10_000);
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}`;
+      const refKeyboard = new InlineKeyboard()
+        .url(t(ctx, 'referral_share_button'), shareUrl)
+        .row()
+        .text(t(ctx, 'menu_back'), 'nav:main');
 
       await ctx.editMessageText(
         buildScreen({
@@ -312,7 +338,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           ],
           footer: `ℹ️ ${t(ctx, 'referral_hint')}`,
         }),
-        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+        { parse_mode: 'Markdown', reply_markup: refKeyboard }
       );
     }
   )
@@ -334,9 +360,10 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     (ctx) => t(ctx, 'menu_support'),
     async (ctx) => {
       if (!ctx.services) return;
+      const supportInfo = resolveSupportInfo(ctx);
       const keyboard = new InlineKeyboard();
-      if (ctx.services.supportUrl) {
-        keyboard.url(t(ctx, 'support_contact_button'), ctx.services.supportUrl).row();
+      if (supportInfo.isConfigured && supportInfo.url) {
+        keyboard.url(t(ctx, 'support_contact_button'), supportInfo.url).row();
       }
       keyboard.text(t(ctx, 'menu_back'), 'nav:main');
       await ctx.editMessageText(
@@ -344,7 +371,9 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           emoji: '💬',
           title: t(ctx, 'support_title'),
           subtitle: t(ctx, 'support_subtitle'),
-          footer: t(ctx, 'support_message'),
+          footer: supportInfo.isConfigured
+            ? t(ctx, 'support_message')
+            : `⚠️ ${t(ctx, 'support_not_configured')}`,
         }),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
@@ -362,6 +391,20 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       );
     }
   });
+
+export function getEffectivePackagePrice(
+  pkg: { price: number; gbAmount: number },
+  pendingPromo?: { type: string; value: number }
+): number {
+  if (!pendingPromo) return pkg.price;
+  if (pendingPromo.type === 'discount_percent') {
+    return Math.max(0, Math.round(pkg.price * (1 - pendingPromo.value / 100)));
+  }
+  if (pendingPromo.type === 'discount_fixed') {
+    return Math.max(0, pkg.price - pendingPromo.value);
+  }
+  return pkg.price;
+}
 
 // ── Shop Menu ────────────────────────────────────────────────────────────────
 
@@ -393,7 +436,8 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
         .text(
           (c) => {
             const name = localizedPackageName(c, pkg.id, pkg.name);
-            return `${tag}${t(c, 'package_button', { name, price: localizedNumber(pkg.price, c) })}`;
+            const effectivePrice = getEffectivePackagePrice(pkg, c.session.pendingPromo);
+            return `${tag}${t(c, 'package_button', { name, price: localizedNumber(effectivePrice, c) })}`;
           },
           async (c) => {
             const telegramId = c.from?.id;

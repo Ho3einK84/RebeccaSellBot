@@ -18,7 +18,8 @@ import {
   sendArtifactInConversation,
   waitForAdminCallbackInput,
   waitForCallbackInput,
-  waitForPhotoInput,
+  waitForReceiptMediaInput,
+  type ReceiptMediaInput,
   waitForAdminTextInput,
 } from '../../ui.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
@@ -170,49 +171,67 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     );
   }
 
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
-      title: t(ctx, 'topup_receipt_title'),
-      subtitle: t(ctx, 'topup_receipt_subtitle'),
-      footer: t(ctx, 'topup_photo_prompt'),
-    }),
-    { parse_mode: 'Markdown' }
-  );
-  const photoFileId = await waitForPhotoInput(conversation);
-  if (photoFileId === undefined) return;
+  let mediaInput: ReceiptMediaInput | undefined;
+  while (!mediaInput) {
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
+        title: t(ctx, 'topup_receipt_title'),
+        subtitle: t(ctx, 'topup_receipt_subtitle'),
+        footer: t(ctx, 'topup_photo_prompt'),
+      }),
+      { parse_mode: 'Markdown' }
+    );
+    mediaInput = await waitForReceiptMediaInput(conversation);
+    if (mediaInput === undefined) return;
 
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
-      title: t(ctx, 'topup_review_title'),
-      subtitle: t(ctx, 'topup_review_subtitle'),
-      footer: `⚠️ ${t(ctx, 'topup_review_consequence')}`,
-    }),
-    {
-      parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard()
-        .text(t(ctx, 'topup_confirm_button'), 'topup:confirm')
-        .row()
-        .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
+        title: t(ctx, 'topup_review_title'),
+        subtitle: t(ctx, 'topup_review_subtitle'),
+        footer: `⚠️ ${t(ctx, 'topup_review_consequence')}`,
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'topup_confirm_button'), 'topup:confirm')
+          .row()
+          .text(t(ctx, 'topup_change_receipt_button'), 'topup:change_receipt')
+          .row()
+          .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
+      }
+    );
+
+    const selection = await waitForCallbackInput(conversation, [
+      'topup:confirm',
+      'topup:change_receipt',
+    ]);
+    if (selection === undefined) return;
+    if (selection === 'topup:change_receipt') {
+      mediaInput = undefined;
+      continue;
     }
-  );
-  if ((await waitForCallbackInput(conversation, ['topup:confirm'])) === undefined) return;
+  }
+
+  const photoFileId = mediaInput.fileId;
+  const mediaType = mediaInput.type;
 
   try {
     const receiptId = await ctx.services.walletService.submitTopupReceipt(
       telegramId,
       amountToman,
-      photoFileId
+      photoFileId,
+      mediaType
     );
     trackFunnelEvent('receipt_submit');
 
     // Real-time admin notification: forward the receipt immediately so admins
     // can act without opening the pending-receipts section. The section remains
     // available for later browsing/management.
-    await notifyAdminsOfReceipt(ctx, receiptId, telegramId, amountToman, photoFileId);
+    await notifyAdminsOfReceipt(ctx, receiptId, telegramId, amountToman, photoFileId, mediaType);
 
     await sendArtifactInConversation(
       conversation,
@@ -260,7 +279,8 @@ async function notifyAdminsOfReceipt(
   receiptId: string,
   telegramId: number,
   amount: number,
-  photoFileId: string
+  photoFileId: string,
+  mediaType: 'photo' | 'document' = 'photo'
 ): Promise<void> {
   if (!ctx.services) return;
   const createdAt = new Date();
@@ -344,11 +364,19 @@ async function notifyAdminsOfReceipt(
           tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_reject'),
           `receipt:reject_prompt:${receiptId}`
         );
-      await ctx.api.sendPhoto(adminId, photoFileId, {
-        caption,
-        parse_mode: 'Markdown',
-        reply_markup: receiptMenu,
-      });
+      if (mediaType === 'document') {
+        await ctx.api.sendDocument(adminId, photoFileId, {
+          caption,
+          parse_mode: 'Markdown',
+          reply_markup: receiptMenu,
+        });
+      } else {
+        await ctx.api.sendPhoto(adminId, photoFileId, {
+          caption,
+          parse_mode: 'Markdown',
+          reply_markup: receiptMenu,
+        });
+      }
     } catch (err) {
       logger.warn({ err, adminId, receiptId }, 'Failed to notify admin of new receipt');
     }

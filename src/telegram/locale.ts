@@ -158,20 +158,43 @@ export function ensurePersianLineDirection(value: string): string {
     .join('\n');
 }
 
+export const APPLICATION_TIMEZONE = process.env.TIMEZONE || 'Asia/Tehran';
+
 export function localizedNumber(value: number, ctx: LocaleAwareContext): string {
   return value.toLocaleString(resolveContextLocale(ctx) === 'fa' ? 'fa-IR' : 'en-US');
 }
 
-export function localizedDate(value: Date, ctx: LocaleAwareContext): string {
-  return value.toLocaleDateString(resolveContextLocale(ctx) === 'fa' ? 'fa-IR' : 'en-US');
+export function localizedDate(
+  value: Date,
+  ctx: LocaleAwareContext,
+  timeZone = APPLICATION_TIMEZONE
+): string {
+  return value.toLocaleDateString(resolveContextLocale(ctx) === 'fa' ? 'fa-IR' : 'en-US', {
+    timeZone,
+  });
+}
+
+export function localizedDateTime(
+  value: Date,
+  ctx: LocaleAwareContext,
+  timeZone = APPLICATION_TIMEZONE
+): string {
+  const localeStr = resolveContextLocale(ctx) === 'fa' ? 'fa-IR' : 'en-US';
+  const d = value.toLocaleDateString(localeStr, { timeZone });
+  const t = value.toLocaleTimeString(localeStr, { hour: '2-digit', minute: '2-digit', timeZone });
+  return `${d} ${t}`;
 }
 
 export function localizedNumberForLocale(value: number, locale: SupportedLocale): string {
   return value.toLocaleString(locale === 'fa' ? 'fa-IR' : 'en-US');
 }
 
-export function localizedDateForLocale(value: Date, locale: SupportedLocale): string {
-  return value.toLocaleDateString(locale === 'fa' ? 'fa-IR' : 'en-US');
+export function localizedDateForLocale(
+  value: Date,
+  locale: SupportedLocale,
+  timeZone = APPLICATION_TIMEZONE
+): string {
+  return value.toLocaleDateString(locale === 'fa' ? 'fa-IR' : 'en-US', { timeZone });
 }
 
 /**

@@ -21,6 +21,7 @@ type PendingReceipt = {
   telegramId: number;
   amount: number;
   photoFileId?: string;
+  mediaType?: 'photo' | 'document';
   createdAt?: Date;
 };
 
@@ -205,11 +206,19 @@ async function showReceiptReview(ctx: MenuContext, receiptId: string, page: numb
   const text = buildReceiptReviewScreen(ctx, receipt);
 
   if (receipt.photoFileId) {
-    await ctx.replyWithPhoto(receipt.photoFileId, {
-      caption: text,
-      parse_mode: 'Markdown',
-      reply_markup: keyboard,
-    });
+    if (receipt.mediaType === 'document') {
+      await ctx.replyWithDocument(receipt.photoFileId, {
+        caption: text,
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      });
+    } else {
+      await ctx.replyWithPhoto(receipt.photoFileId, {
+        caption: text,
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      });
+    }
     return;
   }
   await renderReceiptText(ctx, text, keyboard);

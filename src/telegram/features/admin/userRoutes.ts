@@ -5,6 +5,8 @@ import { callbackData } from '../../callbackData.js';
 import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
+import { calculateTraffic, isConfigActive } from '../../../domain/services/ConfigLifecycle.js';
+
 const USER_PAGE_SIZE = 7;
 const USER_SERVICE_PAGE_SIZE = 4;
 
@@ -289,6 +291,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       keyboard.row();
     }
     keyboard.text(t(ctx, 'menu_back'), `admin:user:view:${targetId}`);
+    const activeCount = configs.filter((c, i) => isConfigActive(details[i], c)).length;
     await renderUserScreen(
       ctx,
       buildScreen({
@@ -298,12 +301,25 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
         primary: {
           emoji: '📦',
           label: t(ctx, 'admin_user_active_services_label'),
-          value: localizedNumber(configs.length, ctx),
+          value: localizedNumber(activeCount, ctx),
         },
         sections: pageConfigs.map((config, index) => {
           const remote = details[index];
+          const traffic = calculateTraffic(remote, config);
+          let remainingStr: string;
+          if (traffic.isUnavailable) {
+            remainingStr = t(ctx, 'traffic_unavailable');
+          } else if (traffic.isUnlimited) {
+            remainingStr = t(ctx, 'unlimited');
+          } else if (traffic.remainingBytes != null) {
+            const gb = Number((traffic.remainingBytes / 1024 ** 3).toFixed(2));
+            remainingStr = `${localizedNumber(gb, ctx)} ${t(ctx, 'traffic_unit_gb')}${traffic.isCached ? ' (cached)' : ''}`;
+          } else {
+            remainingStr = t(ctx, 'traffic_unavailable');
+          }
+
           return {
-            emoji: remote?.status === 'active' ? '🟢' : '⚪️',
+            emoji: isConfigActive(remote, config) ? '🟢' : '⚪️',
             title: escapeTelegramMarkdown(config.configUsername),
             fields: [
               {
@@ -318,10 +334,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
               {
                 emoji: '📊',
                 label: t(ctx, 'remaining'),
-                value:
-                  remote?.data_limit == null
-                    ? t(ctx, 'unlimited')
-                    : `${localizedNumber(Math.round(remote.data_limit / 1024 ** 3), ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+                value: remainingStr,
               },
               {
                 emoji: '📅',

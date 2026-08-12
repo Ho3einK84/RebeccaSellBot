@@ -77,7 +77,7 @@ describe('conversation context hydration', () => {
       expect.stringContaining('topup_receipt_title'),
       expect.any(Object)
     );
-    expect(submitTopupReceipt).toHaveBeenCalledWith(123, 100000, 'receipt-file-id');
+    expect(submitTopupReceipt).toHaveBeenCalledWith(123, 100000, 'receipt-file-id', 'photo');
     expect(sendPhoto).toHaveBeenCalledWith(999, 'receipt-file-id', expect.any(Object));
     expect(reply).toHaveBeenCalledWith(
       expect.stringContaining('topup_success_title'),

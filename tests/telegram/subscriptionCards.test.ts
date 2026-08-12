@@ -534,7 +534,7 @@ describe('subscription card actions', () => {
       })
     );
     expect(reply).not.toHaveBeenCalled();
-    expect(session.artifactMessageIds as number[]).toContain(50);
+    expect(session.artifactMessageIds as number[]).not.toContain(50);
     expect(session.artifactMessageIds as number[]).toContain(100);
   });
 });

@@ -313,10 +313,19 @@ export class WalletService {
     return pending ?? null;
   }
 
+  async getPendingReceiptCount(): Promise<number> {
+    const [row] = await getDb()
+      .select({ value: count() })
+      .from(topupReceipts)
+      .where(eq(topupReceipts.status, 'pending'));
+    return Number(row?.value ?? 0);
+  }
+
   async submitTopupReceipt(
     telegramId: number,
     amount: number,
-    photoFileId: string
+    photoFileId: string,
+    mediaType: 'photo' | 'document' = 'photo'
   ): Promise<string> {
     assertPositiveSafeInteger(amount, 'INVALID_TOPUP_AMOUNT');
     if (!Number.isSafeInteger(telegramId) || telegramId <= 0 || !photoFileId.trim()) {
@@ -345,6 +354,7 @@ export class WalletService {
         telegramId,
         amount,
         photoFileId,
+        mediaType,
         status: 'pending',
       });
     });

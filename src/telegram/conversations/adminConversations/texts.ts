@@ -15,7 +15,7 @@ import {
 } from '../../ui.js';
 import { buildSelectionKeyboard } from './settings.js';
 import { requireAdmin } from './shared.js';
-import { escapeTelegramMarkdown } from '../../rendering.js';
+import { escapeTelegramMarkdown, validateTelegramMarkdown } from '../../rendering.js';
 
 export async function adminEditTextsConversation(
   conversation: MyConversation,
@@ -204,6 +204,20 @@ export async function adminEditTextsConversation(
             '⚠️',
             t(ctx, 'admin_text_editor_title'),
             t(ctx, 'admin_text_value_invalid')
+          ),
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+      const markdownValidation = validateTelegramMarkdown(value);
+      if (!markdownValidation.valid) {
+        await replyInAdminConversation(
+          conversation,
+          ctx,
+          buildEmptyState(
+            '⚠️',
+            t(ctx, 'admin_text_editor_title'),
+            `${t(ctx, 'admin_text_invalid_markdown')}: ${markdownValidation.error ?? ''}`
           ),
           { parse_mode: 'Markdown' }
         );

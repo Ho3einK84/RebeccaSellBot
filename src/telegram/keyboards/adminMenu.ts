@@ -50,9 +50,9 @@ export const adminDailyMenu = new Menu<MenuContext>('admin-daily-menu')
     async (ctx) => {
       const baseLabel = t(ctx, 'admin_menu_pending_receipts');
       if (!ctx.services) return baseLabel;
-      const stats = await ctx.services.walletService.getDashboardStats().catch(() => null);
-      if (stats && stats.pendingReceipts > 0) {
-        return `${baseLabel} (📩 ${localizedNumber(stats.pendingReceipts, ctx)})`;
+      const count = await ctx.services.walletService.getPendingReceiptCount().catch(() => 0);
+      if (count > 0) {
+        return `${baseLabel} (📩 ${localizedNumber(count, ctx)})`;
       }
       return baseLabel;
     },
@@ -200,8 +200,12 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
         latency: Math.max(0, Math.round(performance.now() - databaseStartedAt)),
       }));
       const panelStartedAt = performance.now();
-      const panelPromise = ctx.services.panelRegistry
-        .healthSummary()
+      const panelPromise = Promise.race([
+        ctx.services.panelRegistry.healthSummary(),
+        new Promise<{ configured: number; healthy: number }>((_, reject) =>
+          setTimeout(() => reject(new Error('HEALTH_CHECK_TIMEOUT')), 4_000)
+        ),
+      ])
         .then(({ configured, healthy }) => ({
           healthy: configured > 0 && healthy === configured,
           configured,

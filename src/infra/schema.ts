@@ -288,6 +288,7 @@ export const userConfigs = pgTable(
     // every Telegram interaction.
     panelStatus: text('panel_status'),
     panelDataLimit: bigint('panel_data_limit', { mode: 'number' }),
+    panelUsedTraffic: bigint('panel_used_traffic', { mode: 'number' }),
     panelExpire: bigint('panel_expire', { mode: 'number' }),
     autoRenewEnabled: boolean('auto_renew_enabled').notNull().default(false),
     // Only a stable package ID is persisted. Price/quota/duration are resolved
@@ -308,6 +309,10 @@ export const userConfigs = pgTable(
     check(
       'user_configs_panel_data_limit_safe',
       sql`${table.panelDataLimit} IS NULL OR ${table.panelDataLimit} BETWEEN 0 AND 9007199254740991`
+    ),
+    check(
+      'user_configs_panel_used_traffic_safe',
+      sql`${table.panelUsedTraffic} IS NULL OR ${table.panelUsedTraffic} BETWEEN 0 AND 9007199254740991`
     ),
     check(
       'user_configs_panel_expire_safe',
@@ -767,6 +772,7 @@ export const topupReceipts = pgTable(
       .references(() => users.telegramId),
     amount: bigint('amount', { mode: 'number' }).notNull(),
     photoFileId: text('photo_file_id').notNull(),
+    mediaType: text('media_type').notNull().default('photo'),
     status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
     reviewedBy: bigint('reviewed_by', { mode: 'number' }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -777,6 +783,7 @@ export const topupReceipts = pgTable(
       'topup_receipts_amount_positive_safe_integer',
       sql`${table.amount} > 0 AND ${table.amount} <= 9007199254740991`
     ),
+    check('topup_receipts_media_type_supported', sql`${table.mediaType} IN ('photo', 'document')`),
     check(
       'topup_receipts_status_supported',
       sql`${table.status} IN ('pending', 'approved', 'rejected')`

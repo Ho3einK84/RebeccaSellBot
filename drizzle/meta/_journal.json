@@ -57,6 +57,13 @@
       "when": 1786237200000,
       "tag": "0007_multi_panel_safety",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786250000000,
+      "tag": "0008_traffic_cache_and_receipt_media",
+      "breakpoints": true
     }
   ]
 }

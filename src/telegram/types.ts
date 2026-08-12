@@ -62,6 +62,7 @@ export interface SessionData {
   };
   /** Exact receipt IDs captured before a destructive batch confirmation. */
   adminReceiptBatch?: { ids: string[]; page: number };
+  subscriptionListPage?: number;
   [key: string]: unknown;
 }
 
