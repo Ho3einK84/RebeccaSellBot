@@ -13,6 +13,7 @@ import {
   conversationOwnerId,
   handleConversationCancel,
   promptInConversation,
+  rememberUiMessage,
   replyInAdminConversation,
   replyInConversation,
   sendArtifactInConversation,
@@ -81,6 +82,28 @@ function buildAdminWalletPrompt(
   });
 }
 
+async function promptReceiptPreview(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  media: ReceiptMediaInput,
+  caption: string,
+  keyboard: InlineKeyboard
+): Promise<void> {
+  const options = {
+    caption,
+    parse_mode: 'Markdown' as const,
+    reply_markup: keyboard,
+  };
+  const message =
+    media.type === 'document'
+      ? await ctx.replyWithDocument(media.fileId, options)
+      : await ctx.replyWithPhoto(media.fileId, options);
+
+  await conversation.external((outsideCtx) => {
+    rememberUiMessage(outsideCtx.session, message.message_id, 'prompt');
+  });
+}
+
 export async function topupConversation(conversation: MyConversation, ctx: ConversationContext) {
   const telegramId = ctx.from?.id;
   if (!telegramId || !ctx.services) return;
@@ -130,7 +153,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
   );
 
   const minimum = ctx.services.translationService.getSettingNum('topup_min_amount', 10_000);
-  const maximum = ctx.services.translationService.getSettingNum('topup_max_amount', 50_000_000);
+  const maximum = ctx.services.translationService.getSettingNum('topup_max_amount', 10_000_000);
   let amountToman: number | undefined;
 
   const ownerId = await conversationOwnerId(conversation);
@@ -186,23 +209,21 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     mediaInput = await waitForReceiptMediaInput(conversation);
     if (mediaInput === undefined) return;
 
-    await promptInConversation(
+    await promptReceiptPreview(
       conversation,
       ctx,
+      mediaInput,
       buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
         title: t(ctx, 'topup_review_title'),
         subtitle: t(ctx, 'topup_review_subtitle'),
         footer: `⚠️ ${t(ctx, 'topup_review_consequence')}`,
       }),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'topup_confirm_button'), 'topup:confirm')
-          .row()
-          .text(t(ctx, 'topup_change_receipt_button'), 'topup:change_receipt')
-          .row()
-          .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
-      }
+      new InlineKeyboard()
+        .text(t(ctx, 'topup_confirm_button'), 'topup:confirm')
+        .row()
+        .text(t(ctx, 'topup_change_receipt_button'), 'topup:change_receipt')
+        .row()
+        .text(t(ctx, 'menu_cancel'), 'conversation:cancel')
     );
 
     const selection = await waitForCallbackInput(conversation, [
@@ -333,7 +354,7 @@ async function notifyAdminsOfReceipt(
                   adminLocale,
                   'admin_receipt_user_label'
                 ),
-                value: localizedNumberForLocale(telegramId, adminLocale),
+                value: String(telegramId),
               },
               {
                 label: tForLocale(

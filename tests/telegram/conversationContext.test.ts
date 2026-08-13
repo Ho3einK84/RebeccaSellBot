@@ -34,6 +34,7 @@ describe('conversation context hydration', () => {
   it('lets a hydrated top-up conversation prompt, submit a receipt, and notify admins', async () => {
     const submitTopupReceipt = vi.fn().mockResolvedValue('rec_test_1');
     const sendPhoto = vi.fn().mockResolvedValue({ message_id: 99 });
+    const replyWithPhoto = vi.fn().mockResolvedValue({ message_id: 77 });
     const services = {
       userService: {
         getLocale: vi.fn().mockResolvedValue('fa'),
@@ -50,8 +51,9 @@ describe('conversation context hydration', () => {
     let messageId = 0;
     const reply = vi.fn().mockImplementation(async () => ({ message_id: ++messageId }));
     const ctx = {
-      from: { id: 123, is_bot: false, first_name: 'Test', language_code: 'en-US' },
+      from: { id: 6_698_253_699, is_bot: false, first_name: 'Test', language_code: 'en-US' },
       reply,
+      replyWithPhoto,
       api: { sendPhoto },
     } as unknown as ConversationContext;
     const wait = vi
@@ -77,8 +79,24 @@ describe('conversation context hydration', () => {
       expect.stringContaining('topup_receipt_title'),
       expect.any(Object)
     );
-    expect(submitTopupReceipt).toHaveBeenCalledWith(123, 100000, 'receipt-file-id', 'photo');
+    expect(replyWithPhoto).toHaveBeenCalledWith(
+      'receipt-file-id',
+      expect.objectContaining({
+        caption: expect.stringContaining('topup_review_title'),
+        parse_mode: 'Markdown',
+        reply_markup: expect.anything(),
+      })
+    );
+    expect(submitTopupReceipt).toHaveBeenCalledWith(
+      6_698_253_699,
+      100000,
+      'receipt-file-id',
+      'photo'
+    );
     expect(sendPhoto).toHaveBeenCalledWith(999, 'receipt-file-id', expect.any(Object));
+    const adminCaption = sendPhoto.mock.calls[0]?.[2]?.caption as string;
+    expect(adminCaption).toContain('6698253699');
+    expect(adminCaption).not.toContain('۶٬۶۹۸٬۲۵۳٬۶۹۹');
     expect(reply).toHaveBeenCalledWith(
       expect.stringContaining('topup_success_title'),
       expect.any(Object)

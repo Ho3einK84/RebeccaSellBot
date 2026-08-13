@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { FA_TEXTS } from '../../src/domain/services/TranslationCatalog.fa.js';
 import { EN_TEXTS } from '../../src/domain/services/TranslationCatalog.en.js';
+import { CONFIGURATION_DEFAULTS } from '../../src/domain/services/TranslationCatalog.js';
 
 const SOURCE_ROOT = resolve(process.cwd(), 'src');
 const CATALOG_PATHS = new Set([
@@ -72,6 +73,12 @@ function collectProductionStringLiterals(): {
 }
 
 describe('Translation Catalog Parity and Standard', () => {
+  it('uses the intended default top-up range and card-holder name', () => {
+    expect(CONFIGURATION_DEFAULTS.card_holder).toBe('Name');
+    expect(CONFIGURATION_DEFAULTS.topup_min_amount).toBe('10000');
+    expect(CONFIGURATION_DEFAULTS.topup_max_amount).toBe('10000000');
+  });
+
   it('has identical key sets in Persian and English catalogs', () => {
     const faKeys = Object.keys(FA_TEXTS).sort();
     const enKeys = Object.keys(EN_TEXTS).sort();

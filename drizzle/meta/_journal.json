@@ -64,6 +64,13 @@
       "when": 1786250000000,
       "tag": "0008_traffic_cache_and_receipt_media",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786650000000,
+      "tag": "0009_payment_defaults",
+      "breakpoints": true
     }
   ]
 }

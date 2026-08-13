@@ -114,6 +114,14 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
   return async (ctx, next) => {
     if (ctx.chat?.type !== 'private') return next();
 
+    // A dismissible popover (for example a QR image) sits on top of the current
+    // screen. Closing it must only run the explicit dismiss handler; the normal
+    // pre-route sweep would otherwise delete the screen underneath as well.
+    if (ctx.callbackQuery?.data === 'ui:dismiss') {
+      await uiTracking.run({ chatId: ctx.chat.id, session: ctx.session }, async () => await next());
+      return;
+    }
+
     const callbackMessageId = ctx.callbackQuery?.message?.message_id;
     const previousUiIds = [...new Set(ctx.session.uiMessageIds ?? [])];
     const promptIds = [...new Set(ctx.session.promptMessageIds ?? [])];

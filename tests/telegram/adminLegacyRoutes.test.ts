@@ -47,7 +47,7 @@ describe('legacy admin callback compatibility', () => {
     const rejectTopup = vi.fn();
     const getPendingTopup = vi.fn().mockResolvedValue({
       id: 'receipt_1',
-      telegramId: 42,
+      telegramId: 6_698_253_699,
       amount: 125_000,
     });
     const reply = vi.fn().mockResolvedValue({ message_id: 1 });
@@ -77,6 +77,8 @@ describe('legacy admin callback compatibility', () => {
     const [confirmationText, confirmationOptions] = reply.mock.calls[0] ?? [];
     expect(confirmationText).toContain('admin_receipt_approve_title');
     expect(confirmationText).toContain('admin_receipt_approve_consequence');
+    expect(confirmationText).toContain('6698253699');
+    expect(confirmationText).not.toContain('۶٬۶۹۸٬۲۵۳٬۶۹۹');
     expect(confirmationOptions).toEqual(
       expect.objectContaining({
         parse_mode: 'Markdown',

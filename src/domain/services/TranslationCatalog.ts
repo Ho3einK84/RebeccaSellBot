@@ -40,9 +40,9 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   custom_volume_enabled: 'true',
   custom_volume_target_json: '{}',
   card_number: '6037997900000000',
-  card_holder: 'Hossein Karimi',
+  card_holder: 'Name',
   topup_min_amount: '10000',
-  topup_max_amount: '50000000',
+  topup_max_amount: '10000000',
   support_message: 'برای پشتیبانی با مدیر در تماس باشید.',
   support_destination: '',
 

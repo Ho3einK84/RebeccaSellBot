@@ -263,7 +263,7 @@ async function promptReceiptReview(
           },
           {
             label: t(ctx, 'admin_receipt_user_label'),
-            value: localizedNumber(receipt.telegramId, ctx),
+            value: String(receipt.telegramId),
           },
         ],
       },
@@ -362,7 +362,7 @@ function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): st
           },
           {
             label: t(ctx, 'admin_receipt_user_label'),
-            value: localizedNumber(receipt.telegramId, ctx),
+            value: String(receipt.telegramId),
           },
           {
             label: t(ctx, 'admin_receipt_amount_label'),

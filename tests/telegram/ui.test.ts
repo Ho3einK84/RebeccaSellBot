@@ -4,11 +4,13 @@ import type { ConversationContext, MenuContext, MyConversation } from '../../src
 import {
   cleanChatUiMiddleware,
   dismissKeyboard,
+  forgetUiMessage,
   forwardConversationNavigation,
   promptInConversation,
   rememberArtifactMessage,
   rememberUiMessage,
   renderUiScreen,
+  safelyDeleteMessage,
   waitForCallbackInput,
   waitForPhotoInput,
   waitForTextInput,
@@ -38,6 +40,29 @@ describe('private-chat UI cleanup', () => {
     expect(deleteMessage).toHaveBeenCalledWith(123, 10);
     expect(deleteMessage).toHaveBeenCalledWith(123, 11);
     expect(ctx.session.uiMessageIds).toEqual([12]);
+  });
+
+  it('dismisses only a QR popover and keeps the screen underneath', async () => {
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const ctx = {
+      chat: { id: 123, type: 'private' },
+      callbackQuery: { data: 'ui:dismiss', message: { message_id: 100 } },
+      session: { uiMessageIds: [50], artifactMessageIds: [100] },
+      api: { deleteMessage, config: { use: vi.fn() } },
+    } as unknown as MenuContext;
+    const middleware = cleanChatUiMiddleware() as (
+      ctx: MenuContext,
+      next: () => Promise<unknown>
+    ) => Promise<unknown>;
+
+    await middleware(ctx, async () => {
+      if (await safelyDeleteMessage(ctx, 100)) forgetUiMessage(ctx.session, 100);
+    });
+
+    expect(deleteMessage).toHaveBeenCalledOnce();
+    expect(deleteMessage).toHaveBeenCalledWith(123, 100);
+    expect(ctx.session.uiMessageIds).toEqual([50]);
+    expect(ctx.session.artifactMessageIds).toEqual([]);
   });
 
   it('lets users cancel a pending text step from its inline button', async () => {
