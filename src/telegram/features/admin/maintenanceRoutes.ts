@@ -31,7 +31,7 @@ export async function renderAdminRegistry(ctx: MenuContext): Promise<void> {
   for (const admin of admins) {
     const isCurrentAdmin = admin.telegramId === ctx.from?.id;
     keyboard.text(
-      `🛡️ ${localizedNumber(admin.telegramId, ctx)}${isCurrentAdmin ? ` · ${t(ctx, 'admin_admin_you')}` : ''}`,
+      `🛡️ ${String(admin.telegramId)}${isCurrentAdmin ? ` · ${t(ctx, 'admin_admin_you')}` : ''}`,
       callbackData('admin', 'admins', 'noop', admin.telegramId)
     );
     if (!isCurrentAdmin) {
@@ -63,7 +63,7 @@ export async function renderAdminRegistry(ctx: MenuContext): Promise<void> {
             title: t(ctx, 'admin_registry_section'),
             fields: admins.map((admin) => ({
               emoji: admin.telegramId === ctx.from?.id ? '⭐' : '🛡️',
-              label: localizedNumber(admin.telegramId, ctx),
+              label: String(admin.telegramId),
               value:
                 admin.telegramId === ctx.from?.id
                   ? buildStatusBadge(ctx, 'active', t(ctx, 'admin_admin_you'))
@@ -130,7 +130,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
         primary: {
           emoji: '👤',
           label: t(ctx, 'admin_registry_id_label'),
-          value: localizedNumber(target, ctx),
+          value: String(target),
         },
         footer: t(ctx, 'admin_remove_admin_consequence'),
       }),
@@ -159,7 +159,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
               primary: {
                 emoji: '👤',
                 label: t(ctx, 'admin_registry_id_label'),
-                value: localizedNumber(target, ctx),
+                value: String(target),
               },
             })
           : buildEmptyState(

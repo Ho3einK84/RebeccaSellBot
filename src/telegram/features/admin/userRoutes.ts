@@ -537,7 +537,7 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
           {
             emoji: '🎟️',
             label: t(ctx, 'admin_user_referral_code_label'),
-            value: `\`${escapeTelegramMarkdown(user.referralCode)}\``,
+            value: `\`${user.referralCode}\``,
           },
           {
             emoji: '👥',
