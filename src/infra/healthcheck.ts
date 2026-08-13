@@ -116,20 +116,27 @@ async function handleHealthRequest(
 }
 
 async function probeDatabase(): Promise<boolean> {
+  let timeout: NodeJS.Timeout | undefined;
   try {
     await Promise.race([
       getDb().execute(sql`SELECT 1`),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('DB_HEALTH_TIMEOUT')), 2_000)),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('DB_HEALTH_TIMEOUT')), 2_000);
+      }),
     ]);
     return true;
   } catch {
     return false;
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
-export function stopHealthCheckServer(): void {
-  if (server) {
-    server.close();
-    server = null;
-  }
+export async function stopHealthCheckServer(): Promise<void> {
+  const activeServer = server;
+  server = null;
+  if (!activeServer?.listening) return;
+  await new Promise<void>((resolve, reject) => {
+    activeServer.close((error) => (error ? reject(error) : resolve()));
+  });
 }

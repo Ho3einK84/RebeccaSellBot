@@ -33,6 +33,7 @@ import { PurchaseCheckoutUnavailableError } from '../../../domain/services/Purch
 import type { RebeccaUserDetail } from '../../../domain/services/RebeccaService.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 import { packageCatalogToken } from '../../packageCatalog.js';
+import { recordCheckoutCompleted, recordCheckoutFailed } from '../../checkoutLifecycle.js';
 
 const SUBSCRIPTION_PAGE_SIZE = 4;
 const CONFIG_ID_CAPTURE = '([a-zA-Z0-9_]{3,40})';
@@ -380,13 +381,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       ? await ctx.services.configService.getOwnedConfigById(ctx.from.id, checkout.configId)
       : undefined;
     if (!config || config.panelId !== checkout.panelId) {
-      await ctx.services.purchaseCheckoutService.fail(checkout.id);
+      await recordCheckoutFailed(ctx.services.purchaseCheckoutService, checkout.id);
       await ctx.answerCallbackQuery({ text: t(ctx, 'config_not_owned'), show_alert: true });
       return;
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'renewing') });
+    let result: { configUsername: string; subUrl?: string };
     try {
-      const result = await ctx.services!.walletService.executePurchaseSaga({
+      result = await ctx.services!.walletService.executePurchaseSaga({
         telegramId: ctx.from.id,
         amount: checkout.amount,
         maxAmount: checkout.quotedAmount,
@@ -399,44 +401,46 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
       });
-      await ctx.services.purchaseCheckoutService.complete(checkout.id);
-      if (checkout.promoCode) clearPendingPromo(ctx);
-      await renderSubscriptionScreen(
-        ctx,
-        buildScreen({
-          emoji: '✅',
-          title: t(ctx, 'renewal_success_title'),
-          subtitle: t(ctx, 'renewal_success_subtitle'),
-          primary: {
-            emoji: '📱',
-            label: t(ctx, 'renewal_success_service_label'),
-            value: `\`${escapeTelegramMarkdown(result.configUsername)}\``,
-          },
-          sections: [
-            {
-              emoji: '📦',
-              title: t(ctx, 'checkout_package_section'),
-              fields: [
-                {
-                  emoji: '✅',
-                  label: t(ctx, 'renewal_success_package_label'),
-                  value: escapeTelegramMarkdown(
-                    localizedPackageName(ctx, checkout.packageId, checkout.packageName)
-                  ),
-                },
-              ],
-            },
-          ],
-        }),
-        backKeyboard(ctx, 'main')
-      );
     } catch (err) {
-      await ctx.services.purchaseCheckoutService.fail(checkout.id);
+      await recordCheckoutFailed(ctx.services.purchaseCheckoutService, checkout.id);
       await ctx.reply(
         purchaseFailureMessage(ctx.services!.translationService, err, resolveContextLocale(ctx)),
         { reply_markup: backKeyboard(ctx, 'main') }
       );
+      return;
     }
+
+    await recordCheckoutCompleted(ctx.services.purchaseCheckoutService, checkout.id);
+    if (checkout.promoCode) clearPendingPromo(ctx);
+    await renderSubscriptionScreen(
+      ctx,
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'renewal_success_title'),
+        subtitle: t(ctx, 'renewal_success_subtitle'),
+        primary: {
+          emoji: '📱',
+          label: t(ctx, 'renewal_success_service_label'),
+          value: `\`${escapeTelegramMarkdown(result.configUsername)}\``,
+        },
+        sections: [
+          {
+            emoji: '📦',
+            title: t(ctx, 'checkout_package_section'),
+            fields: [
+              {
+                emoji: '✅',
+                label: t(ctx, 'renewal_success_package_label'),
+                value: escapeTelegramMarkdown(
+                  localizedPackageName(ctx, checkout.packageId, checkout.packageName)
+                ),
+              },
+            ],
+          },
+        ],
+      }),
+      backKeyboard(ctx, 'main')
+    );
   });
 
   bot.callbackQuery(new RegExp(`^renew:custom:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {

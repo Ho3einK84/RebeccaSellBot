@@ -24,6 +24,9 @@ services:
       dockerfile: Dockerfile
     container_name: ${INSTANCE_NAME:-rsbot}_bot
     restart: unless-stopped
+    # Allow the process to stop polling and drain active financial/work queues
+    # before Docker sends SIGKILL.
+    stop_grace_period: 45s
     environment:
       NODE_ENV: production
       BOT_TOKEN: ${BOT_TOKEN}

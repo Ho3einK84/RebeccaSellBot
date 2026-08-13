@@ -24,9 +24,12 @@ import {
   promptInConversation,
   rememberArtifactMessage,
   replyInConversation,
+  sendArtifactInConversation,
   waitForCallbackInput,
   waitForTextInput,
 } from '../ui.js';
+import { logger } from '../../infra/logger.js';
+import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
 import { customVolumeEnabled } from '../../domain/services/FeatureSettings.js';
 import {
   PurchaseCheckoutUnavailableError,
@@ -192,6 +195,7 @@ async function executePurchaseFlow(
   const packageNameStr = customPackageName(ctx, gbAmount, durationDays);
   const target = ctx.services.pricingService.getCustomVolumeTarget();
   let checkout: PurchaseCheckout;
+  let res: { configUsername: string; subUrl?: string };
   try {
     checkout = await conversation.external((outsideCtx) =>
       outsideCtx.services!.purchaseCheckoutService.create({
@@ -287,11 +291,11 @@ async function executePurchaseFlow(
     // it and entering the purchase saga.
     if (!(await requireCustomVolume(conversation, ctx))) {
       await conversation.external((outsideCtx) =>
-        outsideCtx.services!.purchaseCheckoutService.fail(checkout.id)
+        recordCheckoutFailed(outsideCtx.services!.purchaseCheckoutService, checkout.id)
       );
       return;
     }
-    const res = await ctx.services.walletService.executePurchaseSaga({
+    res = await ctx.services.walletService.executePurchaseSaga({
       telegramId,
       amount: checkout.amount,
       maxAmount: checkout.quotedAmount,
@@ -304,43 +308,9 @@ async function executePurchaseFlow(
       checkoutId: checkout.id,
       ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
     });
-    await conversation.external((outsideCtx) =>
-      outsideCtx.services!.purchaseCheckoutService.complete(checkout.id)
-    );
-
-    if (checkout.promoCode) {
-      await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
-    }
-
-    const createdMsg = await ctx.api.editMessageText(
-      ctx.chat!.id,
-      progressMessage.message_id,
-      buildScreen({
-        emoji: '🎉',
-        title: t(ctx, 'purchase_success_title'),
-        subtitle: t(ctx, 'purchase_success_subtitle'),
-        primary: {
-          emoji: '🔗',
-          label: t(ctx, 'purchase_success_link_label'),
-          value: formatSubscriptionLink(res.subUrl, t(ctx, 'subscription_link_unavailable')),
-        },
-      }),
-      { parse_mode: 'Markdown' }
-    );
-    if (typeof createdMsg === 'object' && createdMsg && 'message_id' in createdMsg) {
-      await conversation.external((outsideCtx) => {
-        rememberArtifactMessage(outsideCtx.session, createdMsg.message_id);
-      });
-    }
-    await replyInConversation(conversation, ctx, t(ctx, 'navigation_continue_hint'), {
-      reply_markup: new InlineKeyboard()
-        .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
-        .row()
-        .text(t(ctx, 'menu_back'), 'nav:main'),
-    });
   } catch (err: unknown) {
     await conversation.external((outsideCtx) =>
-      outsideCtx.services!.purchaseCheckoutService.fail(checkout.id)
+      recordCheckoutFailed(outsideCtx.services!.purchaseCheckoutService, checkout.id)
     );
     await ctx.api.editMessageText(
       ctx.chat!.id,
@@ -355,7 +325,51 @@ async function executePurchaseFlow(
         reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'nav:main'),
       }
     );
+    return;
   }
+
+  await conversation.external((outsideCtx) =>
+    recordCheckoutCompleted(outsideCtx.services!.purchaseCheckoutService, checkout.id)
+  );
+  if (checkout.promoCode) {
+    await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
+  }
+
+  const successText = buildScreen({
+    emoji: '🎉',
+    title: t(ctx, 'purchase_success_title'),
+    subtitle: t(ctx, 'purchase_success_subtitle'),
+    primary: {
+      emoji: '🔗',
+      label: t(ctx, 'purchase_success_link_label'),
+      value: formatSubscriptionLink(res.subUrl, t(ctx, 'subscription_link_unavailable')),
+    },
+  });
+  try {
+    const createdMsg = await ctx.api.editMessageText(
+      ctx.chat!.id,
+      progressMessage.message_id,
+      successText,
+      { parse_mode: 'Markdown' }
+    );
+    if (typeof createdMsg === 'object' && createdMsg && 'message_id' in createdMsg) {
+      await conversation.external((outsideCtx) => {
+        rememberArtifactMessage(outsideCtx.session, createdMsg.message_id);
+      });
+    }
+  } catch (err) {
+    logger.warn(
+      { errorName: err instanceof Error ? err.name : typeof err, checkoutId: checkout.id },
+      'Custom purchase succeeded but its progress message could not be edited'
+    );
+    await sendArtifactInConversation(conversation, ctx, successText, { parse_mode: 'Markdown' });
+  }
+  await replyInConversation(conversation, ctx, t(ctx, 'navigation_continue_hint'), {
+    reply_markup: new InlineKeyboard()
+      .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
+      .row()
+      .text(t(ctx, 'menu_back'), 'nav:main'),
+  });
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
@@ -473,6 +487,7 @@ export async function renewConfigConversation(
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
   let checkout: PurchaseCheckout;
+  let res: { configUsername: string; subUrl?: string };
   try {
     checkout = await conversation.external((outsideCtx) =>
       outsideCtx.services!.purchaseCheckoutService.create({
@@ -559,11 +574,11 @@ export async function renewConfigConversation(
     // it and entering the purchase saga.
     if (!(await requireCustomVolume(conversation, ctx, true))) {
       await conversation.external((outsideCtx) =>
-        outsideCtx.services!.purchaseCheckoutService.fail(checkout.id)
+        recordCheckoutFailed(outsideCtx.services!.purchaseCheckoutService, checkout.id)
       );
       return;
     }
-    const res = await ctx.services.walletService.executePurchaseSaga({
+    res = await ctx.services.walletService.executePurchaseSaga({
       telegramId,
       amount: checkout.amount,
       maxAmount: checkout.quotedAmount,
@@ -576,48 +591,9 @@ export async function renewConfigConversation(
       checkoutId: checkout.id,
       ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
     });
-    await conversation.external((outsideCtx) =>
-      outsideCtx.services!.purchaseCheckoutService.complete(checkout.id)
-    );
-
-    if (checkout.promoCode) {
-      await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
-    }
-
-    await ctx.api.editMessageText(
-      ctx.chat!.id,
-      progressMessage.message_id,
-      buildScreen({
-        emoji: '✅',
-        title: t(ctx, 'renewal_success_title'),
-        subtitle: t(ctx, 'renewal_success_subtitle'),
-        primary: {
-          emoji: '📱',
-          label: t(ctx, 'renewal_success_service_label'),
-          value: `\`${escapeTelegramMarkdown(res.configUsername)}\``,
-        },
-        sections: [
-          {
-            emoji: '📦',
-            title: t(ctx, 'checkout_package_section'),
-            fields: [
-              {
-                emoji: '✅',
-                label: t(ctx, 'renewal_success_package_label'),
-                value: customPackageName(ctx, gbAmount, durationDays),
-              },
-            ],
-          },
-        ],
-      }),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
-      }
-    );
   } catch (err: unknown) {
     await conversation.external((outsideCtx) =>
-      outsideCtx.services!.purchaseCheckoutService.fail(checkout.id)
+      recordCheckoutFailed(outsideCtx.services!.purchaseCheckoutService, checkout.id)
     );
     await ctx.api.editMessageText(
       ctx.chat!.id,
@@ -632,6 +608,53 @@ export async function renewConfigConversation(
         reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
       }
     );
+    return;
+  }
+
+  await conversation.external((outsideCtx) =>
+    recordCheckoutCompleted(outsideCtx.services!.purchaseCheckoutService, checkout.id)
+  );
+  if (checkout.promoCode) {
+    await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
+  }
+
+  const renewalSuccessText = buildScreen({
+    emoji: '✅',
+    title: t(ctx, 'renewal_success_title'),
+    subtitle: t(ctx, 'renewal_success_subtitle'),
+    primary: {
+      emoji: '📱',
+      label: t(ctx, 'renewal_success_service_label'),
+      value: `\`${escapeTelegramMarkdown(res.configUsername)}\``,
+    },
+    sections: [
+      {
+        emoji: '📦',
+        title: t(ctx, 'checkout_package_section'),
+        fields: [
+          {
+            emoji: '✅',
+            label: t(ctx, 'renewal_success_package_label'),
+            value: customPackageName(ctx, gbAmount, durationDays),
+          },
+        ],
+      },
+    ],
+  });
+  try {
+    await ctx.api.editMessageText(ctx.chat!.id, progressMessage.message_id, renewalSuccessText, {
+      parse_mode: 'Markdown',
+      reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
+    });
+  } catch (err) {
+    logger.warn(
+      { errorName: err instanceof Error ? err.name : typeof err, checkoutId: checkout.id },
+      'Custom renewal succeeded but its progress message could not be edited'
+    );
+    await replyInConversation(conversation, ctx, renewalSuccessText, {
+      parse_mode: 'Markdown',
+      reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
+    });
   }
 }
 

@@ -42,6 +42,31 @@ describe('job worker runtime', () => {
     expect(task).not.toHaveBeenCalled();
   });
 
+  it('waits for active workers to release their locks during shutdown', async () => {
+    let releaseTask!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseTask = resolve;
+    });
+    const releaseLock = vi.fn().mockResolvedValue(undefined);
+    const runner = new JobRunner({ tryAcquire: vi.fn().mockResolvedValue(releaseLock) });
+
+    const run = runner.run('broadcast-delivery', async () => gate);
+    await vi.waitFor(() => expect(runner.activeJobNames()).toEqual(['broadcast-delivery']));
+    let drainFinished = false;
+    const drain = runner.waitForIdle(1_000).then((result) => {
+      drainFinished = true;
+      return result;
+    });
+    await Promise.resolve();
+    expect(drainFinished).toBe(false);
+
+    releaseTask();
+    await expect(run).resolves.toBe('completed');
+    await expect(drain).resolves.toBe(true);
+    expect(releaseLock).toHaveBeenCalledOnce();
+    expect(runner.activeJobNames()).toEqual([]);
+  });
+
   it('caps batch parallelism at the configured width', async () => {
     let active = 0;
     let maxActive = 0;

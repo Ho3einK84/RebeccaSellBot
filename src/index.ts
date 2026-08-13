@@ -31,6 +31,27 @@ import { startReconciliationCron, stopReconciliationCron } from './jobs/reconcil
 import { startTrialCleanupCron, stopTrialCleanupCron } from './jobs/trialCleanup.js';
 import { startAutoRenewalCron, stopAutoRenewalCron } from './jobs/autoRenewal.js';
 import { startBroadcastWorker, stopBroadcastWorker } from './jobs/broadcast.js';
+import { jobRunner } from './jobs/workerRuntime.js';
+
+const WORKER_SHUTDOWN_TIMEOUT_MS = 30_000;
+
+function stopScheduledWorkers(): void {
+  stopReconciliationCron();
+  stopNotifierCron();
+  stopTrialCleanupCron();
+  stopAutoRenewalCron();
+  stopBroadcastWorker();
+}
+
+async function drainWorkers(): Promise<void> {
+  const drained = await jobRunner.waitForIdle(WORKER_SHUTDOWN_TIMEOUT_MS);
+  if (!drained) {
+    logger.warn(
+      { activeJobs: jobRunner.activeJobNames(), timeoutMs: WORKER_SHUTDOWN_TIMEOUT_MS },
+      'Timed out waiting for background workers during shutdown'
+    );
+  }
+}
 
 async function main() {
   initLogger();
@@ -128,15 +149,27 @@ async function main() {
     shuttingDown = true;
     markHealthStopping();
     logger.info({ signal }, 'Shutting down gracefully...');
-    stopReconciliationCron();
-    stopNotifierCron();
-    stopTrialCleanupCron();
-    stopAutoRenewalCron();
-    stopBroadcastWorker();
-    if (bot.isRunning()) await bot.stop();
-    stopHealthCheckServer();
-    await closeDatabase();
-    process.exit(0);
+    let exitCode = 0;
+    stopScheduledWorkers();
+    if (bot.isRunning()) {
+      await bot.stop().catch((err) => {
+        exitCode = 1;
+        logger.error({ err }, 'Failed to stop Telegram polling during shutdown');
+      });
+    }
+    await drainWorkers().catch((err) => {
+      exitCode = 1;
+      logger.error({ err }, 'Failed to drain background workers during shutdown');
+    });
+    await stopHealthCheckServer().catch((err) => {
+      exitCode = 1;
+      logger.error({ err }, 'Failed to close health check server during shutdown');
+    });
+    await closeDatabase().catch((err) => {
+      exitCode = 1;
+      logger.error({ err }, 'Failed to close database during shutdown');
+    });
+    process.exit(exitCode);
   };
 
   process.once('SIGINT', () => void shutdown('SIGINT'));
@@ -150,12 +183,13 @@ async function main() {
 main().catch(async (err) => {
   markHealthFailed(err);
   logger.fatal({ err }, 'Fatal error on application startup or long-polling');
-  stopReconciliationCron();
-  stopNotifierCron();
-  stopTrialCleanupCron();
-  stopAutoRenewalCron();
-  stopBroadcastWorker();
-  stopHealthCheckServer();
+  stopScheduledWorkers();
+  await drainWorkers().catch((drainErr) => {
+    logger.error({ err: drainErr }, 'Failed to drain workers after fatal error');
+  });
+  await stopHealthCheckServer().catch((healthErr) => {
+    logger.error({ err: healthErr }, 'Failed to close health server after fatal error');
+  });
   await closeDatabase().catch((closeErr) => {
     logger.error({ err: closeErr }, 'Failed to close database after fatal error');
   });
