@@ -356,29 +356,35 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     }
   )
   .row()
-  .text(
-    (ctx) => t(ctx, 'menu_support'),
-    async (ctx) => {
-      if (!ctx.services) return;
-      const supportInfo = resolveSupportInfo(ctx);
-      const keyboard = new InlineKeyboard();
-      if (supportInfo.isConfigured && supportInfo.url) {
-        keyboard.url(t(ctx, 'support_contact_button'), supportInfo.url).row();
-      }
-      keyboard.text(t(ctx, 'menu_back'), 'nav:main');
-      await ctx.editMessageText(
-        buildScreen({
-          emoji: '💬',
-          title: t(ctx, 'support_title'),
-          subtitle: t(ctx, 'support_subtitle'),
-          footer: supportInfo.isConfigured
-            ? t(ctx, 'support_message')
-            : `⚠️ ${t(ctx, 'support_not_configured')}`,
-        }),
-        { parse_mode: 'Markdown', reply_markup: keyboard }
+  .dynamic((ctx, range) => {
+    const supportEnabled =
+      ctx.services?.translationService.getSettingBool('support_enabled', true) ?? true;
+    if (supportEnabled) {
+      range.text(
+        (c) => t(c, 'menu_support'),
+        async (c) => {
+          if (!c.services) return;
+          const supportInfo = resolveSupportInfo(c);
+          const keyboard = new InlineKeyboard();
+          if (supportInfo.isConfigured && supportInfo.url) {
+            keyboard.url(t(c, 'support_contact_button'), supportInfo.url).row();
+          }
+          keyboard.text(t(c, 'menu_back'), 'nav:main');
+          await c.editMessageText(
+            buildScreen({
+              emoji: '💬',
+              title: t(c, 'support_title'),
+              subtitle: t(c, 'support_subtitle'),
+              footer: supportInfo.isConfigured
+                ? t(c, 'support_message')
+                : `⚠️ ${t(c, 'support_not_configured')}`,
+            }),
+            { parse_mode: 'Markdown', reply_markup: keyboard }
+          );
+        }
       );
     }
-  )
+  })
   .row()
   .dynamic((ctx, range) => {
     if (ctx.from?.id && ctx.services?.isAdmin(ctx.from.id)) {
@@ -390,7 +396,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
             return;
           }
           c.menu.nav('admin-menu');
-          await c.editMessageText(renderAdminHome(c), { parse_mode: 'Markdown' });
+          await c.editMessageText(await renderAdminHome(c), { parse_mode: 'Markdown' });
         }
       );
     }

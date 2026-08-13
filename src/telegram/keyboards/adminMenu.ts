@@ -22,11 +22,24 @@ import { renderAdminRegistry, renderOrphanIssues } from '../features/admin/maint
 import { renderPanelRegistry } from '../features/admin/panelRoutes.js';
 import { renderHomeDashboard } from './homeDashboard.js';
 
-export function renderAdminHome(ctx: MenuContext): string {
+export async function renderAdminHome(ctx: MenuContext): Promise<string> {
+  let pendingCount = 0;
+  if (ctx.services) {
+    pendingCount = await ctx.services.walletService.getPendingReceiptCount().catch(() => 0);
+  }
   return buildScreen({
     emoji: '🛠️',
     title: t(ctx, 'admin_home_title'),
     subtitle: t(ctx, 'admin_home_subtitle'),
+    ...(pendingCount > 0
+      ? {
+          primary: {
+            emoji: '🧾',
+            label: t(ctx, 'admin_home_pending_label'),
+            value: localizedNumber(pendingCount, ctx),
+          },
+        }
+      : {}),
     footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
   });
 }
@@ -91,7 +104,7 @@ export const adminDailyMenu = new Menu<MenuContext>('admin-daily-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
+      await ctx.editMessageText(await renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -128,7 +141,7 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
+      await ctx.editMessageText(await renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -152,7 +165,7 @@ export const adminPanelsMenu = new Menu<MenuContext>('admin-panels-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
+      await ctx.editMessageText(await renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -183,7 +196,7 @@ export const adminSystemMenu = new Menu<MenuContext>('admin-system-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(renderAdminHome(ctx), { parse_mode: 'Markdown' });
+      await ctx.editMessageText(await renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 

@@ -9,6 +9,7 @@ export const SETTING_KEYS = [
   'card_number',
   'card_holder',
   'support_destination',
+  'support_enabled',
   'trial_enabled',
   'trial_gb',
   'trial_days',
@@ -102,6 +103,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'support',
     labelKey: 'admin_setting_support_destination',
     editor: { type: 'support' },
+  },
+  {
+    key: 'support_enabled',
+    group: 'support',
+    labelKey: 'admin_setting_support_enabled',
+    editor: { type: 'boolean' },
   },
   {
     key: 'trial_enabled',

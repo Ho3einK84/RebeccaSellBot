@@ -74,7 +74,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       );
       return;
     }
-    await ctx.reply(renderAdminHome(ctx), { parse_mode: 'Markdown', reply_markup: adminMenu });
+    await ctx.reply(await renderAdminHome(ctx), {
+      parse_mode: 'Markdown',
+      reply_markup: adminMenu,
+    });
   });
 
   bot.callbackQuery(/^locale:(fa|en)$/u, async (ctx) => {
@@ -135,7 +138,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       return;
     }
     if (showAdmin) {
-      await renderUiScreen(ctx, renderAdminHome(ctx), {
+      await renderUiScreen(ctx, await renderAdminHome(ctx), {
         parse_mode: 'Markdown',
         reply_markup: adminMenu,
       });

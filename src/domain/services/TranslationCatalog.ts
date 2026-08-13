@@ -45,6 +45,7 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   topup_max_amount: '10000000',
   support_message: 'برای پشتیبانی با مدیر در تماس باشید.',
   support_destination: '',
+  support_enabled: 'true',
 
   // Notification thresholds. Rebecca connection/service configuration lives
   // in normalized, encrypted panel tables rather than this generic K/V store.
