@@ -10,7 +10,6 @@ import {
 } from '../../locale.js';
 import { buildEmptyState, buildScreen, buildStatusBadge } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
-import { escapeTelegramMarkdown } from '../../rendering.js';
 import { logger } from '../../../infra/logger.js';
 
 const RECEIPT_PAGE_SIZE = 4;
@@ -259,7 +258,7 @@ async function promptReceiptReview(
         fields: [
           {
             label: t(ctx, 'admin_receipt_id_label'),
-            value: escapeTelegramMarkdown(receipt.id),
+            value: `\`${receipt.id}\``,
           },
           {
             label: t(ctx, 'admin_receipt_user_label'),
@@ -301,8 +300,8 @@ function buildReceiptQueueScreen(ctx: MenuContext, result: ReceiptPage): string 
         title: t(ctx, 'admin_receipt_queue_section'),
         fields: result.items.map((receipt) => ({
           emoji: '🧾',
-          label: `#${escapeTelegramMarkdown(receipt.id)}`,
-          value: `${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')} · ${receipt.createdAt ? localizedDate(receipt.createdAt, ctx) : '—'}`,
+          label: t(ctx, 'admin_receipt_id_label'),
+          value: `\`#${receipt.id}\` · ${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')} · ${receipt.createdAt ? localizedDate(receipt.createdAt, ctx) : '—'}`,
         })),
       },
     ],
@@ -358,7 +357,7 @@ function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): st
         fields: [
           {
             label: t(ctx, 'admin_receipt_id_label'),
-            value: escapeTelegramMarkdown(receipt.id),
+            value: `\`${receipt.id}\``,
           },
           {
             label: t(ctx, 'admin_receipt_user_label'),

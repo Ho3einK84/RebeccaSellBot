@@ -107,7 +107,7 @@ export async function showUserSubscriptions(
         `🛍️ ${t(ctx, 'subscription_list_empty_action')}`
       ),
       new InlineKeyboard()
-        .text(t(ctx, 'menu_shop'), 'nav:shop')
+        .text(t(ctx, 'menu_buy_subscription'), 'nav:shop')
         .row()
         .text(t(ctx, 'menu_back'), 'nav:main')
     );
