@@ -7,7 +7,7 @@ import {
   adminSystemMenu,
 } from '../../src/telegram/keyboards/adminMenu.js';
 
-describe('Grouped Admin Menu & User Profile (Phase 5)', () => {
+describe('Grouped admin menu and user profile', () => {
   it('instantiates submenus for grouped admin management', () => {
     expect(adminMenu).toBeDefined();
     expect(adminDailyMenu).toBeDefined();

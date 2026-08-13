@@ -107,22 +107,24 @@ describe('TranslationService', () => {
     expect(keysFor('fa')).toEqual(keysFor('en'));
   });
 
-  it('uses legacy Markdown bold markers and preserves clean inline-code values', () => {
+  it('uses Telegram Markdown markers and preserves clean inline-code values', () => {
     const service = new TranslationService();
-    const rendered = service.get('subscription_status', 'en', {
+    const heading = service.get('subscription_detail_heading', 'en', {
       username: 'h_6698253699_8',
-      status: 'Active',
-      remaining: '10 GB',
-      expiry_info: '2026-09-06 (30 days remaining)',
-      online_info: 'Never',
-      created_info: '2026-08-07',
-      sub_url: 'https://panel.example.com/sub/h_6698253699_8',
+    });
+    const prompt = service.get('admin_setting_custom_volume_enabled_prompt', 'en', {
+      current: 'Enabled',
+    });
+    const expiry = service.get('subscription_expiry_remaining', 'en', {
+      date: '2026-09-06',
+      days: 30,
     });
 
     expect(Object.values(DEFAULT_SETTINGS).some((value) => value.includes('**'))).toBe(false);
-    expect(rendered).toContain('*Subscription:* `h_6698253699_8`');
-    expect(rendered).toContain('*Expiration:* 2026-09-06 (30 days remaining)');
-    expect(rendered).not.toContain('\\(');
+    expect(heading).toContain('Service · `h_6698253699_8`');
+    expect(prompt).toContain('*Enabled*');
+    expect(expiry).toContain('2026-09-06 (30 days remaining)');
+    expect(expiry).not.toContain('\\(');
   });
 
   it('validates translation placeholder parity and rejects malformed overrides', async () => {
@@ -186,11 +188,11 @@ describe('TranslationService', () => {
     const markdownLink = `[${url}](${url})`;
 
     await service.updateSetting(
-      'en.trial_subscription_url',
+      'en.legacy_subscription_url',
       'Your trial subscription URL:\n`{sub_url}`'
     );
 
-    expect(service.get('trial_subscription_url', 'en', { sub_url: markdownLink })).toBe(
+    expect(service.get('legacy_subscription_url', 'en', { sub_url: markdownLink })).toBe(
       `Your trial subscription URL:\n${markdownLink}`
     );
   });

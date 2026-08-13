@@ -12,7 +12,7 @@ import { renderHomeDashboard } from '../../src/telegram/keyboards/mainMenu.js';
 import { buildSubscriptionActionKeyboard } from '../../src/telegram/features/subscriptions/routes.js';
 import { trackFunnelEvent } from '../../src/domain/services/FunnelTelemetry.js';
 
-describe('Phase 7 — Comprehensive UI & Quality Test Suite', () => {
+describe('Telegram UI quality', () => {
   it('1. Persian/Arabic number normalization', () => {
     expect(normalizeInputDigits('۵۰۰۰۰')).toBe('50000');
     expect(normalizeInputDigits('۵۰,۰۰۰')).toBe('50000');

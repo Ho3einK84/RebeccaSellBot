@@ -3,7 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import type { MenuContext } from '../../src/telegram/types.js';
 import { buildSubscriptionActionKeyboard } from '../../src/telegram/features/subscriptions/routes.js';
 
-describe('Subscriptions 2-Level View & Action Hierarchy (Phase 4)', () => {
+describe('Subscription views and action hierarchy', () => {
   it('renders level 1 compact card action keyboard with single detail view button', () => {
     const ctx = {
       services: {

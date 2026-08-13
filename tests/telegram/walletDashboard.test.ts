@@ -3,7 +3,7 @@ import type { MenuContext } from '../../src/telegram/types.js';
 import { renderWalletDashboard } from '../../src/telegram/keyboards/mainMenu.js';
 import { localizedNumber } from '../../src/telegram/locale.js';
 
-describe('Wallet Dashboard & Presets (Phase 3)', () => {
+describe('Wallet dashboard and presets', () => {
   it('renders wallet dashboard with balance and pending receipt status', async () => {
     const getBalance = vi.fn().mockResolvedValue(150000);
     const getPendingReceiptForUser = vi.fn().mockResolvedValue({
@@ -18,12 +18,7 @@ describe('Wallet Dashboard & Presets (Phase 3)', () => {
       services: {
         walletService: { getBalance, getPendingReceiptForUser },
         translationService: {
-          get: vi.fn((key: string, _locale: string, params?: Record<string, string | number>) => {
-            if (key === 'wallet_pending_receipt_detail' && params) {
-              return `⏳ رسید در انتظار: ${params.amount} تومان`;
-            }
-            return key;
-          }),
+          get: vi.fn((key: string) => key),
           resolveLocale: vi.fn(() => 'fa'),
         },
       },

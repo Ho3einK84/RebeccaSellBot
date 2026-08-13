@@ -12,16 +12,7 @@ export const FA_TEXTS: Record<string, string> = {
   welcome:
     '👋 به ربات مدیریت و فروش سرویس خوش آمدید!\n\nاز طریق منوی هوشمند زیر می‌توانید سرویس‌های خود را خریداری، تمدید و مدیریت کنید یا کیف پول حساب کاربری خود را شارژ کنید.',
   subscription_view_detail: '👁 مشاهده سرویس',
-  subscription_detail_title: '📱 *جزئیات سرویس:* `{username}`',
-  subscription_advanced_section: '⚙️ *مدیریت بیشتر:*',
-  subscription_danger_section: '⚠️ *عملیات حساس:*',
   wallet_dashboard_title: 'کیف پول حساب کاربری',
-  wallet_pending_receipt_detail:
-    '⏳ *رسید در انتظار بررسی:* \n💰 *مبلغ:* {amount} تومان\n📅 *زمان ثبت:* {date}\n📌 *وضعیت:* در انتظار بررسی توسط مدیریت',
-  topup_preset_prompt:
-    '💬 لطفاً یکی از مبالغ پیشنهادی را انتخاب کنید یا مبلغ دلخواه خود را وارد نمایید:',
-  topup_pending_exists_detail:
-    '⚠️ شما یک رسید در انتظار بررسی دارید (مبلغ: {amount} تومان). ثبت رسید جدید تا تعیین تکلیف رسید قبلی امکان‌پذیر نیست.',
   home_title: 'داشبورد کاربری سرویس‌ها',
   home_subtitle: 'وضعیت کیف پول و سرویس‌ها، در یک نگاه',
   home_balance: 'موجودی کیف پول',
@@ -51,8 +42,6 @@ export const FA_TEXTS: Record<string, string> = {
   trial_duration_label: 'مدت اعتبار',
   trial_terms_label: 'شرایط استفاده',
   trial_terms: 'هر حساب کاربری فقط یک‌بار می‌تواند این اشتراک آزمایشی را دریافت کند.',
-  insufficient_balance_detail:
-    '⚠️ *موجودی کیف پول شما کافی نیست.*\n\n💰 *مبلغ بسته:* {price} تومان\n👛 *موجودی شما:* {balance} تومان\n📉 *کسری موجودی:* {deficit} تومان',
   insufficient_balance_title: 'برای ادامه کیف پول را شارژ کنید',
   insufficient_balance_subtitle: 'موجودی کیف پول شما برای خرید این بسته کافی نیست.',
   insufficient_balance_deficit_label: 'مبلغ موردنیاز',
@@ -60,12 +49,8 @@ export const FA_TEXTS: Record<string, string> = {
   insufficient_balance_price_label: 'قیمت بسته',
   insufficient_balance_balance_label: 'موجودی فعلی',
   insufficient_balance_hint: 'کیف پول را شارژ کنید، سپس دوباره این بسته را انتخاب کنید.',
-  trial_preview_title: '🎁 *تست رایگان ربکا*',
-  trial_preview_text:
-    '🎁 *پیش‌نمایش تست رایگان*\n\n📊 *حجم هدیه:* {gb} گیگابایت\n⏳ *مدت زمان:* {days} روز\n\nℹ️ *شرایط:* این اشتراک تست کاملاً رایگان بوده و هر حساب کاربری تنها یک‌بار مجاز به دریافت آن است.',
   trial_start_button: '🎁 شروع تست رایگان',
   shop_clear_promo_button: '❌ حذف کد تخفیف',
-  shop_promo_active: '🎟️ *کد تخفیف فعال:* `{code}`',
   direct_topup_button: '👛 شارژ کیف پول',
   currency_toman: 'تومان',
   service_unit: 'سرویس',
@@ -74,8 +59,6 @@ export const FA_TEXTS: Record<string, string> = {
   balance:
     '👛 موجودی کیف پول\n\n💰 موجودی قابل استفاده: {balance} تومان\n\nجهت افزایش موجودی یا ثبت کد تخفیف، از گزینه‌های زیر استفاده کنید.',
   shop: '🛍️ فروشگاه اشتراک\nلطفاً بسته مورد نظر خود را انتخاب کنید تا سرویس شما صادر و فعال شود.',
-  topup_instructions:
-    '💳 افزایش موجودی کیف پول\n\nلطفاً مبلغ مورد نظر را به کارت زیر واریز کرده و سپس تصویر واضح رسید پرداخت را ارسال کنید:\n\n💳 شماره کارت: {card_number}\n👤 صاحب حساب: {card_holder}',
   topup_title: 'افزایش موجودی کیف پول',
   topup_subtitle:
     'مبلغ را به کارت زیر واریز کنید، سپس یک تصویر واضح از رسید برای بررسی ارسال کنید.',
@@ -95,10 +78,6 @@ export const FA_TEXTS: Record<string, string> = {
   topup_receipt_id_label: 'شناسهٔ رسید',
   topup_pending_title: 'یک رسید در حال بررسی دارید',
   topup_pending_subtitle: 'پس از تأیید یا رد این رسید می‌توانید رسید دیگری ثبت کنید.',
-  topup_success:
-    '✅ رسید پرداخت شما با موفقیت ثبت شد و پس از بررسی توسط مدیریت، موجودی حساب شما شارژ خواهد شد.',
-  config_created:
-    '🎉 اشتراک شما با موفقیت فعال شد!\n\n🔗 لینک کامل اتصال شما:\n`{sub_url}`\n\nروی لینک بزنید یا آن را در برنامه VPN خود وارد کنید.',
   claimed_success: '✅ اشتراک با موفقیت به حساب شما متصل شد.',
   claim_failed: '⚠️ این لینک اشتراک معتبر نیست یا قبلاً ثبت شده است.',
   claim_already_claimed: '⚠️ این لینک اشتراک قبلاً توسط حساب دیگری ثبت شده است.',
@@ -122,7 +101,6 @@ export const FA_TEXTS: Record<string, string> = {
   promo_max_uses_reached: '⚠️ ظرفیت استفاده از این کد تخفیف تکمیل شده است.',
   promo_user_max_uses_reached: '⚠️ شما به سقف استفاده شخصی از این کد تخفیف رسیده‌اید.',
   promo_minimum_purchase_not_met: '⚠️ مبلغ خرید برای استفاده از این کد تخفیف کافی نیست.',
-  promo_already_redeemed: '⚠️ شما قبلاً از این کد تخفیف استفاده کرده‌اید.',
   promo_gift_credit_success: '🎁 اعتبار هدیه با موفقیت به کیف پول شما اضافه شد.',
   promo_redeem_failed: '⚠️ خطا در ثبت کد تخفیف. لطفاً دوباره تلاش کنید.',
   promo_valid: '✅ کد تخفیف معتبر است.',
@@ -164,16 +142,9 @@ export const FA_TEXTS: Record<string, string> = {
   renewal_package_missing: '⚠️ بسته تمدید انتخاب‌شده در دسترس نیست.',
   promo_no_longer_usable: '⚠️ کد تخفیف انتخاب‌شده دیگر قابل استفاده نیست.',
   renewing: '⏳ در حال تمدید اشتراک…',
-  renewal_success: '🎉 اشتراک `{username}` با بسته {package_name} با موفقیت تمدید شد.',
   operation_in_progress: '⏳ عملیات در حال انجام است. لطفاً شکیبا باشید.',
-  subscription_link_revoked: '🔐 لینک قبلی لغو شد. لینک جدید اشتراک شما:\n`{sub_url}`',
   subscription_link_unavailable: '⚠️ لینک اشتراک در حال حاضر در دسترس نیست.',
-  subscription_enabled: '✅ اشتراک با موفقیت فعال شد.',
-  subscription_disabled: '⏸️ اشتراک غیرفعال شد.',
   config_action_failed: '⚠️ انجام عملیات روی اشتراک با خطا مواجه شد.',
-  receipt_review_in_progress: '⏳ رسید پرداخت شما در حال بررسی است.',
-  receipt_approved: '✅ رسید شما تأیید شد و کیف پولتان شارژ گردید.',
-  receipt_rejected: '⚠️ رسید پرداخت شما رد شد. در صورت نیاز با پشتیبانی تماس بگیرید.',
   receipt_result_approved_title: 'کیف پول شما شارژ شد',
   receipt_result_rejected_title: 'رسید تأیید نشد',
   receipt_result_approved_subtitle:
@@ -185,7 +156,6 @@ export const FA_TEXTS: Record<string, string> = {
   claim_handler_failed: '⚠️ ثبت لینک اشتراک با خطا مواجه شد. لطفاً دوباره تلاش کنید.',
   renewal_button: '🔄 تمدید اشتراک',
   renew_confirm_button: '✅ تأیید و تمدید',
-  renew_select_package: '💬 لطفاً بسته تمدید برای اشتراک `{username}` را انتخاب کنید:',
   renewal_selection_title: 'تمدید سرویس',
   renewal_selection_subtitle:
     'بستهٔ تمدید را انتخاب کنید؛ مبلغ نهایی پیش از کسر از کیف پول به شما نمایش داده می‌شود.',
@@ -210,7 +180,6 @@ export const FA_TEXTS: Record<string, string> = {
   checkout_confirmation_hint: 'تنها پس از زدن «تأیید و تمدید»، مبلغ از کیف پول شما کسر می‌شود.',
   auto_renew_enable_button: '♻️ فعال‌سازی تمدید خودکار',
   auto_renew_disable_button: '⏹ غیرفعال‌سازی تمدید خودکار',
-  auto_renew_select_package: '💬 بسته تمدید خودکار را انتخاب کنید:',
   auto_renew_selection_title: 'تنظیم تمدید خودکار',
   auto_renew_selection_subtitle:
     'بسته‌ای را انتخاب کنید که هنگام سررسید این سرویس به‌صورت خودکار اعمال شود.',
@@ -229,15 +198,7 @@ export const FA_TEXTS: Record<string, string> = {
   auto_renew_enabled_subtitle: 'هنگام سررسید، بستهٔ انتخاب‌شده برای این سرویس اعمال می‌شود.',
   auto_renew_disabled_title: 'تمدید خودکار غیرفعال شد',
   auto_renew_disabled_subtitle: 'این سرویس دیگر به‌صورت خودکار تمدید نمی‌شود.',
-  auto_renew_confirm:
-    'آیا تمدید خودکار برای {username} با بسته {package} و مبلغ {price} تومان در هر تمدید فعال شود؟ هنگام سررسید تمدید، مبلغ از کیف پول شما کسر می‌شود.',
-  auto_renew_disable_confirm:
-    'آیا تمدید خودکار برای {username} غیرفعال شود؟ تمدیدهای برنامه‌ریزی‌شده از کیف پول متوقف می‌شوند.',
-  auto_renew_custom_package: '{gb} گیگابایت / {days} روز',
   auto_renew_enabled: '✅ تمدید خودکار برای این اشتراک فعال شد.',
-  auto_renew_disabled: '⏹ تمدید خودکار برای این اشتراک غیرفعال شد.',
-  auto_renew_state_enabled: '♻️ *تمدید خودکار:* فعال — بسته {package}',
-  auto_renew_state_disabled: '♻️ *تمدید خودکار:* غیرفعال',
   auto_renew_package_unavailable: 'بسته انتخاب شده دیگر موجود نیست',
   auto_renew_package_unavailable_title: 'تمدید خودکار نیاز به رسیدگی دارد',
   auto_renew_package_unavailable_subtitle: 'بسته ذخیره‌شده برای این سرویس دیگر در دسترس نیست.',
@@ -247,8 +208,6 @@ export const FA_TEXTS: Record<string, string> = {
   auto_renew_low_balance_subtitle: 'موجودی کیف پول برای تمدید زمان‌بندی‌شده کافی نبود.',
   auto_renew_required_label: 'هزینه تمدید',
   auto_renew_balance_label: 'موجودی کیف پول',
-  auto_renew_success:
-    '✅ اشتراک `{username}` به‌صورت خودکار تمدید شد. حجم جدید: {gb} گیگابایت؛ اعتبار تا {expiry}.',
   auto_renew_success_title: 'سرویس به‌صورت خودکار تمدید شد',
   auto_renew_success_subtitle: 'هزینه از کیف پول کسر شد و سرویس آماده استفاده است.',
   auto_renew_service_label: 'سرویس',
@@ -265,13 +224,6 @@ export const FA_TEXTS: Record<string, string> = {
   custom_package_name: '{gb} گیگابایت · {days} روز',
   purchase_target_unavailable:
     '⚠️ مقصد این بسته در دسترس نیست. لطفاً بسته دیگری انتخاب کنید یا با پشتیبانی تماس بگیرید.',
-  custom_days_prompt: '💬 لطفاً مدت زمان مورد نظر را به روز وارد کنید (مثلاً ۳۰):',
-  custom_days_invalid:
-    '⚠️ مدت زمان واردشده معتبر نیست. لطفاً یک عدد صحیح بین ۱ تا ۳۶۵۰ روز وارد کنید.',
-  renewal_quote:
-    '🔄 پیش‌نمایش تمدید اشتراک `{username}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از انجام این تمدید مطمئن هستید؟',
-  renewal_quote_with_promo:
-    '🔄 پیش‌نمایش تمدید اشتراک `{username}`\n🎟️ *کد تخفیف:* `{promo_code}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از انجام این تمدید مطمئن هستید؟',
 
   menu_buy_subscription: '🛒 خرید اشتراک',
   menu_wallet: '👛 کیف پول',
@@ -289,10 +241,8 @@ export const FA_TEXTS: Record<string, string> = {
   menu_use_promo: '🎟️ ثبت کد تخفیف',
   menu_back_main: '🏠 منوی اصلی',
   menu_language: '🌐 تغییر زبان / Language',
-  language_selection_prompt: '🌐 لطفاً زبان مورد نظر خود را انتخاب کنید:',
   language_selection_title: 'انتخاب زبان',
   language_selection_subtitle: 'هر زمان بخواهید می‌توانید این انتخاب را تغییر دهید.',
-  language_changed: '✅ زبان ربات با موفقیت به فارسی تغییر یافت.',
   language_update_failed: '⚠️ ذخیره زبان با خطا مواجه شد. لطفاً دوباره تلاش کنید.',
   button_action_failed: '⚠️ پردازش دستور با خطا مواجه شد. لطفاً دوباره تلاش کنید.',
   button_expired: 'این دکمه قدیمی یا منقضی شده است.',
@@ -302,8 +252,6 @@ export const FA_TEXTS: Record<string, string> = {
   button_input_required: 'برای این مرحله از یکی از دکمه‌های نمایش‌داده‌شده استفاده کنید.',
   photo_input_required: '🖼️ لطفاً تصویر واضح رسید را ارسال کنید یا لغو را بزنید.',
   no_subscriptions: '📭 هیچ اشتراکی در حساب شما یافت نشد. می‌توانید از بخش خرید اشتراک اقدام کنید.',
-  subscriptions_list_complete:
-    '✅ {count} اشتراک نمایش داده شد. برای بازگشت از دکمه زیر استفاده کنید.',
   subscriptions_loading: 'در حال بارگذاری سرویس‌ها…',
   subscription_refreshing: 'در حال به‌روزرسانی جزئیات سرویس…',
   subscription_list_title: 'سرویس‌های من',
@@ -333,30 +281,16 @@ export const FA_TEXTS: Record<string, string> = {
   subscription_state_depleted: 'حجم تمام شده',
   subscription_state_unknown: 'نامشخص ({status})',
   unlimited: '♾️ نامحدود',
-  subscription_status:
-    '📱 *اطلاعات اشتراک:* `{username}`\n\n⚡ *وضعیت:* {status}\n📊 *حجم باقیمانده:* {remaining}\n⏳ *مهلت اعتبار:* {expiry_info}\n🌐 *آخرین اتصال:* {online_info}\n📅 *تاریخ ساخت:* {created_info}\n\n🔗 *لینک اتصال:*\n`{sub_url}`',
-  subscription_status_cached:
-    '📱 *اطلاعات ذخیره‌شده اشتراک:* `{username}`\n\n⚠️ پنل موقتاً در دسترس نیست؛ آخرین اطلاعات معتبر نمایش داده می‌شود.\n⚡ *وضعیت:* {status}\n📊 *حجم باقیمانده:* {remaining}\n⏳ *مهلت اعتبار:* {expiry_info}\n🌐 *آخرین اتصال:* {online_info}\n📅 *تاریخ ساخت:* {created_info}\n\n🔗 *لینک اتصال:*\n`{sub_url}`',
-  subscription_status_failed: '⚠️ دریافت اطلاعات اشتراک {username} با خطا مواجه شد.',
   subscription_enable_button: '✅ فعال‌سازی',
   subscription_disable_button: '⏸️ غیرفعال‌سازی',
-  subscription_toggle_button: '🔄 تغییر وضعیت',
   subscription_revoke_button: '🔑 لغو لینک قبلی',
   subscription_refresh_button: '🔄 به‌روزرسانی',
   subscription_qr_button: '📷 دریافت QR',
-  subscription_status_active: '✅ فعال',
-  subscription_status_disabled: '⏸️ غیرفعال',
-  subscription_status_on_hold: '⏳ در انتظار',
-  subscription_status_expired: '⚠️ منقضی‌شده',
-  subscription_status_depleted: '📭 حجم تمام‌شده',
-  subscription_status_unknown: 'نامشخص: {status}',
   subscription_expiry_never: '♾️ بدون انقضا',
   subscription_expiry_remaining: '{date} ({days} روز باقیمانده)',
   subscription_expiry_expired: '{date} (منقضی‌شده)',
   subscription_online_never: '❌ بدون اتصال',
   traffic_unit_gb: 'گیگابایت',
-  subscription_revoke_confirm:
-    'آیا مطمئن هستید که لینک اتصال اشتراک {username} باطل و لینک جدید صادر شود؟',
   subscription_revoke_title: 'تعویض لینک اشتراک',
   subscription_revoke_subtitle: 'لینک اتصال فعلی را باطل کنید و یک لینک خصوصی جدید دریافت کنید.',
   subscription_revoke_consequence:
@@ -364,14 +298,11 @@ export const FA_TEXTS: Record<string, string> = {
   subscription_revoke_success_title: 'لینک جدید اشتراک آماده است',
   subscription_revoke_success_subtitle: 'لینک قبلی دیگر کار نمی‌کند.',
   subscription_qr_generating: 'در حال ساخت QR…',
-  subscription_qr_caption: 'QR اتصال اشتراک {username}',
   subscription_qr_title: 'کد QR اتصال',
   subscription_qr_subtitle:
     'این کد را با برنامهٔ VPN اسکن کنید یا از لینک اشتراک در صفحهٔ سرویس استفاده کنید.',
   subscription_qr_service_label: 'سرویس',
   subscription_qr_failed: '⚠️ ساخت QR اشتراک ممکن نشد. لطفاً دوباره تلاش کنید.',
-  trial_subscription_url:
-    '🔗 لینک اشتراک تست شما:\n`{sub_url}`\n\nجهت اتصال، این لینک را در نرم‌افزار VPN خود کپی کنید.',
   referral_info:
     '👥 سیستم دعوت از دوستان\n\nبا اشتراک‌گذاری لینک زیر، پس از اولین خرید دوستانتان پاداش دریافت کنید:\n\n🔗 لینک اختصاصی شما:\n`{ref_link}`\n\n💰 پاداش هر دعوت: {bonus} تومان',
   referral_title: 'دعوت از دوستان',
@@ -385,13 +316,6 @@ export const FA_TEXTS: Record<string, string> = {
   package_pkg_30gb_30d_name: '۳۰ گیگابایت (۳۰ روزه)',
   package_pkg_50gb_30d_name: '۵۰ گیگابایت (۳۰ روزه)',
   package_pkg_100gb_60d_name: '۱۰۰ گیگابایت (۶۰ روزه)',
-  purchase_issuing: '⏳ در حال صدور اشتراک {package_name}…',
-  purchase_issuing_with_promo:
-    '⏳ در حال صدور اشتراک {package_name} با کد {promo_code} (مبلغ: {amount} تومان)…',
-  purchase_quote:
-    '🛒 پیش‌نمایش خرید اشتراک جدید\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از خرید این اشتراک مطمئن هستید؟',
-  purchase_quote_with_promo:
-    '🛒 پیش‌نمایش خرید اشتراک جدید\n🎟️ *کد تخفیف:* `{promo_code}`\n\n📊 *حجم:* {gb} گیگابایت\n⏳ *مدت:* {days} روز\n💰 *مبلغ قابل پرداخت:* {amount} تومان (گیگی {price_per_gb} تومان)\n\nآیا از خرید این اشتراک مطمئن هستید؟',
   purchase_review_title: 'بررسی خرید',
   purchase_review_subtitle: 'بستهٔ انتخاب‌شده و مبلغ نهایی کسر از کیف پول را بررسی کنید.',
   purchase_confirmation_hint: 'تنها پس از زدن «تأیید و خرید»، مبلغ از کیف پول شما کسر می‌شود.',
@@ -402,32 +326,21 @@ export const FA_TEXTS: Record<string, string> = {
   purchase_success_subtitle: 'برای اتصال، لینک خصوصی زیر را در برنامهٔ VPN خود وارد یا کپی کنید.',
   purchase_success_link_label: 'لینک اشتراک',
   purchase_failed_title: 'خرید انجام نشد',
-  custom_gb_prompt: '💬 لطفاً حجم مورد نظر را به گیگابایت وارد کنید:',
   custom_gb_invalid_range: '⚠️ مقدار حجم باید عدد صحیح بین {min} تا {max} گیگابایت باشد.',
-  custom_gb_simple_prompt: '💬 لطفاً حجم مورد نظر را به گیگابایت وارد کنید:',
   custom_gb_invalid: '⚠️ مقدار حجم واردشده معتبر نیست.',
-  promo_prompt: '💬 لطفاً کد تخفیف یا هدیه را وارد کنید:',
   promo_title: 'استفاده از کد',
   promo_subtitle: 'کد تخفیف یا هدیه را وارد کنید تا برای کیف پول یا خرید بعدی شما اعمال شود.',
   promo_input_hint: 'کد را دقیقاً به همان شکلی که دریافت کرده‌اید ارسال کنید.',
   promo_applied_title: 'کد اعمال شد',
   promo_applied_subtitle: 'این کد در خرید واجدشرایط بعدی شما به‌صورت خودکار استفاده می‌شود.',
-  promo_selected_for_purchase: '✅ کد {promo_code} برای خرید بعدی شما ثبت شد.',
-  topup_amount_prompt: '💬 لطفاً مبلغ واریزی را به تومان وارد کنید:',
   invalid_amount: '⚠️ مبلغ واردشده معتبر نیست.',
   topup_amount_invalid_range: '⚠️ مبلغ باید بین {min} تا {max} تومان باشد.',
   topup_photo_prompt: '🖼️ لطفاً تصویر واضح رسید پرداخت را ارسال کنید:',
-  topup_confirmation:
-    '🧾 *تأیید ثبت رسید*\n\n💰 مبلغ: *{amount} تومان*\n🖼️ تصویر رسید دریافت شد.\n\nپس از ثبت، تا زمان بررسی مدیر امکان ارسال رسید دیگری ندارید.',
   topup_confirm_button: '✅ ثبت نهایی رسید',
-  topup_pending_exists:
-    '⏳ یک رسید در انتظار بررسی دارید. پس از تأیید یا رد آن می‌توانید رسید جدید ثبت کنید.',
   topup_failed: '⚠️ ثبت رسید با خطا مواجه شد. لطفاً دوباره تلاش کنید.',
 
   admin_menu_stats: '📊 آمار',
-  admin_menu_search_user: '🔎 جست‌وجوی کاربر',
   admin_menu_users: '👥 مدیریت کاربران',
-  admin_users_title: '👥 *مدیریت کاربران* (مجموع {total} کاربر)\nصفحه {page} از {total_pages}:',
   admin_users_list_title: 'مدیریت کاربران',
   admin_users_list_subtitle:
     'یک مشتری را بیابید، حساب او را بررسی کنید یا یک اقدام مدیریتی ثبت‌شونده انجام دهید.',
@@ -445,15 +358,11 @@ export const FA_TEXTS: Record<string, string> = {
   admin_menu_texts: '📝 متن‌های ربات',
   admin_menu_manual_topup: '➕ شارژ دستی',
   admin_menu_promo_codes: '🎟️ کدهای تخفیف',
-  admin_menu_create_promo: '➕ ایجاد کد تخفیف',
-  admin_menu_manage_promo: '⏯️ مدیریت کد',
   admin_menu_pending_receipts: '🧾 رسیدهای در انتظار',
   admin_menu_broadcast: '📣 پیام همگانی',
   admin_menu_direct_message: '✉️ پیام مستقیم',
   admin_menu_management: '🛠️ مدیریت',
   admin_menu_back: '◀️ بازگشت به منوی اصلی',
-  admin_dashboard_stats:
-    '📊 گزارش لحظه‌ای سامانه\n\n👥 کاربران: {total_users}\n💳 فروش امروز/هفته/ماه: {daily_revenue} / {weekly_revenue} / {monthly_revenue} تومان\n💰 فروش کل: {total_sales} تومان\n🟢 اشتراک فعال: {active_subscriptions}\n⚪ اشتراک غیرفعال/منقضی: {inactive_subscriptions}\n🧾 رسیدهای در انتظار: {pending_receipts}\n🩺 پنل: {panel_health} ({panel_latency} ms)\n🗄️ پایگاه‌داده: {database_health} ({database_latency} ms)\n🎁 پاداش دعوت: {total_referral_bonus} تومان\n💸 کش‌بک پرداخت‌شده: {total_cashback} تومان',
   admin_stats_title: 'نمای سامانه',
   admin_stats_subtitle: 'شاخص‌های فعلی فروش، عملیات و زیرساخت.',
   admin_stats_revenue_section: 'درآمد',
@@ -474,11 +383,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_stats_database_label: 'پایگاه داده',
   admin_stats_latency_unit: 'میلی‌ثانیه',
   admin_no_promo_codes: '📭 هیچ کد تخفیفی یافت نشد.',
-  admin_promo_code_line:
-    '`{code}` — {type}: {value} (استفاده: {current_uses}/{max_uses}؛ {active})',
-  admin_promo_codes: '🎟️ کدهای تخفیف:\n{codes}',
-  admin_promo_center:
-    '🎟️ مرکز مدیریت کدهای تخفیف\n\nتعداد کل: {count} · صفحه {page} از {total_pages}\nیک کد را برای مدیریت انتخاب کنید:',
   admin_promo_center_title: 'کدهای تخفیف',
   admin_promo_center_subtitle: 'تخفیف‌ها و هدیه‌های مشتری را ایجاد، بررسی، فعال و غیرفعال کنید.',
   admin_promo_total_label: 'تعداد کدهای سامانه',
@@ -506,34 +410,20 @@ export const FA_TEXTS: Record<string, string> = {
   admin_promo_edit_button: '✏️ ویرایش',
   admin_promo_open_button: '🎟️ نمایش کد',
   admin_promo_stale_button: '⚠️ این دکمه قدیمی شده است؛ فهرست تازه نمایش داده شد.',
-  admin_promo_detail:
-    '🎟️ کد: `{code}`\n\nنوع: {type}\nمقدار: {value}\nوضعیت: {active}\nاستفاده: {current_uses}/{max_uses}\nسقف هر کاربر: {max_uses_per_user}\nحداقل خرید: {min_purchase_amount}\nانقضا: {expires_at}',
   admin_promo_never_expires: 'بدون انقضا',
   admin_promo_activate_button: '✅ فعال‌سازی',
   admin_promo_deactivate_button: '⏸ غیرفعال‌سازی',
   admin_promo_delete_button: '🗑 حذف کد',
   admin_promo_delete_confirm_button: '🗑 بله، حذف کن',
-  admin_promo_delete_confirm:
-    'آیا از حذف کد `{code}` مطمئن هستید؟ فقط کدهای استفاده‌نشده قابل حذف هستند.',
   admin_promo_delete_failed: '⚠️ حذف کد `{code}` ممکن نیست؛ احتمالاً قبلاً استفاده شده است.',
   admin_no_pending_receipts: '📭 هیچ رسید در انتظاری یافت نشد.',
   admin_receipt_approve: '✅ تأیید',
   admin_receipt_reject: '❌ رد',
-  admin_receipt_approved_confirm:
-    '✅ رسید {receipt_id} با موفقیت تأیید شد و کیف پول کاربر شارژ گردید.',
-  admin_receipt_rejected_confirm: '⚠️ رسید {receipt_id} رد شد.',
   admin_pending_receipt:
     '🧾 رسید {receipt_id}\nکاربر: {telegram_id}\nمبلغ: {amount} تومان\nزمان: {created_at}',
   receipt_already_reviewed: '⚠️ این رسید قبلاً بررسی شده است.',
-  admin_receipt_approve_confirm:
-    'تأیید رسید {receipt_id}\nکاربر: {telegram_id}\nمبلغ: {amount} تومان\n\nکیف پول کاربر شارژ شود؟',
-  admin_receipt_reject_confirm:
-    'رد رسید {receipt_id}\nکاربر: {telegram_id}\nمبلغ: {amount} تومان\n\nرسید رد شود؟',
-  admin_receipt_queue_complete: '🧾 {count} رسید از مجموع {total} رسید نمایش داده شد.',
   admin_receipt_batch_button: '✅ تأیید همه رسیدهای این صفحه',
-  admin_receipt_batch_confirm: 'تأیید گروهی {count} رسید با مجموع مبلغ {amount} تومان انجام شود؟',
   admin_receipt_batch_confirm_button: '✅ بله، همه را تأیید کن',
-  admin_receipt_batch_done: '✅ {count} رسید در پردازش گروهی تأیید شد.',
   admin_receipt_queue_title: 'رسیدهای در انتظار بررسی',
   admin_receipt_queue_subtitle:
     'هر رسید را جداگانه بررسی کنید. همهٔ تصمیم‌ها در گزارش عملیاتی ثبت می‌شوند.',
@@ -589,8 +479,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_user_not_found: '⚠️ کاربر پیدا نشد.',
   admin_user_search_found: '✅ کاربر {telegram_id} پیدا شد.',
   admin_user_open_profile_button: '👤 نمایش پروفایل',
-  admin_user_profile:
-    '👤 *خلاصه حساب کاربر:* `{telegram_id}`\n• *نام کاربری:* {username}\n• *نام:* {name}\n• *وضعیت حساب:* {ban_status}\n• *تاریخ عضویت:* {created_at}\n\n👛 *اطلاعات کیف پول:*\n• *موجودی فعلی:* {balance} تومان\n• *مبلغ رزروشده:* {reserved_balance} تومان\n• *مجموع خرید:* {total_spend} تومان\n\n📱 *سرویس‌ها:*\n• *اشتراک‌های فعال:* {active_subscription_count} سرویس\n• *استفاده از تست:* {has_used_trial}\n\n📜 *تاریخچه و معرفی:*\n• *کد دعوت:* `{referral_code}`\n• *معرف:* {referrer}\n• *کاربران معرفی‌شده:* {referred_user_count} نفر\n• *پاداش دعوت:* {referral_bonus_earned} تومان\n• *بازگشت وجه:* {cashback_earned} تومان\n• *تعداد تراکنش:* {transaction_count}',
   admin_user_profile_title: 'پروفایل مشتری',
   admin_user_identity_section: 'هویت و حساب',
   admin_user_wallet_section: 'کیف پول',
@@ -608,7 +496,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_user_active_services_label: 'اشتراک‌های فعال',
   admin_user_trial_label: 'استفاده از تست',
   admin_user_referral_code_label: 'کد معرفی',
-  admin_user_referrer_label: 'معرف',
   admin_user_referred_count_label: 'کاربران معرفی‌شده',
   admin_user_referral_bonus_label: 'پاداش معرفی',
   admin_user_cashback_label: 'کش‌بک دریافت‌شده',
@@ -632,28 +519,20 @@ export const FA_TEXTS: Record<string, string> = {
   admin_user_unban_confirm: 'آیا مسدودی کاربر {telegram_id} رفع شود؟',
   admin_confirm_button: '✅ تأیید',
   admin_user_no_subscriptions: '📭 این کاربر اشتراکی ندارد.',
-  admin_user_subscription_card:
-    '📱 اشتراک `{username}`\nوضعیت: {status}\nحجم کل: {data_limit} گیگابایت\nتاریخ ساخت: {created_at}',
-  admin_user_subscriptions_complete: '✅ {count} اشتراک نمایش داده شد.',
   admin_user_audit_title: '📜 آخرین رویدادهای مدیریتی',
   admin_user_no_audit: 'هیچ رویداد مدیریتی ثبت نشده است.',
   subscription_status_unknown_short: 'نامشخص',
   button_refreshed: '🔄 صفحه به‌روزرسانی شد.',
   admin_username_unset: 'ثبت نشده',
   admin_name_unset: 'ثبت نشده',
-  admin_referrer_none: 'ندارد',
   admin_yes: 'بله',
   admin_no: 'خیر',
   admin_banned: 'مسدود',
   admin_active: 'فعال',
-  admin_profile_action_prompt:
-    '⚙️ عملیات مورد نظر را انتخاب کنید:\n1) افزایش موجودی\n2) کسر از موجودی\n3) تنظیم موجودی\n4) مسدود/رفع مسدودی\nسایر) لغو',
   admin_invalid_balance: '⚠️ مقدار موجودی معتبر نیست.',
   admin_new_balance: '💰 موجودی جدید: {balance}',
   admin_user_banned: '✅ کاربر {telegram_id} مسدود شد.',
   admin_user_unbanned: '✅ کاربر {telegram_id} از مسدودی خارج شد.',
-  admin_cancelled: '✅ عملیات لغو شد.',
-  admin_settings_list: '⚙️ تنظیمات پویا:\n{settings}\n\nشماره گزینه موردنظر را وارد کنید.',
   admin_bootstrap_env: 'متغیر محیطی اولیه',
   admin_setting_configured: 'تنظیم شده',
   admin_setting_price_per_gb: 'قیمت هر گیگابایت',
@@ -717,7 +596,6 @@ export const FA_TEXTS: Record<string, string> = {
   config_delete_not_found:
     '⚠️ سرویس `{username}` در پایگاه داده یافت نشد؛ احتمالاً قبلاً حذف شده است.',
   admin_setting_value_prompt: 'مقدار فعلی: `{current_value}`\n\nمقدار جدید را بفرستید.',
-  admin_setting_selection_invalid: '⚠️ گزینه تنظیمات معتبر نیست.',
   admin_setting_invalid: 'مقدار واردشده معتبر نیست.',
   admin_setting_number_range_invalid: '⚠️ عددی بین {min} تا {max} وارد کنید.',
   admin_setting_card_invalid: '⚠️ شماره کارت باید ۱۲ تا ۲۴ رقم باشد.',
@@ -729,7 +607,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_setting_rollback_failed:
     '🚨 اعمال نشد و بازگردانی هم ناموفق بود. تنظیم را دوباره بررسی کنید.',
   admin_rebecca_url_invalid: '⚠️ آدرس پنل باید یک URL معتبر با HTTPS باشد.',
-  admin_setting_saved: '✅ تنظیم «{setting}» با مقدار `{value}` ذخیره شد.',
   admin_setting_naming_mode_prompt:
     'روش فعلی: *{current}*\n\nروش ساخت نام سرویس‌های جدید را انتخاب کنید.',
   admin_setting_naming_mode_prefix_number: '🏷️ پیشوند + شمارنده (مثال: rebecca_1)',
@@ -741,8 +618,6 @@ export const FA_TEXTS: Record<string, string> = {
     'پیشوند فعلی: `{current}`\n\n۱ تا ۲۴ حرف انگلیسی، عدد، خط تیره یا زیرخط بفرستید.',
   admin_setting_trial_enabled_prompt:
     'وضعیت فعلی: *{current}*\n\nسرویس تست برای کاربران جدید روشن باشد؟',
-  admin_setting_trial_enabled_on: '🟢 فعال',
-  admin_setting_trial_enabled_off: '🔴 غیرفعال',
   admin_setting_naming_mode_val_prefix_number: 'پیشوند + شمارنده',
   admin_setting_naming_mode_val_telegramid_number: 'آیدی تلگرام + شمارنده',
   admin_setting_naming_mode_val_custom: 'قالب سفارشی',
@@ -757,7 +632,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_promo_type_fixed: '💰 مبلغ ثابت',
   admin_promo_type_credit: '🎁 اعتبار کیف پول',
   admin_promo_type_gb: '📊 گیگابایت هدیه',
-  admin_invalid_promo_type: '⚠️ نوع کد تخفیف معتبر نیست.',
   admin_promo_value_prompt: '💬 مقدار کد تخفیف را وارد کنید:',
   admin_invalid_promo_value: '⚠️ مقدار کد تخفیف معتبر نیست.',
   admin_promo_max_uses_prompt: '💬 حداکثر تعداد استفاده را وارد کنید:',
@@ -770,24 +644,17 @@ export const FA_TEXTS: Record<string, string> = {
     '📅 تاریخ انقضا را به شکل YYYY-MM-DD وارد کنید؛ برای بدون انقضا عدد ۰:',
   admin_invalid_promo_expiry: '⚠️ تاریخ باید معتبر، در آینده و به شکل YYYY-MM-DD باشد.',
   admin_promo_active_prompt: 'وضعیت کد را انتخاب کنید. وضعیت فعلی: {active}',
-  admin_promo_save_summary:
-    '🎟️ *تأیید اطلاعات کد*\n\nکد: `{code}`\nنوع: {type}\nمقدار: {value}\nسقف کل: {max_uses}\nسقف هر کاربر: {max_uses_per_user}\nحداقل خرید: {min_purchase_amount}\nانقضا: {expires_at}\nوضعیت: {active}',
   admin_promo_save_confirm_button: '✅ ذخیره کد',
   admin_promo_save_consequence:
     'با ذخیره، این کد بر اساس وضعیت فعال خود می‌تواند قیمت پرداختی یا اعتبار کیف پول مشتری را تغییر دهد.',
   admin_promo_created: '✅ کد تخفیف `{code}` با موفقیت ایجاد شد.',
   admin_promo_updated: '✅ کد تخفیف `{code}` با موفقیت به‌روزرسانی شد.',
   admin_promo_create_failed: '⚠️ ایجاد کد تخفیف ناموفق بود.',
-  admin_promo_manage_prompt: '💬 کد تخفیفی که می‌خواهید مدیریت کنید را وارد کنید:',
-  admin_promo_toggle_prompt:
-    '💬 وضعیت جدید را وارد کنید:\n1) فعال\n2) غیرفعال\n3) حذف کد استفاده‌نشده',
   admin_promo_active: 'فعال',
   admin_promo_inactive: 'غیرفعال',
   admin_promo_toggled: '✅ وضعیت کد `{code}` به «{active}» تغییر کرد.',
   admin_promo_deleted: '✅ کد تخفیف `{code}` حذف شد.',
   admin_promo_not_found: '⚠️ کد تخفیف پیدا نشد.',
-  admin_text_editor_intro:
-    '📝 ویرایش متن‌های ربات. زبان، دسته‌بندی و سپس کلید موردنظر را به‌صورت مرحله‌به‌مرحله انتخاب کنید.',
   admin_text_editor_title: 'ویرایشگر ترجمه',
   admin_text_editor_subtitle:
     'متن‌های دوزبانهٔ ربات را بدون نیاز به راه‌اندازی مجدد، با بررسی امن ویرایش کنید.',
@@ -802,13 +669,9 @@ export const FA_TEXTS: Record<string, string> = {
     'جایگزین سفارشی فوراً حذف می‌شود و در پیام‌های بعدی از مقدار داخلی پیش‌فرض استفاده خواهد شد.',
   admin_text_saved_title: 'ترجمه ذخیره شد',
   admin_text_key_invalid: '⚠️ کلید متن معتبر نیست.',
-  admin_text_value_prompt:
-    '💬 *ویرایش متن کلید:* `{key}`\n\n📌 *مقدار فعلی:*\n{current_value}\n\n📌 *مقدار پیش‌فرض:*\n{default_value}',
   admin_text_edit_prompt: '⌨️ لطفاً متن جدید را به‌صورت پیام ارسال کنید یا لغو را بزنید:',
   admin_text_edit_button: '✏️ ویرایش متن',
   admin_text_reset_button: '🔄 بازگردانی به پیش‌فرض',
-  admin_text_reset_confirm:
-    'آیا متن سفارشی «{key}» به مقدار پیش‌فرض بازگردد؟ نسخه سفارشی شما حذف می‌شود.',
   admin_text_reset_success: '✅ متن `{key}` با موفقیت به مقدار پیش‌فرض بازگردانده شد.',
   admin_text_value_invalid: '⚠️ متن خالی یا بیش‌ازحد طولانی است.',
   admin_text_saved: '✅ متن `{key}` بدون نیاز به راه‌اندازی مجدد ذخیره شد.',
@@ -882,11 +745,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_broadcast_prompt_for_audience:
     '💬 گروه: {audience}\nتعداد فعلی: {recipient_count} کاربر\n\nمتن پیام همگانی را وارد کنید:',
   admin_broadcast_too_long: '⚠️ متن پیام تلگرام حداکثر می‌تواند ۴۰۹۶ کاراکتر باشد.',
-  admin_broadcast_preview:
-    '📣 پیش‌نمایش پیام همگانی\n\nگروه: {audience}\nگیرندگان: {recipient_count} کاربر\n\n———\n{message}\n———\n\nپیام در صف پایدار ارسال قرار بگیرد؟',
   admin_broadcast_confirm_button: '✅ ثبت در صف ارسال',
-  admin_broadcast_queued:
-    '📣 پیام برای {recipient_count} کاربر در صف قرار گرفت و ارسال در پس‌زمینه به‌صورت پایدار ادامه پیدا می‌کند.',
   admin_broadcast_status_button: '📊 وضعیت',
   admin_broadcast_cancel_button: '⛔ لغو ارسال',
   admin_broadcast_refresh_button: '🔄 به‌روزرسانی',
@@ -898,8 +757,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_broadcast_status_cancel_requested: 'در انتظار لغو',
   admin_broadcast_status_cancelled: 'لغوشده',
   admin_broadcast_status_completed: 'تکمیل‌شده',
-  admin_broadcast_status:
-    '📣 *ارسال همگانی* `{uuid}`\n\nگروه: {audience}\nوضعیت: *{status}*\nپردازش: {processed_count}/{recipient_count}\nموفق: {sent_count} | ناموفق: {fail_count}\nزمان ثبت: {created_at}',
   admin_broadcast_status_title: 'وضعیت پیام همگانی',
   admin_broadcast_status_subtitle: 'شمارنده‌های زندهٔ ارسال برای پیام همگانیِ ثبت‌شده.',
   admin_broadcast_id_label: 'شناسهٔ پیام همگانی',
@@ -919,18 +776,13 @@ export const FA_TEXTS: Record<string, string> = {
   admin_direct_invalid_telegram_id: '⚠️ شناسه تلگرام معتبر نیست.',
   admin_direct_user_not_found: '⚠️ کاربر پیدا نشد.',
   admin_direct_message_prompt: '💬 پیام مستقیم را وارد کنید:',
-  admin_direct_preview: 'پیش‌نمایش پیام برای کاربر {telegram_id}:\n\n{message}',
   admin_direct_confirm_button: '✅ ارسال پیام',
   admin_direct_sent: '✅ پیام با موفقیت ارسال شد.',
   admin_direct_failed: '⚠️ ارسال پیام ناموفق بود.',
-  admin_alert_title: '⚠️ هشدار سامانه\n{message}',
-  admin_panel_outage:
-    '⚠️ ارتباط با پنل «{panel}» برقرار نیست.\nمسیر: `{endpoint}`\nتلاش‌های ناموفق: {attempts}',
   admin_panel_outage_title: 'هشدار پنل ربکا',
   admin_panel_outage_subtitle: 'یکی از پنل‌های ربکا در دسترس نیست و به رسیدگی اپراتور نیاز دارد.',
   admin_panel_outage_attempts_label: 'تعداد تلاش‌های ناموفق اتصال',
 
-  renewal_notification: '⚠️ اشتراک {username} نیاز به تمدید دارد.\n{reasons}',
   renewal_notification_title: 'تمدید سرویس لازم است',
   renewal_notification_subtitle: 'برای ادامه کار سرویس، این مورد را بررسی کنید.',
   renewal_service_label: 'سرویس',
@@ -976,10 +828,6 @@ export const FA_TEXTS: Record<string, string> = {
   config_delete_success_title: 'سرویس حذف شد',
   config_delete_success_refund_subtitle: 'سرویس حذف شد و مبلغ بازگشت به کیف پول شما اضافه گردید.',
   config_delete_success_no_refund_subtitle: 'سرویس برای همیشه حذف شد و مبلغی بازگردانده نشد.',
-  config_delete_refund_warning:
-    '⚠️ *حذف سرویس* `{username}`\n\nمبلغ خرید: {gross_amount} تومان\nکش‌بک کسرشده از Refund: {cashback_withheld} تومان\n💸 مبلغ قابل بازگشت: *{refund_amount} تومان*\n\nسرویس هنوز هیچ مصرفی نداشته است. با انتخاب حذف و بازگشت وجه، سرویس از Rebecca حذف و مبلغ بالا به کیف پول برگردانده می‌شود.',
-  config_delete_no_refund_warning:
-    '⚠️ *حذف سرویس* `{username}`\n\nاین سرویس واجد شرایط بازگشت وجه نیست:\n{reason}\n\nدر صورت تمایل می‌توانید فقط سرویس را برای همیشه حذف کنید.',
   refund_reason_config_not_found: 'سرویس متعلق به این حساب پیدا نشد.',
   refund_reason_remote_unavailable: 'وضعیت سرویس در Rebecca قابل تأیید نیست.',
   refund_reason_already_used: 'سرویس قبلاً مصرف داشته است.',
@@ -992,15 +840,11 @@ export const FA_TEXTS: Record<string, string> = {
     'این خرید پاداش زیرمجموعه ایجاد کرده و نیاز به بررسی دستی مدیر دارد.',
   refund_reason_already_refunded: 'وجه این خرید قبلاً بازگردانده شده است.',
   refund_reason_refund_in_progress: 'بازگشت وجه این سرویس در حال بررسی/تطبیق است.',
-  config_refund_not_eligible: '⚠️ بازگشت وجه ممکن نیست: {reason}',
-  config_refunded_deleted: '✅ سرویس `{username}` حذف شد و *{amount} تومان* به کیف پول شما برگشت.',
   config_refund_pending:
     '⏳ نتیجه حذف در Rebecca قطعی نیست. درخواست Refund ثبت شد و reconciler آن را بدون پرداخت دوباره بررسی می‌کند.',
   config_refund_failed: '⚠️ حذف و بازگشت وجه انجام نشد. موجودی شما تغییر نکرده است.',
   subscription_transfer_button: '🔁 انتقال سرویس',
   transfer_config_missing: '⚠️ سرویس انتخاب‌شده پیدا نشد. دوباره از «سرویس‌های من» شروع کنید.',
-  transfer_target_prompt:
-    '👤 شناسه عددی تلگرام یا @username کاربر مقصد را ارسال کنید. کاربر مقصد باید قبلاً ربات را Start کرده باشد.',
   transfer_title: 'انتقال سرویس',
   transfer_subtitle: 'یک کاربر موجود ربات را برای دریافت این سرویس انتخاب کنید.',
   transfer_target_hint: 'نام کاربری تلگرام یا شناسهٔ عددی گیرنده را بفرستید.',
@@ -1016,18 +860,12 @@ export const FA_TEXTS: Record<string, string> = {
   transfer_target_same_user: '⚠️ سرویس همین حالا متعلق به این کاربر است.',
   transfer_target_banned: '⚠️ انتقال سرویس به کاربر مسدودشده مجاز نیست.',
   transfer_confirm_button: '✅ انتقال سرویس',
-  transfer_confirm_prompt:
-    '🔁 انتقال سرویس به کاربر زیر انجام شود؟\n\nTelegram ID: `{telegram_id}`\nUsername: {username}\n\nپس از تأیید، سرویس از حساب فعلی شما خارج می‌شود.',
-  transfer_success: '✅ سرویس `{username}` به کاربر {telegram_id} منتقل شد.',
-  transfer_recipient_notice:
-    '🎁 سرویس `{username}` از کاربر {telegram_id} به حساب شما منتقل شد و اکنون در «سرویس‌های من» قابل مدیریت است.',
   transfer_recipient_notice_title: 'یک سرویس به حساب شما اضافه شد',
   transfer_recipient_notice_subtitle: 'اکنون می‌توانید این سرویس را از «سرویس‌های من» مدیریت کنید.',
   transfer_sender_label: 'انتقال از سوی',
   transfer_failed: '⚠️ انتقال سرویس انجام نشد. مالکیت تغییری نکرده است.',
   admin_menu_admins: '🛡️ ادمین‌ها',
   admin_menu_orphans: '🧩 سرویس‌های یتیم',
-  admin_admins_title: '🛡️ *مدیریت ادمین‌ها*\n\n👥 ادمین‌های فعال: {count}',
   admin_registry_title: 'فهرست مدیران',
   admin_registry_subtitle: 'اپراتورهای مورداعتمادِ دارای دسترسی به پنل مدیریت ربات را مدیریت کنید.',
   admin_registry_count_label: 'مدیران فعال',
@@ -1047,11 +885,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_add_admin_prompt: 'شناسه عددی Telegram ادمین جدید را ارسال کنید:',
   admin_admin_added: '✅ کاربر {telegram_id} به ادمین‌ها اضافه شد.',
   admin_admin_already_exists: 'ℹ️ کاربر {telegram_id} از قبل ادمین است.',
-  admin_remove_admin_confirm: 'آیا دسترسی ادمین {telegram_id} حذف شود؟',
-  admin_admin_removed: '✅ دسترسی ادمین {telegram_id} حذف شد.',
   admin_admin_not_found: '⚠️ ادمین {telegram_id} پیدا نشد.',
   admin_last_admin_cannot_remove: '⚠️ آخرین ادمین قابل حذف نیست؛ ابتدا یک ادمین دیگر اضافه کنید.',
-  admin_orphan_none: '✅ هیچ اختلاف باز بین پنل‌های ربکا و دیتابیس ربات وجود ندارد.',
   admin_orphan_scan_button: '🔄 اسکن الآن',
   admin_orphan_scanning: '🔄 اسکن پنل‌های ربکا آغاز شد…',
   admin_orphan_scan_done:
@@ -1060,17 +895,10 @@ export const FA_TEXTS: Record<string, string> = {
     '⚠️ اسکن پنل‌های سالم انجام شد؛ {failed} پنل در دسترس نبود. محلی حذفشده: {local} | سرویس متصل‌نشده: {remote} | نادیده‌گرفته‌شده: {ignored}',
   admin_orphan_scan_failed: '⚠️ اسکن کامل نشد؛ اتصال پنل‌های ربکا یا دیتابیس را بررسی کنید.',
   admin_orphan_baseline_button: '🧱 ثبت وضعیت فعلی بهعنوان مبنای پایه',
-  admin_orphan_baseline_confirm:
-    '🧱 *وضعیت فعلی پنل‌های ربکا بهعنوان مبنای پایه ثبت شود؟*\n\nتمام سرویس‌هایی که *همین الآن* در پنل‌های ربکا وجود دارند ولی به ربات متصل نیستند، بهعنوان سرویس قدیمی/دستی علامت میخورند و در اسکنهای بعدی نادیده گرفته میشوند.\n\nهیچ سرویسی حذف، بازگشت وجه، یا متصل نمیشود. سرویس‌های جدیدی که بعداً ساخته شوند همچنان شناسایی خواهند شد. این گزینه برای زمانی است که قبل از نصب این قابلیت، کانفیگهای دستی زیادی روی پنل داشتهاید.',
   admin_orphan_baseline_confirm_button: '✅ ثبت مبنای پایه',
   admin_orphan_baseline_running: '🧱 در حال دریافت لیست فعلی سرویس‌های ربکا…',
-  admin_orphan_baseline_done:
-    '✅ مبنای پایه ثبت شد. سرویس‌های ربکا: {remote} | از قبل متصل به ربات: {bound} | ثبت‌شده بهعنوان قدیمی/دستی: {ignored}',
   admin_orphan_baseline_failed:
     '⚠️ ثبت مبنای پایه انجام نشد. هیچ سرویسی تغییر نکرد؛ اتصال پنل‌های ربکا/دیتابیس را بررسی و دوباره تلاش کنید.',
-  admin_orphan_summary: '🧩 مجموع موارد باز: {total}',
-  admin_orphan_card:
-    '🧩 *اختلاف سرویس*\nنوع: {kind}\nسرویس: `{username}`\nمالک محلی: `{owner}`\nاولین مشاهده: {first_seen}',
   admin_orphan_kind_local: 'سرویس محلی ──► ناپدیدشده در پنل ربکا',
   admin_orphan_kind_remote: 'سرویس پنل ربکا ──► متصل‌نشده به ربات',
   admin_orphan_remove_local_button: '🗑 پاک کردن رکورد محلی',
@@ -1081,8 +909,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_orphan_assigned: '✅ سرویس `{username}` به کاربر {telegram_id} متصل شد.',
   admin_orphan_assign_failed: '⚠️ اتصال سرویس یتیم به کاربر انجام نشد.',
   admin_orphan_issue_missing: '⚠️ این مورد دیگر باز یا موجود نیست.',
-  admin_orphan_remove_confirm:
-    'رکورد محلی `{username}` حذف شود؟ این عملیات هیچ سرویس در پنل ربکا را حذف و هیچ وجهی را بازگشت نمیدهد.',
   admin_orphan_removed: '✅ رکورد یتیم محلی حذف شد.',
   admin_orphan_remote_reappeared:
     'ℹ️ سرویس دوباره در پنل ربکا وجود دارد. مورد قدیمی بسته شد و چیزی حذف نشد.',
@@ -1121,7 +947,6 @@ export const FA_TEXTS: Record<string, string> = {
     'این عملیات سرویس ربکا را حذف نمی‌کند و بازگشت وجهی هم انجام نمی‌دهد.',
   purchase_confirmation_expired:
     '⌛️ این تأیید منقضی یا قبلاً استفاده شده است. خرید را دوباره از فروشگاه آغاز کنید.',
-  admin_panels_title: '🖥 مدیریت پنل‌های ربکا\n\nتعداد پنل‌ها: {count}',
   admin_panel_registry_title: 'پنل‌های ربکا',
   admin_panel_registry_subtitle:
     'یک پنل را برای بررسی اتصال، سرویس‌ها و تنظیمات عملیاتی انتخاب کنید.',
@@ -1158,7 +983,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_panel_service_delete_subtitle:
     'این مقصد سرویس دیگر برای فروش‌های جدید قابل انتخاب نخواهد بود.',
   admin_panel_service_delete_consequence: 'حذف مقصد، سرویس‌های فعال مشتریان در پنل را حذف نمی‌کند.',
-  admin_panels_empty: '🖥 هنوز پنلی تنظیم نشده است. اولین پنل را اضافه کنید.',
   admin_panel_add_button: '➕ افزودن پنل',
   admin_panel_name_prompt: '🏷 نام کوتاه و قابل تشخیص پنل را بفرستید:',
   admin_panel_url_prompt: '🌐 آدرس اصلی HTTPS پنل را بفرستید؛ بدون مسیر اضافی:',
@@ -1171,8 +995,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_panel_required_first: '⚠️ ابتدا یک پنل فعال و حداقل یک سرویس برای آن بسازید.',
   admin_pkg_target_prompt: '🎯 پنل و سرویس این پکیج را انتخاب کنید:',
   admin_panel_not_found: '⚠️ پنل موردنظر پیدا نشد.',
-  admin_panel_detail:
-    '🖥 {name}\n\nوضعیت: {status}\nپنل پیش‌فرض: {default_status}\nآدرس: {url}\nورود: {credential}\nسرویس پیش‌فرض: {service}',
   admin_panel_status_enabled: '🟢 فعال',
   admin_panel_status_disabled: '⚪️ غیرفعال',
   admin_panel_credential_api_key: '🔐 کلید API',
@@ -1193,11 +1015,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_panel_custom_target_selected_button: '✅ مقصد حجم دلخواه',
   admin_panel_custom_target_saved: '✅ مقصد حجم دلخواه ذخیره شد.',
   admin_panel_service_delete_button: '🗑 حذف',
-  admin_panel_service_delete_confirm:
-    'آیا سرویس «{service}» از این پنل حذف شود؟ این عمل قابل بازگشت نیست.',
   admin_panel_delete_button: '🗑 حذف پنل',
-  admin_panel_delete_confirm:
-    '⚠️ پنل حذف شود؟ اگر خرید، اشتراک یا سابقه‌ای به آن متصل باشد، حذف برای حفظ داده‌ها متوقف می‌شود.',
   admin_panel_deleted: '✅ پنل حذف شد.',
   admin_panel_in_use: '⚠️ این پنل یا سرویس در داده‌های ربات استفاده شده و قابل حذف نیست.',
   admin_panel_last_delete: '⚠️ آخرین پنل قابل حذف نیست.',

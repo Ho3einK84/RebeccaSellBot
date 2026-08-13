@@ -12,15 +12,7 @@ export const EN_TEXTS: Record<string, string> = {
   welcome:
     '👋 Welcome to Rebecca VPN Bot!\nUse the menu below to buy subscriptions, manage your wallet, and track your services.',
   subscription_view_detail: '👁 View Service',
-  subscription_detail_title: '📱 *Subscription Details:* `{username}`',
-  subscription_advanced_section: '⚙️ *Advanced Settings:*',
-  subscription_danger_section: '⚠️ *Danger Zone:*',
   wallet_dashboard_title: 'User Wallet',
-  wallet_pending_receipt_detail:
-    '⏳ *Pending Receipt:* \n💰 *Amount:* {amount} Toman\n📅 *Submitted:* {date}\n📌 *Status:* Under admin review',
-  topup_preset_prompt: '💬 Please select a preset amount or enter a custom amount below:',
-  topup_pending_exists_detail:
-    '⚠️ You already have a pending topup receipt ({amount} Toman). You cannot submit another receipt until it is processed.',
   home_title: 'Home — Rebecca Sales Bot',
   home_subtitle: 'Your wallet and service status at a glance',
   home_balance: 'Wallet Balance',
@@ -51,8 +43,6 @@ export const EN_TEXTS: Record<string, string> = {
   trial_duration_label: 'Validity',
   trial_terms_label: 'Terms',
   trial_terms: 'Each account can claim this complimentary trial subscription once.',
-  insufficient_balance_detail:
-    '⚠️ *Insufficient wallet balance.*\n\n💰 *Package price:* {price} Toman\n👛 *Your balance:* {balance} Toman\n📉 *Deficit:* {deficit} Toman',
   insufficient_balance_title: 'Add Funds to Continue',
   insufficient_balance_subtitle: 'Your wallet balance does not cover this package yet.',
   insufficient_balance_deficit_label: 'Amount still needed',
@@ -60,12 +50,8 @@ export const EN_TEXTS: Record<string, string> = {
   insufficient_balance_price_label: 'Package price',
   insufficient_balance_balance_label: 'Available now',
   insufficient_balance_hint: 'Top up your wallet, then choose this package again.',
-  trial_preview_title: '🎁 *Rebecca Free Trial*',
-  trial_preview_text:
-    '🎁 *Free Trial Preview*\n\n📊 *Traffic:* {gb} GB\n⏳ *Duration:* {days} Days\n\nℹ️ *Terms:* This trial subscription is completely free and can be claimed once per account.',
   trial_start_button: '🎁 Claim Free Trial',
   shop_clear_promo_button: '❌ Remove Promo Code',
-  shop_promo_active: '🎟️ *Active Promo:* `{code}`',
   direct_topup_button: '👛 Top Up Wallet',
   currency_toman: 'Toman',
   service_unit: 'Service(s)',
@@ -74,8 +60,6 @@ export const EN_TEXTS: Record<string, string> = {
   balance:
     '👛 Wallet balance\n\n💰 Available balance: {balance} Toman\n\nUse the buttons below to top up or redeem a promo code.',
   shop: '🛍️ Subscription shop\nChoose a plan below to activate your secure service.',
-  topup_instructions:
-    '💳 Top up wallet\n\nPlease transfer the amount to the card below and send a clear photo of the receipt:\n\n💳 Card number: {card_number}\n👤 Card holder: {card_holder}',
   topup_title: 'Top Up Wallet',
   topup_subtitle: 'Transfer funds to the card below, then submit one clear receipt for review.',
   topup_payment_section: 'Transfer Details',
@@ -96,10 +80,6 @@ export const EN_TEXTS: Record<string, string> = {
   topup_receipt_id_label: 'Receipt ID',
   topup_pending_title: 'A Receipt Is Already Under Review',
   topup_pending_subtitle: 'You can submit another receipt after this one is approved or rejected.',
-  topup_success:
-    '✅ Your receipt was submitted successfully. Your wallet will be credited after admin review.',
-  config_created:
-    '🎉 Your subscription was activated successfully!\n\n🔗 Connection link:\n`{sub_url}`\n\nCopy this link into your VPN client to connect.',
   claimed_success: '✅ Subscription linked to your account successfully.',
   claim_failed: '⚠️ This subscription link is invalid or already claimed.',
   claim_already_claimed: '⚠️ This subscription link is already claimed by another account.',
@@ -121,7 +101,6 @@ export const EN_TEXTS: Record<string, string> = {
   promo_max_uses_reached: '⚠️ This promo code has reached its maximum usage limit.',
   promo_user_max_uses_reached: '⚠️ You have reached your personal usage limit for this promo code.',
   promo_minimum_purchase_not_met: '⚠️ This purchase does not meet the promo code minimum amount.',
-  promo_already_redeemed: '⚠️ You have already redeemed this promo code.',
   promo_gift_credit_success: '🎁 Gift credit added to your wallet successfully!',
   promo_redeem_failed: '⚠️ Failed to redeem promo code. Please try again.',
   promo_valid: '✅ Promo code is valid.',
@@ -162,16 +141,9 @@ export const EN_TEXTS: Record<string, string> = {
   renewal_package_missing: '⚠️ Selected renewal package is not available.',
   promo_no_longer_usable: '⚠️ Selected promo code is no longer usable.',
   renewing: '⏳ Renewing subscription…',
-  renewal_success: '🎉 Subscription `{username}` renewed with package {package_name}.',
   operation_in_progress: '⏳ Operation in progress. Please wait.',
-  subscription_link_revoked: '🔐 Previous link revoked. Your new link:\n`{sub_url}`',
   subscription_link_unavailable: '⚠️ Subscription link currently unavailable.',
-  subscription_enabled: '✅ Subscription enabled successfully.',
-  subscription_disabled: '⏸️ Subscription disabled.',
   config_action_failed: '⚠️ Subscription operation failed.',
-  receipt_review_in_progress: '⏳ Your payment receipt is under review.',
-  receipt_approved: '✅ Receipt approved and wallet credited.',
-  receipt_rejected: '⚠️ Receipt rejected. Contact support if needed.',
   receipt_result_approved_title: 'Wallet Credited',
   receipt_result_rejected_title: 'Receipt Not Approved',
   receipt_result_approved_subtitle:
@@ -183,7 +155,6 @@ export const EN_TEXTS: Record<string, string> = {
   claim_handler_failed: '⚠️ Failed to link subscription. Please try again.',
   renewal_button: '🔄 Renew subscription',
   renew_confirm_button: '✅ Confirm and renew',
-  renew_select_package: '💬 Select a renewal package for `{username}`:',
   renewal_selection_title: 'Renew Subscription',
   renewal_selection_subtitle:
     'Choose a package for your next renewal. You will review the final total before your wallet is charged.',
@@ -208,7 +179,6 @@ export const EN_TEXTS: Record<string, string> = {
   checkout_confirmation_hint: 'Your wallet will be charged only after you tap “Confirm and renew.”',
   auto_renew_enable_button: '♻️ Enable auto-renew',
   auto_renew_disable_button: '⏹ Disable auto-renew',
-  auto_renew_select_package: '💬 Select an auto-renew package:',
   auto_renew_selection_title: 'Set Up Automatic Renewal',
   auto_renew_selection_subtitle:
     'Choose the package to apply automatically when this service is due for renewal.',
@@ -226,15 +196,7 @@ export const EN_TEXTS: Record<string, string> = {
   auto_renew_enabled_subtitle: 'We will use the selected package when this service is due.',
   auto_renew_disabled_title: 'Automatic Renewal Disabled',
   auto_renew_disabled_subtitle: 'This service will no longer renew automatically.',
-  auto_renew_confirm:
-    'Enable automatic renewal for {username} with {package} at {price} Toman per renewal? Your wallet will be charged when the renewal is due.',
-  auto_renew_disable_confirm:
-    'Disable automatic renewal for {username}? Scheduled wallet renewals will stop.',
-  auto_renew_custom_package: '{gb} GB / {days} days',
   auto_renew_enabled: '✅ Auto-renew is now enabled for this subscription.',
-  auto_renew_disabled: '⏹ Auto-renew is now disabled for this subscription.',
-  auto_renew_state_enabled: '♻️ *Auto-renew:* enabled — {package}',
-  auto_renew_state_disabled: '♻️ *Auto-renew:* disabled',
   auto_renew_package_unavailable: 'Selected package is no longer available',
   auto_renew_package_unavailable_title: 'Automatic Renewal Needs Attention',
   auto_renew_package_unavailable_subtitle:
@@ -245,8 +207,6 @@ export const EN_TEXTS: Record<string, string> = {
   auto_renew_low_balance_subtitle: 'Your wallet balance was not enough for a scheduled renewal.',
   auto_renew_required_label: 'Required for renewal',
   auto_renew_balance_label: 'Wallet balance',
-  auto_renew_success:
-    '✅ `{username}` was renewed automatically. New quota: {gb} GB; valid until {expiry}.',
   auto_renew_success_title: 'Service Renewed Automatically',
   auto_renew_success_subtitle: 'Your wallet was charged and the service is ready to use.',
   auto_renew_service_label: 'Service',
@@ -263,13 +223,6 @@ export const EN_TEXTS: Record<string, string> = {
   custom_package_name: '{gb} GB · {days} days',
   purchase_target_unavailable:
     '⚠️ This package target is unavailable. Choose another package or contact support.',
-  custom_days_prompt: '💬 Please enter the desired duration in days (e.g. 30):',
-  custom_days_invalid:
-    '⚠️ Invalid duration entered. Please enter a whole number between 1 and 3650 days.',
-  renewal_quote:
-    '🔄 Renewal summary for `{username}`\n\n📊 *Traffic:* {gb} GB\n⏳ *Duration:* {days} Days\n💰 *Amount payable:* {amount} Toman ({price_per_gb} Toman/GB)\n\nAre you sure you want to proceed?',
-  renewal_quote_with_promo:
-    '🔄 Renewal summary for `{username}`\n🎟️ *Promo code:* `{promo_code}`\n\n📊 *Traffic:* {gb} GB\n⏳ *Duration:* {days} Days\n💰 *Amount payable:* {amount} Toman ({price_per_gb} Toman/GB)\n\nAre you sure you want to proceed?',
 
   menu_buy_subscription: '🛒 Buy subscription',
   menu_wallet: '👛 Wallet',
@@ -287,10 +240,8 @@ export const EN_TEXTS: Record<string, string> = {
   menu_use_promo: '🎟️ Redeem promo code',
   menu_back_main: '🏠 Main menu',
   menu_language: '🌐 Change language / تغییر زبان',
-  language_selection_prompt: '🌐 Please select your preferred language:',
   language_selection_title: 'Choose Your Language',
   language_selection_subtitle: 'You can change this preference again at any time.',
-  language_changed: '✅ Bot language changed to English.',
   language_update_failed: '⚠️ Failed to save language preference. Please try again.',
   button_action_failed: '⚠️ Failed to process command. Please try again.',
   button_expired: 'This button is outdated or expired.',
@@ -300,8 +251,6 @@ export const EN_TEXTS: Record<string, string> = {
   button_input_required: 'Please use one of the buttons shown for this step.',
   photo_input_required: '🖼️ Please send a clear receipt photo or tap Cancel.',
   no_subscriptions: '📭 No subscriptions found in your account.',
-  subscriptions_list_complete:
-    '✅ {count} subscriptions shown. Use the button below when you are ready to return.',
   subscriptions_loading: 'Loading your subscriptions…',
   subscription_refreshing: 'Refreshing service details…',
   subscription_list_title: 'My Subscriptions',
@@ -331,29 +280,16 @@ export const EN_TEXTS: Record<string, string> = {
   subscription_state_depleted: 'Traffic depleted',
   subscription_state_unknown: 'Unknown ({status})',
   unlimited: '♾️ Unlimited',
-  subscription_status:
-    '📱 *Subscription:* `{username}`\n\n⚡ *Status:* {status}\n📊 *Remaining Traffic:* {remaining}\n⏳ *Expiration:* {expiry_info}\n🌐 *Last Connection:* {online_info}\n📅 *Created Date:* {created_info}\n\n🔗 *Subscription URL:*\n`{sub_url}`',
-  subscription_status_cached:
-    '📱 *Cached subscription data:* `{username}`\n\n⚠️ The panel is temporarily unavailable; the latest verified data is shown.\n⚡ *Status:* {status}\n📊 *Remaining Traffic:* {remaining}\n⏳ *Expiration:* {expiry_info}\n🌐 *Last Connection:* {online_info}\n📅 *Created Date:* {created_info}\n\n🔗 *Subscription URL:*\n`{sub_url}`',
-  subscription_status_failed: '⚠️ Failed to retrieve status for {username}.',
   subscription_enable_button: '✅ Enable',
   subscription_disable_button: '⏸️ Disable',
-  subscription_toggle_button: '🔄 Toggle status',
   subscription_revoke_button: '🔑 Revoke old link',
   subscription_refresh_button: '🔄 Refresh',
   subscription_qr_button: '📷 Get QR',
-  subscription_status_active: '✅ Active',
-  subscription_status_disabled: '⏸️ Disabled',
-  subscription_status_on_hold: '⏳ On hold',
-  subscription_status_expired: '⚠️ Expired',
-  subscription_status_depleted: '📭 Traffic depleted',
-  subscription_status_unknown: 'Unknown: {status}',
   subscription_expiry_never: '♾️ Never expires',
   subscription_expiry_remaining: '{date} ({days} days remaining)',
   subscription_expiry_expired: '{date} (expired)',
   subscription_online_never: '❌ No connection',
   traffic_unit_gb: 'GB',
-  subscription_revoke_confirm: 'Revoke the current link for {username} and issue a new one?',
   subscription_revoke_title: 'Replace Subscription Link',
   subscription_revoke_subtitle:
     'Invalidate the current connection link and issue a new private link.',
@@ -362,14 +298,11 @@ export const EN_TEXTS: Record<string, string> = {
   subscription_revoke_success_title: 'New Subscription Link Ready',
   subscription_revoke_success_subtitle: 'The previous link no longer works.',
   subscription_qr_generating: 'Generating QR…',
-  subscription_qr_caption: 'Connection QR for {username}',
   subscription_qr_title: 'Connection QR Code',
   subscription_qr_subtitle:
     'Scan this code with your VPN app, or use the subscription link from the service screen.',
   subscription_qr_service_label: 'Service',
   subscription_qr_failed: '⚠️ Could not generate the subscription QR. Please try again.',
-  trial_subscription_url:
-    '🔗 Your trial subscription link:\n`{sub_url}`\n\nCopy this link into your VPN client.',
   referral_info:
     '👥 Referral Program\n\nEarn rewards when your friends make their first purchase using your link:\n\n🔗 Your referral link:\n`{ref_link}`\n\n💰 Reward per referral: {bonus} Toman',
   referral_title: 'Invite Friends',
@@ -383,13 +316,6 @@ export const EN_TEXTS: Record<string, string> = {
   package_pkg_30gb_30d_name: '30 GB (30 Days)',
   package_pkg_50gb_30d_name: '50 GB (30 Days)',
   package_pkg_100gb_60d_name: '100 GB (60 Days)',
-  purchase_issuing: '⏳ Issuing {package_name} subscription…',
-  purchase_issuing_with_promo:
-    '⏳ Issuing {package_name} with promo {promo_code} ({amount} Toman)…',
-  purchase_quote:
-    '🛒 New subscription purchase summary\n\n📊 *Traffic:* {gb} GB\n⏳ *Duration:* {days} Days\n💰 *Amount payable:* {amount} Toman ({price_per_gb} Toman/GB)\n\nAre you sure you want to proceed?',
-  purchase_quote_with_promo:
-    '🛒 New subscription purchase summary\n🎟️ *Promo code:* `{promo_code}`\n\n📊 *Traffic:* {gb} GB\n⏳ *Duration:* {days} Days\n💰 *Amount payable:* {amount} Toman ({price_per_gb} Toman/GB)\n\nAre you sure you want to proceed?',
   purchase_review_title: 'Review Purchase',
   purchase_review_subtitle: 'Confirm the selected package and final wallet charge.',
   purchase_confirmation_hint:
@@ -401,32 +327,21 @@ export const EN_TEXTS: Record<string, string> = {
   purchase_success_subtitle: 'Copy the private link below into your VPN app to connect.',
   purchase_success_link_label: 'Subscription link',
   purchase_failed_title: 'We Could Not Complete the Purchase',
-  custom_gb_prompt: '💬 Please enter the traffic amount in GB:',
   custom_gb_invalid_range: '⚠️ Traffic must be an integer between {min} and {max} GB.',
-  custom_gb_simple_prompt: '💬 Please enter the traffic amount in GB:',
   custom_gb_invalid: '⚠️ Invalid traffic amount.',
-  promo_prompt: '💬 Please enter the promo or gift code:',
   promo_title: 'Redeem a Code',
   promo_subtitle: 'Enter a promo or gift code to apply it to your wallet or next purchase.',
   promo_input_hint: 'Send the code exactly as you received it.',
   promo_applied_title: 'Code Applied',
   promo_applied_subtitle: 'This code will be used automatically on your next eligible purchase.',
-  promo_selected_for_purchase: '✅ Code {promo_code} applied to your next purchase.',
-  topup_amount_prompt: '💬 Please enter the top-up amount in Toman:',
   invalid_amount: '⚠️ Invalid amount entered.',
   topup_amount_invalid_range: '⚠️ Amount must be between {min} and {max} Toman.',
   topup_photo_prompt: '🖼️ Please send a clear photo of the payment receipt:',
-  topup_confirmation:
-    '🧾 *Confirm receipt submission*\n\n💰 Amount: *{amount} Toman*\n🖼️ Receipt image received.\n\nYou cannot submit another receipt until an admin reviews this one.',
   topup_confirm_button: '✅ Submit receipt',
-  topup_pending_exists:
-    '⏳ You already have a receipt awaiting review. Submit another after it is approved or rejected.',
   topup_failed: '⚠️ Receipt submission failed. Please try again.',
 
   admin_menu_stats: '📊 Statistics',
-  admin_menu_search_user: '🔎 Search user',
   admin_menu_users: '👥 User Management',
-  admin_users_title: '👥 *User Management* ({total} total users)\nPage {page} of {total_pages}:',
   admin_users_list_title: 'User Management',
   admin_users_list_subtitle:
     'Find a customer, inspect their account, or take an audited operator action.',
@@ -444,15 +359,11 @@ export const EN_TEXTS: Record<string, string> = {
   admin_menu_texts: '📝 Bot texts',
   admin_menu_manual_topup: '➕ Manual top-up',
   admin_menu_promo_codes: '🎟️ Promo codes',
-  admin_menu_create_promo: '➕ Create promo code',
-  admin_menu_manage_promo: '⏯️ Manage promo code',
   admin_menu_pending_receipts: '🧾 Pending receipts',
   admin_menu_broadcast: '📣 Broadcast',
   admin_menu_direct_message: '✉️ Direct message',
   admin_menu_management: '🛠️ Management',
   admin_menu_back: '◀️ Back to main menu',
-  admin_dashboard_stats:
-    '📊 System Statistics\n\n👥 Total Users: {total_users}\n💳 Revenue today/week/month: {daily_revenue} / {weekly_revenue} / {monthly_revenue} Toman\n💰 Total Sales: {total_sales} Toman\n🟢 Active subscriptions: {active_subscriptions}\n⚪ Inactive/expired subscriptions: {inactive_subscriptions}\n🧾 Pending receipts: {pending_receipts}\n🩺 Panel: {panel_health} ({panel_latency} ms)\n🗄️ Database: {database_health} ({database_latency} ms)\n🎁 Referral Rewards: {total_referral_bonus} Toman\n💸 Cashback Paid: {total_cashback} Toman',
   admin_stats_title: 'System Snapshot',
   admin_stats_subtitle: 'Current commercial, operational, and infrastructure indicators.',
   admin_stats_revenue_section: 'Revenue',
@@ -473,10 +384,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_stats_database_label: 'Database',
   admin_stats_latency_unit: 'ms',
   admin_no_promo_codes: '📭 No promo codes found.',
-  admin_promo_code_line: '`{code}` — {type}: {value} (uses: {current_uses}/{max_uses}; {active})',
-  admin_promo_codes: '🎟️ Promo codes:\n{codes}',
-  admin_promo_center:
-    '🎟️ Promo code center\n\nTotal: {count} · page {page} of {total_pages}\nSelect a code to manage:',
   admin_promo_center_title: 'Promo Codes',
   admin_promo_center_subtitle:
     'Create, inspect, activate, and retire customer discounts and gifts.',
@@ -505,34 +412,21 @@ export const EN_TEXTS: Record<string, string> = {
   admin_promo_edit_button: '✏️ Edit',
   admin_promo_open_button: '🎟️ Open code',
   admin_promo_stale_button: '⚠️ This button is stale; the current list is now displayed.',
-  admin_promo_detail:
-    '🎟️ Code: `{code}`\n\nType: {type}\nValue: {value}\nStatus: {active}\nUses: {current_uses}/{max_uses}\nPer-user limit: {max_uses_per_user}\nMinimum purchase: {min_purchase_amount}\nExpires: {expires_at}',
   admin_promo_never_expires: 'Never',
   admin_promo_activate_button: '✅ Activate',
   admin_promo_deactivate_button: '⏸ Deactivate',
   admin_promo_delete_button: '🗑 Delete code',
   admin_promo_delete_confirm_button: '🗑 Yes, delete',
-  admin_promo_delete_confirm: 'Delete `{code}`? Only codes with no redemptions can be deleted.',
   admin_promo_delete_failed:
     '⚠️ `{code}` cannot be deleted because it may already have redemptions.',
   admin_no_pending_receipts: '📭 No pending receipts found.',
   admin_receipt_approve: '✅ Approve',
   admin_receipt_reject: '❌ Reject',
-  admin_receipt_approved_confirm:
-    '✅ Receipt {receipt_id} approved and user wallet credited successfully.',
-  admin_receipt_rejected_confirm: '⚠️ Receipt {receipt_id} rejected.',
   admin_pending_receipt:
     '🧾 Receipt {receipt_id}\nUser: {telegram_id}\nAmount: {amount} Toman\nCreated: {created_at}',
   receipt_already_reviewed: '⚠️ This receipt has already been reviewed.',
-  admin_receipt_approve_confirm:
-    'Approve receipt {receipt_id}\nUser: {telegram_id}\nAmount: {amount} Toman\n\nCredit the user wallet?',
-  admin_receipt_reject_confirm:
-    'Reject receipt {receipt_id}\nUser: {telegram_id}\nAmount: {amount} Toman\n\nReject this receipt?',
-  admin_receipt_queue_complete: '🧾 Displayed {count} of {total} pending receipts.',
   admin_receipt_batch_button: '✅ Approve this page',
-  admin_receipt_batch_confirm: 'Approve {count} receipts with a total amount of {amount} Toman?',
   admin_receipt_batch_confirm_button: '✅ Yes, approve all',
-  admin_receipt_batch_done: '✅ Approved {count} receipts in the batch.',
   admin_receipt_queue_title: 'Pending Receipts',
   admin_receipt_queue_subtitle:
     'Review one receipt at a time. Every decision is recorded in the operator audit trail.',
@@ -588,8 +482,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_user_not_found: '⚠️ User not found.',
   admin_user_search_found: '✅ User {telegram_id} found.',
   admin_user_open_profile_button: '👤 Open profile',
-  admin_user_profile:
-    '👤 *User Summary:* `{telegram_id}`\n• *Username:* {username}\n• *Name:* {name}\n• *Status:* {ban_status}\n• *Member since:* {created_at}\n\n👛 *Wallet Details:*\n• *Available Balance:* {balance} Toman\n• *Reserved Balance:* {reserved_balance} Toman\n• *Total Spend:* {total_spend} Toman\n\n📱 *Subscriptions:*\n• *Active Subscriptions:* {active_subscription_count}\n• *Trial Used:* {has_used_trial}\n\n📜 *History & Referrals:*\n• *Referral Code:* `{referral_code}`\n• *Referrer:* {referrer}\n• *Referred Users:* {referred_user_count}\n• *Referral Bonus:* {referral_bonus_earned} Toman\n• *Cashback Earned:* {cashback_earned} Toman\n• *Transactions:* {transaction_count}',
   admin_user_profile_title: 'Customer Profile',
   admin_user_identity_section: 'Identity & Account',
   admin_user_wallet_section: 'Wallet',
@@ -607,7 +499,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_user_active_services_label: 'Active subscriptions',
   admin_user_trial_label: 'Trial used',
   admin_user_referral_code_label: 'Referral code',
-  admin_user_referrer_label: 'Referrer',
   admin_user_referred_count_label: 'Referred users',
   admin_user_referral_bonus_label: 'Referral rewards',
   admin_user_cashback_label: 'Cashback earned',
@@ -631,28 +522,20 @@ export const EN_TEXTS: Record<string, string> = {
   admin_user_unban_confirm: 'Unban user {telegram_id}?',
   admin_confirm_button: '✅ Confirm',
   admin_user_no_subscriptions: '📭 This user has no subscriptions.',
-  admin_user_subscription_card:
-    '📱 Subscription `{username}`\nStatus: {status}\nTotal data: {data_limit} GB\nCreated: {created_at}',
-  admin_user_subscriptions_complete: '✅ Displayed {count} subscriptions.',
   admin_user_audit_title: '📜 Recent administrative events',
   admin_user_no_audit: 'No administrative events have been recorded.',
   subscription_status_unknown_short: 'Unknown',
   button_refreshed: '🔄 Screen refreshed.',
   admin_username_unset: 'Not set',
   admin_name_unset: 'Not set',
-  admin_referrer_none: 'None',
   admin_yes: 'Yes',
   admin_no: 'No',
   admin_banned: 'Banned',
   admin_active: 'Active',
-  admin_profile_action_prompt:
-    '⚙️ Select action:\n1) Add funds\n2) Deduct funds\n3) Set balance\n4) Ban/Unban\nOther) Cancel',
   admin_invalid_balance: '⚠️ Invalid balance value.',
   admin_new_balance: '💰 New balance: {balance}',
   admin_user_banned: '✅ User {telegram_id} banned.',
   admin_user_unbanned: '✅ User {telegram_id} unbanned.',
-  admin_cancelled: '✅ Operation cancelled.',
-  admin_settings_list: '⚙️ Dynamic settings:\n{settings}\n\nEnter option number to edit.',
   admin_bootstrap_env: 'Bootstrap env value',
   admin_setting_configured: 'Configured',
   admin_setting_price_per_gb: 'Price per GB',
@@ -716,7 +599,6 @@ export const EN_TEXTS: Record<string, string> = {
   config_delete_not_found:
     '⚠️ Subscription `{username}` was not found in the database; it may already have been deleted.',
   admin_setting_value_prompt: 'Current value: `{current_value}`\n\nSend the new value.',
-  admin_setting_selection_invalid: '⚠️ The settings option is invalid.',
   admin_setting_invalid: 'The value is invalid.',
   admin_setting_number_range_invalid: '⚠️ Enter a number from {min} to {max}.',
   admin_setting_card_invalid: '⚠️ Card number must contain 12–24 digits.',
@@ -728,7 +610,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_setting_rollback_failed:
     '🚨 The change failed and rollback also failed. Review this setting again.',
   admin_rebecca_url_invalid: '⚠️ The panel URL must be a valid HTTPS URL.',
-  admin_setting_saved: '✅ Setting "{setting}" was saved as `{value}`.',
   admin_setting_naming_mode_prompt:
     'Current method: *{current}*\n\nChoose how new service names are generated.',
   admin_setting_naming_mode_prefix_number: '🏷️ Prefix + Counter (e.g. rebecca_1)',
@@ -740,8 +621,6 @@ export const EN_TEXTS: Record<string, string> = {
     'Current prefix: `{current}`\n\nSend 1–24 letters, digits, hyphens, or underscores.',
   admin_setting_trial_enabled_prompt:
     'Current status: *{current}*\n\nEnable free trials for new users?',
-  admin_setting_trial_enabled_on: '🟢 Enabled',
-  admin_setting_trial_enabled_off: '🔴 Disabled',
   admin_setting_naming_mode_val_prefix_number: 'Prefix + Counter',
   admin_setting_naming_mode_val_telegramid_number: 'Telegram ID + Counter',
   admin_setting_naming_mode_val_custom: 'Custom Template',
@@ -756,7 +635,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_promo_type_fixed: '💰 Fixed amount',
   admin_promo_type_credit: '🎁 Wallet credit',
   admin_promo_type_gb: '📊 Gift GB',
-  admin_invalid_promo_type: '⚠️ The promo code type is invalid.',
   admin_promo_value_prompt: '💬 Enter the promo code value:',
   admin_invalid_promo_value: '⚠️ The promo code value is invalid.',
   admin_promo_max_uses_prompt: '💬 Enter the maximum number of uses:',
@@ -769,23 +647,17 @@ export const EN_TEXTS: Record<string, string> = {
   admin_promo_expiry_prompt: '📅 Enter expiry as YYYY-MM-DD, or enter 0 for no expiration:',
   admin_invalid_promo_expiry: '⚠️ Expiry must be a valid future date in YYYY-MM-DD format.',
   admin_promo_active_prompt: 'Choose the code state. Current state: {active}',
-  admin_promo_save_summary:
-    '🎟️ *Confirm promo code*\n\nCode: `{code}`\nType: {type}\nValue: {value}\nGlobal cap: {max_uses}\nPer-user cap: {max_uses_per_user}\nMinimum purchase: {min_purchase_amount}\nExpires: {expires_at}\nState: {active}',
   admin_promo_save_confirm_button: '✅ Save code',
   admin_promo_save_consequence:
     'Saving can change customer pricing or wallet credit according to this code’s active state.',
   admin_promo_created: '✅ Promo code `{code}` created successfully.',
   admin_promo_updated: '✅ Promo code `{code}` updated successfully.',
   admin_promo_create_failed: '⚠️ Failed to create promo code.',
-  admin_promo_manage_prompt: '💬 Enter the promo code to manage:',
-  admin_promo_toggle_prompt:
-    '💬 Enter the new state:\n1) Active\n2) Inactive\n3) Delete unused code',
   admin_promo_active: 'Active',
   admin_promo_inactive: 'Inactive',
   admin_promo_toggled: '✅ Promo code `{code}` is now {active}.',
   admin_promo_deleted: '✅ Promo code `{code}` was deleted.',
   admin_promo_not_found: '⚠️ Promo code not found.',
-  admin_text_editor_intro: '📝 Edit bot copy. Choose the language, category, and key step by step.',
   admin_text_editor_title: 'Translation Editor',
   admin_text_editor_subtitle:
     'Safely review and update bilingual bot copy without restarting the service.',
@@ -801,13 +673,9 @@ export const EN_TEXTS: Record<string, string> = {
     'The custom override will be removed immediately. The built-in default will be used for future messages.',
   admin_text_saved_title: 'Translation Saved',
   admin_text_key_invalid: '⚠️ The text key is invalid.',
-  admin_text_value_prompt:
-    '💬 *Edit key copy:* `{key}`\n\n📌 *Current value:*\n{current_value}\n\n📌 *Default value:*\n{default_value}',
   admin_text_edit_prompt: '⌨️ Please send the new text as a message or tap Cancel:',
   admin_text_edit_button: '✏️ Edit text',
   admin_text_reset_button: '🔄 Reset to default',
-  admin_text_reset_confirm:
-    'Reset the custom text for `{key}` to its default? Your custom version will be removed.',
   admin_text_reset_success: '✅ Text `{key}` has been reset to default successfully.',
   admin_text_value_invalid: '⚠️ The text is empty or too long.',
   admin_text_saved: '✅ Text `{key}` was saved without restarting the bot.',
@@ -883,11 +751,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_broadcast_prompt_for_audience:
     '💬 Audience: {audience}\nRecipients now: {recipient_count}\n\nEnter the broadcast message:',
   admin_broadcast_too_long: '⚠️ Telegram broadcast text must be at most 4096 characters.',
-  admin_broadcast_preview:
-    '📣 Broadcast preview\n\nAudience: {audience}\nRecipients: {recipient_count}\n\n———\n{message}\n———\n\nQueue this broadcast?',
   admin_broadcast_confirm_button: '✅ Queue broadcast',
-  admin_broadcast_queued:
-    '📣 Broadcast was queued for {recipient_count} recipients. Delivery continues safely in the background.',
   admin_broadcast_status_button: '📊 Status',
   admin_broadcast_cancel_button: '⛔ Cancel',
   admin_broadcast_refresh_button: '🔄 Refresh',
@@ -899,8 +763,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_broadcast_status_cancel_requested: 'Cancel requested',
   admin_broadcast_status_cancelled: 'Cancelled',
   admin_broadcast_status_completed: 'Completed',
-  admin_broadcast_status:
-    '📣 *Broadcast* `{uuid}`\n\nAudience: {audience}\nStatus: *{status}*\nProcessed: {processed_count}/{recipient_count}\nSent: {sent_count} | Failed: {fail_count}\nCreated: {created_at}',
   admin_broadcast_status_title: 'Broadcast Status',
   admin_broadcast_status_subtitle: 'Live delivery counters for the queued broadcast.',
   admin_broadcast_id_label: 'Broadcast ID',
@@ -920,18 +782,13 @@ export const EN_TEXTS: Record<string, string> = {
   admin_direct_invalid_telegram_id: '⚠️ The recipient Telegram ID is invalid.',
   admin_direct_user_not_found: '⚠️ User not found.',
   admin_direct_message_prompt: '💬 Enter the direct message:',
-  admin_direct_preview: 'Message preview for user {telegram_id}:\n\n{message}',
   admin_direct_confirm_button: '✅ Send message',
   admin_direct_sent: '✅ Message sent successfully.',
   admin_direct_failed: '⚠️ Failed to send message.',
-  admin_alert_title: '⚠️ System alert\n{message}',
-  admin_panel_outage:
-    '⚠️ Rebecca panel “{panel}” is unavailable.\nEndpoint: `{endpoint}`\nFailed attempts: {attempts}',
   admin_panel_outage_title: 'Rebecca Panel Alert',
   admin_panel_outage_subtitle: 'A Rebecca panel is unavailable and needs operator attention.',
   admin_panel_outage_attempts_label: 'Failed connection attempts',
 
-  renewal_notification: '⚠️ Subscription {username} needs renewal.\n{reasons}',
   renewal_notification_title: 'Renewal Needed',
   renewal_notification_subtitle: 'This service needs attention to keep working.',
   renewal_service_label: 'Service',
@@ -980,10 +837,6 @@ export const EN_TEXTS: Record<string, string> = {
     'The service was removed and the refund was added to your wallet.',
   config_delete_success_no_refund_subtitle:
     'The service was permanently removed. No refund was issued.',
-  config_delete_refund_warning:
-    '⚠️ *Delete subscription* `{username}`\n\nPurchase charge: {gross_amount}\nCashback withheld: {cashback_withheld}\n💸 Refund to wallet: *{refund_amount}*\n\nRebecca reports zero current and lifetime usage. Delete & Refund removes the remote service and credits the amount above.',
-  config_delete_no_refund_warning:
-    '⚠️ *Delete subscription* `{username}`\n\nThis service is not eligible for an automatic refund:\n{reason}\n\nYou can still permanently delete the service without a refund.',
   refund_reason_config_not_found: 'The subscription does not belong to this account.',
   refund_reason_remote_unavailable: 'Rebecca cannot confirm the service state.',
   refund_reason_already_used: 'The subscription has already been used.',
@@ -997,17 +850,12 @@ export const EN_TEXTS: Record<string, string> = {
     'This purchase generated a referral reward and requires manual admin review.',
   refund_reason_already_refunded: 'This purchase has already been refunded.',
   refund_reason_refund_in_progress: 'This refund is already pending reconciliation.',
-  config_refund_not_eligible: '⚠️ Refund unavailable: {reason}',
-  config_refunded_deleted:
-    '✅ Subscription `{username}` was deleted and *{amount}* was returned to your wallet.',
   config_refund_pending:
     '⏳ Rebecca deletion outcome is uncertain. The refund intent is saved and will be reconciled without double payment.',
   config_refund_failed: '⚠️ Delete & Refund failed. Your wallet was not changed.',
   subscription_transfer_button: '🔁 Transfer service',
   transfer_config_missing:
     '⚠️ The selected subscription is no longer available. Start again from My Subscriptions.',
-  transfer_target_prompt:
-    '👤 Send the destination Telegram ID or @username. The recipient must have started the bot before.',
   transfer_title: 'Transfer Service',
   transfer_subtitle: 'Choose another existing bot user to receive this service.',
   transfer_target_hint: 'Send the recipient’s Telegram username or numeric ID.',
@@ -1024,18 +872,12 @@ export const EN_TEXTS: Record<string, string> = {
   transfer_target_same_user: '⚠️ This subscription already belongs to that user.',
   transfer_target_banned: '⚠️ A subscription cannot be transferred to a banned user.',
   transfer_confirm_button: '✅ Transfer service',
-  transfer_confirm_prompt:
-    '🔁 Transfer this subscription to:\n\nTelegram ID: `{telegram_id}`\nUsername: {username}\n\nAfter confirmation it will leave the current account.',
-  transfer_success: '✅ Subscription `{username}` was transferred to user {telegram_id}.',
-  transfer_recipient_notice:
-    '🎁 Subscription `{username}` was transferred from user {telegram_id} to your account and is now available in My Subscriptions.',
   transfer_recipient_notice_title: 'A Service Was Added to Your Account',
   transfer_recipient_notice_subtitle: 'You can now manage this service from My Subscriptions.',
   transfer_sender_label: 'Transferred by',
   transfer_failed: '⚠️ Transfer failed. Ownership was not changed.',
   admin_menu_admins: '🛡️ Admins',
   admin_menu_orphans: '🧩 Orphan services',
-  admin_admins_title: '🛡️ *Administrator Management*\n\n👥 Active administrators: {count}',
   admin_registry_title: 'Administrator Registry',
   admin_registry_subtitle: 'Manage trusted operators with access to the bot control surface.',
   admin_registry_count_label: 'Active administrators',
@@ -1055,12 +897,9 @@ export const EN_TEXTS: Record<string, string> = {
   admin_add_admin_prompt: 'Send the numeric Telegram ID of the new administrator:',
   admin_admin_added: '✅ User {telegram_id} is now an administrator.',
   admin_admin_already_exists: 'ℹ️ User {telegram_id} is already an administrator.',
-  admin_remove_admin_confirm: 'Remove administrator access from {telegram_id}?',
-  admin_admin_removed: '✅ Administrator {telegram_id} was removed.',
   admin_admin_not_found: '⚠️ Administrator {telegram_id} was not found.',
   admin_last_admin_cannot_remove:
     '⚠️ The last administrator cannot be removed. Add another admin first.',
-  admin_orphan_none: '✅ No open Rebecca/database reconciliation issues were found.',
   admin_orphan_scan_button: '🔄 Scan now',
   admin_orphan_scanning: '🔄 Rebecca reconciliation scan started…',
   admin_orphan_scan_done:
@@ -1069,17 +908,10 @@ export const EN_TEXTS: Record<string, string> = {
     '⚠️ Healthy panels were scanned; {failed} panel(s) were unavailable. Local missing: {local} | Remote unbound: {remote} | Ignored: {ignored}',
   admin_orphan_scan_failed: '⚠️ Scan did not complete. Check Rebecca and database connectivity.',
   admin_orphan_baseline_button: '🧱 Establish current Rebecca baseline',
-  admin_orphan_baseline_confirm:
-    '🧱 *Establish current Rebecca baseline?*\n\nEvery Rebecca service that exists *right now* but is not linked to the bot will be marked as pre-existing/manual and ignored by future orphan scans.\n\nNothing is deleted, refunded, assigned, or changed in Rebecca. New services created later will still be detected. Use this after installing the reconciliation feature on a panel that already contains manual services.',
   admin_orphan_baseline_confirm_button: '✅ Establish baseline',
   admin_orphan_baseline_running: '🧱 Reading the current Rebecca service list…',
-  admin_orphan_baseline_done:
-    '✅ Baseline established. Rebecca services: {remote} | Already linked: {bound} | Marked pre-existing/manual: {ignored}',
   admin_orphan_baseline_failed:
     '⚠️ Baseline was not established. No services were changed; check Rebecca/database connectivity and try again.',
-  admin_orphan_summary: '🧩 Open issues: {total}',
-  admin_orphan_card:
-    '🧩 *Subscription drift*\nType: {kind}\nService: `{username}`\nLocal owner: `{owner}`\nFirst seen: {first_seen}',
   admin_orphan_kind_local: 'Local → Rebecca Missing',
   admin_orphan_kind_remote: 'Rebecca → Local Unbound',
   admin_orphan_remove_local_button: '🗑 Remove local record',
@@ -1090,8 +922,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_orphan_assigned: '✅ Subscription `{username}` was assigned to user {telegram_id}.',
   admin_orphan_assign_failed: '⚠️ Failed to assign the orphan subscription.',
   admin_orphan_issue_missing: '⚠️ This issue is no longer open or available.',
-  admin_orphan_remove_confirm:
-    'Remove local record `{username}`? This does not delete any remote service and does not issue a refund.',
   admin_orphan_removed: '✅ The local orphan record was removed.',
   admin_orphan_remote_reappeared:
     'ℹ️ The service exists in Rebecca again. The stale issue was closed and nothing was deleted.',
@@ -1132,7 +962,6 @@ export const EN_TEXTS: Record<string, string> = {
   purchase_confirmation_expired:
     '⌛️ This confirmation expired or was already used. Start again from the shop.',
   admin_menu_panels: '🖥 Rebecca panels',
-  admin_panels_title: '🖥 Rebecca panel management\n\nPanels: {count}',
   admin_panel_registry_title: 'Rebecca Panels',
   admin_panel_registry_subtitle:
     'Select a panel to inspect its connection, services, and operational settings.',
@@ -1171,7 +1000,6 @@ export const EN_TEXTS: Record<string, string> = {
     'This service target will no longer be selectable for new sales.',
   admin_panel_service_delete_consequence:
     'Deleting the target does not delete customers’ remote services.',
-  admin_panels_empty: '🖥 No panel is configured yet. Add your first panel.',
   admin_panel_add_button: '➕ Add panel',
   admin_panel_name_prompt: '🏷 Send a short, recognizable panel name:',
   admin_panel_url_prompt: '🌐 Send the HTTPS panel origin without an extra path:',
@@ -1184,8 +1012,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_panel_required_first: '⚠️ Add an enabled panel and at least one service first.',
   admin_pkg_target_prompt: '🎯 Select the panel and service for this package:',
   admin_panel_not_found: '⚠️ Panel not found.',
-  admin_panel_detail:
-    '🖥 {name}\n\nStatus: {status}\nDefault panel: {default_status}\nURL: {url}\nCredential: {credential}\nDefault service: {service}',
   admin_panel_status_enabled: '🟢 Enabled',
   admin_panel_status_disabled: '⚪️ Disabled',
   admin_panel_credential_api_key: '🔐 API key',
@@ -1206,11 +1032,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_panel_custom_target_selected_button: '✅ Custom-volume target',
   admin_panel_custom_target_saved: '✅ Custom-volume target saved.',
   admin_panel_service_delete_button: '🗑 Delete',
-  admin_panel_service_delete_confirm:
-    'Delete the “{service}” service from this panel? This cannot be undone.',
   admin_panel_delete_button: '🗑 Delete panel',
-  admin_panel_delete_confirm:
-    '⚠️ Delete this panel? Deletion is blocked when purchases, subscriptions, or history reference it.',
   admin_panel_deleted: '✅ Panel deleted.',
   admin_panel_in_use: '⚠️ This panel or service is referenced by bot data and cannot be deleted.',
   admin_panel_last_delete: '⚠️ The last panel cannot be deleted.',

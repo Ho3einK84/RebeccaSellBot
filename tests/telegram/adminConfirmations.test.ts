@@ -3,7 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import type { MenuContext } from '../../src/telegram/types.js';
 import { buildConfirmationKeyboard } from '../../src/telegram/ui.js';
 
-describe('Advanced Admin Actions & Clear Confirmations (Phase 6)', () => {
+describe('Advanced admin actions and confirmations', () => {
   it('builds explicit confirmation keyboards for destructive admin actions', () => {
     const ctx = {
       services: {

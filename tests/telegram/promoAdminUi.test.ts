@@ -64,7 +64,7 @@ describe('inline promo admin UX', () => {
 
     const detail = await promoDetailView(ctx, promo.id);
 
-    expect(detail?.text).toContain('admin_promo_detail');
+    expect(detail?.text).toContain('admin_promo_detail_title');
     expect(detail?.text).not.toContain('discount_percent');
     expect(ctx.services?.translationService.get).toHaveBeenCalledWith(
       'admin_promo_type_percent',
