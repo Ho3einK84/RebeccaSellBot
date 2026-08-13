@@ -1,8 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { adminSetBalanceConversation } from '../../src/telegram/conversations/adminConversations.js';
+import { isAdminCallbackData } from '../../src/telegram/botRuntime.js';
 import type { MenuContext, MyConversation } from '../../src/telegram/types.js';
 
 describe('admin conversation authorization', () => {
+  it('recognizes grammY admin submenu callbacks as protected data', () => {
+    expect(isAdminCallbackData('admin-menu/0/0//')).toBe(true);
+    expect(isAdminCallbackData('admin-daily-menu/0/1//')).toBe(true);
+    expect(isAdminCallbackData('admin-sales-menu/1/0//')).toBe(true);
+    expect(isAdminCallbackData('admin-panels-menu/0/0//')).toBe(true);
+    expect(isAdminCallbackData('admin-system-menu/0/1//')).toBe(true);
+    expect(isAdminCallbackData('main-menu/0/0//')).toBe(false);
+  });
+
   it('rejects a direct admin-conversation invocation from an ID outside ADMIN_IDS', async () => {
     const reply = vi.fn().mockResolvedValue({ message_id: 1 });
     const waitFor = vi.fn();

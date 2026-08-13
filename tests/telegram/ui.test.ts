@@ -4,8 +4,11 @@ import type { ConversationContext, MenuContext, MyConversation } from '../../src
 import {
   cleanChatUiMiddleware,
   dismissKeyboard,
+  forwardConversationNavigation,
   promptInConversation,
+  rememberArtifactMessage,
   rememberUiMessage,
+  renderUiScreen,
   waitForCallbackInput,
   waitForPhotoInput,
   waitForTextInput,
@@ -101,6 +104,127 @@ describe('private-chat UI cleanup', () => {
     await expect(waitForCallbackInput(conversation, ['valid:'])).resolves.toBe('valid:choice');
     expect(answerCallbackQuery).toHaveBeenCalledTimes(2);
     expect(answerCallbackQuery).toHaveBeenNthCalledWith(1, { text: 'button_action_failed' });
+  });
+
+  it('keeps transiently undeletable screen IDs so cleanup can retry later', async () => {
+    const deleteMessage = vi.fn().mockRejectedValue(new Error('network unavailable'));
+    const ctx = {
+      chat: { id: 123, type: 'private' },
+      session: { uiMessageIds: [10] },
+      api: { deleteMessage, config: { use: vi.fn() } },
+    } as unknown as MenuContext;
+    const middleware = cleanChatUiMiddleware() as (
+      ctx: MenuContext,
+      next: () => Promise<unknown>
+    ) => Promise<unknown>;
+
+    await middleware(ctx, async () => undefined);
+
+    expect(ctx.session.uiMessageIds).toEqual([10]);
+  });
+
+  it('adopts an untracked callback screen without deleting it after an in-place edit', async () => {
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const ctx = {
+      chat: { id: 123, type: 'private' },
+      callbackQuery: { message: { message_id: 15 } },
+      session: {},
+      api: { deleteMessage, config: { use: vi.fn() } },
+    } as unknown as MenuContext;
+    const middleware = cleanChatUiMiddleware() as (
+      ctx: MenuContext,
+      next: () => Promise<unknown>
+    ) => Promise<unknown>;
+
+    await middleware(ctx, async () => rememberUiMessage(ctx.session, 15, 'screen'));
+
+    expect(deleteMessage).not.toHaveBeenCalledWith(123, 15);
+    expect(ctx.session.uiMessageIds).toEqual([15]);
+  });
+});
+
+describe('shared screen rendering', () => {
+  it('edits a callback screen in place and tolerates Telegram no-op edits', async () => {
+    const editMessageText = vi
+      .fn()
+      .mockRejectedValue(new Error('Bad Request: message is not modified'));
+    const reply = vi.fn();
+    const ctx = {
+      callbackQuery: { message: { message_id: 15 } },
+      session: {},
+      editMessageText,
+      reply,
+    } as unknown as MenuContext;
+
+    await expect(renderUiScreen(ctx, 'same screen')).resolves.toBe('unchanged');
+    expect(reply).not.toHaveBeenCalled();
+    expect(ctx.session.uiMessageIds).toEqual([15]);
+  });
+
+  it('never edits a durable artifact into an unrelated screen', async () => {
+    const editMessageText = vi.fn();
+    const reply = vi.fn().mockResolvedValue({ message_id: 16 });
+    const ctx = {
+      callbackQuery: { message: { message_id: 15 } },
+      session: { artifactMessageIds: [15] },
+      editMessageText,
+      reply,
+    } as unknown as MenuContext;
+
+    await expect(renderUiScreen(ctx, 'new screen')).resolves.toBe('replied');
+    expect(editMessageText).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith('new screen', {});
+    expect(ctx.session.artifactMessageIds).toEqual([15]);
+    expect(ctx.session.uiMessageIds).toEqual([16]);
+  });
+
+  it('falls back to a fresh screen when Telegram can no longer edit the callback message', async () => {
+    const editMessageText = vi
+      .fn()
+      .mockRejectedValue(new Error("Bad Request: message can't be edited"));
+    const reply = vi.fn().mockResolvedValue({ message_id: 17 });
+    const ctx = {
+      callbackQuery: { message: { message_id: 15 } },
+      session: { uiMessageIds: [15] },
+      editMessageText,
+      reply,
+    } as unknown as MenuContext;
+
+    await expect(renderUiScreen(ctx, 'replacement')).resolves.toBe('replied');
+    expect(ctx.session.uiMessageIds).toEqual([17]);
+  });
+
+  it('keeps message roles exclusive and never demotes artifacts', () => {
+    const session = {};
+    rememberUiMessage(session, 1, 'screen');
+    rememberUiMessage(session, 1, 'prompt');
+    expect(session).toEqual({ uiMessageIds: [], promptMessageIds: [1] });
+
+    rememberArtifactMessage(session, 1);
+    rememberUiMessage(session, 1, 'screen');
+    expect(session).toEqual({ uiMessageIds: [], promptMessageIds: [], artifactMessageIds: [1] });
+  });
+});
+
+describe('conversation escape navigation', () => {
+  it('halts a waiting conversation and forwards navigation to normal routes', async () => {
+    const halt = vi.fn().mockResolvedValue(undefined);
+    const conversation = { halt } as unknown as MyConversation;
+    const ctx = { callbackQuery: { data: 'nav:admin' } } as unknown as ConversationContext;
+
+    await forwardConversationNavigation(conversation, ctx);
+
+    expect(halt).toHaveBeenCalledWith({ next: true });
+  });
+
+  it('does not forward ordinary conversation choices', async () => {
+    const halt = vi.fn();
+    const conversation = { halt } as unknown as MyConversation;
+    const ctx = { callbackQuery: { data: 'set-group:pricing' } } as unknown as ConversationContext;
+
+    await forwardConversationNavigation(conversation, ctx);
+
+    expect(halt).not.toHaveBeenCalled();
   });
 });
 

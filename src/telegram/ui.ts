@@ -18,6 +18,15 @@ export {
 
 export type BackDestination = 'home' | 'main' | 'admin';
 
+type EditMessageTextOptions = NonNullable<Parameters<MenuContext['editMessageText']>[1]>;
+
+export type RenderUiScreenOptions = EditMessageTextOptions & {
+  /** Set to false when a route intentionally opens a separate popover screen. */
+  preferEdit?: boolean;
+};
+
+export type RenderUiScreenResult = 'edited' | 'unchanged' | 'replied';
+
 const TRACKED_SEND_METHODS = new Set([
   'sendMessage',
   'sendPhoto',
@@ -57,17 +66,23 @@ export function rememberUiMessage(
   messageId: number,
   role: UiMessageRole = 'screen'
 ): void {
-  if (role === 'artifact') {
+  if (role === 'artifact' || role === 'notification') {
     const ids = session.artifactMessageIds ?? [];
     session.artifactMessageIds = [...new Set([...ids, messageId])].slice(-50);
     session.uiMessageIds = (session.uiMessageIds ?? []).filter((id) => id !== messageId);
     session.promptMessageIds = (session.promptMessageIds ?? []).filter((id) => id !== messageId);
   } else if (role === 'prompt') {
+    // A durable message is never implicitly demoted by a later transformer.
+    if ((session.artifactMessageIds ?? []).includes(messageId)) return;
     const ids = session.promptMessageIds ?? [];
     session.promptMessageIds = [...new Set([...ids, messageId])].slice(-20);
+    session.uiMessageIds = (session.uiMessageIds ?? []).filter((id) => id !== messageId);
   } else {
+    // Durable artifacts and notifications must never become replaceable screens.
+    if ((session.artifactMessageIds ?? []).includes(messageId)) return;
     const ids = session.uiMessageIds ?? [];
     session.uiMessageIds = [...new Set([...ids, messageId])].slice(-20);
+    session.promptMessageIds = (session.promptMessageIds ?? []).filter((id) => id !== messageId);
   }
 }
 
@@ -112,9 +127,8 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
 
     const preservedIds =
       callbackMessageId && previousUiIds.includes(callbackMessageId) ? [callbackMessageId] : [];
-    ctx.session.uiMessageIds = preservedIds;
-    ctx.session.promptMessageIds = [];
-
+    const failedScreenDeletes: number[] = [];
+    const failedPromptDeletes: number[] = [];
     await Promise.all(
       cleanupCandidates
         .filter(
@@ -122,29 +136,92 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
             messageId !== callbackMessageId || !preservedIds.includes(callbackMessageId)
         )
         .map(async (messageId) => {
-          await safelyDeleteMessage(ctx, messageId);
-          forgetUiMessage(ctx.session, messageId);
+          const removed = await safelyDeleteMessage(ctx, messageId);
+          if (removed) return;
+          if (previousUiIds.includes(messageId)) failedScreenDeletes.push(messageId);
+          if (promptIds.includes(messageId)) failedPromptDeletes.push(messageId);
         })
     );
+    ctx.session.uiMessageIds = [...new Set([...preservedIds, ...failedScreenDeletes])].slice(-20);
+    ctx.session.promptMessageIds = [...new Set(failedPromptDeletes)].slice(-20);
 
     if (ctx.message?.message_id) {
       await safelyDeleteMessage(ctx, ctx.message.message_id);
     }
 
-    const initialIds = new Set(ctx.session.uiMessageIds);
+    const initialIds = new Set([
+      ...(ctx.session.uiMessageIds ?? []),
+      ...(ctx.session.promptMessageIds ?? []),
+    ]);
     await uiTracking.run({ chatId: ctx.chat.id, session: ctx.session }, async () => await next());
 
-    const sentNewScreen = (ctx.session.uiMessageIds ?? []).some(
-      (messageId) => !initialIds.has(messageId)
-    );
+    const sentNewScreen = [
+      ...(ctx.session.uiMessageIds ?? []),
+      ...(ctx.session.promptMessageIds ?? []),
+    ].some((messageId) => messageId !== callbackMessageId && !initialIds.has(messageId));
     // Re-read artifacts after the handler: a purchase/revoke handler may have
     // promoted the callback message to an artifact during this update.
     const artifactIdsAfter = new Set(ctx.session.artifactMessageIds ?? []);
     if (callbackMessageId && sentNewScreen && !artifactIdsAfter.has(callbackMessageId)) {
-      await safelyDeleteMessage(ctx, callbackMessageId);
-      forgetUiMessage(ctx.session, callbackMessageId);
+      if (await safelyDeleteMessage(ctx, callbackMessageId)) {
+        forgetUiMessage(ctx.session, callbackMessageId);
+      }
     }
   };
+}
+
+/**
+ * Render the current app screen. Callback-driven screens are edited in place;
+ * durable artifacts and messages Telegram can no longer edit are replaced by
+ * a fresh tracked screen instead.
+ */
+export async function renderUiScreen(
+  ctx: MenuContext,
+  text: string,
+  options: RenderUiScreenOptions = {}
+): Promise<RenderUiScreenResult> {
+  const { preferEdit = true, ...apiOptions } = options;
+  const callbackMessageId = ctx.callbackQuery?.message?.message_id;
+
+  if (
+    preferEdit &&
+    callbackMessageId !== undefined &&
+    !isArtifactMessage(ctx.session, callbackMessageId)
+  ) {
+    try {
+      await ctx.editMessageText(text, apiOptions);
+      if (ctx.session) rememberUiMessage(ctx.session, callbackMessageId, 'screen');
+      return 'edited';
+    } catch (error) {
+      if (isMessageNotModifiedError(error)) {
+        if (ctx.session) rememberUiMessage(ctx.session, callbackMessageId, 'screen');
+        return 'unchanged';
+      }
+      if (!isMessageEditUnavailableError(error)) throw error;
+      if (ctx.session) forgetUiMessage(ctx.session, callbackMessageId);
+    }
+  }
+
+  const message = await ctx.reply(
+    text,
+    apiOptions as NonNullable<Parameters<MenuContext['reply']>[1]>
+  );
+  if (ctx.session) rememberUiMessage(ctx.session, message.message_id, 'screen');
+  return 'replied';
+}
+
+export function isMessageNotModifiedError(error: unknown): boolean {
+  return errorMessage(error).includes('message is not modified');
+}
+
+export function isMessageEditUnavailableError(error: unknown): boolean {
+  const message = errorMessage(error);
+  return (
+    message.includes('message to edit not found') ||
+    message.includes("message can't be edited") ||
+    message.includes('there is no text in the message to edit') ||
+    message.includes('message_id_invalid')
+  );
 }
 
 export function backKeyboard(
@@ -239,6 +316,7 @@ export async function waitForTextInput(
     const input = await conversation.wait();
     if (!(await acceptConversationOwner(input, ownerId))) continue;
     if (await handleConversationCancel(conversation, input, cancelDestination)) return undefined;
+    await forwardConversationNavigation(conversation, input);
     if (input.message && 'text' in input.message) return input.message.text;
     await promptInConversation(conversation, input, t(input, 'text_input_required'));
   }
@@ -264,6 +342,7 @@ export async function waitForReceiptMediaInput(
     const input = await conversation.wait();
     if (!(await acceptConversationOwner(input, ownerId))) continue;
     if (await handleConversationCancel(conversation, input, cancelDestination)) return undefined;
+    await forwardConversationNavigation(conversation, input);
     const photos = input.message && 'photo' in input.message ? input.message.photo : undefined;
     if (photos && photos.length > 0) {
       return { fileId: photos[photos.length - 1]!.file_id, type: 'photo' };
@@ -299,6 +378,7 @@ export async function waitForCallbackInput(
     const input = await conversation.wait();
     if (!(await acceptConversationOwner(input, ownerId))) continue;
     if (await handleConversationCancel(conversation, input, cancelDestination)) return undefined;
+    await forwardConversationNavigation(conversation, input);
     const data = input.callbackQuery?.data;
     if (data && validPrefixes.some((prefix) => data.startsWith(prefix))) {
       await input.answerCallbackQuery();
@@ -364,13 +444,42 @@ export function handleAdminConversationCancel(
   return handleConversationCancel(conversation, ctx, 'admin');
 }
 
+/**
+ * Navigation buttons and bot commands remain global escape hatches while a
+ * conversation is waiting. Halting with `next` lets the normal route own the
+ * acknowledgement and destination rendering instead of trapping the user.
+ */
+export async function forwardConversationNavigation(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<void> {
+  const callbackData = ctx.callbackQuery?.data;
+  const messageText = ctx.message?.text?.trim();
+  const isNavigationCallback = /^nav:(?:home|main|admin|wallet|shop)$/u.test(callbackData ?? '');
+  const isBotCommand = /^\/[a-z][a-z0-9_]*(?:@[a-z0-9_]+)?(?:\s|$)/iu.test(messageText ?? '');
+  if (isNavigationCallback || (isBotCommand && messageText !== '/cancel')) {
+    await conversation.halt({ next: true });
+  }
+}
+
 export async function safelyDeleteMessage(
   ctx: Pick<MenuContext, 'api' | 'chat'>,
   messageId: number
-): Promise<void> {
+): Promise<boolean> {
   const chatId = ctx.chat?.id;
-  if (!chatId) return;
-  await ctx.api.deleteMessage(chatId, messageId).catch(() => undefined);
+  if (!chatId) return false;
+  try {
+    await ctx.api.deleteMessage(chatId, messageId);
+    return true;
+  } catch (error) {
+    const message = errorMessage(error);
+    // These failures are permanent and should not keep stale IDs in session.
+    return (
+      message.includes('message to delete not found') ||
+      message.includes("message can't be deleted") ||
+      message.includes('message_id_invalid')
+    );
+  }
 }
 
 function isMessageResult(value: unknown): value is { message_id: number } {
@@ -380,4 +489,8 @@ function isMessageResult(value: unknown): value is { message_id: number } {
     'message_id' in value &&
     typeof value.message_id === 'number'
   );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 }

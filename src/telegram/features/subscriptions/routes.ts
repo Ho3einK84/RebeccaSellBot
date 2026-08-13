@@ -17,8 +17,8 @@ import {
   buildScreen,
   buildStatusBadge,
   dismissKeyboard,
-  isArtifactMessage,
   rememberArtifactMessage,
+  renderUiScreen,
   type StatusType,
 } from '../../ui.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
@@ -1342,13 +1342,5 @@ async function renderSubscriptionScreen(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  const options = { parse_mode: 'Markdown' as const, reply_markup: keyboard };
-  if (ctx.callbackQuery?.message) {
-    const messageId = ctx.callbackQuery.message.message_id;
-    if (!isArtifactMessage(ctx.session, messageId)) {
-      await ctx.editMessageText(text, options);
-      return;
-    }
-  }
-  await ctx.reply(text, options);
+  await renderUiScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

@@ -127,17 +127,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   // authorization in middleware as well as at the /admin entry point.
   bot.use(async (ctx, next) => {
     const data = ctx.callbackQuery?.data;
-    if (
-      data &&
-      (data.includes('admin-menu') ||
-        data.startsWith('admin:') ||
-        data.startsWith('admin_') ||
-        data.startsWith('a:p:') ||
-        data.startsWith('receipt:') ||
-        data.startsWith('receipt-') ||
-        data.startsWith('promo:')) &&
-      !services.isAdmin(ctx.from?.id ?? 0)
-    ) {
+    if (data && isAdminCallbackData(data) && !services.isAdmin(ctx.from?.id ?? 0)) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'access_denied'), show_alert: true });
       logger.warn({ telegramId: ctx.from?.id }, 'Unauthorized admin callback rejected');
       return;
@@ -216,6 +206,19 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   // global limiter before this point left admin conversations waiting forever.
   // Callbacks stay responsive and each mutating action has its own guard.
   bot.use(rateLimitMiddleware());
+}
+
+/** Identify both explicit admin routes and grammY's encoded admin submenu callbacks. */
+export function isAdminCallbackData(data: string): boolean {
+  return (
+    /^admin(?:-[a-z0-9]+)*-menu\//u.test(data) ||
+    data.startsWith('admin:') ||
+    data.startsWith('admin_') ||
+    data.startsWith('a:p:') ||
+    data.startsWith('receipt:') ||
+    data.startsWith('receipt-') ||
+    data.startsWith('promo:')
+  );
 }
 
 export function conversationContextMiddleware(services: BotServices) {

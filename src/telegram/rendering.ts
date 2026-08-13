@@ -7,7 +7,9 @@ import { logger } from '../infra/logger.js';
  * open an entity or turn user data into formatting.
  */
 export function escapeTelegramMarkdown(value: string | number): string {
-  return String(value).replace(/([_*[\x60])/gu, '\\$1');
+  // Escape an existing backslash first. Otherwise user input such as `\*`
+  // could neutralize the escape we add for the following Markdown marker.
+  return String(value).replace(/([\\_*[\x60])/gu, '\\$1');
 }
 
 export function escapeTelegramMarkdownParams(

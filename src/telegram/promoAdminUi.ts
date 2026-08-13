@@ -2,7 +2,7 @@ import { InlineKeyboard } from 'grammy';
 import type { MenuContext } from './types.js';
 import { callbackData } from './callbackData.js';
 import { localizedDate, localizedNumber, t } from './locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge } from './ui.js';
+import { buildEmptyState, buildScreen, buildStatusBadge, renderUiScreen } from './ui.js';
 
 const PROMO_PAGE_SIZE = 8;
 
@@ -177,16 +177,10 @@ export async function renderPromoScreen(
   parseMode?: 'Markdown'
 ): Promise<void> {
   const isPromoCallback = ctx.callbackQuery?.data?.startsWith('promo:');
-  if (isPromoCallback && ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, {
-      ...(parseMode ? { parse_mode: parseMode } : {}),
-      reply_markup: keyboard,
-    });
-    return;
-  }
-  await ctx.reply(text, {
+  await renderUiScreen(ctx, text, {
     ...(parseMode ? { parse_mode: parseMode } : {}),
     reply_markup: keyboard,
+    preferEdit: isPromoCallback,
   });
 }
 

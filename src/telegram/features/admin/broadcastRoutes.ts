@@ -1,7 +1,13 @@
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
 import { localizedDate, localizedNumber, t } from '../../locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge, type StatusType } from '../../ui.js';
+import {
+  buildEmptyState,
+  buildScreen,
+  buildStatusBadge,
+  renderUiScreen,
+  type StatusType,
+} from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
@@ -139,9 +145,5 @@ async function renderBroadcastScreen(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  if (ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
-    return;
-  }
-  await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderUiScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

@@ -5,7 +5,13 @@ import type { BotServices, MenuContext } from '../types.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { logger } from '../../infra/logger.js';
 import { observedContextLocale, t, tm } from '../locale.js';
-import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '../ui.js';
+import {
+  backKeyboard,
+  buildEmptyState,
+  buildScreen,
+  buildStatusBadge,
+  renderUiScreen,
+} from '../ui.js';
 import { callbackData } from '../callbackData.js';
 import { buildSubscriptionActionKeyboard } from './subscriptions/routes.js';
 import { escapeTelegramMarkdown } from '../rendering.js';
@@ -240,9 +246,5 @@ async function renderConfigScreen(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  if (ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
-    return;
-  }
-  await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderUiScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

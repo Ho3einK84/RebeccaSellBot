@@ -385,6 +385,10 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       range.text(
         (c) => t(c, 'admin_menu_management'),
         async (c) => {
+          if (!c.from?.id || !c.services?.isAdmin(c.from.id)) {
+            await c.answerCallbackQuery({ text: t(c, 'access_denied'), show_alert: true });
+            return;
+          }
           c.menu.nav('admin-menu');
           await c.editMessageText(renderAdminHome(c), { parse_mode: 'Markdown' });
         }
