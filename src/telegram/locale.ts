@@ -238,7 +238,7 @@ export function localizedPackageName(
     return translated;
   }
   if (resolveContextLocale(ctx) === 'fa') {
-    return fallback.replace(/\b(\d+)\s*GB\b/gi, '$1 گیگابایت');
+    return fallback.replace(/\b(\d+)\s*GB\b/gi, '$1 گیگ');
   }
   return fallback;
 }

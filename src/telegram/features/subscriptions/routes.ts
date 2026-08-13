@@ -1136,7 +1136,7 @@ export function buildSubscriptionActionKeyboard(
   if (!isDetailView) {
     return keyboard
       .text(
-        t(ctx, 'subscription_view_detail', undefined) || '👁 مشاهده سرویس',
+        t(ctx, 'subscription_view_detail', undefined) || '👁 جزئیات',
         callbackData('config', 'view', configId)
       )
       .row();
