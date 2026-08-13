@@ -103,6 +103,9 @@ export function assertAdminBalanceAdjustment(params: AdminBalanceAdjustment): vo
   if (!params.description.trim() || params.description.length > 500) {
     throw new Error('INVALID_ADMIN_BALANCE_DESCRIPTION');
   }
+  if (params.referenceId !== undefined && !/^[a-zA-Z0-9:_-]{1,128}$/u.test(params.referenceId)) {
+    throw new Error('INVALID_ADMIN_BALANCE_REFERENCE');
+  }
 }
 
 export function errorMessage(err: unknown): string {

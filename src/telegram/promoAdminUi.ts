@@ -146,7 +146,7 @@ export async function promoDetailView(
   const keyboard = new InlineKeyboard()
     .text(
       t(ctx, promo.active ? 'admin_promo_deactivate_button' : 'admin_promo_activate_button'),
-      callbackData('promo', 'toggle', promo.id)
+      callbackData('promo', 'set', promo.active ? 0 : 1, promo.id)
     )
     .row()
     .text(t(ctx, 'admin_promo_edit_button'), callbackData('promo', 'edit', promo.id))

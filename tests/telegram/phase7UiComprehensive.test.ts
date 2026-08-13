@@ -119,7 +119,7 @@ describe('Phase 7 — Comprehensive UI & Quality Test Suite', () => {
     expect(callbacks).toContain('config:refresh:c1'); // Restored Refresh button!
     expect(callbacks).toContain('autorenew:on:c1');
     // Advanced
-    expect(callbacks).toContain('config:toggle:c1');
+    expect(callbacks).toContain('config:set:off:c1');
     expect(callbacks).toContain('config:revoke_prompt:c1');
     expect(callbacks).toContain('config:transfer:c1');
     // Danger

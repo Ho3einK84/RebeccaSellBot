@@ -59,6 +59,7 @@ describe('legacy admin callback compatibility', () => {
     const ctx = {
       match: route.match,
       from: { id: 1, is_bot: false, first_name: 'Admin' },
+      session: {},
       reply,
       answerCallbackQuery,
       services: {
@@ -129,6 +130,7 @@ describe('legacy admin callback compatibility', () => {
     const adjustBalanceAdmin = vi.fn();
     const reply = vi.fn().mockResolvedValue({ message_id: 1 });
     const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+    const session: MenuContext['session'] = {};
     const route = matchRoute(
       collectRoutes(registerAdminUserRoutes),
       'admin:user:quick_topup:42:50000'
@@ -136,6 +138,7 @@ describe('legacy admin callback compatibility', () => {
     const ctx = {
       match: route.match,
       from: { id: 1, is_bot: false, first_name: 'Admin' },
+      session,
       reply,
       answerCallbackQuery,
       services: {
@@ -152,6 +155,80 @@ describe('legacy admin callback compatibility', () => {
     expect(confirmationOptions).toEqual(
       expect.objectContaining({ parse_mode: 'Markdown', reply_markup: expect.anything() })
     );
+    expect(session.adminQuickTopup).toEqual(
+      expect.objectContaining({ targetTelegramId: 42, amount: 50_000, status: 'pending' })
+    );
+    const callbacks = (
+      confirmationOptions as { reply_markup: { inline_keyboard: unknown[][] } }
+    ).reply_markup.inline_keyboard.flat() as Array<{ callback_data?: string }>;
+    expect(callbacks).toContainEqual({
+      text: 'admin_confirm_button',
+      callback_data: `admin:q:${session.adminQuickTopup!.token}`,
+    });
+  });
+
+  it('uses one durable operation reference for repeated quick top-up confirmation clicks', async () => {
+    const token = '0123456789abcdef';
+    const adjustBalanceAdmin = vi.fn().mockResolvedValue(50_000);
+    const findProfile = vi.fn().mockResolvedValue({
+      telegramId: 42,
+      username: 'customer',
+      firstName: 'Test',
+      lastName: 'User',
+      isBanned: false,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      balance: 50_000,
+      reservedBalance: 0,
+      totalSpend: 0,
+      activeSubscriptionCount: 0,
+      hasUsedTrial: false,
+      referralCode: 'REF42',
+      referredUserCount: 0,
+      referralBonusEarned: 0,
+      cashbackEarned: 0,
+      transactionCount: 1,
+    });
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+    const route = matchRoute(collectRoutes(registerAdminUserRoutes), `admin:q:${token}`);
+    const session: MenuContext['session'] = {
+      adminQuickTopup: {
+        token,
+        targetTelegramId: 42,
+        amount: 50_000,
+        status: 'pending',
+      },
+    };
+    const ctx = {
+      match: route.match,
+      from: { id: 1, is_bot: false, first_name: 'Admin' },
+      session,
+      reply,
+      answerCallbackQuery,
+      services: {
+        translationService: translationServiceStub(),
+        walletService: { adjustBalanceAdmin },
+        userService: { findProfile },
+      },
+    } as unknown as MenuContext & { match: RegExpMatchArray };
+
+    await route.handler(ctx);
+    await route.handler(ctx);
+
+    expect(adjustBalanceAdmin).toHaveBeenCalledOnce();
+    expect(adjustBalanceAdmin).toHaveBeenCalledWith({
+      telegramId: 42,
+      operation: 'add',
+      amount: 50_000,
+      adminId: 1,
+      description: 'Admin quick top-up',
+      referenceId: `admin_quick_topup_${token}`,
+    });
+    expect(session.adminQuickTopup).toBeUndefined();
+    expect(answerCallbackQuery).toHaveBeenLastCalledWith({
+      text: 'button_action_failed',
+      show_alert: true,
+    });
   });
 
   it('refreshes a legacy ban toggle into confirmation without changing ban state', async () => {

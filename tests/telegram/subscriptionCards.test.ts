@@ -7,6 +7,8 @@ import {
   showUserSubscriptions,
 } from '../../src/telegram/features/subscriptions/routes.js';
 import type { MenuContext } from '../../src/telegram/types.js';
+import { packageCatalogToken } from '../../src/telegram/packageCatalog.js';
+import { resetActionCooldowns } from '../../src/telegram/middleware/actionCooldown.js';
 
 function context(): MenuContext {
   return {
@@ -43,7 +45,7 @@ describe('subscription card actions', () => {
       .inline_keyboard.flat()
       .map((button) => (button as { callback_data?: string }).callback_data);
 
-    expect(callbacks).toContain('renew:package:uc_alice_123:0');
+    expect(callbacks).toContainEqual(expect.stringMatching(/^r:p:uc_alice_123:0:[0-9a-f]{10}$/u));
     expect(callbacks).toContain('config:view:uc_alice_123');
     expect(callbacks).not.toContain('renew:custom:uc_alice_123');
   });
@@ -81,7 +83,7 @@ describe('subscription card actions', () => {
       .map((button) => (button as { callback_data?: string }).callback_data);
 
     expect(callbacks).toContain('renew:open:uc_alice_123');
-    expect(callbacks).toContain('config:toggle:uc_alice_123');
+    expect(callbacks).toContain('config:set:off:uc_alice_123');
     expect(callbacks).toContain('config:revoke_prompt:uc_alice_123');
     expect(callbacks).toContain('config:delete_prompt:uc_alice_123');
     expect(callbacks).toContain('autorenew:on:uc_alice_123');
@@ -322,7 +324,7 @@ describe('subscription card actions', () => {
         reply.mock.calls[0]?.[1] as { reply_markup: { inline_keyboard: unknown[][] } }
       ).reply_markup.inline_keyboard.flat() as Array<{ callback_data?: string }>
     ).map((button) => button.callback_data);
-    expect(callbacks).toContain('autorenew:pkg:uc_alice_123:0');
+    expect(callbacks).toContainEqual(expect.stringMatching(/^ar:p:uc_alice_123:0:[0-9a-f]{10}$/u));
     expect(callbacks).toContain('config:view:uc_alice_123');
   });
 
@@ -336,9 +338,7 @@ describe('subscription card actions', () => {
     };
     registerSubscriptionRoutes(fakeBot as unknown as Bot<MenuContext>);
 
-    const packageHandler = Object.entries(listeners).find(([key]) =>
-      key.includes('autorenew:pkg:')
-    )?.[1];
+    const packageHandler = Object.entries(listeners).find(([key]) => key.includes('^ar:p:'))?.[1];
     const confirmHandler = Object.entries(listeners).find(([key]) =>
       key.includes('autorenew:confirm:')
     )?.[1];
@@ -355,9 +355,17 @@ describe('subscription card actions', () => {
       panelId: 'main',
       serviceId: 1,
     };
+    const pkg = {
+      id: 'pkg_30gb',
+      name: '30 GB',
+      price: 100_000,
+      gbAmount: 30,
+      durationDays: 30,
+    };
+    const token = packageCatalogToken([pkg]);
     const ctx = {
       ...context(),
-      match: ['autorenew:pkg:uc_confirm_456:0', 'uc_confirm_456', '0'],
+      match: [`ar:p:uc_confirm_456:0:${token}`, 'uc_confirm_456', '0', token],
       from: { id: 42 },
       session: {},
       reply,
@@ -365,15 +373,14 @@ describe('subscription card actions', () => {
       services: {
         translationService: {
           get: vi.fn((key: string) => key),
+          getSetting: vi.fn((_key: string, fallback = '') => fallback),
         },
         configService: {
           getOwnedConfigById: vi.fn().mockResolvedValue(config),
           setAutoRenew,
         },
         pricingService: {
-          getPackages: vi.fn(() => [
-            { id: 'pkg_30gb', name: '30 GB', price: 100_000, gbAmount: 30, durationDays: 30 },
-          ]),
+          getPackages: vi.fn(() => [pkg]),
         },
       },
     };
@@ -393,6 +400,151 @@ describe('subscription card actions', () => {
     await confirmHandler!(ctx);
 
     expect(setAutoRenew).toHaveBeenCalledWith(42, config.id, true, 'pkg_30gb', 100_000);
+  });
+
+  it('rejects a renewal button when its package catalog fingerprint is stale', async () => {
+    const listeners: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const fakeBot = {
+      callbackQuery: vi.fn((pattern: RegExp | string, handler: (ctx: unknown) => Promise<void>) => {
+        listeners[pattern instanceof RegExp ? pattern.source : String(pattern)] = handler;
+      }),
+    };
+    registerSubscriptionRoutes(fakeBot as unknown as Bot<MenuContext>);
+    const handler = Object.entries(listeners).find(([key]) => key.includes('^r:p:'))?.[1];
+    expect(handler).toBeDefined();
+
+    const pkg = {
+      id: 'current_pkg',
+      name: 'Current',
+      price: 100_000,
+      gbAmount: 30,
+      durationDays: 30,
+    };
+    const create = vi.fn();
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+    const ctx = {
+      match: ['r:p:uc_stale_123:0:0000000000', 'uc_stale_123', '0', '0000000000'],
+      from: { id: 42 },
+      session: {},
+      answerCallbackQuery,
+      services: {
+        translationService: { get: vi.fn((key: string) => key) },
+        configService: {
+          getOwnedConfigById: vi.fn().mockResolvedValue({
+            id: 'uc_stale_123',
+            telegramId: 42,
+            configUsername: 'alice',
+          }),
+        },
+        pricingService: { getPackages: vi.fn(() => [pkg]) },
+        purchaseCheckoutService: { create },
+      },
+    };
+
+    await handler!(ctx);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(answerCallbackQuery).toHaveBeenCalledWith({
+      text: 'renewal_package_missing',
+      show_alert: true,
+    });
+  });
+
+  it('routes an underfunded renewal to the handled direct top-up action', async () => {
+    const listeners: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const fakeBot = {
+      callbackQuery: vi.fn((pattern: RegExp | string, handler: (ctx: unknown) => Promise<void>) => {
+        listeners[pattern instanceof RegExp ? pattern.source : String(pattern)] = handler;
+      }),
+    };
+    registerSubscriptionRoutes(fakeBot as unknown as Bot<MenuContext>);
+    const handler = Object.entries(listeners).find(([key]) => key.includes('^r:p:'))?.[1];
+    expect(handler).toBeDefined();
+
+    const pkg = {
+      id: 'pkg_renew',
+      name: 'Renew',
+      price: 100_000,
+      gbAmount: 30,
+      durationDays: 30,
+    };
+    const token = packageCatalogToken([pkg]);
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const create = vi.fn();
+    const ctx = {
+      match: [`r:p:uc_lowbal_123:0:${token}`, 'uc_lowbal_123', '0', token],
+      from: { id: 42 },
+      session: {},
+      reply,
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      services: {
+        translationService: { get: vi.fn((key: string) => key) },
+        configService: {
+          getOwnedConfigById: vi.fn().mockResolvedValue({
+            id: 'uc_lowbal_123',
+            telegramId: 42,
+            configUsername: 'alice',
+          }),
+        },
+        pricingService: { getPackages: vi.fn(() => [pkg]) },
+        walletService: { getBalance: vi.fn().mockResolvedValue(99_999) },
+        purchaseCheckoutService: { create },
+      },
+    };
+
+    await handler!(ctx);
+
+    const keyboard = (
+      reply.mock.calls[0]?.[1] as { reply_markup: { inline_keyboard: unknown[][] } }
+    ).reply_markup;
+    const callbacks = (keyboard.inline_keyboard.flat() as Array<{ callback_data?: string }>).map(
+      (button) => button.callback_data
+    );
+    expect(callbacks).toContain('topup:direct');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('applies an explicit config status once when the button is repeated quickly', async () => {
+    resetActionCooldowns();
+    const listeners: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const fakeBot = {
+      callbackQuery: vi.fn((pattern: RegExp | string, handler: (ctx: unknown) => Promise<void>) => {
+        listeners[pattern instanceof RegExp ? pattern.source : String(pattern)] = handler;
+      }),
+    };
+    registerSubscriptionRoutes(fakeBot as unknown as Bot<MenuContext>);
+    const handler = Object.entries(listeners).find(([key]) => key.includes('config:set:'))?.[1];
+    expect(handler).toBeDefined();
+
+    const disableConfig = vi.fn().mockRejectedValue(new Error('origin unavailable'));
+    const enableConfig = vi.fn();
+    const ctx = {
+      match: ['config:set:off:uc_disable_123', 'off', 'uc_disable_123'],
+      from: { id: 42 },
+      session: {},
+      reply: vi.fn().mockResolvedValue({ message_id: 1 }),
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      services: {
+        translationService: { get: vi.fn((key: string) => key) },
+        configService: {
+          getOwnedConfigById: vi.fn().mockResolvedValue({
+            id: 'uc_disable_123',
+            telegramId: 42,
+            configUsername: 'alice',
+            panelId: 'main',
+          }),
+          disableConfig,
+          enableConfig,
+        },
+      },
+    };
+
+    await handler!(ctx);
+    await handler!(ctx);
+
+    expect(disableConfig).toHaveBeenCalledOnce();
+    expect(disableConfig).toHaveBeenCalledWith('alice', 'main');
+    expect(enableConfig).not.toHaveBeenCalled();
   });
 
   it('handles config:view by rendering the subscription card', async () => {

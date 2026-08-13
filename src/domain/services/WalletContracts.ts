@@ -85,4 +85,6 @@ export type AdminBalanceAdjustment = {
   amount: number;
   adminId: number;
   description: string;
+  /** Optional stable operation key used to make button-driven adjustments idempotent. */
+  referenceId?: string;
 };

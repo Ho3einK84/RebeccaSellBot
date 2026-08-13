@@ -43,7 +43,7 @@ describe('Subscriptions 2-Level View & Action Hierarchy (Phase 4)', () => {
     expect(flattenedCallbacks).toContain('renew:open:cfg_101');
     expect(flattenedCallbacks).toContain('config:qr:cfg_101');
     expect(flattenedCallbacks).toContain('autorenew:on:cfg_101');
-    expect(flattenedCallbacks).toContain('config:toggle:cfg_101');
+    expect(flattenedCallbacks).toContain('config:set:off:cfg_101');
     expect(flattenedCallbacks).toContain('config:revoke_prompt:cfg_101');
     expect(flattenedCallbacks).toContain('config:transfer:cfg_101');
     expect(flattenedCallbacks).toContain('config:delete_prompt:cfg_101');

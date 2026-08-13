@@ -13,6 +13,7 @@ import {
 import { adminMenu, renderAdminHome } from '../keyboards/adminMenu.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
+import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { formatSubscriptionLink, observedContextLocale, t } from '../locale.js';
 import {
   backKeyboard,
@@ -123,6 +124,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     ctx.session.adminPanelAction = undefined;
     ctx.session.adminPanelId = undefined;
     ctx.session.adminPanelDraft = undefined;
+    delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery();
     if (showAdmin && !services.isAdmin(telegramId)) {
       await renderUiScreen(
@@ -160,6 +162,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.callbackQuery('trial:claim', async (ctx) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
+    if (!acquireUserActionCooldown(telegramId, 'trial-claim', 5_000)) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+      return;
+    }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
 
     let result;
@@ -262,6 +268,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     ctx.session.adminPanelAction = undefined;
     ctx.session.adminPanelId = undefined;
     ctx.session.adminPanelDraft = undefined;
+    delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
     await renderUiScreen(
       ctx,

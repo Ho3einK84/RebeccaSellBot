@@ -62,6 +62,13 @@ export interface SessionData {
   };
   /** Exact receipt IDs captured before a destructive batch confirmation. */
   adminReceiptBatch?: { ids: string[]; page: number };
+  /** One-time, idempotent quick top-up confirmation issued from an admin profile. */
+  adminQuickTopup?: {
+    token: string;
+    targetTelegramId: number;
+    amount: number;
+    status: 'pending' | 'submitted';
+  };
   subscriptionListPage?: number;
   [key: string]: unknown;
 }

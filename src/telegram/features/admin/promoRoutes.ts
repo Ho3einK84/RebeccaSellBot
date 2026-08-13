@@ -58,22 +58,30 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
     await ctx.conversation.enter('adminEditPromoConversation');
   });
 
-  bot.callbackQuery(new RegExp(`^promo:toggle:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  bot.callbackQuery(new RegExp(`^promo:set:([01]):${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
-    const id = ctx.match[1]!;
+    const active = ctx.match[1] === '1';
+    const id = ctx.match[2]!;
     const promo = await ctx.services.promoService.getPromoCodeById(id);
     if (!promo) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'admin_promo_not_found'), show_alert: true });
       return;
     }
-    const updated = await ctx.services.promoService.setPromoActiveById(id, !promo.active);
+    const updated = await ctx.services.promoService.setPromoActiveById(id, active);
     await ctx.answerCallbackQuery({
       text: t(ctx, updated ? 'admin_promo_toggled' : 'operation_failed', {
         code: promo.code,
-        active: t(ctx, promo.active ? 'admin_promo_inactive' : 'admin_promo_active'),
+        active: t(ctx, active ? 'admin_promo_active' : 'admin_promo_inactive'),
       }),
     });
     if (updated) await renderDetail(ctx, id);
+  });
+
+  // A pre-upgrade toggle does not encode the intended state. Refresh it
+  // instead of risking an inverse mutation from a stale or repeated click.
+  bot.callbackQuery(new RegExp(`^promo:toggle:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await renderDetail(ctx, ctx.match[1]!);
   });
 
   bot.callbackQuery(new RegExp(`^promo:delete:${UUID_CAPTURE}$`, 'u'), async (ctx) => {

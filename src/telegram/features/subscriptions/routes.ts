@@ -32,6 +32,7 @@ import { RefundOutcomePendingError } from '../../../domain/services/RefundServic
 import { PurchaseCheckoutUnavailableError } from '../../../domain/services/PurchaseCheckoutService.js';
 import type { RebeccaUserDetail } from '../../../domain/services/RebeccaService.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
+import { packageCatalogToken } from '../../packageCatalog.js';
 
 const SUBSCRIPTION_PAGE_SIZE = 4;
 const CONFIG_ID_CAPTURE = '([a-zA-Z0-9_]{3,40})';
@@ -64,6 +65,7 @@ export function buildRenewalSelectionKeyboard(
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   const packages = ctx.services!.pricingService.getPackages(panelId, serviceId);
+  const catalogToken = packageCatalogToken(packages);
   for (const [index, pkg] of packages.entries()) {
     keyboard
       .text(
@@ -71,7 +73,7 @@ export function buildRenewalSelectionKeyboard(
           name: localizedPackageName(ctx, pkg.id, pkg.name),
           price: localizedNumber(pkg.price, ctx),
         }),
-        callbackData('renew', 'package', configId, index)
+        callbackData('r', 'p', configId, index, catalogToken)
       )
       .row();
   }
@@ -178,6 +180,81 @@ export async function showUserSubscriptions(
   );
 }
 
+/** Render the current owned detail card; useful for refreshing legacy callbacks safely. */
+export async function showSubscriptionDetail(
+  ctx: MenuContext,
+  configId: string,
+  answerIfMissing = true
+): Promise<boolean> {
+  const config = await ownedConfig(ctx, configId, answerIfMissing);
+  if (!config) return false;
+  const card = await buildSubscriptionCard(ctx, config, true);
+  await renderSubscriptionScreen(ctx, card.text, card.keyboard);
+  return true;
+}
+
+async function renderRenewalSelection(ctx: MenuContext, config: UserConfigRecord): Promise<void> {
+  const keyboard = buildRenewalSelectionKeyboard(ctx, config.id, config.panelId, config.serviceId);
+  await renderSubscriptionScreen(
+    ctx,
+    buildScreen({
+      emoji: '🔄',
+      title: t(ctx, 'renewal_selection_title'),
+      subtitle: t(ctx, 'renewal_selection_subtitle'),
+      primary: {
+        emoji: '📱',
+        label: t(ctx, 'renewal_selection_service_label'),
+        value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+      },
+      footer: `ℹ️ ${t(ctx, 'renewal_selection_hint')}`,
+    }),
+    keyboard
+  );
+}
+
+async function renderAutoRenewSelection(ctx: MenuContext, config: UserConfigRecord): Promise<void> {
+  if (!ctx.services) return;
+  const packages = ctx.services.pricingService.getPackages(config.panelId, config.serviceId);
+  const catalogToken = packageCatalogToken(packages);
+  const keyboard = new InlineKeyboard();
+  for (const [index, pkg] of packages.entries()) {
+    keyboard
+      .text(
+        t(ctx, 'package_button', {
+          name: localizedPackageName(ctx, pkg.id, pkg.name),
+          price: localizedNumber(pkg.price, ctx),
+        }),
+        callbackData('ar', 'p', config.id, index, catalogToken)
+      )
+      .row();
+  }
+  if (customVolumeEnabled(ctx.services.translationService)) {
+    const pricePerGb = ctx.services.translationService.getSettingNum('price_per_gb', 5_000);
+    keyboard
+      .text(
+        t(ctx, 'renew_custom_button', { price: localizedNumber(pricePerGb, ctx) }),
+        callbackData('autorenew', 'custom', config.id)
+      )
+      .row();
+  }
+  keyboard.text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id));
+  await renderSubscriptionScreen(
+    ctx,
+    buildScreen({
+      emoji: '♻️',
+      title: t(ctx, 'auto_renew_selection_title'),
+      subtitle: t(ctx, 'auto_renew_selection_subtitle'),
+      primary: {
+        emoji: '📱',
+        label: t(ctx, 'renewal_selection_service_label'),
+        value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+      },
+      footer: `ℹ️ ${t(ctx, 'auto_renew_selection_hint')}`,
+    }),
+    keyboard
+  );
+}
+
 export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(/^subs:page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'subscriptions_loading') });
@@ -192,94 +269,94 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       return;
     }
     await ctx.answerCallbackQuery();
-    const keyboard = buildRenewalSelectionKeyboard(
-      ctx,
-      config.id,
-      config.panelId,
-      config.serviceId
-    );
-    await renderSubscriptionScreen(
-      ctx,
-      buildScreen({
-        emoji: '🔄',
-        title: t(ctx, 'renewal_selection_title'),
-        subtitle: t(ctx, 'renewal_selection_subtitle'),
-        primary: {
-          emoji: '📱',
-          label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
-        },
-        footer: `ℹ️ ${t(ctx, 'renewal_selection_hint')}`,
-      }),
-      keyboard
-    );
+    await renderRenewalSelection(ctx, config);
   });
 
+  bot.callbackQuery(
+    new RegExp(`^r:p:${CONFIG_ID_CAPTURE}:(\\d+):([0-9a-f]{10})$`, 'u'),
+    async (ctx) => {
+      const config = await ownedConfig(ctx, ctx.match[1]!);
+      if (!config) return;
+      const packageIndex = Number(ctx.match[2]);
+      const packages = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId);
+      const pkg =
+        ctx.match[3] === packageCatalogToken(packages) && Number.isSafeInteger(packageIndex)
+          ? packages[packageIndex]
+          : undefined;
+      if (!pkg) {
+        await ctx.answerCallbackQuery({
+          text: t(ctx, 'renewal_package_missing'),
+          show_alert: true,
+        });
+        return;
+      }
+      const pendingPromo = await getPendingPromoPricing(ctx, ctx.from.id, pkg.price, pkg.gbAmount);
+      if (pendingPromo.messageKey) {
+        await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable'), show_alert: true });
+        await renderSubscriptionScreen(
+          ctx,
+          buildEmptyState('⚠️', t(ctx, 'renewal_selection_title'), t(ctx, pendingPromo.messageKey)),
+          backKeyboard(ctx)
+        );
+        return;
+      }
+      const price = pendingPromo.quote?.finalAmount ?? pkg.price;
+      if ((await ctx.services!.walletService.getBalance(ctx.from.id)) < price) {
+        await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
+        await renderSubscriptionScreen(
+          ctx,
+          buildEmptyState(
+            '💳',
+            t(ctx, 'insufficient_balance_title'),
+            t(ctx, 'insufficient_balance'),
+            t(ctx, 'insufficient_balance_hint')
+          ),
+          new InlineKeyboard()
+            .text(t(ctx, 'topup_title'), 'topup:direct')
+            .row()
+            .text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id))
+        );
+        return;
+      }
+      await ctx.answerCallbackQuery();
+      const checkout = await ctx.services!.purchaseCheckoutService.create({
+        telegramId: ctx.from.id,
+        kind: 'renew_config',
+        configId: config.id,
+        pkg,
+        panelId: config.panelId,
+        serviceId: pkg.serviceId ?? config.serviceId,
+        promoCode: pendingPromo.promoCode,
+        quotedAmount: price,
+      });
+      await renderSubscriptionScreen(
+        ctx,
+        buildRenewalCheckoutScreen(ctx, {
+          username: config.configUsername,
+          gbAmount: pkg.gbAmount,
+          durationDays: pkg.durationDays,
+          amount: price,
+          pricePerGb: Math.round(price / pkg.gbAmount),
+          promoCode: pendingPromo.quote?.code,
+        }),
+        new InlineKeyboard()
+          .text(t(ctx, 'renew_confirm_button'), callbackData('renew', 'confirm', checkout.id))
+          .row()
+          .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
+      );
+    }
+  );
+
+  // Package-index callbacks from old screens cannot prove which catalog the
+  // user reviewed. Refresh the current list instead of creating a checkout.
   bot.callbackQuery(new RegExp(`^renew:package:${CONFIG_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
-    const packageIndex = Number(ctx.match[2]);
-    const pkg = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId)[
-      packageIndex
-    ];
-    if (!pkg) {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'renewal_package_missing'), show_alert: true });
-      return;
-    }
-    const pendingPromo = await getPendingPromoPricing(ctx, ctx.from.id, pkg.price, pkg.gbAmount);
-    if (pendingPromo.messageKey) {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable'), show_alert: true });
-      await renderSubscriptionScreen(
-        ctx,
-        buildEmptyState('⚠️', t(ctx, 'renewal_selection_title'), t(ctx, pendingPromo.messageKey)),
-        backKeyboard(ctx)
-      );
-      return;
-    }
-    const price = pendingPromo.quote?.finalAmount ?? pkg.price;
-    if ((await ctx.services!.walletService.getBalance(ctx.from.id)) < price) {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
-      await renderSubscriptionScreen(
-        ctx,
-        buildEmptyState(
-          '💳',
-          t(ctx, 'insufficient_balance_title'),
-          t(ctx, 'insufficient_balance'),
-          t(ctx, 'insufficient_balance_hint')
-        ),
-        new InlineKeyboard()
-          .text(t(ctx, 'topup_title') ?? '💳 Top Up Wallet', 'nav:topup')
-          .row()
-          .text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id))
-      );
-      return;
-    }
-    await ctx.answerCallbackQuery();
-    const checkout = await ctx.services!.purchaseCheckoutService.create({
-      telegramId: ctx.from.id,
-      kind: 'renew_config',
-      configId: config.id,
-      pkg,
-      panelId: config.panelId,
-      serviceId: pkg.serviceId ?? config.serviceId,
-      promoCode: pendingPromo.promoCode,
-      quotedAmount: price,
+    await ctx.answerCallbackQuery({
+      text: t(ctx, 'purchase_confirmation_expired'),
+      show_alert: true,
     });
-    await renderSubscriptionScreen(
-      ctx,
-      buildRenewalCheckoutScreen(ctx, {
-        username: config.configUsername,
-        gbAmount: pkg.gbAmount,
-        durationDays: pkg.durationDays,
-        amount: price,
-        pricePerGb: Math.round(price / pkg.gbAmount),
-        promoCode: pendingPromo.quote?.code,
-      }),
-      new InlineKeyboard()
-        .text(t(ctx, 'renew_confirm_button'), callbackData('renew', 'confirm', checkout.id))
-        .row()
-        .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
-    );
+    await renderRenewalSelection(ctx, config);
   });
 
   bot.callbackQuery(/^renew:confirm:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
@@ -378,12 +455,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   });
 
   bot.callbackQuery(new RegExp(`^config:view:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
-    const config = await ownedConfig(ctx, ctx.match[1]!);
-    if (!config) return;
     await ctx.answerCallbackQuery({ text: t(ctx, 'subscriptions_loading') });
     trackFunnelEvent('service_first_view');
-    const card = await buildSubscriptionCard(ctx, config, true);
-    await renderSubscriptionScreen(ctx, card.text, card.keyboard);
+    await showSubscriptionDetail(ctx, ctx.match[1]!, false);
   });
 
   bot.callbackQuery(new RegExp(`^config:refresh:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
@@ -423,45 +497,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       return;
     }
 
-    const keyboard = new InlineKeyboard();
-    for (const [index, pkg] of ctx
-      .services!.pricingService.getPackages(config.panelId, config.serviceId)
-      .entries()) {
-      keyboard
-        .text(
-          t(ctx, 'package_button', {
-            name: localizedPackageName(ctx, pkg.id, pkg.name),
-            price: localizedNumber(pkg.price, ctx),
-          }),
-          callbackData('autorenew', 'pkg', config.id, index)
-        )
-        .row();
-    }
-    if (customVolumeEnabled(ctx.services!.translationService)) {
-      const pricePerGb = ctx.services!.translationService.getSettingNum('price_per_gb', 5_000);
-      keyboard
-        .text(
-          t(ctx, 'renew_custom_button', { price: localizedNumber(pricePerGb, ctx) }),
-          callbackData('autorenew', 'custom', config.id)
-        )
-        .row();
-    }
-    keyboard.text(t(ctx, 'menu_back'), `config:view:${config.id}`);
-    await renderSubscriptionScreen(
-      ctx,
-      buildScreen({
-        emoji: '♻️',
-        title: t(ctx, 'auto_renew_selection_title'),
-        subtitle: t(ctx, 'auto_renew_selection_subtitle'),
-        primary: {
-          emoji: '📱',
-          label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
-        },
-        footer: `ℹ️ ${t(ctx, 'auto_renew_selection_hint')}`,
-      }),
-      keyboard
-    );
+    await renderAutoRenewSelection(ctx, config);
   });
 
   bot.callbackQuery(new RegExp(`^autorenew:custom:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
@@ -479,64 +515,79 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     await ctx.conversation.enter('autoRenewCustomConversation');
   });
 
+  bot.callbackQuery(
+    new RegExp(`^ar:p:${CONFIG_ID_CAPTURE}:(\\d+):([0-9a-f]{10})$`, 'u'),
+    async (ctx) => {
+      const config = await ownedConfig(ctx, ctx.match[1]!);
+      if (!config) return;
+      const packageIndex = Number(ctx.match[2]);
+      const packages = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId);
+      const pkg =
+        ctx.match[3] === packageCatalogToken(packages) && Number.isSafeInteger(packageIndex)
+          ? packages[packageIndex]
+          : undefined;
+      if (!pkg) {
+        await ctx.answerCallbackQuery({
+          text: t(ctx, 'auto_renew_package_unavailable'),
+          show_alert: true,
+        });
+        return;
+      }
+      ctx.session.pendingAutoRenew = { configId: config.id, packageId: pkg.id, price: pkg.price };
+      await ctx.answerCallbackQuery();
+      await renderSubscriptionScreen(
+        ctx,
+        buildScreen({
+          emoji: '♻️',
+          title: t(ctx, 'auto_renew_review_title'),
+          subtitle: t(ctx, 'auto_renew_review_subtitle'),
+          primary: {
+            emoji: '💰',
+            label: t(ctx, 'auto_renew_charge_label'),
+            value: `${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          sections: [
+            {
+              emoji: '📱',
+              title: t(ctx, 'renewal_selection_service_label'),
+              fields: [
+                {
+                  emoji: '🆔',
+                  label: t(ctx, 'checkout_service_label'),
+                  value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+                },
+              ],
+            },
+            {
+              emoji: '📦',
+              title: t(ctx, 'checkout_package_section'),
+              fields: [
+                {
+                  emoji: '📦',
+                  label: t(ctx, 'renewal_success_package_label'),
+                  value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
+                },
+              ],
+            },
+          ],
+          footer: `ℹ️ ${t(ctx, 'auto_renew_review_hint')}`,
+        }),
+        new InlineKeyboard()
+          .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'confirm', config.id))
+          .row()
+          .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
+      );
+    }
+  );
+
   bot.callbackQuery(new RegExp(`^autorenew:pkg:${CONFIG_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
-    const packageIndex = Number(ctx.match[2]);
-    const pkg = Number.isSafeInteger(packageIndex)
-      ? ctx.services!.pricingService.getPackages(config.panelId, config.serviceId)[packageIndex]
-      : undefined;
-    if (!pkg) {
-      await ctx.answerCallbackQuery({
-        text: t(ctx, 'auto_renew_package_unavailable'),
-        show_alert: true,
-      });
-      return;
-    }
-    ctx.session.pendingAutoRenew = { configId: config.id, packageId: pkg.id, price: pkg.price };
-    await ctx.answerCallbackQuery();
-    await renderSubscriptionScreen(
-      ctx,
-      buildScreen({
-        emoji: '♻️',
-        title: t(ctx, 'auto_renew_review_title'),
-        subtitle: t(ctx, 'auto_renew_review_subtitle'),
-        primary: {
-          emoji: '💰',
-          label: t(ctx, 'auto_renew_charge_label'),
-          value: `${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
-        },
-        sections: [
-          {
-            emoji: '📱',
-            title: t(ctx, 'renewal_selection_service_label'),
-            fields: [
-              {
-                emoji: '🆔',
-                label: t(ctx, 'checkout_service_label'),
-                value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
-              },
-            ],
-          },
-          {
-            emoji: '📦',
-            title: t(ctx, 'checkout_package_section'),
-            fields: [
-              {
-                emoji: '📦',
-                label: t(ctx, 'renewal_success_package_label'),
-                value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
-              },
-            ],
-          },
-        ],
-        footer: `ℹ️ ${t(ctx, 'auto_renew_review_hint')}`,
-      }),
-      new InlineKeyboard()
-        .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'confirm', config.id))
-        .row()
-        .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
-    );
+    await ctx.answerCallbackQuery({
+      text: t(ctx, 'purchase_confirmation_expired'),
+      show_alert: true,
+    });
+    await renderAutoRenewSelection(ctx, config);
   });
 
   bot.callbackQuery(new RegExp(`^autorenew:confirm:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
@@ -608,16 +659,21 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     }
   );
 
-  bot.callbackQuery(new RegExp(`^config:toggle:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
-    const config = await ownedConfig(ctx, ctx.match[1]!);
+  bot.callbackQuery(new RegExp(`^config:set:(on|off):${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
+    const enabled = ctx.match[1] === 'on';
+    const config = await ownedConfig(ctx, ctx.match[2]!);
     if (!config) return;
-    if (!acquireUserActionCooldown(ctx.from.id, `toggle:${config.id}`, 3_000)) {
+    if (!acquireUserActionCooldown(ctx.from.id, `config-status:${config.id}`, 3_000)) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress'), show_alert: true });
       return;
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     try {
-      await ctx.services!.configService.toggleConfig(config.configUsername, config.panelId);
+      if (enabled) {
+        await ctx.services!.configService.enableConfig(config.configUsername, config.panelId);
+      } else {
+        await ctx.services!.configService.disableConfig(config.configUsername, config.panelId);
+      }
       const card = await buildSubscriptionCard(ctx, config, true);
       await renderSubscriptionScreen(ctx, card.text, card.keyboard);
     } catch {
@@ -627,6 +683,13 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         backKeyboard(ctx)
       );
     }
+  });
+
+  // Old toggle callbacks did not encode intent. A stale click could therefore
+  // undo a newer state, so refresh the current detail card without mutating it.
+  bot.callbackQuery(new RegExp(`^config:toggle:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await showSubscriptionDetail(ctx, ctx.match[1]!, false);
   });
 
   bot.callbackQuery(new RegExp(`^config:revoke_prompt:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
@@ -806,22 +869,38 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     async (ctx) => {
       const config = await ownedConfig(ctx, ctx.match[1]!);
       if (!config) return;
+      if (!acquireUserActionCooldown(ctx.from.id, `config-delete:${config.id}`, 3_000)) {
+        await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+        return;
+      }
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-      const deleted = await ctx.services!.configService.deleteConfigCompletely(
-        config.configUsername,
-        config.panelId
-      );
-      await renderSubscriptionScreen(
-        ctx,
-        deleted
-          ? buildDeleteResultScreen(ctx, config.configUsername, undefined, false)
-          : buildEmptyState(
-              '⚠️',
-              t(ctx, 'config_delete_review_title'),
-              tm(ctx, 'config_delete_not_found', { username: config.configUsername })
-            ),
-        backKeyboard(ctx, 'main')
-      );
+      try {
+        const deleted = await ctx.services!.configService.deleteConfigCompletely(
+          config.configUsername,
+          config.panelId
+        );
+        await renderSubscriptionScreen(
+          ctx,
+          deleted
+            ? buildDeleteResultScreen(ctx, config.configUsername, undefined, false)
+            : buildEmptyState(
+                '⚠️',
+                t(ctx, 'config_delete_review_title'),
+                tm(ctx, 'config_delete_not_found', { username: config.configUsername })
+              ),
+          backKeyboard(ctx, 'main')
+        );
+      } catch {
+        await renderSubscriptionScreen(
+          ctx,
+          buildEmptyState(
+            '⚠️',
+            t(ctx, 'config_delete_review_title'),
+            t(ctx, 'config_action_failed')
+          ),
+          backKeyboard(ctx, 'main')
+        );
+      }
     }
   );
 
@@ -872,10 +951,10 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
   });
 }
 
-async function ownedConfig(ctx: MenuContext, configId: string) {
+async function ownedConfig(ctx: MenuContext, configId: string, answerIfMissing = true) {
   if (!ctx.services || !ctx.from) return undefined;
   const config = await ctx.services.configService.getOwnedConfigById(ctx.from.id, configId);
-  if (!config) {
+  if (!config && answerIfMissing) {
     await ctx.answerCallbackQuery({ text: t(ctx, 'config_not_owned'), show_alert: true });
   }
   return config;
@@ -1081,7 +1160,7 @@ export function buildSubscriptionActionKeyboard(
       status === 'disabled'
         ? t(ctx, 'subscription_enable_button')
         : t(ctx, 'subscription_disable_button'),
-      callbackData('config', 'toggle', configId)
+      callbackData('config', 'set', status === 'disabled' ? 'on' : 'off', configId)
     )
     .text(t(ctx, 'subscription_revoke_button'), callbackData('config', 'revoke_prompt', configId))
     .row()

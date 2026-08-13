@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
 import type { PackageOption } from '../../../../domain/services/PricingService.js';
 import {
@@ -8,6 +7,7 @@ import {
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { localizedNumber, t, tm } from '../../../locale.js';
 import { callbackData } from '../../../callbackData.js';
+import { packageCatalogToken } from '../../../packageCatalog.js';
 import { escapeTelegramMarkdown } from '../../../rendering.js';
 import {
   buildEmptyState,
@@ -559,10 +559,6 @@ function parsePackageActionIndex(
   if (!match || match[1] !== packageCatalogToken(packages)) return undefined;
   const value = Number(match[2]);
   return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
-}
-
-function packageCatalogToken(packages: readonly PackageOption[]): string {
-  return crypto.createHash('sha256').update(JSON.stringify(packages)).digest('hex').slice(0, 10);
 }
 
 function packagePageCount(packageCount: number): number {

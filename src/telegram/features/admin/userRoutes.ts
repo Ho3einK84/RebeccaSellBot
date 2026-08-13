@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
 import { backKeyboard, buildEmptyState, buildScreen, renderUiScreen } from '../../ui.js';
@@ -88,6 +89,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
   });
 
   bot.callbackQuery(/^admin:user:view:(\d+)$/u, async (ctx) => {
+    delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery();
     await renderUserProfile(ctx, Number(ctx.match[1]));
   });
@@ -106,69 +108,50 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       return;
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
-    await renderUserScreen(
-      ctx,
-      buildScreen({
-        emoji: '💳',
-        title: t(ctx, 'admin_user_wallet_section'),
-        subtitle: t(ctx, 'admin_user_quick_topup_confirm', {
-          telegram_id: targetId,
-          amount: localizedNumber(amount, ctx),
-        }),
-        primary: {
-          emoji: '➕',
-          label: t(ctx, 'admin_balance_add'),
-          value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
-        },
-        sections: [
-          {
-            emoji: '👤',
-            title: t(ctx, 'admin_user_identity_section'),
-            fields: [
-              {
-                emoji: '🆔',
-                label: t(ctx, 'admin_user_id_label'),
-                value: `\`${localizedNumber(targetId, ctx)}\``,
-              },
-            ],
-          },
-        ],
-        footer: `⚠️ ${t(ctx, 'admin_confirm_button')}`,
-      }),
-      new InlineKeyboard()
-        .text(
-          t(ctx, 'admin_confirm_button'),
-          `admin:user:quick_topup_confirm:${targetId}:${amount}`
-        )
-        .row()
-        .text(t(ctx, 'menu_cancel'), `admin:user:view:${targetId}`),
-      'Markdown'
-    );
+    await showQuickTopupConfirmation(ctx, targetId, amount);
   });
 
+  // Pre-upgrade confirmation callbacks lacked an idempotency token. Refresh
+  // them into a new one-time confirmation without crediting the wallet.
   bot.callbackQuery(/^admin:user:quick_topup_confirm:(\d+):(\d+)$/u, async (ctx) => {
-    if (!ctx.services) return;
     const targetId = Number(ctx.match[1]);
     const amount = Number(ctx.match[2]);
     if (!isSafePositiveInteger(targetId) || !isSafePositiveInteger(amount)) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_failed'), show_alert: true });
       return;
     }
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await showQuickTopupConfirmation(ctx, targetId, amount);
+  });
+
+  bot.callbackQuery(/^admin:q:([0-9a-f]{16})$/u, async (ctx) => {
+    if (!ctx.services) return;
+    const token = ctx.match[1]!;
+    const pending = ctx.session.adminQuickTopup;
+    if (!pending || pending.token !== token) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'button_action_failed'), show_alert: true });
+      return;
+    }
+    pending.status = 'submitted';
     try {
       await ctx.services.walletService.adjustBalanceAdmin({
-        telegramId: targetId,
+        telegramId: pending.targetTelegramId,
         operation: 'add',
-        amount,
+        amount: pending.amount,
         adminId: ctx.from.id,
         description: 'Admin quick top-up',
+        referenceId: `admin_quick_topup_${token}`,
       });
       await ctx.answerCallbackQuery({
         text: tm(ctx, 'admin_user_quick_topup_success', {
-          amount: localizedNumber(amount, ctx),
+          amount: localizedNumber(pending.amount, ctx),
         }),
         show_alert: false,
       });
-      await renderUserProfile(ctx, targetId);
+      if (ctx.session.adminQuickTopup?.token === token) {
+        delete ctx.session.adminQuickTopup;
+      }
+      await renderUserProfile(ctx, pending.targetTelegramId);
     } catch {
       await ctx.answerCallbackQuery({
         text: t(ctx, 'operation_failed'),
@@ -602,6 +585,55 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
 
 function isSafePositiveInteger(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0;
+}
+
+async function showQuickTopupConfirmation(
+  ctx: MenuContext,
+  targetId: number,
+  amount: number
+): Promise<void> {
+  const token = crypto.randomBytes(8).toString('hex');
+  ctx.session.adminQuickTopup = {
+    token,
+    targetTelegramId: targetId,
+    amount,
+    status: 'pending',
+  };
+  await renderUserScreen(
+    ctx,
+    buildScreen({
+      emoji: '💳',
+      title: t(ctx, 'admin_user_wallet_section'),
+      subtitle: t(ctx, 'admin_user_quick_topup_confirm', {
+        telegram_id: targetId,
+        amount: localizedNumber(amount, ctx),
+      }),
+      primary: {
+        emoji: '➕',
+        label: t(ctx, 'admin_balance_add'),
+        value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      },
+      sections: [
+        {
+          emoji: '👤',
+          title: t(ctx, 'admin_user_identity_section'),
+          fields: [
+            {
+              emoji: '🆔',
+              label: t(ctx, 'admin_user_id_label'),
+              value: `\`${localizedNumber(targetId, ctx)}\``,
+            },
+          ],
+        },
+      ],
+      footer: `⚠️ ${t(ctx, 'admin_confirm_button')}`,
+    }),
+    new InlineKeyboard()
+      .text(t(ctx, 'admin_confirm_button'), callbackData('admin', 'q', token))
+      .row()
+      .text(t(ctx, 'menu_cancel'), callbackData('admin', 'user', 'view', targetId)),
+    'Markdown'
+  );
 }
 
 async function renderUserScreen(

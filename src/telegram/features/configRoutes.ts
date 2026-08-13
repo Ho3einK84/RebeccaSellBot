@@ -5,15 +5,9 @@ import type { BotServices, MenuContext } from '../types.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { logger } from '../../infra/logger.js';
 import { observedContextLocale, t, tm } from '../locale.js';
-import {
-  backKeyboard,
-  buildEmptyState,
-  buildScreen,
-  buildStatusBadge,
-  renderUiScreen,
-} from '../ui.js';
+import { backKeyboard, buildEmptyState, buildScreen, renderUiScreen } from '../ui.js';
 import { callbackData } from '../callbackData.js';
-import { buildSubscriptionActionKeyboard } from './subscriptions/routes.js';
+import { buildSubscriptionActionKeyboard, showSubscriptionDetail } from './subscriptions/routes.js';
 import { escapeTelegramMarkdown } from '../rendering.js';
 
 export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotServices): void {
@@ -54,36 +48,10 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
       );
       return;
     }
-    if (!acquireUserActionCooldown(telegramId, `config-${action}`, 1_000)) {
-      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress'), show_alert: false });
-      return;
-    }
-    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-    try {
-      const result = await services.configService.toggleConfig(configUsername, localConfig.panelId);
-      const enabled = result === 'enabled';
-      await renderConfigScreen(
-        ctx,
-        buildScreen({
-          emoji: enabled ? '✅' : '⏸️',
-          title: t(ctx, 'subscription_list_title'),
-          primary: {
-            emoji: enabled ? '🟢' : '⚪️',
-            label: t(ctx, 'subscription_status_label'),
-            value: buildStatusBadge(ctx, enabled ? 'active' : 'inactive'),
-          },
-          footer: t(ctx, enabled ? 'subscription_enabled' : 'subscription_disabled'),
-        }),
-        backKeyboard(ctx)
-      );
-    } catch (err) {
-      logger.warn({ err, telegramId, configUsername, action }, 'Config management action failed');
-      await renderConfigScreen(
-        ctx,
-        buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, 'config_action_failed')),
-        backKeyboard(ctx)
-      );
-    }
+    // The legacy toggle did not encode the intended state. Refresh the modern
+    // detail view rather than risking an inverse mutation from an old button.
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await showSubscriptionDetail(ctx, localConfig.id, false);
   });
 
   bot.callbackQuery(/^config_delete(_confirm|_cancel)?:(.+)$/, async (ctx) => {

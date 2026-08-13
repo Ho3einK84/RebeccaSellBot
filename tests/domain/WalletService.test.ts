@@ -789,6 +789,52 @@ describe('WalletService reserve → remote → commit saga', () => {
     );
   });
 
+  it('replays a referenced admin adjustment without applying it twice', async () => {
+    const description = 'Quick top-up from admin profile';
+    const auditDescription = `Admin 99: add; ${description}`;
+    const { db, state } = createDbMock({
+      selectResults: [
+        [{ telegramId: 4321, balance: 100, reservedBalance: 20 }],
+        [],
+        [{ telegramId: 4321, balance: 125, reservedBalance: 20 }],
+        [
+          {
+            telegramId: 4321,
+            amount: 25,
+            balanceAfter: 125,
+            type: 'admin_adjustment',
+            description: auditDescription,
+          },
+        ],
+      ],
+      returningResults: [[{ balance: 125 }]],
+    });
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const adjustment = {
+      telegramId: 4321,
+      operation: 'add' as const,
+      amount: 25,
+      adminId: 99,
+      description,
+      referenceId: 'admin_quick_topup_deadbeef',
+    };
+
+    await expect(walletService.adjustBalanceAdmin(adjustment)).resolves.toBe(125);
+    await expect(walletService.adjustBalanceAdmin(adjustment)).resolves.toBe(125);
+
+    expect(state.updateCalls).toHaveLength(1);
+    expect(state.insertValues).toHaveLength(2);
+    expect(state.insertValues).toContainEqual(
+      expect.objectContaining({
+        referenceId: adjustment.referenceId,
+        amount: 25,
+        balanceAfter: 125,
+        type: 'admin_adjustment',
+      })
+    );
+  });
+
   it('never lets an admin operation reduce the balance below reserved funds', async () => {
     const { db, state } = createDbMock({
       selectResults: [[{ telegramId: 4321, balance: 100, reservedBalance: 80 }]],
