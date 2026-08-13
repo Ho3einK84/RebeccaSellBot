@@ -67,7 +67,7 @@ const FALLBACK_PACKAGES: readonly PackageOption[] = [
 ];
 
 const PACKAGE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
-const MAX_PACKAGE_COUNT = 50;
+export const MAX_PACKAGE_COUNT = 50;
 const MAX_GB_AMOUNT = 10_000;
 const MAX_DURATION_DAYS = 3_650;
 const MAX_PRICE_RULES = 100;

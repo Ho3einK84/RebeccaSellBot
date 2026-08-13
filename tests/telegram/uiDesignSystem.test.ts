@@ -20,6 +20,7 @@ describe('Design System and Number Normalization', () => {
     expect(normalizeInputDigits('۵۰۰۰۰')).toBe('50000');
     expect(normalizeInputDigits('۵۰,۰۰۰')).toBe('50000');
     expect(normalizeInputDigits('۵۰،۰۰۰')).toBe('50000');
+    expect(normalizeInputDigits('۵۰٬۰۰۰')).toBe('50000');
     expect(normalizeInputDigits('۵۰ ۰۰۰')).toBe('50000');
     expect(normalizeInputDigits('٥٠٠٠٠')).toBe('50000');
     expect(normalizeInputDigits(' 50_000 ')).toBe('50000');

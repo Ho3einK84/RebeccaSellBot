@@ -91,6 +91,7 @@ describe('admin settings presentation', () => {
       'set-bool:true',
       'set-bool:false',
       'set-bool:back',
+      'conversation:cancel',
     ]);
     expect(buttons[0]?.text).toContain('✅');
     expect(buttons[1]?.text).not.toContain('✅');

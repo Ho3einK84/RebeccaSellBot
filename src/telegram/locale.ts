@@ -32,14 +32,14 @@ type LocaleAwareContext = Pick<Context, 'from'> & {
 
 /**
  * Normalize Persian (۰-۹) and Arabic (٠-٩) digits into ASCII digits (0-9)
- * and strip common formatting separators (, _ ، spaces).
+ * and strip common formatting separators (, _ ، ٬ spaces).
  */
 export function normalizeInputDigits(input: string): string {
   if (!input) return '';
   return input
     .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
     .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
-    .replace(/[,_،\s]/gu, '');
+    .replace(/[,_،٬\s]/gu, '');
 }
 
 /**
