@@ -2,7 +2,7 @@ import { InlineKeyboard } from 'grammy';
 import type { MenuContext } from './types.js';
 import { callbackData } from './callbackData.js';
 import { localizedDate, localizedNumber, t } from './locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge } from './ui.js';
+import { buildEmptyState, buildScreen, buildStatusBadge, renderUiScreen } from './ui.js';
 
 const PROMO_PAGE_SIZE = 8;
 
@@ -146,7 +146,7 @@ export async function promoDetailView(
   const keyboard = new InlineKeyboard()
     .text(
       t(ctx, promo.active ? 'admin_promo_deactivate_button' : 'admin_promo_activate_button'),
-      callbackData('promo', 'toggle', promo.id)
+      callbackData('promo', 'set', promo.active ? 0 : 1, promo.id)
     )
     .row()
     .text(t(ctx, 'admin_promo_edit_button'), callbackData('promo', 'edit', promo.id))
@@ -177,16 +177,10 @@ export async function renderPromoScreen(
   parseMode?: 'Markdown'
 ): Promise<void> {
   const isPromoCallback = ctx.callbackQuery?.data?.startsWith('promo:');
-  if (isPromoCallback && ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, {
-      ...(parseMode ? { parse_mode: parseMode } : {}),
-      reply_markup: keyboard,
-    });
-    return;
-  }
-  await ctx.reply(text, {
+  await renderUiScreen(ctx, text, {
     ...(parseMode ? { parse_mode: parseMode } : {}),
     reply_markup: keyboard,
+    preferEdit: isPromoCallback,
   });
 }
 

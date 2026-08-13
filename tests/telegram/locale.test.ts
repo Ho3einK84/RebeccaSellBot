@@ -70,7 +70,7 @@ describe('Telegram locale resolution', () => {
 
   it('escapes only legacy Markdown controls and preserves parentheses', () => {
     expect(escapeTelegramMarkdown('plan_(30 days) [beta] \\ path')).toBe(
-      'plan\\_(30 days) \\[beta] \\ path'
+      'plan\\_(30 days) \\[beta] \\\\ path'
     );
   });
 

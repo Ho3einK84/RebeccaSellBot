@@ -88,11 +88,6 @@ function translationService(overrides: Partial<Record<string, number>> = {}) {
             ? `Time remaining: ${params?.['remaining']}`
             : `زمان باقی‌مانده: ${params?.['remaining']}`;
         }
-        if (key === 'renewal_notification') {
-          return locale === 'en'
-            ? `Subscription ${params?.['username']} needs renewal.\n${params?.['reasons']}`
-            : `اشتراک ${params?.['username']} نیاز به تمدید دارد.\n${params?.['reasons']}`;
-        }
         return key;
       }
     ),

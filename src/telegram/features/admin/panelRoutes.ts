@@ -6,7 +6,13 @@ import {
 import type { MenuContext } from '../../types.js';
 import { callbackData } from '../../callbackData.js';
 import { localizedNumber, t } from '../../locale.js';
-import { backKeyboard, buildEmptyState, buildScreen, buildStatusBadge } from '../../ui.js';
+import {
+  backKeyboard,
+  buildEmptyState,
+  buildScreen,
+  buildStatusBadge,
+  renderUiScreen,
+} from '../../ui.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
 const PANEL_ID_CAPTURE = '([a-z0-9_-]{3,40})';
@@ -709,14 +715,7 @@ async function renderPanelScreen(
   keyboard: InlineKeyboard,
   parseMode?: 'Markdown'
 ): Promise<void> {
-  if (ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, {
-      ...(parseMode ? { parse_mode: parseMode } : {}),
-      reply_markup: keyboard,
-    });
-    return;
-  }
-  await ctx.reply(text, {
+  await renderUiScreen(ctx, text, {
     ...(parseMode ? { parse_mode: parseMode } : {}),
     reply_markup: keyboard,
   });

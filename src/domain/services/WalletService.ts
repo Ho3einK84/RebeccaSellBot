@@ -206,6 +206,39 @@ export class WalletService {
         .limit(1);
       if (!user) throw new Error('ADMIN_BALANCE_USER_NOT_FOUND');
 
+      const auditDescription = `Admin ${params.adminId}: ${params.operation}; ${params.description}`;
+      if (params.referenceId) {
+        const [existing] = await tx
+          .select({
+            telegramId: walletTransactions.telegramId,
+            amount: walletTransactions.amount,
+            balanceAfter: walletTransactions.balanceAfter,
+            type: walletTransactions.type,
+            description: walletTransactions.description,
+          })
+          .from(walletTransactions)
+          .where(eq(walletTransactions.referenceId, params.referenceId))
+          .limit(1);
+        if (existing) {
+          const expectedAmount =
+            params.operation === 'add'
+              ? params.amount
+              : params.operation === 'deduct'
+                ? -params.amount
+                : undefined;
+          if (
+            existing.telegramId !== params.telegramId ||
+            existing.type !== 'admin_adjustment' ||
+            existing.description !== auditDescription ||
+            (expectedAmount !== undefined && existing.amount !== expectedAmount) ||
+            (params.operation === 'set' && existing.balanceAfter !== params.amount)
+          ) {
+            throw new Error('ADMIN_BALANCE_REFERENCE_CONFLICT');
+          }
+          return existing.balanceAfter;
+        }
+      }
+
       const targetBalance =
         params.operation === 'add'
           ? user.balance + params.amount
@@ -233,7 +266,8 @@ export class WalletService {
         amount: diff,
         balanceAfter: targetBalance,
         type: 'admin_adjustment',
-        description: `Admin ${params.adminId}: ${params.operation}; ${params.description}`,
+        referenceId: params.referenceId,
+        description: auditDescription,
       });
       await tx.insert(auditLogs).values({
         id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,

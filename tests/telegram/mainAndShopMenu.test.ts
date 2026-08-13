@@ -3,7 +3,7 @@ import type { MenuContext } from '../../src/telegram/types.js';
 import { renderHomeDashboard } from '../../src/telegram/keyboards/mainMenu.js';
 import { localizedNumber } from '../../src/telegram/locale.js';
 
-describe('Home Dashboard & Main Menu (Phase 2)', () => {
+describe('Home dashboard and main menu', () => {
   it('renders state-aware home dashboard with wallet balance and service summary', async () => {
     const getBalance = vi.fn().mockResolvedValue(50000);
     const listConfigsForOwner = vi.fn().mockResolvedValue([

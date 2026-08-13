@@ -12,7 +12,7 @@ import { renderHomeDashboard } from '../../src/telegram/keyboards/mainMenu.js';
 import { buildSubscriptionActionKeyboard } from '../../src/telegram/features/subscriptions/routes.js';
 import { trackFunnelEvent } from '../../src/domain/services/FunnelTelemetry.js';
 
-describe('Phase 7 — Comprehensive UI & Quality Test Suite', () => {
+describe('Telegram UI quality', () => {
   it('1. Persian/Arabic number normalization', () => {
     expect(normalizeInputDigits('۵۰۰۰۰')).toBe('50000');
     expect(normalizeInputDigits('۵۰,۰۰۰')).toBe('50000');
@@ -119,7 +119,7 @@ describe('Phase 7 — Comprehensive UI & Quality Test Suite', () => {
     expect(callbacks).toContain('config:refresh:c1'); // Restored Refresh button!
     expect(callbacks).toContain('autorenew:on:c1');
     // Advanced
-    expect(callbacks).toContain('config:toggle:c1');
+    expect(callbacks).toContain('config:set:off:c1');
     expect(callbacks).toContain('config:revoke_prompt:c1');
     expect(callbacks).toContain('config:transfer:c1');
     // Danger

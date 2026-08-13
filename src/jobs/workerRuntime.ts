@@ -46,6 +46,7 @@ export class PostgresAdvisoryJobLockProvider implements JobLockProvider {
 /** Local single-flight plus cross-replica advisory-lock execution. */
 export class JobRunner {
   private readonly running = new Set<string>();
+  private readonly idleWaiters = new Set<() => void>();
 
   constructor(
     private readonly lockProvider: JobLockProvider = new PostgresAdvisoryJobLockProvider()
@@ -73,8 +74,39 @@ export class JobRunner {
         await release?.();
       } finally {
         this.running.delete(name);
+        if (this.running.size === 0) {
+          const waiters = [...this.idleWaiters];
+          this.idleWaiters.clear();
+          for (const resolve of waiters) resolve();
+        }
       }
     }
+  }
+
+  /** Wait for active workers to release their advisory locks before shutdown. */
+  async waitForIdle(timeoutMs = 30_000): Promise<boolean> {
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+      throw new Error('INVALID_JOB_DRAIN_TIMEOUT');
+    }
+    if (this.running.size === 0) return true;
+
+    return await new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (idle: boolean): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.idleWaiters.delete(onIdle);
+        resolve(idle);
+      };
+      const onIdle = (): void => finish(true);
+      this.idleWaiters.add(onIdle);
+      const timer = setTimeout(() => finish(false), timeoutMs);
+    });
+  }
+
+  activeJobNames(): string[] {
+    return [...this.running].sort();
   }
 }
 

@@ -43,7 +43,7 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   card_holder: 'Hossein Karimi',
   topup_min_amount: '10000',
   topup_max_amount: '50000000',
-  support_message: 'جهت پشتیبانی با آیدی مدیریت در ارتباط باشید.',
+  support_message: 'برای پشتیبانی با مدیر در تماس باشید.',
   support_destination: '',
 
   // Notification thresholds. Rebecca connection/service configuration lives

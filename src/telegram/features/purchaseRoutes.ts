@@ -9,6 +9,8 @@ import { formatSubscriptionLink, resolveContextLocale, t } from '../locale.js';
 import { backKeyboard, buildEmptyState, buildScreen, rememberArtifactMessage } from '../ui.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 import { escapeTelegramMarkdown } from '../rendering.js';
+import { logger } from '../../infra/logger.js';
+import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
 
 export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   bot.callbackQuery(/^buy:confirm:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
@@ -31,7 +33,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
     }
 
     if ((await services.walletService.getBalance(telegramId)) < checkout.quotedAmount) {
-      await services.purchaseCheckoutService.fail(checkout.id);
+      await recordCheckoutFailed(services.purchaseCheckoutService, checkout.id);
       await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
       await ctx.editMessageText(
         buildEmptyState('⚠️', t(ctx, 'insufficient_balance_title'), t(ctx, 'insufficient_balance')),
@@ -84,12 +86,13 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       }
     );
 
+    let result: Awaited<ReturnType<BotServices['walletService']['executePurchaseSaga']>>;
     try {
       const configName = await services.configService.generateConfigName(
         telegramId,
         checkout.panelId
       );
-      const result = await services.walletService.executePurchaseSaga({
+      result = await services.walletService.executePurchaseSaga({
         telegramId,
         amount: checkout.amount,
         maxAmount: checkout.quotedAmount,
@@ -102,32 +105,9 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
       });
-      await services.purchaseCheckoutService.complete(checkout.id);
-      if (checkout.promoCode) clearPendingPromo(ctx);
-      trackFunnelEvent('purchase_confirm');
-
-      await ctx.editMessageText(
-        buildScreen({
-          emoji: '🎉',
-          title: t(ctx, 'purchase_success_title'),
-          subtitle: t(ctx, 'purchase_success_subtitle'),
-          primary: {
-            emoji: '🔗',
-            label: t(ctx, 'purchase_success_link_label'),
-            value: formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable')),
-          },
-        }),
-        { parse_mode: 'Markdown' }
-      );
-      if (ctx.callbackQuery?.message) {
-        rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
-      }
-      await ctx.reply(t(ctx, 'navigation_continue_hint'), {
-        reply_markup: backKeyboard(ctx, 'main'),
-      });
     } catch (error) {
       trackFunnelEvent('purchase_failed');
-      await services.purchaseCheckoutService.fail(checkout.id);
+      await recordCheckoutFailed(services.purchaseCheckoutService, checkout.id);
       await ctx.editMessageText(
         buildEmptyState(
           '⚠️',
@@ -136,7 +116,39 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
         ),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
       );
+      return;
     }
+
+    await recordCheckoutCompleted(services.purchaseCheckoutService, checkout.id);
+    if (checkout.promoCode) clearPendingPromo(ctx);
+    trackFunnelEvent('purchase_confirm');
+
+    const successText = buildScreen({
+      emoji: '🎉',
+      title: t(ctx, 'purchase_success_title'),
+      subtitle: t(ctx, 'purchase_success_subtitle'),
+      primary: {
+        emoji: '🔗',
+        label: t(ctx, 'purchase_success_link_label'),
+        value: formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable')),
+      },
+    });
+    try {
+      await ctx.editMessageText(successText, { parse_mode: 'Markdown' });
+      if (ctx.callbackQuery?.message) {
+        rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
+      }
+    } catch (err) {
+      logger.warn(
+        { errorName: err instanceof Error ? err.name : typeof err, checkoutId: checkout.id },
+        'Purchase succeeded but its confirmation message could not be edited'
+      );
+      const artifact = await ctx.reply(successText, { parse_mode: 'Markdown' });
+      rememberArtifactMessage(ctx.session, artifact.message_id);
+    }
+    await ctx.reply(t(ctx, 'navigation_continue_hint'), {
+      reply_markup: backKeyboard(ctx, 'main'),
+    });
   });
 
   bot.callbackQuery('purchase:pending', async (ctx) => {

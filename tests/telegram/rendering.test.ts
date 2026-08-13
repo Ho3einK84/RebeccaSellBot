@@ -8,8 +8,9 @@ import {
 describe('Telegram rendering safety', () => {
   it('escapes user-controlled legacy Markdown entity characters', () => {
     expect(escapeTelegramMarkdown('discount_percent *[x]* `code` \\')).toBe(
-      'discount\\_percent \\*\\[x]\\* \\`code\\` \\'
+      'discount\\_percent \\*\\[x]\\* \\`code\\` \\\\'
     );
+    expect(escapeTelegramMarkdown('\\*not bold*')).toBe('\\\\\\*not bold\\*');
   });
 
   it('recognizes Telegram entity parser failures', () => {

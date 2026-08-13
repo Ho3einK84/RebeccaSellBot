@@ -13,14 +13,15 @@ import {
 import { adminMenu, renderAdminHome } from '../keyboards/adminMenu.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
+import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { formatSubscriptionLink, observedContextLocale, t } from '../locale.js';
 import {
   backKeyboard,
   buildEmptyState,
   buildScreen,
   forgetUiMessage,
-  isArtifactMessage,
   rememberArtifactMessage,
+  renderUiScreen,
   safelyDeleteMessage,
 } from '../ui.js';
 
@@ -108,11 +109,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
         { err, telegramId, locale },
         'Failed to save selected Telegram language preference'
       );
-      await renderBaseScreen(
+      await renderUiScreen(
         ctx,
         buildEmptyState('⚠️', t(ctx, 'language_selection_title'), t(ctx, 'language_update_failed')),
-        backKeyboard(ctx),
-        'Markdown'
+        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
       );
     }
   });
@@ -124,25 +124,37 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     ctx.session.adminPanelAction = undefined;
     ctx.session.adminPanelId = undefined;
     ctx.session.adminPanelDraft = undefined;
+    delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery();
     if (showAdmin && !services.isAdmin(telegramId)) {
-      await renderBaseScreen(
+      await renderUiScreen(
         ctx,
         buildEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
-        mainMenu,
-        'Markdown'
+        { parse_mode: 'Markdown', reply_markup: mainMenu }
       );
       return;
     }
     if (showAdmin) {
-      await renderBaseScreen(ctx, renderAdminHome(ctx), adminMenu, 'Markdown');
+      await renderUiScreen(ctx, renderAdminHome(ctx), {
+        parse_mode: 'Markdown',
+        reply_markup: adminMenu,
+      });
     } else if (requested === 'wallet') {
-      await renderBaseScreen(ctx, await renderWalletDashboard(ctx), walletMenu, 'Markdown');
+      await renderUiScreen(ctx, await renderWalletDashboard(ctx), {
+        parse_mode: 'Markdown',
+        reply_markup: walletMenu,
+      });
     } else if (requested === 'shop') {
-      await renderBaseScreen(ctx, await renderShopMenuText(ctx), shopMenu, 'Markdown');
+      await renderUiScreen(ctx, await renderShopMenuText(ctx), {
+        parse_mode: 'Markdown',
+        reply_markup: shopMenu,
+      });
     } else {
       const dashboardText = await renderHomeDashboard(ctx);
-      await renderBaseScreen(ctx, dashboardText, mainMenu, 'Markdown');
+      await renderUiScreen(ctx, dashboardText, {
+        parse_mode: 'Markdown',
+        reply_markup: mainMenu,
+      });
     }
   });
 
@@ -150,6 +162,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.callbackQuery('trial:claim', async (ctx) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
+    if (!acquireUserActionCooldown(telegramId, 'trial-claim', 5_000)) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+      return;
+    }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
 
     let result;
@@ -170,11 +186,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     }
 
     if (!result.success) {
-      await renderBaseScreen(
+      await renderUiScreen(
         ctx,
         buildEmptyState('⚠️', t(ctx, 'trial_preview_heading'), t(ctx, result.messageKey)),
-        backKeyboard(ctx, 'main'),
-        'Markdown'
+        { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
       );
       return;
     }
@@ -218,14 +233,20 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   // live shop keyboard without discarding an active promo selection.
   bot.callbackQuery('shop:open', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await renderBaseScreen(ctx, await renderShopMenuText(ctx), shopMenu, 'Markdown');
+    await renderUiScreen(ctx, await renderShopMenuText(ctx), {
+      parse_mode: 'Markdown',
+      reply_markup: shopMenu,
+    });
   });
 
   // Clear pending promo code from shop
   bot.callbackQuery('shop:clear_promo', async (ctx) => {
     delete ctx.session.pendingPromo;
     await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable') });
-    await renderBaseScreen(ctx, await renderShopMenuText(ctx), shopMenu, 'Markdown');
+    await renderUiScreen(ctx, await renderShopMenuText(ctx), {
+      parse_mode: 'Markdown',
+      reply_markup: shopMenu,
+    });
   });
 
   // Dismiss / delete temporary popover message (e.g. QR photo)
@@ -247,36 +268,12 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     ctx.session.adminPanelAction = undefined;
     ctx.session.adminPanelId = undefined;
     ctx.session.adminPanelDraft = undefined;
+    delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
-    await renderBaseScreen(
+    await renderUiScreen(
       ctx,
       buildEmptyState('↩️', t(ctx, 'operation_cancelled'), t(ctx, 'operation_cancelled')),
-      backKeyboard(ctx),
-      'Markdown'
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
     );
-  });
-}
-
-type ScreenReplyMarkup = NonNullable<Parameters<MenuContext['editMessageText']>[1]>['reply_markup'];
-
-async function renderBaseScreen(
-  ctx: MenuContext,
-  text: string,
-  replyMarkup: ScreenReplyMarkup,
-  parseMode?: 'Markdown'
-): Promise<void> {
-  if (ctx.callbackQuery?.message) {
-    const messageId = ctx.callbackQuery.message.message_id;
-    if (!isArtifactMessage(ctx.session, messageId)) {
-      await ctx.editMessageText(text, {
-        ...(parseMode ? { parse_mode: parseMode } : {}),
-        reply_markup: replyMarkup,
-      });
-      return;
-    }
-  }
-  await ctx.reply(text, {
-    ...(parseMode ? { parse_mode: parseMode } : {}),
-    reply_markup: replyMarkup,
   });
 }

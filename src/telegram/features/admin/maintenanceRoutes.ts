@@ -2,7 +2,7 @@ import { InlineKeyboard, type Bot } from 'grammy';
 import { LastAdminRemovalError } from '../../../domain/services/AdminService.js';
 import type { MenuContext } from '../../types.js';
 import { localizedDate, localizedNumber, t } from '../../locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge } from '../../ui.js';
+import { buildEmptyState, buildScreen, buildStatusBadge, renderUiScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
@@ -577,9 +577,5 @@ async function renderMaintenanceScreen(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  if (ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
-    return;
-  }
-  await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderUiScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

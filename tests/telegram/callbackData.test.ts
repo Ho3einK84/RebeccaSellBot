@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { callbackData, isUuidCallbackValue } from '../../src/telegram/callbackData.js';
 import { panelCallback } from '../../src/telegram/features/admin/panelRoutes.js';
+import { buildSubscriptionActionKeyboard } from '../../src/telegram/features/subscriptions/routes.js';
+import type { MenuContext } from '../../src/telegram/types.js';
 
 describe('Telegram callback data', () => {
   it('keeps stable UUID actions within Telegram UTF-8 limits', () => {
@@ -45,6 +47,26 @@ describe('Telegram callback data', () => {
       panelCallback('xc', panelId),
     ];
 
+    expect(
+      Math.max(...callbacks.map((value) => Buffer.byteLength(value, 'utf8')))
+    ).toBeLessThanOrEqual(64);
+  });
+
+  it('keeps every subscription action within the callback limit at maximum config IDs', () => {
+    const ctx = {
+      services: {
+        translationService: {
+          get: vi.fn((key: string) => key),
+          resolveLocale: vi.fn(() => 'en'),
+        },
+      },
+    } as unknown as MenuContext;
+    const keyboard = buildSubscriptionActionKeyboard(ctx, 'c'.repeat(40), 'active', false, true);
+    const callbacks = keyboard.inline_keyboard
+      .flat()
+      .flatMap((button) => ('callback_data' in button ? [button.callback_data] : []));
+
+    expect(callbacks.length).toBeGreaterThan(0);
     expect(
       Math.max(...callbacks.map((value) => Buffer.byteLength(value, 'utf8')))
     ).toBeLessThanOrEqual(64);

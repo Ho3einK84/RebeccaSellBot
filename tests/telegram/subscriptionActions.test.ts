@@ -3,7 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import type { MenuContext } from '../../src/telegram/types.js';
 import { buildSubscriptionActionKeyboard } from '../../src/telegram/features/subscriptions/routes.js';
 
-describe('Subscriptions 2-Level View & Action Hierarchy (Phase 4)', () => {
+describe('Subscription views and action hierarchy', () => {
   it('renders level 1 compact card action keyboard with single detail view button', () => {
     const ctx = {
       services: {
@@ -43,7 +43,7 @@ describe('Subscriptions 2-Level View & Action Hierarchy (Phase 4)', () => {
     expect(flattenedCallbacks).toContain('renew:open:cfg_101');
     expect(flattenedCallbacks).toContain('config:qr:cfg_101');
     expect(flattenedCallbacks).toContain('autorenew:on:cfg_101');
-    expect(flattenedCallbacks).toContain('config:toggle:cfg_101');
+    expect(flattenedCallbacks).toContain('config:set:off:cfg_101');
     expect(flattenedCallbacks).toContain('config:revoke_prompt:cfg_101');
     expect(flattenedCallbacks).toContain('config:transfer:cfg_101');
     expect(flattenedCallbacks).toContain('config:delete_prompt:cfg_101');
