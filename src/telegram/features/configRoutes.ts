@@ -8,7 +8,7 @@ import { observedContextLocale, t, tm } from '../locale.js';
 import { backKeyboard, buildEmptyState, buildScreen, renderUiScreen } from '../ui.js';
 import { callbackData } from '../callbackData.js';
 import { buildSubscriptionActionKeyboard, showSubscriptionDetail } from './subscriptions/routes.js';
-import { escapeTelegramMarkdown } from '../rendering.js';
+import { sanitizeTelegramInlineCode } from '../rendering.js';
 
 export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   bot.callbackQuery(/^config_(toggle|revoke):(.+)$/, async (ctx) => {
@@ -34,7 +34,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
           primary: {
             emoji: '📱',
             label: t(ctx, 'subscription_connection_section'),
-            value: escapeTelegramMarkdown(localConfig.configUsername),
+            value: `\`${sanitizeTelegramInlineCode(localConfig.configUsername)}\``,
           },
           footer: t(ctx, 'subscription_revoke_consequence'),
         }),
@@ -92,7 +92,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
           primary: {
             emoji: '📱',
             label: t(ctx, 'subscription_connection_section'),
-            value: escapeTelegramMarkdown(configUsername),
+            value: `\`${sanitizeTelegramInlineCode(configUsername)}\``,
           },
           footer: tm(ctx, 'config_delete_warning', { username: configUsername }),
         }),
@@ -121,7 +121,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
               primary: {
                 emoji: '📱',
                 label: t(ctx, 'subscription_connection_section'),
-                value: escapeTelegramMarkdown(configUsername),
+                value: `\`${sanitizeTelegramInlineCode(configUsername)}\``,
               },
               footer: tm(ctx, 'config_deleted', { username: configUsername }),
             })
@@ -180,7 +180,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
               primary: {
                 emoji: '📱',
                 label: t(ctx, 'subscription_connection_section'),
-                value: escapeTelegramMarkdown(res.username),
+                value: `\`${sanitizeTelegramInlineCode(res.username)}\``,
               },
               footer: t(ctx, res.messageKey),
             }),

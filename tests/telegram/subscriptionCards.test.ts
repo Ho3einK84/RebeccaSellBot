@@ -171,8 +171,9 @@ describe('subscription card actions', () => {
     const callbacks = (keyboard.inline_keyboard.flat() as Array<{ callback_data?: string }>).map(
       (button) => button.callback_data
     );
-    expect(text.replace(/\\_/g, '_')).toContain('config_one');
-    expect(text.replace(/\\_/g, '_')).toContain('config_two');
+    expect(text).toContain('`config_one`');
+    expect(text).toContain('`config_two`');
+    expect(text).not.toContain('\\');
     expect(callbacks).toContain('config:view:uc_one_123');
     expect(callbacks).toContain('config:view:uc_two_123');
     expect(callbacks).toContain('nav:main');
@@ -257,7 +258,7 @@ describe('subscription card actions', () => {
     await showUserSubscriptions(ctx);
 
     expect(editMessageText).toHaveBeenCalledWith(
-      expect.stringMatching(/config[\\_]+edit/),
+      expect.stringMatching(/`config_edit`/),
       expect.objectContaining({ parse_mode: 'Markdown' })
     );
     expect(ctx.reply).not.toHaveBeenCalled();

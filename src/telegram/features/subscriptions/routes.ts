@@ -160,7 +160,7 @@ export async function showUserSubscriptions(
         const card = cards[index]!;
         return {
           emoji: statusEmoji(card.status),
-          title: escapeTelegramMarkdown(config.configUsername),
+          title: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
           fields: [
             {
               emoji: '⚡',
@@ -982,7 +982,7 @@ async function buildSubscriptionCard(
     return {
       text: buildScreen({
         emoji: '📱',
-        title: escapeTelegramMarkdown(config.configUsername),
+        title: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
         primary: {
           emoji: statusEmoji(snapshot.status),
           label: t(ctx, 'subscription_status_label'),
