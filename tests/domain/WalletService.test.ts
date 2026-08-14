@@ -30,6 +30,19 @@ type FakeDbState = {
   readonly transaction: ReturnType<typeof vi.fn>;
 };
 
+const RENEWAL_CREATED_AT = '2026-01-01T00:00:00Z';
+
+function verifiedRenewalBinding(telegramId: number, configUsername: string) {
+  return {
+    id: `uc_${configUsername}`,
+    telegramId,
+    panelId: 'legacy',
+    configUsername,
+    subUrl: `https://sub.example.test/${configUsername}`,
+    remoteCreatedAt: `created:${RENEWAL_CREATED_AT}`,
+  };
+}
+
 function createDbMock(
   options: {
     returningResults?: unknown[][];
@@ -123,6 +136,7 @@ describe('WalletService reserve → remote → commit saga', () => {
         status: 'active',
         data_limit: purchase.gbAmount * 1024 * 1024 * 1024,
         expire: Math.floor(Date.now() / 1000) + purchase.durationDays * 86400,
+        created_at: RENEWAL_CREATED_AT,
         subscription_url: 'https://sub.example.test/primary',
         subscription_urls: { primary: 'https://sub.example.test/primary' },
         note: payload.note ?? null,
@@ -280,6 +294,7 @@ describe('WalletService reserve → remote → commit saga', () => {
         [{ telegramId: renewal.telegramId }], // initial guarded reserve
         [{ id: 'pi_test' }], // persisted renewal target
       ],
+      selectResults: [[], [verifiedRenewalBinding(renewal.telegramId, renewal.configUsername)]],
     });
     vi.mocked(getDb).mockReturnValue(db as never);
     mockRebeccaService.getUser.mockResolvedValue({
@@ -287,6 +302,7 @@ describe('WalletService reserve → remote → commit saga', () => {
       status: 'active',
       data_limit: renewal.gbAmount * 1024 * 1024 * 1024,
       expire: 1_700_000_000,
+      created_at: RENEWAL_CREATED_AT,
     });
     const originDown = new RebeccaOriginDownError(
       `/api/user/${renewal.configUsername}`,
@@ -311,6 +327,39 @@ describe('WalletService reserve → remote → commit saga', () => {
     ).toBe(true);
     expect(state.setCalls.filter((values) => 'reservedBalance' in values)).toHaveLength(1);
     expect(mockPromoService.releaseReservedPurchasePromoInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('fails renewal closed when the Rebecca username was recreated for another incarnation', async () => {
+    const renewal = {
+      ...purchase,
+      type: 'renew_config' as const,
+      configUsername: 'recreated_renewal',
+    };
+    const { db, state } = createDbMock({
+      returningResults: [
+        [{ telegramId: renewal.telegramId }], // initial guarded reserve
+        [{ id: 'pi_test' }], // fail pending purchase intent
+        [{ telegramId: renewal.telegramId }], // release reservation
+      ],
+      selectResults: [[], [verifiedRenewalBinding(renewal.telegramId, renewal.configUsername)]],
+    });
+    vi.mocked(getDb).mockReturnValue(db as never);
+    mockRebeccaService.getUser.mockResolvedValue({
+      username: renewal.configUsername,
+      status: 'active',
+      data_limit: renewal.gbAmount * 1024 * 1024 * 1024,
+      expire: 1_700_000_000,
+      created_at: '2026-06-01T00:00:00Z',
+    });
+
+    await expect(walletService.executePurchaseSaga(renewal)).rejects.toThrow(
+      'CONFIG_INCARNATION_MISMATCH'
+    );
+
+    expect(mockRebeccaService.resetUserTraffic).not.toHaveBeenCalled();
+    expect(mockRebeccaService.updateUser).not.toHaveBeenCalled();
+    expect(state.setCalls.filter((values) => 'reservedBalance' in values)).toHaveLength(2);
+    expect(mockPromoService.releaseReservedPurchasePromoInTransaction).toHaveBeenCalledOnce();
   });
 
   it('releases the reservation after a definite 4xx business failure', async () => {
@@ -349,6 +398,7 @@ describe('WalletService reserve → remote → commit saga', () => {
       status: 'active',
       data_limit: purchase.gbAmount * 1024 * 1024 * 1024,
       expire: null,
+      created_at: RENEWAL_CREATED_AT,
       subscription_url: 'https://sub.example.test/primary',
       note: payload.note ?? null,
     }));
@@ -383,6 +433,7 @@ describe('WalletService reserve → remote → commit saga', () => {
       status: 'active',
       data_limit: 15 * 1024 * 1024 * 1024,
       expire: Math.floor(Date.now() / 1000) + purchase.durationDays * 86400,
+      created_at: RENEWAL_CREATED_AT,
       subscription_url: 'https://sub.example.test/primary',
       subscription_urls: { primary: 'https://sub.example.test/primary' },
       note: payload.note ?? null,
@@ -440,6 +491,7 @@ describe('WalletService reserve → remote → commit saga', () => {
         [{ id: 'pi_test' }], // conditional completed transition
         [{ balance: 50_000 }], // final debit
       ],
+      selectResults: [[], [verifiedRenewalBinding(renewal.telegramId, renewal.configUsername)]],
     });
     vi.mocked(getDb).mockReturnValue(db as never);
     mockRebeccaService.getUser.mockResolvedValue({
@@ -447,6 +499,7 @@ describe('WalletService reserve → remote → commit saga', () => {
       status: 'active',
       data_limit: null,
       expire: 1_700_000_000,
+      created_at: RENEWAL_CREATED_AT,
     });
     mockRebeccaService.resetUserTraffic.mockResolvedValue({
       username: renewal.configUsername,
@@ -493,6 +546,7 @@ describe('WalletService reserve → remote → commit saga', () => {
         [{ id: 'pi_test' }],
         [{ balance: 50_000 }],
       ],
+      selectResults: [[], [verifiedRenewalBinding(renewal.telegramId, renewal.configUsername)]],
     });
     vi.mocked(getDb).mockReturnValue(db as never);
     mockRebeccaService.getUser.mockResolvedValue({
@@ -500,6 +554,7 @@ describe('WalletService reserve → remote → commit saga', () => {
       status: 'disabled',
       data_limit: 10 * 1024 * 1024 * 1024,
       expire: 1_600_000_000,
+      created_at: RENEWAL_CREATED_AT,
     });
     mockRebeccaService.resetUserTraffic.mockResolvedValue({
       username: renewal.configUsername,
@@ -531,6 +586,7 @@ describe('WalletService reserve → remote → commit saga', () => {
     };
     const { db } = createDbMock({
       returningResults: [[{ telegramId: renewal.telegramId }], [{ id: 'pi_test' }]],
+      selectResults: [[], [verifiedRenewalBinding(renewal.telegramId, renewal.configUsername)]],
     });
     vi.mocked(getDb).mockReturnValue(db as never);
     mockRebeccaService.getUser.mockResolvedValue({
@@ -538,6 +594,7 @@ describe('WalletService reserve → remote → commit saga', () => {
       status: 'active',
       data_limit: 10 * 1024 * 1024 * 1024,
       expire: 1_700_000_000,
+      created_at: RENEWAL_CREATED_AT,
     });
     mockRebeccaService.resetUserTraffic.mockRejectedValue(new Error('Reset API error'));
     mockRebeccaService.updateUser.mockResolvedValue({
@@ -563,6 +620,7 @@ describe('WalletService reserve → remote → commit saga', () => {
         [{ id: 'pi_test' }],
         [], // debit invariant failure forces reconciliation deferral
       ],
+      selectResults: [[], [verifiedRenewalBinding(renewal.telegramId, renewal.configUsername)]],
     });
     vi.mocked(getDb).mockReturnValue(db as never);
     mockRebeccaService.getUser.mockResolvedValue({
@@ -570,6 +628,7 @@ describe('WalletService reserve → remote → commit saga', () => {
       status: 'active',
       data_limit: null,
       expire: 1_700_000_000,
+      created_at: RENEWAL_CREATED_AT,
     });
     mockRebeccaService.updateUser.mockResolvedValueOnce({
       username: renewal.configUsername,

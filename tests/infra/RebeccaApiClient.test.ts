@@ -172,6 +172,52 @@ describe('RebeccaApiClient & RebeccaService — 521 Cloudflare Resilience Tests'
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('links=true');
   });
 
+  it('single-flights concurrent admin-token refreshes', async () => {
+    client = new RebeccaApiClient({
+      baseUrl: 'https://rebecca.example.com',
+      adminUsername: 'admin',
+      adminPassword: 'secret',
+    });
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith('/api/admin/token')) {
+        return {
+          ok: true,
+          status: 200,
+          json: vi
+            .fn()
+            .mockResolvedValue({ access_token: 'opaque-access-token', token_type: 'bearer' }),
+        } as unknown as Response;
+      }
+      const username = url.endsWith('/bob') ? 'bob' : 'alice';
+      return {
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          username,
+          status: 'active',
+          used_traffic: 0,
+          data_limit: null,
+          expire: null,
+          created_at: '2026-01-01T00:00:00Z',
+          subscription_url: `https://sub.example/${username}`,
+          links: [],
+          proxies: {},
+          inbounds: {},
+        }),
+      } as unknown as Response;
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    await Promise.all([client.getUser('alice'), client.getUser('bob')]);
+
+    const tokenCalls = fetchMock.mock.calls.filter(([input]) =>
+      String(input).endsWith('/api/admin/token')
+    );
+    expect(tokenCalls).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it('expands relative subscription paths with the configured panel origin and port', async () => {
     client = new RebeccaApiClient({
       baseUrl: 'https://rebecca.example.com:2087',

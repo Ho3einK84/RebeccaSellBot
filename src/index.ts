@@ -104,13 +104,6 @@ async function main() {
   const configReconciliationService = new ConfigReconciliationService(panelRegistry);
   const broadcastService = new BroadcastService();
 
-  setHealthPhase('rebecca_counter_sync');
-  try {
-    await configService.syncCounters();
-  } catch (err) {
-    logger.warn({ err }, 'Initial counter sync failed; will sync on-demand per panel');
-  }
-
   const services = {
     walletService,
     configService,
@@ -181,6 +174,20 @@ async function main() {
 
   const pollingTask = startBot(bot);
   markHealthReady();
+
+  // A full Rebecca counter scan can take seconds on a large or degraded panel.
+  // It must not delay Telegram responsiveness. ConfigService still enforces a
+  // target-specific sync before generating the first name on an unsynchronised
+  // panel, so moving this warm-up off the startup critical path does not weaken
+  // username-collision safety.
+  void jobRunner
+    .run('config-counter-warmup', async () => {
+      await configService.syncCounters();
+    })
+    .catch((err) => {
+      logger.warn({ err }, 'Background counter warm-up failed; will sync on-demand per panel');
+    });
+
   await pollingTask;
 }
 

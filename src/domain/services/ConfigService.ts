@@ -15,6 +15,11 @@ import {
 } from './RebeccaPanelAccess.js';
 import type { TranslationService } from './TranslationService.js';
 import { remoteFingerprint } from './RebeccaOwnership.js';
+import {
+  ConfigIncarnationMismatchError,
+  ConfigIncarnationUnverifiedError,
+  verifyOrEstablishConfigIncarnation,
+} from './ConfigIncarnation.js';
 import { logger } from '../../infra/logger.js';
 import crypto from 'crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
@@ -596,13 +601,7 @@ export class ConfigService {
       const remote = await this.panels
         .getService(currentConfig.panelId)
         .getUser(currentConfig.configUsername);
-      if (
-        currentConfig.remoteCreatedAt &&
-        remoteFingerprint(remote) !== currentConfig.remoteCreatedAt
-      ) {
-        await this.markLocalConfigStale(currentConfig);
-        throw new Error('CONFIG_INCARNATION_MISMATCH');
-      }
+      await this.assertConfigIncarnation(currentConfig, remote);
 
       const updated = await this.panels
         .getService(currentConfig.panelId)
@@ -631,6 +630,8 @@ export class ConfigService {
 
   async resetUsage(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
+    const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
+    await this.assertConfigIncarnation(config, remote);
     await this.panels.getService(config.panelId).resetUserTraffic(config.configUsername);
   }
 
@@ -639,7 +640,9 @@ export class ConfigService {
     const config = await this.resolveLocalConfig(configUsername, panelId);
     const remote = await this.getRemoteConfigDetail(config);
     const enabled = remote.status === 'disabled';
-    await this.setConfigEnabled(config, enabled);
+    // Reuse the remote snapshot we already fetched to decide the toggle. The
+    // old path fetched the same Rebecca user twice before every toggle.
+    await this.setConfigEnabled(config, enabled, remote);
     return enabled ? 'enabled' : 'disabled';
   }
 
@@ -653,12 +656,15 @@ export class ConfigService {
     await this.setConfigEnabled(config, true);
   }
 
-  private async setConfigEnabled(config: ConfigRecord, enabled: boolean): Promise<void> {
-    const remoteUser = await this.panels.getService(config.panelId).getUser(config.configUsername);
-    if (config.remoteCreatedAt && remoteFingerprint(remoteUser) !== config.remoteCreatedAt) {
-      await this.markLocalConfigStale(config);
-      throw new Error('CONFIG_INCARNATION_MISMATCH');
-    }
+  private async setConfigEnabled(
+    config: ConfigRecord,
+    enabled: boolean,
+    remoteSnapshot?: RebeccaUserDetail
+  ): Promise<void> {
+    const remoteUser =
+      remoteSnapshot ??
+      (await this.panels.getService(config.panelId).getUser(config.configUsername));
+    await this.assertConfigIncarnation(config, remoteUser);
     const remote = enabled
       ? await this.panels.getService(config.panelId).enableUser(config.configUsername)
       : await this.panels.getService(config.panelId).disableUser(config.configUsername);
@@ -695,6 +701,20 @@ export class ConfigService {
     });
   }
 
+  private async assertConfigIncarnation(
+    config: ConfigRecord,
+    remote: RebeccaUserDetail
+  ): Promise<void> {
+    try {
+      await verifyOrEstablishConfigIncarnation(config, remote);
+    } catch (err) {
+      if (err instanceof ConfigIncarnationMismatchError) {
+        await this.markLocalConfigStale(config);
+      }
+      throw err;
+    }
+  }
+
   /**
    * Permanently remove a config from BOTH the Rebecca panel (via its REST API)
    * and the bot's own database. This is intentionally destructive and unlike
@@ -711,20 +731,41 @@ export class ConfigService {
       try {
         const remote = await this.panels.getService('legacy').getUser(configUsername);
         const [local] = await db
-          .select({ remoteCreatedAt: userConfigs.remoteCreatedAt })
+          .select()
           .from(userConfigs)
           .where(eq(userConfigs.configUsername, configUsername))
           .limit(1);
-        if (local?.remoteCreatedAt && remoteFingerprint(remote) !== local.remoteCreatedAt) {
-          logger.warn(
-            { configUsername },
-            'Remote config incarnation mismatched during legacy deletion; preserving remote user'
-          );
+        if (!local) {
+          // Never let the legacy compatibility path become a generic Rebecca
+          // deletion primitive for manually-created services.
           deleteRemote = false;
+        } else {
+          try {
+            await verifyOrEstablishConfigIncarnation(local, remote);
+          } catch (err) {
+            if (
+              err instanceof ConfigIncarnationMismatchError ||
+              err instanceof ConfigIncarnationUnverifiedError
+            ) {
+              logger.warn(
+                { configUsername, reason: err.message },
+                'Remote config identity could not be verified during legacy deletion; ' +
+                  'preserving remote user'
+              );
+              deleteRemote = false;
+            } else {
+              throw err;
+            }
+          }
         }
       } catch (err) {
         if (err instanceof RebeccaApiError && err.status === 404) {
           deleteRemote = false;
+        } else {
+          // A network/contract/identity-verification failure is not evidence
+          // that this Rebecca username is safe to delete. Fail closed rather
+          // than falling through to the destructive call.
+          throw err;
         }
       }
       if (deleteRemote) {
@@ -760,12 +801,25 @@ export class ConfigService {
     let deleteRemote = true;
     try {
       const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
-      if (config.remoteCreatedAt && remoteFingerprint(remote) !== config.remoteCreatedAt) {
-        logger.warn(
-          { configUsername: config.configUsername, panelId: config.panelId },
-          'Remote config incarnation mismatched during deletion; preserving remote user'
-        );
-        deleteRemote = false;
+      try {
+        await verifyOrEstablishConfigIncarnation(config, remote);
+      } catch (err) {
+        if (
+          err instanceof ConfigIncarnationMismatchError ||
+          err instanceof ConfigIncarnationUnverifiedError
+        ) {
+          logger.warn(
+            {
+              configUsername: config.configUsername,
+              panelId: config.panelId,
+              reason: err.message,
+            },
+            'Remote config identity could not be verified during deletion; preserving remote user'
+          );
+          deleteRemote = false;
+        } else {
+          throw err;
+        }
       }
     } catch (err) {
       if (err instanceof RebeccaApiError && err.status === 404) {
@@ -841,29 +895,59 @@ async function withConfigLock<T>(
   configUsername: string,
   fn: () => Promise<T>
 ): Promise<T> {
-  let client;
-  let lockKey: bigint | null = null;
-  try {
-    const pool = getPool();
-    if (pool && typeof pool.connect === 'function') {
-      client = await pool.connect();
-      lockKey = configLockKey(panelId, configUsername);
-      await client.query('SELECT pg_advisory_lock($1::bigint)', [lockKey.toString()]);
-    }
-  } catch {
-    client = null;
+  const lockKey = configLockKey(panelId, configUsername);
+  const client = await getPool()
+    .connect()
+    .catch((err: unknown) => {
+      throw new Error('CONFIG_MUTATION_LOCK_UNAVAILABLE', { cause: err });
+    });
+
+  // Never block a pool connection behind another long-running remote API call.
+  // A contender fails fast and can be retried by the user/UI instead of
+  // exhausting the PostgreSQL pool under a revoke burst.
+  const result = await client
+    .query<{ locked: boolean }>('SELECT pg_try_advisory_lock($1::bigint) AS locked', [
+      lockKey.toString(),
+    ])
+    .catch((err: unknown) => {
+      client.release(err instanceof Error ? err : true);
+      throw new Error('CONFIG_MUTATION_LOCK_UNAVAILABLE', { cause: err });
+    });
+
+  if (!result.rows[0]?.locked) {
+    client.release();
+    throw new Error('CONFIG_MUTATION_BUSY');
   }
 
   try {
     return await fn();
   } finally {
-    if (client && lockKey !== null) {
-      try {
-        await client.query('SELECT pg_advisory_unlock($1::bigint)', [lockKey.toString()]);
-      } finally {
-        client.release();
+    let releaseError: Error | undefined;
+    try {
+      const unlock = await client.query<{ unlocked: boolean }>(
+        'SELECT pg_advisory_unlock($1::bigint) AS unlocked',
+        [lockKey.toString()]
+      );
+      if (!unlock.rows[0]?.unlocked) {
+        releaseError = new Error('CONFIG_MUTATION_UNLOCK_FAILED');
+        logger.error(
+          { panelId, configUsername },
+          'PostgreSQL advisory config lock was not owned during release'
+        );
       }
+    } catch (err) {
+      releaseError =
+        err instanceof Error ? err : new Error('CONFIG_MUTATION_UNLOCK_FAILED', { cause: err });
+      logger.error(
+        { err, panelId, configUsername },
+        'Failed to release PostgreSQL advisory config lock; discarding connection'
+      );
     }
+
+    // Advisory locks are session-scoped. If unlock failed, passing an error to
+    // release() evicts this client instead of returning a possibly locked
+    // PostgreSQL session to the pool.
+    client.release(releaseError);
   }
 }
 

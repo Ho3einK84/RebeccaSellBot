@@ -234,6 +234,10 @@ export class RebeccaApiClient {
   private accessToken: string | null = null;
   /** Unix seconds — expire claim from JWT, or heuristic 24 h */
   private tokenExpiresAt: number = 0;
+  /** Collapse concurrent cold-start/refresh authentication into one request. */
+  private authTokenRequest: { generation: number; promise: Promise<string> } | null = null;
+  /** Invalidates in-flight auth work when live panel credentials are reconfigured. */
+  private authGeneration = 0;
 
   constructor(options: RebeccaConnectionOptions) {
     this.baseUrl = validateRebeccaBaseUrl(options.baseUrl);
@@ -265,6 +269,18 @@ export class RebeccaApiClient {
       return this.accessToken;
     }
 
+    const generation = this.authGeneration;
+    if (this.authTokenRequest?.generation === generation) return this.authTokenRequest.promise;
+    const request = this.fetchAuthToken(nowSec, generation);
+    this.authTokenRequest = { generation, promise: request };
+    try {
+      return await request;
+    } finally {
+      if (this.authTokenRequest?.promise === request) this.authTokenRequest = null;
+    }
+  }
+
+  private async fetchAuthToken(nowSec: number, generation: number): Promise<string> {
     const url = `${this.baseUrl}/api/admin/token`;
     // Rebecca accepts JSON body (confirmed in admin_auth.go readAdminLoginRequest)
     let res: Response;
@@ -300,6 +316,11 @@ export class RebeccaApiClient {
       rebeccaTokenResponseSchema
     );
     const accessToken = data.access_token;
+    // Live panel settings can change while the token request is in flight. Do
+    // not cache or use a token produced from stale credentials against the new
+    // connection; transparently join/start auth for the current generation.
+    if (this.authGeneration !== generation) return this.getAuthToken();
+
     this.accessToken = accessToken;
     // Parse expiry from JWT; fall back to 24 h
     const exp = jwtExpiry(accessToken);
@@ -310,6 +331,8 @@ export class RebeccaApiClient {
   private invalidateToken(): void {
     this.accessToken = null;
     this.tokenExpiresAt = 0;
+    this.authGeneration += 1;
+    this.authTokenRequest = null;
   }
 
   // ── Fetch with timeout ─────────────────────────────────────────────────────

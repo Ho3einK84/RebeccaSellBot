@@ -15,6 +15,7 @@ import {
 } from '../../src/infra/schema.js';
 import { AdminService, LastAdminRemovalError } from '../../src/domain/services/AdminService.js';
 import { ConfigTransferService } from '../../src/domain/services/ConfigTransferService.js';
+import { ConfigService } from '../../src/domain/services/ConfigService.js';
 import { RefundService } from '../../src/domain/services/RefundService.js';
 import { ConfigReconciliationService } from '../../src/domain/services/ConfigReconciliationService.js';
 import { BroadcastService } from '../../src/domain/services/BroadcastService.js';
@@ -102,23 +103,28 @@ integration('subscription lifecycle management', () => {
   });
 
   it('transfers ownership atomically without touching the Rebecca identity', async () => {
+    const transferRemote = remoteUser('transfer_test');
     await getDb()
       .insert(users)
       .values([
         { telegramId: 301, referralCode: 'ref_301', balance: 0 },
         { telegramId: 302, referralCode: 'ref_302', balance: 0 },
       ]);
-    await getDb().insert(userConfigs).values({
-      id: 'uc_transfer_test',
-      telegramId: 301,
-      configUsername: 'transfer_test',
-      panelStatus: 'active',
-      autoRenewEnabled: true,
-      autoRenewPackageId: 'pkg_1',
-    });
+    await getDb()
+      .insert(userConfigs)
+      .values({
+        id: 'uc_transfer_test',
+        telegramId: 301,
+        configUsername: 'transfer_test',
+        panelStatus: 'active',
+        autoRenewEnabled: true,
+        autoRenewPackageId: 'pkg_1',
+        subUrl: transferRemote.subscription_url,
+        remoteCreatedAt: `created:${transferRemote.created_at}`,
+      });
 
     const rebeccaService = {
-      getUser: vi.fn().mockResolvedValue(remoteUser('transfer_test')),
+      getUser: vi.fn().mockResolvedValue(transferRemote),
     } as unknown as RebeccaService;
     const service = new ConfigTransferService(rebeccaService);
     await service.transfer({
@@ -140,8 +146,59 @@ integration('subscription lifecycle management', () => {
     expect(rebeccaService.getUser).toHaveBeenCalledWith('transfer_test');
   });
 
+  it('serializes concurrent subscription revokes with a real PostgreSQL advisory lock', async () => {
+    const telegramId = 351;
+    const remote = remoteUser('concurrent_revoke');
+    await getDb().insert(users).values({
+      telegramId,
+      referralCode: 'ref_351',
+      balance: 0,
+    });
+    await getDb()
+      .insert(userConfigs)
+      .values({
+        id: 'uc_concurrent_revoke',
+        telegramId,
+        configUsername: 'concurrent_revoke',
+        panelStatus: 'active',
+        subUrl: remote.subscription_url,
+        remoteCreatedAt: `created:${remote.created_at}`,
+      });
+
+    let finishRemote!: (value: RebeccaUserDetail) => void;
+    const revokeSubscription = vi.fn(
+      () =>
+        new Promise<RebeccaUserDetail>((resolve) => {
+          finishRemote = resolve;
+        })
+    );
+    const rebeccaService = {
+      getUser: vi.fn().mockResolvedValue(remote),
+      revokeSubscription,
+    } as unknown as RebeccaService;
+    const service = new ConfigService(rebeccaService, {
+      getSetting: vi.fn(),
+      getSettingNum: vi.fn(),
+    } as unknown as TranslationService);
+
+    const first = service.revokeSubscription('concurrent_revoke');
+    await vi.waitFor(() => expect(revokeSubscription).toHaveBeenCalledOnce());
+
+    await expect(service.revokeSubscription('concurrent_revoke')).rejects.toThrow(
+      'CONFIG_MUTATION_BUSY'
+    );
+
+    finishRemote({
+      ...remote,
+      subscription_url: 'https://rebecca.example/sub/concurrent_revoke_rotated',
+    });
+    await expect(first).resolves.toBe('https://rebecca.example/sub/concurrent_revoke_rotated');
+    expect(revokeSubscription).toHaveBeenCalledOnce();
+  });
+
   it('deletes a never-used paid service and refunds its charged amount exactly once', async () => {
     const telegramId = 401;
+    const refundRemote = remoteUser('refund_test');
     await getDb().insert(users).values({
       telegramId,
       referralCode: 'ref_401',
@@ -170,15 +227,19 @@ integration('subscription lifecycle management', () => {
       referenceId: 'pi_refund_source',
       description: 'integration purchase',
     });
-    await getDb().insert(userConfigs).values({
-      id: 'uc_refund_test',
-      telegramId,
-      configUsername: 'refund_test',
-      panelStatus: 'active',
-    });
+    await getDb()
+      .insert(userConfigs)
+      .values({
+        id: 'uc_refund_test',
+        telegramId,
+        configUsername: 'refund_test',
+        panelStatus: 'active',
+        subUrl: refundRemote.subscription_url,
+        remoteCreatedAt: `created:${refundRemote.created_at}`,
+      });
 
     const rebeccaService = {
-      getUser: vi.fn().mockResolvedValue(remoteUser('refund_test')),
+      getUser: vi.fn().mockResolvedValue(refundRemote),
       deleteUser: vi.fn().mockResolvedValue({ username: 'refund_test', status: 'deleted' }),
     } as unknown as RebeccaService;
     const translationService = {
@@ -212,6 +273,7 @@ integration('subscription lifecycle management', () => {
 
   it('re-checks usage at confirmation time and refuses a stale unused quote', async () => {
     const telegramId = 425;
+    const refundRemote = remoteUser('refund_usage_race');
     await getDb().insert(users).values({
       telegramId,
       referralCode: 'ref_425',
@@ -229,19 +291,23 @@ integration('subscription lifecycle management', () => {
       durationDays: 30,
       bonusesProcessedAt: new Date(),
     });
-    await getDb().insert(userConfigs).values({
-      id: 'uc_refund_usage_race',
-      telegramId,
-      configUsername: 'refund_usage_race',
-      panelStatus: 'active',
-    });
+    await getDb()
+      .insert(userConfigs)
+      .values({
+        id: 'uc_refund_usage_race',
+        telegramId,
+        configUsername: 'refund_usage_race',
+        panelStatus: 'active',
+        subUrl: refundRemote.subscription_url,
+        remoteCreatedAt: `created:${refundRemote.created_at}`,
+      });
 
     const rebeccaService = {
       getUser: vi
         .fn()
-        .mockResolvedValueOnce(remoteUser('refund_usage_race'))
+        .mockResolvedValueOnce(refundRemote)
         .mockResolvedValueOnce({
-          ...remoteUser('refund_usage_race'),
+          ...refundRemote,
           used_traffic: 1024,
           lifetime_used_traffic: 1024,
         }),
@@ -265,6 +331,7 @@ integration('subscription lifecycle management', () => {
 
   it('reuses a failed refund intent safely on retry instead of double-crediting', async () => {
     const telegramId = 451;
+    const refundRemote = remoteUser('refund_retry');
     await getDb().insert(users).values({
       telegramId,
       referralCode: 'ref_451',
@@ -282,15 +349,19 @@ integration('subscription lifecycle management', () => {
       durationDays: 30,
       bonusesProcessedAt: new Date(),
     });
-    await getDb().insert(userConfigs).values({
-      id: 'uc_refund_retry',
-      telegramId,
-      configUsername: 'refund_retry',
-      panelStatus: 'active',
-    });
+    await getDb()
+      .insert(userConfigs)
+      .values({
+        id: 'uc_refund_retry',
+        telegramId,
+        configUsername: 'refund_retry',
+        panelStatus: 'active',
+        subUrl: refundRemote.subscription_url,
+        remoteCreatedAt: `created:${refundRemote.created_at}`,
+      });
 
     const rebeccaService = {
-      getUser: vi.fn().mockResolvedValue(remoteUser('refund_retry')),
+      getUser: vi.fn().mockResolvedValue(refundRemote),
       deleteUser: vi
         .fn()
         .mockRejectedValueOnce(new RebeccaApiError(400, '/api/user/refund_retry', 'failed'))
@@ -433,16 +504,20 @@ integration('subscription lifecycle management', () => {
   });
 
   it('baselines existing manual Rebecca services without hiding later service incarnations', async () => {
+    const botManaged = remoteUser('bot_managed');
+    botManaged.created_at = '2026-01-01T00:00:00Z';
     await getDb().insert(users).values({ telegramId: 701, referralCode: 'ref_701', balance: 0 });
     await getDb().insert(userConfigs).values({
       id: 'uc_baseline_bound',
       telegramId: 701,
       configUsername: 'bot_managed',
       panelStatus: 'active',
+      // Exercise the safe legacy backfill path: pre-migration rows may not yet
+      // have remote_created_at, but their last known subscription credential
+      // proves continuity with the current Rebecca incarnation.
+      subUrl: botManaged.subscription_url,
     });
 
-    const botManaged = remoteUser('bot_managed');
-    botManaged.created_at = '2026-01-01T00:00:00Z';
     const manualExisting = remoteUser('manual_existing');
     manualExisting.created_at = '2026-02-01T00:00:00Z';
     let snapshot = [botManaged, manualExisting];
@@ -460,6 +535,11 @@ integration('subscription lifecycle management', () => {
       alreadyBound: 1,
       ignoredUnbound: 1,
     });
+    const [upgradedBinding] = await getDb()
+      .select({ remoteCreatedAt: userConfigs.remoteCreatedAt })
+      .from(userConfigs)
+      .where(eq(userConfigs.id, 'uc_baseline_bound'));
+    expect(upgradedBinding?.remoteCreatedAt).toBe('created:2026-01-01T00:00:00Z');
     const [baselineIssue] = await getDb()
       .select()
       .from(configReconciliationIssues)

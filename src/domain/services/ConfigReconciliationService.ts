@@ -22,6 +22,11 @@ import {
   observedConfigLifecycle,
 } from './ConfigLifecycle.js';
 import { remoteFingerprint } from './RebeccaOwnership.js';
+import {
+  ConfigIncarnationMismatchError,
+  ConfigIncarnationUnverifiedError,
+  verifyOrEstablishConfigIncarnation,
+} from './ConfigIncarnation.js';
 import { logger } from '../../infra/logger.js';
 
 export type ConfigReconciliationIssue = typeof configReconciliationIssues.$inferSelect;
@@ -135,16 +140,44 @@ export class ConfigReconciliationService {
       .limit(1);
     if (!issue) return false;
 
-    // Re-check the destructive assumption immediately before removing the
-    // local binding. A stale issue must never delete a service that reappeared.
+    // Re-check immediately before removing the local binding. A remote account
+    // with the same username only cancels the issue when it is provably the
+    // SAME incarnation; a recreated username must not keep a stale local owner.
     try {
       const remote = await this.panels.getService(issue.panelId).getUser(issue.configUsername);
       if (remote.status !== 'deleted') {
-        await db
-          .update(configReconciliationIssues)
-          .set({ status: 'resolved', resolvedAt: new Date(), lastSeenAt: new Date() })
-          .where(eq(configReconciliationIssues.id, issue.id));
-        throw new Error('ORPHAN_REMOTE_REAPPEARED');
+        const [local] = await db
+          .select()
+          .from(userConfigs)
+          .where(
+            issue.localConfigId
+              ? eq(userConfigs.id, issue.localConfigId)
+              : and(
+                  eq(userConfigs.panelId, issue.panelId),
+                  eq(userConfigs.configUsername, issue.configUsername)
+                )
+          )
+          .limit(1);
+        if (local) {
+          try {
+            await verifyOrEstablishConfigIncarnation(local, remote);
+            await db
+              .update(configReconciliationIssues)
+              .set({ status: 'resolved', resolvedAt: new Date(), lastSeenAt: new Date() })
+              .where(eq(configReconciliationIssues.id, issue.id));
+            throw new Error('ORPHAN_REMOTE_REAPPEARED');
+          } catch (err) {
+            if (
+              err instanceof ConfigIncarnationMismatchError ||
+              err instanceof ConfigIncarnationUnverifiedError
+            ) {
+              // This is exactly the stale/recreated case the issue represents;
+              // continue and remove only the local binding below.
+            } else {
+              throw err;
+            }
+          }
+        }
       }
     } catch (err) {
       if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
@@ -241,6 +274,17 @@ export class ConfigReconciliationService {
 
     const remote = await this.panels.getService(issue.panelId).getUser(issue.configUsername);
     if (remote.status === 'deleted') throw new Error('ORPHAN_REMOTE_DELETED');
+    const remoteCreatedAt = remoteFingerprint(remote);
+    if (issue.remoteCreatedAt && issue.remoteCreatedAt !== remoteCreatedAt) {
+      await this.upsertIssue({
+        panelId: issue.panelId,
+        kind: 'remote_unbound',
+        configUsername: issue.configUsername,
+        remoteCreatedAt,
+        seenAt: new Date(),
+      });
+      throw new Error('ORPHAN_REMOTE_CHANGED');
+    }
     const configId = `uc_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
     const subUrl = remote.subscription_url || Object.values(remote.subscription_urls ?? {})[0];
     const observedAt = new Date();
@@ -267,6 +311,7 @@ export class ConfigReconciliationService {
         subUrl,
         isClaimed: true,
         claimedAt: observedAt,
+        remoteCreatedAt,
         ...observedConfigLifecycle(remote, observedAt),
       });
       await tx
@@ -341,20 +386,46 @@ export class ConfigReconciliationService {
     for (const panelId of this.panels.getEnabledPanelIds()) {
       const establishedAt = new Date();
       const remoteUsers = await this.listAllRemoteUsers(panelId);
+      // Legacy-incarnation verification needs the old local subscription URL
+      // and owner metadata as continuity evidence. Load the complete binding
+      // rather than only username/fingerprint so safe rows can be upgraded in
+      // place while ambiguous rows remain fail-closed.
       const localConfigs = await getDb()
-        .select({
-          configUsername: userConfigs.configUsername,
-          remoteCreatedAt: userConfigs.remoteCreatedAt,
-        })
+        .select()
         .from(userConfigs)
         .where(eq(userConfigs.panelId, panelId));
+      const currentRemoteByUsername = new Map(
+        remoteUsers
+          .filter((remote) => remote.status !== 'deleted')
+          .map((remote) => [remote.username, remote])
+      );
+      for (const local of localConfigs) {
+        if (local.remoteCreatedAt?.startsWith('created:')) continue;
+        const remote = currentRemoteByUsername.get(local.configUsername);
+        if (!remote) continue;
+        try {
+          local.remoteCreatedAt = await this.verifyReconciliationIncarnation(
+            panelId,
+            local,
+            remote
+          );
+        } catch (err) {
+          if (
+            !(err instanceof ConfigIncarnationMismatchError) &&
+            !(err instanceof ConfigIncarnationUnverifiedError)
+          ) {
+            throw err;
+          }
+        }
+      }
       const bound = new Map(localConfigs.map((config) => [config.configUsername, config]));
       const currentRemote = remoteUsers.filter((remote) => remote.status !== 'deleted');
       const unbound = currentRemote.filter((remote) => {
         const local = bound.get(remote.username);
         return (
           !local ||
-          (local.remoteCreatedAt != null && local.remoteCreatedAt !== remoteFingerprint(remote))
+          local.remoteCreatedAt == null ||
+          local.remoteCreatedAt !== remoteFingerprint(remote)
         );
       });
 
@@ -441,11 +512,25 @@ export class ConfigReconciliationService {
     let missing = 0;
     for (const config of localConfigs) {
       const remote = remoteByUsername.get(config.configUsername);
-      const isMismatch =
-        remote &&
-        config.remoteCreatedAt != null &&
-        remoteFingerprint(remote) !== config.remoteCreatedAt;
-      if (!remote || remote.status === 'deleted' || isMismatch) {
+      let isVerified = false;
+      if (remote && remote.status !== 'deleted') {
+        try {
+          config.remoteCreatedAt = await this.verifyReconciliationIncarnation(
+            panelId,
+            config,
+            remote
+          );
+          isVerified = true;
+        } catch (err) {
+          if (
+            !(err instanceof ConfigIncarnationMismatchError) &&
+            !(err instanceof ConfigIncarnationUnverifiedError)
+          ) {
+            throw err;
+          }
+        }
+      }
+      if (!remote || remote.status === 'deleted' || !isVerified) {
         missing += 1;
         await db
           .update(userConfigs)
@@ -501,7 +586,8 @@ export class ConfigReconciliationService {
       const local = bound.get(remote.username);
       const isBoundMatch =
         local &&
-        (local.remoteCreatedAt == null || local.remoteCreatedAt === remoteFingerprint(remote));
+        local.remoteCreatedAt != null &&
+        local.remoteCreatedAt === remoteFingerprint(remote);
       if (isBoundMatch) {
         await db
           .update(configReconciliationIssues)
@@ -527,6 +613,25 @@ export class ConfigReconciliationService {
       else open += 1;
     }
     return { open, ignored };
+  }
+
+  private async verifyReconciliationIncarnation(
+    panelId: string,
+    config: typeof userConfigs.$inferSelect,
+    remote: RebeccaUsersResponse['users'][number]
+  ): Promise<string> {
+    try {
+      return await verifyOrEstablishConfigIncarnation(config, remote);
+    } catch (err) {
+      if (!(err instanceof ConfigIncarnationUnverifiedError)) throw err;
+
+      // List responses do not include Rebecca's ownership note. Most legacy
+      // rows are proven from their cached subscription URL without this extra
+      // request; only ambiguous rows pay for one detail lookup so a purchase or
+      // trial marker can still recover a legitimate pre-migration binding.
+      const detail = await this.panels.getService(panelId).getUser(config.configUsername);
+      return verifyOrEstablishConfigIncarnation(config, detail);
+    }
   }
 
   private async resolveStaleObservations(panelId: string, scanStartedAt: Date): Promise<void> {

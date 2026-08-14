@@ -36,6 +36,11 @@ import { buildScreen, cleanChatUiMiddleware, uiMessageTrackingTransformer } from
 import { escapeTelegramMarkdown, safeFormattingTransformer } from './rendering.js';
 
 export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices): void {
+  // getOrCreateUser already reads the full user row on the normal private-chat
+  // path. Reuse its ban flag later instead of issuing a second PostgreSQL query
+  // for every Telegram update.
+  const knownBanStatus = new WeakMap<object, boolean>();
+
   // API-level rate throttler (respects Telegram flood limits)
   const throttler = apiThrottler();
   bot.api.config.use(throttler);
@@ -99,6 +104,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
           'telegram_interaction'
         );
         ctx.userLocale = user.locale === 'en' ? 'en' : 'fa';
+        knownBanStatus.set(ctx, user.isBanned);
       } catch (err) {
         logger.debug(
           { telegramId: ctx.from.id, errorName: err instanceof Error ? err.name : typeof err },
@@ -153,7 +159,8 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     const telegramId = ctx.from?.id;
     if (!telegramId) return next();
     try {
-      if (await services.userService.isBanned(telegramId)) {
+      const isBanned = knownBanStatus.get(ctx) ?? (await services.userService.isBanned(telegramId));
+      if (isBanned) {
         if (ctx.callbackQuery) await ctx.answerCallbackQuery();
         return;
       }

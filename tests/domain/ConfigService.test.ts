@@ -139,7 +139,13 @@ describe('ConfigService subscription claims', () => {
 
   it('toggles a bound config inside the domain service using its remote state', async () => {
     selectQueryMock.limit.mockResolvedValue([
-      { id: 'uc_alice_123', panelId: 'legacy', configUsername: 'alice', telegramId: 41 },
+      {
+        id: 'uc_alice_123',
+        panelId: 'legacy',
+        configUsername: 'alice',
+        telegramId: 41,
+        remoteCreatedAt: 'created:2026-01-01T00:00:00Z',
+      },
     ]);
     rebeccaService.getUser.mockResolvedValue({
       ...remoteUser('alice', OPAQUE_SUB_URL),
@@ -151,6 +157,7 @@ describe('ConfigService subscription claims', () => {
 
     expect(rebeccaService.enableUser).toHaveBeenCalledWith('alice');
     expect(rebeccaService.disableUser).not.toHaveBeenCalled();
+    expect(rebeccaService.getUser).toHaveBeenCalledTimes(1);
     expect(updateQueryMock.set).toHaveBeenCalledWith(
       expect.objectContaining({ panelStatus: 'active' })
     );
@@ -292,6 +299,17 @@ describe('ConfigService subscription claims', () => {
   });
 
   it('permanently deletes a config from the panel and the local table', async () => {
+    const remote = remoteUser('alice', OPAQUE_SUB_URL);
+    rebeccaService.getUser.mockResolvedValue(remote);
+    selectQueryMock.limit.mockResolvedValue([
+      {
+        id: 'uc_alice_123',
+        panelId: 'legacy',
+        configUsername: 'alice',
+        telegramId: 41,
+        remoteCreatedAt: `created:${remote.created_at}`,
+      },
+    ]);
     rebeccaService.deleteUser.mockResolvedValue({ username: 'alice', status: 'deleted' });
     deleteQueryMock.returning.mockResolvedValue([{ configUsername: 'alice', telegramId: 41 }]);
 
@@ -304,6 +322,17 @@ describe('ConfigService subscription claims', () => {
   });
 
   it('treats an already-deleted remote config (404) as a successful full removal', async () => {
+    const remote = remoteUser('alice', OPAQUE_SUB_URL);
+    rebeccaService.getUser.mockResolvedValue(remote);
+    selectQueryMock.limit.mockResolvedValue([
+      {
+        id: 'uc_alice_123',
+        panelId: 'legacy',
+        configUsername: 'alice',
+        telegramId: 41,
+        remoteCreatedAt: `created:${remote.created_at}`,
+      },
+    ]);
     rebeccaService.deleteUser.mockRejectedValue(
       new RebeccaApiError(404, 'DELETE /api/user/alice', '{}')
     );
@@ -311,6 +340,16 @@ describe('ConfigService subscription claims', () => {
 
     await expect(service.deleteConfigCompletely('alice')).resolves.toBe(true);
     expect(rebeccaService.deleteUser).toHaveBeenCalledWith('alice');
+  });
+
+  it('fails closed before legacy deletion when remote identity verification is unavailable', async () => {
+    rebeccaService.getUser.mockRejectedValue(new Error('temporary panel failure'));
+
+    await expect(service.deleteConfigCompletely('alice')).rejects.toThrow(
+      'temporary panel failure'
+    );
+    expect(rebeccaService.deleteUser).not.toHaveBeenCalled();
+    expect(dbMock.delete).not.toHaveBeenCalled();
   });
 
   it('forces a valid counter-bearing Rebecca username for unsafe custom templates', async () => {

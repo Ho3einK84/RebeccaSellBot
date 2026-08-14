@@ -42,11 +42,24 @@ dbMock.transaction.mockImplementation(async (callback: (tx: typeof dbMock) => un
   callback(dbMock)
 );
 
+let advisoryLocked = false;
+
 vi.mock('../../src/infra/db.js', () => ({
   getDb: vi.fn(() => dbMock),
   getPool: vi.fn(() => ({
     connect: vi.fn().mockResolvedValue({
-      query: vi.fn().mockResolvedValue({}),
+      query: vi.fn(async (query: string) => {
+        if (query.includes('pg_try_advisory_lock')) {
+          if (advisoryLocked) return { rows: [{ locked: false }] };
+          advisoryLocked = true;
+          return { rows: [{ locked: true }] };
+        }
+        if (query.includes('pg_advisory_unlock')) {
+          advisoryLocked = false;
+          return { rows: [{ unlocked: true }] };
+        }
+        return { rows: [] };
+      }),
       release: vi.fn(),
     }),
   })),
@@ -78,6 +91,7 @@ describe('P0 — Remote Config Incarnation Verification', () => {
     enableUser: ReturnType<typeof vi.fn>;
     disableUser: ReturnType<typeof vi.fn>;
     revokeSubscription: ReturnType<typeof vi.fn>;
+    resetUserTraffic: ReturnType<typeof vi.fn>;
     deleteUser: ReturnType<typeof vi.fn>;
     getUsers: ReturnType<typeof vi.fn>;
   };
@@ -86,11 +100,13 @@ describe('P0 — Remote Config Incarnation Verification', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    advisoryLocked = false;
     mockRebeccaService = {
       getUser: vi.fn(),
       enableUser: vi.fn(),
       disableUser: vi.fn(),
       revokeSubscription: vi.fn(),
+      resetUserTraffic: vi.fn(),
       deleteUser: vi.fn(),
       getUsers: vi.fn(),
     };
@@ -138,6 +154,44 @@ describe('P0 — Remote Config Incarnation Verification', () => {
       expect(dbMock.update).toHaveBeenCalled();
     });
 
+    it('allows only one concurrent revoke to reach Rebecca and fails the contender closed', async () => {
+      const configService = new ConfigService(mockPanels, mockTranslationService);
+      const localConfig = {
+        id: 'uc_1',
+        telegramId: 1001,
+        panelId: 'panel_a',
+        configUsername: 'alice',
+        remoteCreatedAt: 'created:2026-01-01T00:00:00Z',
+        subUrl: 'https://sub.example/sub/original',
+      };
+      // First revoke resolves once before the lock and once after acquiring it;
+      // the contender resolves once before its lock attempt.
+      selectResults.push([localConfig], [localConfig], [localConfig]);
+      mockRebeccaService.getUser.mockResolvedValue(
+        createRemoteUser('alice', '2026-01-01T00:00:00Z')
+      );
+      let finishRemote!: (value: RebeccaUserDetail) => void;
+      mockRebeccaService.revokeSubscription.mockImplementation(
+        () =>
+          new Promise<RebeccaUserDetail>((resolve) => {
+            finishRemote = resolve;
+          })
+      );
+
+      const first = configService.revokeSubscription('alice', 'panel_a');
+      await vi.waitFor(() =>
+        expect(mockRebeccaService.revokeSubscription).toHaveBeenCalledTimes(1)
+      );
+      const second = configService.revokeSubscription('alice', 'panel_a');
+      await expect(second).rejects.toThrow('CONFIG_MUTATION_BUSY');
+
+      finishRemote(
+        createRemoteUser('alice', '2026-01-01T00:00:00Z', 'https://sub.example/sub/rotated')
+      );
+      await expect(first).resolves.toBe('https://sub.example/sub/rotated');
+      expect(mockRebeccaService.revokeSubscription).toHaveBeenCalledTimes(1);
+    });
+
     it('rejects enableConfig/disableConfig on incarnation mismatch', async () => {
       const configService = new ConfigService(mockPanels, mockTranslationService);
       const localConfig = {
@@ -157,6 +211,71 @@ describe('P0 — Remote Config Incarnation Verification', () => {
       );
       expect(mockRebeccaService.enableUser).not.toHaveBeenCalled();
       expect(mockRebeccaService.disableUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects resetUsage on incarnation mismatch before resetting remote traffic', async () => {
+      const configService = new ConfigService(mockPanels, mockTranslationService);
+      const localConfig = {
+        id: 'uc_1',
+        telegramId: 1001,
+        panelId: 'panel_a',
+        configUsername: 'alice',
+        remoteCreatedAt: 'created:2026-01-01T00:00:00Z',
+      };
+      selectResults.push([localConfig]);
+      mockRebeccaService.getUser.mockResolvedValue(
+        createRemoteUser('alice', '2026-02-01T00:00:00Z')
+      );
+      await expect(configService.resetUsage('alice', 'panel_a')).rejects.toThrow(
+        'CONFIG_INCARNATION_MISMATCH'
+      );
+      expect(mockRebeccaService.resetUserTraffic).not.toHaveBeenCalled();
+    });
+
+    it('fails closed for a legacy NULL fingerprint when continuity cannot be proven', async () => {
+      const configService = new ConfigService(mockPanels, mockTranslationService);
+      const localConfig = {
+        id: 'uc_legacy',
+        telegramId: 1001,
+        panelId: 'panel_a',
+        configUsername: 'alice',
+        remoteCreatedAt: null,
+        subUrl: 'https://sub.example/sub/old-secret',
+      };
+      // resolveLocalConfig, then the completed-new-config ownership lookup.
+      selectResults.push([localConfig], []);
+      mockRebeccaService.getUser.mockResolvedValue(
+        createRemoteUser('alice', '2026-02-01T00:00:00Z', 'https://sub.example/sub/new-secret')
+      );
+
+      await expect(configService.resetUsage('alice', 'panel_a')).rejects.toThrow(
+        'CONFIG_INCARNATION_UNVERIFIED'
+      );
+      expect(mockRebeccaService.resetUserTraffic).not.toHaveBeenCalled();
+    });
+
+    it('safely backfills a legacy NULL fingerprint when the stored subscription credential matches', async () => {
+      const configService = new ConfigService(mockPanels, mockTranslationService);
+      const localConfig = {
+        id: 'uc_legacy',
+        telegramId: 1001,
+        panelId: 'panel_a',
+        configUsername: 'alice',
+        remoteCreatedAt: null,
+        subUrl: 'https://sub.example/sub/same-secret',
+      };
+      selectResults.push([localConfig]);
+      mockRebeccaService.getUser.mockResolvedValue(
+        createRemoteUser('alice', '2026-01-01T00:00:00Z', localConfig.subUrl)
+      );
+      updateQueryMock.returning.mockResolvedValueOnce([
+        { remoteCreatedAt: 'created:2026-01-01T00:00:00Z' },
+      ]);
+      mockRebeccaService.resetUserTraffic.mockResolvedValue(undefined);
+
+      await expect(configService.resetUsage('alice', 'panel_a')).resolves.toBeUndefined();
+      expect(mockRebeccaService.resetUserTraffic).toHaveBeenCalledWith('alice');
+      expect(localConfig.remoteCreatedAt).toBe('created:2026-01-01T00:00:00Z');
     });
 
     it('preserves recreated remote user when deleteConfigCompletely encounters incarnation mismatch', async () => {

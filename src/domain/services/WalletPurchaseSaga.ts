@@ -22,6 +22,7 @@ import type { ReferralService } from './ReferralService.js';
 import type { PromoService } from './PromoService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import { purchaseOwnershipMarker, remoteFingerprint } from './RebeccaOwnership.js';
+import { verifyOrEstablishConfigIncarnation } from './ConfigIncarnation.js';
 import {
   PurchaseInProgressError,
   PurchaseOutcomePendingError,
@@ -277,6 +278,19 @@ export class WalletPurchaseSaga {
         subUrl = res.subscription_url || Object.values(res.subscription_urls ?? {})[0];
       } else {
         const existing = await rebeccaService.getUser(params.configUsername);
+        const [localConfig] = await db
+          .select()
+          .from(userConfigs)
+          .where(
+            and(
+              eq(userConfigs.telegramId, params.telegramId),
+              eq(userConfigs.panelId, panelId),
+              eq(userConfigs.configUsername, params.configUsername)
+            )
+          )
+          .limit(1);
+        if (!localConfig) throw new Error('CONFIG_NOT_OWNED');
+        await verifyOrEstablishConfigIncarnation(localConfig, existing);
         if (
           existing.status !== 'active' &&
           existing.status !== 'disabled' &&

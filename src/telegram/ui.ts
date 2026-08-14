@@ -153,15 +153,19 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
     ctx.session.uiMessageIds = [...new Set([...preservedIds, ...failedScreenDeletes])].slice(-20);
     ctx.session.promptMessageIds = [...new Set(failedPromptDeletes)].slice(-20);
 
-    if (ctx.message?.message_id) {
-      await safelyDeleteMessage(ctx, ctx.message.message_id);
-    }
+    // Deleting the user's incoming message is independent from route logic and
+    // does not mutate tracked session state. Start it now, but do not make the
+    // bot wait an extra Telegram API round-trip before it can render a reply.
+    const incomingMessageCleanup = ctx.message?.message_id
+      ? safelyDeleteMessage(ctx, ctx.message.message_id)
+      : Promise.resolve(false);
 
     const initialIds = new Set([
       ...(ctx.session.uiMessageIds ?? []),
       ...(ctx.session.promptMessageIds ?? []),
     ]);
     await uiTracking.run({ chatId: ctx.chat.id, session: ctx.session }, async () => await next());
+    await incomingMessageCleanup;
 
     const sentNewScreen = [
       ...(ctx.session.uiMessageIds ?? []),

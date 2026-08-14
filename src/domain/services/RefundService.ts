@@ -18,11 +18,12 @@ import {
 } from './RebeccaService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { TranslationService } from './TranslationService.js';
+import { purchaseOwnershipMarker, remoteMatchesOwnershipMarker } from './RebeccaOwnership.js';
 import {
-  purchaseOwnershipMarker,
-  remoteFingerprint,
-  remoteMatchesOwnershipMarker,
-} from './RebeccaOwnership.js';
+  ConfigIncarnationMismatchError,
+  ConfigIncarnationUnverifiedError,
+  verifyOrEstablishConfigIncarnation,
+} from './ConfigIncarnation.js';
 import { logger } from '../../infra/logger.js';
 import {
   normalizeRebeccaPanelAccess,
@@ -120,8 +121,16 @@ export class RefundService {
       .orderBy(asc(purchaseIntents.createdAt));
     const initial = intents.find((intent) => intent.type === 'new_config');
     if (!initial) return { eligible: false, reason: 'not_purchased_here' };
-    if (config.remoteCreatedAt && remoteFingerprint(remote) !== config.remoteCreatedAt) {
-      return { eligible: false, reason: 'ownership_mismatch' };
+    try {
+      await verifyOrEstablishConfigIncarnation(config, remote);
+    } catch (err) {
+      if (
+        err instanceof ConfigIncarnationMismatchError ||
+        err instanceof ConfigIncarnationUnverifiedError
+      ) {
+        return { eligible: false, reason: 'ownership_mismatch' };
+      }
+      throw err;
     }
     if (
       remote.note?.startsWith('rsbot:') &&
@@ -213,16 +222,25 @@ export class RefundService {
         return { eligible: false, reason: 'already_used' };
       }
       const [localConfig] = await db
-        .select({ remoteCreatedAt: userConfigs.remoteCreatedAt })
+        .select()
         .from(userConfigs)
         .where(eq(userConfigs.id, quote.configId))
         .limit(1);
-      if (
-        localConfig?.remoteCreatedAt &&
-        remoteFingerprint(latest) !== localConfig.remoteCreatedAt
-      ) {
-        await this.failIntent(refundId, 'Refund rejected: remote config incarnation mismatch');
-        return { eligible: false, reason: 'ownership_mismatch' };
+      if (!localConfig) {
+        await this.failIntent(refundId, 'Refund rejected: local config binding disappeared');
+        return { eligible: false, reason: 'config_not_found' };
+      }
+      try {
+        await verifyOrEstablishConfigIncarnation(localConfig, latest);
+      } catch (err) {
+        if (
+          err instanceof ConfigIncarnationMismatchError ||
+          err instanceof ConfigIncarnationUnverifiedError
+        ) {
+          await this.failIntent(refundId, 'Refund rejected: remote config identity mismatch');
+          return { eligible: false, reason: 'ownership_mismatch' };
+        }
+        throw err;
       }
       deleteRequired = latest.status !== 'deleted';
     } catch (err) {
