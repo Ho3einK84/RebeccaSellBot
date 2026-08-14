@@ -105,7 +105,11 @@ async function main() {
   const broadcastService = new BroadcastService();
 
   setHealthPhase('rebecca_counter_sync');
-  await configService.syncCounters();
+  try {
+    await configService.syncCounters();
+  } catch (err) {
+    logger.warn({ err }, 'Initial counter sync failed; will sync on-demand per panel');
+  }
 
   const services = {
     walletService,

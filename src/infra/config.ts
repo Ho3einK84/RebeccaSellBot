@@ -94,11 +94,27 @@ const configSchema = z
     DEFAULT_LOCALE: z.enum(['fa', 'en']).default('fa'),
     SUPPORT_URL: z
       .string()
-      .url('SUPPORT_URL must be a valid URL')
-      .startsWith('https://')
-      .optional(),
+      .optional()
+      .transform((val) => {
+        const trimmed = val?.trim();
+        return trimmed ? trimmed : undefined;
+      })
+      .pipe(
+        z
+          .string()
+          .url('SUPPORT_URL must be a valid URL')
+          .startsWith('https://', 'SUPPORT_URL must start with https://')
+          .optional()
+      ),
   })
   .superRefine((value, ctx) => {
+    if (value.NODE_ENV === 'production' && !value.PANEL_CREDENTIALS_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['PANEL_CREDENTIALS_KEY'],
+        message: 'PANEL_CREDENTIALS_KEY is required in production',
+      });
+    }
     if (!value.REBECCA_API_URL) return;
     if (value.REBECCA_API_KEY || value.REBECCA_ADMIN_PASSWORD) return;
     if (value.NODE_ENV !== 'production') return;

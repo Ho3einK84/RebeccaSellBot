@@ -145,7 +145,7 @@ load_config_file() {
     value="${line#*=}"
 
     case "$key" in
-      BOT_TOKEN|ADMIN_IDS|PANEL_CREDENTIALS_KEY|REBECCA_API_URL|REBECCA_API_KEY|REBECCA_ADMIN_USERNAME|REBECCA_ADMIN_PASSWORD|REBECCA_SERVICE_ID|DB_USER|DB_PASSWORD|DB_NAME|DEFAULT_LOCALE|GITHUB_PAT|RSBOT_ACCESS_METHOD|RSBOT_REPOSITORY_URL|RSBOT_SSH_KEY_PATH)
+      BOT_TOKEN|ADMIN_IDS|PANEL_CREDENTIALS_KEY|REBECCA_API_URL|REBECCA_API_KEY|REBECCA_ADMIN_USERNAME|REBECCA_ADMIN_PASSWORD|REBECCA_SERVICE_ID|DB_USER|DB_PASSWORD|DB_NAME|DEFAULT_LOCALE|SUPPORT_URL|GITHUB_PAT|RSBOT_ACCESS_METHOD|RSBOT_REPOSITORY_URL|RSBOT_SSH_KEY_PATH)
         printf -v "$key" '%s' "$value"
         export "$key"
         ;;
@@ -412,6 +412,14 @@ configure_environment() {
   fi
   validate_locale "$DEFAULT_LOCALE" || die "Default locale must be fa or en."
 
+  SUPPORT_URL="${SUPPORT_URL:-}"
+  if [[ -z "$SUPPORT_URL" && "$NON_INTERACTIVE" == false ]]; then
+    SUPPORT_URL="$(prompt_default "Support URL (optional, e.g. https://t.me/your_support)" "")"
+  fi
+  if [[ -n "$SUPPORT_URL" ]]; then
+    validate_https_url "$SUPPORT_URL" || warn "SUPPORT_URL should be a valid HTTPS URL."
+  fi
+
   umask 077
   {
     printf 'INSTANCE_NAME=%s\n' "$INSTANCE_NAME"
@@ -428,6 +436,7 @@ configure_environment() {
     printf 'REBECCA_ADMIN_PASSWORD=%s\n' "$REBECCA_ADMIN_PASSWORD"
     printf 'REBECCA_SERVICE_ID=%s\n' "$REBECCA_SERVICE_ID"
     printf 'DEFAULT_LOCALE=%s\n' "$DEFAULT_LOCALE"
+    printf 'SUPPORT_URL=%s\n' "$SUPPORT_URL"
     printf 'HEALTH_CHECK_PORT=3001\n'
   } > "$ENV_FILE"
   "${SUDO[@]}" chown "$INSTALL_OWNER:$(id -gn "$INSTALL_OWNER")" "$ENV_FILE"

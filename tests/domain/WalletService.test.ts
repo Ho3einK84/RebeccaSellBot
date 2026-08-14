@@ -556,14 +556,12 @@ describe('WalletService reserve → remote → commit saga', () => {
       gbAmount: 25,
       durationDays: 30,
     };
-    const { db } = createDbMock({
+    const { db, state } = createDbMock({
       returningResults: [
         [{ telegramId: renewal.telegramId }],
         [{ id: 'pi_test' }],
         [{ id: 'pi_test' }],
-        [], // debit invariant failure forces compensation
-        [{ id: 'pi_test' }], // failed intent transition after confirmed compensation
-        [{ telegramId: renewal.telegramId }], // release reservation
+        [], // debit invariant failure forces reconciliation deferral
       ],
     });
     vi.mocked(getDb).mockReturnValue(db as never);
@@ -573,30 +571,27 @@ describe('WalletService reserve → remote → commit saga', () => {
       data_limit: null,
       expire: 1_700_000_000,
     });
-    mockRebeccaService.updateUser
-      .mockResolvedValueOnce({
-        username: renewal.configUsername,
-        status: 'active',
-        data_limit: 25 * 1024 * 1024 * 1024,
-        expire: Math.floor(Date.now() / 1000) + renewal.durationDays * 86400,
-        subscription_url: 'https://sub.example.test/renewed',
-      })
-      .mockResolvedValueOnce({
-        username: renewal.configUsername,
-        status: 'active',
-        data_limit: null,
-        expire: 1_700_000_000,
-        subscription_url: 'https://sub.example.test/restored',
-      });
+    mockRebeccaService.updateUser.mockResolvedValueOnce({
+      username: renewal.configUsername,
+      status: 'active',
+      data_limit: 25 * 1024 * 1024 * 1024,
+      expire: Math.floor(Date.now() / 1000) + renewal.durationDays * 86400,
+      subscription_url: 'https://sub.example.test/renewed',
+    });
 
-    await expect(walletService.executePurchaseSaga(renewal)).rejects.toThrow(
-      'Transaction failed; wallet was not charged.'
+    await expect(walletService.executePurchaseSaga(renewal)).rejects.toBeInstanceOf(
+      PurchaseOutcomePendingError
     );
 
-    expect(mockRebeccaService.updateUser).toHaveBeenCalledTimes(2);
-    expect(mockRebeccaService.updateUser.mock.calls[1]?.[1]).toEqual(
-      expect.objectContaining({ data_limit: null, expire: 1_700_000_000, status: 'active' })
-    );
+    expect(mockRebeccaService.updateUser).toHaveBeenCalledTimes(1);
+    expect(
+      state.setCalls.some(
+        (call) =>
+          call.status === 'reconciliation_required' ||
+          call.errorMessage ===
+            'Remote renewal applied (traffic reset) but local commit failed; reconciliation required'
+      )
+    ).toBe(true);
   });
 
   it('does not release funds when local commit and compensation outcomes are both unknown', async () => {

@@ -18,7 +18,11 @@ import {
 } from './RebeccaService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { TranslationService } from './TranslationService.js';
-import { purchaseOwnershipMarker, remoteMatchesOwnershipMarker } from './RebeccaOwnership.js';
+import {
+  purchaseOwnershipMarker,
+  remoteFingerprint,
+  remoteMatchesOwnershipMarker,
+} from './RebeccaOwnership.js';
 import { logger } from '../../infra/logger.js';
 import {
   normalizeRebeccaPanelAccess,
@@ -116,6 +120,9 @@ export class RefundService {
       .orderBy(asc(purchaseIntents.createdAt));
     const initial = intents.find((intent) => intent.type === 'new_config');
     if (!initial) return { eligible: false, reason: 'not_purchased_here' };
+    if (config.remoteCreatedAt && remoteFingerprint(remote) !== config.remoteCreatedAt) {
+      return { eligible: false, reason: 'ownership_mismatch' };
+    }
     if (
       remote.note?.startsWith('rsbot:') &&
       !remoteMatchesOwnershipMarker(remote, purchaseOwnershipMarker(initial.id))
@@ -144,10 +151,11 @@ export class RefundService {
     }
 
     const windowHours = this.translationService.getSettingNum('refund_window_hours', 0);
+    const completedAt = initial.completedAt ?? initial.createdAt;
     if (
       Number.isFinite(windowHours) &&
       windowHours > 0 &&
-      Date.now() - initial.createdAt.getTime() > windowHours * 60 * 60 * 1000
+      Date.now() - completedAt.getTime() > windowHours * 60 * 60 * 1000
     ) {
       return { eligible: false, reason: 'refund_window_expired' };
     }
@@ -179,11 +187,12 @@ export class RefundService {
       cashbackWithheld,
       refundAmount,
       purchaseIntentId: initial.id,
-      purchasedAt: initial.createdAt,
+      purchasedAt: completedAt,
     };
   }
 
   async executeDeleteWithRefund(telegramId: number, configId: string): Promise<RefundQuote> {
+    const db = getDb();
     const quote = await this.quote(telegramId, configId);
     if (!quote.eligible) return quote;
 
@@ -202,6 +211,18 @@ export class RefundService {
       if (latest.used_traffic > 0 || latest.lifetime_used_traffic > 0) {
         await this.failIntent(refundId, 'Refund rejected: traffic appeared before deletion');
         return { eligible: false, reason: 'already_used' };
+      }
+      const [localConfig] = await db
+        .select({ remoteCreatedAt: userConfigs.remoteCreatedAt })
+        .from(userConfigs)
+        .where(eq(userConfigs.id, quote.configId))
+        .limit(1);
+      if (
+        localConfig?.remoteCreatedAt &&
+        remoteFingerprint(latest) !== localConfig.remoteCreatedAt
+      ) {
+        await this.failIntent(refundId, 'Refund rejected: remote config incarnation mismatch');
+        return { eligible: false, reason: 'ownership_mismatch' };
       }
       deleteRequired = latest.status !== 'deleted';
     } catch (err) {

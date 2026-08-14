@@ -7,7 +7,11 @@ import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { TranslationService } from './TranslationService.js';
 import { logger } from '../../infra/logger.js';
 import { activeConfigCountSql, observedConfigLifecycle } from './ConfigLifecycle.js';
-import { remoteMatchesOwnershipMarker, trialOwnershipMarker } from './RebeccaOwnership.js';
+import {
+  remoteFingerprint,
+  remoteMatchesOwnershipMarker,
+  trialOwnershipMarker,
+} from './RebeccaOwnership.js';
 import {
   normalizeRebeccaPanelAccess,
   type NormalizedRebeccaPanelAccess,
@@ -471,6 +475,7 @@ export class TrialService {
             subUrl,
             isClaimed: true,
             claimedAt: new Date(),
+            remoteCreatedAt: remoteFingerprint(remote),
             ...observedConfigLifecycle(remote, observedAt),
           })
           .onConflictDoNothing()

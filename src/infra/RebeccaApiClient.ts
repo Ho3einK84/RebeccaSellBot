@@ -267,11 +267,20 @@ export class RebeccaApiClient {
 
     const url = `${this.baseUrl}/api/admin/token`;
     // Rebecca accepts JSON body (confirmed in admin_auth.go readAdminLoginRequest)
-    const res = await this.fetchWithTimeout(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ username: this.adminUsername, password: this.adminPassword }),
-    });
+    let res: Response;
+    try {
+      res = await this.fetchWithTimeout(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ username: this.adminUsername, password: this.adminPassword }),
+      });
+    } catch (networkErr: unknown) {
+      logger.error(
+        { err: networkErr, endpoint: '/api/admin/token' },
+        'Rebecca API: token fetch network failure'
+      );
+      throw new RebeccaOriginDownError('/api/admin/token', null, 1, false);
+    }
 
     if (!res.ok) {
       const errBody = await res.text();
@@ -279,6 +288,9 @@ export class RebeccaApiClient {
         { status: res.status, errorBodyLength: errBody.length },
         'Rebecca API: token fetch failed'
       );
+      if (RETRYABLE_5XX.has(res.status)) {
+        throw new RebeccaOriginDownError('/api/admin/token', res.status, 1, false);
+      }
       throw new RebeccaApiError(res.status, '/api/admin/token', errBody);
     }
 

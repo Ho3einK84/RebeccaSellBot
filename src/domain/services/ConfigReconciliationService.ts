@@ -21,6 +21,7 @@ import {
   deletedConfigLifecycle,
   observedConfigLifecycle,
 } from './ConfigLifecycle.js';
+import { remoteFingerprint } from './RebeccaOwnership.js';
 import { logger } from '../../infra/logger.js';
 
 export type ConfigReconciliationIssue = typeof configReconciliationIssues.$inferSelect;
@@ -341,12 +342,21 @@ export class ConfigReconciliationService {
       const establishedAt = new Date();
       const remoteUsers = await this.listAllRemoteUsers(panelId);
       const localConfigs = await getDb()
-        .select({ configUsername: userConfigs.configUsername })
+        .select({
+          configUsername: userConfigs.configUsername,
+          remoteCreatedAt: userConfigs.remoteCreatedAt,
+        })
         .from(userConfigs)
         .where(eq(userConfigs.panelId, panelId));
-      const bound = new Set(localConfigs.map((config) => config.configUsername));
+      const bound = new Map(localConfigs.map((config) => [config.configUsername, config]));
       const currentRemote = remoteUsers.filter((remote) => remote.status !== 'deleted');
-      const unbound = currentRemote.filter((remote) => !bound.has(remote.username));
+      const unbound = currentRemote.filter((remote) => {
+        const local = bound.get(remote.username);
+        return (
+          !local ||
+          (local.remoteCreatedAt != null && local.remoteCreatedAt !== remoteFingerprint(remote))
+        );
+      });
 
       await getDb().transaction(async (tx) => {
         for (const remote of unbound) {
@@ -431,7 +441,11 @@ export class ConfigReconciliationService {
     let missing = 0;
     for (const config of localConfigs) {
       const remote = remoteByUsername.get(config.configUsername);
-      if (!remote || remote.status === 'deleted') {
+      const isMismatch =
+        remote &&
+        config.remoteCreatedAt != null &&
+        remoteFingerprint(remote) !== config.remoteCreatedAt;
+      if (!remote || remote.status === 'deleted' || isMismatch) {
         missing += 1;
         await db
           .update(userConfigs)
@@ -479,12 +493,16 @@ export class ConfigReconciliationService {
     scanStartedAt: Date
   ): Promise<{ open: number; ignored: number }> {
     const db = getDb();
-    const bound = new Set(localConfigs.map((config) => config.configUsername));
+    const bound = new Map(localConfigs.map((config) => [config.configUsername, config]));
     let open = 0;
     let ignored = 0;
     for (const remote of remoteUsers) {
       if (remote.status === 'deleted') continue;
-      if (bound.has(remote.username)) {
+      const local = bound.get(remote.username);
+      const isBoundMatch =
+        local &&
+        (local.remoteCreatedAt == null || local.remoteCreatedAt === remoteFingerprint(remote));
+      if (isBoundMatch) {
         await db
           .update(configReconciliationIssues)
           .set({ status: 'resolved', resolvedAt: scanStartedAt, lastSeenAt: scanStartedAt })
@@ -578,13 +596,4 @@ export class ConfigReconciliationService {
       .returning({ status: configReconciliationIssues.status });
     return (row?.status ?? 'open') as 'open' | 'ignored' | 'resolved';
   }
-}
-
-function remoteFingerprint(remote: RebeccaUsersResponse['users'][number]): string {
-  const createdAt = remote.created_at.trim();
-  if (createdAt) return `created:${createdAt}`;
-  // Older Rebecca releases may omit created_at. A stable subscription token
-  // still prevents an ignored, deleted username from suppressing a later
-  // incarnation with a different credential.
-  return `sub:${crypto.createHash('sha256').update(remote.subscription_url).digest('hex')}`;
 }

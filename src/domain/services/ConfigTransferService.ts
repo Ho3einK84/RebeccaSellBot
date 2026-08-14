@@ -8,6 +8,7 @@ import {
   normalizeRebeccaPanelAccess,
   type NormalizedRebeccaPanelAccess,
 } from './RebeccaPanelAccess.js';
+import { remoteFingerprint } from './RebeccaOwnership.js';
 
 export class ConfigTransferService {
   private readonly panels: NormalizedRebeccaPanelAccess;
@@ -47,6 +48,9 @@ export class ConfigTransferService {
     // Never move a stale/deleted local shell. The panel remains the authority.
     const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
     if (remote.status === 'deleted') throw new Error('CONFIG_REMOTE_DELETED');
+    if (config.remoteCreatedAt && remoteFingerprint(remote) !== config.remoteCreatedAt) {
+      throw new Error('CONFIG_INCARNATION_MISMATCH');
+    }
 
     return db.transaction(async (tx) => {
       // Conditional owner match makes a concurrent transfer lose safely.

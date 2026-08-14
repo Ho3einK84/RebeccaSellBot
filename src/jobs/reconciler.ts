@@ -39,6 +39,7 @@ import {
 } from '../domain/services/RebeccaPanelAccess.js';
 import {
   purchaseOwnershipMarker,
+  remoteFingerprint,
   remoteMatchesOwnershipMarker,
 } from '../domain/services/RebeccaOwnership.js';
 
@@ -386,6 +387,7 @@ async function completePendingIntent(
         status: 'completed',
         errorMessage: null,
         leaseExpiresAt: null,
+        completedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(
@@ -433,6 +435,7 @@ async function completePendingIntent(
           subUrl,
           isClaimed: true,
           claimedAt: new Date(),
+          remoteCreatedAt: remoteFingerprint(remote),
           ...observedConfigLifecycle(remote, observedAt),
         })
         .onConflictDoNothing();

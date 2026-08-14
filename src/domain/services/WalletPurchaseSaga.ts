@@ -21,7 +21,7 @@ import { activeConfigCountSql, observedConfigLifecycle } from './ConfigLifecycle
 import type { ReferralService } from './ReferralService.js';
 import type { PromoService } from './PromoService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
-import { purchaseOwnershipMarker } from './RebeccaOwnership.js';
+import { purchaseOwnershipMarker, remoteFingerprint } from './RebeccaOwnership.js';
 import {
   PurchaseInProgressError,
   PurchaseOutcomePendingError,
@@ -242,9 +242,11 @@ export class WalletPurchaseSaga {
         return result;
       } catch (err) {
         if (
-          err instanceof RebeccaApiError ||
+          (err instanceof RebeccaApiError && err.endpoint !== '/api/admin/token') ||
           err instanceof RebeccaContractError ||
-          (err instanceof RebeccaOriginDownError && err.requestDispatched)
+          (err instanceof RebeccaOriginDownError &&
+            err.requestDispatched &&
+            err.endpoint !== '/api/admin/token')
         ) {
           remoteMutationAttempted = true;
         }
@@ -374,6 +376,7 @@ export class WalletPurchaseSaga {
             status: 'completed',
             errorMessage: null,
             leaseExpiresAt: null,
+            completedAt: new Date(),
             updatedAt: new Date(),
           })
           .where(sql`${purchaseIntents.id} = ${intentId} AND ${purchaseIntents.status} = 'pending'`)
@@ -421,6 +424,7 @@ export class WalletPurchaseSaga {
               subUrl,
               isClaimed: true,
               claimedAt: new Date(),
+              remoteCreatedAt: remoteFingerprint(confirmedRemote),
               ...observedConfigLifecycle(confirmedRemote, observedAt),
             })
             .onConflictDoNothing();
@@ -523,13 +527,9 @@ export class WalletPurchaseSaga {
         if (params.type === 'new_config') {
           await rebeccaService.deleteUser(params.configUsername);
           compensationConfirmed = true;
-        } else if (renewalBefore) {
-          await rebeccaService.updateUser(params.configUsername, {
-            expire: renewalBefore.expire,
-            status: renewalBefore.status,
-            data_limit: renewalBefore.dataLimit,
-          });
-          compensationConfirmed = true;
+        } else {
+          // Consumed traffic cannot be restored after resetUserTraffic; do not claim full compensation
+          compensationConfirmed = false;
         }
       } catch (compensationError) {
         logger.error(
@@ -557,7 +557,9 @@ export class WalletPurchaseSaga {
       }
 
       await keepPendingForReconciliation(
-        'Local commit failed after remote success; awaiting reconciliation'
+        params.type === 'renew_config'
+          ? 'Remote renewal applied (traffic reset) but local commit failed; reconciliation required'
+          : 'Local commit failed after remote success; awaiting reconciliation'
       );
       throw new PurchaseOutcomePendingError(intentId, { cause: err });
     }

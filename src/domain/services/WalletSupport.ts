@@ -142,8 +142,13 @@ export function assertPanelPurchaseApplied(
 /** A dispatched mutation without a definitive outcome must be reconciled. */
 export function isRemoteOutcomeIndeterminate(err: unknown): boolean {
   if (err instanceof PanelPurchaseVerificationError) return true;
-  if (err instanceof RebeccaOriginDownError) return err.requestDispatched;
+  if (err instanceof RebeccaOriginDownError) {
+    return err.requestDispatched && err.endpoint !== '/api/admin/token';
+  }
   if (err instanceof RebeccaContractError) return true;
-  if (err instanceof RebeccaApiError) return err.status >= 500 || err.status === 409;
+  if (err instanceof RebeccaApiError) {
+    if (err.endpoint === '/api/admin/token') return false;
+    return err.status >= 500 || err.status === 409;
+  }
   return false;
 }

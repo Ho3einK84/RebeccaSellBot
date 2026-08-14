@@ -95,24 +95,39 @@ export class WalletService {
 
     if (existing.length > 0) {
       const current = existing[0]!;
+      const nextUsername = username ?? null;
+      const nextFirstName = firstName ?? null;
+      const nextLastName = lastName ?? null;
+      const profileChanged =
+        current.username !== nextUsername ||
+        current.firstName !== nextFirstName ||
+        current.lastName !== nextLastName ||
+        Boolean(locale && !current.localeManual && current.locale !== locale);
+
+      const now = Date.now();
+      const lastSeenMs = current.lastSeenAt ? new Date(current.lastSeenAt).getTime() : 0;
+      const LAST_SEEN_THROTTLE_MS = 10 * 60 * 1000; // 10 minutes
+      const shouldUpdateLastSeen = now - lastSeenMs >= LAST_SEEN_THROTTLE_MS;
+
+      if (!profileChanged && !shouldUpdateLastSeen) {
+        return current;
+      }
+
       const changes: {
         username?: string | null;
         firstName?: string | null;
         lastName?: string | null;
         locale?: SupportedLocale;
-        lastSeenAt: Date;
+        lastSeenAt?: Date;
         updatedAt: Date;
       } = {
-        lastSeenAt: new Date(),
-        updatedAt: new Date(),
+        updatedAt: new Date(now),
       };
-      const nextUsername = username ?? null;
-      const nextFirstName = firstName ?? null;
-      const nextLastName = lastName ?? null;
       if (current.username !== nextUsername) changes.username = nextUsername;
       if (current.firstName !== nextFirstName) changes.firstName = nextFirstName;
       if (current.lastName !== nextLastName) changes.lastName = nextLastName;
       if (locale && !current.localeManual && current.locale !== locale) changes.locale = locale;
+      if (shouldUpdateLastSeen) changes.lastSeenAt = new Date(now);
 
       const [updated] = await db
         .update(users)

@@ -71,6 +71,13 @@
       "when": 1786650000000,
       "tag": "0009_payment_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786700000000,
+      "tag": "0010_remote_incarnation_and_completed_at",
+      "breakpoints": true
     }
   ]
 }

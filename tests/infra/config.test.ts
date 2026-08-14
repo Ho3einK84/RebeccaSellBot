@@ -21,6 +21,7 @@ describe('loadConfig', () => {
     DATABASE_URL: 'postgres://user:password@localhost:5432/rsbot_test',
     REBECCA_API_URL: 'https://panel.example.com',
     REBECCA_API_KEY: 'test-api-key',
+    PANEL_CREDENTIALS_KEY: 'a'.repeat(64),
   };
 
   it('rejects production startup without any administrator IDs', async () => {
@@ -51,6 +52,52 @@ describe('loadConfig', () => {
     });
 
     expect(() => loadConfig()).toThrow('Invalid environment configuration');
+  });
+
+  it('requires PANEL_CREDENTIALS_KEY in production', async () => {
+    const loadConfig = await loadConfigWithEnv({
+      ...requiredConfig,
+      NODE_ENV: 'production',
+      PANEL_CREDENTIALS_KEY: '',
+    });
+
+    expect(() => loadConfig()).toThrow('Invalid environment configuration');
+  });
+
+  it('allows PANEL_CREDENTIALS_KEY to be omitted in development or test', async () => {
+    const loadConfigDev = await loadConfigWithEnv({
+      ...requiredConfig,
+      NODE_ENV: 'development',
+      PANEL_CREDENTIALS_KEY: '',
+    });
+    expect(loadConfigDev().PANEL_CREDENTIALS_KEY).toBeUndefined();
+
+    const loadConfigTest = await loadConfigWithEnv({
+      ...requiredConfig,
+      NODE_ENV: 'test',
+      PANEL_CREDENTIALS_KEY: '',
+    });
+    expect(loadConfigTest().PANEL_CREDENTIALS_KEY).toBeUndefined();
+  });
+
+  it('handles SUPPORT_URL properly when empty, valid, or invalid', async () => {
+    const loadConfigEmpty = await loadConfigWithEnv({
+      ...requiredConfig,
+      SUPPORT_URL: '',
+    });
+    expect(loadConfigEmpty().SUPPORT_URL).toBeUndefined();
+
+    const loadConfigValid = await loadConfigWithEnv({
+      ...requiredConfig,
+      SUPPORT_URL: 'https://t.me/support_bot',
+    });
+    expect(loadConfigValid().SUPPORT_URL).toBe('https://t.me/support_bot');
+
+    const loadConfigInvalid = await loadConfigWithEnv({
+      ...requiredConfig,
+      SUPPORT_URL: 'not-a-valid-url',
+    });
+    expect(() => loadConfigInvalid()).toThrow('Invalid environment configuration');
   });
 
   it('requires an API key or an explicit Rebecca administrator password in production', async () => {

@@ -6,7 +6,7 @@
  * renewal), while the database saga remains the source of truth for
  * idempotency across processes.
  */
-const actionTimestamps = new Map<string, number>();
+const actionExpirations = new Map<string, number>();
 
 export function acquireUserActionCooldown(
   telegramId: number,
@@ -15,13 +15,13 @@ export function acquireUserActionCooldown(
 ): boolean {
   const now = Date.now();
   const key = `${action}:${telegramId}`;
-  const previous = actionTimestamps.get(key) ?? 0;
-  if (now - previous < cooldownMs) return false;
+  const expiresAt = actionExpirations.get(key) ?? 0;
+  if (expiresAt > now) return false;
 
-  actionTimestamps.set(key, now);
-  if (actionTimestamps.size > 10_000) {
-    for (const [entry, timestamp] of actionTimestamps) {
-      if (now - timestamp >= cooldownMs) actionTimestamps.delete(entry);
+  actionExpirations.set(key, now + cooldownMs);
+  if (actionExpirations.size > 10_000) {
+    for (const [entry, expiry] of actionExpirations) {
+      if (expiry <= now) actionExpirations.delete(entry);
     }
   }
   return true;
@@ -29,5 +29,5 @@ export function acquireUserActionCooldown(
 
 /** Test-only/reset helper; not used by application code. */
 export function resetActionCooldowns(): void {
-  actionTimestamps.clear();
+  actionExpirations.clear();
 }

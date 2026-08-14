@@ -4,7 +4,7 @@
  * Layering: all Rebecca API calls go through RebeccaService.
  * No direct RebeccaApiClient imports.
  */
-import { getDb } from '../../infra/db.js';
+import { getDb, getPool } from '../../infra/db.js';
 import { userConfigs, configCounters, notificationDeliveries, users } from '../../infra/schema.js';
 import { RebeccaApiError, type RebeccaService, type RebeccaUserDetail } from './RebeccaService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
@@ -14,10 +14,15 @@ import {
   type NormalizedRebeccaPanelAccess,
 } from './RebeccaPanelAccess.js';
 import type { TranslationService } from './TranslationService.js';
+import { remoteFingerprint } from './RebeccaOwnership.js';
 import { logger } from '../../infra/logger.js';
 import crypto from 'crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
-import { activeConfigCountSql, observedConfigLifecycle } from './ConfigLifecycle.js';
+import {
+  activeConfigCountSql,
+  deletedConfigLifecycle,
+  observedConfigLifecycle,
+} from './ConfigLifecycle.js';
 
 const CREDENTIAL_KEY_RE = /^[a-f0-9-]{16,128}$/i;
 const OPAQUE_SUBSCRIPTION_TOKEN_RE = /^(?=.*[a-z])(?=.*[A-Z])[A-Za-z0-9_-]{15,}$/;
@@ -441,6 +446,7 @@ export class ConfigService {
             subUrl: normalizedSubUrl.toString(),
             isClaimed: true,
             claimedAt: new Date(),
+            remoteCreatedAt: remoteFingerprint(matchedUser),
             ...observedConfigLifecycle(matchedUser, observedAt),
           })
           .onConflictDoNothing({ target: [userConfigs.panelId, userConfigs.configUsername] })
@@ -585,28 +591,42 @@ export class ConfigService {
   /** Revoke subscription (rotate UUID) and update cached subUrl in DB */
   async revokeSubscription(configUsername: string, panelId?: string): Promise<string | undefined> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    const updated = await this.panels
-      .getService(config.panelId)
-      .revokeSubscription(config.configUsername);
-    const newSubUrl = canonicalSubscriptionUrls(updated)[0];
-    const observedAt = new Date();
-    await getDb().transaction(async (tx) => {
-      await tx
-        .update(userConfigs)
-        .set({
-          ...(newSubUrl ? { subUrl: newSubUrl } : {}),
-          ...observedConfigLifecycle(updated, observedAt),
-        })
-        .where(eq(userConfigs.id, config.id));
-      await tx
-        .update(users)
-        .set({
-          activeSubscriptionCount: activeConfigCountSql(config.telegramId),
-          updatedAt: observedAt,
-        })
-        .where(eq(users.telegramId, config.telegramId));
+    return withConfigLock(config.panelId, config.configUsername, async () => {
+      const currentConfig = await this.resolveLocalConfig(config.configUsername, config.panelId);
+      const remote = await this.panels
+        .getService(currentConfig.panelId)
+        .getUser(currentConfig.configUsername);
+      if (
+        currentConfig.remoteCreatedAt &&
+        remoteFingerprint(remote) !== currentConfig.remoteCreatedAt
+      ) {
+        await this.markLocalConfigStale(currentConfig);
+        throw new Error('CONFIG_INCARNATION_MISMATCH');
+      }
+
+      const updated = await this.panels
+        .getService(currentConfig.panelId)
+        .revokeSubscription(currentConfig.configUsername);
+      const newSubUrl = canonicalSubscriptionUrls(updated)[0];
+      const observedAt = new Date();
+      await getDb().transaction(async (tx) => {
+        await tx
+          .update(userConfigs)
+          .set({
+            ...(newSubUrl ? { subUrl: newSubUrl } : {}),
+            ...observedConfigLifecycle(updated, observedAt),
+          })
+          .where(eq(userConfigs.id, currentConfig.id));
+        await tx
+          .update(users)
+          .set({
+            activeSubscriptionCount: activeConfigCountSql(currentConfig.telegramId),
+            updatedAt: observedAt,
+          })
+          .where(eq(users.telegramId, currentConfig.telegramId));
+      });
+      return newSubUrl;
     });
-    return newSubUrl;
   }
 
   async resetUsage(configUsername: string, panelId?: string): Promise<void> {
@@ -634,6 +654,11 @@ export class ConfigService {
   }
 
   private async setConfigEnabled(config: ConfigRecord, enabled: boolean): Promise<void> {
+    const remoteUser = await this.panels.getService(config.panelId).getUser(config.configUsername);
+    if (config.remoteCreatedAt && remoteFingerprint(remoteUser) !== config.remoteCreatedAt) {
+      await this.markLocalConfigStale(config);
+      throw new Error('CONFIG_INCARNATION_MISMATCH');
+    }
     const remote = enabled
       ? await this.panels.getService(config.panelId).enableUser(config.configUsername)
       : await this.panels.getService(config.panelId).disableUser(config.configUsername);
@@ -642,6 +667,23 @@ export class ConfigService {
       await tx
         .update(userConfigs)
         .set(observedConfigLifecycle(remote, observedAt))
+        .where(eq(userConfigs.id, config.id));
+      await tx
+        .update(users)
+        .set({
+          activeSubscriptionCount: activeConfigCountSql(config.telegramId),
+          updatedAt: observedAt,
+        })
+        .where(eq(users.telegramId, config.telegramId));
+    });
+  }
+
+  private async markLocalConfigStale(config: ConfigRecord): Promise<void> {
+    const observedAt = new Date();
+    await getDb().transaction(async (tx) => {
+      await tx
+        .update(userConfigs)
+        .set(deletedConfigLifecycle(observedAt))
         .where(eq(userConfigs.id, config.id));
       await tx
         .update(users)
@@ -665,10 +707,32 @@ export class ConfigService {
   async deleteConfigCompletely(configUsername: string, panelId?: string): Promise<boolean> {
     const db = getDb();
     if (this.legacySinglePanel && !panelId) {
+      let deleteRemote = true;
       try {
-        await this.panels.getService('legacy').deleteUser(configUsername);
+        const remote = await this.panels.getService('legacy').getUser(configUsername);
+        const [local] = await db
+          .select({ remoteCreatedAt: userConfigs.remoteCreatedAt })
+          .from(userConfigs)
+          .where(eq(userConfigs.configUsername, configUsername))
+          .limit(1);
+        if (local?.remoteCreatedAt && remoteFingerprint(remote) !== local.remoteCreatedAt) {
+          logger.warn(
+            { configUsername },
+            'Remote config incarnation mismatched during legacy deletion; preserving remote user'
+          );
+          deleteRemote = false;
+        }
       } catch (err) {
-        if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
+        if (err instanceof RebeccaApiError && err.status === 404) {
+          deleteRemote = false;
+        }
+      }
+      if (deleteRemote) {
+        try {
+          await this.panels.getService('legacy').deleteUser(configUsername);
+        } catch (err) {
+          if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
+        }
       }
       return db.transaction(async (tx) => {
         const [deleted] = await tx
@@ -693,17 +757,40 @@ export class ConfigService {
       });
     }
     const config = await this.resolveLocalConfig(configUsername, panelId);
+    let deleteRemote = true;
     try {
-      await this.panels.getService(config.panelId).deleteUser(config.configUsername);
+      const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
+      if (config.remoteCreatedAt && remoteFingerprint(remote) !== config.remoteCreatedAt) {
+        logger.warn(
+          { configUsername: config.configUsername, panelId: config.panelId },
+          'Remote config incarnation mismatched during deletion; preserving remote user'
+        );
+        deleteRemote = false;
+      }
     } catch (err) {
-      if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
+      if (err instanceof RebeccaApiError && err.status === 404) {
+        deleteRemote = false;
+      } else {
+        throw err;
+      }
+    }
+
+    if (deleteRemote) {
+      try {
+        await this.panels.getService(config.panelId).deleteUser(config.configUsername);
+      } catch (err) {
+        if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
+      }
     }
 
     return db.transaction(async (tx) => {
       const [deleted] = await tx
         .delete(userConfigs)
         .where(eq(userConfigs.id, config.id))
-        .returning({ configUsername: userConfigs.configUsername });
+        .returning({
+          configUsername: userConfigs.configUsername,
+          telegramId: userConfigs.telegramId,
+        });
       if (!deleted) return false;
       await tx
         .delete(notificationDeliveries)
@@ -737,6 +824,46 @@ export class ConfigService {
     if (rows.length === 0) throw new Error('CONFIG_NOT_FOUND');
     if (!panelId && rows.length > 1) throw new Error('AMBIGUOUS_CONFIG_USERNAME');
     return rows[0]!;
+  }
+}
+
+function configLockKey(panelId: string, configUsername: string): bigint {
+  const digest = crypto
+    .createHash('sha256')
+    .update(`RebeccaSellBot:config_mutation:${panelId}:${configUsername}`)
+    .digest();
+  const unsigned = digest.readBigUInt64BE(0);
+  return BigInt.asIntN(64, unsigned);
+}
+
+async function withConfigLock<T>(
+  panelId: string,
+  configUsername: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  let client;
+  let lockKey: bigint | null = null;
+  try {
+    const pool = getPool();
+    if (pool && typeof pool.connect === 'function') {
+      client = await pool.connect();
+      lockKey = configLockKey(panelId, configUsername);
+      await client.query('SELECT pg_advisory_lock($1::bigint)', [lockKey.toString()]);
+    }
+  } catch {
+    client = null;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    if (client && lockKey !== null) {
+      try {
+        await client.query('SELECT pg_advisory_unlock($1::bigint)', [lockKey.toString()]);
+      } finally {
+        client.release();
+      }
+    }
   }
 }
 

@@ -191,6 +191,7 @@ export const purchaseIntents = pgTable(
     // compensated by a concurrent recovery worker.
     operationStartedAt: timestamp('operation_started_at'),
     leaseExpiresAt: timestamp('lease_expires_at'),
+    completedAt: timestamp('completed_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -297,6 +298,7 @@ export const userConfigs = pgTable(
     // User-approved ceiling snapshot. Package price changes require a fresh
     // Telegram confirmation instead of silently charging the new amount.
     autoRenewPrice: bigint('auto_renew_price', { mode: 'number' }),
+    remoteCreatedAt: text('remote_created_at'),
     lastSyncedAt: timestamp('last_synced_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

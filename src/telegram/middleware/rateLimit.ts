@@ -9,10 +9,11 @@ export const MAX_TRACKED_USERS = 10_000;
 
 const userCooldowns = new Map<number, number>();
 
-function purgeElapsedCooldowns(now: number, cooldownMs: number): void {
-  for (const [telegramId, lastMessageTimestamp] of userCooldowns) {
-    if (now - lastMessageTimestamp < cooldownMs) break;
-    userCooldowns.delete(telegramId);
+function purgeElapsedCooldowns(now: number): void {
+  for (const [telegramId, expiresAt] of userCooldowns) {
+    if (expiresAt <= now) {
+      userCooldowns.delete(telegramId);
+    }
   }
 }
 
@@ -46,13 +47,13 @@ export function rateLimitMiddleware({
     }
 
     const now = Date.now();
-    purgeElapsedCooldowns(now, messageCooldownMs);
-    const lastTime = userCooldowns.get(telegramId);
+    purgeElapsedCooldowns(now);
+    const expiresAt = userCooldowns.get(telegramId);
 
-    if (lastTime !== undefined && now - lastTime < messageCooldownMs) return;
+    if (expiresAt !== undefined && expiresAt > now) return;
 
     evictOldestUserIfFull();
-    userCooldowns.set(telegramId, now);
+    userCooldowns.set(telegramId, now + messageCooldownMs);
     return next();
   };
 }
