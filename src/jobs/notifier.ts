@@ -20,7 +20,7 @@ import { notificationDeliveries, userConfigs, users } from '../infra/schema.js';
 import { logger } from '../infra/logger.js';
 import { buildScreen } from '../telegram/designSystem.js';
 import { tForLocale } from '../telegram/locale.js';
-import { escapeTelegramMarkdown } from '../telegram/rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
 import { jobRunner } from './workerRuntime.js';
 
 export const NOTIFIER_CONDITION_TYPES = ['low_traffic', 'near_expiry'] as const;
@@ -267,7 +267,7 @@ export async function runNotifierSweep(
             primary: {
               emoji: '📱',
               label: tForLocale(translationService, locale, 'renewal_service_label'),
-              value: `\`${escapeTelegramMarkdown(cfg.configUsername)}\``,
+              value: `\`${sanitizeTelegramInlineCode(cfg.configUsername)}\``,
             },
             sections: [
               {

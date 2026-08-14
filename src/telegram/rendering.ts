@@ -12,6 +12,20 @@ export function escapeTelegramMarkdown(value: string | number): string {
   return String(value).replace(/([\\_*[\x60])/gu, '\\$1');
 }
 
+/**
+ * Sanitize values interpolated into Telegram's legacy Markdown inline code spans (`...`).
+ *
+ * In Telegram legacy Markdown, code spans treat characters like `_`, `*`, `\`, and `[` as
+ * raw literals, so escaping them with backslashes is harmful and shows visible `\`.
+ * However, backticks (`\``) would prematurely terminate the code span, so we strip them.
+ */
+export function sanitizeTelegramInlineCode(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/`/gu, '');
+}
+
+export const sanitizeInlineCode = sanitizeTelegramInlineCode;
+
 export function escapeTelegramMarkdownParams(
   params: Record<string, string | number> | undefined,
   trustedKeys: readonly string[] = []

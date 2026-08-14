@@ -25,7 +25,7 @@ import {
 } from '../../ui.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import { parseNonnegativeSafeInteger, parsePositiveSafeInteger, requireAdmin } from './shared.js';
-import { escapeTelegramMarkdown } from '../../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 function buildPaymentInfoCard(
   ctx: ConversationContext,
@@ -55,7 +55,7 @@ function buildPaymentInfoCard(
           {
             emoji: '💳',
             label: t(ctx, 'topup_card_number_label'),
-            value: `\`${escapeTelegramMarkdown(cardNumber)}\``,
+            value: `\`${sanitizeTelegramInlineCode(cardNumber)}\``,
           },
           {
             emoji: '👤',

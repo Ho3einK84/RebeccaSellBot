@@ -17,7 +17,7 @@ import {
   t,
   tForLocale,
 } from '../locale.js';
-import { escapeTelegramMarkdown } from '../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import {
   buildEmptyState,
   buildScreen,
@@ -107,7 +107,7 @@ function buildCustomCheckoutScreen(
                 {
                   emoji: '🆔',
                   label: t(ctx, 'checkout_service_label'),
-                  value: `\`${escapeTelegramMarkdown(input.username)}\``,
+                  value: `\`${sanitizeTelegramInlineCode(input.username)}\``,
                 },
               ],
             },
@@ -148,7 +148,7 @@ function buildCustomCheckoutScreen(
                 {
                   emoji: '🎟️',
                   label: t(ctx, 'shop_promo_section'),
-                  value: `\`${escapeTelegramMarkdown(input.promoCode)}\``,
+                  value: `\`${sanitizeTelegramInlineCode(input.promoCode)}\``,
                 },
               ],
             },
@@ -560,7 +560,7 @@ export async function renewConfigConversation(
       primary: {
         emoji: '📱',
         label: t(ctx, 'renewal_selection_service_label'),
-        value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+        value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
       },
     }),
     {
@@ -625,7 +625,7 @@ export async function renewConfigConversation(
     primary: {
       emoji: '📱',
       label: t(ctx, 'renewal_success_service_label'),
-      value: `\`${escapeTelegramMarkdown(res.configUsername)}\``,
+      value: `\`${sanitizeTelegramInlineCode(res.configUsername)}\``,
     },
     sections: [
       {
@@ -723,7 +723,7 @@ export async function autoRenewCustomConversation(
             {
               emoji: '🆔',
               label: t(ctx, 'checkout_service_label'),
-              value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+              value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
             },
           ],
         },
@@ -779,7 +779,7 @@ export async function autoRenewCustomConversation(
       primary: {
         emoji: '📱',
         label: t(ctx, 'renewal_selection_service_label'),
-        value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+        value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
       },
     }),
     { parse_mode: 'Markdown', reply_markup: backKeyboard }
@@ -830,7 +830,7 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
         primary: {
           emoji: '🎟️',
           label: t(ctx, 'checkout_promo_section'),
-          value: `\`${escapeTelegramMarkdown(res.code)}\``,
+          value: `\`${sanitizeTelegramInlineCode(res.code)}\``,
         },
         footer: text,
       }),
@@ -996,7 +996,7 @@ export async function transferConfigConversation(
         primary: {
           emoji: '📱',
           label: t(ctx, 'transfer_service_label'),
-          value: `\`${escapeTelegramMarkdown(result.configUsername)}\``,
+          value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
         },
         sections: [
           {
@@ -1038,7 +1038,7 @@ export async function transferConfigConversation(
               recipientLocale,
               'transfer_service_label'
             ),
-            value: `\`${escapeTelegramMarkdown(result.configUsername)}\``,
+            value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
           },
           sections: [
             {

@@ -8,7 +8,7 @@ import { purchaseFailureMessage } from '../purchaseFeedback.js';
 import { formatSubscriptionLink, resolveContextLocale, t } from '../locale.js';
 import { backKeyboard, buildEmptyState, buildScreen, rememberArtifactMessage } from '../ui.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
-import { escapeTelegramMarkdown } from '../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import { logger } from '../../infra/logger.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
 
@@ -69,7 +69,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
                     {
                       emoji: '🎟️',
                       label: t(ctx, 'shop_promo_section'),
-                      value: `\`${escapeTelegramMarkdown(checkout.promoCode)}\``,
+                      value: `\`${sanitizeTelegramInlineCode(checkout.promoCode)}\``,
                     },
                   ],
                 },

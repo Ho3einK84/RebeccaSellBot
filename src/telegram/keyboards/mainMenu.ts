@@ -20,7 +20,7 @@ import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderAdminHome } from './adminMenu.js';
 import { customVolumeEnabled } from '../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
-import { escapeTelegramMarkdown } from '../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 
 // Re-export so conversations can import from one place
 export type { MenuContext, MyConversation };
@@ -95,7 +95,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           primary: {
             emoji: '🎟️',
             label: t(ctx, 'shop_promo_section'),
-            value: `\`${escapeTelegramMarkdown(promoCode)}\``,
+            value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
           },
         }
       : {}),
@@ -191,7 +191,7 @@ function buildPurchaseCheckoutScreen(
                 {
                   emoji: '🎟️',
                   label: t(ctx, 'shop_promo_section'),
-                  value: `\`${escapeTelegramMarkdown(promoCode)}\``,
+                  value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
                 },
               ],
             },

@@ -22,7 +22,7 @@ import type { PricingService } from '../domain/services/PricingService.js';
 import type { SupportedLocale, TranslationService } from '../domain/services/TranslationService.js';
 import { buildScreen } from '../telegram/designSystem.js';
 import { tForLocale } from '../telegram/locale.js';
-import { escapeTelegramMarkdown } from '../telegram/rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
 import {
   PostgresNotificationDeliveryStore,
   assessNotificationConditions,
@@ -177,7 +177,7 @@ export async function runAutoRenewalSweep(
                 primary: {
                   emoji: '📱',
                   label: tForLocale(translationService, locale, 'auto_renew_service_label'),
-                  value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+                  value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
                 },
                 footer: `ℹ️ ${tForLocale(
                   translationService,
@@ -233,7 +233,7 @@ export async function runAutoRenewalSweep(
                     fields: [
                       {
                         label: tForLocale(translationService, locale, 'auto_renew_service_label'),
-                        value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+                        value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
                       },
                       {
                         label: tForLocale(translationService, locale, 'auto_renew_balance_label'),
@@ -302,7 +302,7 @@ export async function runAutoRenewalSweep(
             primary: {
               emoji: '📱',
               label: tForLocale(translationService, locale, 'auto_renew_service_label'),
-              value: `\`${escapeTelegramMarkdown(config.configUsername)}\``,
+              value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
             },
             sections: [
               {
