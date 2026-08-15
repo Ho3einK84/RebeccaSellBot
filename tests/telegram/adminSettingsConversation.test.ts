@@ -274,7 +274,6 @@ describe('admin package manager', () => {
       [
         { callback: staleDelete! },
         { callback: confirmDelete },
-        { callback: 'pkg-continue' },
         { callback: staleDelete! },
         { callback: 'pkg-back' },
       ],

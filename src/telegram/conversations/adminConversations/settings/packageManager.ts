@@ -261,21 +261,6 @@ export async function managePackages(
 
     packages = nextPackages;
     page = clampPackagePage(page, packages.length);
-    const action = await showPackageNotice(
-      conversation,
-      ctx,
-      buildScreen({
-        emoji: '✅',
-        title: t(ctx, 'admin_package_saved_title'),
-        primary: {
-          emoji: '📦',
-          label: t(ctx, 'admin_promo_total_label'),
-          value: localizedNumber(packages.length, ctx),
-        },
-        footer: t(ctx, 'admin_pkg_saved'),
-      })
-    );
-    if (action !== 'continue') return action;
   }
 }
 
@@ -333,9 +318,7 @@ export function buildPackageManagerKeyboard(
   return keyboard
     .text(t(ctx, 'admin_pkg_add'), 'pkg-add')
     .row()
-    .text(t(ctx, 'admin_settings_back_category'), 'pkg-back')
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+    .text(t(ctx, 'admin_settings_back_category'), 'pkg-back');
 }
 
 export function generatePackageId(name: string, packages: readonly PackageOption[]): string {
@@ -453,10 +436,7 @@ async function choosePackageTarget(
         .row();
     }
   }
-  keyboard
-    .text(t(ctx, 'admin_settings_back_category'), 'pkg-field-back')
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+  keyboard.text(t(ctx, 'admin_settings_back_category'), 'pkg-field-back');
   await promptInConversation(
     conversation,
     ctx,
@@ -579,9 +559,7 @@ async function showPackageNotice(
   const keyboard = new InlineKeyboard()
     .text(t(ctx, 'admin_pkg_continue_editing'), 'pkg-continue')
     .row()
-    .text(t(ctx, 'admin_settings_back_category'), 'pkg-back')
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+    .text(t(ctx, 'admin_settings_back_category'), 'pkg-back');
   await promptInConversation(conversation, ctx, text, {
     parse_mode: 'Markdown',
     reply_markup: keyboard,
@@ -597,10 +575,7 @@ async function showPackageNotice(
 }
 
 function packageFieldKeyboard(ctx: ConversationContext): InlineKeyboard {
-  return new InlineKeyboard()
-    .text(t(ctx, 'admin_pkg_cancel_edit'), 'pkg-field-back')
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+  return new InlineKeyboard().text(t(ctx, 'admin_pkg_cancel_edit'), 'pkg-field-back');
 }
 
 function currentPackages(ctx: ConversationContext): PackageOption[] {
