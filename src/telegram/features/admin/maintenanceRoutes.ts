@@ -4,7 +4,7 @@ import type { MenuContext } from '../../types.js';
 import { localizedDate, localizedNumber, t } from '../../locale.js';
 import { buildEmptyState, buildScreen, buildStatusBadge, renderUiScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
-import { escapeTelegramMarkdown } from '../../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 const ORPHAN_PAGE_SIZE = 6;
 const UUID_CAPTURE = '([0-9a-fA-F-]{36})';
@@ -369,7 +369,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
         primary: {
           emoji: '🧩',
           label: t(ctx, 'admin_orphan_service_label'),
-          value: escapeTelegramMarkdown(issue.configUsername),
+          value: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\``,
         },
         footer: t(ctx, 'admin_orphan_remove_consequence'),
       }),
@@ -459,7 +459,7 @@ function buildOrphanQueueScreen(ctx: MenuContext, result: OrphanIssuePage): stri
         title: t(ctx, 'admin_orphan_queue_section'),
         fields: result.issues.map((issue) => ({
           emoji: issue.kind === 'local_missing_remote' ? '📉' : '🔗',
-          label: escapeTelegramMarkdown(issue.configUsername),
+          label: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\``,
           value: `${t(ctx, issue.kind === 'local_missing_remote' ? 'admin_orphan_kind_local' : 'admin_orphan_kind_remote')} · ${localizedDate(issue.firstSeenAt, ctx)}`,
         })),
       },
@@ -551,7 +551,7 @@ async function renderOrphanIssueDetail(ctx: MenuContext, issue: OrphanIssue): Pr
           fields: [
             {
               label: t(ctx, 'admin_orphan_service_label'),
-              value: escapeTelegramMarkdown(issue.configUsername),
+              value: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\``,
             },
             {
               label: t(ctx, 'admin_orphan_owner_label'),

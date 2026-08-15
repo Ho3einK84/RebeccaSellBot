@@ -9,7 +9,7 @@ import {
   waitForAdminTextInput,
 } from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
-import { escapeTelegramMarkdown } from '../../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 export async function adminAddAdminConversation(
   conversation: MyConversation,
@@ -124,7 +124,7 @@ export async function adminAssignOrphanConversation(
             primary: {
               emoji: '🧩',
               label: t(ctx, 'admin_orphan_service_label'),
-              value: escapeTelegramMarkdown(result.configUsername),
+              value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
             },
             sections: [
               {

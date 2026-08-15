@@ -377,8 +377,11 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
       return;
     }
+    const isAdmin = typeof ctx.services.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id);
     const config = checkout.configId
-      ? await ctx.services.configService.getOwnedConfigById(ctx.from.id, checkout.configId)
+      ? (isAdmin
+          ? await ctx.services.configService.getConfigById(checkout.configId)
+          : await ctx.services.configService.getOwnedConfigById(ctx.from.id, checkout.configId))
       : undefined;
     if (!config || config.panelId !== checkout.panelId) {
       await recordCheckoutFailed(ctx.services.purchaseCheckoutService, checkout.id);
@@ -618,7 +621,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       return;
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-    await ctx.services!.configService.setAutoRenew(ctx.from.id, config.id, true, pkg.id, pkg.price);
+    await ctx.services!.configService.setAutoRenew(config.telegramId, config.id, true, pkg.id, pkg.price);
     await renderSubscriptionScreen(
       ctx,
       buildScreen({
@@ -645,7 +648,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         return;
       }
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-      await ctx.services!.configService.setAutoRenew(ctx.from.id, config.id, false);
+      await ctx.services!.configService.setAutoRenew(config.telegramId, config.id, false);
       await renderSubscriptionScreen(
         ctx,
         buildScreen({
@@ -789,7 +792,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-    const quote = await ctx.services!.refundService.quote(ctx.from.id, config.id);
+    const quote = await ctx.services!.refundService.quote(config.telegramId, config.id);
     const keyboard = new InlineKeyboard();
     if (quote.eligible) {
       keyboard
@@ -824,7 +827,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
       try {
         const result = await ctx.services!.refundService.executeDeleteWithRefund(
-          ctx.from.id,
+          config.telegramId,
           config.id
         );
         if (!result.eligible) {
@@ -912,7 +915,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
     ctx.session.transferConfigId = config.id;
-    ctx.session.transferConfigOwnerTelegramId = ctx.from.id;
+    ctx.session.transferConfigOwnerTelegramId = config.telegramId;
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('transferConfigConversation');
   });
@@ -957,7 +960,10 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
 
 async function ownedConfig(ctx: MenuContext, configId: string, answerIfMissing = true) {
   if (!ctx.services || !ctx.from) return undefined;
-  const config = await ctx.services.configService.getOwnedConfigById(ctx.from.id, configId);
+  const isAdmin = typeof ctx.services.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id);
+  const config = isAdmin
+    ? await ctx.services.configService.getConfigById(configId)
+    : await ctx.services.configService.getOwnedConfigById(ctx.from.id, configId);
   if (!config && answerIfMissing) {
     await ctx.answerCallbackQuery({ text: t(ctx, 'config_not_owned'), show_alert: true });
   }
@@ -967,15 +973,23 @@ async function ownedConfig(ctx: MenuContext, configId: string, answerIfMissing =
 async function buildSubscriptionCard(
   ctx: MenuContext,
   config: UserConfigRecord,
-  isDetailView = false
+  isDetailView = false,
+  backCallback?: string
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
   const snapshot = await buildSubscriptionSnapshot(ctx, config);
+  const isAdmin = typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id);
+  const resolvedBack =
+    backCallback ??
+    (isAdmin && config.telegramId !== ctx.from?.id
+      ? `admin:user:subscriptions:${config.telegramId}:1`
+      : 'subs:page:1');
   const keyboard = buildSubscriptionActionKeyboard(
     ctx,
     config.id,
     snapshot.status,
     config.autoRenewEnabled,
-    isDetailView
+    isDetailView,
+    resolvedBack
   );
 
   if (!isDetailView) {
@@ -1129,7 +1143,8 @@ export function buildSubscriptionActionKeyboard(
   configId: string,
   status: string,
   autoRenewEnabled = false,
-  isDetailView = false
+  isDetailView = false,
+  backCallback?: string
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
 
@@ -1175,7 +1190,7 @@ export function buildSubscriptionActionKeyboard(
   keyboard
     .text(t(ctx, 'config_delete_button'), callbackData('config', 'delete_prompt', configId))
     .row()
-    .text(t(ctx, 'menu_back'), 'subs:page:1');
+    .text(t(ctx, 'menu_back'), backCallback ?? 'subs:page:1');
 
   return keyboard;
 }

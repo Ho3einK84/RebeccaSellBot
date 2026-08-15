@@ -4,7 +4,7 @@ import type { MenuContext } from '../../types.js';
 import { backKeyboard, buildEmptyState, buildScreen, renderUiScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
-import { escapeTelegramMarkdown } from '../../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 import { calculateTraffic, isConfigActive } from '../../../domain/services/ConfigLifecycle.js';
 
@@ -249,8 +249,8 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     for (const config of pageConfigs) {
       keyboard
         .text(
-          `${t(ctx, 'subscription_transfer_button')} · ${config.configUsername}`,
-          callbackData('admin', 'config', 'transfer', config.id)
+          `⚙️ ${config.configUsername}`,
+          callbackData('config', 'view', config.id)
         )
         .row();
     }
@@ -303,7 +303,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
 
           return {
             emoji: isConfigActive(remote, config) ? '🟢' : '⚪️',
-            title: escapeTelegramMarkdown(config.configUsername),
+            title: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
             fields: [
               {
                 emoji: '⚡',
