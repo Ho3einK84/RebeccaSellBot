@@ -247,12 +247,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     );
     const keyboard = new InlineKeyboard();
     for (const config of pageConfigs) {
-      keyboard
-        .text(
-          `⚙️ ${config.configUsername}`,
-          callbackData('config', 'view', config.id)
-        )
-        .row();
+      keyboard.text(`⚙️ ${config.configUsername}`, callbackData('config', 'view', config.id)).row();
     }
     if (totalPages > 1) {
       if (page > 1) {

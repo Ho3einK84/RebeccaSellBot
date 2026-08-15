@@ -4,7 +4,7 @@
  */
 import cron from 'node-cron';
 import { InlineKeyboard, type Api } from 'grammy';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getDb } from '../infra/db.js';
 import { userConfigs, users } from '../infra/schema.js';
 import { logger } from '../infra/logger.js';
@@ -37,6 +37,9 @@ export type AutoRenewalCandidate = ConfigNotificationRecipient & {
 
 export interface AutoRenewalCandidateStore {
   listEnabledConfigs(): Promise<AutoRenewalCandidate[]>;
+  disableAutoRenew?(
+    candidate: Pick<AutoRenewalCandidate, 'configId' | 'panelId' | 'configUsername'>
+  ): Promise<void>;
 }
 
 export class PostgresAutoRenewalCandidateStore implements AutoRenewalCandidateStore {
@@ -60,6 +63,28 @@ export class PostgresAutoRenewalCandidateStore implements AutoRenewalCandidateSt
       ...candidate,
       locale: normalizeLocale(locale),
     }));
+  }
+
+  async disableAutoRenew(
+    candidate: Pick<AutoRenewalCandidate, 'configId' | 'panelId' | 'configUsername'>
+  ): Promise<void> {
+    const db = getDb();
+    if (candidate.configId) {
+      await db
+        .update(userConfigs)
+        .set({ autoRenewEnabled: false, updatedAt: new Date() })
+        .where(eq(userConfigs.id, candidate.configId));
+    } else {
+      await db
+        .update(userConfigs)
+        .set({ autoRenewEnabled: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(userConfigs.panelId, candidate.panelId),
+            eq(userConfigs.configUsername, candidate.configUsername)
+          )
+        );
+    }
   }
 }
 
@@ -193,6 +218,9 @@ export async function runAutoRenewalSweep(
                 ),
               }
             );
+            if (candidateStore.disableAutoRenew) {
+              await candidateStore.disableAutoRenew(config);
+            }
           } catch (err) {
             await deliveryStore.release(config, ['auto_renew_package_missing'], new Date());
             logger.warn(

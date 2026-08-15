@@ -377,11 +377,13 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
       return;
     }
-    const isAdmin = Boolean(ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id));
+    const isAdmin = Boolean(
+      ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
+    );
     const config = checkout.configId
-      ? (isAdmin
-          ? await ctx.services.configService.getConfigById(checkout.configId)
-          : await ctx.services.configService.getOwnedConfigById(ctx.from.id, checkout.configId))
+      ? isAdmin
+        ? await ctx.services.configService.getConfigById(checkout.configId)
+        : await ctx.services.configService.getOwnedConfigById(ctx.from.id, checkout.configId)
       : undefined;
     if (!config || config.panelId !== checkout.panelId) {
       await recordCheckoutFailed(ctx.services.purchaseCheckoutService, checkout.id);
@@ -621,7 +623,13 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       return;
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-    await ctx.services!.configService.setAutoRenew(config.telegramId, config.id, true, pkg.id, pkg.price);
+    await ctx.services!.configService.setAutoRenew(
+      config.telegramId,
+      config.id,
+      true,
+      pkg.id,
+      pkg.price
+    );
     await renderSubscriptionScreen(
       ctx,
       buildScreen({
@@ -960,7 +968,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
 
 async function ownedConfig(ctx: MenuContext, configId: string, answerIfMissing = true) {
   if (!ctx.services || !ctx.from) return undefined;
-  const isAdmin = Boolean(ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id));
+  const isAdmin = Boolean(
+    ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
+  );
   const config = isAdmin
     ? await ctx.services.configService.getConfigById(configId)
     : await ctx.services.configService.getOwnedConfigById(ctx.from.id, configId);
@@ -977,7 +987,9 @@ async function buildSubscriptionCard(
   backCallback?: string
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
   const snapshot = await buildSubscriptionSnapshot(ctx, config);
-  const isAdmin = Boolean(ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id));
+  const isAdmin = Boolean(
+    ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
+  );
   const resolvedBack =
     backCallback ??
     (isAdmin && ctx.from && config.telegramId !== ctx.from.id

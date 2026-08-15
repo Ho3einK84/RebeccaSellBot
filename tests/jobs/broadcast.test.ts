@@ -53,7 +53,8 @@ describe('durable broadcast worker', () => {
 
     await processNextBroadcast(
       service as unknown as BroadcastService,
-      { sendMessage } as unknown as Pick<Api, 'sendMessage'>
+      { sendMessage } as unknown as Pick<Api, 'sendMessage'>,
+      { interBatchDelayMs: 0 }
     );
 
     expect(service.requeueStaleClaims).toHaveBeenCalledOnce();

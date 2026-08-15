@@ -55,7 +55,10 @@ function remoteUser(overrides: Record<string, unknown> = {}) {
 }
 
 function candidateStore(candidates = [CANDIDATE]): AutoRenewalCandidateStore {
-  return { listEnabledConfigs: vi.fn().mockResolvedValue(candidates) };
+  return {
+    listEnabledConfigs: vi.fn().mockResolvedValue(candidates),
+    disableAutoRenew: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 function deliveryStore(reserved = true): NotificationDeliveryStore {
@@ -187,6 +190,7 @@ describe('runAutoRenewalSweep', () => {
       expect.stringContaining('auto_renew_package_unavailable_title'),
       expect.objectContaining({ parse_mode: 'Markdown', reply_markup: expect.anything() })
     );
+    expect(ctx.candidateStore.disableAutoRenew).toHaveBeenCalledWith(missingPkgCandidate);
     expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();
   });
 

@@ -4,9 +4,16 @@ import { logger } from '../infra/logger.js';
 import { forEachConcurrent, jobRunner } from './workerRuntime.js';
 
 const BROADCAST_POLL_INTERVAL_MS = 5_000;
-const BROADCAST_BATCH_SIZE = 20;
-const BROADCAST_CONCURRENCY = 5;
+const BROADCAST_BATCH_SIZE = 15;
+const BROADCAST_CONCURRENCY = 3;
+const BROADCAST_INTER_BATCH_DELAY_MS = 500;
 let timer: NodeJS.Timeout | null = null;
+
+export interface ProcessBroadcastOptions {
+  batchSize?: number;
+  concurrency?: number;
+  interBatchDelayMs?: number;
+}
 
 export function startBroadcastWorker(broadcastService: BroadcastService, telegramApi: Api): void {
   stopBroadcastWorker();
@@ -32,8 +39,13 @@ export function stopBroadcastWorker(): void {
 
 export async function processNextBroadcast(
   broadcastService: BroadcastService,
-  telegramApi: Pick<Api, 'sendMessage'>
+  telegramApi: Pick<Api, 'sendMessage'>,
+  options: ProcessBroadcastOptions = {}
 ): Promise<void> {
+  const batchSize = options.batchSize ?? BROADCAST_BATCH_SIZE;
+  const concurrency = options.concurrency ?? BROADCAST_CONCURRENCY;
+  const interBatchDelayMs = options.interBatchDelayMs ?? BROADCAST_INTER_BATCH_DELAY_MS;
+
   await broadcastService.requeueStaleClaims();
   const initial = await broadcastService.nextRunnableJob();
   if (!initial) return;
@@ -57,13 +69,13 @@ export async function processNextBroadcast(
       return;
     }
 
-    const recipients = await broadcastService.claimBatch(current.id, BROADCAST_BATCH_SIZE);
+    const recipients = await broadcastService.claimBatch(current.id, batchSize);
     if (recipients.length === 0) {
       await broadcastService.finalizeCompleted(current.id);
       return;
     }
 
-    await forEachConcurrent(recipients, BROADCAST_CONCURRENCY, async (telegramId) => {
+    await forEachConcurrent(recipients, concurrency, async (telegramId) => {
       try {
         await telegramApi.sendMessage(telegramId, current.message);
         await broadcastService.markRecipientSent(current.id, telegramId);
@@ -72,5 +84,9 @@ export async function processNextBroadcast(
         logger.warn({ err, telegramId, broadcastId: current.id }, 'Broadcast recipient failed');
       }
     });
+
+    if (interBatchDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, interBatchDelayMs));
+    }
   }
 }
