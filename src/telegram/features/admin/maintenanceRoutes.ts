@@ -4,7 +4,7 @@ import type { MenuContext } from '../../types.js';
 import { localizedDate, localizedNumber, t } from '../../locale.js';
 import { buildEmptyState, buildScreen, buildStatusBadge, renderUiScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
-import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
+import { sanitizeTelegramInlineCode } from '../../rendering.js';
 
 const ORPHAN_PAGE_SIZE = 6;
 const UUID_CAPTURE = '([0-9a-fA-F-]{36})';

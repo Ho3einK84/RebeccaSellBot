@@ -9,7 +9,7 @@ import {
   waitForAdminTextInput,
 } from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
-import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
+import { sanitizeTelegramInlineCode } from '../../rendering.js';
 
 export async function adminAddAdminConversation(
   conversation: MyConversation,

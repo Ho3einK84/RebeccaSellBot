@@ -377,7 +377,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
       return;
     }
-    const isAdmin = typeof ctx.services.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id);
+    const isAdmin = Boolean(ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id));
     const config = checkout.configId
       ? (isAdmin
           ? await ctx.services.configService.getConfigById(checkout.configId)
@@ -960,7 +960,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
 
 async function ownedConfig(ctx: MenuContext, configId: string, answerIfMissing = true) {
   if (!ctx.services || !ctx.from) return undefined;
-  const isAdmin = typeof ctx.services.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id);
+  const isAdmin = Boolean(ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id));
   const config = isAdmin
     ? await ctx.services.configService.getConfigById(configId)
     : await ctx.services.configService.getOwnedConfigById(ctx.from.id, configId);
@@ -977,10 +977,10 @@ async function buildSubscriptionCard(
   backCallback?: string
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
   const snapshot = await buildSubscriptionSnapshot(ctx, config);
-  const isAdmin = typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id);
+  const isAdmin = Boolean(ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id));
   const resolvedBack =
     backCallback ??
-    (isAdmin && config.telegramId !== ctx.from?.id
+    (isAdmin && ctx.from && config.telegramId !== ctx.from.id
       ? `admin:user:subscriptions:${config.telegramId}:1`
       : 'subs:page:1');
   const keyboard = buildSubscriptionActionKeyboard(
