@@ -1,0 +1,45 @@
+# Git / OS
+.git
+.gitignore
+.DS_Store
+
+# Node / build artifacts
+node_modules
+dist
+build
+coverage
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Credentials / private keys
+.git-credentials
+.netrc
+*.pem
+*.key
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*.p12
+*.pfx
+
+# Logs
+*.log
+logs
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Project local
+pgdata
+*backup_*.sql
+backups
+*.dump
+*.backup
+Rebecca_Source_Reference/

@@ -1,0 +1,73 @@
+{
+  "name": "rsbot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RebeccaSellBot - Telegram VPN sales bot for Rebecca Panel (REST API only)",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/Ho3einK84/RebeccaSellBot#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ho3einK84/RebeccaSellBot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Ho3einK84/RebeccaSellBot/issues"
+  },
+  "keywords": [
+    "telegram-bot",
+    "rebecca-panel",
+    "vpn-sales",
+    "grammy",
+    "typescript",
+    "drizzle-orm",
+    "postgresql"
+  ],
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "packageManager": "npm@11.16.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "db:migrate": "node dist/infra/migrate.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "architecture:check": "node scripts/check-architecture.mjs",
+    "verify": "npm run architecture:check && npm run typecheck && npm run lint && npm run format:check && npm test && npm run build",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@grammyjs/conversations": "2.1.1",
+    "@grammyjs/menu": "1.4.0",
+    "@grammyjs/transformer-throttler": "1.2.1",
+    "dotenv": "17.4.2",
+    "drizzle-orm": "0.45.2",
+    "grammy": "1.45.1",
+    "node-cron": "4.6.0",
+    "pg": "8.23.0",
+    "pino": "10.3.1",
+    "qrcode": "1.5.4",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.2.0",
+    "@types/node-cron": "3.0.11",
+    "@types/pg": "8.21.0",
+    "@types/qrcode": "1.5.6",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "10.8.1",
+    "pino-pretty": "13.1.3",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.10"
+  }
+}

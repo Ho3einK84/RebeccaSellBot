@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ${INSTANCE_NAME:-rsbot}_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-rsbot_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-rsbot_pass}
+      POSTGRES_DB: ${DB_NAME:-rsbot_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-rsbot_user} -d ${DB_NAME:-rsbot_db}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - database
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${INSTANCE_NAME:-rsbot}_bot
+    restart: unless-stopped
+    # Allow the process to stop polling and drain active financial/work queues
+    # before Docker sends SIGKILL.
+    stop_grace_period: 45s
+    environment:
+      NODE_ENV: production
+      BOT_TOKEN: ${BOT_TOKEN}
+      ADMIN_IDS: ${ADMIN_IDS}
+      DATABASE_URL: postgres://${DB_USER:-rsbot_user}:${DB_PASSWORD:-rsbot_pass}@db:5432/${DB_NAME:-rsbot_db}
+      PANEL_CREDENTIALS_KEY: ${PANEL_CREDENTIALS_KEY-}
+      REBECCA_API_URL: ${REBECCA_API_URL-}
+      REBECCA_API_KEY: ${REBECCA_API_KEY-}
+      REBECCA_ADMIN_USERNAME: ${REBECCA_ADMIN_USERNAME:-admin}
+      REBECCA_ADMIN_PASSWORD: ${REBECCA_ADMIN_PASSWORD-}
+      REBECCA_SERVICE_ID: ${REBECCA_SERVICE_ID:-1}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-fa}
+      SUPPORT_URL: ${SUPPORT_URL-}
+      HEALTH_CHECK_PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      database:
+        gw_priority: 0
+      # Explicitly select the internet-capable network as the default route.
+      # Without this, Docker may choose the lexicographically first network
+      # (the internal database network), which blocks Telegram/Rebecca traffic.
+      outbound:
+        gw_priority: 1
+
+volumes:
+  pgdata:
+    name: ${INSTANCE_NAME:-rsbot}_pgdata
+
+networks:
+  # PostgreSQL is attached only to this private network. The bot joins it for
+  # database access but uses the separate outbound network for Telegram long
+  # polling and the Rebecca HTTPS API.
+  database:
+    name: ${INSTANCE_NAME:-rsbot}_database
+    internal: true
+  outbound:
+    name: ${INSTANCE_NAME:-rsbot}_outbound

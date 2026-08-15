@@ -1,0 +1,2686 @@
+{
+  "id": "a1404bc4-8aee-4462-8f3d-7bd28ec33bfb",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.audit_logs": {
+      "name": "audit_logs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "actor_telegram_id": {
+          "name": "actor_telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_telegram_id": {
+          "name": "target_telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "audit_logs_entity_idx": {
+          "name": "audit_logs_entity_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_logs_target_idx": {
+          "name": "audit_logs_target_idx",
+          "columns": [
+            {
+              "expression": "target_telegram_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bot_admins": {
+      "name": "bot_admins",
+      "schema": "",
+      "columns": {
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "added_by": {
+          "name": "added_by",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "bot_admins_telegram_id_safe": {
+          "name": "bot_admins_telegram_id_safe",
+          "value": "\"bot_admins\".\"telegram_id\" > 0 AND \"bot_admins\".\"telegram_id\" <= 9007199254740991"
+        },
+        "bot_admins_added_by_safe": {
+          "name": "bot_admins_added_by_safe",
+          "value": "\"bot_admins\".\"added_by\" IS NULL OR (\"bot_admins\".\"added_by\" > 0 AND \"bot_admins\".\"added_by\" <= 9007199254740991)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.broadcast_jobs": {
+      "name": "broadcast_jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "actor_telegram_id": {
+          "name": "actor_telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "audience": {
+          "name": "audience",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "recipient_count": {
+          "name": "recipient_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "sent_count": {
+          "name": "sent_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failed_count": {
+          "name": "failed_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "broadcast_jobs_runnable_idx": {
+          "name": "broadcast_jobs_runnable_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"broadcast_jobs\".\"status\" IN ('queued', 'running', 'cancel_requested')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "broadcast_jobs_actor_safe": {
+          "name": "broadcast_jobs_actor_safe",
+          "value": "\"broadcast_jobs\".\"actor_telegram_id\" > 0 AND \"broadcast_jobs\".\"actor_telegram_id\" <= 9007199254740991"
+        },
+        "broadcast_jobs_audience_supported": {
+          "name": "broadcast_jobs_audience_supported",
+          "value": "\"broadcast_jobs\".\"audience\" IN ('all', 'active_subscription', 'no_subscription', 'no_purchase_30d', 'no_active_subscription')"
+        },
+        "broadcast_jobs_status_supported": {
+          "name": "broadcast_jobs_status_supported",
+          "value": "\"broadcast_jobs\".\"status\" IN ('queued', 'running', 'cancel_requested', 'cancelled', 'completed')"
+        },
+        "broadcast_jobs_counts_safe": {
+          "name": "broadcast_jobs_counts_safe",
+          "value": "\"broadcast_jobs\".\"recipient_count\" >= 0 AND \"broadcast_jobs\".\"sent_count\" >= 0 AND \"broadcast_jobs\".\"failed_count\" >= 0 AND \"broadcast_jobs\".\"sent_count\" + \"broadcast_jobs\".\"failed_count\" <= \"broadcast_jobs\".\"recipient_count\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.broadcast_recipients": {
+      "name": "broadcast_recipients",
+      "schema": "",
+      "columns": {
+        "job_id": {
+          "name": "job_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "broadcast_recipients_pending_idx": {
+          "name": "broadcast_recipients_pending_idx",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "telegram_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"broadcast_recipients\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "broadcast_recipients_stale_idx": {
+          "name": "broadcast_recipients_stale_idx",
+          "columns": [
+            {
+              "expression": "claimed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"broadcast_recipients\".\"status\" = 'sending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "broadcast_recipients_job_id_broadcast_jobs_id_fk": {
+          "name": "broadcast_recipients_job_id_broadcast_jobs_id_fk",
+          "tableFrom": "broadcast_recipients",
+          "tableTo": "broadcast_jobs",
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "broadcast_recipients_telegram_id_users_telegram_id_fk": {
+          "name": "broadcast_recipients_telegram_id_users_telegram_id_fk",
+          "tableFrom": "broadcast_recipients",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "broadcast_recipients_job_id_telegram_id_pk": {
+          "name": "broadcast_recipients_job_id_telegram_id_pk",
+          "columns": ["job_id", "telegram_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "broadcast_recipients_status_supported": {
+          "name": "broadcast_recipients_status_supported",
+          "value": "\"broadcast_recipients\".\"status\" IN ('pending', 'sending', 'sent', 'failed', 'cancelled')"
+        },
+        "broadcast_recipients_attempts_safe": {
+          "name": "broadcast_recipients_attempts_safe",
+          "value": "\"broadcast_recipients\".\"attempts\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.code_redemptions": {
+      "name": "code_redemptions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purchase_intent_id": {
+          "name": "purchase_intent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'completed'"
+        },
+        "redeemed_at": {
+          "name": "redeemed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "code_redemptions_purchase_intent_unique": {
+          "name": "code_redemptions_purchase_intent_unique",
+          "columns": [
+            {
+              "expression": "purchase_intent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"code_redemptions\".\"purchase_intent_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "code_redemptions_user_code_idx": {
+          "name": "code_redemptions_user_code_idx",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "telegram_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "code_redemptions_code_promo_codes_code_fk": {
+          "name": "code_redemptions_code_promo_codes_code_fk",
+          "tableFrom": "code_redemptions",
+          "tableTo": "promo_codes",
+          "columnsFrom": ["code"],
+          "columnsTo": ["code"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "code_redemptions_telegram_id_users_telegram_id_fk": {
+          "name": "code_redemptions_telegram_id_users_telegram_id_fk",
+          "tableFrom": "code_redemptions",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "code_redemptions_purchase_intent_id_purchase_intents_id_fk": {
+          "name": "code_redemptions_purchase_intent_id_purchase_intents_id_fk",
+          "tableFrom": "code_redemptions",
+          "tableTo": "purchase_intents",
+          "columnsFrom": ["purchase_intent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "code_redemptions_status_supported": {
+          "name": "code_redemptions_status_supported",
+          "value": "\"code_redemptions\".\"status\" IN ('pending', 'completed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.config_counters": {
+      "name": "config_counters",
+      "schema": "",
+      "columns": {
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "current_count": {
+          "name": "current_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "config_counters_nonnegative": {
+          "name": "config_counters_nonnegative",
+          "value": "\"config_counters\".\"current_count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.config_reconciliation_issues": {
+      "name": "config_reconciliation_issues",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "panel_id": {
+          "name": "panel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'legacy'"
+        },
+        "config_username": {
+          "name": "config_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "local_config_id": {
+          "name": "local_config_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "local_owner_telegram_id": {
+          "name": "local_owner_telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "remote_created_at": {
+          "name": "remote_created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "config_reconciliation_issue_unique": {
+          "name": "config_reconciliation_issue_unique",
+          "columns": [
+            {
+              "expression": "panel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "config_username",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "config_reconciliation_open_idx": {
+          "name": "config_reconciliation_open_idx",
+          "columns": [
+            {
+              "expression": "last_seen_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"config_reconciliation_issues\".\"status\" = 'open'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "config_reconciliation_issues_panel_id_rebecca_panels_id_fk": {
+          "name": "config_reconciliation_issues_panel_id_rebecca_panels_id_fk",
+          "tableFrom": "config_reconciliation_issues",
+          "tableTo": "rebecca_panels",
+          "columnsFrom": ["panel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "config_reconciliation_issue_kind_supported": {
+          "name": "config_reconciliation_issue_kind_supported",
+          "value": "\"config_reconciliation_issues\".\"kind\" IN ('local_missing_remote', 'remote_unbound')"
+        },
+        "config_reconciliation_issue_status_supported": {
+          "name": "config_reconciliation_issue_status_supported",
+          "value": "\"config_reconciliation_issues\".\"status\" IN ('open', 'ignored', 'resolved')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.grammy_sessions": {
+      "name": "grammy_sessions",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.notification_deliveries": {
+      "name": "notification_deliveries",
+      "schema": "",
+      "columns": {
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "panel_id": {
+          "name": "panel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'legacy'"
+        },
+        "config_username": {
+          "name": "config_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notification_type": {
+          "name": "notification_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "condition_active": {
+          "name": "condition_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "last_sent_at": {
+          "name": "last_sent_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "notification_deliveries_telegram_id_users_telegram_id_fk": {
+          "name": "notification_deliveries_telegram_id_users_telegram_id_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "notification_deliveries_panel_id_rebecca_panels_id_fk": {
+          "name": "notification_deliveries_panel_id_rebecca_panels_id_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "rebecca_panels",
+          "columnsFrom": ["panel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "notification_deliveries_telegram_id_panel_id_config_username_notification_type_pk": {
+          "name": "notification_deliveries_telegram_id_panel_id_config_username_notification_type_pk",
+          "columns": ["telegram_id", "panel_id", "config_username", "notification_type"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "notification_deliveries_type_supported": {
+          "name": "notification_deliveries_type_supported",
+          "value": "\"notification_deliveries\".\"notification_type\" IN ('low_traffic', 'near_expiry', 'auto_renew_low_balance', 'auto_renew_package_missing')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.promo_codes": {
+      "name": "promo_codes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_uses": {
+          "name": "max_uses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "max_uses_per_user": {
+          "name": "max_uses_per_user",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "current_uses": {
+          "name": "current_uses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "min_purchase_amount": {
+          "name": "min_purchase_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "promo_codes_id_unique": {
+          "name": "promo_codes_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "promo_codes_type_supported": {
+          "name": "promo_codes_type_supported",
+          "value": "\"promo_codes\".\"type\" IN ('discount_percent', 'discount_fixed', 'gift_credit', 'gift_gb')"
+        },
+        "promo_codes_value_positive": {
+          "name": "promo_codes_value_positive",
+          "value": "\"promo_codes\".\"value\" > 0"
+        },
+        "promo_codes_percent_range": {
+          "name": "promo_codes_percent_range",
+          "value": "\"promo_codes\".\"type\" <> 'discount_percent' OR \"promo_codes\".\"value\" BETWEEN 1 AND 100"
+        },
+        "promo_codes_max_uses_positive": {
+          "name": "promo_codes_max_uses_positive",
+          "value": "\"promo_codes\".\"max_uses\" > 0"
+        },
+        "promo_codes_max_uses_per_user_positive": {
+          "name": "promo_codes_max_uses_per_user_positive",
+          "value": "\"promo_codes\".\"max_uses_per_user\" > 0"
+        },
+        "promo_codes_current_uses_valid": {
+          "name": "promo_codes_current_uses_valid",
+          "value": "\"promo_codes\".\"current_uses\" >= 0 AND \"promo_codes\".\"current_uses\" <= \"promo_codes\".\"max_uses\""
+        },
+        "promo_codes_min_purchase_safe": {
+          "name": "promo_codes_min_purchase_safe",
+          "value": "\"promo_codes\".\"min_purchase_amount\" BETWEEN 0 AND 9007199254740991"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.purchase_checkouts": {
+      "name": "purchase_checkouts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "config_id": {
+          "name": "config_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "package_id": {
+          "name": "package_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "package_name": {
+          "name": "package_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "panel_id": {
+          "name": "panel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service_id": {
+          "name": "service_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quoted_amount": {
+          "name": "quoted_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gb_amount": {
+          "name": "gb_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_days": {
+          "name": "duration_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "promo_code": {
+          "name": "promo_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "purchase_checkouts_expiry_idx": {
+          "name": "purchase_checkouts_expiry_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"purchase_checkouts\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "purchase_checkouts_telegram_id_users_telegram_id_fk": {
+          "name": "purchase_checkouts_telegram_id_users_telegram_id_fk",
+          "tableFrom": "purchase_checkouts",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_checkouts_panel_id_rebecca_panels_id_fk": {
+          "name": "purchase_checkouts_panel_id_rebecca_panels_id_fk",
+          "tableFrom": "purchase_checkouts",
+          "tableTo": "rebecca_panels",
+          "columnsFrom": ["panel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_checkouts_panel_service_fk": {
+          "name": "purchase_checkouts_panel_service_fk",
+          "tableFrom": "purchase_checkouts",
+          "tableTo": "rebecca_panel_services",
+          "columnsFrom": ["panel_id", "service_id"],
+          "columnsTo": ["panel_id", "service_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "purchase_checkouts_kind_supported": {
+          "name": "purchase_checkouts_kind_supported",
+          "value": "\"purchase_checkouts\".\"kind\" IN ('new_config', 'renew_config')"
+        },
+        "purchase_checkouts_status_supported": {
+          "name": "purchase_checkouts_status_supported",
+          "value": "\"purchase_checkouts\".\"status\" IN ('pending', 'processing', 'completed', 'failed', 'expired')"
+        },
+        "purchase_checkouts_amount_safe": {
+          "name": "purchase_checkouts_amount_safe",
+          "value": "\"purchase_checkouts\".\"amount\" >= 0 AND \"purchase_checkouts\".\"amount\" <= 9007199254740991"
+        },
+        "purchase_checkouts_quoted_amount_safe": {
+          "name": "purchase_checkouts_quoted_amount_safe",
+          "value": "\"purchase_checkouts\".\"quoted_amount\" >= 0 AND \"purchase_checkouts\".\"quoted_amount\" <= \"purchase_checkouts\".\"amount\""
+        },
+        "purchase_checkouts_gb_positive": {
+          "name": "purchase_checkouts_gb_positive",
+          "value": "\"purchase_checkouts\".\"gb_amount\" > 0"
+        },
+        "purchase_checkouts_days_positive": {
+          "name": "purchase_checkouts_days_positive",
+          "value": "\"purchase_checkouts\".\"duration_days\" > 0"
+        },
+        "purchase_checkouts_service_positive": {
+          "name": "purchase_checkouts_service_positive",
+          "value": "\"purchase_checkouts\".\"service_id\" > 0 AND \"purchase_checkouts\".\"service_id\" <= 2147483647"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.purchase_intents": {
+      "name": "purchase_intents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "panel_id": {
+          "name": "panel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'legacy'"
+        },
+        "service_id": {
+          "name": "service_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "checkout_id": {
+          "name": "checkout_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "config_username": {
+          "name": "config_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gb_amount": {
+          "name": "gb_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_days": {
+          "name": "duration_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "previous_data_limit": {
+          "name": "previous_data_limit",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "previous_expire": {
+          "name": "previous_expire",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "previous_status": {
+          "name": "previous_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_data_limit": {
+          "name": "expected_data_limit",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_expire": {
+          "name": "expected_expire",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_status": {
+          "name": "expected_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bonuses_processed_at": {
+          "name": "bonuses_processed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operation_started_at": {
+          "name": "operation_started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "purchase_intents_one_pending_per_user": {
+          "name": "purchase_intents_one_pending_per_user",
+          "columns": [
+            {
+              "expression": "telegram_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"purchase_intents\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "purchase_intents_nonterminal_updated_at_idx": {
+          "name": "purchase_intents_nonterminal_updated_at_idx",
+          "columns": [
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"purchase_intents\".\"status\" IN ('pending', 'reconciliation_required')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "purchase_intents_nonterminal_user_idx": {
+          "name": "purchase_intents_nonterminal_user_idx",
+          "columns": [
+            {
+              "expression": "telegram_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"purchase_intents\".\"status\" IN ('pending', 'reconciliation_required')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "purchase_intents_bonus_retry_idx": {
+          "name": "purchase_intents_bonus_retry_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"purchase_intents\".\"status\" = 'completed' AND \"purchase_intents\".\"bonuses_processed_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "purchase_intents_checkout_unique": {
+          "name": "purchase_intents_checkout_unique",
+          "columns": [
+            {
+              "expression": "checkout_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"purchase_intents\".\"checkout_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "purchase_intents_telegram_id_users_telegram_id_fk": {
+          "name": "purchase_intents_telegram_id_users_telegram_id_fk",
+          "tableFrom": "purchase_intents",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_intents_panel_id_rebecca_panels_id_fk": {
+          "name": "purchase_intents_panel_id_rebecca_panels_id_fk",
+          "tableFrom": "purchase_intents",
+          "tableTo": "rebecca_panels",
+          "columnsFrom": ["panel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_intents_panel_service_fk": {
+          "name": "purchase_intents_panel_service_fk",
+          "tableFrom": "purchase_intents",
+          "tableTo": "rebecca_panel_services",
+          "columnsFrom": ["panel_id", "service_id"],
+          "columnsTo": ["panel_id", "service_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "purchase_intents_amount_positive_safe_integer": {
+          "name": "purchase_intents_amount_positive_safe_integer",
+          "value": "\"purchase_intents\".\"amount\" >= 0 AND \"purchase_intents\".\"amount\" <= 9007199254740991"
+        },
+        "purchase_intents_type_supported": {
+          "name": "purchase_intents_type_supported",
+          "value": "\"purchase_intents\".\"type\" IN ('new_config', 'renew_config')"
+        },
+        "purchase_intents_status_supported": {
+          "name": "purchase_intents_status_supported",
+          "value": "\"purchase_intents\".\"status\" IN ('pending', 'reconciliation_required', 'completed', 'failed')"
+        },
+        "purchase_intents_gb_amount_positive": {
+          "name": "purchase_intents_gb_amount_positive",
+          "value": "\"purchase_intents\".\"gb_amount\" IS NULL OR \"purchase_intents\".\"gb_amount\" > 0"
+        },
+        "purchase_intents_duration_days_positive": {
+          "name": "purchase_intents_duration_days_positive",
+          "value": "\"purchase_intents\".\"duration_days\" IS NULL OR \"purchase_intents\".\"duration_days\" > 0"
+        },
+        "purchase_intents_service_id_positive": {
+          "name": "purchase_intents_service_id_positive",
+          "value": "\"purchase_intents\".\"service_id\" > 0 AND \"purchase_intents\".\"service_id\" <= 2147483647"
+        },
+        "purchase_intents_previous_data_limit_safe": {
+          "name": "purchase_intents_previous_data_limit_safe",
+          "value": "\"purchase_intents\".\"previous_data_limit\" IS NULL OR \"purchase_intents\".\"previous_data_limit\" BETWEEN 0 AND 9007199254740991"
+        },
+        "purchase_intents_expected_data_limit_safe": {
+          "name": "purchase_intents_expected_data_limit_safe",
+          "value": "\"purchase_intents\".\"expected_data_limit\" IS NULL OR \"purchase_intents\".\"expected_data_limit\" BETWEEN 0 AND 9007199254740991"
+        },
+        "purchase_intents_previous_expire_safe": {
+          "name": "purchase_intents_previous_expire_safe",
+          "value": "\"purchase_intents\".\"previous_expire\" IS NULL OR \"purchase_intents\".\"previous_expire\" BETWEEN 0 AND 9007199254740991"
+        },
+        "purchase_intents_expected_expire_safe": {
+          "name": "purchase_intents_expected_expire_safe",
+          "value": "\"purchase_intents\".\"expected_expire\" IS NULL OR \"purchase_intents\".\"expected_expire\" BETWEEN 0 AND 9007199254740991"
+        },
+        "purchase_intents_previous_status_supported": {
+          "name": "purchase_intents_previous_status_supported",
+          "value": "\"purchase_intents\".\"previous_status\" IS NULL OR \"purchase_intents\".\"previous_status\" IN ('active', 'disabled', 'on_hold')"
+        },
+        "purchase_intents_expected_status_supported": {
+          "name": "purchase_intents_expected_status_supported",
+          "value": "\"purchase_intents\".\"expected_status\" IS NULL OR \"purchase_intents\".\"expected_status\" IN ('active', 'disabled', 'on_hold')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.rebecca_panel_services": {
+      "name": "rebecca_panel_services",
+      "schema": "",
+      "columns": {
+        "panel_id": {
+          "name": "panel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "service_id": {
+          "name": "service_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "rebecca_panel_services_one_default": {
+          "name": "rebecca_panel_services_one_default",
+          "columns": [
+            {
+              "expression": "panel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"rebecca_panel_services\".\"is_default\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "rebecca_panel_services_panel_id_rebecca_panels_id_fk": {
+          "name": "rebecca_panel_services_panel_id_rebecca_panels_id_fk",
+          "tableFrom": "rebecca_panel_services",
+          "tableTo": "rebecca_panels",
+          "columnsFrom": ["panel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "rebecca_panel_services_panel_id_service_id_pk": {
+          "name": "rebecca_panel_services_panel_id_service_id_pk",
+          "columns": ["panel_id", "service_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "rebecca_panel_services_id_positive": {
+          "name": "rebecca_panel_services_id_positive",
+          "value": "\"rebecca_panel_services\".\"service_id\" > 0 AND \"rebecca_panel_services\".\"service_id\" <= 2147483647"
+        },
+        "rebecca_panel_services_name_present": {
+          "name": "rebecca_panel_services_name_present",
+          "value": "length(btrim(\"rebecca_panel_services\".\"name\")) BETWEEN 1 AND 80"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.rebecca_panels": {
+      "name": "rebecca_panels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_url": {
+          "name": "base_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "api_key_encrypted": {
+          "name": "api_key_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_username": {
+          "name": "admin_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_password_encrypted": {
+          "name": "admin_password_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "rebecca_panels_one_default": {
+          "name": "rebecca_panels_one_default",
+          "columns": [
+            {
+              "expression": "is_default",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"rebecca_panels\".\"is_default\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "rebecca_panels_name_present": {
+          "name": "rebecca_panels_name_present",
+          "value": "length(btrim(\"rebecca_panels\".\"name\")) BETWEEN 1 AND 80"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.refund_intents": {
+      "name": "refund_intents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "purchase_intent_id": {
+          "name": "purchase_intent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "panel_id": {
+          "name": "panel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'legacy'"
+        },
+        "config_username": {
+          "name": "config_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gross_amount": {
+          "name": "gross_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cashback_withheld": {
+          "name": "cashback_withheld",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "refund_amount": {
+          "name": "refund_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operation_started_at": {
+          "name": "operation_started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "refund_intents_purchase_unique": {
+          "name": "refund_intents_purchase_unique",
+          "columns": [
+            {
+              "expression": "purchase_intent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "refund_intents_one_nonterminal_per_config": {
+          "name": "refund_intents_one_nonterminal_per_config",
+          "columns": [
+            {
+              "expression": "panel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "config_username",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"refund_intents\".\"status\" IN ('pending', 'reconciliation_required')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "refund_intents_reconciliation_updated_at_idx": {
+          "name": "refund_intents_reconciliation_updated_at_idx",
+          "columns": [
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"refund_intents\".\"status\" IN ('pending', 'reconciliation_required')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "refund_intents_purchase_intent_id_purchase_intents_id_fk": {
+          "name": "refund_intents_purchase_intent_id_purchase_intents_id_fk",
+          "tableFrom": "refund_intents",
+          "tableTo": "purchase_intents",
+          "columnsFrom": ["purchase_intent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "refund_intents_telegram_id_users_telegram_id_fk": {
+          "name": "refund_intents_telegram_id_users_telegram_id_fk",
+          "tableFrom": "refund_intents",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "refund_intents_panel_id_rebecca_panels_id_fk": {
+          "name": "refund_intents_panel_id_rebecca_panels_id_fk",
+          "tableFrom": "refund_intents",
+          "tableTo": "rebecca_panels",
+          "columnsFrom": ["panel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "refund_intents_gross_positive": {
+          "name": "refund_intents_gross_positive",
+          "value": "\"refund_intents\".\"gross_amount\" >= 0 AND \"refund_intents\".\"gross_amount\" <= 9007199254740991"
+        },
+        "refund_intents_cashback_safe": {
+          "name": "refund_intents_cashback_safe",
+          "value": "\"refund_intents\".\"cashback_withheld\" >= 0 AND \"refund_intents\".\"cashback_withheld\" <= \"refund_intents\".\"gross_amount\""
+        },
+        "refund_intents_amount_safe": {
+          "name": "refund_intents_amount_safe",
+          "value": "\"refund_intents\".\"refund_amount\" >= 0 AND \"refund_intents\".\"refund_amount\" <= \"refund_intents\".\"gross_amount\""
+        },
+        "refund_intents_status_supported": {
+          "name": "refund_intents_status_supported",
+          "value": "\"refund_intents\".\"status\" IN ('pending', 'reconciliation_required', 'completed', 'failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.settings": {
+      "name": "settings",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.topup_receipts": {
+      "name": "topup_receipts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "photo_file_id": {
+          "name": "photo_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'photo'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "reviewed_by": {
+          "name": "reviewed_by",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "topup_receipts_telegram_id_users_telegram_id_fk": {
+          "name": "topup_receipts_telegram_id_users_telegram_id_fk",
+          "tableFrom": "topup_receipts",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "topup_receipts_amount_positive_safe_integer": {
+          "name": "topup_receipts_amount_positive_safe_integer",
+          "value": "\"topup_receipts\".\"amount\" > 0 AND \"topup_receipts\".\"amount\" <= 9007199254740991"
+        },
+        "topup_receipts_media_type_supported": {
+          "name": "topup_receipts_media_type_supported",
+          "value": "\"topup_receipts\".\"media_type\" IN ('photo', 'document')"
+        },
+        "topup_receipts_status_supported": {
+          "name": "topup_receipts_status_supported",
+          "value": "\"topup_receipts\".\"status\" IN ('pending', 'approved', 'rejected')"
+        },
+        "topup_receipts_reviewed_by_safe_integer": {
+          "name": "topup_receipts_reviewed_by_safe_integer",
+          "value": "\"topup_receipts\".\"reviewed_by\" IS NULL OR (\"topup_receipts\".\"reviewed_by\" > 0 AND \"topup_receipts\".\"reviewed_by\" <= 9007199254740991)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trial_claims": {
+      "name": "trial_claims",
+      "schema": "",
+      "columns": {
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "panel_id": {
+          "name": "panel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'legacy'"
+        },
+        "service_id": {
+          "name": "service_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "config_username": {
+          "name": "config_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gb_amount": {
+          "name": "gb_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_days": {
+          "name": "duration_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "sub_url": {
+          "name": "sub_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "trial_claims_panel_username_unique": {
+          "name": "trial_claims_panel_username_unique",
+          "columns": [
+            {
+              "expression": "panel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "config_username",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trial_claims_recovery_idx": {
+          "name": "trial_claims_recovery_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"trial_claims\".\"status\" IN ('pending', 'compensating')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trial_claims_telegram_id_users_telegram_id_fk": {
+          "name": "trial_claims_telegram_id_users_telegram_id_fk",
+          "tableFrom": "trial_claims",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trial_claims_panel_id_rebecca_panels_id_fk": {
+          "name": "trial_claims_panel_id_rebecca_panels_id_fk",
+          "tableFrom": "trial_claims",
+          "tableTo": "rebecca_panels",
+          "columnsFrom": ["panel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trial_claims_panel_service_fk": {
+          "name": "trial_claims_panel_service_fk",
+          "tableFrom": "trial_claims",
+          "tableTo": "rebecca_panel_services",
+          "columnsFrom": ["panel_id", "service_id"],
+          "columnsTo": ["panel_id", "service_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "trial_claims_gb_amount_positive": {
+          "name": "trial_claims_gb_amount_positive",
+          "value": "\"trial_claims\".\"gb_amount\" > 0"
+        },
+        "trial_claims_duration_days_positive": {
+          "name": "trial_claims_duration_days_positive",
+          "value": "\"trial_claims\".\"duration_days\" > 0"
+        },
+        "trial_claims_service_id_positive": {
+          "name": "trial_claims_service_id_positive",
+          "value": "\"trial_claims\".\"service_id\" > 0 AND \"trial_claims\".\"service_id\" <= 2147483647"
+        },
+        "trial_claims_status_supported": {
+          "name": "trial_claims_status_supported",
+          "value": "\"trial_claims\".\"status\" IN ('pending', 'compensating', 'review_required', 'completed', 'converted', 'failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.user_configs": {
+      "name": "user_configs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "panel_id": {
+          "name": "panel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'legacy'"
+        },
+        "service_id": {
+          "name": "service_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "config_username": {
+          "name": "config_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sub_url": {
+          "name": "sub_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_claimed": {
+          "name": "is_claimed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "panel_status": {
+          "name": "panel_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "panel_data_limit": {
+          "name": "panel_data_limit",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "panel_used_traffic": {
+          "name": "panel_used_traffic",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "panel_expire": {
+          "name": "panel_expire",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auto_renew_enabled": {
+          "name": "auto_renew_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "auto_renew_package_id": {
+          "name": "auto_renew_package_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auto_renew_price": {
+          "name": "auto_renew_price",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "remote_created_at": {
+          "name": "remote_created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_configs_telegram_id_idx": {
+          "name": "user_configs_telegram_id_idx",
+          "columns": [
+            {
+              "expression": "telegram_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_configs_sub_url_idx": {
+          "name": "user_configs_sub_url_idx",
+          "columns": [
+            {
+              "expression": "sub_url",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_configs_panel_username_unique": {
+          "name": "user_configs_panel_username_unique",
+          "columns": [
+            {
+              "expression": "panel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "config_username",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_configs_telegram_id_users_telegram_id_fk": {
+          "name": "user_configs_telegram_id_users_telegram_id_fk",
+          "tableFrom": "user_configs",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "user_configs_panel_id_rebecca_panels_id_fk": {
+          "name": "user_configs_panel_id_rebecca_panels_id_fk",
+          "tableFrom": "user_configs",
+          "tableTo": "rebecca_panels",
+          "columnsFrom": ["panel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "user_configs_panel_service_fk": {
+          "name": "user_configs_panel_service_fk",
+          "tableFrom": "user_configs",
+          "tableTo": "rebecca_panel_services",
+          "columnsFrom": ["panel_id", "service_id"],
+          "columnsTo": ["panel_id", "service_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "user_configs_panel_status_supported": {
+          "name": "user_configs_panel_status_supported",
+          "value": "\"user_configs\".\"panel_status\" IS NULL OR \"user_configs\".\"panel_status\" IN ('active', 'disabled', 'limited', 'expired', 'on_hold', 'deleted')"
+        },
+        "user_configs_panel_data_limit_safe": {
+          "name": "user_configs_panel_data_limit_safe",
+          "value": "\"user_configs\".\"panel_data_limit\" IS NULL OR \"user_configs\".\"panel_data_limit\" BETWEEN 0 AND 9007199254740991"
+        },
+        "user_configs_panel_used_traffic_safe": {
+          "name": "user_configs_panel_used_traffic_safe",
+          "value": "\"user_configs\".\"panel_used_traffic\" IS NULL OR \"user_configs\".\"panel_used_traffic\" BETWEEN 0 AND 9007199254740991"
+        },
+        "user_configs_panel_expire_safe": {
+          "name": "user_configs_panel_expire_safe",
+          "value": "\"user_configs\".\"panel_expire\" IS NULL OR \"user_configs\".\"panel_expire\" BETWEEN 0 AND 9007199254740991"
+        },
+        "user_configs_service_id_positive": {
+          "name": "user_configs_service_id_positive",
+          "value": "\"user_configs\".\"service_id\" > 0 AND \"user_configs\".\"service_id\" <= 2147483647"
+        },
+        "user_configs_auto_renew_price_safe": {
+          "name": "user_configs_auto_renew_price_safe",
+          "value": "\"user_configs\".\"auto_renew_price\" IS NULL OR \"user_configs\".\"auto_renew_price\" BETWEEN 0 AND 9007199254740991"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_name": {
+          "name": "first_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "balance": {
+          "name": "balance",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reserved_balance": {
+          "name": "reserved_balance",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "is_banned": {
+          "name": "is_banned",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "has_used_trial": {
+          "name": "has_used_trial",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'fa'"
+        },
+        "locale_manual": {
+          "name": "locale_manual",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "referrer_id": {
+          "name": "referrer_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "referral_code": {
+          "name": "referral_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "registration_source": {
+          "name": "registration_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'telegram'"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "total_spend": {
+          "name": "total_spend",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "active_subscription_count": {
+          "name": "active_subscription_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_id_unique": {
+          "name": "users_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["id"]
+        },
+        "users_referral_code_unique": {
+          "name": "users_referral_code_unique",
+          "nullsNotDistinct": false,
+          "columns": ["referral_code"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "users_reserved_balance_nonnegative": {
+          "name": "users_reserved_balance_nonnegative",
+          "value": "\"users\".\"reserved_balance\" >= 0"
+        },
+        "users_available_balance_nonnegative": {
+          "name": "users_available_balance_nonnegative",
+          "value": "\"users\".\"balance\" >= \"users\".\"reserved_balance\""
+        },
+        "users_locale_supported": {
+          "name": "users_locale_supported",
+          "value": "\"users\".\"locale\" IN ('fa', 'en')"
+        },
+        "users_total_spend_nonnegative": {
+          "name": "users_total_spend_nonnegative",
+          "value": "\"users\".\"total_spend\" >= 0"
+        },
+        "users_telegram_id_safe_integer": {
+          "name": "users_telegram_id_safe_integer",
+          "value": "\"users\".\"telegram_id\" > 0 AND \"users\".\"telegram_id\" <= 9007199254740991"
+        },
+        "users_balance_safe_integer": {
+          "name": "users_balance_safe_integer",
+          "value": "\"users\".\"balance\" <= 9007199254740991"
+        },
+        "users_total_spend_safe_integer": {
+          "name": "users_total_spend_safe_integer",
+          "value": "\"users\".\"total_spend\" <= 9007199254740991"
+        },
+        "users_referrer_id_safe_integer": {
+          "name": "users_referrer_id_safe_integer",
+          "value": "\"users\".\"referrer_id\" IS NULL OR (\"users\".\"referrer_id\" > 0 AND \"users\".\"referrer_id\" <= 9007199254740991)"
+        },
+        "users_active_subscription_count_nonnegative": {
+          "name": "users_active_subscription_count_nonnegative",
+          "value": "\"users\".\"active_subscription_count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.wallet_transactions": {
+      "name": "wallet_transactions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "telegram_id": {
+          "name": "telegram_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance_after": {
+          "name": "balance_after",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference_id": {
+          "name": "reference_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "wallet_transactions_telegram_id_users_telegram_id_fk": {
+          "name": "wallet_transactions_telegram_id_users_telegram_id_fk",
+          "tableFrom": "wallet_transactions",
+          "tableTo": "users",
+          "columnsFrom": ["telegram_id"],
+          "columnsTo": ["telegram_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "wallet_transactions_reference_id_unique": {
+          "name": "wallet_transactions_reference_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["reference_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "wallet_transactions_amount_safe_integer": {
+          "name": "wallet_transactions_amount_safe_integer",
+          "value": "\"wallet_transactions\".\"amount\" BETWEEN -9007199254740991 AND 9007199254740991"
+        },
+        "wallet_transactions_balance_after_safe_integer": {
+          "name": "wallet_transactions_balance_after_safe_integer",
+          "value": "\"wallet_transactions\".\"balance_after\" BETWEEN 0 AND 9007199254740991"
+        },
+        "wallet_transactions_type_supported": {
+          "name": "wallet_transactions_type_supported",
+          "value": "\"wallet_transactions\".\"type\" IN ('topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial')"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

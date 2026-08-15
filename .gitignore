@@ -1,0 +1,54 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pino.log
+pino-logger.log
+
+# Dependency directories
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Testing
+coverage/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+Rebecca_Source_Reference/
+pgdata/
+*backup_*.sql
+backups/
+*.dump
+*.backup
+
+# Drizzle (Note: we do not ignore the drizzle/ migrations folder itself as it should be tracked,
+# but we ignore local sqlite/db files if they ever get created)
+*.db
+*.sqlite
+*.sqlite3
