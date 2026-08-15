@@ -402,4 +402,10 @@ CREATE UNIQUE INDEX "trial_claims_panel_username_unique" ON "trial_claims" USING
 CREATE INDEX "trial_claims_recovery_idx" ON "trial_claims" USING btree ("created_at") WHERE "trial_claims"."status" IN ('pending', 'compensating');--> statement-breakpoint
 CREATE INDEX "user_configs_telegram_id_idx" ON "user_configs" USING btree ("telegram_id");--> statement-breakpoint
 CREATE INDEX "user_configs_sub_url_idx" ON "user_configs" USING btree ("sub_url");--> statement-breakpoint
-CREATE UNIQUE INDEX "user_configs_panel_username_unique" ON "user_configs" USING btree ("panel_id","config_username");
+CREATE UNIQUE INDEX "user_configs_panel_username_unique" ON "user_configs" USING btree ("panel_id","config_username");--> statement-breakpoint
+INSERT INTO "rebecca_panels" ("id", "name", "enabled", "is_default")
+VALUES ('legacy', 'پنل اصلی', false, true)
+ON CONFLICT ("id") DO NOTHING;--> statement-breakpoint
+INSERT INTO "rebecca_panel_services" ("panel_id", "service_id", "name", "is_default")
+VALUES ('legacy', 1, 'سرویس پیش‌فرض', true)
+ON CONFLICT ("panel_id", "service_id") DO NOTHING;
