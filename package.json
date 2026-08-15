@@ -57,7 +57,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@types/node": "26.1.2",
+    "@types/node": "26.2.0",
     "@types/node-cron": "3.0.11",
     "@types/pg": "8.20.4",
     "@types/qrcode": "1.5.6",
