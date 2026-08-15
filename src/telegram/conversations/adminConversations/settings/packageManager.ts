@@ -11,6 +11,7 @@ import { escapeTelegramMarkdown } from '../../../rendering.js';
 import {
   buildEmptyState,
   buildScreen,
+  isMessageNotModifiedError,
   promptInConversation,
   replyInAdminConversation,
 } from '../../../ui.js';
@@ -32,6 +33,7 @@ export async function managePackages(
   if (!ctx.services) return 'cancel';
   let packages = currentPackages(ctx);
   let page = 0;
+  let activeCtx: ConversationContext = ctx;
 
   for (;;) {
     page = clampPackagePage(page, packages.length);
@@ -41,19 +43,36 @@ export async function managePackages(
       (page + 1) * PACKAGE_PAGE_SIZE
     );
     const keyboard = buildPackageManagerKeyboard(ctx, packages, page);
-    await promptInConversation(
-      conversation,
-      ctx,
-      buildPackageManagerScreen(ctx, visiblePackages, {
-        totalCount: packages.length,
-        page,
-        totalPages: pageCount,
-      }),
-      {
+    const screenText = buildPackageManagerScreen(ctx, visiblePackages, {
+      totalCount: packages.length,
+      page,
+      totalPages: pageCount,
+    });
+
+    let renderedInPlace = false;
+    const messageId = activeCtx.callbackQuery?.message?.message_id;
+    const chatId = activeCtx.chat?.id;
+    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
+      try {
+        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+        renderedInPlace = true;
+      } catch (error) {
+        if (isMessageNotModifiedError(error)) {
+          renderedInPlace = true;
+        }
+      }
+    }
+
+    if (!renderedInPlace) {
+      await promptInConversation(conversation, ctx, screenText, {
         parse_mode: 'Markdown',
         reply_markup: keyboard,
-      }
-    );
+      });
+    }
+
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: [
         'pkg-edit:',
@@ -71,6 +90,8 @@ export async function managePackages(
     if (input.type === 'cancel') return 'cancel';
     if (input.type === 'back') return 'back';
     if (input.type !== 'callback') continue;
+
+    activeCtx = input.ctx;
 
     let nextPackages: PackageOption[] | undefined;
     if (input.data.startsWith('pkg-page:')) {

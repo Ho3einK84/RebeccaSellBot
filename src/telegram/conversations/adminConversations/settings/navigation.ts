@@ -1,5 +1,5 @@
 import type { InlineKeyboard } from 'grammy';
-import type { MyConversation } from '../../../types.js';
+import type { ConversationContext, MyConversation } from '../../../types.js';
 import { t } from '../../../locale.js';
 import {
   acceptConversationOwner,
@@ -10,9 +10,9 @@ import {
 } from '../../../ui.js';
 
 export type SettingsInput =
-  | { type: 'text'; value: string }
-  | { type: 'callback'; data: string }
-  | { type: 'back' }
+  | { type: 'text'; value: string; ctx: ConversationContext }
+  | { type: 'callback'; data: string; ctx: ConversationContext }
+  | { type: 'back'; ctx?: ConversationContext }
   | { type: 'cancel' };
 
 type SettingsInputOptions = {
@@ -42,11 +42,11 @@ export async function waitForSettingsInput(
     if (data) {
       if (options.backCallbacks?.includes(data)) {
         await input.answerCallbackQuery();
-        return { type: 'back' };
+        return { type: 'back', ctx: input };
       }
       if (options.callbackPrefixes?.some((prefix) => data.startsWith(prefix))) {
         await input.answerCallbackQuery();
-        return { type: 'callback', data };
+        return { type: 'callback', data, ctx: input };
       }
       await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
       continue;
@@ -58,7 +58,7 @@ export async function waitForSettingsInput(
       'text' in input.message &&
       typeof input.message.text === 'string'
     ) {
-      return { type: 'text', value: input.message.text };
+      return { type: 'text', value: input.message.text, ctx: input };
     }
 
     await promptInConversation(

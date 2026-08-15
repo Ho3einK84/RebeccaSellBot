@@ -413,7 +413,7 @@ export function buildPackageManagerScreen(
     subtitle: t(ctx, 'admin_package_manager_subtitle'),
     primary: {
       emoji: '📦',
-      label: t(ctx, 'admin_promo_total_label'),
+      label: t(ctx, 'admin_pkg_total_label'),
       value: localizedNumber(totalCount, ctx),
     },
     sections: [
