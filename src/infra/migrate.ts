@@ -14,8 +14,12 @@ export async function autoMigrate(
   try {
     await migrate(dbInstance, { migrationsFolder: './drizzle' });
     logger.info('Database migrations applied successfully');
-  } catch (err) {
-    logger.error({ err }, 'Failed to run database migrations');
+  } catch (err: unknown) {
+    const errorDetails =
+      err instanceof Error
+        ? { message: err.message, stack: err.stack, ...(typeof err === 'object' ? err : {}) }
+        : { raw: err };
+    logger.error({ err: errorDetails }, 'Failed to run database migrations');
     throw err;
   }
 }

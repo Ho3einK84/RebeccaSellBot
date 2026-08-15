@@ -1,4 +1,4 @@
-CREATE TABLE "audit_logs" (
+CREATE TABLE IF NOT EXISTS "audit_logs" (
 	"id" text PRIMARY KEY NOT NULL,
 	"actor_telegram_id" bigint,
 	"action" text NOT NULL,
@@ -7,17 +7,15 @@ CREATE TABLE "audit_logs" (
 	"target_telegram_id" bigint,
 	"metadata" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "bot_admins" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "bot_admins" (
 	"telegram_id" bigint PRIMARY KEY NOT NULL,
 	"added_by" bigint,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "bot_admins_telegram_id_safe" CHECK ("bot_admins"."telegram_id" > 0 AND "bot_admins"."telegram_id" <= 9007199254740991),
 	CONSTRAINT "bot_admins_added_by_safe" CHECK ("bot_admins"."added_by" IS NULL OR ("bot_admins"."added_by" > 0 AND "bot_admins"."added_by" <= 9007199254740991))
-);
---> statement-breakpoint
-CREATE TABLE "broadcast_jobs" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "broadcast_jobs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"actor_telegram_id" bigint NOT NULL,
 	"audience" text NOT NULL,
@@ -34,9 +32,8 @@ CREATE TABLE "broadcast_jobs" (
 	CONSTRAINT "broadcast_jobs_audience_supported" CHECK ("broadcast_jobs"."audience" IN ('all', 'active_subscription', 'no_subscription', 'no_purchase_30d', 'no_active_subscription')),
 	CONSTRAINT "broadcast_jobs_status_supported" CHECK ("broadcast_jobs"."status" IN ('queued', 'running', 'cancel_requested', 'cancelled', 'completed')),
 	CONSTRAINT "broadcast_jobs_counts_safe" CHECK ("broadcast_jobs"."recipient_count" >= 0 AND "broadcast_jobs"."sent_count" >= 0 AND "broadcast_jobs"."failed_count" >= 0 AND "broadcast_jobs"."sent_count" + "broadcast_jobs"."failed_count" <= "broadcast_jobs"."recipient_count")
-);
---> statement-breakpoint
-CREATE TABLE "broadcast_recipients" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "broadcast_recipients" (
 	"job_id" uuid NOT NULL,
 	"telegram_id" bigint NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
@@ -48,9 +45,8 @@ CREATE TABLE "broadcast_recipients" (
 	CONSTRAINT "broadcast_recipients_job_id_telegram_id_pk" PRIMARY KEY("job_id","telegram_id"),
 	CONSTRAINT "broadcast_recipients_status_supported" CHECK ("broadcast_recipients"."status" IN ('pending', 'sending', 'sent', 'failed', 'cancelled')),
 	CONSTRAINT "broadcast_recipients_attempts_safe" CHECK ("broadcast_recipients"."attempts" >= 0)
-);
---> statement-breakpoint
-CREATE TABLE "code_redemptions" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "code_redemptions" (
 	"id" text PRIMARY KEY NOT NULL,
 	"code" text NOT NULL,
 	"telegram_id" bigint NOT NULL,
@@ -58,16 +54,14 @@ CREATE TABLE "code_redemptions" (
 	"status" text DEFAULT 'completed' NOT NULL,
 	"redeemed_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "code_redemptions_status_supported" CHECK ("code_redemptions"."status" IN ('pending', 'completed'))
-);
---> statement-breakpoint
-CREATE TABLE "config_counters" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "config_counters" (
 	"mode" text PRIMARY KEY NOT NULL,
 	"current_count" integer DEFAULT 0 NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "config_counters_nonnegative" CHECK ("config_counters"."current_count" >= 0)
-);
---> statement-breakpoint
-CREATE TABLE "config_reconciliation_issues" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "config_reconciliation_issues" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"kind" text NOT NULL,
 	"panel_id" text DEFAULT 'legacy' NOT NULL,
@@ -81,14 +75,12 @@ CREATE TABLE "config_reconciliation_issues" (
 	"resolved_at" timestamp,
 	CONSTRAINT "config_reconciliation_issue_kind_supported" CHECK ("config_reconciliation_issues"."kind" IN ('local_missing_remote', 'remote_unbound')),
 	CONSTRAINT "config_reconciliation_issue_status_supported" CHECK ("config_reconciliation_issues"."status" IN ('open', 'ignored', 'resolved'))
-);
---> statement-breakpoint
-CREATE TABLE "grammy_sessions" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "grammy_sessions" (
 	"key" text PRIMARY KEY NOT NULL,
 	"value" text NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "notification_deliveries" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "notification_deliveries" (
 	"telegram_id" bigint NOT NULL,
 	"panel_id" text DEFAULT 'legacy' NOT NULL,
 	"config_username" text NOT NULL,
@@ -99,9 +91,8 @@ CREATE TABLE "notification_deliveries" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "notification_deliveries_telegram_id_panel_id_config_username_notification_type_pk" PRIMARY KEY("telegram_id","panel_id","config_username","notification_type"),
 	CONSTRAINT "notification_deliveries_type_supported" CHECK ("notification_deliveries"."notification_type" IN ('low_traffic', 'near_expiry', 'auto_renew_low_balance', 'auto_renew_package_missing'))
-);
---> statement-breakpoint
-CREATE TABLE "promo_codes" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "promo_codes" (
 	"id" uuid DEFAULT gen_random_uuid() NOT NULL,
 	"code" text PRIMARY KEY NOT NULL,
 	"type" text NOT NULL,
@@ -121,9 +112,8 @@ CREATE TABLE "promo_codes" (
 	CONSTRAINT "promo_codes_max_uses_per_user_positive" CHECK ("promo_codes"."max_uses_per_user" > 0),
 	CONSTRAINT "promo_codes_current_uses_valid" CHECK ("promo_codes"."current_uses" >= 0 AND "promo_codes"."current_uses" <= "promo_codes"."max_uses"),
 	CONSTRAINT "promo_codes_min_purchase_safe" CHECK ("promo_codes"."min_purchase_amount" BETWEEN 0 AND 9007199254740991)
-);
---> statement-breakpoint
-CREATE TABLE "purchase_checkouts" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "purchase_checkouts" (
 	"id" text PRIMARY KEY NOT NULL,
 	"telegram_id" bigint NOT NULL,
 	"kind" text NOT NULL,
@@ -149,9 +139,8 @@ CREATE TABLE "purchase_checkouts" (
 	CONSTRAINT "purchase_checkouts_gb_positive" CHECK ("purchase_checkouts"."gb_amount" > 0),
 	CONSTRAINT "purchase_checkouts_days_positive" CHECK ("purchase_checkouts"."duration_days" > 0),
 	CONSTRAINT "purchase_checkouts_service_positive" CHECK ("purchase_checkouts"."service_id" > 0 AND "purchase_checkouts"."service_id" <= 2147483647)
-);
---> statement-breakpoint
-CREATE TABLE "purchase_intents" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "purchase_intents" (
 	"id" text PRIMARY KEY NOT NULL,
 	"telegram_id" bigint NOT NULL,
 	"panel_id" text DEFAULT 'legacy' NOT NULL,
@@ -188,9 +177,8 @@ CREATE TABLE "purchase_intents" (
 	CONSTRAINT "purchase_intents_expected_expire_safe" CHECK ("purchase_intents"."expected_expire" IS NULL OR "purchase_intents"."expected_expire" BETWEEN 0 AND 9007199254740991),
 	CONSTRAINT "purchase_intents_previous_status_supported" CHECK ("purchase_intents"."previous_status" IS NULL OR "purchase_intents"."previous_status" IN ('active', 'disabled', 'on_hold')),
 	CONSTRAINT "purchase_intents_expected_status_supported" CHECK ("purchase_intents"."expected_status" IS NULL OR "purchase_intents"."expected_status" IN ('active', 'disabled', 'on_hold'))
-);
---> statement-breakpoint
-CREATE TABLE "rebecca_panel_services" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "rebecca_panel_services" (
 	"panel_id" text NOT NULL,
 	"service_id" integer NOT NULL,
 	"name" text NOT NULL,
@@ -200,9 +188,8 @@ CREATE TABLE "rebecca_panel_services" (
 	CONSTRAINT "rebecca_panel_services_panel_id_service_id_pk" PRIMARY KEY("panel_id","service_id"),
 	CONSTRAINT "rebecca_panel_services_id_positive" CHECK ("rebecca_panel_services"."service_id" > 0 AND "rebecca_panel_services"."service_id" <= 2147483647),
 	CONSTRAINT "rebecca_panel_services_name_present" CHECK (length(btrim("rebecca_panel_services"."name")) BETWEEN 1 AND 80)
-);
---> statement-breakpoint
-CREATE TABLE "rebecca_panels" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "rebecca_panels" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"base_url" text,
@@ -214,9 +201,8 @@ CREATE TABLE "rebecca_panels" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "rebecca_panels_name_present" CHECK (length(btrim("rebecca_panels"."name")) BETWEEN 1 AND 80)
-);
---> statement-breakpoint
-CREATE TABLE "refund_intents" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "refund_intents" (
 	"id" text PRIMARY KEY NOT NULL,
 	"purchase_intent_id" text NOT NULL,
 	"telegram_id" bigint NOT NULL,
@@ -235,15 +221,13 @@ CREATE TABLE "refund_intents" (
 	CONSTRAINT "refund_intents_cashback_safe" CHECK ("refund_intents"."cashback_withheld" >= 0 AND "refund_intents"."cashback_withheld" <= "refund_intents"."gross_amount"),
 	CONSTRAINT "refund_intents_amount_safe" CHECK ("refund_intents"."refund_amount" >= 0 AND "refund_intents"."refund_amount" <= "refund_intents"."gross_amount"),
 	CONSTRAINT "refund_intents_status_supported" CHECK ("refund_intents"."status" IN ('pending', 'reconciliation_required', 'completed', 'failed'))
-);
---> statement-breakpoint
-CREATE TABLE "settings" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "settings" (
 	"key" text PRIMARY KEY NOT NULL,
 	"value" text NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "topup_receipts" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "topup_receipts" (
 	"id" text PRIMARY KEY NOT NULL,
 	"telegram_id" bigint NOT NULL,
 	"amount" bigint NOT NULL,
@@ -257,9 +241,8 @@ CREATE TABLE "topup_receipts" (
 	CONSTRAINT "topup_receipts_media_type_supported" CHECK ("topup_receipts"."media_type" IN ('photo', 'document')),
 	CONSTRAINT "topup_receipts_status_supported" CHECK ("topup_receipts"."status" IN ('pending', 'approved', 'rejected')),
 	CONSTRAINT "topup_receipts_reviewed_by_safe_integer" CHECK ("topup_receipts"."reviewed_by" IS NULL OR ("topup_receipts"."reviewed_by" > 0 AND "topup_receipts"."reviewed_by" <= 9007199254740991))
-);
---> statement-breakpoint
-CREATE TABLE "trial_claims" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "trial_claims" (
 	"telegram_id" bigint PRIMARY KEY NOT NULL,
 	"panel_id" text DEFAULT 'legacy' NOT NULL,
 	"service_id" integer DEFAULT 1 NOT NULL,
@@ -274,9 +257,8 @@ CREATE TABLE "trial_claims" (
 	CONSTRAINT "trial_claims_duration_days_positive" CHECK ("trial_claims"."duration_days" > 0),
 	CONSTRAINT "trial_claims_service_id_positive" CHECK ("trial_claims"."service_id" > 0 AND "trial_claims"."service_id" <= 2147483647),
 	CONSTRAINT "trial_claims_status_supported" CHECK ("trial_claims"."status" IN ('pending', 'compensating', 'review_required', 'completed', 'converted', 'failed'))
-);
---> statement-breakpoint
-CREATE TABLE "user_configs" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "user_configs" (
 	"id" text PRIMARY KEY NOT NULL,
 	"telegram_id" bigint NOT NULL,
 	"panel_id" text DEFAULT 'legacy' NOT NULL,
@@ -302,9 +284,8 @@ CREATE TABLE "user_configs" (
 	CONSTRAINT "user_configs_panel_expire_safe" CHECK ("user_configs"."panel_expire" IS NULL OR "user_configs"."panel_expire" BETWEEN 0 AND 9007199254740991),
 	CONSTRAINT "user_configs_service_id_positive" CHECK ("user_configs"."service_id" > 0 AND "user_configs"."service_id" <= 2147483647),
 	CONSTRAINT "user_configs_auto_renew_price_safe" CHECK ("user_configs"."auto_renew_price" IS NULL OR "user_configs"."auto_renew_price" BETWEEN 0 AND 9007199254740991)
-);
---> statement-breakpoint
-CREATE TABLE "users" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "users" (
 	"id" uuid DEFAULT gen_random_uuid() NOT NULL,
 	"telegram_id" bigint PRIMARY KEY NOT NULL,
 	"username" text,
@@ -335,9 +316,8 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_total_spend_safe_integer" CHECK ("users"."total_spend" <= 9007199254740991),
 	CONSTRAINT "users_referrer_id_safe_integer" CHECK ("users"."referrer_id" IS NULL OR ("users"."referrer_id" > 0 AND "users"."referrer_id" <= 9007199254740991)),
 	CONSTRAINT "users_active_subscription_count_nonnegative" CHECK ("users"."active_subscription_count" >= 0)
-);
---> statement-breakpoint
-CREATE TABLE "wallet_transactions" (
+);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "wallet_transactions" (
 	"id" text PRIMARY KEY NOT NULL,
 	"telegram_id" bigint NOT NULL,
 	"amount" bigint NOT NULL,
@@ -350,59 +330,162 @@ CREATE TABLE "wallet_transactions" (
 	CONSTRAINT "wallet_transactions_amount_safe_integer" CHECK ("wallet_transactions"."amount" BETWEEN -9007199254740991 AND 9007199254740991),
 	CONSTRAINT "wallet_transactions_balance_after_safe_integer" CHECK ("wallet_transactions"."balance_after" BETWEEN 0 AND 9007199254740991),
 	CONSTRAINT "wallet_transactions_type_supported" CHECK ("wallet_transactions"."type" IN ('topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial'))
-);
---> statement-breakpoint
-ALTER TABLE "broadcast_recipients" ADD CONSTRAINT "broadcast_recipients_job_id_broadcast_jobs_id_fk" FOREIGN KEY ("job_id") REFERENCES "public"."broadcast_jobs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "broadcast_recipients" ADD CONSTRAINT "broadcast_recipients_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "code_redemptions" ADD CONSTRAINT "code_redemptions_code_promo_codes_code_fk" FOREIGN KEY ("code") REFERENCES "public"."promo_codes"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "code_redemptions" ADD CONSTRAINT "code_redemptions_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "code_redemptions" ADD CONSTRAINT "code_redemptions_purchase_intent_id_purchase_intents_id_fk" FOREIGN KEY ("purchase_intent_id") REFERENCES "public"."purchase_intents"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "config_reconciliation_issues" ADD CONSTRAINT "config_reconciliation_issues_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "purchase_checkouts" ADD CONSTRAINT "purchase_checkouts_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "purchase_checkouts" ADD CONSTRAINT "purchase_checkouts_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "purchase_checkouts" ADD CONSTRAINT "purchase_checkouts_panel_service_fk" FOREIGN KEY ("panel_id","service_id") REFERENCES "public"."rebecca_panel_services"("panel_id","service_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "purchase_intents" ADD CONSTRAINT "purchase_intents_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "purchase_intents" ADD CONSTRAINT "purchase_intents_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "purchase_intents" ADD CONSTRAINT "purchase_intents_panel_service_fk" FOREIGN KEY ("panel_id","service_id") REFERENCES "public"."rebecca_panel_services"("panel_id","service_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rebecca_panel_services" ADD CONSTRAINT "rebecca_panel_services_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "refund_intents" ADD CONSTRAINT "refund_intents_purchase_intent_id_purchase_intents_id_fk" FOREIGN KEY ("purchase_intent_id") REFERENCES "public"."purchase_intents"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "refund_intents" ADD CONSTRAINT "refund_intents_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "refund_intents" ADD CONSTRAINT "refund_intents_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "topup_receipts" ADD CONSTRAINT "topup_receipts_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "trial_claims" ADD CONSTRAINT "trial_claims_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "trial_claims" ADD CONSTRAINT "trial_claims_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "trial_claims" ADD CONSTRAINT "trial_claims_panel_service_fk" FOREIGN KEY ("panel_id","service_id") REFERENCES "public"."rebecca_panel_services"("panel_id","service_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_configs" ADD CONSTRAINT "user_configs_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_configs" ADD CONSTRAINT "user_configs_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_configs" ADD CONSTRAINT "user_configs_panel_service_fk" FOREIGN KEY ("panel_id","service_id") REFERENCES "public"."rebecca_panel_services"("panel_id","service_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "wallet_transactions" ADD CONSTRAINT "wallet_transactions_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "audit_logs_entity_idx" ON "audit_logs" USING btree ("entity_type","entity_id");--> statement-breakpoint
-CREATE INDEX "audit_logs_target_idx" ON "audit_logs" USING btree ("target_telegram_id");--> statement-breakpoint
-CREATE INDEX "broadcast_jobs_runnable_idx" ON "broadcast_jobs" USING btree ("created_at") WHERE "broadcast_jobs"."status" IN ('queued', 'running', 'cancel_requested');--> statement-breakpoint
-CREATE INDEX "broadcast_recipients_pending_idx" ON "broadcast_recipients" USING btree ("job_id","telegram_id") WHERE "broadcast_recipients"."status" = 'pending';--> statement-breakpoint
-CREATE INDEX "broadcast_recipients_stale_idx" ON "broadcast_recipients" USING btree ("claimed_at") WHERE "broadcast_recipients"."status" = 'sending';--> statement-breakpoint
-CREATE UNIQUE INDEX "code_redemptions_purchase_intent_unique" ON "code_redemptions" USING btree ("purchase_intent_id") WHERE "code_redemptions"."purchase_intent_id" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX "code_redemptions_user_code_idx" ON "code_redemptions" USING btree ("code","telegram_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "config_reconciliation_issue_unique" ON "config_reconciliation_issues" USING btree ("panel_id","kind","config_username");--> statement-breakpoint
-CREATE INDEX "config_reconciliation_open_idx" ON "config_reconciliation_issues" USING btree ("last_seen_at") WHERE "config_reconciliation_issues"."status" = 'open';--> statement-breakpoint
-CREATE INDEX "purchase_checkouts_expiry_idx" ON "purchase_checkouts" USING btree ("expires_at") WHERE "purchase_checkouts"."status" = 'pending';--> statement-breakpoint
-CREATE UNIQUE INDEX "purchase_intents_one_pending_per_user" ON "purchase_intents" USING btree ("telegram_id") WHERE "purchase_intents"."status" = 'pending';--> statement-breakpoint
-CREATE INDEX "purchase_intents_nonterminal_updated_at_idx" ON "purchase_intents" USING btree ("updated_at") WHERE "purchase_intents"."status" IN ('pending', 'reconciliation_required');--> statement-breakpoint
-CREATE INDEX "purchase_intents_nonterminal_user_idx" ON "purchase_intents" USING btree ("telegram_id") WHERE "purchase_intents"."status" IN ('pending', 'reconciliation_required');--> statement-breakpoint
-CREATE INDEX "purchase_intents_bonus_retry_idx" ON "purchase_intents" USING btree ("created_at") WHERE "purchase_intents"."status" = 'completed' AND "purchase_intents"."bonuses_processed_at" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "purchase_intents_checkout_unique" ON "purchase_intents" USING btree ("checkout_id") WHERE "purchase_intents"."checkout_id" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "rebecca_panel_services_one_default" ON "rebecca_panel_services" USING btree ("panel_id") WHERE "rebecca_panel_services"."is_default" = true;--> statement-breakpoint
-CREATE UNIQUE INDEX "rebecca_panels_one_default" ON "rebecca_panels" USING btree ("is_default") WHERE "rebecca_panels"."is_default" = true;--> statement-breakpoint
-CREATE UNIQUE INDEX "refund_intents_purchase_unique" ON "refund_intents" USING btree ("purchase_intent_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "refund_intents_one_nonterminal_per_config" ON "refund_intents" USING btree ("panel_id","config_username") WHERE "refund_intents"."status" IN ('pending', 'reconciliation_required');--> statement-breakpoint
-CREATE INDEX "refund_intents_reconciliation_updated_at_idx" ON "refund_intents" USING btree ("updated_at") WHERE "refund_intents"."status" IN ('pending', 'reconciliation_required');--> statement-breakpoint
-CREATE UNIQUE INDEX "trial_claims_panel_username_unique" ON "trial_claims" USING btree ("panel_id","config_username");--> statement-breakpoint
-CREATE INDEX "trial_claims_recovery_idx" ON "trial_claims" USING btree ("created_at") WHERE "trial_claims"."status" IN ('pending', 'compensating');--> statement-breakpoint
-CREATE INDEX "user_configs_telegram_id_idx" ON "user_configs" USING btree ("telegram_id");--> statement-breakpoint
-CREATE INDEX "user_configs_sub_url_idx" ON "user_configs" USING btree ("sub_url");--> statement-breakpoint
-CREATE UNIQUE INDEX "user_configs_panel_username_unique" ON "user_configs" USING btree ("panel_id","config_username");--> statement-breakpoint
+);--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "broadcast_recipients" ADD CONSTRAINT "broadcast_recipients_job_id_broadcast_jobs_id_fk" FOREIGN KEY ("job_id") REFERENCES "public"."broadcast_jobs"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "broadcast_recipients" ADD CONSTRAINT "broadcast_recipients_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "code_redemptions" ADD CONSTRAINT "code_redemptions_code_promo_codes_code_fk" FOREIGN KEY ("code") REFERENCES "public"."promo_codes"("code") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "code_redemptions" ADD CONSTRAINT "code_redemptions_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "code_redemptions" ADD CONSTRAINT "code_redemptions_purchase_intent_id_purchase_intents_id_fk" FOREIGN KEY ("purchase_intent_id") REFERENCES "public"."purchase_intents"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "config_reconciliation_issues" ADD CONSTRAINT "config_reconciliation_issues_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "purchase_checkouts" ADD CONSTRAINT "purchase_checkouts_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "purchase_checkouts" ADD CONSTRAINT "purchase_checkouts_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "purchase_checkouts" ADD CONSTRAINT "purchase_checkouts_panel_service_fk" FOREIGN KEY ("panel_id","service_id") REFERENCES "public"."rebecca_panel_services"("panel_id","service_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "purchase_intents" ADD CONSTRAINT "purchase_intents_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "purchase_intents" ADD CONSTRAINT "purchase_intents_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "purchase_intents" ADD CONSTRAINT "purchase_intents_panel_service_fk" FOREIGN KEY ("panel_id","service_id") REFERENCES "public"."rebecca_panel_services"("panel_id","service_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "rebecca_panel_services" ADD CONSTRAINT "rebecca_panel_services_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "refund_intents" ADD CONSTRAINT "refund_intents_purchase_intent_id_purchase_intents_id_fk" FOREIGN KEY ("purchase_intent_id") REFERENCES "public"."purchase_intents"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "refund_intents" ADD CONSTRAINT "refund_intents_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "refund_intents" ADD CONSTRAINT "refund_intents_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "topup_receipts" ADD CONSTRAINT "topup_receipts_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "trial_claims" ADD CONSTRAINT "trial_claims_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "trial_claims" ADD CONSTRAINT "trial_claims_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "trial_claims" ADD CONSTRAINT "trial_claims_panel_service_fk" FOREIGN KEY ("panel_id","service_id") REFERENCES "public"."rebecca_panel_services"("panel_id","service_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "user_configs" ADD CONSTRAINT "user_configs_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "user_configs" ADD CONSTRAINT "user_configs_panel_id_rebecca_panels_id_fk" FOREIGN KEY ("panel_id") REFERENCES "public"."rebecca_panels"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "user_configs" ADD CONSTRAINT "user_configs_panel_service_fk" FOREIGN KEY ("panel_id","service_id") REFERENCES "public"."rebecca_panel_services"("panel_id","service_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "wallet_transactions" ADD CONSTRAINT "wallet_transactions_telegram_id_users_telegram_id_fk" FOREIGN KEY ("telegram_id") REFERENCES "public"."users"("telegram_id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "audit_logs_entity_idx" ON "audit_logs" USING btree ("entity_type","entity_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "audit_logs_target_idx" ON "audit_logs" USING btree ("target_telegram_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "broadcast_jobs_runnable_idx" ON "broadcast_jobs" USING btree ("created_at") WHERE "broadcast_jobs"."status" IN ('queued', 'running', 'cancel_requested');--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "broadcast_recipients_pending_idx" ON "broadcast_recipients" USING btree ("job_id","telegram_id") WHERE "broadcast_recipients"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "broadcast_recipients_stale_idx" ON "broadcast_recipients" USING btree ("claimed_at") WHERE "broadcast_recipients"."status" = 'sending';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "code_redemptions_purchase_intent_unique" ON "code_redemptions" USING btree ("purchase_intent_id") WHERE "code_redemptions"."purchase_intent_id" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "code_redemptions_user_code_idx" ON "code_redemptions" USING btree ("code","telegram_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "config_reconciliation_issue_unique" ON "config_reconciliation_issues" USING btree ("panel_id","kind","config_username");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "config_reconciliation_open_idx" ON "config_reconciliation_issues" USING btree ("last_seen_at") WHERE "config_reconciliation_issues"."status" = 'open';--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "purchase_checkouts_expiry_idx" ON "purchase_checkouts" USING btree ("expires_at") WHERE "purchase_checkouts"."status" = 'pending';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "purchase_intents_one_pending_per_user" ON "purchase_intents" USING btree ("telegram_id") WHERE "purchase_intents"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "purchase_intents_nonterminal_updated_at_idx" ON "purchase_intents" USING btree ("updated_at") WHERE "purchase_intents"."status" IN ('pending', 'reconciliation_required');--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "purchase_intents_nonterminal_user_idx" ON "purchase_intents" USING btree ("telegram_id") WHERE "purchase_intents"."status" IN ('pending', 'reconciliation_required');--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "purchase_intents_bonus_retry_idx" ON "purchase_intents" USING btree ("created_at") WHERE "purchase_intents"."status" = 'completed' AND "purchase_intents"."bonuses_processed_at" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "purchase_intents_checkout_unique" ON "purchase_intents" USING btree ("checkout_id") WHERE "purchase_intents"."checkout_id" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "rebecca_panel_services_one_default" ON "rebecca_panel_services" USING btree ("panel_id") WHERE "rebecca_panel_services"."is_default" = true;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "rebecca_panels_one_default" ON "rebecca_panels" USING btree ("is_default") WHERE "rebecca_panels"."is_default" = true;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "refund_intents_purchase_unique" ON "refund_intents" USING btree ("purchase_intent_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "refund_intents_one_nonterminal_per_config" ON "refund_intents" USING btree ("panel_id","config_username") WHERE "refund_intents"."status" IN ('pending', 'reconciliation_required');--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "refund_intents_reconciliation_updated_at_idx" ON "refund_intents" USING btree ("updated_at") WHERE "refund_intents"."status" IN ('pending', 'reconciliation_required');--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "trial_claims_panel_username_unique" ON "trial_claims" USING btree ("panel_id","config_username");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "trial_claims_recovery_idx" ON "trial_claims" USING btree ("created_at") WHERE "trial_claims"."status" IN ('pending', 'compensating');--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_configs_telegram_id_idx" ON "user_configs" USING btree ("telegram_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_configs_sub_url_idx" ON "user_configs" USING btree ("sub_url");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "user_configs_panel_username_unique" ON "user_configs" USING btree ("panel_id","config_username");--> statement-breakpoint
 INSERT INTO "rebecca_panels" ("id", "name", "enabled", "is_default")
 VALUES ('legacy', 'پنل اصلی', false, true)
 ON CONFLICT ("id") DO NOTHING;--> statement-breakpoint
