@@ -420,10 +420,15 @@ export function buildPackageManagerScreen(
       {
         emoji: '🛍️',
         title: t(ctx, 'admin_pkg_manager_prompt', { count: localizedNumber(totalCount, ctx) }),
-        fields: packages.map((pkg) => ({
-          label: escapeTelegramMarkdown(pkg.name),
-          value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')} · ${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')} · ${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
-        })),
+        fields: packages.map((pkg) => {
+          const isEnabled = pkg.enabled !== false;
+          const statusPrefix = isEnabled ? '🟢 ' : '⚪️ ';
+          const statusSuffix = isEnabled ? '' : ` (${t(ctx, 'admin_pkg_inactive_badge')})`;
+          return {
+            label: `${statusPrefix}${escapeTelegramMarkdown(pkg.name)}${statusSuffix}`,
+            value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')} · ${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')} · ${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
+          };
+        }),
       },
     ],
     ...(pageStatus ? { footer: pageStatus } : {}),

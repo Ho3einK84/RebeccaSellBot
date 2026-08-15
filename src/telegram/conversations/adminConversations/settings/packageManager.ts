@@ -56,7 +56,16 @@ export async function managePackages(
       }
     );
     const input = await waitForSettingsInput(conversation, {
-      callbackPrefixes: ['pkg-edit:', 'pkg-del:', 'pkg-page:', 'pkg-add'],
+      callbackPrefixes: [
+        'pkg-edit:',
+        'pkg-del:',
+        'pkg-page:',
+        'pkg-add',
+        'pkg-toggle:',
+        'pkg-clone:',
+        'pkg-up:',
+        'pkg-down:',
+      ],
       backCallbacks: ['pkg-back'],
       retryKeyboard: keyboard,
     });
@@ -69,6 +78,58 @@ export async function managePackages(
       const requestedPage = parsePackageIndex(input.data, 'pkg-page:');
       if (requestedPage !== undefined && requestedPage < pageCount) page = requestedPage;
       continue;
+    } else if (input.data.startsWith('pkg-toggle:')) {
+      const index = parsePackageActionIndex(input.data, 'pkg-toggle:', packages);
+      const existing = index === undefined ? undefined : packages[index];
+      if (!existing || index === undefined) continue;
+      const currentEnabled = existing.enabled !== false;
+      const updatedPkg = { ...existing, enabled: !currentEnabled };
+      nextPackages = packages.map((pkg, itemIndex) => (itemIndex === index ? updatedPkg : pkg));
+    } else if (input.data.startsWith('pkg-clone:')) {
+      const index = parsePackageActionIndex(input.data, 'pkg-clone:', packages);
+      const existing = index === undefined ? undefined : packages[index];
+      if (!existing || index === undefined) continue;
+      if (packages.length >= MAX_PACKAGE_COUNT) {
+        const action = await showPackageNotice(
+          conversation,
+          ctx,
+          buildEmptyState(
+            '⚠️',
+            t(ctx, 'admin_package_manager_title'),
+            t(ctx, 'admin_pkg_limit_reached', { count: localizedNumber(MAX_PACKAGE_COUNT, ctx) })
+          )
+        );
+        if (action !== 'continue') return action;
+        continue;
+      }
+      const cloneSuffix = t(ctx, 'admin_pkg_copy_suffix');
+      const cloneName = `${existing.name} ${cloneSuffix}`.slice(0, 120);
+      const cloneId = generatePackageId(cloneName, packages);
+      const clonedPkg: PackageOption = {
+        ...existing,
+        id: cloneId,
+        name: cloneName,
+        enabled: existing.enabled ?? true,
+      };
+      nextPackages = [...packages.slice(0, index + 1), clonedPkg, ...packages.slice(index + 1)];
+    } else if (input.data.startsWith('pkg-up:')) {
+      const index = parsePackageActionIndex(input.data, 'pkg-up:', packages);
+      if (index === undefined || index <= 0 || index >= packages.length) continue;
+      const reordered = [...packages];
+      const current = reordered[index]!;
+      const prev = reordered[index - 1]!;
+      reordered[index - 1] = current;
+      reordered[index] = prev;
+      nextPackages = reordered;
+    } else if (input.data.startsWith('pkg-down:')) {
+      const index = parsePackageActionIndex(input.data, 'pkg-down:', packages);
+      if (index === undefined || index < 0 || index >= packages.length - 1) continue;
+      const reordered = [...packages];
+      const current = reordered[index]!;
+      const next = reordered[index + 1]!;
+      reordered[index + 1] = current;
+      reordered[index] = next;
+      nextPackages = reordered;
     } else if (input.data === 'pkg-add') {
       if (packages.length >= MAX_PACKAGE_COUNT) {
         const action = await showPackageNotice(
@@ -230,6 +291,11 @@ export function buildPackageManagerKeyboard(
   const catalogToken = packageCatalogToken(packages);
   packages.slice(startIndex, startIndex + PACKAGE_PAGE_SIZE).forEach((pkg, offset) => {
     const index = startIndex + offset;
+    const isEnabled = pkg.enabled !== false;
+    const statusIcon = isEnabled ? '🟢' : '⚪️';
+    const statusBadge = isEnabled
+      ? t(ctx, 'admin_pkg_active_badge')
+      : t(ctx, 'admin_pkg_inactive_badge');
     const panel = pkg.panelId ? ctx.services?.panelRegistry.getPanel(pkg.panelId) : undefined;
     const service = panel?.services.find((item) => item.serviceId === pkg.serviceId);
     const target =
@@ -238,9 +304,22 @@ export function buildPackageManagerKeyboard(
         : ` · ${t(ctx, 'admin_pkg_default_target')}`;
     keyboard
       .text(
-        truncateButtonLabel(`${pkg.name}${target}  ✏️`),
+        truncateButtonLabel(`${statusIcon} ${pkg.name}${target} ✏️`),
         callbackData('pkg-edit', catalogToken, index)
       )
+      .row();
+
+    keyboard.text(statusBadge, callbackData('pkg-toggle', catalogToken, index));
+
+    if (index > 0) {
+      keyboard.text('🔼', callbackData('pkg-up', catalogToken, index));
+    }
+    if (index < packages.length - 1) {
+      keyboard.text('🔽', callbackData('pkg-down', catalogToken, index));
+    }
+
+    keyboard
+      .text(`📋 ${t(ctx, 'admin_pkg_clone')}`, callbackData('pkg-clone', catalogToken, index))
       .text('🗑', callbackData('pkg-del', catalogToken, index))
       .row();
   });
@@ -332,6 +411,7 @@ async function promptPackageFields(
       gbAmount: gbAmount.value,
       durationDays: durationDays.value,
       price: price.value,
+      enabled: existing?.enabled ?? true,
       panelId: target.value.panelId,
       serviceId: target.value.serviceId,
     },

@@ -6,6 +6,8 @@ export interface PackageOption {
   gbAmount: number;
   durationDays: number;
   price: number; // configured currency minor unit
+  /** Whether the package is active for user purchase in the shop. Defaults to true. */
+  enabled?: boolean;
   /** Creation target. Missing values preserve legacy packages via the runtime default target. */
   panelId?: string;
   serviceId?: number;
@@ -42,13 +44,21 @@ export interface CustomPriceOverride {
 }
 
 const FALLBACK_PACKAGES: readonly PackageOption[] = [
-  { id: 'pkg_10gb_30d', name: '10 GB - 30 Days', gbAmount: 10, durationDays: 30, price: 50_000 },
+  {
+    id: 'pkg_10gb_30d',
+    name: '10 GB - 30 Days',
+    gbAmount: 10,
+    durationDays: 30,
+    price: 50_000,
+    enabled: true,
+  },
   {
     id: 'pkg_30gb_30d',
     name: '30 GB - 30 Days',
     gbAmount: 30,
     durationDays: 30,
     price: 120_000,
+    enabled: true,
   },
   {
     id: 'pkg_50gb_30d',
@@ -56,6 +66,7 @@ const FALLBACK_PACKAGES: readonly PackageOption[] = [
     gbAmount: 50,
     durationDays: 30,
     price: 180_000,
+    enabled: true,
   },
   {
     id: 'pkg_100gb_60d',
@@ -63,6 +74,7 @@ const FALLBACK_PACKAGES: readonly PackageOption[] = [
     gbAmount: 100,
     durationDays: 60,
     price: 320_000,
+    enabled: true,
   },
 ];
 
@@ -76,21 +88,17 @@ const MAX_PRICE = Number.MAX_SAFE_INTEGER;
 export class PricingService {
   constructor(private readonly translationService: TranslationService) {}
 
-  getPackages(panelId?: string, serviceId?: number): PackageOption[] {
+  getPackages(panelId?: string, serviceId?: number, includeDisabled = false): PackageOption[] {
     const customJson = this.translationService.getSetting('packages_json');
     const packages = parsePackageOptionsJson(customJson);
-    if (packages) return filterPackagesForPanel(packages, panelId, serviceId);
-
-    return filterPackagesForPanel(
-      FALLBACK_PACKAGES.map((pkg) => ({ ...pkg })),
-      panelId,
-      serviceId
-    );
+    const basePackages = packages ?? FALLBACK_PACKAGES.map((pkg) => ({ ...pkg }));
+    const filtered = filterPackagesForPanel(basePackages, panelId, serviceId);
+    return includeDisabled ? filtered : filtered.filter((pkg) => pkg.enabled !== false);
   }
 
   getPackageById(id: string | null | undefined): PackageOption | undefined {
     if (!id) return undefined;
-    const staticPkg = this.getPackages().find((pkg) => pkg.id === id);
+    const staticPkg = this.getPackages(undefined, undefined, true).find((pkg) => pkg.id === id);
     if (staticPkg) return staticPkg;
 
     const customMatch = /^custom_(\d+)gb_(\d+)d$/i.exec(id);
@@ -275,6 +283,7 @@ function parsePackages(value: unknown): PackageOption[] | undefined {
       !positiveSafeInteger(item.gbAmount, MAX_GB_AMOUNT) ||
       !positiveSafeInteger(item.durationDays, MAX_DURATION_DAYS) ||
       !positiveSafeInteger(item.price, MAX_PRICE) ||
+      (item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
       seenIds.has(id) ||
       (panelId !== undefined && !/^[a-z0-9][a-z0-9_-]{1,39}$/iu.test(panelId)) ||
       (serviceId !== undefined && !positiveSafeInteger(serviceId, 2_147_483_647)) ||
@@ -289,6 +298,7 @@ function parsePackages(value: unknown): PackageOption[] | undefined {
       gbAmount: item.gbAmount,
       durationDays: item.durationDays,
       price: item.price,
+      ...(item.enabled !== undefined ? { enabled: item.enabled } : {}),
       ...(panelId === undefined ? {} : { panelId }),
       ...(serviceId === undefined ? {} : { serviceId }),
     });

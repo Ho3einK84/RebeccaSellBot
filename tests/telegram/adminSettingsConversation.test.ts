@@ -313,6 +313,74 @@ describe('admin package manager', () => {
     );
   });
 
+  it('toggles package active state immediately', async () => {
+    const packages = [starterPackage()];
+    const previewHarness = createHarness({}, []);
+    const toggleCallback = buildPackageManagerKeyboard(previewHarness.ctx, packages)
+      .inline_keyboard.flat()
+      .find((button) => button.callback_data?.startsWith('pkg-toggle:'))?.callback_data;
+    expect(toggleCallback).toBeDefined();
+
+    const harness = createHarness(
+      { packages_json: JSON.stringify(packages) },
+      [{ callback: toggleCallback! }, { callback: 'pkg-back' }],
+      { packages }
+    );
+
+    await expect(managePackages(harness.conversation, harness.ctx)).resolves.toBe('back');
+    expect(harness.updateSetting).toHaveBeenCalledOnce();
+    const persisted = JSON.parse(harness.updateSetting.mock.calls[0]![1]!) as PackageOption[];
+    expect(persisted[0]?.enabled).toBe(false);
+  });
+
+  it('clones an existing package with copy suffix and preserves settings', async () => {
+    const packages = [starterPackage()];
+    const previewHarness = createHarness({}, []);
+    const cloneCallback = buildPackageManagerKeyboard(previewHarness.ctx, packages)
+      .inline_keyboard.flat()
+      .find((button) => button.callback_data?.startsWith('pkg-clone:'))?.callback_data;
+    expect(cloneCallback).toBeDefined();
+
+    const harness = createHarness(
+      { packages_json: JSON.stringify(packages) },
+      [{ callback: cloneCallback! }, { callback: 'pkg-back' }],
+      { packages }
+    );
+
+    await expect(managePackages(harness.conversation, harness.ctx)).resolves.toBe('back');
+    expect(harness.updateSetting).toHaveBeenCalledOnce();
+    const persisted = JSON.parse(harness.updateSetting.mock.calls[0]![1]!) as PackageOption[];
+    expect(persisted).toHaveLength(2);
+    expect(persisted[1]?.name).toContain('admin_pkg_copy_suffix');
+    expect(persisted[1]?.gbAmount).toBe(10);
+    expect(persisted[1]?.durationDays).toBe(30);
+    expect(persisted[1]?.price).toBe(50_000);
+    expect(persisted[1]?.id).toBe('pkg_starter_admin_pkg_copy_suffix');
+  });
+
+  it('reorders packages by moving them up and down', async () => {
+    const packages = [
+      starterPackage(),
+      { ...starterPackage(), id: 'second', name: 'Second package' },
+    ];
+    const previewHarness = createHarness({}, []);
+    const downCallback = buildPackageManagerKeyboard(previewHarness.ctx, packages)
+      .inline_keyboard.flat()
+      .find((button) => button.callback_data?.startsWith('pkg-down:'))?.callback_data;
+    expect(downCallback).toBeDefined();
+
+    const harness = createHarness(
+      { packages_json: JSON.stringify(packages) },
+      [{ callback: downCallback! }, { callback: 'pkg-back' }],
+      { packages }
+    );
+
+    await expect(managePackages(harness.conversation, harness.ctx)).resolves.toBe('back');
+    expect(harness.updateSetting).toHaveBeenCalledOnce();
+    const persisted = JSON.parse(harness.updateSetting.mock.calls[0]![1]!) as PackageOption[];
+    expect(persisted.map((pkg) => pkg.id)).toEqual(['second', 'starter']);
+  });
+
   it('generates stable unique IDs and keeps rendered callback data within Telegram limits', () => {
     const harness = createHarness({}, []);
     const packages = Array.from({ length: MAX_PACKAGE_COUNT }, (_, index) => ({

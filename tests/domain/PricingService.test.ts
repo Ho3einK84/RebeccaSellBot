@@ -169,4 +169,36 @@ describe('PricingService package settings', () => {
     });
     expect(service.getPackageById('invalid_id')).toBeUndefined();
   });
+
+  it('filters disabled packages from getPackages by default and includes them when requested', () => {
+    const raw = JSON.stringify([
+      {
+        id: 'pkg_active',
+        name: 'Active',
+        gbAmount: 10,
+        durationDays: 30,
+        price: 50_000,
+        enabled: true,
+      },
+      {
+        id: 'pkg_inactive',
+        name: 'Inactive',
+        gbAmount: 20,
+        durationDays: 30,
+        price: 90_000,
+        enabled: false,
+      },
+    ]);
+    const service = serviceWithPackages(raw);
+
+    expect(service.getPackages().map((p) => p.id)).toEqual(['pkg_active']);
+    expect(service.getPackages(undefined, undefined, true).map((p) => p.id)).toEqual([
+      'pkg_active',
+      'pkg_inactive',
+    ]);
+    expect(service.getPackageById('pkg_inactive')).toMatchObject({
+      id: 'pkg_inactive',
+      enabled: false,
+    });
+  });
 });
