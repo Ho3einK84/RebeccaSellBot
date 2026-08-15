@@ -1,4 +1,7 @@
 export const SETTING_KEYS = [
+  'bot_enabled',
+  'language_selection_enabled',
+  'default_locale',
   'packages_json',
   'low_traffic_threshold_gb',
   'expiry_warning_days',
@@ -22,11 +25,12 @@ export const SETTING_KEYS = [
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
 export type SettingGroupId =
-  'pricing' | 'custom_volume' | 'payment' | 'support' | 'trial' | 'referral' | 'naming';
+  'system' | 'pricing' | 'custom_volume' | 'payment' | 'support' | 'trial' | 'referral' | 'naming';
 
 export type SettingEditor =
   | { type: 'packages' }
   | { type: 'boolean' }
+  | { type: 'locale' }
   | { type: 'integer'; minimum: number; maximum: number }
   | { type: 'decimal'; minimum: number; maximum: number }
   | { type: 'card_number' }
@@ -44,6 +48,24 @@ export type SettingDefinition = {
 };
 
 export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
+  {
+    key: 'bot_enabled',
+    group: 'system',
+    labelKey: 'admin_setting_bot_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'language_selection_enabled',
+    group: 'system',
+    labelKey: 'admin_setting_language_selection_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'default_locale',
+    group: 'system',
+    labelKey: 'admin_setting_default_locale',
+    editor: { type: 'locale' },
+  },
   {
     key: 'packages_json',
     group: 'pricing',
@@ -168,6 +190,7 @@ export type SettingGroup = {
 };
 
 export const SETTING_GROUPS: readonly SettingGroup[] = [
+  settingGroup('system', 'admin_setting_group_system', 'admin_setting_group_system_desc'),
   settingGroup('pricing', 'admin_setting_group_pricing', 'admin_setting_group_pricing_desc'),
   settingGroup(
     'custom_volume',

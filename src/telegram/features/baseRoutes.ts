@@ -50,11 +50,17 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     );
 
     if (isFirstVisit) {
-      await ctx.reply(t(ctx, 'onboarding_welcome'), {
-        parse_mode: 'Markdown',
-        reply_markup: languageKeyboard(ctx, 'main'),
-      });
-      return;
+      const languageSelectionEnabled = services.translationService.getSettingBool(
+        'language_selection_enabled',
+        true
+      );
+      if (languageSelectionEnabled) {
+        await ctx.reply(t(ctx, 'onboarding_welcome'), {
+          parse_mode: 'Markdown',
+          reply_markup: languageKeyboard(ctx, 'main'),
+        });
+        return;
+      }
     }
 
     const dashboardText = await renderHomeDashboard(ctx);

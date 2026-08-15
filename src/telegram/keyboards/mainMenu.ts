@@ -342,19 +342,25 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       );
     }
   )
-  .text(
-    (ctx) => t(ctx, 'menu_language'),
-    async (ctx) => {
-      await ctx.editMessageText(
-        buildScreen({
-          emoji: '🌐',
-          title: t(ctx, 'language_selection_title'),
-          subtitle: t(ctx, 'language_selection_subtitle'),
-        }),
-        { parse_mode: 'Markdown', reply_markup: languageKeyboard(ctx, 'main') }
+  .dynamic((ctx, range) => {
+    const languageSelectionEnabled =
+      ctx.services?.translationService.getSettingBool('language_selection_enabled', true) ?? true;
+    if (languageSelectionEnabled || (ctx.from?.id && ctx.services?.isAdmin(ctx.from.id))) {
+      range.text(
+        (c) => t(c, 'menu_language'),
+        async (c) => {
+          await c.editMessageText(
+            buildScreen({
+              emoji: '🌐',
+              title: t(c, 'language_selection_title'),
+              subtitle: t(c, 'language_selection_subtitle'),
+            }),
+            { parse_mode: 'Markdown', reply_markup: languageKeyboard(c, 'main') }
+          );
+        }
       );
     }
-  )
+  })
   .row()
   .dynamic((ctx, range) => {
     const supportEnabled =

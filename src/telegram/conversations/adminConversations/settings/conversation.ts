@@ -18,13 +18,16 @@ import {
   buildBooleanSettingKeyboard,
   buildCustomNamingTemplatePrompt,
   buildEditorNavigationKeyboard,
+  buildLocaleSettingKeyboard,
   buildSettingSavedScreen,
   buildSettingsGroupKeyboard,
   buildSettingsGroupPrompt,
   buildSettingsInGroupKeyboard,
+  buildSettingsOverviewScreen,
   buildSettingsPrompt,
   displayAdminSettingValue,
   editableSettingValue,
+  readSettingBool,
 } from './presentation.js';
 import { managePackages } from './packageManager.js';
 import { waitForSettingsInput } from './navigation.js';
@@ -72,6 +75,16 @@ export async function adminEditSettingsConversation(
       continue;
     }
 
+    if (choice.definition.editor.type === 'boolean') {
+      const current = readSettingBool(ctx, choice.definition.key);
+      const nextVal = (!current).toString();
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting(choice.definition.key, nextVal);
+      });
+      continue;
+    }
+
     const outcome = await editSetting(conversation, ctx, choice.definition);
     if (outcome === 'cancel') return;
     // Both save and Back return to the category that owns the setting.
@@ -83,10 +96,11 @@ async function chooseSettingsGroup(
   ctx: ConversationContext
 ): Promise<GroupChoice> {
   const keyboard = buildSettingsGroupKeyboard(ctx);
+  const overview = buildSettingsOverviewScreen(ctx);
   await promptInConversation(
     conversation,
     ctx,
-    buildSettingsPrompt(ctx, t(ctx, 'admin_settings_groups_prompt'), { emoji: '⚙️' }),
+    overview || buildSettingsPrompt(ctx, t(ctx, 'admin_settings_groups_prompt'), { emoji: '⚙️' }),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
   const input = await waitForSettingsInput(conversation, {
@@ -134,6 +148,8 @@ async function editSetting(
   switch (definition.editor.type) {
     case 'boolean':
       return editBooleanSetting(conversation, ctx, definition);
+    case 'locale':
+      return editLocaleSetting(conversation, ctx, definition);
     case 'naming_mode':
       return editNamingMode(conversation, ctx, definition);
     case 'support':
@@ -141,6 +157,35 @@ async function editSetting(
     default:
       return editTextSetting(conversation, ctx, definition);
   }
+}
+
+async function editLocaleSetting(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  definition: SettingDefinition
+): Promise<FlowOutcome> {
+  const current = ctx.services?.translationService.getSetting(definition.key, 'fa') ?? 'fa';
+  const callbackPrefix = 'set-loc:';
+  const keyboard = buildLocaleSettingKeyboard(ctx, current, callbackPrefix);
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(ctx, t(ctx, 'admin_setting_locale_prompt'), {
+      emoji: '🌐',
+      title: t(ctx, definition.labelKey),
+    }),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
+  const input = await waitForSettingsInput(conversation, {
+    callbackPrefixes: [callbackPrefix],
+    backCallbacks: [`${callbackPrefix}back`],
+    retryKeyboard: keyboard,
+  });
+  if (input.type === 'cancel') return 'cancel';
+  if (input.type !== 'callback') return 'back';
+  const chosen = input.data.slice(callbackPrefix.length);
+  const validLocale = chosen === 'en' ? 'en' : 'fa';
+  return saveSetting(conversation, ctx, definition, validLocale);
 }
 
 async function editBooleanSetting(

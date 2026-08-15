@@ -9,6 +9,7 @@ import { buildPromptScreen, buildScreen } from '../../../ui.js';
 import {
   SETTING_GROUPS,
   SETTING_LABELS,
+  getSettingDefinition,
   getSettingGroup,
   isSecretSetting,
   type SettingGroup,
@@ -50,7 +51,14 @@ export function buildSettingsInGroupKeyboard(
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   for (const key of group.settings) {
-    keyboard.text(t(ctx, SETTING_LABELS[key]), callbackData('set-edit', key)).row();
+    const definition = getSettingDefinition(key);
+    let label = t(ctx, SETTING_LABELS[key]);
+    if (definition?.editor.type === 'boolean') {
+      const isEnabled = readSettingBool(ctx, key);
+      const badge = isEnabled ? t(ctx, 'admin_overview_active') : t(ctx, 'admin_overview_inactive');
+      label = `${label}: ${badge}`;
+    }
+    keyboard.text(truncateButtonLabel(label, 60), callbackData('set-edit', key)).row();
   }
   return keyboard
     .text(t(ctx, 'admin_settings_back_groups'), 'set-groups')
@@ -69,6 +77,24 @@ export function buildBooleanSettingKeyboard(
   return new InlineKeyboard()
     .text(current ? `✅ ${activeLabel}` : activeLabel, `${callbackPrefix}true`)
     .text(!current ? `✅ ${inactiveLabel}` : inactiveLabel, `${callbackPrefix}false`)
+    .row()
+    .text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`)
+    .row()
+    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+}
+
+export function buildLocaleSettingKeyboard(
+  ctx: ConversationContext,
+  currentLocale: string,
+  callbackPrefix: string
+): InlineKeyboard {
+  const isFa = currentLocale !== 'en';
+  const isEn = currentLocale === 'en';
+  const faLabel = t(ctx, 'admin_setting_locale_fa');
+  const enLabel = t(ctx, 'admin_setting_locale_en');
+  return new InlineKeyboard()
+    .text(isFa ? `✅ ${faLabel}` : faLabel, `${callbackPrefix}fa`)
+    .text(isEn ? `✅ ${enLabel}` : enLabel, `${callbackPrefix}en`)
     .row()
     .text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`)
     .row()
@@ -134,6 +160,157 @@ export function buildSettingsGroupPrompt(ctx: ConversationContext, groupId: stri
   );
 }
 
+function parseSettingNum(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw === '') return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
+  if (!ctx.services) return '';
+  const ts = ctx.services.translationService;
+  const botEnabled = ts.getSettingBool('bot_enabled', true);
+  const langEnabled = ts.getSettingBool('language_selection_enabled', true);
+  const defLocale = ts.getSetting('default_locale', 'fa');
+  const trialEnabled = ts.getSettingBool('trial_enabled', true);
+  const trialGb = parseSettingNum(ts.getSetting('trial_gb'), 1);
+  const trialDays = parseSettingNum(ts.getSetting('trial_days'), 3);
+  const customVolEnabled = ts.getSettingBool('custom_volume_enabled', true);
+  const pricePerGb = parseSettingNum(ts.getSetting('price_per_gb'), 5000);
+  const customDays = parseSettingNum(ts.getSetting('custom_default_days'), 30);
+  const cardNumber = ts.getSetting('card_number', '—');
+  const cardHolder = ts.getSetting('card_holder', '—');
+  const supportEnabled = ts.getSettingBool('support_enabled', true);
+  const supportDest = ts.getSetting('support_destination', '') || '—';
+  const refBonus = parseSettingNum(ts.getSetting('referral_bonus_toman'), 10000);
+  const cashback = parseSettingNum(ts.getSetting('cashback_percent'), 5);
+  const lowTraffic = parseSettingNum(ts.getSetting('low_traffic_threshold_gb'), 2);
+  const expiryDays = parseSettingNum(ts.getSetting('expiry_warning_days'), 3);
+
+  const onBadge = t(ctx, 'admin_overview_active');
+  const offBadge = t(ctx, 'admin_overview_inactive');
+  const maintBadge = t(ctx, 'admin_overview_maintenance');
+
+  return buildScreen({
+    emoji: '⚙️',
+    title: t(ctx, 'admin_overview_title'),
+    subtitle: t(ctx, 'admin_overview_subtitle'),
+    primary: {
+      emoji: botEnabled ? '🟢' : '🔴',
+      label: t(ctx, 'admin_overview_bot_status'),
+      value: botEnabled ? onBadge : maintBadge,
+    },
+    sections: [
+      {
+        emoji: '🌐',
+        title: t(ctx, 'admin_overview_language'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_default_locale'),
+            value:
+              defLocale === 'en'
+                ? t(ctx, 'admin_setting_locale_en')
+                : t(ctx, 'admin_setting_locale_fa'),
+          },
+          {
+            label: t(ctx, 'admin_setting_language_selection_enabled'),
+            value: langEnabled ? onBadge : offBadge,
+          },
+        ],
+      },
+      {
+        emoji: '💳',
+        title: t(ctx, 'admin_overview_payment'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_card_number'),
+            value: `\`${escapeTelegramMarkdown(cardNumber)}\``,
+          },
+          {
+            label: t(ctx, 'admin_setting_card_holder'),
+            value: escapeTelegramMarkdown(cardHolder),
+          },
+        ],
+      },
+      {
+        emoji: '🎁',
+        title: t(ctx, 'admin_overview_trial'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_trial_enabled'),
+            value: trialEnabled
+              ? `${onBadge} (${localizedNumber(trialGb, ctx)} GB / ${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')})`
+              : offBadge,
+          },
+        ],
+      },
+      {
+        emoji: '📦',
+        title: t(ctx, 'admin_overview_custom_volume'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_custom_volume_enabled'),
+            value: customVolEnabled
+              ? `${onBadge} (${localizedNumber(pricePerGb, ctx)} ${t(ctx, 'currency_toman')}/GB - ${localizedNumber(customDays, ctx)} ${t(ctx, 'days_unit')})`
+              : offBadge,
+          },
+        ],
+      },
+      {
+        emoji: '👥',
+        title: t(ctx, 'admin_overview_referral'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_referral_bonus_toman'),
+            value: `${localizedNumber(refBonus, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            label: t(ctx, 'admin_setting_cashback_percent'),
+            value: `${localizedNumber(cashback, ctx)}%`,
+          },
+        ],
+      },
+      {
+        emoji: '💬',
+        title: t(ctx, 'admin_overview_support'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_support_enabled'),
+            value: supportEnabled
+              ? `${onBadge} (\`${escapeTelegramMarkdown(supportDest)}\`)`
+              : offBadge,
+          },
+        ],
+      },
+      {
+        emoji: '⚠️',
+        title: t(ctx, 'admin_overview_alerts'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_low_traffic_threshold_gb'),
+            value: `${localizedNumber(lowTraffic, ctx)} GB`,
+          },
+          {
+            label: t(ctx, 'admin_setting_expiry_warning_days'),
+            value: `${localizedNumber(expiryDays, ctx)} ${t(ctx, 'days_unit')}`,
+          },
+        ],
+      },
+      {
+        emoji: '🏷️',
+        title: t(ctx, 'admin_overview_naming'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_naming_mode'),
+            value: displayAdminSettingValue(ctx, 'naming_mode'),
+          },
+        ],
+      },
+    ],
+    footer: `ℹ️ ${t(ctx, 'admin_settings_groups_prompt')}`,
+  });
+}
+
 export function displayAdminSettingValue(ctx: ConversationContext, key: string): string {
   if (!ctx.services) return '—';
   if (isSecretSetting(key)) {
@@ -146,6 +323,10 @@ export function displayAdminSettingValue(ctx: ConversationContext, key: string):
     return packages
       ? t(ctx, 'admin_setting_packages_summary', { count: localizedNumber(packages.length, ctx) })
       : t(ctx, 'admin_setting_invalid');
+  }
+  if (key === 'default_locale') {
+    const loc = ctx.services.translationService.getSetting(key, 'fa');
+    return loc === 'en' ? t(ctx, 'admin_setting_locale_en') : t(ctx, 'admin_setting_locale_fa');
   }
   if (key === 'naming_mode') {
     const mode = ctx.services.translationService.getSetting(key, 'custom');
@@ -164,7 +345,8 @@ export function displayAdminSettingValue(ctx: ConversationContext, key: string):
     }
     return value;
   }
-  if (key === 'trial_enabled' || key === 'custom_volume_enabled') {
+  const definition = getSettingDefinition(key);
+  if (definition?.editor.type === 'boolean') {
     return t(
       ctx,
       readSettingBool(ctx, key) ? 'admin_setting_enabled_on' : 'admin_setting_enabled_off'
@@ -257,7 +439,7 @@ function escapeInlineCode(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('`', '\\`');
 }
 
-function readSettingBool(ctx: ConversationContext, key: string): boolean {
+export function readSettingBool(ctx: ConversationContext, key: string): boolean {
   const service = ctx.services?.translationService;
   if (!service) return false;
 

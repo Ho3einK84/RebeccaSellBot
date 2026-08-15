@@ -10,6 +10,7 @@ describe('admin conversation authorization', () => {
     expect(isAdminCallbackData('admin-sales-menu/1/0//')).toBe(true);
     expect(isAdminCallbackData('admin-panels-menu/0/0//')).toBe(true);
     expect(isAdminCallbackData('admin-system-menu/0/1//')).toBe(true);
+    expect(isAdminCallbackData('set-group:system')).toBe(true);
     expect(isAdminCallbackData('main-menu/0/0//')).toBe(false);
   });
 

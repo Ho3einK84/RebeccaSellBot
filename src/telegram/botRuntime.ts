@@ -179,6 +179,33 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     return next();
   });
 
+  // Maintenance mode check — if bot_enabled is false, reject non-admin interactions
+  bot.use(async (ctx, next) => {
+    const telegramId = ctx.from?.id;
+    if (!telegramId) return next();
+    if (services.isAdmin(telegramId)) return next();
+
+    const botEnabled = services.translationService.getSettingBool('bot_enabled', true);
+    if (!botEnabled) {
+      if (ctx.callbackQuery) {
+        await ctx.answerCallbackQuery({
+          text: t(ctx, 'bot_maintenance_alert'),
+          show_alert: true,
+        });
+      } else {
+        const maintenanceScreen = buildScreen({
+          emoji: '🛠️',
+          title: t(ctx, 'bot_maintenance_title'),
+          subtitle: t(ctx, 'bot_maintenance_subtitle'),
+          footer: t(ctx, 'bot_maintenance_message'),
+        });
+        await ctx.reply(maintenanceScreen, { parse_mode: 'Markdown' });
+      }
+      return;
+    }
+    return next();
+  });
+
   // Conversation plugin
   // Conversation contexts are created from scratch by the plugin and do not
   // inherit properties installed by the outer middleware tree. Reinject the
@@ -224,7 +251,9 @@ export function isAdminCallbackData(data: string): boolean {
     data.startsWith('a:p:') ||
     data.startsWith('receipt:') ||
     data.startsWith('receipt-') ||
-    data.startsWith('promo:')
+    data.startsWith('promo:') ||
+    data.startsWith('set-') ||
+    data.startsWith('pkg-')
   );
 }
 

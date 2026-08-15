@@ -64,11 +64,12 @@ export class TranslationService {
 
   /** Resolve Telegram-style locale values such as `fa-IR` and `en_US`. */
   resolveLocale(locale?: string): SupportedLocale {
-    return normalizeLocale(locale, this.defaultLocale);
+    return normalizeLocale(locale, this.getDefaultLocale());
   }
 
   getDefaultLocale(): SupportedLocale {
-    return this.defaultLocale;
+    const configured = this.cache.get('default_locale');
+    return normalizeLocale(configured, this.defaultLocale);
   }
 
   /** Enumerate the stable text catalogue available to the Telegram editor. */
@@ -87,8 +88,10 @@ export class TranslationService {
    */
   get(key: string, locale?: string, params?: Record<string, string | number>): string {
     const { messageKey, requestedLocale } = this.parseTranslationKey(key, locale);
+    const activeDefault = this.getDefaultLocale();
     const localeOrder = uniqueLocales([
       requestedLocale,
+      activeDefault,
       this.defaultLocale,
       DEFAULT_LOCALE,
       ...SUPPORTED_LOCALES,

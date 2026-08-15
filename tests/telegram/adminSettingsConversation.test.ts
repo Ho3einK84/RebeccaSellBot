@@ -114,14 +114,12 @@ function createHarness(
 }
 
 describe('admin settings conversation', () => {
-  it('navigates home, category, toggle save, category return, Back, and Cancel', async () => {
+  it('navigates home, category, instant toggle save, Back, and Cancel', async () => {
     const harness = createHarness(
       { custom_volume_enabled: 'true', price_per_gb: '5000', custom_default_days: '30' },
       [
         { callback: 'set-group:custom_volume' },
         { callback: 'set-edit:custom_volume_enabled' },
-        { callback: 'set-cv:false' },
-        { callback: 'set-return:custom_volume' },
         { callback: 'set-groups' },
         { callback: 'conversation:cancel' },
       ]
@@ -132,9 +130,6 @@ describe('admin settings conversation', () => {
     expect(harness.updateSetting).toHaveBeenCalledOnce();
     expect(harness.updateSetting).toHaveBeenCalledWith('custom_volume_enabled', 'false');
     expect(harness.settings.get('custom_volume_enabled')).toBe('false');
-    expect(replyTexts(harness.reply)).toContainEqual(
-      expect.stringContaining('admin_setting_saved_title')
-    );
     expect(keyboardRenderCount(harness.reply, 'set-group:custom_volume')).toBe(2);
     expect(keyboardRenderCount(harness.reply, 'set-edit:custom_volume_enabled')).toBe(2);
     expect(harness.remaining).toHaveLength(0);
@@ -341,6 +336,29 @@ describe('admin package manager', () => {
       expect([...button.text].length).toBeLessThanOrEqual(60);
     }
     expect(getSettingGroup('pricing')?.settings).toContain('packages_json');
+  });
+
+  it('toggles bot_enabled and changes default_locale in the system group', async () => {
+    const harness = createHarness(
+      { bot_enabled: 'true', default_locale: 'fa', language_selection_enabled: 'true' },
+      [
+        { callback: 'set-group:system' },
+        { callback: 'set-edit:bot_enabled' },
+        { callback: 'set-edit:default_locale' },
+        { callback: 'set-loc:en' },
+        { callback: 'set-return:system' },
+        { callback: 'set-groups' },
+        { callback: 'conversation:cancel' },
+      ]
+    );
+
+    await adminEditSettingsConversation(harness.conversation, harness.ctx);
+
+    expect(harness.updateSetting).toHaveBeenCalledWith('bot_enabled', 'false');
+    expect(harness.settings.get('bot_enabled')).toBe('false');
+    expect(harness.updateSetting).toHaveBeenCalledWith('default_locale', 'en');
+    expect(harness.settings.get('default_locale')).toBe('en');
+    expect(harness.remaining).toHaveLength(0);
   });
 });
 

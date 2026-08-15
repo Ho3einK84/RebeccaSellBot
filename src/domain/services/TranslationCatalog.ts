@@ -62,6 +62,11 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   naming_mode: 'custom',
   custom_naming_template: '{prefix}_{telegram_id}_{counter}',
   naming_prefix: 'rebecca',
+
+  // System, maintenance, and language settings.
+  bot_enabled: 'true',
+  language_selection_enabled: 'true',
+  default_locale: 'fa',
 };
 
 function qualify(locale: SupportedLocale, texts: Record<string, string>): Record<string, string> {

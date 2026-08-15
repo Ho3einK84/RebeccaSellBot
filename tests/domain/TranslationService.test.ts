@@ -274,4 +274,17 @@ describe('TranslationService', () => {
     await service.updateSetting('price_per_gb', '5000oops');
     expect(service.getSettingNum('price_per_gb', 7000)).toBe(7000);
   });
+
+  it('dynamically adapts default locale when default_locale setting is updated in DB', async () => {
+    const db = createDatabaseMock();
+    vi.mocked(getDb).mockReturnValue(db as never);
+    const service = new TranslationService({ defaultLocale: 'fa' });
+
+    expect(service.getDefaultLocale()).toBe('fa');
+    expect(service.resolveLocale()).toBe('fa');
+
+    await service.updateSetting('default_locale', 'en');
+    expect(service.getDefaultLocale()).toBe('en');
+    expect(service.resolveLocale()).toBe('en');
+  });
 });

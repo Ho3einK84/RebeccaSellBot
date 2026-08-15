@@ -35,6 +35,8 @@ export function validateAdminSetting(key: SettingKey, rawValue: string): string 
     }
     case 'boolean':
       return value === 'true' || value === 'false' ? value : undefined;
+    case 'locale':
+      return value === 'fa' || value === 'en' ? value : undefined;
     case 'card_number': {
       const normalized = normalizeInputDigits(value.replaceAll('-', ''));
       return /^\d{12,24}$/u.test(normalized) ? normalized : undefined;
