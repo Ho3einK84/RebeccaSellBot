@@ -523,7 +523,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_setting_bot_enabled: 'Bot operating status',
   admin_setting_language_selection_enabled: 'User language selection',
   admin_setting_default_locale: 'Default bot language',
-  admin_setting_locale_fa: 'Persian (FA) 🇮🇷',
+  admin_setting_locale_fa: 'Persian (FA) 🦁',
   admin_setting_locale_en: 'English (EN) 🇬🇧',
   admin_setting_locale_prompt: 'Select the default bot language:',
   bot_maintenance_title: 'Under Maintenance',

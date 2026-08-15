@@ -5,78 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1785580938782,
-      "tag": "0000_initial",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1785591000000,
-      "tag": "0001_user_locale_preference",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1786124800000,
-      "tag": "0002_operational_hardening",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1786128400000,
-      "tag": "0003_telegram_admin_foundation",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1786135360000,
-      "tag": "0004_wallet_auto_renew",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1786209177522,
-      "tag": "0005_data_integrity_hardening",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1786220574146,
-      "tag": "0006_subscription_lifecycle",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1786237200000,
-      "tag": "0007_multi_panel_safety",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1786250000000,
-      "tag": "0008_traffic_cache_and_receipt_media",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1786650000000,
-      "tag": "0009_payment_defaults",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1786700000000,
-      "tag": "0010_remote_incarnation_and_completed_at",
+      "when": 1786801530099,
+      "tag": "0000_initial_schema",
       "breakpoints": true
     }
   ]

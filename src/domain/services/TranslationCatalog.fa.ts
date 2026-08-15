@@ -520,7 +520,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_setting_bot_enabled: 'وضعیت کارکرد ربات',
   admin_setting_language_selection_enabled: 'انتخاب زبان توسط کاربر',
   admin_setting_default_locale: 'زبان پیش‌فرض ربات',
-  admin_setting_locale_fa: 'فارسی 🇮🇷',
+  admin_setting_locale_fa: 'فارسی 🦁',
   admin_setting_locale_en: 'English 🇬🇧',
   admin_setting_locale_prompt: 'زبان پیش‌فرض ربات را انتخاب کنید:',
   bot_maintenance_title: 'در دست تعمیر و به‌روزرسانی',
