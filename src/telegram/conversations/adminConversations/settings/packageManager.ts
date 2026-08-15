@@ -7,7 +7,6 @@ import {
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { localizedNumber, t, tm } from '../../../locale.js';
 import { callbackData } from '../../../callbackData.js';
-import { packageCatalogToken } from '../../../packageCatalog.js';
 import { escapeTelegramMarkdown } from '../../../rendering.js';
 import {
   buildEmptyState,
@@ -79,16 +78,17 @@ export async function managePackages(
       if (requestedPage !== undefined && requestedPage < pageCount) page = requestedPage;
       continue;
     } else if (input.data.startsWith('pkg-toggle:')) {
-      const index = parsePackageActionIndex(input.data, 'pkg-toggle:', packages);
-      const existing = index === undefined ? undefined : packages[index];
-      if (!existing || index === undefined) continue;
+      const pkgId = input.data.slice('pkg-toggle:'.length);
+      const existing = packages.find((pkg) => pkg.id === pkgId);
+      if (!existing) continue;
       const currentEnabled = existing.enabled !== false;
       const updatedPkg = { ...existing, enabled: !currentEnabled };
-      nextPackages = packages.map((pkg, itemIndex) => (itemIndex === index ? updatedPkg : pkg));
+      nextPackages = packages.map((pkg) => (pkg.id === pkgId ? updatedPkg : pkg));
     } else if (input.data.startsWith('pkg-clone:')) {
-      const index = parsePackageActionIndex(input.data, 'pkg-clone:', packages);
-      const existing = index === undefined ? undefined : packages[index];
-      if (!existing || index === undefined) continue;
+      const pkgId = input.data.slice('pkg-clone:'.length);
+      const index = packages.findIndex((pkg) => pkg.id === pkgId);
+      const existing = index === -1 ? undefined : packages[index];
+      if (!existing || index === -1) continue;
       if (packages.length >= MAX_PACKAGE_COUNT) {
         const action = await showPackageNotice(
           conversation,
@@ -113,8 +113,9 @@ export async function managePackages(
       };
       nextPackages = [...packages.slice(0, index + 1), clonedPkg, ...packages.slice(index + 1)];
     } else if (input.data.startsWith('pkg-up:')) {
-      const index = parsePackageActionIndex(input.data, 'pkg-up:', packages);
-      if (index === undefined || index <= 0 || index >= packages.length) continue;
+      const pkgId = input.data.slice('pkg-up:'.length);
+      const index = packages.findIndex((pkg) => pkg.id === pkgId);
+      if (index <= 0 || index >= packages.length) continue;
       const reordered = [...packages];
       const current = reordered[index]!;
       const prev = reordered[index - 1]!;
@@ -122,8 +123,9 @@ export async function managePackages(
       reordered[index] = prev;
       nextPackages = reordered;
     } else if (input.data.startsWith('pkg-down:')) {
-      const index = parsePackageActionIndex(input.data, 'pkg-down:', packages);
-      if (index === undefined || index < 0 || index >= packages.length - 1) continue;
+      const pkgId = input.data.slice('pkg-down:'.length);
+      const index = packages.findIndex((pkg) => pkg.id === pkgId);
+      if (index < 0 || index >= packages.length - 1) continue;
       const reordered = [...packages];
       const current = reordered[index]!;
       const next = reordered[index + 1]!;
@@ -162,9 +164,10 @@ export async function managePackages(
       }
       nextPackages = [...packages, created.value];
     } else if (input.data.startsWith('pkg-edit:')) {
-      const index = parsePackageActionIndex(input.data, 'pkg-edit:', packages);
-      const existing = index === undefined ? undefined : packages[index];
-      if (!existing || index === undefined) continue;
+      const pkgId = input.data.slice('pkg-edit:'.length);
+      const index = packages.findIndex((pkg) => pkg.id === pkgId);
+      const existing = index === -1 ? undefined : packages[index];
+      if (!existing || index === -1) continue;
       const updated = await promptPackageFields(conversation, ctx, packages, existing);
       if (updated.type === 'cancel') return 'cancel';
       if (updated.type === 'back') continue;
@@ -181,11 +184,11 @@ export async function managePackages(
         if (action !== 'continue') return action;
         continue;
       }
-      nextPackages = packages.map((pkg, itemIndex) => (itemIndex === index ? updated.value : pkg));
+      nextPackages = packages.map((pkg) => (pkg.id === pkgId ? updated.value : pkg));
     } else if (input.data.startsWith('pkg-del:')) {
-      const index = parsePackageActionIndex(input.data, 'pkg-del:', packages);
-      const existing = index === undefined ? undefined : packages[index];
-      if (!existing || index === undefined) continue;
+      const pkgId = input.data.slice('pkg-del:'.length);
+      const existing = packages.find((pkg) => pkg.id === pkgId);
+      if (!existing) continue;
       if (packages.length <= 1) {
         const action = await showPackageNotice(
           conversation,
@@ -199,9 +202,8 @@ export async function managePackages(
         if (action !== 'continue') return action;
         continue;
       }
-      const catalogToken = packageCatalogToken(packages);
       const confirmKeyboard = new InlineKeyboard()
-        .text(t(ctx, 'admin_confirm_button'), callbackData('pkg-del-confirm', catalogToken, index))
+        .text(t(ctx, 'admin_confirm_button'), callbackData('pkg-del-confirm', pkgId))
         .row()
         .text(t(ctx, 'menu_cancel'), 'pkg-del-cancel');
       await promptInConversation(
@@ -229,11 +231,11 @@ export async function managePackages(
       if (confirmation.type === 'cancel') return 'cancel';
       if (
         confirmation.type !== 'callback' ||
-        confirmation.data !== callbackData('pkg-del-confirm', catalogToken, index)
+        confirmation.data !== callbackData('pkg-del-confirm', pkgId)
       ) {
         continue;
       }
-      nextPackages = packages.filter((_, itemIndex) => itemIndex !== index);
+      nextPackages = packages.filter((pkg) => pkg.id !== pkgId);
     }
 
     if (!nextPackages) continue;
@@ -273,7 +275,6 @@ export function buildPackageManagerKeyboard(
   const safePage = clampPackagePage(page, packages.length);
   const pageCount = packagePageCount(packages.length);
   const startIndex = safePage * PACKAGE_PAGE_SIZE;
-  const catalogToken = packageCatalogToken(packages);
   packages.slice(startIndex, startIndex + PACKAGE_PAGE_SIZE).forEach((pkg, offset) => {
     const index = startIndex + offset;
     const isEnabled = pkg.enabled !== false;
@@ -290,22 +291,22 @@ export function buildPackageManagerKeyboard(
     keyboard
       .text(
         truncateButtonLabel(`${statusIcon} ${pkg.name}${target} ✏️`),
-        callbackData('pkg-edit', catalogToken, index)
+        callbackData('pkg-edit', pkg.id)
       )
       .row();
 
-    keyboard.text(statusBadge, callbackData('pkg-toggle', catalogToken, index));
+    keyboard.text(statusBadge, callbackData('pkg-toggle', pkg.id));
 
     if (index > 0) {
-      keyboard.text('🔼', callbackData('pkg-up', catalogToken, index));
+      keyboard.text('🔼', callbackData('pkg-up', pkg.id));
     }
     if (index < packages.length - 1) {
-      keyboard.text('🔽', callbackData('pkg-down', catalogToken, index));
+      keyboard.text('🔽', callbackData('pkg-down', pkg.id));
     }
 
     keyboard
-      .text(`📋 ${t(ctx, 'admin_pkg_clone')}`, callbackData('pkg-clone', catalogToken, index))
-      .text('🗑', callbackData('pkg-del', catalogToken, index))
+      .text(`📋 ${t(ctx, 'admin_pkg_clone')}`, callbackData('pkg-clone', pkg.id))
+      .text('🗑', callbackData('pkg-del', pkg.id))
       .row();
   });
   if (safePage > 0) {
@@ -327,12 +328,12 @@ export function generatePackageId(name: string, packages: readonly PackageOption
       .toLowerCase()
       .replace(/[^a-z0-9]+/gu, '_')
       .replace(/^_+|_+$/gu, '')
-      .slice(0, 48) || 'package';
+      .slice(0, 32) || 'package';
   const base = `pkg_${slug}`;
   const ids = new Set(packages.map((pkg) => pkg.id));
   if (!ids.has(base)) return base;
   for (let suffix = 2; suffix <= 999; suffix++) {
-    const candidate = `${base.slice(0, 59 - String(suffix).length)}_${suffix}`;
+    const candidate = `${base.slice(0, 50 - String(suffix).length)}_${suffix}`;
     if (!ids.has(candidate)) return candidate;
   }
   throw new Error('PACKAGE_ID_SPACE_EXHAUSTED');
@@ -602,17 +603,6 @@ function parsePackageIndex(data: string, prefix: string): number | undefined {
   const raw = data.slice(prefix.length);
   if (!/^\d+$/u.test(raw)) return undefined;
   const value = Number(raw);
-  return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
-}
-
-function parsePackageActionIndex(
-  data: string,
-  prefix: string,
-  packages: readonly PackageOption[]
-): number | undefined {
-  const match = /^([0-9a-f]{10}):(\d+)$/u.exec(data.slice(prefix.length));
-  if (!match || match[1] !== packageCatalogToken(packages)) return undefined;
-  const value = Number(match[2]);
   return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 

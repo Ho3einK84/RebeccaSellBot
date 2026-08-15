@@ -258,23 +258,17 @@ describe('admin package manager', () => {
     expect(harness.updateSetting).not.toHaveBeenCalled();
   });
 
-  it('rejects a stale package action after the catalog changes', async () => {
+  it('supports multiple sequential actions without errors', async () => {
     const packages = [
       starterPackage(),
       { ...starterPackage(), id: 'second', name: 'Second package', gbAmount: 20 },
     ];
-    const previewHarness = createHarness({}, []);
-    const staleDelete = buildPackageManagerKeyboard(previewHarness.ctx, packages)
-      .inline_keyboard.flat()
-      .find((button) => button.callback_data?.startsWith('pkg-del:'))?.callback_data;
-    expect(staleDelete).toBeDefined();
-    const confirmDelete = staleDelete!.replace('pkg-del:', 'pkg-del-confirm:');
     const harness = createHarness(
       { packages_json: JSON.stringify(packages) },
       [
-        { callback: staleDelete! },
-        { callback: confirmDelete },
-        { callback: staleDelete! },
+        { callback: 'pkg-toggle:starter' }, // 1. Toggle starter to disabled
+        { callback: 'pkg-down:starter' }, // 2. Move starter down (swap with second)
+        { callback: 'pkg-toggle:starter' }, // 3. Toggle starter back to enabled
         { callback: 'pkg-back' },
       ],
       { packages }
@@ -282,9 +276,11 @@ describe('admin package manager', () => {
 
     await expect(managePackages(harness.conversation, harness.ctx)).resolves.toBe('back');
 
-    expect(harness.updateSetting).toHaveBeenCalledOnce();
-    const persisted = JSON.parse(harness.updateSetting.mock.calls[0]![1]!) as PackageOption[];
-    expect(persisted.map((pkg) => pkg.id)).toEqual(['second']);
+    expect(harness.updateSetting).toHaveBeenCalledTimes(3);
+    const lastCall = harness.updateSetting.mock.calls[2]![1]!;
+    const persisted = JSON.parse(lastCall) as PackageOption[];
+    expect(persisted.map((pkg) => pkg.id)).toEqual(['second', 'starter']);
+    expect(persisted[1]?.enabled).toBe(true);
   });
 
   it('paginates large valid catalogs and refuses to exceed the domain limit', async () => {
