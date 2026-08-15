@@ -4,6 +4,24 @@
   "private": true,
   "description": "RebeccaSellBot - Telegram VPN sales bot for Rebecca Panel (REST API only)",
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/Ho3einK84/RebeccaSellBot#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ho3einK84/RebeccaSellBot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Ho3einK84/RebeccaSellBot/issues"
+  },
+  "keywords": [
+    "telegram-bot",
+    "rebecca-panel",
+    "vpn-sales",
+    "grammy",
+    "typescript",
+    "drizzle-orm",
+    "postgresql"
+  ],
   "engines": {
     "node": ">=24 <25",
     "npm": ">=11 <12"

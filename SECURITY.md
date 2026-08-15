@@ -13,11 +13,11 @@ A useful report includes the affected commit/version, impact, prerequisites, rep
 - Treat Rebecca subscription URLs as credentials; do not paste them into logs or public reports.
 - Rotate any secret immediately if it was committed, copied into an image layer, or exposed in CI output. Removing it from the latest Git commit is not sufficient because historical objects and image layers may retain it.
 
-## Database integrity migration
+## Database integrity
 
-Migration `0005_data_integrity_hardening.sql` adds new status, range, and safe-integer checks as `NOT VALID`. PostgreSQL enforces those constraints for new or updated rows without blocking deployment on legacy data, but existing rows are not proven compliant until the constraints are validated.
+The database schema enforces data integrity at the database layer with check constraints, safe-integer bounds (`-9007199254740991` through `9007199254740991`), non-negative financial values, and state machine validations.
 
-Before validating the constraints in production, inspect legacy rows for invalid statuses, negative financial values, or `bigint` values outside JavaScript's safe-integer range (`-9007199254740991` through `9007199254740991`). After cleanup, validate each constraint with `ALTER TABLE ... VALIDATE CONSTRAINT ...` during a controlled maintenance window.
+For production migrations or maintenance, ensure any custom queries adhere to safe integer ranges and status invariants defined in `drizzle/0000_initial_schema.sql`.
 
 ## Supported code
 
