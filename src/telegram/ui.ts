@@ -480,7 +480,9 @@ export async function forwardConversationNavigation(
 ): Promise<void> {
   const callbackData = ctx.callbackQuery?.data;
   const messageText = ctx.message?.text?.trim();
-  const isNavigationCallback = /^nav:(?:home|main|admin|wallet|shop)$/u.test(callbackData ?? '');
+  const isNavigationCallback = /^nav:(?:home|main|admin|admin:sales|wallet|shop)$/u.test(
+    callbackData ?? ''
+  );
   const isBotCommand = /^\/[a-z][a-z0-9_]*(?:@[a-z0-9_]+)?(?:\s|$)/iu.test(messageText ?? '');
   if (isNavigationCallback || (isBotCommand && messageText !== '/cancel')) {
     await conversation.halt({ next: true });

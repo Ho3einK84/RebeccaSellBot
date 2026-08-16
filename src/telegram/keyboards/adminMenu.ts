@@ -108,7 +108,13 @@ export const adminDailyMenu = new Menu<MenuContext>('admin-daily-menu')
     }
   );
 
-// ── Sales & Packages Submenu ──────────────────────────────────────────────────
+export function renderAdminSalesMenuScreen(ctx: MenuContext): string {
+  return renderAdminGroup(ctx, {
+    emoji: '🛍️',
+    titleKey: 'admin_sales_title',
+    subtitleKey: 'admin_sales_subtitle',
+  });
+}
 
 export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
   .text(

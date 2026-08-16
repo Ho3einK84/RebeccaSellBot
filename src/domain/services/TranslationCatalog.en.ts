@@ -338,7 +338,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_menu_broadcast: '📣 Broadcast',
   admin_menu_direct_message: '✉️ Direct message',
   admin_menu_management: '🛠️ Management',
-  admin_menu_back: '⌂ Home',
+  admin_menu_back: '‹ Back',
   admin_stats_title: 'Overview',
   admin_stats_subtitle: 'Sales, users, and system health',
   admin_stats_revenue_section: 'Revenue',
@@ -567,7 +567,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_settings_return_category: '‹ Back',
   admin_setting_saved_hint: 'Continue editing this section.',
   admin_pkg_total_label: 'Total packages',
-  admin_pkg_manager_prompt: 'Package catalog list ({count} packages)',
+  admin_pkg_manager_prompt: 'Active and inactive packages list',
   admin_pkg_add: '➕ Add New Package',
   admin_pkg_default_target: 'Default panel & service',
   admin_pkg_name_prompt:

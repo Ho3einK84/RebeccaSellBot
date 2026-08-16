@@ -10,7 +10,12 @@ import {
   renderWalletDashboard,
   walletMenu,
 } from '../keyboards/mainMenu.js';
-import { adminMenu, renderAdminHome } from '../keyboards/adminMenu.js';
+import {
+  adminMenu,
+  adminSalesMenu,
+  renderAdminHome,
+  renderAdminSalesMenuScreen,
+} from '../keyboards/adminMenu.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
@@ -126,10 +131,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     }
   });
 
-  bot.callbackQuery(/^nav:(home|main|admin|wallet|shop)$/u, async (ctx) => {
+  bot.callbackQuery(/^nav:(home|main|admin|admin:sales|wallet|shop)$/u, async (ctx) => {
     const requested = ctx.match[1];
     const telegramId = ctx.from.id;
-    const showAdmin = requested === 'admin';
+    const showAdmin = requested === 'admin' || requested === 'admin:sales';
     ctx.session.adminPanelAction = undefined;
     ctx.session.adminPanelId = undefined;
     ctx.session.adminPanelDraft = undefined;
@@ -143,7 +148,12 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       );
       return;
     }
-    if (showAdmin) {
+    if (requested === 'admin:sales') {
+      await renderUiScreen(ctx, renderAdminSalesMenuScreen(ctx), {
+        parse_mode: 'Markdown',
+        reply_markup: adminSalesMenu,
+      });
+    } else if (showAdmin) {
       await renderUiScreen(ctx, await renderAdminHome(ctx), {
         parse_mode: 'Markdown',
         reply_markup: adminMenu,

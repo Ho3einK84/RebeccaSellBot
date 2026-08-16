@@ -13,6 +13,7 @@ import {
   buildScreen,
   isMessageNotModifiedError,
   promptInConversation,
+  renderUiScreen,
   replyInAdminConversation,
 } from '../../../ui.js';
 import {
@@ -24,6 +25,7 @@ import { waitForSettingsInput } from './navigation.js';
 import { requireAdmin } from '../shared.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
+import { adminSalesMenu, renderAdminSalesMenuScreen } from '../../../keyboards/adminMenu.js';
 
 export type PackageManagerOutcome = 'back' | 'cancel';
 type FieldResult<T> = { type: 'value'; value: T } | { type: 'back' } | { type: 'cancel' };
@@ -35,6 +37,12 @@ export async function adminManagePackagesConversation(
 ): Promise<void> {
   if (!(await requireAdmin(conversation, ctx))) return;
   await managePackages(conversation, ctx);
+  await conversation.external(async (outsideCtx) => {
+    await renderUiScreen(outsideCtx, renderAdminSalesMenuScreen(outsideCtx), {
+      parse_mode: 'Markdown',
+      reply_markup: adminSalesMenu,
+    });
+  });
 }
 
 export async function managePackages(
@@ -725,6 +733,8 @@ async function manageCategories(
 ): Promise<PackageManagerOutcome> {
   if (!ctx.services) return 'cancel';
 
+  let activeCtx = ctx;
+
   for (;;) {
     const categories = await ctx.services.packageCategoryService.listCategories(true);
 
@@ -757,10 +767,29 @@ async function manageCategories(
       footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
     });
 
-    await promptInConversation(conversation, ctx, screenText, {
-      parse_mode: 'Markdown',
-      reply_markup: keyboard,
-    });
+    let renderedInPlace = false;
+    const messageId = activeCtx.callbackQuery?.message?.message_id;
+    const chatId = activeCtx.chat?.id;
+    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
+      try {
+        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+        renderedInPlace = true;
+      } catch (error) {
+        if (isMessageNotModifiedError(error)) {
+          renderedInPlace = true;
+        }
+      }
+    }
+
+    if (!renderedInPlace) {
+      await promptInConversation(conversation, activeCtx, screenText, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      });
+    }
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['cat:edit:', 'cat:up:', 'cat:down:', 'cat:del:', 'cat:add'],
@@ -771,6 +800,7 @@ async function manageCategories(
     if (input.type === 'cancel') return 'cancel';
     if (input.type === 'back') return 'back';
     if (input.type !== 'callback') continue;
+    activeCtx = input.ctx;
 
     if (input.data === 'cat:add') {
       const nameResult = await askPackageString(
@@ -921,10 +951,31 @@ async function manageCategories(
       continue;
     }
 
+    if (input.data.startsWith('cat:up:') || input.data.startsWith('cat:down:')) {
+      const isUp = input.data.startsWith('cat:up:');
+      const catId = input.data.slice(isUp ? 'cat:up:'.length : 'cat:down:'.length);
+      const index = categories.findIndex((c) => c.id === catId);
+      if (index === -1) continue;
+      const targetIndex = isUp ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= categories.length) continue;
+
+      const reordered = [...categories];
+      const [moved] = reordered.splice(index, 1);
+      if (moved) reordered.splice(targetIndex, 0, moved);
+
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.packageCategoryService.reorderCategories(
+          reordered.map((c) => c.id)
+        );
+      });
+      continue;
+    }
+
     if (input.data.startsWith('cat:del:')) {
       const catId = input.data.slice('cat:del:'.length);
-      const existing = categories.find((c) => c.id === catId);
-      if (!existing) continue;
+      const category = await ctx.services.packageCategoryService.getCategoryById(catId);
+      if (!category) continue;
 
       const confirmKeyboard = new InlineKeyboard()
         .text(t(ctx, 'admin_confirm_button'), callbackData('cat:del-confirm', catId))
@@ -937,7 +988,14 @@ async function manageCategories(
         buildScreen({
           emoji: '⚠️',
           title: t(ctx, 'admin_category_manager_title'),
-          footer: t(ctx, 'admin_category_delete_confirm', { name: existing.name }),
+          primary: {
+            emoji: '🏷️',
+            label: t(ctx, 'admin_pkg_category_label'),
+            value: escapeTelegramMarkdown(category.name),
+          },
+          footer: t(ctx, 'admin_category_delete_confirm', {
+            name: escapeTelegramMarkdown(category.name),
+          }),
         }),
         { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
       );
@@ -948,12 +1006,18 @@ async function manageCategories(
         retryKeyboard: confirmKeyboard,
       });
 
-      if (confirmation.type === 'callback' && confirmation.data.startsWith('cat:del-confirm:')) {
-        await conversation.external(async (outsideCtx) => {
-          if (!outsideCtx.services) return;
-          await outsideCtx.services.packageCategoryService.deleteCategory(catId);
-        });
+      if (confirmation.type === 'cancel') return 'cancel';
+      if (
+        confirmation.type !== 'callback' ||
+        confirmation.data !== callbackData('cat:del-confirm', catId)
+      ) {
+        continue;
       }
+
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.packageCategoryService.deleteCategory(catId);
+      });
       continue;
     }
   }
@@ -966,6 +1030,8 @@ async function managePackagePolicies(
   ctx: ConversationContext
 ): Promise<PackageManagerOutcome> {
   if (!ctx.services) return 'cancel';
+
+  let activeCtx = ctx;
 
   for (;;) {
     const ts = ctx.services.translationService;
@@ -1022,10 +1088,29 @@ async function managePackagePolicies(
       .row()
       .text(t(ctx, 'admin_menu_back'), 'pp:back');
 
-    await promptInConversation(conversation, ctx, screenText, {
-      parse_mode: 'Markdown',
-      reply_markup: keyboard,
-    });
+    let renderedInPlace = false;
+    const messageId = activeCtx.callbackQuery?.message?.message_id;
+    const chatId = activeCtx.chat?.id;
+    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
+      try {
+        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+        renderedInPlace = true;
+      } catch (error) {
+        if (isMessageNotModifiedError(error)) {
+          renderedInPlace = true;
+        }
+      }
+    }
+
+    if (!renderedInPlace) {
+      await promptInConversation(conversation, activeCtx, screenText, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      });
+    }
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['pp:toggle:', 'pp:edit:'],
@@ -1036,6 +1121,7 @@ async function managePackagePolicies(
     if (input.type === 'cancel') return 'cancel';
     if (input.type === 'back') return 'back';
     if (input.type !== 'callback') continue;
+    activeCtx = input.ctx;
 
     if (input.data === 'pp:toggle:mode') {
       const nextMode = displayMode === 'name' ? 'specs' : 'name';

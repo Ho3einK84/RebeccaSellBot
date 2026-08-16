@@ -337,7 +337,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_menu_broadcast: '📣 پیام همگانی',
   admin_menu_direct_message: '✉️ پیام مستقیم',
   admin_menu_management: '🛠️ مدیریت',
-  admin_menu_back: '⌂ خانه',
+  admin_menu_back: '‹ بازگشت',
   admin_stats_title: 'آمار کلی',
   admin_stats_subtitle: 'فروش، کاربران و وضعیت زیرساخت',
   admin_stats_revenue_section: 'درآمد',
@@ -564,7 +564,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_settings_return_category: '‹ بازگشت',
   admin_setting_saved_hint: 'ویرایش این بخش را ادامه دهید.',
   admin_pkg_total_label: 'تعداد کل بسته‌ها',
-  admin_pkg_manager_prompt: 'فهرست بسته‌های فعال و غیرفعال ({count} بسته)',
+  admin_pkg_manager_prompt: 'فهرست بسته‌های فعال و غیرفعال',
   admin_pkg_add: '➕ افزودن بسته جدید',
   admin_pkg_default_target: 'پنل و سرویس پیش‌فرض',
   admin_pkg_name_prompt:

@@ -1,17 +1,25 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { localizedNumber, t } from '../../../locale.js';
-import { buildScreen, promptInConversation } from '../../../ui.js';
+import {
+  buildScreen,
+  isMessageNotModifiedError,
+  promptInConversation,
+  renderUiScreen,
+} from '../../../ui.js';
 import { requireAdmin } from '../shared.js';
 import { waitForSettingsInput } from './navigation.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
+import { adminSalesMenu, renderAdminSalesMenuScreen } from '../../../keyboards/adminMenu.js';
 
 export async function adminReferralSettingsConversation(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<void> {
   if (!(await requireAdmin(conversation, ctx)) || !ctx.services) return;
+
+  let activeCtx = ctx;
 
   for (;;) {
     const ts = ctx.services.translationService;
@@ -46,20 +54,41 @@ export async function adminReferralSettingsConversation(
       .row()
       .text(t(ctx, 'admin_setting_cashback_percent'), 'ref:edit:cashback_percent')
       .row()
-      .text(t(ctx, 'admin_menu_back'), 'conversation:cancel');
+      .text(t(ctx, 'admin_menu_back'), 'ref:back');
 
-    await promptInConversation(conversation, ctx, screenText, {
-      parse_mode: 'Markdown',
-      reply_markup: keyboard,
-    });
+    let renderedInPlace = false;
+    const messageId = activeCtx.callbackQuery?.message?.message_id;
+    const chatId = activeCtx.chat?.id;
+    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
+      try {
+        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+        renderedInPlace = true;
+      } catch (error) {
+        if (isMessageNotModifiedError(error)) {
+          renderedInPlace = true;
+        }
+      }
+    }
+
+    if (!renderedInPlace) {
+      await promptInConversation(conversation, activeCtx, screenText, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      });
+    }
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['ref:edit:'],
+      backCallbacks: ['ref:back'],
       retryKeyboard: keyboard,
     });
 
-    if (input.type === 'cancel' || input.type === 'back') return;
+    if (input.type === 'cancel' || input.type === 'back') break;
     if (input.type !== 'callback') continue;
+    activeCtx = input.ctx;
 
     if (input.data.startsWith('ref:edit:')) {
       const key = input.data.slice('ref:edit:'.length);
@@ -69,4 +98,11 @@ export async function adminReferralSettingsConversation(
       }
     }
   }
+
+  await conversation.external(async (outsideCtx) => {
+    await renderUiScreen(outsideCtx, renderAdminSalesMenuScreen(outsideCtx), {
+      parse_mode: 'Markdown',
+      reply_markup: adminSalesMenu,
+    });
+  });
 }

@@ -359,7 +359,7 @@ export function buildPackageManagerScreen(
     sections: [
       {
         emoji: '🛍️',
-        title: t(ctx, 'admin_pkg_manager_prompt', { count: localizedNumber(totalCount, ctx) }),
+        title: t(ctx, 'admin_pkg_manager_prompt'),
         fields: packages.map((pkg) => {
           const isEnabled = pkg.enabled !== false;
           const statusPrefix = isEnabled ? '🟢 ' : '⚪️ ';
