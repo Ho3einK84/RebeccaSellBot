@@ -4,8 +4,9 @@
  * Layering: all Rebecca API calls go through RebeccaService.
  * No direct RebeccaApiClient imports.
  */
-import { getDb, getPool } from '../../infra/db.js';
+import { getDb } from '../../infra/db.js';
 import { userConfigs, configCounters, notificationDeliveries, users } from '../../infra/schema.js';
+import { withConfigLock } from './ConfigLock.js';
 import { RebeccaApiError, type RebeccaService, type RebeccaUserDetail } from './RebeccaService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import {
@@ -90,23 +91,28 @@ export class ConfigService {
       throw new Error('AUTO_RENEW_PACKAGE_REQUIRED');
     }
 
-    const values = enabled
-      ? {
-          autoRenewEnabled: true,
-          autoRenewPackageId: packageId!,
-          ...(approvedPrice === undefined ? {} : { autoRenewPrice: approvedPrice }),
-        }
-      : { autoRenewEnabled: false };
-    const [updated] = await getDb()
-      .update(userConfigs)
-      .set(values)
-      .where(and(eq(userConfigs.id, configId), eq(userConfigs.telegramId, telegramId)))
-      .returning({
-        autoRenewEnabled: userConfigs.autoRenewEnabled,
-        autoRenewPackageId: userConfigs.autoRenewPackageId,
-        autoRenewPrice: userConfigs.autoRenewPrice,
-      });
-    return updated ?? null;
+    const config = await this.getOwnedConfigById(telegramId, configId);
+    if (!config) return null;
+
+    return withConfigLock(config.panelId, config.configUsername, async () => {
+      const values = enabled
+        ? {
+            autoRenewEnabled: true,
+            autoRenewPackageId: packageId!,
+            ...(approvedPrice === undefined ? {} : { autoRenewPrice: approvedPrice }),
+          }
+        : { autoRenewEnabled: false };
+      const [updated] = await getDb()
+        .update(userConfigs)
+        .set(values)
+        .where(and(eq(userConfigs.id, configId), eq(userConfigs.telegramId, telegramId)))
+        .returning({
+          autoRenewEnabled: userConfigs.autoRenewEnabled,
+          autoRenewPackageId: userConfigs.autoRenewPackageId,
+          autoRenewPrice: userConfigs.autoRenewPrice,
+        });
+      return updated ?? null;
+    });
   }
 
   /**
@@ -630,30 +636,38 @@ export class ConfigService {
 
   async resetUsage(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
-    await this.assertConfigIncarnation(config, remote);
-    await this.panels.getService(config.panelId).resetUserTraffic(config.configUsername);
+    return withConfigLock(config.panelId, config.configUsername, async () => {
+      const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
+      await this.assertConfigIncarnation(config, remote);
+      await this.panels.getService(config.panelId).resetUserTraffic(config.configUsername);
+    });
   }
 
   /** Toggle a locally bound config according to its current remote state. */
   async toggleConfig(configUsername: string, panelId?: string): Promise<'enabled' | 'disabled'> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    const remote = await this.getRemoteConfigDetail(config);
-    const enabled = remote.status === 'disabled';
-    // Reuse the remote snapshot we already fetched to decide the toggle. The
-    // old path fetched the same Rebecca user twice before every toggle.
-    await this.setConfigEnabled(config, enabled, remote);
-    return enabled ? 'enabled' : 'disabled';
+    return withConfigLock(config.panelId, config.configUsername, async () => {
+      const remote = await this.getRemoteConfigDetail(config);
+      const enabled = remote.status === 'disabled';
+      // Reuse the remote snapshot we already fetched to decide the toggle. The
+      // old path fetched the same Rebecca user twice before every toggle.
+      await this.setConfigEnabled(config, enabled, remote);
+      return enabled ? 'enabled' : 'disabled';
+    });
   }
 
   async disableConfig(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    await this.setConfigEnabled(config, false);
+    return withConfigLock(config.panelId, config.configUsername, async () => {
+      await this.setConfigEnabled(config, false);
+    });
   }
 
   async enableConfig(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
-    await this.setConfigEnabled(config, true);
+    return withConfigLock(config.panelId, config.configUsername, async () => {
+      await this.setConfigEnabled(config, true);
+    });
   }
 
   private async setConfigEnabled(
@@ -670,10 +684,12 @@ export class ConfigService {
       : await this.panels.getService(config.panelId).disableUser(config.configUsername);
     const observedAt = new Date();
     await getDb().transaction(async (tx) => {
-      await tx
+      const [updated] = await tx
         .update(userConfigs)
         .set(observedConfigLifecycle(remote, observedAt))
-        .where(eq(userConfigs.id, config.id));
+        .where(eq(userConfigs.id, config.id))
+        .returning({ id: userConfigs.id });
+      if (!updated) throw new Error('CONFIG_NOT_FOUND');
       await tx
         .update(users)
         .set({
@@ -727,58 +743,123 @@ export class ConfigService {
   async deleteConfigCompletely(configUsername: string, panelId?: string): Promise<boolean> {
     const db = getDb();
     if (this.legacySinglePanel && !panelId) {
+      return withConfigLock('legacy', configUsername, async () => {
+        let deleteRemote = true;
+        try {
+          const remote = await this.panels.getService('legacy').getUser(configUsername);
+          const [local] = await db
+            .select()
+            .from(userConfigs)
+            .where(eq(userConfigs.configUsername, configUsername))
+            .limit(1);
+          if (!local) {
+            // Never let the legacy compatibility path become a generic Rebecca
+            // deletion primitive for manually-created services.
+            deleteRemote = false;
+          } else {
+            try {
+              await verifyOrEstablishConfigIncarnation(local, remote);
+            } catch (err) {
+              if (
+                err instanceof ConfigIncarnationMismatchError ||
+                err instanceof ConfigIncarnationUnverifiedError
+              ) {
+                logger.warn(
+                  { configUsername, reason: err.message },
+                  'Remote config identity could not be verified during legacy deletion; ' +
+                    'preserving remote user'
+                );
+                deleteRemote = false;
+              } else {
+                throw err;
+              }
+            }
+          }
+        } catch (err) {
+          if (err instanceof RebeccaApiError && err.status === 404) {
+            deleteRemote = false;
+          } else {
+            // A network/contract/identity-verification failure is not evidence
+            // that this Rebecca username is safe to delete. Fail closed rather
+            // than falling through to the destructive call.
+            throw err;
+          }
+        }
+        if (deleteRemote) {
+          try {
+            await this.panels.getService('legacy').deleteUser(configUsername);
+          } catch (err) {
+            if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
+          }
+        }
+        return db.transaction(async (tx) => {
+          const [deleted] = await tx
+            .delete(userConfigs)
+            .where(eq(userConfigs.configUsername, configUsername))
+            .returning({
+              configUsername: userConfigs.configUsername,
+              telegramId: userConfigs.telegramId,
+            });
+          if (!deleted) return false;
+          await tx
+            .delete(notificationDeliveries)
+            .where(eq(notificationDeliveries.configUsername, configUsername));
+          await tx
+            .update(users)
+            .set({
+              activeSubscriptionCount: activeConfigCountSql(deleted.telegramId),
+              updatedAt: new Date(),
+            })
+            .where(eq(users.telegramId, deleted.telegramId));
+          return true;
+        });
+      });
+    }
+    const config = await this.resolveLocalConfig(configUsername, panelId);
+    return withConfigLock(config.panelId, config.configUsername, async () => {
       let deleteRemote = true;
       try {
-        const remote = await this.panels.getService('legacy').getUser(configUsername);
-        const [local] = await db
-          .select()
-          .from(userConfigs)
-          .where(eq(userConfigs.configUsername, configUsername))
-          .limit(1);
-        if (!local) {
-          // Never let the legacy compatibility path become a generic Rebecca
-          // deletion primitive for manually-created services.
-          deleteRemote = false;
-        } else {
-          try {
-            await verifyOrEstablishConfigIncarnation(local, remote);
-          } catch (err) {
-            if (
-              err instanceof ConfigIncarnationMismatchError ||
-              err instanceof ConfigIncarnationUnverifiedError
-            ) {
-              logger.warn(
-                { configUsername, reason: err.message },
-                'Remote config identity could not be verified during legacy deletion; ' +
-                  'preserving remote user'
-              );
-              deleteRemote = false;
-            } else {
-              throw err;
-            }
+        const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
+        try {
+          await verifyOrEstablishConfigIncarnation(config, remote);
+        } catch (err) {
+          if (
+            err instanceof ConfigIncarnationMismatchError ||
+            err instanceof ConfigIncarnationUnverifiedError
+          ) {
+            logger.warn(
+              {
+                configUsername: config.configUsername,
+                panelId: config.panelId,
+                reason: err.message,
+              },
+              'Remote config identity could not be verified during deletion; preserving remote user'
+            );
+            deleteRemote = false;
+          } else {
+            throw err;
           }
         }
       } catch (err) {
         if (err instanceof RebeccaApiError && err.status === 404) {
           deleteRemote = false;
         } else {
-          // A network/contract/identity-verification failure is not evidence
-          // that this Rebecca username is safe to delete. Fail closed rather
-          // than falling through to the destructive call.
           throw err;
         }
       }
+
       if (deleteRemote) {
         try {
-          await this.panels.getService('legacy').deleteUser(configUsername);
+          await this.panels.getService(config.panelId).deleteUser(config.configUsername);
         } catch (err) {
           if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
         }
       }
+
       return db.transaction(async (tx) => {
         const [deleted] = await tx
           .delete(userConfigs)
-          .where(eq(userConfigs.configUsername, configUsername))
+          .where(eq(userConfigs.id, config.id))
           .returning({
             configUsername: userConfigs.configUsername,
             telegramId: userConfigs.telegramId,
@@ -786,82 +867,21 @@ export class ConfigService {
         if (!deleted) return false;
         await tx
           .delete(notificationDeliveries)
-          .where(eq(notificationDeliveries.configUsername, configUsername));
+          .where(
+            and(
+              eq(notificationDeliveries.panelId, config.panelId),
+              eq(notificationDeliveries.configUsername, config.configUsername)
+            )
+          );
         await tx
           .update(users)
           .set({
-            activeSubscriptionCount: activeConfigCountSql(deleted.telegramId),
+            activeSubscriptionCount: activeConfigCountSql(config.telegramId),
             updatedAt: new Date(),
           })
-          .where(eq(users.telegramId, deleted.telegramId));
+          .where(eq(users.telegramId, config.telegramId));
         return true;
       });
-    }
-    const config = await this.resolveLocalConfig(configUsername, panelId);
-    let deleteRemote = true;
-    try {
-      const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
-      try {
-        await verifyOrEstablishConfigIncarnation(config, remote);
-      } catch (err) {
-        if (
-          err instanceof ConfigIncarnationMismatchError ||
-          err instanceof ConfigIncarnationUnverifiedError
-        ) {
-          logger.warn(
-            {
-              configUsername: config.configUsername,
-              panelId: config.panelId,
-              reason: err.message,
-            },
-            'Remote config identity could not be verified during deletion; preserving remote user'
-          );
-          deleteRemote = false;
-        } else {
-          throw err;
-        }
-      }
-    } catch (err) {
-      if (err instanceof RebeccaApiError && err.status === 404) {
-        deleteRemote = false;
-      } else {
-        throw err;
-      }
-    }
-
-    if (deleteRemote) {
-      try {
-        await this.panels.getService(config.panelId).deleteUser(config.configUsername);
-      } catch (err) {
-        if (!(err instanceof RebeccaApiError && err.status === 404)) throw err;
-      }
-    }
-
-    return db.transaction(async (tx) => {
-      const [deleted] = await tx
-        .delete(userConfigs)
-        .where(eq(userConfigs.id, config.id))
-        .returning({
-          configUsername: userConfigs.configUsername,
-          telegramId: userConfigs.telegramId,
-        });
-      if (!deleted) return false;
-      await tx
-        .delete(notificationDeliveries)
-        .where(
-          and(
-            eq(notificationDeliveries.panelId, config.panelId),
-            eq(notificationDeliveries.configUsername, config.configUsername)
-          )
-        );
-      await tx
-        .update(users)
-        .set({
-          activeSubscriptionCount: activeConfigCountSql(config.telegramId),
-          updatedAt: new Date(),
-        })
-        .where(eq(users.telegramId, config.telegramId));
-      return true;
     });
   }
 
@@ -878,76 +898,6 @@ export class ConfigService {
     if (rows.length === 0) throw new Error('CONFIG_NOT_FOUND');
     if (!panelId && rows.length > 1) throw new Error('AMBIGUOUS_CONFIG_USERNAME');
     return rows[0]!;
-  }
-}
-
-function configLockKey(panelId: string, configUsername: string): bigint {
-  const digest = crypto
-    .createHash('sha256')
-    .update(`RebeccaSellBot:config_mutation:${panelId}:${configUsername}`)
-    .digest();
-  const unsigned = digest.readBigUInt64BE(0);
-  return BigInt.asIntN(64, unsigned);
-}
-
-async function withConfigLock<T>(
-  panelId: string,
-  configUsername: string,
-  fn: () => Promise<T>
-): Promise<T> {
-  const lockKey = configLockKey(panelId, configUsername);
-  const client = await getPool()
-    .connect()
-    .catch((err: unknown) => {
-      throw new Error('CONFIG_MUTATION_LOCK_UNAVAILABLE', { cause: err });
-    });
-
-  // Never block a pool connection behind another long-running remote API call.
-  // A contender fails fast and can be retried by the user/UI instead of
-  // exhausting the PostgreSQL pool under a revoke burst.
-  const result = await client
-    .query<{ locked: boolean }>('SELECT pg_try_advisory_lock($1::bigint) AS locked', [
-      lockKey.toString(),
-    ])
-    .catch((err: unknown) => {
-      client.release(err instanceof Error ? err : true);
-      throw new Error('CONFIG_MUTATION_LOCK_UNAVAILABLE', { cause: err });
-    });
-
-  if (!result.rows[0]?.locked) {
-    client.release();
-    throw new Error('CONFIG_MUTATION_BUSY');
-  }
-
-  try {
-    return await fn();
-  } finally {
-    let releaseError: Error | undefined;
-    try {
-      const unlock = await client.query<{ unlocked: boolean }>(
-        'SELECT pg_advisory_unlock($1::bigint) AS unlocked',
-        [lockKey.toString()]
-      );
-      if (!unlock.rows[0]?.unlocked) {
-        releaseError = new Error('CONFIG_MUTATION_UNLOCK_FAILED');
-        logger.error(
-          { panelId, configUsername },
-          'PostgreSQL advisory config lock was not owned during release'
-        );
-      }
-    } catch (err) {
-      releaseError =
-        err instanceof Error ? err : new Error('CONFIG_MUTATION_UNLOCK_FAILED', { cause: err });
-      logger.error(
-        { err, panelId, configUsername },
-        'Failed to release PostgreSQL advisory config lock; discarding connection'
-      );
-    }
-
-    // Advisory locks are session-scoped. If unlock failed, passing an error to
-    // release() evicts this client instead of returning a possibly locked
-    // PostgreSQL session to the pool.
-    client.release(releaseError);
   }
 }
 

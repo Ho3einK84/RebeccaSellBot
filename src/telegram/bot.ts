@@ -8,6 +8,7 @@ import { configureBotRuntime } from './botRuntime.js';
 import { registerCoreRoutes } from './features/coreRoutes.js';
 import { t } from './locale.js';
 import { backKeyboard, buildEmptyState } from './ui.js';
+import { extractBotErrorDiagnostics } from './telegramLogging.js';
 
 export { conversationContextMiddleware } from './botRuntime.js';
 
@@ -19,16 +20,7 @@ export function setupBot(config: Config, services: BotServices): Bot<MenuContext
 
   // Global error handler — log and notify user without crashing.
   bot.catch(async (err) => {
-    logger.error(
-      {
-        errorName: err.error instanceof Error ? err.error.name : typeof err.error,
-        updateId: err.ctx?.update.update_id,
-        updateKinds: err.ctx?.update
-          ? Object.keys(err.ctx.update).filter((key) => key !== 'update_id')
-          : [],
-      },
-      'Unhandled bot error'
-    );
+    logger.error(extractBotErrorDiagnostics(err), 'Unhandled bot error');
     if (err.ctx.callbackQuery) {
       await err.ctx
         .answerCallbackQuery({ text: t(err.ctx, 'button_action_failed'), show_alert: true })

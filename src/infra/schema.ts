@@ -186,6 +186,12 @@ export const purchaseIntents = pgTable(
     // NULL is a durable retry marker when post-commit referral/cashback
     // settlement was interrupted. The ledger remains the idempotency source.
     bonusesProcessedAt: timestamp('bonuses_processed_at'),
+    // Snapshotted financial bonus terms — immutable once the intent is reserved.
+    cashbackPercent: integer('cashback_percent'),
+    cashbackAmount: bigint('cashback_amount', { mode: 'number' }),
+    referrerTelegramId: bigint('referrer_telegram_id', { mode: 'number' }),
+    referralBonusAmount: bigint('referral_bonus_amount', { mode: 'number' }),
+    refundedAt: timestamp('refunded_at'),
     // A reconciler may only claim work after this foreground-operation lease
     // expires. Heartbeats prevent a slow but active Rebecca request from being
     // compensated by a concurrent recovery worker.
@@ -203,7 +209,7 @@ export const purchaseIntents = pgTable(
     check('purchase_intents_type_supported', sql`${table.type} IN ('new_config', 'renew_config')`),
     check(
       'purchase_intents_status_supported',
-      sql`${table.status} IN ('pending', 'reconciliation_required', 'completed', 'failed')`
+      sql`${table.status} IN ('pending', 'reconciliation_required', 'completed', 'failed', 'refunded')`
     ),
     check(
       'purchase_intents_gb_amount_positive',
@@ -245,6 +251,22 @@ export const purchaseIntents = pgTable(
     check(
       'purchase_intents_expected_status_supported',
       sql`${table.expectedStatus} IS NULL OR ${table.expectedStatus} IN ('active', 'disabled', 'on_hold')`
+    ),
+    check(
+      'purchase_intents_cashback_percent_safe',
+      sql`${table.cashbackPercent} IS NULL OR (${table.cashbackPercent} >= 0 AND ${table.cashbackPercent} <= 100)`
+    ),
+    check(
+      'purchase_intents_cashback_amount_safe',
+      sql`${table.cashbackAmount} IS NULL OR (${table.cashbackAmount} >= 0 AND ${table.cashbackAmount} <= 9007199254740991)`
+    ),
+    check(
+      'purchase_intents_referrer_id_safe',
+      sql`${table.referrerTelegramId} IS NULL OR (${table.referrerTelegramId} > 0 AND ${table.referrerTelegramId} <= 9007199254740991)`
+    ),
+    check(
+      'purchase_intents_referral_bonus_amount_safe',
+      sql`${table.referralBonusAmount} IS NULL OR (${table.referralBonusAmount} >= 0 AND ${table.referralBonusAmount} <= 9007199254740991)`
     ),
     // A generated new-config name changes on every tap, so a per-config
     // uniqueness constraint does not prevent duplicate purchases. One active

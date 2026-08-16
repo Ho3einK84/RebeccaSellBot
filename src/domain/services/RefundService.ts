@@ -29,6 +29,7 @@ import {
   normalizeRebeccaPanelAccess,
   type NormalizedRebeccaPanelAccess,
 } from './RebeccaPanelAccess.js';
+import { withConfigLock } from './ConfigLock.js';
 
 const NON_TERMINAL_REFUND_STATUSES = ['pending', 'reconciliation_required'] as const;
 const REFUND_RECONCILIATION_MIN_AGE_MS = 60_000;
@@ -205,87 +206,89 @@ export class RefundService {
     const quote = await this.quote(telegramId, configId);
     if (!quote.eligible) return quote;
 
-    const refundId = await this.acquireRefundIntent(telegramId, quote);
-    if (!refundId) return { eligible: false, reason: 'refund_in_progress' };
+    return withConfigLock(quote.panelId, quote.configUsername, async () => {
+      const refundId = await this.acquireRefundIntent(telegramId, quote);
+      if (!refundId) return { eligible: false, reason: 'refund_in_progress' };
 
-    // Usage can change between rendering the confirmation button and the user
-    // pressing it. Re-check immediately before the destructive call so a
-    // service that started carrying traffic is never auto-refunded from a
-    // stale quote. A 404 is already the desired deleted state.
-    let deleteRequired: boolean;
-    const rebeccaService = this.panels.getService(quote.panelId);
-    try {
-      await this.refreshLease(refundId);
-      const latest = await rebeccaService.getUser(quote.configUsername);
-      if (latest.used_traffic > 0 || latest.lifetime_used_traffic > 0) {
-        await this.failIntent(refundId, 'Refund rejected: traffic appeared before deletion');
-        return { eligible: false, reason: 'already_used' };
-      }
-      const [localConfig] = await db
-        .select()
-        .from(userConfigs)
-        .where(eq(userConfigs.id, quote.configId))
-        .limit(1);
-      if (!localConfig) {
-        await this.failIntent(refundId, 'Refund rejected: local config binding disappeared');
-        return { eligible: false, reason: 'config_not_found' };
-      }
+      // Usage can change between rendering the confirmation button and the user
+      // pressing it. Re-check immediately before the destructive call so a
+      // service that started carrying traffic is never auto-refunded from a
+      // stale quote. A 404 is already the desired deleted state.
+      let deleteRequired: boolean;
+      const rebeccaService = this.panels.getService(quote.panelId);
       try {
-        await verifyOrEstablishConfigIncarnation(localConfig, latest);
-      } catch (err) {
-        if (
-          err instanceof ConfigIncarnationMismatchError ||
-          err instanceof ConfigIncarnationUnverifiedError
-        ) {
-          await this.failIntent(refundId, 'Refund rejected: remote config identity mismatch');
-          return { eligible: false, reason: 'ownership_mismatch' };
-        }
-        throw err;
-      }
-      deleteRequired = latest.status !== 'deleted';
-    } catch (err) {
-      if (err instanceof RebeccaApiError && err.status === 404) {
-        deleteRequired = false;
-      } else {
-        await this.failIntent(refundId, `Pre-delete verification failed: ${errorMessage(err)}`);
-        throw err;
-      }
-    }
-
-    try {
-      if (deleteRequired) {
         await this.refreshLease(refundId);
-        await rebeccaService.deleteUser(quote.configUsername);
+        const latest = await rebeccaService.getUser(quote.configUsername);
+        if (latest.used_traffic > 0 || latest.lifetime_used_traffic > 0) {
+          await this.failIntent(refundId, 'Refund rejected: traffic appeared before deletion');
+          return { eligible: false, reason: 'already_used' };
+        }
+        const [localConfig] = await db
+          .select()
+          .from(userConfigs)
+          .where(eq(userConfigs.id, quote.configId))
+          .limit(1);
+        if (!localConfig) {
+          await this.failIntent(refundId, 'Refund rejected: local config binding disappeared');
+          return { eligible: false, reason: 'config_not_found' };
+        }
+        try {
+          await verifyOrEstablishConfigIncarnation(localConfig, latest);
+        } catch (err) {
+          if (
+            err instanceof ConfigIncarnationMismatchError ||
+            err instanceof ConfigIncarnationUnverifiedError
+          ) {
+            await this.failIntent(refundId, 'Refund rejected: remote config identity mismatch');
+            return { eligible: false, reason: 'ownership_mismatch' };
+          }
+          throw err;
+        }
+        deleteRequired = latest.status !== 'deleted';
+      } catch (err) {
+        if (err instanceof RebeccaApiError && err.status === 404) {
+          deleteRequired = false;
+        } else {
+          await this.failIntent(refundId, `Pre-delete verification failed: ${errorMessage(err)}`);
+          throw err;
+        }
       }
-    } catch (err) {
-      if (err instanceof RebeccaApiError && err.status === 404) {
-        // The quote verified the remote user immediately before intent creation;
-        // a 404 here means the desired deleted state has already converged.
-      } else if (
-        err instanceof RebeccaContractError ||
-        (err instanceof RebeccaApiError && err.status >= 500) ||
-        (err instanceof RebeccaOriginDownError && err.requestDispatched)
-      ) {
-        await this.markForReconciliation(refundId, 'Remote delete outcome is unknown');
-        throw new RefundOutcomePendingError(refundId, { cause: err });
-      } else {
-        await this.failIntent(refundId, errorMessage(err));
-        throw err;
-      }
-    }
 
-    try {
-      const completed = await completeRefundIntent(refundId, telegramId);
-      if (!completed) throw new Error('REFUND_INTENT_NO_LONGER_ACTIVE');
-    } catch (err) {
-      logger.error({ err, refundId }, 'Remote config delete succeeded but refund commit failed');
-      await this.markForReconciliation(
-        refundId,
-        'Remote delete confirmed; local wallet settlement requires reconciliation'
-      ).catch(() => undefined);
-      throw new RefundOutcomePendingError(refundId, { cause: err });
-    }
-    return quote;
+      try {
+        if (deleteRequired) {
+          await this.refreshLease(refundId);
+          await rebeccaService.deleteUser(quote.configUsername);
+        }
+      } catch (err) {
+        if (err instanceof RebeccaApiError && err.status === 404) {
+          // The quote verified the remote user immediately before intent creation;
+          // a 404 here means the desired deleted state has already converged.
+        } else if (
+          err instanceof RebeccaContractError ||
+          (err instanceof RebeccaApiError && err.status >= 500) ||
+          (err instanceof RebeccaOriginDownError && err.requestDispatched)
+        ) {
+          await this.markForReconciliation(refundId, 'Remote delete outcome is unknown');
+          throw new RefundOutcomePendingError(refundId, { cause: err });
+        } else {
+          await this.failIntent(refundId, errorMessage(err));
+          throw err;
+        }
+      }
+
+      try {
+        const completed = await completeRefundIntent(refundId, telegramId);
+        if (!completed) throw new Error('REFUND_INTENT_NO_LONGER_ACTIVE');
+      } catch (err) {
+        logger.error({ err, refundId }, 'Remote config delete succeeded but refund commit failed');
+        await this.markForReconciliation(
+          refundId,
+          'Remote delete confirmed; local wallet settlement requires reconciliation'
+        ).catch(() => undefined);
+        throw new RefundOutcomePendingError(refundId, { cause: err });
+      }
+      return quote;
+    });
   }
 
   private async acquireRefundIntent(
@@ -474,6 +477,26 @@ async function completeRefundIntent(refundId: string, telegramId: number): Promi
       )
       .returning({ id: refundIntents.id });
     if (!transitioned) return false;
+
+    // Atomically lock and transition the purchase intent to refunded & cancel bonuses
+    const [lockedPurchaseIntent] = await tx
+      .select()
+      .from(purchaseIntents)
+      .where(eq(purchaseIntents.id, intent.purchaseIntentId))
+      .for('update')
+      .limit(1);
+
+    if (lockedPurchaseIntent) {
+      await tx
+        .update(purchaseIntents)
+        .set({
+          status: 'refunded',
+          refundedAt: new Date(),
+          bonusesProcessedAt: sql`COALESCE(${purchaseIntents.bonusesProcessedAt}, NOW())`,
+          updatedAt: new Date(),
+        })
+        .where(eq(purchaseIntents.id, intent.purchaseIntentId));
+    }
 
     const [updated] = await tx
       .update(users)

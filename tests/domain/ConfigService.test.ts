@@ -12,21 +12,21 @@ import type { TranslationService } from '../../src/domain/services/TranslationSe
 const selectQueryMock = {
   from: vi.fn().mockReturnThis(),
   where: vi.fn().mockReturnThis(),
-  limit: vi.fn(),
+  limit: vi.fn().mockResolvedValue([]),
 };
 const insertQueryMock = {
   values: vi.fn().mockReturnThis(),
   onConflictDoNothing: vi.fn().mockReturnThis(),
-  returning: vi.fn(),
+  returning: vi.fn().mockResolvedValue([]),
 };
 const deleteQueryMock = {
   where: vi.fn().mockReturnThis(),
-  returning: vi.fn(),
+  returning: vi.fn().mockResolvedValue([]),
 };
 const updateQueryMock = {
   set: vi.fn().mockReturnThis(),
   where: vi.fn().mockReturnThis(),
-  returning: vi.fn(),
+  returning: vi.fn().mockResolvedValue([{ id: 'mock' }]),
 };
 const dbMock = {
   select: vi.fn().mockReturnValue(selectQueryMock),
@@ -41,6 +41,12 @@ dbMock.transaction.mockImplementation(async (callback: (tx: typeof dbMock) => un
 
 vi.mock('../../src/infra/db.js', () => ({
   getDb: vi.fn(() => dbMock),
+  getPool: vi.fn(() => ({
+    connect: vi.fn().mockResolvedValue({
+      query: vi.fn().mockResolvedValue({ rows: [{ locked: true, unlocked: true }] }),
+      release: vi.fn(),
+    }),
+  })),
 }));
 
 const OPAQUE_SUB_URL = 'https://sub.example/sub/aBcdEfGhIjKlMnOpQ';
@@ -91,15 +97,18 @@ describe('ConfigService subscription claims', () => {
     selectQueryMock.from.mockReturnThis();
     selectQueryMock.where.mockReturnThis();
     selectQueryMock.limit.mockReset();
-    selectQueryMock.limit.mockReset();
+    selectQueryMock.limit.mockResolvedValue([]);
     insertQueryMock.values.mockReturnThis();
     insertQueryMock.onConflictDoNothing.mockReturnThis();
     insertQueryMock.returning.mockReset();
+    insertQueryMock.returning.mockResolvedValue([]);
     deleteQueryMock.where.mockReturnThis();
     deleteQueryMock.returning.mockReset();
+    deleteQueryMock.returning.mockResolvedValue([]);
     updateQueryMock.set.mockReturnThis();
     updateQueryMock.where.mockReturnThis();
     updateQueryMock.returning.mockReset();
+    updateQueryMock.returning.mockResolvedValue([{ id: 'mock' }]);
     dbMock.select.mockReturnValue(selectQueryMock);
     dbMock.insert.mockReturnValue(insertQueryMock);
     dbMock.delete.mockReturnValue(deleteQueryMock);
@@ -272,6 +281,9 @@ describe('ConfigService subscription claims', () => {
   });
 
   it('enables auto-renew for an owned config with a package id', async () => {
+    selectQueryMock.limit.mockResolvedValue([
+      { id: 'uc_alice_123', panelId: 'legacy', configUsername: 'alice', telegramId: 41 },
+    ]);
     updateQueryMock.returning.mockResolvedValue([
       { autoRenewEnabled: true, autoRenewPackageId: 'pkg_30gb_30d' },
     ]);
@@ -287,6 +299,9 @@ describe('ConfigService subscription claims', () => {
   });
 
   it('disables auto-renew without clearing the remembered package id', async () => {
+    selectQueryMock.limit.mockResolvedValue([
+      { id: 'uc_alice_123', panelId: 'legacy', configUsername: 'alice', telegramId: 41 },
+    ]);
     updateQueryMock.returning.mockResolvedValue([
       { autoRenewEnabled: false, autoRenewPackageId: 'pkg_30gb_30d' },
     ]);

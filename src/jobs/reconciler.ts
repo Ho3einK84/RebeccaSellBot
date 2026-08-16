@@ -596,7 +596,11 @@ async function reconcileDeferredBonuses(
       .select()
       .from(purchaseIntents)
       .where(
-        and(eq(purchaseIntents.status, 'completed'), isNull(purchaseIntents.bonusesProcessedAt))
+        and(
+          eq(purchaseIntents.status, 'completed'),
+          isNull(purchaseIntents.bonusesProcessedAt),
+          isNull(purchaseIntents.refundedAt)
+        )
       )
       .orderBy(purchaseIntents.createdAt)
       .limit(100);

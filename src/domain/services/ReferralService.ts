@@ -3,12 +3,19 @@
  * credits. WalletService owns the purchase saga and invokes this service only
  * after its purchase transaction has completed.
  */
-import { and, asc, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { getDb } from '../../infra/db.js';
-import { users, walletTransactions } from '../../infra/schema.js';
+import { purchaseIntents, refundIntents, users, walletTransactions } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
 import type { TranslationService } from './TranslationService.js';
+
+export type BonusSnapshot = {
+  cashbackPercent: number;
+  cashbackAmount: number;
+  referrerTelegramId: number | null;
+  referralBonusAmount: number;
+};
 
 export class ReferralService {
   constructor(private readonly translationService: TranslationService) {}
@@ -38,79 +45,190 @@ export class ReferralService {
     return referrer.telegramId;
   }
 
+  async calculateBonusSnapshot(
+    tx: {
+      select: (args?: any) => any;
+    },
+    telegramId: number,
+    purchaseAmount: number
+  ): Promise<BonusSnapshot> {
+    let referrerTelegramId: number | null = null;
+    let referralBonusAmount = 0;
+
+    const [user] = await tx
+      .select({ referrerId: users.referrerId })
+      .from(users)
+      .where(eq(users.telegramId, telegramId))
+      .limit(1);
+
+    if (user?.referrerId && user.referrerId !== telegramId) {
+      const [previousPaid] = await tx
+        .select({ id: walletTransactions.id })
+        .from(walletTransactions)
+        .where(
+          and(
+            eq(walletTransactions.telegramId, telegramId),
+            eq(walletTransactions.type, 'purchase'),
+            lt(walletTransactions.amount, 0)
+          )
+        )
+        .limit(1);
+
+      if (!previousPaid) {
+        referralBonusAmount = asPositiveSafeInteger(
+          this.translationService.getSettingNum('referral_bonus_toman', 10000)
+        );
+        referrerTelegramId = user.referrerId;
+      }
+    }
+
+    const cashbackPercent = asPercent(this.translationService.getSettingNum('cashback_percent', 0));
+    const safeAmount = asPositiveSafeInteger(purchaseAmount);
+    const cashbackAmount =
+      cashbackPercent > 0 && safeAmount > 0 ? Math.floor((safeAmount / 100) * cashbackPercent) : 0;
+
+    return {
+      cashbackPercent,
+      cashbackAmount,
+      referrerTelegramId,
+      referralBonusAmount,
+    };
+  }
+
   async processCompletedPurchase(
     telegramId: number,
     amount: number,
     intentId: string
   ): Promise<void> {
     const db = getDb();
-    const userList = await db.select().from(users).where(eq(users.telegramId, telegramId)).limit(1);
-    if (userList.length === 0) return;
-    const user = userList[0]!;
-
-    if (user.referrerId && user.referrerId !== telegramId) {
-      // Find the first committed purchase, rather than assuming this callback
-      // arrives in purchase order. If an earlier callback was interrupted, a
-      // later successful purchase still settles the one eligible bonus.
-      const [firstPurchase] = await db
-        .select({ intentId: walletTransactions.referenceId })
-        .from(walletTransactions)
+    await db.transaction(async (tx) => {
+      // 1. Lock the purchase intent row
+      const [intent] = await tx
+        .select()
+        .from(purchaseIntents)
         .where(
           and(
-            eq(walletTransactions.telegramId, telegramId),
-            eq(walletTransactions.type, 'purchase'),
-            // A 100% promotional purchase has a zero debit. It is a valid
-            // config issuance but must not be used to farm a paid referral
-            // reward; the first actual debit remains eligible later.
-            lt(walletTransactions.amount, 0)
+            eq(purchaseIntents.id, intentId),
+            eq(purchaseIntents.status, 'completed'),
+            isNull(purchaseIntents.refundedAt)
           )
         )
-        .orderBy(asc(walletTransactions.createdAt), asc(walletTransactions.id))
+        .for('update')
         .limit(1);
 
-      if (firstPurchase?.intentId) {
-        const bonusAmount = asPositiveSafeInteger(
-          this.translationService.getSettingNum('referral_bonus_toman', 10000)
-        );
-        const referenceId = `ref_bonus_${firstPurchase.intentId}`;
-        if (bonusAmount > 0) {
-          const awarded = await this.creditWallet({
-            telegramId: user.referrerId,
-            amount: bonusAmount,
-            type: 'referral_bonus',
-            referenceId,
-            description: `Referral bonus for user ${telegramId}`,
-          });
-          if (awarded) {
-            logger.info(
-              { referrerId: user.referrerId, bonusAmount, referenceId },
-              'Referral bonus awarded'
+      if (!intent) {
+        // Either not found, not completed, or already refunded
+        return;
+      }
+
+      // Check if any refund intent is pending or completed for this purchase
+      const [activeRefund] = await tx
+        .select({ id: refundIntents.id })
+        .from(refundIntents)
+        .where(
+          and(
+            eq(refundIntents.purchaseIntentId, intentId),
+            inArray(refundIntents.status, ['completed', 'pending', 'reconciliation_required'])
+          )
+        )
+        .limit(1);
+
+      if (activeRefund) {
+        // Mark bonuses terminal so reconciler will not re-attempt
+        await tx
+          .update(purchaseIntents)
+          .set({ bonusesProcessedAt: new Date(), updatedAt: new Date() })
+          .where(eq(purchaseIntents.id, intentId));
+        return;
+      }
+
+      // Resolve snapshotted or fallback values:
+      // If snapshot is present in row, use it unconditionally (never re-read global settings).
+      // For legacy rows where snapshot columns are NULL, calculate safely once or default to 0.
+      let referralBonus = intent.referralBonusAmount;
+      let referrerId = intent.referrerTelegramId;
+      let cashbackAmount = intent.cashbackAmount;
+      let cashbackPercent = intent.cashbackPercent;
+
+      if (
+        referralBonus === null ||
+        referrerId === null ||
+        cashbackAmount === null ||
+        cashbackPercent === null
+      ) {
+        const [user] = await tx
+          .select()
+          .from(users)
+          .where(eq(users.telegramId, telegramId))
+          .limit(1);
+        if (user?.referrerId && user.referrerId !== telegramId && referrerId === null) {
+          const [firstPurchase] = await tx
+            .select({ intentId: walletTransactions.referenceId })
+            .from(walletTransactions)
+            .where(
+              and(
+                eq(walletTransactions.telegramId, telegramId),
+                eq(walletTransactions.type, 'purchase'),
+                lt(walletTransactions.amount, 0)
+              )
+            )
+            .orderBy(asc(walletTransactions.createdAt), asc(walletTransactions.id))
+            .limit(1);
+          if (firstPurchase?.intentId) {
+            referrerId = user.referrerId;
+            referralBonus = asPositiveSafeInteger(
+              this.translationService.getSettingNum('referral_bonus_toman', 10000)
             );
           }
         }
+        if (cashbackPercent === null) {
+          cashbackPercent = asPercent(this.translationService.getSettingNum('cashback_percent', 0));
+        }
+        if (cashbackAmount === null) {
+          const purchaseAmount = asPositiveSafeInteger(amount);
+          cashbackAmount =
+            cashbackPercent > 0 && purchaseAmount > 0
+              ? Math.floor((purchaseAmount / 100) * cashbackPercent)
+              : 0;
+        }
       }
-    }
 
-    const cashbackPercent = asPercent(this.translationService.getSettingNum('cashback_percent', 0));
-    const purchaseAmount = asPositiveSafeInteger(amount);
-    if (cashbackPercent <= 0 || purchaseAmount <= 0) return;
+      if (referrerId && (referralBonus ?? 0) > 0) {
+        const referenceId = `ref_bonus_${intentId}`;
+        const awarded = await this.creditWalletInTransaction(tx, {
+          telegramId: referrerId,
+          amount: referralBonus!,
+          type: 'referral_bonus',
+          referenceId,
+          description: `Referral bonus for user ${telegramId}`,
+        });
+        if (awarded) {
+          logger.info(
+            { referrerId, bonusAmount: referralBonus, referenceId },
+            'Referral bonus awarded'
+          );
+        }
+      }
 
-    // Divide first so a malformed-but-finite setting cannot overflow a JS
-    // safe integer. The percentage is constrained to 0–100.
-    const cashbackAmount = Math.floor((purchaseAmount / 100) * cashbackPercent);
-    if (cashbackAmount <= 0) return;
+      if ((cashbackAmount ?? 0) > 0) {
+        const referenceId = `cashback_${intentId}`;
+        const awarded = await this.creditWalletInTransaction(tx, {
+          telegramId,
+          amount: cashbackAmount!,
+          type: 'cashback',
+          referenceId,
+          description: `Cashback ${cashbackPercent ?? 0}% for purchase ${intentId}`,
+        });
+        if (awarded) {
+          logger.info({ telegramId, cashbackAmount, referenceId }, 'Cashback awarded');
+        }
+      }
 
-    const referenceId = `cashback_${intentId}`;
-    const awarded = await this.creditWallet({
-      telegramId,
-      amount: cashbackAmount,
-      type: 'cashback',
-      referenceId,
-      description: `Cashback ${cashbackPercent}% for purchase ${intentId}`,
+      await tx
+        .update(purchaseIntents)
+        .set({ bonusesProcessedAt: new Date(), updatedAt: new Date() })
+        .where(eq(purchaseIntents.id, intentId));
     });
-    if (awarded) {
-      logger.info({ telegramId, cashbackAmount, referenceId }, 'Cashback awarded');
-    }
   }
 
   /**
@@ -120,44 +238,48 @@ export class ReferralService {
    * with the failed insert, so no duplicate credit can escape. Unexpected
    * failures propagate so the durable reconciliation retry can see them.
    */
-  private async creditWallet(params: {
-    telegramId: number;
-    amount: number;
-    type: 'referral_bonus' | 'cashback';
-    referenceId: string;
-    description: string;
-  }): Promise<boolean> {
-    const db = getDb();
+  private async creditWalletInTransaction(
+    tx: {
+      select: (args?: any) => any;
+      update: (table: any) => any;
+      insert: (table: any) => any;
+    },
+    params: {
+      telegramId: number;
+      amount: number;
+      type: 'referral_bonus' | 'cashback';
+      referenceId: string;
+      description: string;
+    }
+  ): Promise<boolean> {
     try {
-      return await db.transaction(async (tx) => {
-        const [alreadyCredited] = await tx
-          .select({ id: walletTransactions.id })
-          .from(walletTransactions)
-          .where(eq(walletTransactions.referenceId, params.referenceId))
-          .limit(1);
-        if (alreadyCredited) return false;
+      const [alreadyCredited] = await tx
+        .select({ id: walletTransactions.id })
+        .from(walletTransactions)
+        .where(eq(walletTransactions.referenceId, params.referenceId))
+        .limit(1);
+      if (alreadyCredited) return false;
 
-        const [updatedUser] = await tx
-          .update(users)
-          .set({
-            balance: sql`${users.balance} + ${params.amount}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.telegramId, params.telegramId))
-          .returning({ balance: users.balance });
-        if (!updatedUser) throw new Error('REFERRAL_CREDIT_USER_NOT_FOUND');
+      const [updatedUser] = await tx
+        .update(users)
+        .set({
+          balance: sql`${users.balance} + ${params.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.telegramId, params.telegramId))
+        .returning({ balance: users.balance });
+      if (!updatedUser) throw new Error('REFERRAL_CREDIT_USER_NOT_FOUND');
 
-        await tx.insert(walletTransactions).values({
-          id: `tx_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-          telegramId: params.telegramId,
-          amount: params.amount,
-          balanceAfter: updatedUser.balance,
-          type: params.type,
-          referenceId: params.referenceId,
-          description: params.description,
-        });
-        return true;
+      await tx.insert(walletTransactions).values({
+        id: `tx_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        telegramId: params.telegramId,
+        amount: params.amount,
+        balanceAfter: updatedUser.balance,
+        type: params.type,
+        referenceId: params.referenceId,
+        description: params.description,
       });
+      return true;
     } catch (err) {
       if (isUniqueViolation(err)) {
         logger.debug(

@@ -9,6 +9,7 @@ import {
   type NormalizedRebeccaPanelAccess,
 } from './RebeccaPanelAccess.js';
 import { verifyOrEstablishConfigIncarnation } from './ConfigIncarnation.js';
+import { withConfigLock } from './ConfigLock.js';
 
 export class ConfigTransferService {
   private readonly panels: NormalizedRebeccaPanelAccess;
@@ -45,71 +46,73 @@ export class ConfigTransferService {
       throw new Error('CONFIG_NOT_OWNED');
     }
 
-    // Never move a stale/deleted local shell. The panel remains the authority.
-    const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
-    if (remote.status === 'deleted') throw new Error('CONFIG_REMOTE_DELETED');
-    await verifyOrEstablishConfigIncarnation(config, remote);
+    return withConfigLock(config.panelId, config.configUsername, async () => {
+      // Never move a stale/deleted local shell. The panel remains the authority.
+      const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
+      if (remote.status === 'deleted') throw new Error('CONFIG_REMOTE_DELETED');
+      await verifyOrEstablishConfigIncarnation(config, remote);
 
-    return db.transaction(async (tx) => {
-      // Conditional owner match makes a concurrent transfer lose safely.
-      const [moved] = await tx
-        .update(userConfigs)
-        .set({
-          telegramId: params.toTelegramId,
-          autoRenewEnabled: false,
-          autoRenewPackageId: null,
-          autoRenewPrice: null,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(userConfigs.id, params.configId), eq(userConfigs.telegramId, config.telegramId))
-        )
-        .returning({ configUsername: userConfigs.configUsername });
-      if (!moved) throw new Error('TRANSFER_CONFLICT');
-
-      await tx
-        .delete(notificationDeliveries)
-        .where(
-          and(
-            eq(notificationDeliveries.panelId, config.panelId),
-            eq(notificationDeliveries.configUsername, moved.configUsername)
-          )
-        );
-
-      for (const telegramId of [config.telegramId, params.toTelegramId]) {
-        await tx
-          .update(users)
+      return db.transaction(async (tx) => {
+        // Conditional owner match makes a concurrent transfer lose safely.
+        const [moved] = await tx
+          .update(userConfigs)
           .set({
-            activeSubscriptionCount: sql`(
-              SELECT COUNT(*)::integer FROM ${userConfigs}
-              WHERE ${userConfigs.telegramId} = ${telegramId}
-                AND ${userConfigs.panelStatus} = 'active'
-            )`,
+            telegramId: params.toTelegramId,
+            autoRenewEnabled: false,
+            autoRenewPackageId: null,
+            autoRenewPrice: null,
             updatedAt: new Date(),
           })
-          .where(eq(users.telegramId, telegramId));
-      }
+          .where(
+            and(eq(userConfigs.id, params.configId), eq(userConfigs.telegramId, config.telegramId))
+          )
+          .returning({ configUsername: userConfigs.configUsername });
+        if (!moved) throw new Error('TRANSFER_CONFLICT');
 
-      await tx.insert(auditLogs).values({
-        id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-        actorTelegramId: params.actorTelegramId,
-        action: 'subscription_transferred',
-        entityType: 'user_config',
-        entityId: params.configId,
-        targetTelegramId: params.toTelegramId,
-        metadata: JSON.stringify({
+        await tx
+          .delete(notificationDeliveries)
+          .where(
+            and(
+              eq(notificationDeliveries.panelId, config.panelId),
+              eq(notificationDeliveries.configUsername, moved.configUsername)
+            )
+          );
+
+        for (const telegramId of [config.telegramId, params.toTelegramId]) {
+          await tx
+            .update(users)
+            .set({
+              activeSubscriptionCount: sql`(
+                SELECT COUNT(*)::integer FROM ${userConfigs}
+                WHERE ${userConfigs.telegramId} = ${telegramId}
+                  AND ${userConfigs.panelStatus} = 'active'
+              )`,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.telegramId, telegramId));
+        }
+
+        await tx.insert(auditLogs).values({
+          id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+          actorTelegramId: params.actorTelegramId,
+          action: 'subscription_transferred',
+          entityType: 'user_config',
+          entityId: params.configId,
+          targetTelegramId: params.toTelegramId,
+          metadata: JSON.stringify({
+            configUsername: moved.configUsername,
+            fromTelegramId: config.telegramId,
+            toTelegramId: params.toTelegramId,
+            autoRenewReset: config.autoRenewEnabled,
+          }),
+        });
+
+        return {
           configUsername: moved.configUsername,
           fromTelegramId: config.telegramId,
           toTelegramId: params.toTelegramId,
-          autoRenewReset: config.autoRenewEnabled,
-        }),
+        };
       });
-
-      return {
-        configUsername: moved.configUsername,
-        fromTelegramId: config.telegramId,
-        toTelegramId: params.toTelegramId,
-      };
     });
   }
 }

@@ -16,7 +16,15 @@ import type { TranslationService } from '../../src/domain/services/TranslationSe
 import type { ReferralService } from '../../src/domain/services/ReferralService.js';
 import type { PromoService } from '../../src/domain/services/PromoService.js';
 
-vi.mock('../../src/infra/db.js', () => ({ getDb: vi.fn() }));
+vi.mock('../../src/infra/db.js', () => ({
+  getDb: vi.fn(),
+  getPool: vi.fn(() => ({
+    connect: vi.fn().mockResolvedValue({
+      query: vi.fn().mockResolvedValue({ rows: [{ locked: true, unlocked: true }] }),
+      release: vi.fn(),
+    }),
+  })),
+}));
 vi.mock('../../src/infra/logger.js', () => ({
   logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -87,7 +95,13 @@ function createDbMock(
           return query;
         }),
         where: vi.fn(() => query),
-        returning: vi.fn(() => Promise.resolve(state.returningResults.shift() ?? [])),
+        returning: vi.fn(() =>
+          Promise.resolve(
+            state.returningResults.shift() ?? [
+              { id: 'mock_row', telegramId: 1001, balance: 50_000 },
+            ]
+          )
+        ),
       };
       return query;
     }),
