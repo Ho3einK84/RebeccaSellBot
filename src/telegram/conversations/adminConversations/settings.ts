@@ -1,6 +1,10 @@
 /** Public surface for the Admin Settings Center. */
 
 export { adminEditSettingsConversation } from './settings/conversation.js';
+export { adminManagePackagesConversation } from './settings/packageManager.js';
+export { adminCustomVolumeConversation } from './settings/customVolume.js';
+export { adminReferralSettingsConversation } from './settings/referral.js';
+export { adminPaymentSettingsConversation } from './settings/payment.js';
 export {
   SETTING_DEFINITIONS,
   SETTING_GROUPS,

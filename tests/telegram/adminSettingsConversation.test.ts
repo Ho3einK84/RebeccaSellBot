@@ -66,6 +66,10 @@ function createHarness(
     translationService,
     configService: { syncCounters },
     pricingService: { getPackages: vi.fn(() => fallbackPackages.map((pkg) => ({ ...pkg }))) },
+    packageCategoryService: {
+      listCategories: vi.fn(async () => []),
+      getCategoryById: vi.fn(async () => null),
+    },
     panelRegistry: {
       listPanels: vi.fn(() => panels),
       getPanel: vi.fn((panelId: string) => panels.find((panel) => panel.id === panelId)),
@@ -115,23 +119,20 @@ function createHarness(
 
 describe('admin settings conversation', () => {
   it('navigates home, category, instant toggle save, Back, and Cancel', async () => {
-    const harness = createHarness(
-      { custom_volume_enabled: 'true', price_per_gb: '5000', custom_default_days: '30' },
-      [
-        { callback: 'set-group:custom_volume' },
-        { callback: 'set-edit:custom_volume_enabled' },
-        { callback: 'set-groups' },
-        { callback: 'conversation:cancel' },
-      ]
-    );
+    const harness = createHarness({ trial_enabled: 'true', trial_gb: '1', trial_days: '3' }, [
+      { callback: 'set-group:trial' },
+      { callback: 'set-edit:trial_enabled' },
+      { callback: 'set-groups' },
+      { callback: 'conversation:cancel' },
+    ]);
 
     await adminEditSettingsConversation(harness.conversation, harness.ctx);
 
     expect(harness.updateSetting).toHaveBeenCalledOnce();
-    expect(harness.updateSetting).toHaveBeenCalledWith('custom_volume_enabled', 'false');
-    expect(harness.settings.get('custom_volume_enabled')).toBe('false');
-    expect(keyboardRenderCount(harness.reply, 'set-group:custom_volume')).toBe(2);
-    expect(keyboardRenderCount(harness.reply, 'set-edit:custom_volume_enabled')).toBe(2);
+    expect(harness.updateSetting).toHaveBeenCalledWith('trial_enabled', 'false');
+    expect(harness.settings.get('trial_enabled')).toBe('false');
+    expect(keyboardRenderCount(harness.reply, 'set-group:trial')).toBe(2);
+    expect(keyboardRenderCount(harness.reply, 'set-edit:trial_enabled')).toBe(2);
     expect(harness.remaining).toHaveLength(0);
   });
 

@@ -9,12 +9,14 @@ import { languageKeyboard } from './language.js';
 import { renderHomeDashboard } from './homeDashboard.js';
 import { clearPendingPromo, getPendingPromoPricing } from '../promoSelection.js';
 import {
+  formatPackageButtonLabel,
   localizedDate,
   localizedNumber,
   localizedPackageName,
   observedContextLocale,
   t,
 } from '../locale.js';
+import type { PackageOption } from '../../domain/services/PricingService.js';
 import { backKeyboard, buildEmptyState, buildScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderAdminHome } from './adminMenu.js';
@@ -104,6 +106,29 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
  */
 export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
   const promoCode = ctx.session.pendingPromo?.code;
+  if (ctx.session.activeShopCategory && ctx.services) {
+    const category = await ctx.services.packageCategoryService.getCategoryById(
+      ctx.session.activeShopCategory
+    );
+    if (category) {
+      return buildScreen({
+        emoji: category.icon || '📦',
+        title: category.name,
+        subtitle: category.description || t(ctx, 'shop_subtitle'),
+        ...(promoCode
+          ? {
+              primary: {
+                emoji: '🎟️',
+                label: t(ctx, 'shop_promo_section'),
+                value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
+              },
+            }
+          : {}),
+        footer: `ℹ️ ${t(ctx, 'shop_hint')}`,
+      });
+    }
+  }
+
   return buildScreen({
     emoji: '🛍️',
     title: t(ctx, 'shop_title'),
@@ -237,6 +262,11 @@ export function resolveSupportInfo(ctx: MenuContext): {
   }
   if (ctx.services?.supportUrl) {
     return { url: ctx.services.supportUrl, rawValue: ctx.services.supportUrl, isConfigured: true };
+  }
+  const fallbackAdminId = ctx.services?.adminService?.adminIds[0];
+  if (fallbackAdminId) {
+    const fallbackUrl = `tg://user?id=${fallbackAdminId}`;
+    return { url: fallbackUrl, rawValue: String(fallbackAdminId), isConfigured: true };
   }
   return { isConfigured: false, rawValue: '' };
 }
@@ -442,8 +472,91 @@ export function getEffectivePackagePrice(
 
 // ── Shop Menu ────────────────────────────────────────────────────────────────
 
+function renderPackageButtons(
+  range: Parameters<Parameters<typeof shopMenu.dynamic>[0]>[1],
+  packages: readonly PackageOption[]
+) {
+  for (const pkg of packages) {
+    const isPopular =
+      pkg.id.includes('popular') || pkg.id.includes('best') || pkg.id.includes('pro');
+    const tag = isPopular ? '⭐ ' : '';
+
+    range
+      .text(
+        (c) => {
+          const effectivePrice = getEffectivePackagePrice(pkg, c.session.pendingPromo);
+          return formatPackageButtonLabel(c, pkg, { effectivePrice, tag });
+        },
+        async (c) => {
+          const telegramId = c.from?.id;
+          const chatId = c.chat?.id;
+          if (!telegramId || !chatId || !c.services) return;
+
+          const pendingPromo = await getPendingPromoPricing(c, telegramId, pkg.price, pkg.gbAmount);
+          if (pendingPromo.messageKey) {
+            await c.editMessageText(
+              buildEmptyState('⚠️', t(c, 'purchase_review_title'), t(c, pendingPromo.messageKey)),
+              { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
+            );
+            return;
+          }
+          const displayedPrice = pendingPromo.quote?.finalAmount ?? pkg.price;
+          const balance = await c.services.walletService.getBalance(telegramId);
+          if (balance < displayedPrice) {
+            const insufficientKeyboard = new InlineKeyboard()
+              .text(t(c, 'direct_topup_button'), 'topup:direct')
+              .row()
+              .text(t(c, 'menu_back'), 'shop:open');
+
+            await c.editMessageText(buildInsufficientBalanceScreen(c, displayedPrice, balance), {
+              parse_mode: 'Markdown',
+              reply_markup: insufficientKeyboard,
+            });
+            return;
+          }
+
+          let checkout;
+          try {
+            checkout = await c.services.purchaseCheckoutService.create({
+              telegramId,
+              kind: 'new_config',
+              pkg,
+              promoCode: pendingPromo.promoCode,
+              quotedAmount: displayedPrice,
+            });
+            trackFunnelEvent('checkout_start');
+          } catch {
+            await c.editMessageText(
+              buildEmptyState(
+                '⚠️',
+                t(c, 'purchase_review_title'),
+                t(c, 'purchase_target_unavailable')
+              ),
+              { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
+            );
+            return;
+          }
+
+          const confirmKeyboard = new InlineKeyboard()
+            .text(t(c, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
+            .row()
+            .text(t(c, 'menu_back'), 'shop:open');
+
+          await c.editMessageText(
+            buildPurchaseCheckoutScreen(c, pkg, displayedPrice, pendingPromo.quote?.code),
+            {
+              parse_mode: 'Markdown',
+              reply_markup: confirmKeyboard,
+            }
+          );
+        }
+      )
+      .row();
+  }
+}
+
 export const shopMenu = new Menu<MenuContext>('shop-menu')
-  .dynamic((ctx, range) => {
+  .dynamic(async (ctx, range) => {
     if (!ctx.services) return;
 
     if (ctx.session.pendingPromo) {
@@ -459,114 +572,81 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
         .row();
     }
 
-    const packages = ctx.services.pricingService.getPackages();
+    if (ctx.session.activeShopCategory) {
+      const categoryPackages = ctx.services.pricingService.getPackages(
+        undefined,
+        undefined,
+        false,
+        ctx.session.activeShopCategory
+      );
 
-    for (const pkg of packages) {
-      const isPopular =
-        pkg.id.includes('popular') || pkg.id.includes('best') || pkg.id.includes('pro');
-      const tag = isPopular ? '⭐ ' : '';
+      if (categoryPackages.length === 0) {
+        range
+          .text(
+            (c) => t(c, 'shop_category_empty'),
+            async () => {}
+          )
+          .row();
+      } else {
+        renderPackageButtons(range, categoryPackages);
+      }
 
       range
         .text(
-          (c) => {
-            const name = localizedPackageName(c, pkg.id, pkg.name);
-            const effectivePrice = getEffectivePackagePrice(pkg, c.session.pendingPromo);
-            return `${tag}${t(c, 'package_button', { name, price: localizedNumber(effectivePrice, c) })}`;
-          },
+          (c) => t(c, 'shop_all_categories_button'),
           async (c) => {
-            const telegramId = c.from?.id;
-            const chatId = c.chat?.id;
-            if (!telegramId || !chatId || !c.services) return;
+            c.session.activeShopCategory = undefined;
+            await c.editMessageText(await renderShopMenuText(c), { parse_mode: 'Markdown' });
+          }
+        )
+        .row();
+    } else {
+      const categories = await ctx.services.packageCategoryService.listCategories(false);
 
-            const pendingPromo = await getPendingPromoPricing(
-              c,
-              telegramId,
-              pkg.price,
-              pkg.gbAmount
-            );
-            if (pendingPromo.messageKey) {
-              await c.editMessageText(
-                buildEmptyState('⚠️', t(c, 'purchase_review_title'), t(c, pendingPromo.messageKey)),
-                { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
-              );
-              return;
-            }
-            const displayedPrice = pendingPromo.quote?.finalAmount ?? pkg.price;
-            const balance = await c.services.walletService.getBalance(telegramId);
-            if (balance < displayedPrice) {
-              const insufficientKeyboard = new InlineKeyboard()
-                .text(t(c, 'direct_topup_button'), 'topup:direct')
-                .row()
-                .text(t(c, 'menu_back'), 'shop:open');
+      for (const cat of categories) {
+        const label = `${cat.icon ? cat.icon + ' ' : '📦 '}${cat.name}`;
+        range
+          .text(label, async (c) => {
+            c.session.activeShopCategory = cat.id;
+            await c.editMessageText(await renderShopMenuText(c), { parse_mode: 'Markdown' });
+          })
+          .row();
+      }
 
-              await c.editMessageText(buildInsufficientBalanceScreen(c, displayedPrice, balance), {
-                parse_mode: 'Markdown',
-                reply_markup: insufficientKeyboard,
-              });
-              return;
-            }
+      const uncategorizedPackages =
+        categories.length > 0
+          ? ctx.services.pricingService.getPackages(undefined, undefined, false, null)
+          : ctx.services.pricingService.getPackages();
 
-            let checkout;
-            try {
-              checkout = await c.services.purchaseCheckoutService.create({
-                telegramId,
-                kind: 'new_config',
-                pkg,
-                promoCode: pendingPromo.promoCode,
-                quotedAmount: displayedPrice,
-              });
-              trackFunnelEvent('checkout_start');
-            } catch {
-              await c.editMessageText(
-                buildEmptyState(
-                  '⚠️',
-                  t(c, 'purchase_review_title'),
-                  t(c, 'purchase_target_unavailable')
-                ),
-                { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
-              );
-              return;
-            }
+      renderPackageButtons(range, uncategorizedPackages);
 
-            const confirmKeyboard = new InlineKeyboard()
-              .text(t(c, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
-              .row()
-              .text(t(c, 'menu_back'), 'shop:open');
-
-            await c.editMessageText(
-              buildPurchaseCheckoutScreen(c, pkg, displayedPrice, pendingPromo.quote?.code),
-              {
-                parse_mode: 'Markdown',
-                reply_markup: confirmKeyboard,
+      if (customVolumeEnabled(ctx.services.translationService)) {
+        const customPricePerGb = ctx.services.translationService.getSettingNum(
+          'price_per_gb',
+          5000
+        );
+        range
+          .text(
+            (c) => t(c, 'menu_custom_amount', { price: localizedNumber(customPricePerGb, c) }),
+            async (c) => {
+              if (!c.services || !customVolumeEnabled(c.services.translationService)) {
+                await c.reply(t(c, 'custom_volume_unavailable'), {
+                  reply_markup: backKeyboard(c, 'main'),
+                });
+                return;
               }
-            );
-          }
-        )
-        .row();
-    }
-
-    if (customVolumeEnabled(ctx.services.translationService)) {
-      const customPricePerGb = ctx.services.translationService.getSettingNum('price_per_gb', 5000);
-      range
-        .text(
-          (c) => t(c, 'menu_custom_amount', { price: localizedNumber(customPricePerGb, c) }),
-          async (c) => {
-            if (!c.services || !customVolumeEnabled(c.services.translationService)) {
-              await c.reply(t(c, 'custom_volume_unavailable'), {
-                reply_markup: backKeyboard(c, 'main'),
-              });
-              return;
+              await c.conversation.enter('customAmountConversation');
             }
-            await c.conversation.enter('customAmountConversation');
-          }
-        )
-        .row();
+          )
+          .row();
+      }
     }
   })
   .row()
   .text(
     (ctx) => t(ctx, 'menu_back'),
     async (ctx) => {
+      ctx.session.activeShopCategory = undefined;
       ctx.menu.nav('main-menu');
       await ctx.editMessageText(await renderHomeDashboard(ctx), { parse_mode: 'Markdown' });
     }

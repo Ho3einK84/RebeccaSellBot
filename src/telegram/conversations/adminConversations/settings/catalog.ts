@@ -203,8 +203,15 @@ export type SettingGroup = {
   settings: readonly SettingKey[];
 };
 
-export const SETTING_GROUPS: readonly SettingGroup[] = [
+export const GENERAL_SETTING_GROUPS: readonly SettingGroup[] = [
   settingGroup('system', 'admin_setting_group_system', 'admin_setting_group_system_desc'),
+  settingGroup('support', 'admin_setting_group_support', 'admin_setting_group_support_desc'),
+  settingGroup('trial', 'admin_setting_group_trial', 'admin_setting_group_trial_desc'),
+  settingGroup('naming', 'admin_setting_group_naming', 'admin_setting_group_naming_desc'),
+];
+
+export const SETTING_GROUPS: readonly SettingGroup[] = [
+  ...GENERAL_SETTING_GROUPS,
   settingGroup('pricing', 'admin_setting_group_pricing', 'admin_setting_group_pricing_desc'),
   settingGroup(
     'custom_volume',
@@ -212,10 +219,7 @@ export const SETTING_GROUPS: readonly SettingGroup[] = [
     'admin_setting_group_custom_volume_desc'
   ),
   settingGroup('payment', 'admin_setting_group_payment', 'admin_setting_group_payment_desc'),
-  settingGroup('support', 'admin_setting_group_support', 'admin_setting_group_support_desc'),
-  settingGroup('trial', 'admin_setting_group_trial', 'admin_setting_group_trial_desc'),
   settingGroup('referral', 'admin_setting_group_referral', 'admin_setting_group_referral_desc'),
-  settingGroup('naming', 'admin_setting_group_naming', 'admin_setting_group_naming_desc'),
 ];
 
 export const SETTING_LABELS: Readonly<Record<SettingKey, string>> = Object.fromEntries(

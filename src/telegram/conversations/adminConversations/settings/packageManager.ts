@@ -21,10 +21,21 @@ import {
   truncateButtonLabel,
 } from './presentation.js';
 import { waitForSettingsInput } from './navigation.js';
+import { requireAdmin } from '../shared.js';
+import { editSetting } from './conversation.js';
+import { getSettingDefinition } from './catalog.js';
 
 export type PackageManagerOutcome = 'back' | 'cancel';
 type FieldResult<T> = { type: 'value'; value: T } | { type: 'back' } | { type: 'cancel' };
 const PACKAGE_PAGE_SIZE = 8;
+
+export async function adminManagePackagesConversation(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<void> {
+  if (!(await requireAdmin(conversation, ctx))) return;
+  await managePackages(conversation, ctx);
+}
 
 export async function managePackages(
   conversation: MyConversation,
@@ -83,6 +94,8 @@ export async function managePackages(
         'pkg-clone:',
         'pkg-up:',
         'pkg-down:',
+        'pkg-categories',
+        'pkg-settings',
       ],
       backCallbacks: ['pkg-back'],
       retryKeyboard: keyboard,
@@ -92,6 +105,19 @@ export async function managePackages(
     if (input.type !== 'callback') continue;
 
     activeCtx = input.ctx;
+
+    if (input.data === 'pkg-categories') {
+      const outcome = await manageCategories(conversation, ctx);
+      if (outcome === 'cancel') return 'cancel';
+      packages = currentPackages(ctx);
+      continue;
+    }
+
+    if (input.data === 'pkg-settings') {
+      const outcome = await managePackagePolicies(conversation, ctx);
+      if (outcome === 'cancel') return 'cancel';
+      continue;
+    }
 
     let nextPackages: PackageOption[] | undefined;
     if (input.data.startsWith('pkg-page:')) {
@@ -337,10 +363,14 @@ export function buildPackageManagerKeyboard(
     keyboard.text(t(ctx, 'pagination_next'), callbackData('pkg-page', safePage + 1));
   }
   if (pageCount > 1) keyboard.row();
+
   return keyboard
     .text(t(ctx, 'admin_pkg_add'), 'pkg-add')
     .row()
-    .text(t(ctx, 'admin_settings_back_category'), 'pkg-back');
+    .text(t(ctx, 'admin_pkg_categories_button'), 'pkg-categories')
+    .text(t(ctx, 'admin_sales_package_policy_title'), 'pkg-settings')
+    .row()
+    .text(t(ctx, 'admin_menu_back'), 'pkg-back');
 }
 
 export function generatePackageId(name: string, packages: readonly PackageOption[]): string {
@@ -405,6 +435,9 @@ async function promptPackageFields(
   );
   if (price.type !== 'value') return price;
 
+  const categoryResult = await choosePackageCategory(conversation, ctx, existing?.categoryId);
+  if (categoryResult.type === 'cancel') return categoryResult;
+
   const target = await choosePackageTarget(conversation, ctx, existing);
   if (target.type !== 'value') return target;
 
@@ -419,8 +452,52 @@ async function promptPackageFields(
       enabled: existing?.enabled ?? true,
       panelId: target.value.panelId,
       serviceId: target.value.serviceId,
+      categoryId: categoryResult.type === 'value' ? categoryResult.value : undefined,
     },
   };
+}
+
+async function choosePackageCategory(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  existingCategoryId?: string
+): Promise<FieldResult<string | undefined>> {
+  const categories = (await ctx.services?.packageCategoryService?.listCategories(true)) ?? [];
+  if (categories.length === 0) {
+    return { type: 'value', value: undefined };
+  }
+
+  const keyboard = new InlineKeyboard();
+  keyboard
+    .text(`${!existingCategoryId ? '✅ ' : ''}${t(ctx, 'admin_pkg_no_category')}`, 'pkg-cat:none')
+    .row();
+
+  for (const cat of categories) {
+    const isSelected = existingCategoryId === cat.id;
+    const label = `${isSelected ? '✅ ' : ''}${cat.icon ? cat.icon + ' ' : ''}${cat.name}`;
+    keyboard.text(label, callbackData('pkg-cat', cat.id)).row();
+  }
+
+  keyboard.text(t(ctx, 'admin_pkg_cancel_edit'), 'pkg-field-back');
+
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(ctx, t(ctx, 'admin_pkg_select_category_prompt'), { emoji: '🏷️' }),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
+
+  const input = await waitForSettingsInput(conversation, {
+    callbackPrefixes: ['pkg-cat:'],
+    backCallbacks: ['pkg-field-back'],
+    retryKeyboard: keyboard,
+  });
+
+  if (input.type === 'cancel') return { type: 'cancel' };
+  if (input.type === 'back' || input.type !== 'callback') return { type: 'back' };
+
+  const rawId = input.data.slice('pkg-cat:'.length);
+  return { type: 'value', value: rawId === 'none' ? undefined : rawId };
 }
 
 async function choosePackageTarget(
@@ -448,25 +525,15 @@ async function choosePackageTarget(
   for (const panel of panels) {
     for (const service of panel.services) {
       const selected = panel.id === existing?.panelId && service.serviceId === existing.serviceId;
-      keyboard
-        .text(
-          truncateButtonLabel(
-            `${selected ? '✅ ' : ''}${panel.name} · ${service.name} (${service.serviceId})`
-          ),
-          callbackData('pkg-target', panel.id, service.serviceId)
-        )
-        .row();
+      const label = `${selected ? '✅ ' : ''}${panel.name} / ${service.name}`;
+      keyboard.text(label, callbackData('pkg-target', `${panel.id}:${service.serviceId}`)).row();
     }
   }
-  keyboard.text(t(ctx, 'admin_settings_back_category'), 'pkg-field-back');
+  keyboard.text(t(ctx, 'admin_pkg_cancel_edit'), 'pkg-field-back');
   await promptInConversation(
     conversation,
     ctx,
-    buildSettingsPrompt(ctx, t(ctx, 'admin_pkg_target_prompt'), {
-      emoji: '🎯',
-      title: t(ctx, 'admin_package_manager_title'),
-      subtitle: t(ctx, 'admin_package_manager_subtitle'),
-    }),
+    buildSettingsPrompt(ctx, t(ctx, 'admin_pkg_target_prompt'), { emoji: '🎯' }),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
   const input = await waitForSettingsInput(conversation, {
@@ -476,34 +543,41 @@ async function choosePackageTarget(
   });
   if (input.type === 'cancel') return { type: 'cancel' };
   if (input.type !== 'callback') return { type: 'back' };
-  const match = /^pkg-target:([a-z0-9_-]{2,40}):(\d+)$/iu.exec(input.data);
-  const serviceId = match ? Number(match[2]) : Number.NaN;
-  const panel = match ? panels.find((candidate) => candidate.id === match[1]) : undefined;
-  const service = panel?.services.find((candidate) => candidate.serviceId === serviceId);
-  return panel && service && Number.isSafeInteger(serviceId) && serviceId > 0
-    ? { type: 'value', value: { panelId: panel.id, serviceId } }
-    : { type: 'back' };
+  const rawTarget = input.data.slice('pkg-target:'.length);
+  const [panelId, rawServiceId] = rawTarget.split(':');
+  const serviceId = Number(rawServiceId);
+  if (!panelId || !Number.isSafeInteger(serviceId) || serviceId <= 0) {
+    return { type: 'back' };
+  }
+  const matchedPanel = panels.find((panel) => panel.id === panelId);
+  const matchedService = matchedPanel?.services.find((service) => service.serviceId === serviceId);
+  if (!matchedPanel || !matchedService) {
+    return { type: 'back' };
+  }
+  return { type: 'value', value: { panelId, serviceId } };
 }
 
 async function askPackageString(
   conversation: MyConversation,
   ctx: ConversationContext,
   promptKey: string,
-  current: string | undefined,
+  existingValue: string | undefined,
   validate: (value: string) => boolean
 ): Promise<FieldResult<string>> {
   const keyboard = packageFieldKeyboard(ctx);
-  await promptInConversation(
-    conversation,
+  const prompt = tm(
     ctx,
-    buildSettingsPrompt(ctx, tm(ctx, promptKey, { current: current ?? '—' }), {
-      emoji: '✍️',
-      title: t(ctx, 'admin_package_manager_title'),
-      subtitle: t(ctx, 'admin_package_manager_subtitle'),
-    }),
-    { parse_mode: 'Markdown', reply_markup: keyboard }
+    promptKey,
+    {
+      current: escapeTelegramMarkdown(existingValue ?? '—'),
+    },
+    ['current']
   );
   for (;;) {
+    await promptInConversation(conversation, ctx, prompt, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
     const input = await waitForSettingsInput(conversation, {
       allowText: true,
       backCallbacks: ['pkg-field-back'],
@@ -516,7 +590,11 @@ async function askPackageString(
     await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'admin_package_manager_title'), t(ctx, 'admin_setting_invalid')),
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_package_manager_title'),
+        t(ctx, 'admin_setting_text_invalid')
+      ),
       { parse_mode: 'Markdown', reply_markup: keyboard }
     );
   }
@@ -526,22 +604,26 @@ async function askPackageInteger(
   conversation: MyConversation,
   ctx: ConversationContext,
   promptKey: string,
-  current: number | undefined,
+  existingValue: number | undefined,
   minimum: number,
   maximum: number
 ): Promise<FieldResult<number>> {
   const keyboard = packageFieldKeyboard(ctx);
-  await promptInConversation(
-    conversation,
+  const prompt = tm(
     ctx,
-    buildSettingsPrompt(ctx, t(ctx, promptKey, { current: current ?? '—' }), {
-      emoji: '🔢',
-      title: t(ctx, 'admin_package_manager_title'),
-      subtitle: t(ctx, 'admin_package_manager_subtitle'),
-    }),
-    { parse_mode: 'Markdown', reply_markup: keyboard }
+    promptKey,
+    {
+      current: existingValue !== undefined ? localizedNumber(existingValue, ctx) : '—',
+      min: localizedNumber(minimum, ctx),
+      max: localizedNumber(maximum, ctx),
+    },
+    ['current', 'min', 'max']
   );
   for (;;) {
+    await promptInConversation(conversation, ctx, prompt, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
     const input = await waitForSettingsInput(conversation, {
       allowText: true,
       backCallbacks: ['pkg-field-back'],
@@ -633,4 +715,346 @@ function packagePageCount(packageCount: number): number {
 
 function clampPackagePage(page: number, packageCount: number): number {
   return Math.min(Math.max(0, page), packagePageCount(packageCount) - 1);
+}
+
+// ── Categories Management Subflow ──────────────────────────────────────────
+
+async function manageCategories(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<PackageManagerOutcome> {
+  if (!ctx.services) return 'cancel';
+
+  for (;;) {
+    const categories = await ctx.services.packageCategoryService.listCategories(true);
+
+    const keyboard = new InlineKeyboard();
+    for (const [index, cat] of categories.entries()) {
+      const isEnabled = cat.enabled;
+      const statusIcon = isEnabled ? '🟢' : '⚪️';
+      const label = `${statusIcon} ${cat.icon ? cat.icon + ' ' : ''}${cat.name}`;
+
+      keyboard.text(label, callbackData('cat:edit', cat.id)).row();
+
+      if (index > 0) {
+        keyboard.text('🔼', callbackData('cat:up', cat.id));
+      }
+      if (index < categories.length - 1) {
+        keyboard.text('🔽', callbackData('cat:down', cat.id));
+      }
+      keyboard.text('🗑', callbackData('cat:del', cat.id)).row();
+    }
+
+    keyboard
+      .text(t(ctx, 'admin_category_add_button'), 'cat:add')
+      .row()
+      .text(t(ctx, 'admin_menu_back'), 'cat:back');
+
+    const screenText = buildScreen({
+      emoji: '🏷️',
+      title: t(ctx, 'admin_category_manager_title'),
+      subtitle: t(ctx, 'admin_category_manager_subtitle'),
+      footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+    });
+
+    await promptInConversation(conversation, ctx, screenText, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+
+    const input = await waitForSettingsInput(conversation, {
+      callbackPrefixes: ['cat:edit:', 'cat:up:', 'cat:down:', 'cat:del:', 'cat:add'],
+      backCallbacks: ['cat:back'],
+      retryKeyboard: keyboard,
+    });
+
+    if (input.type === 'cancel') return 'cancel';
+    if (input.type === 'back') return 'back';
+    if (input.type !== 'callback') continue;
+
+    if (input.data === 'cat:add') {
+      const nameResult = await askPackageString(
+        conversation,
+        ctx,
+        'admin_category_name_prompt',
+        undefined,
+        (val) => val.length >= 1 && val.length <= 100
+      );
+      if (nameResult.type !== 'value') continue;
+
+      const iconResult = await askPackageString(
+        conversation,
+        ctx,
+        'admin_category_icon_prompt',
+        undefined,
+        () => true
+      );
+      const icon =
+        iconResult.type === 'value' && iconResult.value !== '-' ? iconResult.value : undefined;
+
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.packageCategoryService.createCategory({
+          name: nameResult.value,
+          icon,
+        });
+      });
+      continue;
+    }
+
+    if (input.data.startsWith('cat:up:')) {
+      const catId = input.data.slice('cat:up:'.length);
+      const index = categories.findIndex((c) => c.id === catId);
+      if (index > 0) {
+        const reordered = [...categories];
+        const [removed] = reordered.splice(index, 1);
+        if (removed) reordered.splice(index - 1, 0, removed);
+        await conversation.external(async (outsideCtx) => {
+          if (!outsideCtx.services) return;
+          await outsideCtx.services.packageCategoryService.reorderCategories(
+            reordered.map((c) => c.id)
+          );
+        });
+      }
+      continue;
+    }
+
+    if (input.data.startsWith('cat:down:')) {
+      const catId = input.data.slice('cat:down:'.length);
+      const index = categories.findIndex((c) => c.id === catId);
+      if (index >= 0 && index < categories.length - 1) {
+        const reordered = [...categories];
+        const [removed] = reordered.splice(index, 1);
+        if (removed) reordered.splice(index + 1, 0, removed);
+        await conversation.external(async (outsideCtx) => {
+          if (!outsideCtx.services) return;
+          await outsideCtx.services.packageCategoryService.reorderCategories(
+            reordered.map((c) => c.id)
+          );
+        });
+      }
+      continue;
+    }
+
+    if (input.data.startsWith('cat:edit:')) {
+      const catId = input.data.slice('cat:edit:'.length);
+      const existing = categories.find((c) => c.id === catId);
+      if (!existing) continue;
+
+      const editMenu = new InlineKeyboard()
+        .text(t(ctx, 'admin_panel_edit_name_button'), callbackData('cat:edit-name', catId))
+        .text(
+          '🎨 ' + t(ctx, 'admin_category_icon_prompt').slice(0, 10),
+          callbackData('cat:edit-icon', catId)
+        )
+        .row()
+        .text(
+          `${existing.enabled ? t(ctx, 'admin_panel_disable_button') : t(ctx, 'admin_panel_enable_button')}`,
+          callbackData('cat:toggle', catId)
+        )
+        .row()
+        .text(t(ctx, 'menu_back'), 'cat:edit-back');
+
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildScreen({
+          emoji: '🏷️',
+          title: existing.name,
+          primary: {
+            emoji: existing.icon || '📦',
+            label: t(ctx, 'admin_pkg_category_label'),
+            value: existing.name,
+          },
+        }),
+        { parse_mode: 'Markdown', reply_markup: editMenu }
+      );
+
+      const editChoice = await waitForSettingsInput(conversation, {
+        callbackPrefixes: ['cat:edit-name:', 'cat:edit-icon:', 'cat:toggle:'],
+        backCallbacks: ['cat:edit-back'],
+        retryKeyboard: editMenu,
+      });
+
+      if (editChoice.type !== 'callback') continue;
+
+      if (editChoice.data.startsWith('cat:toggle:')) {
+        await conversation.external(async (outsideCtx) => {
+          if (!outsideCtx.services) return;
+          await outsideCtx.services.packageCategoryService.updateCategory(catId, {
+            enabled: !existing.enabled,
+          });
+        });
+      } else if (editChoice.data.startsWith('cat:edit-name:')) {
+        const newName = await askPackageString(
+          conversation,
+          ctx,
+          'admin_category_name_prompt',
+          existing.name,
+          (val) => val.length >= 1 && val.length <= 100
+        );
+        if (newName.type === 'value') {
+          await conversation.external(async (outsideCtx) => {
+            if (!outsideCtx.services) return;
+            await outsideCtx.services.packageCategoryService.updateCategory(catId, {
+              name: newName.value,
+            });
+          });
+        }
+      } else if (editChoice.data.startsWith('cat:edit-icon:')) {
+        const newIcon = await askPackageString(
+          conversation,
+          ctx,
+          'admin_category_icon_prompt',
+          existing.icon ?? undefined,
+          () => true
+        );
+        if (newIcon.type === 'value') {
+          await conversation.external(async (outsideCtx) => {
+            if (!outsideCtx.services) return;
+            await outsideCtx.services.packageCategoryService.updateCategory(catId, {
+              icon: newIcon.value !== '-' ? newIcon.value : undefined,
+            });
+          });
+        }
+      }
+      continue;
+    }
+
+    if (input.data.startsWith('cat:del:')) {
+      const catId = input.data.slice('cat:del:'.length);
+      const existing = categories.find((c) => c.id === catId);
+      if (!existing) continue;
+
+      const confirmKeyboard = new InlineKeyboard()
+        .text(t(ctx, 'admin_confirm_button'), callbackData('cat:del-confirm', catId))
+        .row()
+        .text(t(ctx, 'menu_cancel'), 'cat:del-cancel');
+
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildScreen({
+          emoji: '⚠️',
+          title: t(ctx, 'admin_category_manager_title'),
+          footer: t(ctx, 'admin_category_delete_confirm', { name: existing.name }),
+        }),
+        { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
+      );
+
+      const confirmation = await waitForSettingsInput(conversation, {
+        callbackPrefixes: ['cat:del-confirm:'],
+        backCallbacks: ['cat:del-cancel'],
+        retryKeyboard: confirmKeyboard,
+      });
+
+      if (confirmation.type === 'callback' && confirmation.data.startsWith('cat:del-confirm:')) {
+        await conversation.external(async (outsideCtx) => {
+          if (!outsideCtx.services) return;
+          await outsideCtx.services.packageCategoryService.deleteCategory(catId);
+        });
+      }
+      continue;
+    }
+  }
+}
+
+// ── Package Settings & Display Mode Subflow ────────────────────────────────
+
+async function managePackagePolicies(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<PackageManagerOutcome> {
+  if (!ctx.services) return 'cancel';
+
+  for (;;) {
+    const ts = ctx.services.translationService;
+    const displayMode = ts.getSetting('package_display_mode', 'specs');
+    const lowTraffic = ts.getSettingNum('low_traffic_threshold_gb', 2);
+    const expiryDays = ts.getSettingNum('expiry_warning_days', 3);
+    const refundHours = ts.getSettingNum('refund_window_hours', 0);
+
+    const modeLabel =
+      displayMode === 'name'
+        ? t(ctx, 'admin_pkg_display_mode_name')
+        : t(ctx, 'admin_pkg_display_mode_specs');
+
+    const screenText = buildScreen({
+      emoji: '⚙️',
+      title: t(ctx, 'admin_sales_package_policy_title'),
+      subtitle: t(ctx, 'admin_setting_package_display_mode_desc'),
+      primary: {
+        emoji: '📺',
+        label: t(ctx, 'admin_setting_package_display_mode'),
+        value: modeLabel,
+      },
+      sections: [
+        {
+          emoji: '📏',
+          title: t(ctx, 'admin_setting_group_pricing'),
+          fields: [
+            {
+              label: t(ctx, 'admin_setting_low_traffic_threshold_gb'),
+              value: `${localizedNumber(lowTraffic, ctx)} GB`,
+            },
+            {
+              label: t(ctx, 'admin_setting_expiry_warning_days'),
+              value: `${localizedNumber(expiryDays, ctx)} ${t(ctx, 'days_unit')}`,
+            },
+            {
+              label: t(ctx, 'admin_setting_refund_window_hours'),
+              value: `${localizedNumber(refundHours, ctx)} ${t(ctx, 'hours_unit')}`,
+            },
+          ],
+        },
+      ],
+      footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+    });
+
+    const keyboard = new InlineKeyboard()
+      .text(`${t(ctx, 'admin_setting_package_display_mode')}: ${modeLabel}`, 'pp:toggle:mode')
+      .row()
+      .text(t(ctx, 'admin_setting_low_traffic_threshold_gb'), 'pp:edit:low_traffic_threshold_gb')
+      .row()
+      .text(t(ctx, 'admin_setting_expiry_warning_days'), 'pp:edit:expiry_warning_days')
+      .row()
+      .text(t(ctx, 'admin_setting_refund_window_hours'), 'pp:edit:refund_window_hours')
+      .row()
+      .text(t(ctx, 'admin_menu_back'), 'pp:back');
+
+    await promptInConversation(conversation, ctx, screenText, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+
+    const input = await waitForSettingsInput(conversation, {
+      callbackPrefixes: ['pp:toggle:', 'pp:edit:'],
+      backCallbacks: ['pp:back'],
+      retryKeyboard: keyboard,
+    });
+
+    if (input.type === 'cancel') return 'cancel';
+    if (input.type === 'back') return 'back';
+    if (input.type !== 'callback') continue;
+
+    if (input.data === 'pp:toggle:mode') {
+      const nextMode = displayMode === 'name' ? 'specs' : 'name';
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting(
+          'package_display_mode',
+          nextMode
+        );
+      });
+      continue;
+    }
+
+    if (input.data.startsWith('pp:edit:')) {
+      const key = input.data.slice('pp:edit:'.length);
+      const definition = getSettingDefinition(key);
+      if (definition) {
+        await editSetting(conversation, ctx, definition);
+      }
+    }
+  }
 }

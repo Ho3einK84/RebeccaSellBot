@@ -21,13 +21,14 @@ export class AdminService {
   /** Stable mutable reference retained by BotServices for notification fanout. */
   readonly adminIds: number[] = [];
 
-  async initialize(bootstrapAdminIds: readonly number[]): Promise<void> {
+  async initialize(bootstrapAdminIds: readonly number[] = []): Promise<void> {
     const db = getDb();
     await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(72623859790382856)`);
       const [row] = await tx.select({ value: count() }).from(botAdmins);
       if ((row?.value ?? 0) > 0) return;
-      if (bootstrapAdminIds.length === 0) throw new Error('ADMIN_BOOTSTRAP_REQUIRED');
+      if (!bootstrapAdminIds || bootstrapAdminIds.length === 0)
+        throw new Error('ADMIN_BOOTSTRAP_REQUIRED');
       await tx
         .insert(botAdmins)
         .values(bootstrapAdminIds.map((telegramId) => ({ telegramId, addedBy: null })))

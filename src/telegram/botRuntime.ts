@@ -23,6 +23,10 @@ import {
   adminBroadcastConversation,
   adminSearchUserConversation,
   adminEditSettingsConversation,
+  adminManagePackagesConversation,
+  adminCustomVolumeConversation,
+  adminReferralSettingsConversation,
+  adminPaymentSettingsConversation,
   adminEditTextsConversation,
   adminDirectMessageConversation,
   adminAddAdminConversation,
@@ -232,6 +236,12 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   bot.use(createConversation(adminBroadcastConversation, 'adminBroadcastConversation'));
   bot.use(createConversation(adminSearchUserConversation, 'adminSearchUserConversation'));
   bot.use(createConversation(adminEditSettingsConversation, 'adminEditSettingsConversation'));
+  bot.use(createConversation(adminManagePackagesConversation, 'adminManagePackagesConversation'));
+  bot.use(createConversation(adminCustomVolumeConversation, 'adminCustomVolumeConversation'));
+  bot.use(
+    createConversation(adminReferralSettingsConversation, 'adminReferralSettingsConversation')
+  );
+  bot.use(createConversation(adminPaymentSettingsConversation, 'adminPaymentSettingsConversation'));
   bot.use(createConversation(adminEditTextsConversation, 'adminEditTextsConversation'));
   bot.use(createConversation(adminDirectMessageConversation, 'adminDirectMessageConversation'));
   bot.use(createConversation(adminAddAdminConversation, 'adminAddAdminConversation'));
@@ -255,7 +265,12 @@ export function isAdminCallbackData(data: string): boolean {
     data.startsWith('receipt-') ||
     data.startsWith('promo:') ||
     data.startsWith('set-') ||
-    data.startsWith('pkg-')
+    data.startsWith('pkg-') ||
+    data.startsWith('cat:') ||
+    data.startsWith('cv:') ||
+    data.startsWith('ref:') ||
+    data.startsWith('pay:') ||
+    data.startsWith('pp:')
   );
 }
 

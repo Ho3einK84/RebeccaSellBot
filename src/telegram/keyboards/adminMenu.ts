@@ -114,13 +114,13 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
   .text(
     (ctx) => t(ctx, 'admin_sales_packages_button'),
     async (ctx) => {
-      await ctx.conversation.enter('adminEditSettingsConversation', 'packages');
+      await ctx.conversation.enter('adminManagePackagesConversation');
     }
   )
   .text(
     (ctx) => t(ctx, 'admin_sales_custom_volume_button'),
     async (ctx) => {
-      await ctx.conversation.enter('adminEditSettingsConversation', 'custom_volume');
+      await ctx.conversation.enter('adminCustomVolumeConversation');
     }
   )
   .row()
@@ -133,14 +133,14 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
   .text(
     (ctx) => t(ctx, 'admin_sales_referral_button'),
     async (ctx) => {
-      await ctx.conversation.enter('adminEditSettingsConversation', 'referral');
+      await ctx.conversation.enter('adminReferralSettingsConversation');
     }
   )
   .row()
   .text(
     (ctx) => t(ctx, 'admin_sales_wallet_transfer_button'),
     async (ctx) => {
-      await ctx.conversation.enter('adminEditSettingsConversation', 'payment');
+      await ctx.conversation.enter('adminPaymentSettingsConversation');
     }
   )
   .row()

@@ -242,3 +242,26 @@ export function localizedPackageName(
   }
   return fallback;
 }
+
+export function formatPackageButtonLabel(
+  ctx: LocaleAwareContext & {
+    services?: { translationService?: { getSetting: (k: string, d?: string) => string } };
+  },
+  pkg: { id: string; name: string; price: number; gbAmount: number },
+  options?: {
+    effectivePrice?: number;
+    tag?: string;
+  }
+): string {
+  const displayMode =
+    ctx.services?.translationService?.getSetting('package_display_mode', 'specs') ?? 'specs';
+  const tag = options?.tag ?? '';
+  const effectivePrice = options?.effectivePrice ?? pkg.price;
+  const name = localizedPackageName(ctx, pkg.id, pkg.name);
+
+  if (displayMode === 'name') {
+    return `${tag}${name}`;
+  }
+
+  return `${tag}${t(ctx, 'package_button', { name, price: localizedNumber(effectivePrice, ctx) })}`;
+}

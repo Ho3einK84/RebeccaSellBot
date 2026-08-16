@@ -22,6 +22,8 @@ import type { RefundService } from '../domain/services/RefundService.js';
 import type { ConfigTransferService } from '../domain/services/ConfigTransferService.js';
 import type { ConfigReconciliationService } from '../domain/services/ConfigReconciliationService.js';
 import type { BroadcastService } from '../domain/services/BroadcastService.js';
+import type { PackageCategoryService } from '../domain/services/PackageCategoryService.js';
+import type { PaymentService } from '../domain/services/PaymentService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
@@ -70,6 +72,7 @@ export interface SessionData {
     status: 'pending' | 'submitted';
   };
   subscriptionListPage?: number;
+  activeShopCategory?: string;
   [key: string]: unknown;
 }
 
@@ -77,6 +80,8 @@ export type BotServices = {
   walletService: WalletService;
   configService: ConfigService;
   pricingService: PricingService;
+  packageCategoryService: PackageCategoryService;
+  paymentService: PaymentService;
   purchaseCheckoutService: PurchaseCheckoutService;
   promoService: PromoService;
   trialService: TrialService;

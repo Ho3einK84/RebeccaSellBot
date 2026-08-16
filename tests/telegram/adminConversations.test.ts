@@ -35,7 +35,7 @@ describe('admin category and settings group keyboards', () => {
   });
 
   it('buildSettingsGroupKeyboard builds buttons for SETTING_GROUPS plus back to main', () => {
-    const keyboard = buildSettingsGroupKeyboard(fakeCtx);
+    const keyboard = buildSettingsGroupKeyboard(fakeCtx, SETTING_GROUPS);
     const buttons = keyboard.inline_keyboard.flat();
 
     expect(SETTING_GROUPS.length).toBeGreaterThan(0);

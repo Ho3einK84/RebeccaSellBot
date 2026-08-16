@@ -11,6 +11,8 @@ export interface PackageOption {
   /** Creation target. Missing values preserve legacy packages via the runtime default target. */
   panelId?: string;
   serviceId?: number;
+  /** Optional category ID reference. */
+  categoryId?: string;
 }
 
 export interface CustomPriceQuote {
@@ -88,12 +90,25 @@ const MAX_PRICE = Number.MAX_SAFE_INTEGER;
 export class PricingService {
   constructor(private readonly translationService: TranslationService) {}
 
-  getPackages(panelId?: string, serviceId?: number, includeDisabled = false): PackageOption[] {
+  getPackages(
+    panelId?: string,
+    serviceId?: number,
+    includeDisabled = false,
+    categoryId?: string | null
+  ): PackageOption[] {
     const customJson = this.translationService.getSetting('packages_json');
     const packages = parsePackageOptionsJson(customJson);
     const basePackages = packages ?? FALLBACK_PACKAGES.map((pkg) => ({ ...pkg }));
-    const filtered = filterPackagesForPanel(basePackages, panelId, serviceId);
-    return includeDisabled ? filtered : filtered.filter((pkg) => pkg.enabled !== false);
+    let filtered = filterPackagesForPanel(basePackages, panelId, serviceId);
+    if (!includeDisabled) {
+      filtered = filtered.filter((pkg) => pkg.enabled !== false);
+    }
+    if (categoryId === null) {
+      filtered = filtered.filter((pkg) => !pkg.categoryId);
+    } else if (typeof categoryId === 'string' && categoryId.length > 0) {
+      filtered = filtered.filter((pkg) => pkg.categoryId === categoryId);
+    }
+    return filtered;
   }
 
   getPackageById(id: string | null | undefined): PackageOption | undefined {
@@ -274,8 +289,13 @@ function parsePackages(value: unknown): PackageOption[] | undefined {
     if (!isRecord(item)) return undefined;
     const id = typeof item.id === 'string' ? item.id.trim() : '';
     const name = typeof item.name === 'string' ? item.name.trim() : '';
-    const panelId = typeof item.panelId === 'string' ? item.panelId.trim() : undefined;
-    const serviceId = item.serviceId;
+    const panelId =
+      typeof item.panelId === 'string' && item.panelId.trim() ? item.panelId.trim() : undefined;
+    const serviceId = typeof item.serviceId === 'number' ? item.serviceId : undefined;
+    const categoryId =
+      typeof item.categoryId === 'string' && item.categoryId.trim().length > 0
+        ? item.categoryId.trim()
+        : undefined;
     if (
       !PACKAGE_ID_PATTERN.test(id) ||
       !name ||
@@ -287,7 +307,8 @@ function parsePackages(value: unknown): PackageOption[] | undefined {
       seenIds.has(id) ||
       (panelId !== undefined && !/^[a-z0-9][a-z0-9_-]{1,39}$/iu.test(panelId)) ||
       (serviceId !== undefined && !positiveSafeInteger(serviceId, 2_147_483_647)) ||
-      (panelId === undefined) !== (serviceId === undefined)
+      (panelId === undefined) !== (serviceId === undefined) ||
+      (categoryId !== undefined && categoryId.length > 64)
     ) {
       return undefined;
     }
@@ -301,6 +322,7 @@ function parsePackages(value: unknown): PackageOption[] | undefined {
       ...(item.enabled !== undefined ? { enabled: item.enabled } : {}),
       ...(panelId === undefined ? {} : { panelId }),
       ...(serviceId === undefined ? {} : { serviceId }),
+      ...(categoryId === undefined ? {} : { categoryId }),
     });
   }
   return packages;

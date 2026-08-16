@@ -7,7 +7,7 @@ import { callbackData } from '../../../callbackData.js';
 import { escapeTelegramMarkdown } from '../../../rendering.js';
 import { buildPromptScreen, buildScreen } from '../../../ui.js';
 import {
-  SETTING_GROUPS,
+  GENERAL_SETTING_GROUPS,
   SETTING_LABELS,
   getSettingDefinition,
   getSettingGroup,
@@ -36,9 +36,12 @@ export function buildSelectionKeyboard(
   return keyboard;
 }
 
-export function buildSettingsGroupKeyboard(ctx: ConversationContext): InlineKeyboard {
+export function buildSettingsGroupKeyboard(
+  ctx: ConversationContext,
+  groups: readonly SettingGroup[] = GENERAL_SETTING_GROUPS
+): InlineKeyboard {
   const keyboard = new InlineKeyboard();
-  for (const item of SETTING_GROUPS) {
+  for (const item of groups) {
     keyboard.text(t(ctx, item.labelKey), callbackData('set-group', item.id)).row();
   }
   keyboard.text(t(ctx, 'admin_menu_back'), 'nav:admin');
@@ -175,19 +178,8 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
   const trialEnabled = ts.getSettingBool('trial_enabled', true);
   const trialGb = parseSettingNum(ts.getSetting('trial_gb'), 1);
   const trialDays = parseSettingNum(ts.getSetting('trial_days'), 3);
-  const customVolEnabled = ts.getSettingBool('custom_volume_enabled', true);
-  const pricePerGb = parseSettingNum(ts.getSetting('price_per_gb'), 5000);
-  const customDays = parseSettingNum(ts.getSetting('custom_default_days'), 30);
-  const cardNumber = ts.getSetting('card_number', '—');
-  const cardHolder = ts.getSetting('card_holder', '—');
-  const transferEnabled = ts.getSettingBool('wallet_transfer_enabled', true);
-  const transferMinAmount = parseSettingNum(ts.getSetting('wallet_transfer_min_amount'), 5000);
   const supportEnabled = ts.getSettingBool('support_enabled', true);
   const supportDest = ts.getSetting('support_destination', '') || '—';
-  const refBonus = parseSettingNum(ts.getSetting('referral_bonus_toman'), 10000);
-  const cashback = parseSettingNum(ts.getSetting('cashback_percent'), 5);
-  const lowTraffic = parseSettingNum(ts.getSetting('low_traffic_threshold_gb'), 2);
-  const expiryDays = parseSettingNum(ts.getSetting('expiry_warning_days'), 3);
 
   const onBadge = t(ctx, 'admin_overview_active');
   const offBadge = t(ctx, 'admin_overview_inactive');
@@ -221,26 +213,6 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
         ],
       },
       {
-        emoji: '💳',
-        title: t(ctx, 'admin_overview_payment'),
-        fields: [
-          {
-            label: t(ctx, 'admin_setting_card_number'),
-            value: `\`${escapeTelegramMarkdown(cardNumber)}\``,
-          },
-          {
-            label: t(ctx, 'admin_setting_card_holder'),
-            value: escapeTelegramMarkdown(cardHolder),
-          },
-          {
-            label: t(ctx, 'admin_setting_wallet_transfer_enabled'),
-            value: transferEnabled
-              ? `${onBadge} (${localizedNumber(transferMinAmount, ctx)} ${t(ctx, 'currency_toman')})`
-              : offBadge,
-          },
-        ],
-      },
-      {
         emoji: '🎁',
         title: t(ctx, 'admin_overview_trial'),
         fields: [
@@ -253,32 +225,6 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
         ],
       },
       {
-        emoji: '📦',
-        title: t(ctx, 'admin_overview_custom_volume'),
-        fields: [
-          {
-            label: t(ctx, 'admin_setting_custom_volume_enabled'),
-            value: customVolEnabled
-              ? `${onBadge} (${localizedNumber(pricePerGb, ctx)} ${t(ctx, 'currency_toman')}/GB - ${localizedNumber(customDays, ctx)} ${t(ctx, 'days_unit')})`
-              : offBadge,
-          },
-        ],
-      },
-      {
-        emoji: '👥',
-        title: t(ctx, 'admin_overview_referral'),
-        fields: [
-          {
-            label: t(ctx, 'admin_setting_referral_bonus_toman'),
-            value: `${localizedNumber(refBonus, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-          {
-            label: t(ctx, 'admin_setting_cashback_percent'),
-            value: `${localizedNumber(cashback, ctx)}%`,
-          },
-        ],
-      },
-      {
         emoji: '💬',
         title: t(ctx, 'admin_overview_support'),
         fields: [
@@ -287,20 +233,6 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
             value: supportEnabled
               ? `${onBadge} (\`${escapeTelegramMarkdown(supportDest)}\`)`
               : offBadge,
-          },
-        ],
-      },
-      {
-        emoji: '⚠️',
-        title: t(ctx, 'admin_overview_alerts'),
-        fields: [
-          {
-            label: t(ctx, 'admin_setting_low_traffic_threshold_gb'),
-            value: `${localizedNumber(lowTraffic, ctx)} GB`,
-          },
-          {
-            label: t(ctx, 'admin_setting_expiry_warning_days'),
-            value: `${localizedNumber(expiryDays, ctx)} ${t(ctx, 'days_unit')}`,
           },
         ],
       },

@@ -14,8 +14,26 @@ export type LocalUserProfile = typeof users.$inferSelect & {
 
 export type UserLocale = SupportedLocale;
 
+export type UserInvalidationHook = (telegramId: number) => void;
+
 /** Domain access to Telegram-account state, including administrative lookups. */
 export class UserService {
+  private invalidationHooks: UserInvalidationHook[] = [];
+
+  registerInvalidationHook(hook: UserInvalidationHook): void {
+    this.invalidationHooks.push(hook);
+  }
+
+  private notifyInvalidation(telegramId: number): void {
+    for (const hook of this.invalidationHooks) {
+      try {
+        hook(telegramId);
+      } catch {
+        // hook errors must not prevent domain return
+      }
+    }
+  }
+
   async isBanned(telegramId: number): Promise<boolean> {
     const db = getDb();
     const [user] = await db
@@ -119,13 +137,13 @@ export class UserService {
     actorTelegramId?: number
   ): Promise<boolean> {
     const db = getDb();
-    return db.transaction(async (tx) => {
-      const [updated] = await tx
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
         .update(users)
         .set({ isBanned, updatedAt: new Date() })
         .where(eq(users.telegramId, telegramId))
         .returning({ telegramId: users.telegramId });
-      if (!updated) return false;
+      if (!row) return false;
       if (actorTelegramId !== undefined) {
         await tx.insert(auditLogs).values({
           id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
@@ -138,6 +156,10 @@ export class UserService {
       }
       return true;
     });
+    if (updated) {
+      this.notifyInvalidation(telegramId);
+    }
+    return updated;
   }
 
   async recordAdminAction(params: {

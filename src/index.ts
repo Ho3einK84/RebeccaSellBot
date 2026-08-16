@@ -17,6 +17,8 @@ import { RefundService } from './domain/services/RefundService.js';
 import { ConfigTransferService } from './domain/services/ConfigTransferService.js';
 import { ConfigReconciliationService } from './domain/services/ConfigReconciliationService.js';
 import { BroadcastService } from './domain/services/BroadcastService.js';
+import { PackageCategoryService } from './domain/services/PackageCategoryService.js';
+import { PaymentService } from './domain/services/PaymentService.js';
 import { initializeBot, setupBot, startBot } from './telegram/bot.js';
 import {
   markHealthFailed,
@@ -97,17 +99,24 @@ async function main() {
   const purchaseCheckoutService = new PurchaseCheckoutService(panelRegistry);
   const trialService = new TrialService(panelRegistry, translationService);
   const userService = new UserService();
+  userService.registerInvalidationHook((telegramId) =>
+    walletService.invalidateUserCache(telegramId)
+  );
   const adminService = new AdminService();
   await adminService.initialize(config.ADMIN_IDS);
   const refundService = new RefundService(panelRegistry, translationService);
   const configTransferService = new ConfigTransferService(panelRegistry);
   const configReconciliationService = new ConfigReconciliationService(panelRegistry);
   const broadcastService = new BroadcastService();
+  const packageCategoryService = new PackageCategoryService(translationService);
+  const paymentService = new PaymentService(translationService, walletService);
 
   const services = {
     walletService,
     configService,
     pricingService,
+    packageCategoryService,
+    paymentService,
     purchaseCheckoutService,
     promoService,
     trialService,
@@ -119,7 +128,7 @@ async function main() {
     configTransferService,
     configReconciliationService,
     broadcastService,
-    supportUrl: config.SUPPORT_URL ?? `tg://user?id=${config.ADMIN_IDS[0]}`,
+    supportUrl: config.SUPPORT_URL,
     adminIds: adminService.adminIds,
     isAdmin: (telegramId: number) => adminService.isAdmin(telegramId),
   };

@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import type { MenuContext } from '../../types.js';
 import { callbackData } from '../../callbackData.js';
 import {
+  formatPackageButtonLabel,
   formatSubscriptionLink,
   localizedDate,
   localizedNumber,
@@ -70,10 +71,7 @@ export function buildRenewalSelectionKeyboard(
   for (const [index, pkg] of packages.entries()) {
     keyboard
       .text(
-        t(ctx, 'package_button', {
-          name: localizedPackageName(ctx, pkg.id, pkg.name),
-          price: localizedNumber(pkg.price, ctx),
-        }),
+        formatPackageButtonLabel(ctx, pkg),
         callbackData('r', 'p', configId, index, catalogToken)
       )
       .row();
@@ -221,10 +219,7 @@ async function renderAutoRenewSelection(ctx: MenuContext, config: UserConfigReco
   for (const [index, pkg] of packages.entries()) {
     keyboard
       .text(
-        t(ctx, 'package_button', {
-          name: localizedPackageName(ctx, pkg.id, pkg.name),
-          price: localizedNumber(pkg.price, ctx),
-        }),
+        formatPackageButtonLabel(ctx, pkg),
         callbackData('ar', 'p', config.id, index, catalogToken)
       )
       .row();

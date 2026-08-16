@@ -118,18 +118,17 @@ describe('admin settings presentation', () => {
     expect(prompt).not.toContain('—_{telegram_id}_—');
   });
 
-  it('builds settings overview screen with payment and wallet transfer settings', () => {
+  it('builds settings overview screen with general system settings', () => {
     const ctx = createContext({
       bot_enabled: 'true',
-      card_number: '6037991122334455',
-      card_holder: 'Admin User',
-      wallet_transfer_enabled: 'true',
-      wallet_transfer_min_amount: '5000',
+      trial_enabled: 'true',
+      support_enabled: 'true',
+      support_destination: '@support_admin',
     });
 
     const overview = buildSettingsOverviewScreen(ctx);
-    expect(overview).toContain('6037991122334455');
-    expect(overview).toContain('Admin User');
-    expect(overview).toContain('admin_setting_wallet_transfer_enabled');
+    expect(overview).toContain('admin_overview_bot_status');
+    expect(overview).toContain('admin_setting_trial_enabled');
+    expect(overview).toContain('@support\\_admin');
   });
 });

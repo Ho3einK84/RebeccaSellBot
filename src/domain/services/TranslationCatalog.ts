@@ -34,6 +34,7 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   volume_pricing_tiers_json: '[]',
   custom_price_overrides_json: '[]',
   packages_json: JSON.stringify(DEFAULT_PACKAGES),
+  package_display_mode: 'specs',
   // Default subscription length (days) applied to the custom-volume flow.
   custom_default_days: '30',
   // Admin switch for exposing custom-volume purchase and renewal flows.

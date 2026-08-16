@@ -24,14 +24,14 @@ describe('loadConfig', () => {
     PANEL_CREDENTIALS_KEY: 'a'.repeat(64),
   };
 
-  it('rejects production startup without any administrator IDs', async () => {
+  it('allows startup without ADMIN_IDS in env (returns empty array)', async () => {
     const loadConfig = await loadConfigWithEnv({
       ...requiredConfig,
       NODE_ENV: 'production',
       ADMIN_IDS: '',
     });
 
-    expect(() => loadConfig()).toThrow('Invalid environment configuration');
+    expect(loadConfig().ADMIN_IDS).toEqual([]);
   });
 
   it('accepts at least one numeric administrator ID in production', async () => {

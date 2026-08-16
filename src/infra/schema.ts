@@ -835,3 +835,24 @@ export const configCounters = pgTable(
   },
   (table) => [check('config_counters_nonnegative', sql`${table.currentCount} >= 0`)]
 );
+
+// Package Categories (Optional categorization for packages)
+export const packageCategories = pgTable(
+  'package_categories',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    displayOrder: integer('display_order').notNull().default(0),
+    icon: text('icon'),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    check('package_categories_id_safe', sql`length(btrim(${table.id})) BETWEEN 1 AND 64`),
+    check('package_categories_name_safe', sql`length(btrim(${table.name})) BETWEEN 1 AND 100`),
+    check('package_categories_display_order_safe', sql`${table.displayOrder} >= 0`),
+    index('package_categories_order_idx').on(table.displayOrder, table.createdAt),
+  ]
+);

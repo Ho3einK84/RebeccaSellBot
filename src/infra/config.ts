@@ -64,7 +64,9 @@ const configSchema = z
     BOT_TOKEN: z.string().min(1, 'BOT_TOKEN is required'),
     ADMIN_IDS: z
       .string()
+      .optional()
       .transform((value, ctx) => {
+        if (!value || !value.trim()) return [];
         const rawIds = value.split(',').map((rawId) => rawId.trim());
         const invalidIds = rawIds.filter(
           (rawId) => !/^[1-9]\d*$/.test(rawId) || !Number.isSafeInteger(Number(rawId))
@@ -78,7 +80,7 @@ const configSchema = z
         }
         return rawIds.map(Number);
       })
-      .pipe(z.array(z.number().int().positive()).min(1, 'At least one ADMIN_ID is required')),
+      .pipe(z.array(z.number().int().positive())),
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
     // Legacy single-panel bootstrap only. A fresh installation may leave all
     // Rebecca values empty and configure one or more panels from Telegram.

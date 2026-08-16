@@ -140,7 +140,7 @@ async function chooseSettingInGroup(
     : { type: 'back' };
 }
 
-async function editSetting(
+export async function editSetting(
   conversation: MyConversation,
   ctx: ConversationContext,
   definition: SettingDefinition
