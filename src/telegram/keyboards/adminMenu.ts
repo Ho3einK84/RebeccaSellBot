@@ -11,10 +11,11 @@
  *  - Topup receipt verification
  *  - Throttled global broadcast
  */
+import { InlineKeyboard } from 'grammy';
 import { Menu } from '@grammyjs/menu';
-import type { MenuContext } from '../types.js';
+import type { ConversationContext, MenuContext } from '../types.js';
 import { localizedNumber, t } from '../locale.js';
-import { backKeyboard, buildScreen, buildStatusBadge } from '../ui.js';
+import { backKeyboard, buildScreen, buildStatusBadge, renderUiScreen } from '../ui.js';
 import { showPromoCenter } from '../promoAdminUi.js';
 import { renderUserListPage } from '../features/admin/userRoutes.js';
 import { showReceiptQueue } from '../features/admin/receiptRoutes.js';
@@ -45,7 +46,7 @@ export async function renderAdminHome(ctx: MenuContext): Promise<string> {
 }
 
 function renderAdminGroup(
-  ctx: MenuContext,
+  ctx: MenuContext | ConversationContext,
   input: { emoji: string; titleKey: string; subtitleKey: string }
 ): string {
   return buildScreen({
@@ -108,11 +109,31 @@ export const adminDailyMenu = new Menu<MenuContext>('admin-daily-menu')
     }
   );
 
-export function renderAdminSalesMenuScreen(ctx: MenuContext): string {
+export function salesMenuKeyboard(ctx: MenuContext | ConversationContext): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(t(ctx, 'admin_sales_packages_button'), 'admin:sales:packages')
+    .text(t(ctx, 'admin_sales_custom_volume_button'), 'admin:sales:custom_volume')
+    .row()
+    .text(t(ctx, 'admin_menu_promo_codes'), 'admin:sales:promo')
+    .text(t(ctx, 'admin_sales_referral_button'), 'admin:sales:referral')
+    .row()
+    .text(t(ctx, 'admin_sales_wallet_transfer_button'), 'admin:sales:payment')
+    .row()
+    .text(t(ctx, 'admin_menu_back'), 'nav:admin');
+}
+
+export function renderAdminSalesMenuScreen(ctx: MenuContext | ConversationContext): string {
   return renderAdminGroup(ctx, {
     emoji: '🛍️',
     titleKey: 'admin_sales_title',
     subtitleKey: 'admin_sales_subtitle',
+  });
+}
+
+export async function renderSalesMenu(ctx: MenuContext): Promise<void> {
+  await renderUiScreen(ctx, renderAdminSalesMenuScreen(ctx), {
+    parse_mode: 'Markdown',
+    reply_markup: salesMenuKeyboard(ctx),
   });
 }
 
@@ -369,15 +390,7 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
   .text(
     (ctx) => t(ctx, 'admin_group_sales'),
     async (ctx) => {
-      ctx.menu.nav('admin-sales-menu');
-      await ctx.editMessageText(
-        renderAdminGroup(ctx, {
-          emoji: '🛍️',
-          titleKey: 'admin_sales_title',
-          subtitleKey: 'admin_sales_subtitle',
-        }),
-        { parse_mode: 'Markdown' }
-      );
+      await renderSalesMenu(ctx);
     }
   )
   .row()

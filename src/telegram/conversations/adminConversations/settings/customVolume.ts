@@ -1,17 +1,12 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { localizedNumber, t } from '../../../locale.js';
-import {
-  buildScreen,
-  isMessageNotModifiedError,
-  promptInConversation,
-  renderUiScreen,
-} from '../../../ui.js';
+import { buildScreen, isMessageNotModifiedError, promptInConversation } from '../../../ui.js';
 import { requireAdmin } from '../shared.js';
 import { waitForSettingsInput } from './navigation.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
-import { adminSalesMenu, renderAdminSalesMenuScreen } from '../../../keyboards/adminMenu.js';
+import { renderSalesMenu } from '../../../keyboards/adminMenu.js';
 
 export async function adminCustomVolumeConversation(
   conversation: MyConversation,
@@ -126,9 +121,6 @@ export async function adminCustomVolumeConversation(
   }
 
   await conversation.external(async (outsideCtx) => {
-    await renderUiScreen(outsideCtx, renderAdminSalesMenuScreen(outsideCtx), {
-      parse_mode: 'Markdown',
-      reply_markup: adminSalesMenu,
-    });
+    await renderSalesMenu(outsideCtx);
   });
 }

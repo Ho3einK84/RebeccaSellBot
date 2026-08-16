@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-import { renderAdminSalesMenuScreen } from '../../src/telegram/keyboards/adminMenu.js';
+import {
+  renderAdminSalesMenuScreen,
+  salesMenuKeyboard,
+} from '../../src/telegram/keyboards/adminMenu.js';
 import { buildPackageManagerScreen } from '../../src/telegram/conversations/adminConversations/settings/presentation.js';
 import type { ConversationContext, MenuContext } from '../../src/telegram/types.js';
 
@@ -17,6 +19,28 @@ describe('adminSalesNavigation', () => {
     const screen = renderAdminSalesMenuScreen(ctx);
     expect(screen).toContain('admin_sales_title');
     expect(screen).toContain('admin_sales_subtitle');
+  });
+
+  it('builds salesMenuKeyboard with correct callback data and back to admin', () => {
+    const ctx = {
+      services: {
+        translationService: {
+          get: vi.fn((key: string) => key),
+          resolveLocale: vi.fn(() => 'fa'),
+        },
+      },
+    } as unknown as MenuContext;
+
+    const keyboard = salesMenuKeyboard(ctx);
+    const buttons = keyboard.inline_keyboard.flat();
+    const callbacks = buttons.map((b) => b.callback_data);
+
+    expect(callbacks).toContain('admin:sales:packages');
+    expect(callbacks).toContain('admin:sales:custom_volume');
+    expect(callbacks).toContain('admin:sales:promo');
+    expect(callbacks).toContain('admin:sales:referral');
+    expect(callbacks).toContain('admin:sales:payment');
+    expect(callbacks).toContain('nav:admin');
   });
 
   it('buildPackageManagerScreen does not duplicate package count in section title', () => {

@@ -10,12 +10,8 @@ import {
   renderWalletDashboard,
   walletMenu,
 } from '../keyboards/mainMenu.js';
-import {
-  adminMenu,
-  adminSalesMenu,
-  renderAdminHome,
-  renderAdminSalesMenuScreen,
-} from '../keyboards/adminMenu.js';
+import { adminMenu, renderAdminHome, renderSalesMenu } from '../keyboards/adminMenu.js';
+import { showPromoCenter } from '../promoAdminUi.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
@@ -149,10 +145,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       return;
     }
     if (requested === 'admin:sales') {
-      await renderUiScreen(ctx, renderAdminSalesMenuScreen(ctx), {
-        parse_mode: 'Markdown',
-        reply_markup: adminSalesMenu,
-      });
+      await renderSalesMenu(ctx);
     } else if (showAdmin) {
       await renderUiScreen(ctx, await renderAdminHome(ctx), {
         parse_mode: 'Markdown',
@@ -175,6 +168,31 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
         reply_markup: mainMenu,
       });
     }
+  });
+
+  bot.callbackQuery('admin:sales:packages', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminManagePackagesConversation');
+  });
+
+  bot.callbackQuery('admin:sales:custom_volume', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminCustomVolumeConversation');
+  });
+
+  bot.callbackQuery('admin:sales:promo', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await showPromoCenter(ctx);
+  });
+
+  bot.callbackQuery('admin:sales:referral', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminReferralSettingsConversation');
+  });
+
+  bot.callbackQuery('admin:sales:payment', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminPaymentSettingsConversation');
   });
 
   // Free Trial Claim Handler

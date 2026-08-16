@@ -13,7 +13,6 @@ import {
   buildScreen,
   isMessageNotModifiedError,
   promptInConversation,
-  renderUiScreen,
   replyInAdminConversation,
 } from '../../../ui.js';
 import {
@@ -25,7 +24,7 @@ import { waitForSettingsInput } from './navigation.js';
 import { requireAdmin } from '../shared.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
-import { adminSalesMenu, renderAdminSalesMenuScreen } from '../../../keyboards/adminMenu.js';
+import { renderSalesMenu } from '../../../keyboards/adminMenu.js';
 
 export type PackageManagerOutcome = 'back' | 'cancel';
 type FieldResult<T> = { type: 'value'; value: T } | { type: 'back' } | { type: 'cancel' };
@@ -38,10 +37,7 @@ export async function adminManagePackagesConversation(
   if (!(await requireAdmin(conversation, ctx))) return;
   await managePackages(conversation, ctx);
   await conversation.external(async (outsideCtx) => {
-    await renderUiScreen(outsideCtx, renderAdminSalesMenuScreen(outsideCtx), {
-      parse_mode: 'Markdown',
-      reply_markup: adminSalesMenu,
-    });
+    await renderSalesMenu(outsideCtx);
   });
 }
 
@@ -86,7 +82,7 @@ export async function managePackages(
     }
 
     if (!renderedInPlace) {
-      await promptInConversation(conversation, ctx, screenText, {
+      await promptInConversation(conversation, activeCtx, screenText, {
         parse_mode: 'Markdown',
         reply_markup: keyboard,
       });
@@ -115,14 +111,14 @@ export async function managePackages(
     activeCtx = input.ctx;
 
     if (input.data === 'pkg-categories') {
-      const outcome = await manageCategories(conversation, ctx);
+      const outcome = await manageCategories(conversation, activeCtx);
       if (outcome === 'cancel') return 'cancel';
       packages = currentPackages(ctx);
       continue;
     }
 
     if (input.data === 'pkg-settings') {
-      const outcome = await managePackagePolicies(conversation, ctx);
+      const outcome = await managePackagePolicies(conversation, activeCtx);
       if (outcome === 'cancel') return 'cancel';
       continue;
     }
