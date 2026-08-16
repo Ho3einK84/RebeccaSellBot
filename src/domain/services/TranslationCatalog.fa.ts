@@ -2,7 +2,7 @@
 
 export const FA_TEXTS: Record<string, string> = {
   onboarding_welcome:
-    '👋 *به ربکا خوش آمدید*\n\nخرید و مدیریت سرویس VPN، ساده و امن.\n\nزبان را انتخاب کنید:',
+    '👋 *به ربات فروش VPN خوش آمدید*\n\nخرید و مدیریت سرویس VPN، ساده و امن.\n\nزبان را انتخاب کنید:',
   ui_status_active: 'فعال',
   ui_status_inactive: 'غیرفعال',
   ui_status_pending: 'در انتظار',

@@ -2,7 +2,7 @@
 
 export const EN_TEXTS: Record<string, string> = {
   onboarding_welcome:
-    '👋 *Welcome to Rebecca*\n\nBuy and manage VPN services—simple and secure.\n\nChoose a language:',
+    '👋 *Welcome to VPN Bot*\n\nBuy and manage VPN services—simple and secure.\n\nChoose a language:',
   ui_status_active: 'Active',
   ui_status_inactive: 'Inactive',
   ui_status_pending: 'Pending',
