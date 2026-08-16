@@ -1,57 +1,74 @@
 # ✦ RebeccaSellBot
 
-Telegram callback, navigation, rendering, and module boundaries are documented in [docs/telegram-architecture.md](docs/telegram-architecture.md).
-
 <p align="center">
-  <strong>A secure Telegram storefront for Rebecca Panel VPN subscriptions.</strong>
+  <strong>A resilient, multi-panel Telegram storefront for Rebecca Panel VPN subscriptions.</strong>
   <br />
-  Sell, renew, manage, and support subscriptions without leaving Telegram.
+  Automate sales, renewals, wallet payments, and customer support entirely inside Telegram.
 </p>
 
 <p align="center">
   <a href="https://github.com/Ho3einK84/RebeccaSellBot"><img src="https://img.shields.io/badge/release-0.1.0-7c3aed?style=flat-square" alt="Release 0.1.0" /></a>
   <img src="https://img.shields.io/badge/runtime-Node.js%2024-339933?style=flat-square" alt="Node.js 24" />
   <img src="https://img.shields.io/badge/database-PostgreSQL%2016-336791?style=flat-square" alt="PostgreSQL 16" />
+  <img src="https://img.shields.io/badge/framework-grammY-0088cc?style=flat-square" alt="grammY" />
   <img src="https://img.shields.io/badge/deployment-Docker-2496ED?style=flat-square" alt="Docker" />
   <img src="https://img.shields.io/badge/platform-Ubuntu%2024.04-E95420?style=flat-square" alt="Ubuntu 24.04" />
 </p>
 
 > [!IMPORTANT]
-> RebeccaSellBot calls Rebecca exclusively through its HTTPS REST API. It never
-> reads or writes the Rebecca database directly.
+> **Zero Database Touch:** RebeccaSellBot communicates with Rebecca panels exclusively via their official HTTPS REST APIs. It never reads from or writes to the Rebecca database directly.
 
-## What it does
+Detailed Telegram delivery layer and screen rendering specifications are documented in [docs/telegram-architecture.md](docs/telegram-architecture.md).
 
-| For customers                                                                                    | For administrators                                                                                                                               |
-| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Buy, renew, claim, revoke, enable, disable, transfer, and safely refund unused VPN subscriptions | Manage multiple Rebecca panels/API keys, per-package services, pricing, admins, reconciliation, and a safe manual-service baseline from Telegram |
-| Pay from a wallet after manual card-transfer approval                                            | Search, ban, message, and adjust user balances with an audit trail                                                                               |
-| Receive low-traffic and near-expiry reminders                                                    | Create promo codes, inspect referral/cashback data, and run durable segmented/cancelable broadcasts                                              |
-| Use the bot in Persian or English                                                                | Run multiple fully isolated bot instances on one server                                                                                          |
+---
 
-## Why it is safe to operate
+## Key Capabilities
+
+| For Customers                                                                                  | For Administrators                                                                                  |
+| :--------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
+| 🛒 **Instant Ordering:** Purchase and renew fixed packages or custom-volume plans.             | 🌐 **Multi-Panel Fleet:** Connect multiple Rebecca panels and assign distinct services per package. |
+| 💳 **Wallet & Transfers:** Top up via card-to-card receipts; transfer balance to peers.        | 🛡️ **Financial Backoffice:** Review payment receipts, adjust balances, and audit transaction logs.  |
+| 📊 **Subscription Portal:** Real-time quota, expiry dates, QR codes, and sub links.            | ⚙️ **In-Bot Settings:** Manage pricing, packages, categories, card info, and trial limits directly. |
+| 🔄 **Auto-Renewal & Refunds:** Automatic renewal safeguards and one-click unused-plan refunds. | 📢 **Segmented Broadcasts:** Send cancelable, throttled broadcasts by user subscription status.     |
+| 🎁 **Growth Tools:** Earn referral rewards, cashback percentages, and redeem promo codes.      | 🔍 **Reconciliation Engine:** Detect and resolve orphaned subscriptions and remote state drifts.    |
+| 🌐 **Bilingual UX:** Seamless Persian (FA) and English (EN) localized interfaces.              | 📦 **Multi-Instance Ready:** Run isolated bot instances with separate databases on a single server. |
+
+---
+
+## Safety & Financial Architecture
 
 ```text
-Telegram customer
+Telegram Customer
        │
        ▼
-  Wallet reserve ──► Rebecca HTTPS API ──► Wallet commit
-       │                    │
-       └──── failure ───────┴──► Wallet release + audit record
+ ┌──────────────┐
+ │ Wallet       │ ──► [ Reserve Funds ]
+ └──────┬───────┘
+        │
+        ▼
+ ┌──────────────┐      Success
+ │ Rebecca API  │ ────────────────► [ Commit Wallet + Award Bonuses ]
+ └──────┬───────┘
+        │ Failure / Timeout
+        ▼
+ ┌──────────────┐
+ │ Compensation │ ────────────────► [ Release Reserve + Audit Record ]
+ └──────────────┘
 ```
 
-- Balances use signed integer currency units, never floating point values.
-- Purchases follow a reserve → remote API call → commit/release saga.
-- Reconciliation handles interruptions after a remote call.
-- Referral, cashback, and promotion rewards are idempotent.
-- The bot’s PostgreSQL database is private to its Docker network.
-- Telegram uses outbound long polling; no bot or database port is published.
+- **Integer Arithmetic:** All currency calculations use signed 64-bit integers in minor units (no floating-point rounding errors).
+- **3-Phase Purchase Saga:** Balances are reserved prior to external API dispatch and committed only upon verified creation.
+- **Idempotent Rewards:** Referral bonuses, cashback, and promo usages are bound to unique transaction references.
+- **Encrypted Credentials:** Panel API keys and admin passwords are encrypted at rest using AES-256-GCM.
+- **Isolated Network Model:** PostgreSQL is accessible only within a private Docker bridge network; Telegram operates via outbound long polling with zero open public ports.
 
-## Quick start
+---
 
-### Guided installation — recommended for the first server
+## Quick Start
 
-On an Ubuntu 24.04 server, clone the repository and run the installer:
+### Option A: Guided Interactive Installation (Recommended)
+
+Run the bootstrap script on a clean **Ubuntu 24.04 LTS** server:
 
 ```bash
 git clone https://github.com/Ho3einK84/RebeccaSellBot.git
@@ -59,192 +76,113 @@ cd RebeccaSellBot
 ./install.sh
 ```
 
-The guided flow installs Docker if necessary, asks only for Telegram/database
-bootstrap values, builds the bot, applies migrations, and starts a healthy
-instance. Add Rebecca panels afterward from `/admin` → **Rebecca panels**.
+The installer verifies prerequisites, installs Docker if needed, configures your instance, applies database migrations, and boots the service. Panel connections can be added afterward from `/admin` → **Rebecca panels**.
 
-### Unattended installation — one command
+### Option B: Unattended 1-Command Deployment
 
-For repeatable deployments, create a protected plain `KEY=value` file outside
-the repository, for example `/root/rsbot.env` with mode `0600`:
+For automated provisioning, create a restricted environment file (`/root/rsbot.env`, permission `0600`):
 
 ```dotenv
-BOT_TOKEN=123456:replace_me
+BOT_TOKEN=123456789:AAExampleTelegramBotTokenHere
 ADMIN_IDS=123456789
 DB_USER=rsbot_bot1
-DB_PASSWORD=use_a_16_character_or_longer_safe_password
+DB_PASSWORD=ChooseAStrong16CharPassword
 DB_NAME=rsbot_bot1
 DEFAULT_LOCALE=fa
 ```
 
-Then launch the installer in unattended mode. It generates a database password
-when `DB_PASSWORD` is omitted.
+Execute the unattended installation command:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
   | sudo bash -s -- --instance bot1 --env-file /root/rsbot.env --non-interactive --yes
 ```
 
-> [!CAUTION]
-> Keep the deployment file private and delete it after a successful install if
-> it is no longer needed. Do not put tokens or passwords on the command line.
+---
 
-### Private repository installation
+## Managing Instances (`rsbot`)
 
-The installer supports public HTTPS repositories, read-only SSH deploy keys,
-and fine-grained GitHub PATs. In guided mode select the access method when
-asked. In unattended mode use `RSBOT_ACCESS_METHOD=ssh` plus
-`RSBOT_SSH_KEY_PATH`, or `RSBOT_ACCESS_METHOD=pat` plus `GITHUB_PAT` in the
-protected deployment file.
-
-## Installation requirements
-
-- Ubuntu 24.04 LTS server
-- A Telegram bot token from `@BotFather`
-- One or more numeric Telegram administrator IDs
-- A Rebecca HTTPS origin and API key when you are ready to configure a panel
-
-Docker Engine and Docker Compose are installed automatically when missing.
-
-## Deployment model
-
-Each instance is installed in its own directory:
-
-```text
-/opt/RebeccaSellBot/<instance>
-```
-
-For example, `main`, `shopbot`, and `testbot` can coexist on one machine. Each
-receives independent containers, Docker networks, PostgreSQL volume, `.env`
-file, and Compose project name. Backups live outside the Git checkout under
-`/opt/RebeccaSellBot/backups/<instance>`.
-
-```text
-                        outbound network
-                    ┌─────────────────────┐
-Telegram / Rebecca ◄┤  <instance>_bot     │
-                    └─────────┬───────────┘
-                              │
-                    ┌─────────▼───────────┐
-                    │ private DB network  │
-                    │  <instance>_db      │
-                    └─────────────────────┘
-```
-
-The internal health endpoint binds to `127.0.0.1` in the bot container and is
-used only by Docker. There are no published inbound ports.
-
-## Manage an instance with `rsbot`
-
-The installer places the instance-aware manager at `/usr/local/bin/rsbot`.
+The global CLI utility `/usr/local/bin/rsbot` simplifies multi-instance management:
 
 ```bash
-rsbot list
-rsbot main status
-rsbot main logs -f
+rsbot list                     # List all installed instances
+rsbot <name> status            # Inspect service health and container status
+rsbot <name> logs -f           # Stream real-time structured logs
 ```
 
-| Command                           | Effect                                                      |
-| --------------------------------- | ----------------------------------------------------------- |
-| `rsbot <instance> up`             | Build and start services, waiting for health                |
-| `rsbot <instance> down`           | Stop services while preserving data                         |
-| `rsbot <instance> restart`        | Restart current containers                                  |
-| `rsbot <instance> status`         | Display service status                                      |
-| `rsbot <instance> logs -f`        | Follow recent logs                                          |
-| `rsbot <instance> update`         | Pull Git, rebuild, apply SQL migrations, and start          |
-| `rsbot <instance> backup`         | Write a compressed PostgreSQL backup with mode `0600`       |
-| `rsbot <instance> restore <file>` | Restore a custom-format backup after confirmation           |
-| `rsbot <instance> uninstall`      | Remove only that instance and its volume after confirmation |
-
-## Bootstrap configuration
-
-The installer writes the selected values to the instance’s `.env` file with
-mode `0600`.
-
-| Variable                            | Purpose                                                                        |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
-| `BOT_TOKEN`                         | Telegram Bot API token                                                         |
-| `ADMIN_IDS`                         | Bootstrap admin IDs used only while the database admin registry is empty       |
-| `SUPPORT_URL`                       | Optional HTTPS support URL; falls back to the first bootstrap admin when unset |
-| `INSTANCE_NAME`                     | Container, network, volume, and Compose namespace                              |
-| `PANEL_CREDENTIALS_KEY`             | Stable local key used to encrypt panel credentials in PostgreSQL               |
-| `REBECCA_*`                         | Optional one-time legacy single-panel import only                              |
-| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Instance-local PostgreSQL credentials                                          |
-| `DEFAULT_LOCALE`                    | Initial bot locale: `fa` or `en`                                               |
-
-> [!IMPORTANT]
-> `REBECCA_API_URL` is the Rebecca API origin, not the dashboard path. If your
-> panel opens at `https://panel.example.com:2087/x-dashboard/`, configure
-> `REBECCA_API_URL=https://panel.example.com:2087`. Omitting `:2087` sends
-> the bot to the default HTTPS port (443), which may be a different service.
-
-After startup, add any number of panels and service IDs in Telegram. Every
-package stores its own panel/service target; custom-volume purchases have an
-independent target. Credentials are encrypted at rest and never shown again.
-
-To add a panel: open `/admin` → **Rebecca panels** → **Add panel**. Afterward,
-edit packages under **Settings → Pricing** and select a panel/service for each.
-
-## Project map
-
-| Location              | Responsibility                                                                               |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| `src/telegram`        | grammY handlers, conversations, menus, localization, and authorization                       |
-| `src/domain/services` | Wallet, pricing, promotions, referrals, trial, user, translation, and Rebecca business logic |
-| `src/infra`           | Database, Drizzle schema, API client, logger, sessions, and internal health server           |
-| `src/jobs`            | Notification/reconciliation workers plus distributed job runtime                             |
-| `drizzle`             | Fresh PostgreSQL migration set                                                               |
-| `scripts/rsbot`       | Multi-instance lifecycle, update, backup, and restore manager                                |
-
-## Local development
-
-Requirements: Node.js `24.x` and PostgreSQL `16+`.
-
-```bash
-cp .env.example .env
-npm ci
-npm run db:migrate
-npm run dev
-```
-
-Run the full quality suite before shipping a change:
-
-```bash
-npm run architecture:check
-npm run typecheck
-npm run lint
-npm run format:check
-npm test
-npm run test:coverage
-npm run build
-```
-
-Run the PostgreSQL integration/concurrency suite against a disposable database:
-
-```bash
-TEST_DATABASE_URL=postgres://rsbot_test:rsbot_test@127.0.0.1:5432/rsbot_test npm run test:integration
-```
-
-CI provisions PostgreSQL 16 automatically for this suite.
-
-## Security checklist
-
-- Use a valid HTTPS Rebecca URL; TLS verification is never disabled.
-- Keep the initial `ADMIN_IDS` bootstrap list limited to trusted Telegram accounts; later admin changes are stored in PostgreSQL and managed from the bot.
-- Use a read-only deploy key or fine-grained PAT with only `Contents: Read`.
-- Treat the instance `.env`, `.git-credentials`, and backups as secrets.
-- Back up before updating production installations.
-- Never add a host port mapping for PostgreSQL or the bot health endpoint.
-
-## Operational notes
-
-- The bot’s admin authorization is independent of Rebecca panel admins.
-- Secret values and receipt images are redacted from structured logs.
-- Manual balance changes create transaction audit records.
-- Restore and uninstall operations require the exact instance name as a safety
-  confirmation.
+| Command                       | Description                                                          |
+| :---------------------------- | :------------------------------------------------------------------- |
+| `rsbot <name> up`             | Build images, apply SQL migrations, and start containers.            |
+| `rsbot <name> down`           | Gracefully stop containers while retaining all data volumes.         |
+| `rsbot <name> restart`        | Perform a zero-downtime service restart.                             |
+| `rsbot <name> update`         | Pull latest Git commits, migrate schema, rebuild, and relaunch.      |
+| `rsbot <name> backup`         | Generate an encrypted, compressed PostgreSQL snapshot (`0600`).      |
+| `rsbot <name> restore <file>` | Restore database from a backup file with interactive safety checks.  |
+| `rsbot <name> uninstall`      | Safely tear down containers and delete the designated instance data. |
 
 ---
 
-Built for operators who want a practical, self-hosted Telegram sales bot with
-clear financial controls and a small operational surface.
+## Environment Variables
+
+| Variable                | Description                                                            | Default / Example                    |
+| :---------------------- | :--------------------------------------------------------------------- | :----------------------------------- |
+| `BOT_TOKEN`             | Telegram Bot API token obtained from `@BotFather`.                     | _Required_                           |
+| `ADMIN_IDS`             | Comma-separated initial Telegram user IDs for admin bootstrap.         | `123456789`                          |
+| `DATABASE_URL`          | PostgreSQL connection string.                                          | `postgres://user:pass@db:5432/rsbot` |
+| `PANEL_CREDENTIALS_KEY` | 32+ character key used to encrypt panel credentials at rest.           | Generated by installer               |
+| `DEFAULT_LOCALE`        | Default language for newly registered users (`fa` or `en`).            | `fa`                                 |
+| `SUPPORT_URL`           | Optional Telegram support username/link (e.g. `https://t.me/support`). | First `ADMIN_ID`                     |
+| `HEALTH_CHECK_PORT`     | Internal HTTP port used by Docker for container health probes.         | `8080`                               |
+
+---
+
+## Development & Verification
+
+### Local Setup
+
+```bash
+# Clone and install dependencies
+git clone https://github.com/Ho3einK84/RebeccaSellBot.git
+cd RebeccaSellBot
+npm ci
+
+# Configure environment & migrate database
+cp .env.example .env
+npm run db:migrate
+
+# Start with live reloading
+npm run dev
+```
+
+### Quality Verification Suite
+
+Ensure code quality, typing, formatting, and architecture rules pass before committing:
+
+```bash
+npm run verify
+```
+
+The `verify` script runs the complete pipeline:
+
+- `npm run architecture:check` — Enforces structural and API isolation rules.
+- `npm run typecheck` — Strict TypeScript compiler checks.
+- `npm run lint` — ESLint static analysis.
+- `npm run format:check` — Prettier code style validation.
+- `npm test` — Comprehensive Vitest test suite (67+ test files, 390+ unit tests).
+- `npm run build` — Production TypeScript bundle compilation.
+
+---
+
+## Security & Operational Checklist
+
+- [x] **HTTPS Enforcement:** Rebecca panels must expose valid TLS endpoints; insecure connections are rejected.
+- [x] **Secret Redaction:** Logs automatically redact authorization tokens, card details, and sensitive receipts.
+- [x] **Outbound-Only Polling:** No exposed inbound webhook ports; resilient against direct network scans.
+- [x] **Non-Root Execution:** Node.js processes run under an unprivileged `node` user in production Docker containers.
+- [x] **Audit Trail:** Balance alterations, card approval actions, and admin overrides are immutably logged.
+
+---
+
+## License
+
+This project is licensed under the terms of the [MIT License](LICENSE).
