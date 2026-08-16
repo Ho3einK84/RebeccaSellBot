@@ -11,3 +11,20 @@ export function customVolumeEnabled(settings: SettingReader): boolean {
   const value = settings.getSetting('custom_volume_enabled', 'true').trim().toLowerCase();
   return value !== 'false' && value !== '0';
 }
+
+/**
+ * Wallet balance transfer between users is enabled by default.
+ */
+export function walletTransferEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('wallet_transfer_enabled', 'true').trim().toLowerCase();
+  return value !== 'false' && value !== '0';
+}
+
+/**
+ * Minimum wallet transfer amount in minor currency units (Toman).
+ */
+export function walletTransferMinAmount(settings: SettingReader, fallback = 5_000): number {
+  const raw = settings.getSetting('wallet_transfer_min_amount', String(fallback)).trim();
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}

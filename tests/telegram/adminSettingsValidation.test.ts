@@ -24,6 +24,9 @@ describe('admin settings validation', () => {
     expect(validateAdminSetting('price_per_gb', 'Infinity')).toBeUndefined();
     expect(validateAdminSetting('price_per_gb', 'NaN')).toBeUndefined();
     expect(validateAdminSetting('price_per_gb', '9007199254740992')).toBeUndefined();
+    expect(validateAdminSetting('wallet_transfer_min_amount', '5000')).toBe('5000');
+    expect(validateAdminSetting('wallet_transfer_min_amount', '۵٬۰۰۰')).toBe('5000');
+    expect(validateAdminSetting('wallet_transfer_min_amount', '0')).toBeUndefined();
   });
 
   it('normalizes card numbers without retaining presentation separators', () => {

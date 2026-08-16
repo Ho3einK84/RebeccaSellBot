@@ -44,6 +44,8 @@ import {
   type DashboardStats,
   type PurchaseSagaParams,
   type PurchaseSagaResult,
+  type WalletTransferParams,
+  type WalletTransferResult,
 } from './WalletContracts.js';
 import {
   assertAdminBalanceAdjustment,
@@ -63,6 +65,8 @@ export type {
   DashboardStats,
   PurchaseSagaParams,
   PurchaseSagaResult,
+  WalletTransferParams,
+  WalletTransferResult,
 } from './WalletContracts.js';
 
 export class WalletService {
@@ -570,5 +574,153 @@ export class WalletService {
   // operations stay independent from remote mutation/reconciliation logic.
   async executePurchaseSaga(params: PurchaseSagaParams): Promise<PurchaseSagaResult> {
     return this.purchaseSaga.execute(params);
+  }
+
+  /**
+   * Atomically transfer wallet funds from one user to another.
+   *
+   * Financial integrity guarantees:
+   *  - Sender and recipient rows are locked in ascending telegram_id order (FOR UPDATE)
+   *    to completely prevent database deadlocks and double-spending.
+   *  - Validates balance - reservedBalance >= amount so in-flight purchases are protected.
+   *  - Writes immutable auditLog and two wallet_transactions entries (transfer_sent and transfer_received)
+   *    in the same database transaction.
+   *  - Optional referenceId ensures deterministic idempotent transfers.
+   */
+  async transferBalance(params: WalletTransferParams): Promise<WalletTransferResult> {
+    if (params.fromTelegramId === params.toTelegramId) {
+      throw new Error('TRANSFER_TO_SELF');
+    }
+    assertPositiveSafeInteger(params.amount, 'INVALID_TRANSFER_AMOUNT');
+
+    const db = getDb();
+    return db.transaction(async (tx) => {
+      // Deterministic lock order by telegramId (ascending) to prevent deadlocks
+      const [firstId, secondId] =
+        params.fromTelegramId < params.toTelegramId
+          ? [params.fromTelegramId, params.toTelegramId]
+          : [params.toTelegramId, params.fromTelegramId];
+
+      const [firstUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.telegramId, firstId))
+        .for('update')
+        .limit(1);
+
+      const [secondUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.telegramId, secondId))
+        .for('update')
+        .limit(1);
+
+      const fromUser = firstUser?.telegramId === params.fromTelegramId ? firstUser : secondUser;
+      const toUser = firstUser?.telegramId === params.toTelegramId ? firstUser : secondUser;
+
+      if (!fromUser) throw new Error('USER_NOT_FOUND');
+      if (fromUser.isBanned) throw new Error('SENDER_BANNED');
+      if (!toUser) throw new Error('TRANSFER_TARGET_NOT_FOUND');
+      if (toUser.isBanned) throw new Error('TRANSFER_TARGET_BANNED');
+
+      // Check available balance (excluding reserved funds for active purchases)
+      const availableBalance = fromUser.balance - fromUser.reservedBalance;
+      if (availableBalance < params.amount) {
+        throw new Error('INSUFFICIENT_BALANCE');
+      }
+
+      const fromBalanceAfter = fromUser.balance - params.amount;
+      const toBalanceAfter = toUser.balance + params.amount;
+
+      if (!Number.isSafeInteger(fromBalanceAfter) || fromBalanceAfter < 0) {
+        throw new Error('INSUFFICIENT_BALANCE');
+      }
+      if (!Number.isSafeInteger(toBalanceAfter) || toBalanceAfter > 9007199254740991) {
+        throw new Error('BALANCE_OVERFLOW');
+      }
+
+      const sentRefId = params.referenceId ? `transfer_sent_${params.referenceId}` : undefined;
+      const recvRefId = params.referenceId ? `transfer_recv_${params.referenceId}` : undefined;
+
+      if (sentRefId) {
+        const [existing] = await tx
+          .select({ id: walletTransactions.id })
+          .from(walletTransactions)
+          .where(eq(walletTransactions.referenceId, sentRefId))
+          .limit(1);
+        if (existing) {
+          throw new Error('TRANSFER_ALREADY_PROCESSED');
+        }
+      }
+
+      await tx
+        .update(users)
+        .set({ balance: fromBalanceAfter, updatedAt: new Date() })
+        .where(eq(users.telegramId, params.fromTelegramId));
+
+      await tx
+        .update(users)
+        .set({ balance: toBalanceAfter, updatedAt: new Date() })
+        .where(eq(users.telegramId, params.toTelegramId));
+
+      const txIdSender = `tx_ts_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+      const txIdRecipient = `tx_tr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+
+      const senderDesc = params.description?.trim()
+        ? `Transfer to ${params.toTelegramId}: ${params.description.trim()}`
+        : `Transfer to ${params.toTelegramId}`;
+      const recipientDesc = params.description?.trim()
+        ? `Transfer from ${params.fromTelegramId}: ${params.description.trim()}`
+        : `Transfer from ${params.fromTelegramId}`;
+
+      await tx.insert(walletTransactions).values({
+        id: txIdSender,
+        telegramId: params.fromTelegramId,
+        amount: -params.amount,
+        balanceAfter: fromBalanceAfter,
+        type: 'transfer_sent',
+        referenceId: sentRefId,
+        description: senderDesc,
+      });
+
+      await tx.insert(walletTransactions).values({
+        id: txIdRecipient,
+        telegramId: params.toTelegramId,
+        amount: params.amount,
+        balanceAfter: toBalanceAfter,
+        type: 'transfer_received',
+        referenceId: recvRefId,
+        description: recipientDesc,
+      });
+
+      await tx.insert(auditLogs).values({
+        id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        actorTelegramId: params.fromTelegramId,
+        action: 'wallet_transfer',
+        entityType: 'user_wallet',
+        entityId: String(params.fromTelegramId),
+        targetTelegramId: params.toTelegramId,
+        metadata: JSON.stringify({
+          amount: params.amount,
+          fromTelegramId: params.fromTelegramId,
+          toTelegramId: params.toTelegramId,
+          fromBalanceAfter,
+          toBalanceAfter,
+          txIdSender,
+          txIdRecipient,
+        }),
+      });
+
+      return {
+        success: true,
+        fromTelegramId: params.fromTelegramId,
+        toTelegramId: params.toTelegramId,
+        amount: params.amount,
+        fromBalanceAfter,
+        toBalanceAfter,
+        txIdSender,
+        txIdRecipient,
+      };
+    });
   }
 }

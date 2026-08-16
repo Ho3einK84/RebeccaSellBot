@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { customVolumeEnabled } from '../../src/domain/services/FeatureSettings.js';
+import {
+  customVolumeEnabled,
+  walletTransferEnabled,
+  walletTransferMinAmount,
+} from '../../src/domain/services/FeatureSettings.js';
 
 function settings(value?: string) {
   return {
@@ -17,5 +21,28 @@ describe('customVolumeEnabled', () => {
     expect(customVolumeEnabled(settings('false'))).toBe(false);
     expect(customVolumeEnabled(settings(' FALSE '))).toBe(false);
     expect(customVolumeEnabled(settings('0'))).toBe(false);
+  });
+});
+
+describe('walletTransferEnabled', () => {
+  it('defaults to true when no setting row exists', () => {
+    expect(walletTransferEnabled(settings())).toBe(true);
+  });
+
+  it('correctly disables when configured as false', () => {
+    expect(walletTransferEnabled(settings('false'))).toBe(false);
+    expect(walletTransferEnabled(settings('0'))).toBe(false);
+    expect(walletTransferEnabled(settings('true'))).toBe(true);
+  });
+});
+
+describe('walletTransferMinAmount', () => {
+  it('returns default 5000 when unset', () => {
+    expect(walletTransferMinAmount(settings())).toBe(5000);
+  });
+
+  it('returns configured positive integer', () => {
+    expect(walletTransferMinAmount(settings('10000'))).toBe(10000);
+    expect(walletTransferMinAmount(settings('invalid'))).toBe(5000);
   });
 });

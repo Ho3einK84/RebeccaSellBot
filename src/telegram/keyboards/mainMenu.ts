@@ -18,7 +18,10 @@ import {
 import { backKeyboard, buildEmptyState, buildScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderAdminHome } from './adminMenu.js';
-import { customVolumeEnabled } from '../../domain/services/FeatureSettings.js';
+import {
+  customVolumeEnabled,
+  walletTransferEnabled,
+} from '../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 
@@ -570,6 +573,19 @@ export const walletMenu = new Menu<MenuContext>('wallet-menu')
     }
   )
   .row()
+  .dynamic((ctx, range) => {
+    const transferEnabled = !ctx.services || walletTransferEnabled(ctx.services.translationService);
+    if (transferEnabled) {
+      range
+        .text(
+          (c) => t(c, 'menu_wallet_transfer'),
+          async (c) => {
+            await c.conversation.enter('transferBalanceConversation');
+          }
+        )
+        .row();
+    }
+  })
   .text(
     (ctx) => t(ctx, 'menu_back_main'),
     async (ctx) => {

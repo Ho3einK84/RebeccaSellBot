@@ -148,7 +148,7 @@ export const walletTransactions = pgTable(
     ),
     check(
       'wallet_transactions_type_supported',
-      sql`${table.type} IN ('topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial')`
+      sql`${table.type} IN ('topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial', 'transfer_sent', 'transfer_received')`
     ),
   ]
 );

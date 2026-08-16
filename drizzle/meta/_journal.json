@@ -15,6 +15,13 @@
       "when": 1786880000000,
       "tag": "0001_snapshot_financial_terms",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786890000000,
+      "tag": "0002_add_wallet_transfer_types",
+      "breakpoints": true
     }
   ]
 }

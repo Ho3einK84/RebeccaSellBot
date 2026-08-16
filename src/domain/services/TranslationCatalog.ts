@@ -43,6 +43,8 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   card_holder: 'Name',
   topup_min_amount: '10000',
   topup_max_amount: '10000000',
+  wallet_transfer_enabled: 'true',
+  wallet_transfer_min_amount: '5000',
   support_message: 'برای پشتیبانی با مدیر در تماس باشید.',
   support_destination: '',
   support_enabled: 'true',

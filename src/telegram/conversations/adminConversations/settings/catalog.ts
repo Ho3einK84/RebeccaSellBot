@@ -11,6 +11,8 @@ export const SETTING_KEYS = [
   'custom_default_days',
   'card_number',
   'card_holder',
+  'wallet_transfer_enabled',
+  'wallet_transfer_min_amount',
   'support_destination',
   'support_enabled',
   'trial_enabled',
@@ -119,6 +121,18 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'payment',
     labelKey: 'admin_setting_card_holder',
     editor: { type: 'text', minimumLength: 1, maximumLength: 120 },
+  },
+  {
+    key: 'wallet_transfer_enabled',
+    group: 'payment',
+    labelKey: 'admin_setting_wallet_transfer_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'wallet_transfer_min_amount',
+    group: 'payment',
+    labelKey: 'admin_setting_wallet_transfer_min_amount',
+    editor: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
   },
   {
     key: 'support_destination',

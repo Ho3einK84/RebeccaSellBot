@@ -88,3 +88,23 @@ export type AdminBalanceAdjustment = {
   /** Optional stable operation key used to make button-driven adjustments idempotent. */
   referenceId?: string;
 };
+
+export interface WalletTransferParams {
+  fromTelegramId: number;
+  toTelegramId: number;
+  amount: number;
+  description?: string;
+  /** Optional stable operation key used to make transfer attempts idempotent. */
+  referenceId?: string;
+}
+
+export interface WalletTransferResult {
+  success: boolean;
+  fromTelegramId: number;
+  toTelegramId: number;
+  amount: number;
+  fromBalanceAfter: number;
+  toBalanceAfter: number;
+  txIdSender: string;
+  txIdRecipient: string;
+}

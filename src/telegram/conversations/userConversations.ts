@@ -30,7 +30,11 @@ import {
 } from '../ui.js';
 import { logger } from '../../infra/logger.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
-import { customVolumeEnabled } from '../../domain/services/FeatureSettings.js';
+import {
+  customVolumeEnabled,
+  walletTransferEnabled,
+  walletTransferMinAmount,
+} from '../../domain/services/FeatureSettings.js';
 import {
   PurchaseCheckoutUnavailableError,
   type PurchaseCheckout,
@@ -1089,6 +1093,378 @@ export async function transferConfigConversation(
             : 'transfer_failed'
         )
       ),
+      { parse_mode: 'Markdown' }
+    );
+  }
+}
+
+/** Transfer available wallet balance to another bot user. */
+export async function transferBalanceConversation(
+  conversation: MyConversation,
+  ctx: ConversationContext
+) {
+  const senderTelegramId = ctx.from?.id;
+  if (!senderTelegramId || !ctx.services) return;
+
+  const isEnabled = walletTransferEnabled(ctx.services.translationService);
+  if (!isEnabled) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'wallet_transfer_disabled')),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  const senderBalance = await ctx.services.walletService.getBalance(senderTelegramId);
+  const minAmount = walletTransferMinAmount(ctx.services.translationService);
+
+  if (senderBalance < minAmount) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '👛',
+        t(ctx, 'wallet_transfer_title'),
+        t(ctx, 'wallet_transfer_insufficient_balance')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  // Step 1: Prompt for recipient
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildScreen({
+      emoji: '💸',
+      title: t(ctx, 'wallet_transfer_title'),
+      subtitle: t(ctx, 'wallet_transfer_subtitle'),
+      footer: `ℹ️ ${t(ctx, 'wallet_transfer_target_hint')}`,
+    }),
+    { parse_mode: 'Markdown' }
+  );
+
+  const targetInput = await waitForTextInput(conversation);
+  if (targetInput === undefined) return;
+
+  const target = await ctx.services.userService.findProfile(targetInput);
+  if (!target) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'transfer_target_not_found')),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  if (target.telegramId === senderTelegramId) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'wallet_transfer_self_error')),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  if (target.isBanned) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'transfer_target_banned')),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  // Step 2: Prompt for amount
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildScreen({
+      emoji: '💰',
+      title: t(ctx, 'wallet_transfer_title'),
+      subtitle: t(ctx, 'wallet_transfer_amount_prompt'),
+      primary: {
+        emoji: '👤',
+        label: t(ctx, 'wallet_transfer_recipient_label'),
+        value: target.username
+          ? `@${escapeTelegramMarkdown(target.username)}`
+          : `\`${localizedNumber(target.telegramId, ctx)}\``,
+      },
+      sections: [
+        {
+          emoji: '👛',
+          title: t(ctx, 'wallet_available_balance'),
+          fields: [
+            {
+              emoji: '💰',
+              label: t(ctx, 'wallet_available_balance'),
+              value: `${localizedNumber(senderBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+            },
+          ],
+        },
+      ],
+      footer: `ℹ️ ${t(ctx, 'wallet_transfer_min_amount_hint', { min: localizedNumber(minAmount, ctx) })}`,
+    }),
+    { parse_mode: 'Markdown' }
+  );
+
+  const amountInput = await waitForTextInput(conversation);
+  if (amountInput === undefined) return;
+
+  const normalized = normalizeInputDigits(amountInput).replace(/[,_\s]/g, '');
+  const parsedAmount = /^\d+$/.test(normalized) ? Number(normalized) : Number.NaN;
+
+  if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'wallet_transfer_title'),
+        t(ctx, 'wallet_transfer_invalid_amount')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  if (parsedAmount < minAmount) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'wallet_transfer_title'),
+        t(ctx, 'wallet_transfer_below_min', { min: localizedNumber(minAmount, ctx) })
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  if (parsedAmount > senderBalance) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'wallet_transfer_title'),
+        t(ctx, 'wallet_transfer_insufficient_balance')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  // Step 3: Review & Confirm Screen
+  const balanceAfter = senderBalance - parsedAmount;
+  const confirmKeyboard = new InlineKeyboard()
+    .text(t(ctx, 'wallet_transfer_confirm_button'), 'wallet_transfer_confirm')
+    .row()
+    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildScreen({
+      emoji: '💸',
+      title: t(ctx, 'wallet_transfer_review_title'),
+      subtitle: t(ctx, 'wallet_transfer_review_subtitle'),
+      primary: {
+        emoji: '💰',
+        label: t(ctx, 'wallet_transfer_amount_label'),
+        value: `${localizedNumber(parsedAmount, ctx)} ${t(ctx, 'currency_toman')}`,
+      },
+      sections: [
+        {
+          emoji: '👤',
+          title: t(ctx, 'wallet_transfer_recipient_label'),
+          fields: [
+            {
+              emoji: '👤',
+              label: t(ctx, 'wallet_transfer_recipient_label'),
+              value: target.username
+                ? `@${escapeTelegramMarkdown(target.username)}`
+                : `\`${localizedNumber(target.telegramId, ctx)}\``,
+            },
+            {
+              emoji: '🆔',
+              label: t(ctx, 'transfer_recipient_id_label'),
+              value: `\`${localizedNumber(target.telegramId, ctx)}\``,
+            },
+          ],
+        },
+        {
+          emoji: '👛',
+          title: t(ctx, 'wallet_transfer_balance_after_label'),
+          fields: [
+            {
+              emoji: '💳',
+              label: t(ctx, 'wallet_transfer_balance_after_label'),
+              value: `${localizedNumber(balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
+            },
+          ],
+        },
+      ],
+      footer: `⚠️ ${t(ctx, 'wallet_transfer_consequence')}`,
+    }),
+    { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
+  );
+
+  const choice = await waitForCallbackInput(conversation, ['wallet_transfer_confirm']);
+  if (choice === undefined) return;
+
+  try {
+    const result = await ctx.services.walletService.transferBalance({
+      fromTelegramId: senderTelegramId,
+      toTelegramId: target.telegramId,
+      amount: parsedAmount,
+    });
+
+    // Notify sender of success
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'wallet_transfer_success_title'),
+        subtitle: t(ctx, 'wallet_transfer_success_subtitle'),
+        primary: {
+          emoji: '💰',
+          label: t(ctx, 'wallet_transfer_amount_label'),
+          value: `${localizedNumber(result.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+        },
+        sections: [
+          {
+            emoji: '👤',
+            title: t(ctx, 'wallet_transfer_recipient_label'),
+            fields: [
+              {
+                emoji: '🆔',
+                label: t(ctx, 'transfer_recipient_id_label'),
+                value: `\`${localizedNumber(target.telegramId, ctx)}\``,
+              },
+            ],
+          },
+          {
+            emoji: '👛',
+            title: t(ctx, 'wallet_available_balance'),
+            fields: [
+              {
+                emoji: '💳',
+                label: t(ctx, 'wallet_available_balance'),
+                value: `${localizedNumber(result.fromBalanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
+              },
+            ],
+          },
+        ],
+        footer: t(ctx, 'wallet_transfer_sender_new_balance', {
+          balance: localizedNumber(result.fromBalanceAfter, ctx),
+        }),
+      }),
+      { parse_mode: 'Markdown' }
+    );
+
+    // Notify recipient in their configured language
+    try {
+      const recipientLocale =
+        (await ctx.services.userService.getLocale(target.telegramId)) ?? resolveContextLocale(ctx);
+      await ctx.api.sendMessage(
+        target.telegramId,
+        buildScreen({
+          emoji: '🎁',
+          title: tForLocale(
+            ctx.services.translationService,
+            recipientLocale,
+            'wallet_transfer_recipient_notice_title'
+          ),
+          subtitle: tForLocale(
+            ctx.services.translationService,
+            recipientLocale,
+            'wallet_transfer_recipient_notice_subtitle'
+          ),
+          primary: {
+            emoji: '💰',
+            label: tForLocale(
+              ctx.services.translationService,
+              recipientLocale,
+              'wallet_transfer_amount_label'
+            ),
+            value: `${localizedNumber(result.amount, ctx)} ${tForLocale(ctx.services.translationService, recipientLocale, 'currency_toman')}`,
+          },
+          sections: [
+            {
+              emoji: '👤',
+              title: tForLocale(
+                ctx.services.translationService,
+                recipientLocale,
+                'wallet_transfer_sender_label'
+              ),
+              fields: [
+                {
+                  emoji: '🆔',
+                  label: tForLocale(
+                    ctx.services.translationService,
+                    recipientLocale,
+                    'transfer_recipient_id_label'
+                  ),
+                  value: `\`${senderTelegramId.toLocaleString(
+                    recipientLocale === 'fa' ? 'fa-IR' : 'en-US'
+                  )}\``,
+                },
+              ],
+            },
+            {
+              emoji: '👛',
+              title: tForLocale(
+                ctx.services.translationService,
+                recipientLocale,
+                'wallet_available_balance'
+              ),
+              fields: [
+                {
+                  emoji: '💳',
+                  label: tForLocale(
+                    ctx.services.translationService,
+                    recipientLocale,
+                    'wallet_available_balance'
+                  ),
+                  value: `${result.toBalanceAfter.toLocaleString(
+                    recipientLocale === 'fa' ? 'fa-IR' : 'en-US'
+                  )} ${tForLocale(ctx.services.translationService, recipientLocale, 'currency_toman')}`,
+                },
+              ],
+            },
+          ],
+        }),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard().text(
+            tForLocale(ctx.services.translationService, recipientLocale, 'menu_wallet'),
+            'nav:wallet'
+          ),
+        }
+      );
+    } catch {
+      // Transfer is authoritative even if Telegram notification fails (e.g. user blocked bot)
+    }
+  } catch (err) {
+    const errorKey =
+      err instanceof Error && err.message === 'TRANSFER_TARGET_BANNED'
+        ? 'transfer_target_banned'
+        : err instanceof Error && err.message === 'INSUFFICIENT_BALANCE'
+          ? 'wallet_transfer_insufficient_balance'
+          : 'wallet_transfer_failed';
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, errorKey)),
       { parse_mode: 'Markdown' }
     );
   }

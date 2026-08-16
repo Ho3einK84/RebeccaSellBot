@@ -11,6 +11,7 @@ import {
   customAmountConversation,
   promoConversation,
   transferConfigConversation,
+  transferBalanceConversation,
   renewConfigConversation,
 } from './conversations/userConversations.js';
 import {
@@ -222,6 +223,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   bot.use(createConversation(autoRenewCustomConversation, 'autoRenewCustomConversation'));
   bot.use(createConversation(promoConversation, 'promoConversation'));
   bot.use(createConversation(transferConfigConversation, 'transferConfigConversation'));
+  bot.use(createConversation(transferBalanceConversation, 'transferBalanceConversation'));
   bot.use(createConversation(topupConversation, 'topupConversation'));
   bot.use(createConversation(adminSetBalanceConversation, 'adminSetBalanceConversation'));
   bot.use(createConversation(adminCreatePromoConversation, 'adminCreatePromoConversation'));
