@@ -125,7 +125,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_sales_packages_button: '📦 Packages',
   admin_sales_custom_volume_button: '✏️ Custom Volume',
   admin_sales_referral_button: '👥 Referrals & Cashback',
-  admin_sales_wallet_transfer_button: '💸 Wallet Transfer',
+  admin_sales_wallet_transfer_button: '💳 Payment Settings',
   remaining: 'Data remaining',
   expiry: 'Valid until',
   config_not_owned: '⚠️ This service does not belong to you.',

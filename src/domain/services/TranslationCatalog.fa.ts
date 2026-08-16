@@ -125,7 +125,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_sales_packages_button: '📦 بسته‌ها',
   admin_sales_custom_volume_button: '✏️ حجم دلخواه',
   admin_sales_referral_button: '👥 دعوت و کش‌بک',
-  admin_sales_wallet_transfer_button: '💸 انتقال موجودی',
+  admin_sales_wallet_transfer_button: '💳 تنظیمات پرداخت',
   remaining: 'حجم باقی‌مانده',
   expiry: 'اعتبار تا',
   config_not_owned: '⚠️ این سرویس متعلق به شما نیست.',
