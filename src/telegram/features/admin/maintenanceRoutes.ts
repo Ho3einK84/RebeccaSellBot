@@ -556,9 +556,7 @@ async function renderOrphanIssueDetail(ctx: MenuContext, issue: OrphanIssue): Pr
             {
               label: t(ctx, 'admin_orphan_owner_label'),
               value:
-                issue.localOwnerTelegramId === null
-                  ? '—'
-                  : localizedNumber(issue.localOwnerTelegramId, ctx),
+                issue.localOwnerTelegramId === null ? '—' : `\`${issue.localOwnerTelegramId}\``,
             },
             {
               label: t(ctx, 'admin_orphan_first_seen_label'),

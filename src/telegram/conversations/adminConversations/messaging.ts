@@ -250,7 +250,7 @@ export async function adminDirectMessageConversation(
       primary: {
         emoji: '👤',
         label: t(ctx, 'admin_direct_recipient_label'),
-        value: localizedNumber(telegramId, ctx),
+        value: `\`${telegramId}\``,
       },
       footer: t(ctx, 'admin_direct_message_prompt'),
     }),
@@ -269,7 +269,7 @@ export async function adminDirectMessageConversation(
       primary: {
         emoji: '👤',
         label: t(ctx, 'admin_direct_recipient_label'),
-        value: localizedNumber(telegramId, ctx),
+        value: `\`${telegramId}\``,
       },
       sections: [
         {
@@ -310,7 +310,7 @@ export async function adminDirectMessageConversation(
         primary: {
           emoji: '👤',
           label: t(ctx, 'admin_direct_recipient_label'),
-          value: localizedNumber(telegramId, ctx),
+          value: `\`${telegramId}\``,
         },
         footer: t(ctx, 'admin_direct_sent'),
       }),

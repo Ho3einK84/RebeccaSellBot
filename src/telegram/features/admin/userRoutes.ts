@@ -616,7 +616,7 @@ async function showQuickTopupConfirmation(
             {
               emoji: '🆔',
               label: t(ctx, 'admin_user_id_label'),
-              value: `\`${localizedNumber(targetId, ctx)}\``,
+              value: `\`${targetId}\``,
             },
           ],
         },

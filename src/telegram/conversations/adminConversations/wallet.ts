@@ -529,7 +529,7 @@ export async function adminSearchUserConversation(
       primary: {
         emoji: '🆔',
         label: t(ctx, 'admin_user_id_label'),
-        value: `\`${localizedNumber(u.telegramId, ctx)}\``,
+        value: `\`${u.telegramId}\``,
       },
     }),
     {
@@ -615,7 +615,7 @@ async function applyAdminBalanceOperation(
             {
               emoji: '🆔',
               label: t(ctx, 'admin_user_id_label'),
-              value: `\`${localizedNumber(telegramId, ctx)}\``,
+              value: `\`${telegramId}\``,
             },
             {
               emoji: '💰',

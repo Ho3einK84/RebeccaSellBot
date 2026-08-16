@@ -12,6 +12,7 @@ import { purchaseFailureMessage } from '../purchaseFeedback.js';
 import {
   formatSubscriptionLink,
   localizedNumber,
+  localizedNumberForLocale,
   normalizeInputDigits,
   resolveContextLocale,
   t,
@@ -956,7 +957,7 @@ export async function transferConfigConversation(
         label: t(ctx, 'transfer_recipient_label'),
         value: target.username
           ? `@${escapeTelegramMarkdown(target.username)}`
-          : `\`${localizedNumber(target.telegramId, ctx)}\``,
+          : `\`${target.telegramId}\``,
       },
       sections: [
         {
@@ -966,7 +967,7 @@ export async function transferConfigConversation(
             {
               emoji: '🆔',
               label: t(ctx, 'transfer_recipient_id_label'),
-              value: `\`${localizedNumber(target.telegramId, ctx)}\``,
+              value: `\`${target.telegramId}\``,
             },
           ],
         },
@@ -1010,7 +1011,7 @@ export async function transferConfigConversation(
               {
                 emoji: '🆔',
                 label: t(ctx, 'transfer_recipient_id_label'),
-                value: `\`${localizedNumber(target.telegramId, ctx)}\``,
+                value: `\`${target.telegramId}\``,
               },
             ],
           },
@@ -1060,9 +1061,7 @@ export async function transferConfigConversation(
                     recipientLocale,
                     'transfer_recipient_id_label'
                   ),
-                  value: `\`${result.fromTelegramId.toLocaleString(
-                    recipientLocale === 'fa' ? 'fa-IR' : 'en-US'
-                  )}\``,
+                  value: `\`${result.fromTelegramId}\``,
                 },
               ],
             },
@@ -1194,7 +1193,7 @@ export async function transferBalanceConversation(
         label: t(ctx, 'wallet_transfer_recipient_label'),
         value: target.username
           ? `@${escapeTelegramMarkdown(target.username)}`
-          : `\`${localizedNumber(target.telegramId, ctx)}\``,
+          : `\`${target.telegramId}\``,
       },
       sections: [
         {
@@ -1291,12 +1290,12 @@ export async function transferBalanceConversation(
               label: t(ctx, 'wallet_transfer_recipient_label'),
               value: target.username
                 ? `@${escapeTelegramMarkdown(target.username)}`
-                : `\`${localizedNumber(target.telegramId, ctx)}\``,
+                : `\`${target.telegramId}\``,
             },
             {
               emoji: '🆔',
               label: t(ctx, 'transfer_recipient_id_label'),
-              value: `\`${localizedNumber(target.telegramId, ctx)}\``,
+              value: `\`${target.telegramId}\``,
             },
           ],
         },
@@ -1348,7 +1347,7 @@ export async function transferBalanceConversation(
               {
                 emoji: '🆔',
                 label: t(ctx, 'transfer_recipient_id_label'),
-                value: `\`${localizedNumber(target.telegramId, ctx)}\``,
+                value: `\`${target.telegramId}\``,
               },
             ],
           },
@@ -1396,7 +1395,7 @@ export async function transferBalanceConversation(
               recipientLocale,
               'wallet_transfer_amount_label'
             ),
-            value: `${localizedNumber(result.amount, ctx)} ${tForLocale(ctx.services.translationService, recipientLocale, 'currency_toman')}`,
+            value: `${localizedNumberForLocale(result.amount, recipientLocale)} ${tForLocale(ctx.services.translationService, recipientLocale, 'currency_toman')}`,
           },
           sections: [
             {
@@ -1414,9 +1413,7 @@ export async function transferBalanceConversation(
                     recipientLocale,
                     'transfer_recipient_id_label'
                   ),
-                  value: `\`${senderTelegramId.toLocaleString(
-                    recipientLocale === 'fa' ? 'fa-IR' : 'en-US'
-                  )}\``,
+                  value: `\`${senderTelegramId}\``,
                 },
               ],
             },

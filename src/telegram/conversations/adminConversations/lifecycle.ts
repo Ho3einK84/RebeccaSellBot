@@ -1,5 +1,5 @@
 import type { ConversationContext, MyConversation } from '../../types.js';
-import { localizedNumber, t } from '../../locale.js';
+import { t } from '../../locale.js';
 import {
   buildEmptyState,
   buildPromptScreen,
@@ -50,7 +50,7 @@ export async function adminAddAdminConversation(
       primary: {
         emoji: '👤',
         label: t(ctx, 'admin_registry_id_label'),
-        value: localizedNumber(telegramId, ctx),
+        value: `\`${telegramId}\``,
       },
       footer: t(ctx, added ? 'admin_admin_added' : 'admin_admin_already_exists', {
         telegram_id: telegramId,
@@ -133,7 +133,7 @@ export async function adminAssignOrphanConversation(
                 fields: [
                   {
                     label: t(ctx, 'admin_orphan_owner_label'),
-                    value: localizedNumber(target.telegramId, ctx),
+                    value: `\`${target.telegramId}\``,
                   },
                 ],
               },

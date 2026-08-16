@@ -180,6 +180,8 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
   const customDays = parseSettingNum(ts.getSetting('custom_default_days'), 30);
   const cardNumber = ts.getSetting('card_number', '—');
   const cardHolder = ts.getSetting('card_holder', '—');
+  const transferEnabled = ts.getSettingBool('wallet_transfer_enabled', true);
+  const transferMinAmount = parseSettingNum(ts.getSetting('wallet_transfer_min_amount'), 5000);
   const supportEnabled = ts.getSettingBool('support_enabled', true);
   const supportDest = ts.getSetting('support_destination', '') || '—';
   const refBonus = parseSettingNum(ts.getSetting('referral_bonus_toman'), 10000);
@@ -229,6 +231,12 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
           {
             label: t(ctx, 'admin_setting_card_holder'),
             value: escapeTelegramMarkdown(cardHolder),
+          },
+          {
+            label: t(ctx, 'admin_setting_wallet_transfer_enabled'),
+            value: transferEnabled
+              ? `${onBadge} (${localizedNumber(transferMinAmount, ctx)} ${t(ctx, 'currency_toman')})`
+              : offBadge,
           },
         ],
       },

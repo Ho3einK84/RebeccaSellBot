@@ -5,11 +5,16 @@ import {
   buildSettingsGroupPrompt,
   displayAdminSettingValue,
 } from '../../src/telegram/conversations/adminConversations.js';
+import { buildSettingsOverviewScreen } from '../../src/telegram/conversations/adminConversations/settings/presentation.js';
 import type { ConversationContext } from '../../src/telegram/types.js';
 
 function createContext(settings: Record<string, string>): ConversationContext {
   const translationService = {
     getSetting: vi.fn((key: string, fallback = '') => settings[key] ?? fallback),
+    getSettingBool: vi.fn((key: string, fallback = false) =>
+      settings[key] !== undefined ? settings[key] === 'true' : fallback
+    ),
+    resolveLocale: vi.fn(() => 'fa'),
     get: vi.fn((key: string, _locale?: string, params?: Record<string, string | number>) => {
       const texts: Record<string, string> = {
         admin_setting_naming_mode_val_prefix_number: 'پیشوند + شمارنده',
@@ -111,5 +116,20 @@ describe('admin settings presentation', () => {
     expect(prompt).toContain('🧩 قالب سفارشی: `h_{telegram_id}_{counter}`');
     expect(prompt).not.toContain('custom\n');
     expect(prompt).not.toContain('—_{telegram_id}_—');
+  });
+
+  it('builds settings overview screen with payment and wallet transfer settings', () => {
+    const ctx = createContext({
+      bot_enabled: 'true',
+      card_number: '6037991122334455',
+      card_holder: 'Admin User',
+      wallet_transfer_enabled: 'true',
+      wallet_transfer_min_amount: '5000',
+    });
+
+    const overview = buildSettingsOverviewScreen(ctx);
+    expect(overview).toContain('6037991122334455');
+    expect(overview).toContain('Admin User');
+    expect(overview).toContain('admin_setting_wallet_transfer_enabled');
   });
 });

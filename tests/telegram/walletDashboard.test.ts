@@ -30,6 +30,7 @@ describe('Wallet dashboard and presets', () => {
     expect(getPendingReceiptForUser).toHaveBeenCalledWith(789);
     expect(text).toContain(localizedNumber(150000, ctx));
     expect(text).toContain(localizedNumber(100000, ctx));
+    expect(text).toContain('`789`');
   });
 
   it('renders clean wallet dashboard without pending receipt when none exists', async () => {
@@ -51,6 +52,7 @@ describe('Wallet dashboard and presets', () => {
     const text = await renderWalletDashboard(ctx);
 
     expect(text).toContain(localizedNumber(50000, ctx));
+    expect(text).toContain('`789`');
     expect(text).not.toContain('rcp_');
   });
 });

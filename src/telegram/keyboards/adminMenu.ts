@@ -138,6 +138,13 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
   )
   .row()
   .text(
+    (ctx) => t(ctx, 'admin_sales_wallet_transfer_button'),
+    async (ctx) => {
+      await ctx.conversation.enter('adminEditSettingsConversation', 'payment');
+    }
+  )
+  .row()
+  .text(
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');

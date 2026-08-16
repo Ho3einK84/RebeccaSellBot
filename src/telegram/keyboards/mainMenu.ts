@@ -57,31 +57,44 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
       label: t(ctx, 'wallet_available_balance'),
       value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
     },
-    sections: pendingReceipt
-      ? [
+    sections: [
+      {
+        emoji: '👤',
+        title: t(ctx, 'wallet_user_info_section'),
+        fields: [
           {
-            emoji: '⏳',
-            title: t(ctx, 'wallet_pending_section'),
-            fields: [
-              {
-                emoji: '💰',
-                label: t(ctx, 'wallet_pending_amount'),
-                value: `${localizedNumber(pendingReceipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
-              },
-              {
-                emoji: '📅',
-                label: t(ctx, 'wallet_pending_submitted'),
-                value: localizedDate(pendingReceipt.createdAt, ctx),
-              },
-              {
-                emoji: '⏳',
-                label: t(ctx, 'wallet_pending_status'),
-                value: t(ctx, 'wallet_pending_status_detail'),
-              },
-            ],
+            emoji: '🆔',
+            label: t(ctx, 'wallet_user_id_label'),
+            value: `\`${telegramId}\``,
           },
-        ]
-      : undefined,
+        ],
+      },
+      ...(pendingReceipt
+        ? [
+            {
+              emoji: '⏳',
+              title: t(ctx, 'wallet_pending_section'),
+              fields: [
+                {
+                  emoji: '💰',
+                  label: t(ctx, 'wallet_pending_amount'),
+                  value: `${localizedNumber(pendingReceipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  emoji: '📅',
+                  label: t(ctx, 'wallet_pending_submitted'),
+                  value: localizedDate(pendingReceipt.createdAt, ctx),
+                },
+                {
+                  emoji: '⏳',
+                  label: t(ctx, 'wallet_pending_status'),
+                  value: t(ctx, 'wallet_pending_status_detail'),
+                },
+              ],
+            },
+          ]
+        : []),
+    ],
     footer: pendingReceipt ? undefined : `ℹ️ ${t(ctx, 'wallet_dashboard_empty_hint')}`,
   });
 }
