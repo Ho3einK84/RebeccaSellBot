@@ -43,8 +43,10 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
   const telegramId = ctx.from?.id;
   if (!telegramId || !ctx.services) return t(ctx, 'balance');
 
-  const balance = await ctx.services.walletService.getBalance(telegramId);
-  const pendingReceipt = await ctx.services.walletService.getPendingReceiptForUser?.(telegramId);
+  const [balance, pendingReceipt] = await Promise.all([
+    ctx.services.walletService.getBalance(telegramId),
+    ctx.services.walletService.getPendingReceiptForUser?.(telegramId) ?? Promise.resolve(null),
+  ]);
 
   return buildScreen({
     emoji: '👛',

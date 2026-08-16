@@ -7,13 +7,17 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
   const telegramId = ctx.from?.id;
   if (!telegramId || !ctx.services) return t(ctx, 'main_menu');
 
-  const balance = await ctx.services.walletService.getBalance(telegramId);
+  let balance: number;
   let activeCount = 0;
   let servicesAvailable = true;
   let nearExpiryInfo: { username: string; daysLeft: number } | undefined;
 
   try {
-    const configs = await ctx.services.configService.listConfigsForOwner(telegramId);
+    const [fetchedBalance, configs] = await Promise.all([
+      ctx.services.walletService.getBalance(telegramId),
+      ctx.services.configService.listConfigsForOwner(telegramId),
+    ]);
+    balance = fetchedBalance;
     const now = Math.floor(Date.now() / 1000);
     const activeConfigs = configs.filter(
       (config) =>
@@ -32,6 +36,7 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
     nearExpiryInfo = expiring;
   } catch {
     servicesAvailable = false;
+    balance = await ctx.services.walletService.getBalance(telegramId).catch(() => 0);
   }
 
   const notices: string[] = [];

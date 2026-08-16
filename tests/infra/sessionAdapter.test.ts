@@ -51,4 +51,34 @@ describe('PostgresSessionAdapter write elision', () => {
     expect(insertQuery.values).toHaveBeenCalledWith({ key: '1:1', value: '{"page":3}' });
     expect(conflictUpdateMock).toHaveBeenCalledTimes(1);
   });
+
+  it('serves repeated reads from in-memory L1 cache without querying database', async () => {
+    const adapter = new PostgresSessionAdapter<{ count?: number }>();
+    limitMock.mockResolvedValueOnce([{ key: 'user:10', value: '{"count":42}' }]);
+
+    const firstRead = await adapter.read('user:10');
+    expect(firstRead).toEqual({ count: 42 });
+    expect(dbMock.select).toHaveBeenCalledTimes(1);
+
+    const secondRead = await adapter.read('user:10');
+    expect(secondRead).toEqual({ count: 42 });
+    // select should not have been called a second time
+    expect(dbMock.select).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates L1 cache on delete', async () => {
+    const adapter = new PostgresSessionAdapter<{ count?: number }>();
+    limitMock.mockResolvedValueOnce([{ key: 'user:11', value: '{"count":1}' }]);
+
+    await adapter.read('user:11');
+    expect(dbMock.select).toHaveBeenCalledTimes(1);
+
+    await adapter.delete('user:11');
+    expect(deleteWhereMock).toHaveBeenCalledTimes(1);
+
+    limitMock.mockResolvedValueOnce([{ key: 'user:11', value: '{"count":2}' }]);
+    const thirdRead = await adapter.read('user:11');
+    expect(thirdRead).toEqual({ count: 2 });
+    expect(dbMock.select).toHaveBeenCalledTimes(2);
+  });
 });

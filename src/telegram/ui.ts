@@ -137,7 +137,13 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
       callbackMessageId && previousUiIds.includes(callbackMessageId) ? [callbackMessageId] : [];
     const failedScreenDeletes: number[] = [];
     const failedPromptDeletes: number[] = [];
-    await Promise.all(
+
+    // Optimistically update session lists immediately so next() works with clean state,
+    // and run network deletions in background concurrent with route execution.
+    ctx.session.uiMessageIds = [...preservedIds];
+    ctx.session.promptMessageIds = [];
+
+    const cleanupPromise = Promise.all(
       cleanupCandidates
         .filter(
           (messageId) =>
@@ -150,8 +156,6 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
           if (promptIds.includes(messageId)) failedPromptDeletes.push(messageId);
         })
     );
-    ctx.session.uiMessageIds = [...new Set([...preservedIds, ...failedScreenDeletes])].slice(-20);
-    ctx.session.promptMessageIds = [...new Set(failedPromptDeletes)].slice(-20);
 
     // Deleting the user's incoming message is independent from route logic and
     // does not mutate tracked session state. Start it now, but do not make the
@@ -165,7 +169,16 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
       ...(ctx.session.promptMessageIds ?? []),
     ]);
     await uiTracking.run({ chatId: ctx.chat.id, session: ctx.session }, async () => await next());
-    await incomingMessageCleanup;
+    await Promise.allSettled([cleanupPromise, incomingMessageCleanup]);
+
+    if (failedScreenDeletes.length > 0 || failedPromptDeletes.length > 0) {
+      ctx.session.uiMessageIds = [
+        ...new Set([...(ctx.session.uiMessageIds ?? []), ...failedScreenDeletes]),
+      ].slice(-20);
+      ctx.session.promptMessageIds = [
+        ...new Set([...(ctx.session.promptMessageIds ?? []), ...failedPromptDeletes]),
+      ].slice(-20);
+    }
 
     const sentNewScreen = [
       ...(ctx.session.uiMessageIds ?? []),

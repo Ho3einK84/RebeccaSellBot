@@ -71,6 +71,11 @@ export type {
 
 export class WalletService {
   private readonly purchaseSaga: WalletPurchaseSaga;
+  private readonly userCache = new Map<
+    number,
+    { user: typeof users.$inferSelect; expiresAt: number }
+  >();
+  private readonly USER_CACHE_TTL_MS = 60_000; // 60 seconds
 
   constructor(
     panels: RebeccaPanelRegistry | RebeccaService,
@@ -85,6 +90,26 @@ export class WalletService {
       isRebeccaPanelRegistryAccess(panels)
     );
   }
+
+  public invalidateUserCache(telegramId?: number): void {
+    if (telegramId !== undefined) {
+      this.userCache.delete(telegramId);
+    } else {
+      this.userCache.clear();
+    }
+  }
+
+  private setUserCache(telegramId: number, user: typeof users.$inferSelect): void {
+    this.userCache.set(telegramId, {
+      user,
+      expiresAt: Date.now() + this.USER_CACHE_TTL_MS,
+    });
+    if (this.userCache.size > 5_000) {
+      const oldest = this.userCache.keys().next().value as number | undefined;
+      if (oldest !== undefined) this.userCache.delete(oldest);
+    }
+  }
+
   async getOrCreateUser(
     telegramId: number,
     username?: string,
@@ -94,6 +119,24 @@ export class WalletService {
     locale?: SupportedLocale,
     registrationSource = 'telegram'
   ) {
+    const now = Date.now();
+    const cached = this.userCache.get(telegramId);
+    if (cached && now < cached.expiresAt) {
+      const current = cached.user;
+      const nextUsername = username ?? null;
+      const nextFirstName = firstName ?? null;
+      const nextLastName = lastName ?? null;
+      const profileChanged =
+        current.username !== nextUsername ||
+        current.firstName !== nextFirstName ||
+        current.lastName !== nextLastName ||
+        Boolean(locale && !current.localeManual && current.locale !== locale);
+
+      if (!profileChanged) {
+        return current;
+      }
+    }
+
     const db = getDb();
     const existing = await db.select().from(users).where(eq(users.telegramId, telegramId)).limit(1);
 
@@ -108,12 +151,12 @@ export class WalletService {
         current.lastName !== nextLastName ||
         Boolean(locale && !current.localeManual && current.locale !== locale);
 
-      const now = Date.now();
       const lastSeenMs = current.lastSeenAt ? new Date(current.lastSeenAt).getTime() : 0;
       const LAST_SEEN_THROTTLE_MS = 10 * 60 * 1000; // 10 minutes
       const shouldUpdateLastSeen = now - lastSeenMs >= LAST_SEEN_THROTTLE_MS;
 
       if (!profileChanged && !shouldUpdateLastSeen) {
+        this.setUserCache(telegramId, current);
         return current;
       }
 
@@ -138,7 +181,9 @@ export class WalletService {
         .set(changes)
         .where(eq(users.telegramId, telegramId))
         .returning();
-      return updated ?? current;
+      const finalUser = updated ?? current;
+      this.setUserCache(telegramId, finalUser);
+      return finalUser;
     }
 
     // The full stored code—not a Telegram ID parsed out of the payload—is
@@ -168,14 +213,20 @@ export class WalletService {
         })
         .onConflictDoNothing()
         .returning();
-      if (newUser) return newUser;
+      if (newUser) {
+        this.setUserCache(telegramId, newUser);
+        return newUser;
+      }
 
       const [winner] = await db
         .select()
         .from(users)
         .where(eq(users.telegramId, telegramId))
         .limit(1);
-      if (winner) return winner;
+      if (winner) {
+        this.setUserCache(telegramId, winner);
+        return winner;
+      }
     }
 
     throw new Error('USER_CREATE_CONFLICT');
