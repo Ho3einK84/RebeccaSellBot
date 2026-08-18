@@ -32,6 +32,7 @@ export {
   buildPackageManagerKeyboard,
   generatePackageId,
   managePackages,
+  managePackagePolicies,
 } from './settings/packageManager.js';
 export {
   isValidNamingTemplate,

@@ -1,11 +1,13 @@
 import crypto from 'node:crypto';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
-import { purchaseCheckouts } from '../../infra/schema.js';
+import { purchaseCheckouts, purchaseIntents } from '../../infra/schema.js';
+import { logger } from '../../infra/logger.js';
 import type { PackageOption } from './PricingService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 
 const CHECKOUT_TTL_MS = 15 * 60 * 1000;
+export const PROCESSING_CHECKOUT_MIN_AGE_MS = 5 * 60 * 1000;
 
 export class PurchaseCheckoutUnavailableError extends Error {
   constructor(readonly reason: 'missing' | 'expired' | 'consumed' | 'owner_mismatch') {
@@ -59,20 +61,11 @@ export class PurchaseCheckoutService {
   }
 
   async claim(checkoutId: string, telegramId: number): Promise<PurchaseCheckout> {
-    const now = new Date();
-    const [claimed] = await getDb()
-      .update(purchaseCheckouts)
-      .set({ status: 'processing', claimedAt: now, updatedAt: now })
-      .where(
-        sql`${purchaseCheckouts.id} = ${checkoutId}
-          AND ${purchaseCheckouts.telegramId} = ${telegramId}
-          AND ${purchaseCheckouts.status} = 'pending'
-          AND ${purchaseCheckouts.expiresAt} > ${now}`
-      )
-      .returning();
+    let now = new Date();
+    const claimed = await this.claimPending(checkoutId, telegramId, now);
     if (claimed) return claimed;
 
-    const [existing] = await getDb()
+    let [existing] = await getDb()
       .select()
       .from(purchaseCheckouts)
       .where(eq(purchaseCheckouts.id, checkoutId))
@@ -81,6 +74,22 @@ export class PurchaseCheckoutService {
     if (existing.telegramId !== telegramId) {
       throw new PurchaseCheckoutUnavailableError('owner_mismatch');
     }
+
+    if (existing.status === 'processing' && isProcessingCheckoutStale(existing, now)) {
+      await this.reconcileProcessingCheckout(existing.id, now);
+      [existing] = await getDb()
+        .select()
+        .from(purchaseCheckouts)
+        .where(eq(purchaseCheckouts.id, checkoutId))
+        .limit(1);
+      if (!existing) throw new PurchaseCheckoutUnavailableError('missing');
+      now = new Date();
+      if (existing.status === 'pending') {
+        const reclaimed = await this.claimPending(checkoutId, telegramId, now);
+        if (reclaimed) return reclaimed;
+      }
+    }
+
     if (existing.status === 'pending' && existing.expiresAt <= now) {
       await getDb()
         .update(purchaseCheckouts)
@@ -94,7 +103,109 @@ export class PurchaseCheckoutService {
         );
       throw new PurchaseCheckoutUnavailableError('expired');
     }
+    if (existing.status === 'expired') throw new PurchaseCheckoutUnavailableError('expired');
     throw new PurchaseCheckoutUnavailableError('consumed');
+  }
+
+  /**
+   * Recover checkout rows left in `processing` by a process crash. A checkout
+   * is never blindly re-opened: its durable purchase_intent is authoritative.
+   * Only a stale checkout with no intent can become pending again.
+   */
+  async reconcileStaleProcessing(limit = 100): Promise<number> {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - PROCESSING_CHECKOUT_MIN_AGE_MS);
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.trunc(limit), 500)) : 100;
+    const stale = await getDb()
+      .select({ id: purchaseCheckouts.id })
+      .from(purchaseCheckouts)
+      .where(
+        and(
+          eq(purchaseCheckouts.status, 'processing'),
+          or(isNull(purchaseCheckouts.claimedAt), lt(purchaseCheckouts.claimedAt, cutoff))
+        )
+      )
+      .limit(safeLimit);
+
+    let recovered = 0;
+    for (const checkout of stale) {
+      if (await this.reconcileProcessingCheckout(checkout.id, now)) recovered += 1;
+    }
+    return recovered;
+  }
+
+  private async claimPending(
+    checkoutId: string,
+    telegramId: number,
+    now: Date
+  ): Promise<PurchaseCheckout | undefined> {
+    const [claimed] = await getDb()
+      .update(purchaseCheckouts)
+      .set({ status: 'processing', claimedAt: now, updatedAt: now })
+      .where(
+        sql`${purchaseCheckouts.id} = ${checkoutId}
+          AND ${purchaseCheckouts.telegramId} = ${telegramId}
+          AND ${purchaseCheckouts.status} = 'pending'
+          AND ${purchaseCheckouts.expiresAt} > ${now}`
+      )
+      .returning();
+    return claimed;
+  }
+
+  private async reconcileProcessingCheckout(checkoutId: string, now: Date): Promise<boolean> {
+    return getDb().transaction(async (tx) => {
+      const [checkout] = await tx
+        .select()
+        .from(purchaseCheckouts)
+        .where(eq(purchaseCheckouts.id, checkoutId))
+        .for('update')
+        .limit(1);
+      if (
+        !checkout ||
+        checkout.status !== 'processing' ||
+        !isProcessingCheckoutStale(checkout, now)
+      ) {
+        return false;
+      }
+
+      const [intent] = await tx
+        .select({ status: purchaseIntents.status })
+        .from(purchaseIntents)
+        .where(eq(purchaseIntents.checkoutId, checkoutId))
+        .limit(1);
+
+      let status: 'pending' | 'completed' | 'failed' | 'expired' | undefined;
+      let claimedAt: Date | null | undefined;
+      if (!intent) {
+        status = checkout.expiresAt > now ? 'pending' : 'expired';
+        if (status === 'pending') claimedAt = null;
+      } else if (intent.status === 'completed' || intent.status === 'refunded') {
+        status = 'completed';
+      } else if (intent.status === 'failed') {
+        status = 'failed';
+      }
+
+      // Pending/reconciliation_required purchase intents may already have
+      // touched the panel. Leave their checkout consumed until the purchase
+      // reconciler proves a terminal outcome.
+      if (!status) return false;
+
+      const [updated] = await tx
+        .update(purchaseCheckouts)
+        .set({
+          status,
+          ...(claimedAt !== undefined ? { claimedAt } : {}),
+          updatedAt: now,
+        })
+        .where(
+          and(eq(purchaseCheckouts.id, checkoutId), eq(purchaseCheckouts.status, 'processing'))
+        )
+        .returning({ id: purchaseCheckouts.id });
+      if (!updated) return false;
+
+      logger.info({ checkoutId, status }, 'Recovered stale purchase checkout');
+      return true;
+    });
   }
 
   async complete(checkoutId: string): Promise<void> {
@@ -110,6 +221,11 @@ export class PurchaseCheckoutService {
       .set({ status: 'failed', updatedAt: new Date() })
       .where(and(eq(purchaseCheckouts.id, checkoutId), eq(purchaseCheckouts.status, 'processing')));
   }
+}
+
+function isProcessingCheckoutStale(checkout: PurchaseCheckout, now: Date): boolean {
+  if (!checkout.claimedAt) return true;
+  return checkout.claimedAt.getTime() <= now.getTime() - PROCESSING_CHECKOUT_MIN_AGE_MS;
 }
 
 function assertCheckoutInput(

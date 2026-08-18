@@ -174,7 +174,7 @@ export class ReferralService {
             )
             .orderBy(asc(walletTransactions.createdAt), asc(walletTransactions.id))
             .limit(1);
-          if (firstPurchase?.intentId) {
+          if (firstPurchase?.intentId === intentId) {
             referrerId = user.referrerId;
             referralBonus = asPositiveSafeInteger(
               this.translationService.getSettingNum('referral_bonus_toman', 10000)

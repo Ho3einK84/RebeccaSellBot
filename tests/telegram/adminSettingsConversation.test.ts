@@ -60,6 +60,12 @@ function createHarness(
       const value = settings.get(key);
       return value === undefined ? fallback : value === 'true';
     }),
+    getSettingNum: vi.fn((key: string, fallback = 0) => {
+      const value = settings.get(key);
+      if (value === undefined || value.trim() === '') return fallback;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }),
     updateSetting,
   };
   const services = {
@@ -375,6 +381,37 @@ describe('admin package manager', () => {
     expect(harness.updateSetting).toHaveBeenCalledOnce();
     const persisted = JSON.parse(harness.updateSetting.mock.calls[0]![1]!) as PackageOption[];
     expect(persisted.map((pkg) => pkg.id)).toEqual(['second', 'starter']);
+  });
+
+  it('opens package policies, toggles display mode, edits a rule, and returns to packages', async () => {
+    const packages = [starterPackage()];
+    const harness = createHarness(
+      {
+        packages_json: JSON.stringify(packages),
+        package_display_mode: 'specs',
+        low_traffic_threshold_gb: '2',
+        expiry_warning_days: '3',
+        refund_window_hours: '0',
+      },
+      [
+        { callback: 'pkg-settings' },
+        { callback: 'pp:toggle:mode' },
+        { callback: 'pp:edit:low_traffic_threshold_gb' },
+        { text: '۵' },
+        { callback: 'set-return:pricing' },
+        { callback: 'pp:back' },
+        { callback: 'pkg-back' },
+      ],
+      { packages }
+    );
+
+    await expect(managePackages(harness.conversation, harness.ctx)).resolves.toBe('back');
+
+    expect(harness.updateSetting).toHaveBeenCalledWith('package_display_mode', 'name');
+    expect(harness.updateSetting).toHaveBeenCalledWith('low_traffic_threshold_gb', '5');
+    expect(harness.settings.get('package_display_mode')).toBe('name');
+    expect(harness.settings.get('low_traffic_threshold_gb')).toBe('5');
+    expect(harness.remaining).toHaveLength(0);
   });
 
   it('generates stable unique IDs and keeps rendered callback data within Telegram limits', () => {

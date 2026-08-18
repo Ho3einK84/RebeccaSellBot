@@ -101,9 +101,9 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
       try {
         const user = await services.walletService.getOrCreateUser(
           ctx.from.id,
-          ctx.from.username,
-          ctx.from.first_name,
-          ctx.from.last_name,
+          ctx.from.username ?? null,
+          ctx.from.first_name ?? null,
+          ctx.from.last_name ?? null,
           undefined,
           observedLocale,
           'telegram_interaction'

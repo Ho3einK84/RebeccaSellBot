@@ -5,11 +5,12 @@ set -Eeuo pipefail
 # always loads the selected instance's .env for Compose interpolation.
 
 readonly BASE_PATH="/opt/RebeccaSellBot"
+readonly BACKUP_FORMAT_VERSION="1"
 
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
 show_help() {
-  cat <<'EOF'
+  cat <<'HELP'
 rsbot — RebeccaSellBot multi-instance manager
 
 Usage:
@@ -23,10 +24,10 @@ Commands:
   status             Show container status
   logs [-f]          Show logs (use -f to follow)
   update             Pull, rebuild, run Drizzle migrations, and start
-  backup             Create a compressed pg_dump backup
-  restore <file>     Restore a pg_dump custom-format backup
+  backup             Create a complete compressed backup (database + .env)
+  restore <file>     Safely restore a complete backup or legacy .dump
   uninstall          Permanently remove only this instance and its volume
-EOF
+HELP
 }
 
 validate_instance() { [[ "$1" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ ]]; }
@@ -83,6 +84,7 @@ readonly COMMAND
 readonly INSTANCE_DIR="$BASE_PATH/$INSTANCE"
 readonly ENV_FILE="$INSTANCE_DIR/.env"
 readonly COMPOSE_FILE="$INSTANCE_DIR/docker-compose.yml"
+readonly BACKUP_DIR="$BASE_PATH/backups/$INSTANCE"
 
 [[ -d "$INSTANCE_DIR" ]] || die "Instance '$INSTANCE' was not found at $INSTANCE_DIR."
 [[ -f "$ENV_FILE" ]] || die "Missing instance environment file: $ENV_FILE"
@@ -106,11 +108,152 @@ wait_for_stack() {
   fi
 }
 
+env_value_from_file() {
+  local file="$1" key="$2" value
+  value="$(sed -n "s/^$key=//p" "$file" | head -n 1)"
+  [[ -n "$value" ]] || return 1
+  printf '%s' "$value"
+}
+
 env_value() {
   local key="$1" value
-  value="$(sed -n "s/^$key=//p" "$ENV_FILE" | head -n 1)"
-  [[ -n "$value" ]] || die "$key is missing from $ENV_FILE."
+  value="$(env_value_from_file "$ENV_FILE" "$key")" || die "$key is missing from $ENV_FILE."
   printf '%s' "$value"
+}
+
+validate_database_dump() {
+  local dump_file="$1"
+  [[ -s "$dump_file" ]] || return 1
+  dc exec -T db pg_restore --list < "$dump_file" >/dev/null
+}
+
+restore_database_dump() {
+  local dump_file="$1" db_user="$2" db_name="$3"
+  dc exec -T db pg_restore \
+    --single-transaction \
+    --exit-on-error \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges \
+    -U "$db_user" \
+    -d "$db_name" < "$dump_file"
+}
+
+create_backup_bundle() (
+  set -Eeuo pipefail
+  local label="${1:-backup}"
+  local db_user db_name timestamp output_file temp_dir temp_archive git_commit
+
+  db_user="$(env_value DB_USER)"
+  db_name="$(env_value DB_NAME)"
+  mkdir -p "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR" 2>/dev/null || true
+
+  timestamp="$(date -u +%Y%m%d_%H%M%S)"
+  output_file="$BACKUP_DIR/${label}_${INSTANCE}_${timestamp}.tar.gz"
+  if [[ -e "$output_file" ]]; then
+    output_file="$BACKUP_DIR/${label}_${INSTANCE}_${timestamp}_$$.tar.gz"
+  fi
+
+  temp_dir="$(mktemp -d "$BACKUP_DIR/.${label}_${INSTANCE}.${timestamp}.XXXXXX")"
+  temp_archive="$(mktemp "$BACKUP_DIR/.${label}_${INSTANCE}.${timestamp}.XXXXXX.tar.gz")"
+  cleanup() {
+    rm -rf -- "$temp_dir"
+    rm -f -- "$temp_archive"
+  }
+  trap cleanup EXIT
+
+  printf "Creating PostgreSQL snapshot for '%s'...\n" "$INSTANCE" >&2
+  wait_for_stack db >&2
+  dc exec -T db pg_dump -Fc --no-owner -U "$db_user" "$db_name" > "$temp_dir/database.dump"
+  validate_database_dump "$temp_dir/database.dump"
+
+  install -m 0600 "$ENV_FILE" "$temp_dir/.env"
+  install -m 0600 "$COMPOSE_FILE" "$temp_dir/docker-compose.yml"
+  git_commit="unknown"
+  if [[ -d "$INSTANCE_DIR/.git" ]]; then
+    git_commit="$(git -C "$INSTANCE_DIR" rev-parse --verify HEAD 2>/dev/null || printf 'unknown')"
+  fi
+  cat > "$temp_dir/manifest.txt" <<MANIFEST
+format_version=$BACKUP_FORMAT_VERSION
+instance=$INSTANCE
+created_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+git_commit=$git_commit
+contents=database.dump,.env,docker-compose.yml,manifest.txt
+MANIFEST
+  chmod 0600 "$temp_dir/database.dump" "$temp_dir/.env" "$temp_dir/docker-compose.yml" "$temp_dir/manifest.txt"
+
+  tar -C "$temp_dir" -czf "$temp_archive" database.dump .env docker-compose.yml manifest.txt
+  chmod 0600 "$temp_archive"
+  mv -- "$temp_archive" "$output_file"
+  rm -rf -- "$temp_dir"
+  trap - EXIT
+  printf '%s\n' "$output_file"
+)
+
+is_complete_backup_bundle() {
+  local backup_file="$1"
+  tar -tzf "$backup_file" >/dev/null 2>&1 || return 1
+  local entries
+  entries="$(tar -tzf "$backup_file")" || return 1
+  [[ "$(printf '%s\n' "$entries" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 4 ]] || return 1
+  for required in database.dump .env docker-compose.yml manifest.txt; do
+    [[ "$(printf '%s\n' "$entries" | grep -Fxc -- "$required")" -eq 1 ]] || return 1
+  done
+  # Refuse symlinks, directories, devices, and any other non-regular entry.
+  tar -tvzf "$backup_file" | awk '$1 !~ /^-/ { exit 1 }' || return 1
+}
+
+extract_complete_backup_bundle() {
+  local backup_file="$1" destination="$2"
+  is_complete_backup_bundle "$backup_file" || return 1
+  mkdir -p "$destination"
+  chmod 700 "$destination"
+  tar --no-same-owner --no-same-permissions -xzf "$backup_file" -C "$destination"
+  for required in database.dump .env docker-compose.yml manifest.txt; do
+    [[ -f "$destination/$required" && ! -L "$destination/$required" ]] || return 1
+  done
+  chmod 0600 "$destination/database.dump" "$destination/.env" \
+    "$destination/docker-compose.yml" "$destination/manifest.txt"
+}
+
+validate_bundle_identity() {
+  local extracted_dir="$1"
+  local manifest_instance format_version backup_instance_name
+  format_version="$(sed -n 's/^format_version=//p' "$extracted_dir/manifest.txt" | head -n 1)"
+  manifest_instance="$(sed -n 's/^instance=//p' "$extracted_dir/manifest.txt" | head -n 1)"
+  [[ "$format_version" == "$BACKUP_FORMAT_VERSION" ]] ||
+    die "Unsupported backup format version: ${format_version:-missing}."
+  [[ "$manifest_instance" == "$INSTANCE" ]] ||
+    die "Backup belongs to instance '${manifest_instance:-unknown}', not '$INSTANCE'."
+
+  backup_instance_name="$(env_value_from_file "$extracted_dir/.env" INSTANCE_NAME 2>/dev/null || true)"
+  if [[ -n "$backup_instance_name" && "$backup_instance_name" != "$INSTANCE" ]]; then
+    die "Backup .env belongs to INSTANCE_NAME '$backup_instance_name', not '$INSTANCE'."
+  fi
+}
+
+validate_bundle_database_identity() {
+  local extracted_env="$1"
+  local key current_value backup_value
+  # PostgreSQL roles and databases live in the Docker volume and are not part
+  # of pg_dump --no-owner. Restoring an environment with different DB identity
+  # would make the restored bot unable to authenticate to the existing volume.
+  for key in DB_USER DB_PASSWORD DB_NAME; do
+    current_value="$(env_value_from_file "$ENV_FILE" "$key")" || die "$key is missing from $ENV_FILE."
+    backup_value="$(env_value_from_file "$extracted_env" "$key")" ||
+      die "$key is missing from the backup .env."
+    [[ "$current_value" == "$backup_value" ]] ||
+      die "Backup $key differs from the current instance. Restore the saved .env before provisioning the database, or use a matching instance."
+  done
+}
+
+atomic_install_env() {
+  local source_env="$1" temp_env
+  temp_env="$(mktemp "$INSTANCE_DIR/.env.restore.XXXXXX")"
+  install -m 0600 "$source_env" "$temp_env"
+  mv -f -- "$temp_env" "$ENV_FILE"
 }
 
 case "$COMMAND" in
@@ -146,36 +289,89 @@ case "$COMMAND" in
     printf "Updated '%s' successfully.\n" "$INSTANCE"
     ;;
   backup)
-    db_user="$(env_value DB_USER)"
-    db_name="$(env_value DB_NAME)"
-    backup_dir="$BASE_PATH/backups/$INSTANCE"
-    mkdir -p "$backup_dir"
-    timestamp="$(date +%Y%m%d_%H%M%S)"
-    backup_file="$backup_dir/backup_${INSTANCE}_${timestamp}.dump"
-    temporary_file="$(mktemp "$backup_dir/.backup_${INSTANCE}.${timestamp}.XXXXXX")"
-    cleanup_backup() { rm -f -- "$temporary_file"; }
-    trap cleanup_backup ERR
-    printf "Creating PostgreSQL backup for '%s'...\n" "$INSTANCE"
-    dc exec -T db pg_dump -Fc --no-owner -U "$db_user" "$db_name" > "$temporary_file"
-    chmod 600 "$temporary_file"
-    mv "$temporary_file" "$backup_file"
-    trap - ERR
-    printf 'Backup created: %s\n' "$backup_file"
+    backup_file="$(create_backup_bundle backup)"
+    printf 'Complete backup created: %s\n' "$backup_file"
+    printf 'Contains PostgreSQL data and .env secrets; store this unencrypted file securely.\n'
     ;;
   restore)
     restore_file="${1:-}"
     [[ -n "$restore_file" && -r "$restore_file" ]] ||
-      die "Usage: rsbot $INSTANCE restore /path/to/backup.dump"
-    read -r -p "Restore replaces database objects for '$INSTANCE'. Type the instance name to continue: " confirmation
+      die "Usage: rsbot $INSTANCE restore /path/to/backup.tar.gz"
+    restore_file="$(realpath "$restore_file")"
+
+    restore_workspace="$(mktemp -d)"
+    rollback_workspace="$(mktemp -d)"
+    cleanup_restore_workspaces() {
+      rm -rf -- "$restore_workspace" "$rollback_workspace"
+    }
+    trap cleanup_restore_workspaces EXIT
+
+    bundle_restore=false
+    restore_dump="$restore_file"
+    if is_complete_backup_bundle "$restore_file"; then
+      bundle_restore=true
+      extract_complete_backup_bundle "$restore_file" "$restore_workspace" ||
+        die "Backup archive failed structural validation."
+      validate_bundle_identity "$restore_workspace"
+      validate_bundle_database_identity "$restore_workspace/.env"
+      restore_dump="$restore_workspace/database.dump"
+    fi
+
+    wait_for_stack db
+    printf "Validating PostgreSQL backup before making changes...\n"
+    validate_database_dump "$restore_dump" || die "PostgreSQL backup validation failed."
+
+    read -r -p "Restore replaces database objects for '$INSTANCE' and may restore its .env. Type the instance name to continue: " confirmation
     [[ "$confirmation" == "$INSTANCE" ]] || { printf 'Restore cancelled.\n'; exit 0; }
+
+    printf "Creating automatic pre-restore safety backup...\n"
+    safety_backup="$(create_backup_bundle pre_restore)"
+    extract_complete_backup_bundle "$safety_backup" "$rollback_workspace" ||
+      die "Could not prepare the automatic rollback snapshot."
+    rollback_db_user="$(env_value_from_file "$rollback_workspace/.env" DB_USER)"
+    rollback_db_name="$(env_value_from_file "$rollback_workspace/.env" DB_NAME)"
+
+    rollback_restore() {
+      local exit_code="$?"
+      trap - ERR
+      set +e
+      printf '\nRestore failed. Rolling back the database and .env from: %s\n' "$safety_backup" >&2
+      atomic_install_env "$rollback_workspace/.env"
+      dc stop bot >/dev/null 2>&1 || true
+      if restore_database_dump "$rollback_workspace/database.dump" "$rollback_db_user" "$rollback_db_name"; then
+        dc run --rm --no-deps bot npm run db:migrate >/dev/null 2>&1 || true
+        if wait_for_stack bot; then
+          printf 'Automatic rollback completed successfully.\n' >&2
+        else
+          printf 'Rollback database succeeded, but the bot did not become healthy. Inspect logs manually.\n' >&2
+        fi
+      else
+        printf 'Automatic rollback also failed. Preserve and restore the safety backup manually: %s\n' "$safety_backup" >&2
+      fi
+      exit "$exit_code"
+    }
+
+    trap rollback_restore ERR
     db_user="$(env_value DB_USER)"
     db_name="$(env_value DB_NAME)"
-    printf "Stopping bot and restoring '%s'...\n" "$INSTANCE"
+    printf "Stopping bot and restoring '%s' transactionally...\n" "$INSTANCE"
     dc stop bot
-    dc exec -T db pg_restore --clean --if-exists --no-owner --no-privileges \
-      -U "$db_user" -d "$db_name" < "$restore_file"
-    dc up -d --wait bot
+    restore_database_dump "$restore_dump" "$db_user" "$db_name"
+
+    if [[ "$bundle_restore" == true ]]; then
+      atomic_install_env "$restore_workspace/.env"
+      printf 'Restored .env from the backup bundle.\n'
+    else
+      printf 'Legacy .dump detected; current .env was preserved.\n'
+    fi
+
+    # A backup may predate the currently checked-out code. Bring its schema to
+    # the current release before allowing the bot to serve traffic again.
+    dc run --rm --no-deps bot npm run db:migrate
+    wait_for_stack bot
+    trap - ERR
     printf "Restore completed for '%s'.\n" "$INSTANCE"
+    printf 'Automatic pre-restore safety backup: %s\n' "$safety_backup"
     ;;
   uninstall)
     read -r -p "This permanently removes '$INSTANCE', its containers, and its database volume. Type the instance name to continue: " confirmation

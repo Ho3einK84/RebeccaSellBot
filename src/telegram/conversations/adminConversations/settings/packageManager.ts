@@ -1021,7 +1021,7 @@ async function manageCategories(
 
 // ── Package Settings & Display Mode Subflow ────────────────────────────────
 
-async function managePackagePolicies(
+export async function managePackagePolicies(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<PackageManagerOutcome> {
@@ -1030,59 +1030,74 @@ async function managePackagePolicies(
   let activeCtx = ctx;
 
   for (;;) {
-    const ts = ctx.services.translationService;
-    const displayMode = ts.getSetting('package_display_mode', 'specs');
-    const lowTraffic = ts.getSettingNum('low_traffic_threshold_gb', 2);
-    const expiryDays = ts.getSettingNum('expiry_warning_days', 3);
-    const refundHours = ts.getSettingNum('refund_window_hours', 0);
+    const policy = await conversation.external((outsideCtx) => {
+      if (!outsideCtx.services) return undefined;
+      const ts = outsideCtx.services.translationService;
+      return {
+        displayMode: ts.getSetting('package_display_mode', 'specs'),
+        lowTraffic: ts.getSettingNum('low_traffic_threshold_gb', 2),
+        expiryDays: ts.getSettingNum('expiry_warning_days', 3),
+        refundHours: ts.getSettingNum('refund_window_hours', 0),
+      };
+    });
+    if (!policy) return 'cancel';
 
     const modeLabel =
-      displayMode === 'name'
-        ? t(ctx, 'admin_pkg_display_mode_name')
-        : t(ctx, 'admin_pkg_display_mode_specs');
+      policy.displayMode === 'name'
+        ? t(activeCtx, 'admin_pkg_display_mode_name')
+        : t(activeCtx, 'admin_pkg_display_mode_specs');
 
     const screenText = buildScreen({
       emoji: '⚙️',
-      title: t(ctx, 'admin_sales_package_policy_title'),
-      subtitle: t(ctx, 'admin_setting_package_display_mode_desc'),
+      title: t(activeCtx, 'admin_sales_package_policy_title'),
+      subtitle: t(activeCtx, 'admin_setting_package_display_mode_desc'),
       primary: {
         emoji: '📺',
-        label: t(ctx, 'admin_setting_package_display_mode'),
+        label: t(activeCtx, 'admin_setting_package_display_mode'),
         value: modeLabel,
       },
       sections: [
         {
           emoji: '📏',
-          title: t(ctx, 'admin_setting_group_pricing'),
+          title: t(activeCtx, 'admin_setting_group_pricing'),
           fields: [
             {
-              label: t(ctx, 'admin_setting_low_traffic_threshold_gb'),
-              value: `${localizedNumber(lowTraffic, ctx)} GB`,
+              label: t(activeCtx, 'admin_setting_low_traffic_threshold_gb'),
+              value: `${localizedNumber(policy.lowTraffic, activeCtx)} GB`,
             },
             {
-              label: t(ctx, 'admin_setting_expiry_warning_days'),
-              value: `${localizedNumber(expiryDays, ctx)} ${t(ctx, 'days_unit')}`,
+              label: t(activeCtx, 'admin_setting_expiry_warning_days'),
+              value: `${localizedNumber(policy.expiryDays, activeCtx)} ${t(
+                activeCtx,
+                'days_unit'
+              )}`,
             },
             {
-              label: t(ctx, 'admin_setting_refund_window_hours'),
-              value: `${localizedNumber(refundHours, ctx)} ${t(ctx, 'hours_unit')}`,
+              label: t(activeCtx, 'admin_setting_refund_window_hours'),
+              value: `${localizedNumber(policy.refundHours, activeCtx)} ${t(
+                activeCtx,
+                'hours_unit'
+              )}`,
             },
           ],
         },
       ],
-      footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+      footer: `ℹ️ ${t(activeCtx, 'admin_home_hint')}`,
     });
 
     const keyboard = new InlineKeyboard()
-      .text(`${t(ctx, 'admin_setting_package_display_mode')}: ${modeLabel}`, 'pp:toggle:mode')
+      .text(`${t(activeCtx, 'admin_setting_package_display_mode')}: ${modeLabel}`, 'pp:toggle:mode')
       .row()
-      .text(t(ctx, 'admin_setting_low_traffic_threshold_gb'), 'pp:edit:low_traffic_threshold_gb')
+      .text(
+        t(activeCtx, 'admin_setting_low_traffic_threshold_gb'),
+        'pp:edit:low_traffic_threshold_gb'
+      )
       .row()
-      .text(t(ctx, 'admin_setting_expiry_warning_days'), 'pp:edit:expiry_warning_days')
+      .text(t(activeCtx, 'admin_setting_expiry_warning_days'), 'pp:edit:expiry_warning_days')
       .row()
-      .text(t(ctx, 'admin_setting_refund_window_hours'), 'pp:edit:refund_window_hours')
+      .text(t(activeCtx, 'admin_setting_refund_window_hours'), 'pp:edit:refund_window_hours')
       .row()
-      .text(t(ctx, 'admin_menu_back'), 'pp:back');
+      .text(t(activeCtx, 'admin_menu_back'), 'pp:back');
 
     let renderedInPlace = false;
     const messageId = activeCtx.callbackQuery?.message?.message_id;
@@ -1120,7 +1135,7 @@ async function managePackagePolicies(
     activeCtx = input.ctx;
 
     if (input.data === 'pp:toggle:mode') {
-      const nextMode = displayMode === 'name' ? 'specs' : 'name';
+      const nextMode = policy.displayMode === 'name' ? 'specs' : 'name';
       await conversation.external(async (outsideCtx) => {
         if (!outsideCtx.services) return;
         await outsideCtx.services.translationService.updateSetting(
@@ -1135,7 +1150,8 @@ async function managePackagePolicies(
       const key = input.data.slice('pp:edit:'.length);
       const definition = getSettingDefinition(key);
       if (definition) {
-        await editSetting(conversation, ctx, definition);
+        const outcome = await editSetting(conversation, activeCtx, definition);
+        if (outcome === 'cancel') return 'cancel';
       }
     }
   }

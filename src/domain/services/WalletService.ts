@@ -112,9 +112,9 @@ export class WalletService {
 
   async getOrCreateUser(
     telegramId: number,
-    username?: string,
-    firstName?: string,
-    lastName?: string,
+    username?: string | null,
+    firstName?: string | null,
+    lastName?: string | null,
     referralCode?: string,
     locale?: SupportedLocale,
     registrationSource = 'telegram'
@@ -123,9 +123,9 @@ export class WalletService {
     const cached = this.userCache.get(telegramId);
     if (cached && now < cached.expiresAt) {
       const current = cached.user;
-      const nextUsername = username ?? null;
-      const nextFirstName = firstName ?? null;
-      const nextLastName = lastName ?? null;
+      const nextUsername = username === undefined ? current.username : username;
+      const nextFirstName = firstName === undefined ? current.firstName : firstName;
+      const nextLastName = lastName === undefined ? current.lastName : lastName;
       const profileChanged =
         current.username !== nextUsername ||
         current.firstName !== nextFirstName ||
@@ -142,9 +142,9 @@ export class WalletService {
 
     if (existing.length > 0) {
       const current = existing[0]!;
-      const nextUsername = username ?? null;
-      const nextFirstName = firstName ?? null;
-      const nextLastName = lastName ?? null;
+      const nextUsername = username === undefined ? current.username : username;
+      const nextFirstName = firstName === undefined ? current.firstName : firstName;
+      const nextLastName = lastName === undefined ? current.lastName : lastName;
       const profileChanged =
         current.username !== nextUsername ||
         current.firstName !== nextFirstName ||

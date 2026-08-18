@@ -110,15 +110,26 @@ rsbot <name> status            # Inspect service health and container status
 rsbot <name> logs -f           # Stream real-time structured logs
 ```
 
-| Command                       | Description                                                          |
-| :---------------------------- | :------------------------------------------------------------------- |
-| `rsbot <name> up`             | Build images, apply SQL migrations, and start containers.            |
-| `rsbot <name> down`           | Gracefully stop containers while retaining all data volumes.         |
-| `rsbot <name> restart`        | Perform a zero-downtime service restart.                             |
-| `rsbot <name> update`         | Pull latest Git commits, migrate schema, rebuild, and relaunch.      |
-| `rsbot <name> backup`         | Generate an encrypted, compressed PostgreSQL snapshot (`0600`).      |
-| `rsbot <name> restore <file>` | Restore database from a backup file with interactive safety checks.  |
-| `rsbot <name> uninstall`      | Safely tear down containers and delete the designated instance data. |
+| Command                       | Description                                                                       |
+| :---------------------------- | :-------------------------------------------------------------------------------- |
+| `rsbot <name> up`             | Build images, apply SQL migrations, and start containers.                         |
+| `rsbot <name> down`           | Gracefully stop containers while retaining all data volumes.                      |
+| `rsbot <name> restart`        | Perform a zero-downtime service restart.                                          |
+| `rsbot <name> update`         | Pull latest Git commits, migrate schema, rebuild, and relaunch.                   |
+| `rsbot <name> backup`         | Create a compressed full backup: PostgreSQL + `.env` + Compose metadata (`0600`). |
+| `rsbot <name> restore <file>` | Validate and transactionally restore a full backup with automatic rollback.       |
+| `rsbot <name> uninstall`      | Safely tear down containers and delete the designated instance data.              |
+
+### Backup and Restore Safety
+
+`rsbot <name> backup` creates a `.tar.gz` bundle containing the PostgreSQL custom-format dump, the instance `.env`, `docker-compose.yml`, and a small manifest. The archive itself is written with permission `0600` and the database dump is validated before the bundle is finalized.
+
+> [!WARNING]
+> Backups are **compressed but not encrypted**. Because the bundle contains `.env` (including the Telegram token, database password, and panel credential encryption key), copy it only to trusted storage with appropriate access controls.
+
+Before a restore, `rsbot` validates the archive and PostgreSQL dump, verifies that the backup belongs to the selected instance, and creates a separate `pre_restore_*.tar.gz` safety backup. Database replacement runs in a single PostgreSQL transaction. The saved `.env` is installed atomically only after the database restore succeeds, current migrations are applied, and the bot must become healthy. If any restore step fails, `rsbot` attempts to restore both the previous database and previous `.env` automatically. Legacy PostgreSQL `.dump` files remain supported, but they do not replace the current `.env`.
+
+For safety, restoring a full bundle into an already-provisioned instance requires `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in the saved `.env` to match the existing database volume. For disaster recovery onto a fresh server, provision the instance with the saved `.env` values first, then restore the bundle.
 
 ---
 

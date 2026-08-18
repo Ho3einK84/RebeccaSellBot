@@ -346,9 +346,9 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       if (!telegramId || !ctx.services) return;
       const u = await ctx.services.walletService.getOrCreateUser(
         telegramId,
-        undefined,
-        undefined,
-        undefined,
+        ctx.from?.username ?? null,
+        ctx.from?.first_name ?? null,
+        ctx.from?.last_name ?? null,
         undefined,
         observedContextLocale(ctx)
       );

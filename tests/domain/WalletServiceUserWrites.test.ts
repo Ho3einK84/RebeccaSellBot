@@ -74,6 +74,46 @@ describe('P2 — Reduce unnecessary user DB writes in WalletService.getOrCreateU
     expect(dbMock.update).not.toHaveBeenCalled();
   });
 
+  it('preserves stored profile fields when a caller omits them', async () => {
+    const recentLastSeen = new Date(Date.now() - 2 * 60 * 1000);
+    const existingUser = {
+      telegramId: 12345,
+      username: 'alice',
+      firstName: 'Alice',
+      lastName: 'Example',
+      locale: 'fa',
+      localeManual: false,
+      lastSeenAt: recentLastSeen,
+      balance: 10000,
+    };
+    selectQueryMock.limit.mockResolvedValueOnce([existingUser]);
+
+    const result = await walletService.getOrCreateUser(12345);
+
+    expect(result).toEqual(existingUser);
+    expect(dbMock.update).not.toHaveBeenCalled();
+  });
+
+  it('clears an optional Telegram profile field when null is passed explicitly', async () => {
+    const recentLastSeen = new Date(Date.now() - 2 * 60 * 1000);
+    const existingUser = {
+      telegramId: 12345,
+      username: 'alice',
+      firstName: 'Alice',
+      lastName: null,
+      locale: 'fa',
+      localeManual: false,
+      lastSeenAt: recentLastSeen,
+      balance: 10000,
+    };
+    selectQueryMock.limit.mockResolvedValueOnce([existingUser]);
+    updateQueryMock.returning.mockResolvedValueOnce([{ ...existingUser, username: null }]);
+
+    await walletService.getOrCreateUser(12345, null, 'Alice', null, undefined, 'fa');
+
+    expect(updateQueryMock.set).toHaveBeenCalledWith(expect.objectContaining({ username: null }));
+  });
+
   it('performs database update when profile fields change even within 10 minutes', async () => {
     const recentLastSeen = new Date(Date.now() - 2 * 60 * 1000);
     const existingUser = {

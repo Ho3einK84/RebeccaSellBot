@@ -144,6 +144,7 @@ async function main() {
     trialService,
     refundService,
     configReconciliationService,
+    purchaseCheckoutService,
   });
   startTrialCleanupCron(panelRegistry, configService);
   startAutoRenewalCron(panelRegistry, walletService, pricingService, translationService, bot.api);

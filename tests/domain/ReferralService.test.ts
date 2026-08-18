@@ -154,6 +154,39 @@ describe('ReferralService idempotency, snapshots and refund protection', () => {
     );
   });
 
+  it('does not award a legacy referral bonus when the completed intent was not the first purchase', async () => {
+    const service = createService({ referral_bonus_toman: 15_000, cashback_percent: 0 });
+    const internals = service as unknown as {
+      creditWalletInTransaction: (...args: unknown[]) => Promise<boolean>;
+    };
+    const credit = vi.spyOn(internals, 'creditWalletInTransaction').mockResolvedValue(true);
+    getDbMock.mockReturnValue(
+      databaseWithSelectResults([
+        [
+          {
+            id: 'pi_later_purchase',
+            status: 'completed',
+            refundedAt: null,
+            referrerTelegramId: null,
+            referralBonusAmount: null,
+            cashbackAmount: null,
+            cashbackPercent: null,
+          },
+        ],
+        [],
+        [{ referrerId: 99 }],
+        [{ intentId: 'pi_first_purchase' }],
+      ]) as never
+    );
+
+    await service.processCompletedPurchase(10, 80_000, 'pi_later_purchase');
+
+    expect(credit).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: 'referral_bonus' })
+    );
+  });
+
   it('never credits bonus if purchase intent is marked refunded', async () => {
     const service = createService();
     const internals = service as unknown as {

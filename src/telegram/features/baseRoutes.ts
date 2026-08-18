@@ -42,9 +42,9 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
 
     await services.walletService.getOrCreateUser(
       telegramId,
-      ctx.from?.username,
-      ctx.from?.first_name,
-      ctx.from?.last_name,
+      ctx.from?.username ?? null,
+      ctx.from?.first_name ?? null,
+      ctx.from?.last_name ?? null,
       referralCode,
       observedContextLocale(ctx),
       referralCode ? 'telegram_referral_start' : 'telegram_start'
@@ -97,9 +97,9 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       // first so the explicit preference is durable in that case as well.
       await services.walletService.getOrCreateUser(
         telegramId,
-        ctx.from.username,
-        ctx.from.first_name,
-        ctx.from.last_name,
+        ctx.from.username ?? null,
+        ctx.from.first_name ?? null,
+        ctx.from.last_name ?? null,
         undefined,
         locale
       );

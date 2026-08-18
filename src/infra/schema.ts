@@ -421,6 +421,9 @@ export const purchaseCheckouts = pgTable(
     index('purchase_checkouts_expiry_idx')
       .on(table.expiresAt)
       .where(sql`${table.status} = 'pending'`),
+    index('purchase_checkouts_processing_claimed_idx')
+      .on(table.claimedAt)
+      .where(sql`${table.status} = 'processing'`),
   ]
 );
 

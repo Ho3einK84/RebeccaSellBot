@@ -29,6 +29,13 @@
       "when": 1786900000000,
       "tag": "0003_add_package_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787070000000,
+      "tag": "0004_purchase_checkout_recovery_index",
+      "breakpoints": true
     }
   ]
 }

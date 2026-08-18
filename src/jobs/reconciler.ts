@@ -32,6 +32,7 @@ import type { ReferralService } from '../domain/services/ReferralService.js';
 import type { TrialService } from '../domain/services/TrialService.js';
 import type { RefundService } from '../domain/services/RefundService.js';
 import type { ConfigReconciliationService } from '../domain/services/ConfigReconciliationService.js';
+import type { PurchaseCheckoutService } from '../domain/services/PurchaseCheckoutService.js';
 import type { RebeccaPanelRegistry } from '../domain/services/RebeccaPanelRegistry.js';
 import {
   getRebeccaService,
@@ -58,6 +59,7 @@ export interface ReconciliationServices {
   trialService?: TrialService;
   refundService?: RefundService;
   configReconciliationService?: ConfigReconciliationService;
+  purchaseCheckoutService?: PurchaseCheckoutService;
 }
 
 export async function reconcilePendingIntents(
@@ -630,6 +632,9 @@ export function startReconciliationCron(
     try {
       await jobRunner.run('reconciliation', async () => {
         await reconcilePendingIntents(panels, services);
+        if (services.purchaseCheckoutService) {
+          await services.purchaseCheckoutService.reconcileStaleProcessing();
+        }
         await syncSubscriptionStatuses(panels);
         if (services.refundService) await services.refundService.reconcilePendingRefunds();
         if (
