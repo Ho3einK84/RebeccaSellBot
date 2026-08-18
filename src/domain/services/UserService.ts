@@ -195,10 +195,14 @@ export class UserService {
   /** Persist an explicit language choice from the bot's language menu. */
   async updateLocale(telegramId: number, locale: UserLocale): Promise<void> {
     const db = getDb();
-    await db
+    const result = await db
       .update(users)
       .set({ locale, localeManual: true, updatedAt: new Date() })
-      .where(eq(users.telegramId, telegramId));
+      .where(eq(users.telegramId, telegramId))
+      .returning({ telegramId: users.telegramId });
+    if (result.length > 0) {
+      this.notifyInvalidation(telegramId);
+    }
   }
 
   /**
@@ -207,7 +211,7 @@ export class UserService {
    */
   async updateObservedLocale(telegramId: number, locale: UserLocale): Promise<void> {
     const db = getDb();
-    await db
+    const result = await db
       .update(users)
       .set({ locale, updatedAt: new Date() })
       .where(
@@ -216,7 +220,11 @@ export class UserService {
           eq(users.localeManual, false),
           ne(users.locale, locale)
         )
-      );
+      )
+      .returning({ telegramId: users.telegramId });
+    if (result.length > 0) {
+      this.notifyInvalidation(telegramId);
+    }
   }
 
   /** Returns a stored locale when the Telegram account has been seen by the bot. */

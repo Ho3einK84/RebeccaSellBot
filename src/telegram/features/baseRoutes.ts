@@ -104,16 +104,13 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
         locale
       );
       await services.userService.updateLocale(telegramId, locale);
+      services.walletService.invalidateUserCache(telegramId);
       ctx.userLocale = locale;
       const dashboardText = await renderHomeDashboard(ctx);
-      if (ctx.callbackQuery?.message) {
-        await ctx.editMessageText(dashboardText, {
-          parse_mode: 'Markdown',
-          reply_markup: mainMenu,
-        });
-      } else {
-        await ctx.reply(dashboardText, { parse_mode: 'Markdown', reply_markup: mainMenu });
-      }
+      await renderUiScreen(ctx, dashboardText, {
+        parse_mode: 'Markdown',
+        reply_markup: mainMenu,
+      });
     } catch (err) {
       logger.error(
         { err, telegramId, locale },

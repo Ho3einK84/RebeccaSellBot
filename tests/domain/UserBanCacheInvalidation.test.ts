@@ -31,4 +31,46 @@ describe('UserBanCacheInvalidation', () => {
 
     expect(hook).toHaveBeenCalledWith(123456789);
   });
+
+  it('triggers registered invalidation hooks immediately on updateLocale', async () => {
+    const mockDb = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(() => ({
+            returning: vi.fn(() => Promise.resolve([{ telegramId: 123456789 }])),
+          })),
+        })),
+      })),
+    };
+    vi.mocked(getDb).mockReturnValue(mockDb as any);
+
+    const userService = new UserService();
+    const hook = vi.fn();
+    userService.registerInvalidationHook(hook);
+
+    await userService.updateLocale(123456789, 'en');
+
+    expect(hook).toHaveBeenCalledWith(123456789);
+  });
+
+  it('triggers registered invalidation hooks on updateObservedLocale when changed', async () => {
+    const mockDb = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(() => ({
+            returning: vi.fn(() => Promise.resolve([{ telegramId: 123456789 }])),
+          })),
+        })),
+      })),
+    };
+    vi.mocked(getDb).mockReturnValue(mockDb as any);
+
+    const userService = new UserService();
+    const hook = vi.fn();
+    userService.registerInvalidationHook(hook);
+
+    await userService.updateObservedLocale(123456789, 'en');
+
+    expect(hook).toHaveBeenCalledWith(123456789);
+  });
 });
