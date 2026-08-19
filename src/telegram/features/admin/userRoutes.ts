@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
-import { backKeyboard, buildEmptyState, buildScreen, renderUiScreen } from '../../ui.js';
+import { backKeyboard, buildEmptyState, buildScreen, renderScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
@@ -18,7 +18,7 @@ export async function renderUserListPage(ctx: MenuContext, requestedPage = 1): P
     await renderUserScreen(
       ctx,
       buildEmptyState('📭', t(ctx, 'admin_users_list_title'), t(ctx, 'admin_user_not_found')),
-      new InlineKeyboard().text(t(ctx, 'menu_back'), 'nav:admin'),
+      new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
       'Markdown'
     );
     return;
@@ -55,7 +55,7 @@ export async function renderUserListPage(ctx: MenuContext, requestedPage = 1): P
   keyboard
     .text(t(ctx, 'admin_user_search_button'), 'admin:users:search')
     .row()
-    .text(t(ctx, 'menu_back'), 'nav:admin');
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
   await renderUserScreen(
     ctx,
     buildScreen({
@@ -291,7 +291,9 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
             remainingStr = t(ctx, 'unlimited');
           } else if (traffic.remainingBytes != null) {
             const gb = Number((traffic.remainingBytes / 1024 ** 3).toFixed(2));
-            remainingStr = `${localizedNumber(gb, ctx)} ${t(ctx, 'traffic_unit_gb')}${traffic.isCached ? ' (cached)' : ''}`;
+            remainingStr = `${localizedNumber(gb, ctx)} ${t(ctx, 'traffic_unit_gb')}${
+              traffic.isCached ? ` · ${t(ctx, 'cached_data_label')}` : ''
+            }`;
           } else {
             remainingStr = t(ctx, 'traffic_unavailable');
           }
@@ -637,7 +639,7 @@ async function renderUserScreen(
   keyboard: InlineKeyboard,
   parseMode?: 'Markdown'
 ): Promise<void> {
-  await renderUiScreen(ctx, text, {
+  await renderScreen(ctx, text, {
     ...(parseMode ? { parse_mode: parseMode } : {}),
     reply_markup: keyboard,
   });

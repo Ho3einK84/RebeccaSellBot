@@ -5,7 +5,7 @@ import {
   buildEmptyState,
   buildScreen,
   buildStatusBadge,
-  renderUiScreen,
+  renderScreen,
   type StatusType,
 } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
@@ -28,7 +28,7 @@ export async function renderBroadcastStatus(
         t(ctx, 'admin_broadcast_status_title'),
         t(ctx, 'admin_broadcast_job_missing')
       ),
-      new InlineKeyboard().text(t(ctx, 'menu_back'), 'nav:admin')
+      new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin')
     );
     return;
   }
@@ -48,7 +48,7 @@ export async function renderBroadcastStatus(
       callbackData('admin', 'broadcast', 'status', job.id)
     )
     .row()
-    .text(t(ctx, 'menu_back'), 'nav:admin');
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
   await renderBroadcastScreen(
     ctx,
     buildScreen({
@@ -145,5 +145,5 @@ async function renderBroadcastScreen(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  await renderUiScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

@@ -22,7 +22,7 @@ import {
   buildScreen,
   forgetUiMessage,
   rememberArtifactMessage,
-  renderUiScreen,
+  renderScreen,
   safelyDeleteMessage,
 } from '../ui.js';
 
@@ -56,7 +56,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
         true
       );
       if (languageSelectionEnabled) {
-        await ctx.reply(t(ctx, 'onboarding_welcome'), {
+        await renderScreen(ctx, t(ctx, 'onboarding_welcome'), {
           parse_mode: 'Markdown',
           reply_markup: languageKeyboard(ctx, 'main'),
         });
@@ -65,7 +65,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     }
 
     const dashboardText = await renderHomeDashboard(ctx);
-    await ctx.reply(dashboardText, {
+    await renderScreen(ctx, dashboardText, {
       parse_mode: 'Markdown',
       reply_markup: mainMenu,
     });
@@ -75,13 +75,14 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.command('admin', async (ctx) => {
     const telegramId = ctx.from?.id;
     if (!telegramId || !services.isAdmin(telegramId)) {
-      await ctx.reply(
+      await renderScreen(
+        ctx,
         buildEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
         { parse_mode: 'Markdown', reply_markup: mainMenu }
       );
       return;
     }
-    await ctx.reply(await renderAdminHome(ctx), {
+    await renderScreen(ctx, await renderAdminHome(ctx), {
       parse_mode: 'Markdown',
       reply_markup: adminMenu,
     });
@@ -107,7 +108,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       services.walletService.invalidateUserCache(telegramId);
       ctx.userLocale = locale;
       const dashboardText = await renderHomeDashboard(ctx);
-      await renderUiScreen(ctx, dashboardText, {
+      await renderScreen(ctx, dashboardText, {
         parse_mode: 'Markdown',
         reply_markup: mainMenu,
       });
@@ -116,7 +117,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
         { err, telegramId, locale },
         'Failed to save selected Telegram language preference'
       );
-      await renderUiScreen(
+      await renderScreen(
         ctx,
         buildEmptyState('⚠️', t(ctx, 'language_selection_title'), t(ctx, 'language_update_failed')),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
@@ -134,7 +135,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery();
     if (showAdmin && !services.isAdmin(telegramId)) {
-      await renderUiScreen(
+      await renderScreen(
         ctx,
         buildEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
         { parse_mode: 'Markdown', reply_markup: mainMenu }
@@ -144,23 +145,23 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     if (requested === 'admin:sales') {
       await renderSalesMenu(ctx);
     } else if (showAdmin) {
-      await renderUiScreen(ctx, await renderAdminHome(ctx), {
+      await renderScreen(ctx, await renderAdminHome(ctx), {
         parse_mode: 'Markdown',
         reply_markup: adminMenu,
       });
     } else if (requested === 'wallet') {
-      await renderUiScreen(ctx, await renderWalletDashboard(ctx), {
+      await renderScreen(ctx, await renderWalletDashboard(ctx), {
         parse_mode: 'Markdown',
         reply_markup: walletMenu,
       });
     } else if (requested === 'shop') {
-      await renderUiScreen(ctx, await renderShopMenuText(ctx), {
+      await renderScreen(ctx, await renderShopMenuText(ctx), {
         parse_mode: 'Markdown',
         reply_markup: shopMenu,
       });
     } else {
       const dashboardText = await renderHomeDashboard(ctx);
-      await renderUiScreen(ctx, dashboardText, {
+      await renderScreen(ctx, dashboardText, {
         parse_mode: 'Markdown',
         reply_markup: mainMenu,
       });
@@ -220,7 +221,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     }
 
     if (!result.success) {
-      await renderUiScreen(
+      await renderScreen(
         ctx,
         buildEmptyState('⚠️', t(ctx, 'trial_preview_heading'), t(ctx, result.messageKey)),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
@@ -267,7 +268,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   // live shop keyboard without discarding an active promo selection.
   bot.callbackQuery('shop:open', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await renderUiScreen(ctx, await renderShopMenuText(ctx), {
+    await renderScreen(ctx, await renderShopMenuText(ctx), {
       parse_mode: 'Markdown',
       reply_markup: shopMenu,
     });
@@ -277,7 +278,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.callbackQuery('shop:clear_promo', async (ctx) => {
     delete ctx.session.pendingPromo;
     await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable') });
-    await renderUiScreen(ctx, await renderShopMenuText(ctx), {
+    await renderScreen(ctx, await renderShopMenuText(ctx), {
       parse_mode: 'Markdown',
       reply_markup: shopMenu,
     });
@@ -304,7 +305,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     ctx.session.adminPanelDraft = undefined;
     delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
-    await renderUiScreen(
+    await renderScreen(
       ctx,
       buildEmptyState('↩️', t(ctx, 'operation_cancelled'), t(ctx, 'operation_cancelled')),
       { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }

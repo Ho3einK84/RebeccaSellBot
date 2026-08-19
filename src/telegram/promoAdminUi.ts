@@ -2,7 +2,7 @@ import { InlineKeyboard } from 'grammy';
 import type { MenuContext } from './types.js';
 import { callbackData } from './callbackData.js';
 import { localizedDate, localizedNumber, t } from './locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge, renderUiScreen } from './ui.js';
+import { buildEmptyState, buildScreen, buildStatusBadge, renderScreen } from './ui.js';
 
 const PROMO_PAGE_SIZE = 8;
 
@@ -16,7 +16,7 @@ export async function showPromoCenter(ctx: MenuContext, requestedPage = 1): Prom
       new InlineKeyboard()
         .text(t(ctx, 'admin_promo_create_button'), callbackData('promo', 'create'))
         .row()
-        .text(t(ctx, 'menu_back'), 'nav:admin:sales'),
+        .text(t(ctx, 'admin_menu_back_to_sales'), 'nav:admin:sales'),
       'Markdown'
     );
     return;
@@ -57,7 +57,7 @@ export async function showPromoCenter(ctx: MenuContext, requestedPage = 1): Prom
     .text(t(ctx, 'admin_promo_search_button'), callbackData('promo', 'search'))
     .text(t(ctx, 'admin_promo_create_button'), callbackData('promo', 'create'))
     .row()
-    .text(t(ctx, 'menu_back'), 'nav:admin:sales');
+    .text(t(ctx, 'admin_menu_back_to_sales'), 'nav:admin:sales');
 
   const text = buildScreen({
     emoji: '🎟️',
@@ -167,7 +167,7 @@ export function promoCenterKeyboard(ctx: MenuContext): InlineKeyboard {
   return new InlineKeyboard()
     .text(t(ctx, 'admin_promo_back_to_list'), callbackData('promo', 'list'))
     .row()
-    .text(t(ctx, 'menu_back'), 'nav:admin:sales');
+    .text(t(ctx, 'admin_menu_back_to_sales'), 'nav:admin:sales');
 }
 
 export async function renderPromoScreen(
@@ -177,7 +177,7 @@ export async function renderPromoScreen(
   parseMode?: 'Markdown'
 ): Promise<void> {
   const isPromoCallback = ctx.callbackQuery?.data?.startsWith('promo:');
-  await renderUiScreen(ctx, text, {
+  await renderScreen(ctx, text, {
     ...(parseMode ? { parse_mode: parseMode } : {}),
     reply_markup: keyboard,
     preferEdit: isPromoCallback,

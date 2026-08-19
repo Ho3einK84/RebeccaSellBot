@@ -8,6 +8,7 @@ import type {
   UiMessageRole,
 } from './types.js';
 import { t } from './locale.js';
+import { buildConfirmationKeyboard, buildScreen, type ScreenDefinition } from './designSystem.js';
 
 export * from './designSystem.js';
 export {
@@ -16,7 +17,7 @@ export {
   ensurePersianLineDirection,
 } from './locale.js';
 
-export type BackDestination = 'home' | 'main' | 'admin';
+export type BackDestination = 'home' | 'main' | 'admin' | 'admin:sales' | 'wallet' | 'shop';
 
 type EditMessageTextOptions = NonNullable<Parameters<MenuContext['editMessageText']>[1]>;
 
@@ -157,19 +158,15 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
         })
     );
 
-    // Deleting the user's incoming message is independent from route logic and
-    // does not mutate tracked session state. Start it now, but do not make the
-    // bot wait an extra Telegram API round-trip before it can render a reply.
-    const incomingMessageCleanup = ctx.message?.message_id
-      ? safelyDeleteMessage(ctx, ctx.message.message_id)
-      : Promise.resolve(false);
-
+    // User-authored messages are intentionally NOT deleted here. Only input that
+    // is actually consumed by a conversation or a sensitive one-shot handler is
+    // removed by that handler. Ordinary text therefore never appears to vanish.
     const initialIds = new Set([
       ...(ctx.session.uiMessageIds ?? []),
       ...(ctx.session.promptMessageIds ?? []),
     ]);
     await uiTracking.run({ chatId: ctx.chat.id, session: ctx.session }, async () => await next());
-    await Promise.allSettled([cleanupPromise, incomingMessageCleanup]);
+    await Promise.allSettled([cleanupPromise]);
 
     if (failedScreenDeletes.length > 0 || failedPromptDeletes.length > 0) {
       ctx.session.uiMessageIds = [
@@ -235,6 +232,81 @@ export async function renderUiScreen(
   return 'replied';
 }
 
+export type UiScreenContent = string | ScreenDefinition;
+
+function resolveScreenContent(content: UiScreenContent): string {
+  return typeof content === 'string' ? content : buildScreen(content);
+}
+
+/** Canonical renderer for app screens. Prefer this over direct edit/reply calls in routes. */
+export function renderScreen(
+  ctx: MenuContext,
+  content: UiScreenContent,
+  options: RenderUiScreenOptions = {}
+): Promise<RenderUiScreenResult> {
+  return renderUiScreen(ctx, resolveScreenContent(content), options);
+}
+
+/** Semantic renderer for read-only detail views. */
+export function renderDetailScreen(
+  ctx: MenuContext,
+  content: UiScreenContent,
+  options: RenderUiScreenOptions = {}
+): Promise<RenderUiScreenResult> {
+  return renderScreen(ctx, content, options);
+}
+
+/** Semantic renderer for menu-driven form entry points with a consistent cancel action. */
+export function renderFormScreen(
+  ctx: MenuContext,
+  content: UiScreenContent,
+  options: RenderUiScreenOptions = {}
+): Promise<RenderUiScreenResult> {
+  return renderScreen(ctx, content, {
+    ...options,
+    reply_markup: options.reply_markup ?? cancelKeyboard(ctx),
+  });
+}
+
+/** Render a confirmation screen and standardize confirm/cancel hierarchy. */
+export function renderConfirmScreen(
+  ctx: MenuContext,
+  content: UiScreenContent,
+  confirmCallback: string,
+  options: RenderUiScreenOptions & {
+    confirmLabelKey?: string;
+    cancelCallback?: string;
+    cancelLabelKey?: string;
+  } = {}
+): Promise<RenderUiScreenResult> {
+  const { confirmLabelKey, cancelCallback, cancelLabelKey, ...renderOptions } = options;
+  return renderScreen(ctx, content, {
+    ...renderOptions,
+    reply_markup:
+      renderOptions.reply_markup ??
+      buildConfirmationKeyboard(
+        ctx,
+        confirmCallback,
+        confirmLabelKey,
+        cancelCallback,
+        cancelLabelKey
+      ),
+  });
+}
+
+/** Render a terminal success/error state with one predictable navigation action. */
+export function renderResultScreen(
+  ctx: MenuContext,
+  content: UiScreenContent,
+  destination: BackDestination = 'main',
+  options: RenderUiScreenOptions = {}
+): Promise<RenderUiScreenResult> {
+  return renderScreen(ctx, content, {
+    ...options,
+    reply_markup: options.reply_markup ?? backKeyboard(ctx, destination),
+  });
+}
+
 export function isMessageNotModifiedError(error: unknown): boolean {
   return errorMessage(error).includes('message is not modified');
 }
@@ -249,11 +321,37 @@ export function isMessageEditUnavailableError(error: unknown): boolean {
   );
 }
 
+function backLabelKey(destination: BackDestination): string {
+  switch (destination) {
+    case 'admin':
+      return 'admin_menu_back_to_admin';
+    case 'admin:sales':
+      return 'admin_menu_back_to_sales';
+    case 'wallet':
+      return 'menu_back_wallet';
+    case 'shop':
+      return 'menu_back_shop';
+    case 'home':
+    case 'main':
+    default:
+      return 'menu_back_main';
+  }
+}
+
 export function backKeyboard(
   ctx: ConversationContext,
   destination: BackDestination = 'home'
 ): InlineKeyboard {
-  return new InlineKeyboard().text(t(ctx, 'menu_back'), `nav:${destination}`);
+  return new InlineKeyboard().text(t(ctx, backLabelKey(destination)), `nav:${destination}`);
+}
+
+/** Back button for a concrete nested screen that is not a global nav destination. */
+export function backToKeyboard(
+  ctx: ConversationContext,
+  callbackData: string,
+  labelKey = 'menu_back'
+): InlineKeyboard {
+  return new InlineKeyboard().text(t(ctx, labelKey), callbackData);
 }
 
 export function dismissKeyboard(ctx: ConversationContext): InlineKeyboard {
@@ -342,7 +440,11 @@ export async function waitForTextInput(
     if (!(await acceptConversationOwner(input, ownerId))) continue;
     if (await handleConversationCancel(conversation, input, cancelDestination)) return undefined;
     await forwardConversationNavigation(conversation, input);
-    if (input.message && 'text' in input.message) return input.message.text;
+    if (input.message && 'text' in input.message) {
+      await deleteConsumedInputMessage(input);
+      return input.message.text;
+    }
+    await deleteConsumedInputMessage(input);
     await promptInConversation(conversation, input, t(input, 'text_input_required'));
   }
 }
@@ -370,13 +472,16 @@ export async function waitForReceiptMediaInput(
     await forwardConversationNavigation(conversation, input);
     const photos = input.message && 'photo' in input.message ? input.message.photo : undefined;
     if (photos && photos.length > 0) {
+      await deleteConsumedInputMessage(input);
       return { fileId: photos[photos.length - 1]!.file_id, type: 'photo' };
     }
     const document =
       input.message && 'document' in input.message ? input.message.document : undefined;
     if (document) {
+      await deleteConsumedInputMessage(input);
       return { fileId: document.file_id, type: 'document', mimeType: document.mime_type };
     }
+    await deleteConsumedInputMessage(input);
     await promptInConversation(conversation, input, t(input, 'photo_input_required'));
   }
 }
@@ -413,6 +518,7 @@ export async function waitForCallbackInput(
       await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
       continue;
     }
+    await deleteConsumedInputMessage(input);
     await promptInConversation(conversation, input, t(input, 'button_input_required'));
   }
 }
@@ -454,6 +560,8 @@ export async function handleConversationCancel(
 
   if (isCancelCallback) {
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
+  } else {
+    await deleteConsumedInputMessage(ctx);
   }
   await replyInConversationWithRole(conversation, ctx, t(ctx, 'operation_cancelled'), 'prompt', {
     reply_markup: backKeyboard(ctx, destination),
@@ -489,8 +597,17 @@ export async function forwardConversationNavigation(
   }
 }
 
+/** Delete a user message only after a flow has explicitly consumed it as input. */
+export async function deleteConsumedInputMessage(
+  ctx: Pick<ConversationContext, 'api' | 'chat' | 'message'>
+): Promise<boolean> {
+  const messageId = ctx.message?.message_id;
+  if (!messageId) return false;
+  return safelyDeleteMessage(ctx, messageId);
+}
+
 export async function safelyDeleteMessage(
-  ctx: Pick<MenuContext, 'api' | 'chat'>,
+  ctx: Pick<ConversationContext, 'api' | 'chat'>,
   messageId: number
 ): Promise<boolean> {
   const chatId = ctx.chat?.id;

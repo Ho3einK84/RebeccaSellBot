@@ -6,7 +6,13 @@ import { PurchaseCheckoutUnavailableError } from '../../domain/services/Purchase
 import { clearPendingPromo } from '../promoSelection.js';
 import { purchaseFailureMessage } from '../purchaseFeedback.js';
 import { formatSubscriptionLink, resolveContextLocale, t } from '../locale.js';
-import { backKeyboard, buildEmptyState, buildScreen, rememberArtifactMessage } from '../ui.js';
+import {
+  backKeyboard,
+  buildEmptyState,
+  buildScreen,
+  rememberArtifactMessage,
+  renderScreen,
+} from '../ui.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import { logger } from '../../infra/logger.js';
@@ -35,21 +41,23 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
     if ((await services.walletService.getBalance(telegramId)) < checkout.quotedAmount) {
       await recordCheckoutFailed(services.purchaseCheckoutService, checkout.id);
       await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
-      await ctx.editMessageText(
+      await renderScreen(
+        ctx,
         buildEmptyState('⚠️', t(ctx, 'insufficient_balance_title'), t(ctx, 'insufficient_balance')),
         {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard()
             .text(t(ctx, 'direct_topup_button'), 'topup:direct')
             .row()
-            .text(t(ctx, 'menu_back'), 'shop:open'),
+            .text(t(ctx, 'menu_back_shop'), 'shop:open'),
         }
       );
       return;
     }
 
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-    await ctx.editMessageText(
+    await renderScreen(
+      ctx,
       buildScreen({
         emoji: '⏳',
         title: t(ctx, 'purchase_issuing_title'),
@@ -108,7 +116,8 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
     } catch (error) {
       trackFunnelEvent('purchase_failed');
       await recordCheckoutFailed(services.purchaseCheckoutService, checkout.id);
-      await ctx.editMessageText(
+      await renderScreen(
+        ctx,
         buildEmptyState(
           '⚠️',
           t(ctx, 'purchase_failed_title'),
@@ -134,7 +143,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       },
     });
     try {
-      await ctx.editMessageText(successText, { parse_mode: 'Markdown' });
+      await renderScreen(ctx, successText, { parse_mode: 'Markdown' });
       if (ctx.callbackQuery?.message) {
         rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
       }

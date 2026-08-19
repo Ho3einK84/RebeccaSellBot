@@ -2,7 +2,7 @@ import { InlineKeyboard, type Bot } from 'grammy';
 import { LastAdminRemovalError } from '../../../domain/services/AdminService.js';
 import type { MenuContext } from '../../types.js';
 import { localizedDate, localizedNumber, t } from '../../locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge, renderUiScreen } from '../../ui.js';
+import { buildEmptyState, buildScreen, buildStatusBadge, renderScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { sanitizeTelegramInlineCode } from '../../rendering.js';
 
@@ -45,7 +45,7 @@ export async function renderAdminRegistry(ctx: MenuContext): Promise<void> {
   keyboard
     .text(t(ctx, 'admin_add_admin_button'), 'admin:admins:add')
     .row()
-    .text(t(ctx, 'menu_back'), 'nav:admin');
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 
   const text = admins.length
     ? buildScreen({
@@ -509,7 +509,7 @@ function appendOrphanQueueActions(ctx: MenuContext, keyboard: InlineKeyboard): I
     .row()
     .text(t(ctx, 'admin_orphan_baseline_button'), 'admin:orphans:baseline')
     .row()
-    .text(t(ctx, 'menu_back'), 'nav:admin');
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 }
 
 async function renderOrphanIssueDetail(ctx: MenuContext, issue: OrphanIssue): Promise<void> {
@@ -575,5 +575,5 @@ async function renderMaintenanceScreen(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  await renderUiScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

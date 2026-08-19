@@ -19,7 +19,7 @@ import {
   buildStatusBadge,
   dismissKeyboard,
   rememberArtifactMessage,
-  renderUiScreen,
+  renderScreen,
   type StatusType,
 } from '../../ui.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
@@ -107,7 +107,7 @@ export async function showUserSubscriptions(
       new InlineKeyboard()
         .text(t(ctx, 'menu_buy_subscription'), 'nav:shop')
         .row()
-        .text(t(ctx, 'menu_back'), 'nav:main')
+        .text(t(ctx, 'menu_back_main'), 'nav:main')
     );
     return;
   }
@@ -142,7 +142,7 @@ export async function showUserSubscriptions(
     if (page < totalPages) navigation.text(t(ctx, 'pagination_next'), `subs:page:${page + 1}`);
     navigation.row();
   }
-  navigation.text(t(ctx, 'menu_back'), 'nav:main');
+  navigation.text(t(ctx, 'menu_back_main'), 'nav:main');
   await renderSubscriptionScreen(
     ctx,
     buildScreen({
@@ -403,7 +403,8 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
     } catch (err) {
       await recordCheckoutFailed(ctx.services.purchaseCheckoutService, checkout.id);
-      await ctx.reply(
+      await renderScreen(
+        ctx,
         purchaseFailureMessage(ctx.services!.translationService, err, resolveContextLocale(ctx)),
         { reply_markup: backKeyboard(ctx, 'main') }
       );
@@ -775,7 +776,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           reply_markup: new InlineKeyboard()
             .text(t(ctx, 'menu_my_configs'), `subs:page:${ctx.session.subscriptionListPage ?? 1}`)
             .row()
-            .text(t(ctx, 'menu_back'), 'nav:main'),
+            .text(t(ctx, 'menu_back_main'), 'nav:main'),
         });
       } catch {
         await renderSubscriptionScreen(
@@ -1118,7 +1119,9 @@ async function buildSubscriptionSnapshot(
     remaining = t(ctx, 'unlimited');
   } else if (traffic.remainingBytes != null) {
     const gb = Number((traffic.remainingBytes / 1024 ** 3).toFixed(2));
-    remaining = `${localizedNumber(gb, ctx)} ${t(ctx, 'traffic_unit_gb')}${traffic.isCached ? ' (cached)' : ''}`;
+    remaining = `${localizedNumber(gb, ctx)} ${t(ctx, 'traffic_unit_gb')}${
+      traffic.isCached ? ` · ${t(ctx, 'cached_data_label')}` : ''
+    }`;
   } else {
     remaining = t(ctx, 'traffic_unavailable');
   }
@@ -1447,5 +1450,5 @@ async function renderSubscriptionScreen(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  await renderUiScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from '../../../domain/services/TranslationService.js
 import {
   buildEmptyState,
   buildPromptScreen,
+  deleteConsumedInputMessage,
   buildScreen,
   handleAdminConversationCancel,
   promptInConversation,
@@ -29,7 +30,7 @@ export async function adminEditTextsConversation(
     .text('🦁 فارسی', 'text-lang:fa')
     .text('🇬🇧 English', 'text-lang:en')
     .row()
-    .text(t(ctx, 'admin_menu_back'), 'nav:admin')
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin')
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
   await promptInConversation(
@@ -243,6 +244,7 @@ export async function adminEditTextsConversation(
     }
 
     if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
+      await deleteConsumedInputMessage(input);
       const value = input.message.text.trim();
       if (!value || value.length > 3_500) {
         await replyInAdminConversation(
@@ -276,6 +278,7 @@ export async function adminEditTextsConversation(
       return;
     }
 
+    await deleteConsumedInputMessage(input);
     await promptInConversation(
       conversation,
       input,

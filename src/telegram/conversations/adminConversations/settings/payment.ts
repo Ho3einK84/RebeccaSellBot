@@ -79,7 +79,7 @@ export async function adminPaymentSettingsConversation(
         'pay:edit:wallet_transfer_min_amount'
       )
       .row()
-      .text(t(ctx, 'admin_menu_back'), 'pay:back');
+      .text(t(ctx, 'admin_menu_back_to_sales'), 'pay:back');
 
     let renderedInPlace = false;
     const messageId = activeCtx.callbackQuery?.message?.message_id;

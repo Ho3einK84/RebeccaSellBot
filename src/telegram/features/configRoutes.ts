@@ -5,7 +5,13 @@ import type { BotServices, MenuContext } from '../types.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { logger } from '../../infra/logger.js';
 import { observedContextLocale, t, tm } from '../locale.js';
-import { backKeyboard, buildEmptyState, buildScreen, renderUiScreen } from '../ui.js';
+import {
+  backKeyboard,
+  buildEmptyState,
+  buildScreen,
+  deleteConsumedInputMessage,
+  renderScreen,
+} from '../ui.js';
 import { callbackData } from '../callbackData.js';
 import { buildSubscriptionActionKeyboard, showSubscriptionDetail } from './subscriptions/routes.js';
 import { sanitizeTelegramInlineCode } from '../rendering.js';
@@ -83,7 +89,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
         .text(t(ctx, 'config_delete_confirm_button'), `config_delete_confirm:${configUsername}`)
         .text(t(ctx, 'config_delete_cancel_button'), `config_delete_cancel:${configUsername}`)
         .row()
-        .text(t(ctx, 'menu_back'), 'nav:main');
+        .text(t(ctx, 'menu_back_main'), 'nav:main');
       await renderConfigScreen(
         ctx,
         buildScreen({
@@ -148,6 +154,8 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
     const subUrl = services.configService.extractSubUrl(text);
 
     if (subUrl && ctx.from?.id) {
+      // Subscription URLs are credentials; remove only this explicitly consumed sensitive input.
+      await deleteConsumedInputMessage(ctx);
       try {
         // A link can be the user's first interaction (without /start). Ensure
         // the local FK owner exists before ConfigService attempts its atomic
@@ -171,9 +179,10 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
           const managementMenu = owned
             ? buildSubscriptionActionKeyboard(ctx, owned.id, owned.panelStatus ?? 'active')
                 .row()
-                .text(t(ctx, 'menu_back'), 'nav:main')
+                .text(t(ctx, 'menu_back_main'), 'nav:main')
             : backKeyboard(ctx, 'main');
-          await ctx.reply(
+          await renderScreen(
+            ctx,
             buildScreen({
               emoji: '✅',
               title: t(ctx, 'subscription_list_title'),
@@ -187,7 +196,8 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
             { parse_mode: 'Markdown', reply_markup: managementMenu }
           );
         } else {
-          await ctx.reply(
+          await renderScreen(
+            ctx,
             buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, res.messageKey)),
             { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
           );
@@ -197,7 +207,8 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
           { telegramId: ctx.from.id, errorName: err instanceof Error ? err.name : typeof err },
           'Subscription link claim handler failed'
         );
-        await ctx.reply(
+        await renderScreen(
+          ctx,
           buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, 'claim_handler_failed')),
           { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
         );
@@ -214,5 +225,5 @@ async function renderConfigScreen(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  await renderUiScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

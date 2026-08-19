@@ -20,6 +20,7 @@ import {
 } from '../locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import {
+  backKeyboard,
   buildEmptyState,
   buildScreen,
   promptInConversation,
@@ -327,7 +328,7 @@ async function executePurchaseFlow(
       ),
       {
         parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'nav:main'),
+        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:main'),
       }
     );
     return;
@@ -373,7 +374,7 @@ async function executePurchaseFlow(
     reply_markup: new InlineKeyboard()
       .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
       .row()
-      .text(t(ctx, 'menu_back'), 'nav:main'),
+      .text(t(ctx, 'menu_back_main'), 'nav:main'),
   });
 }
 
@@ -795,6 +796,14 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
   const telegramId = ctx.from?.id;
   if (!telegramId || !ctx.services) return;
 
+  const returnDestination = await conversation.external((outsideCtx) =>
+    outsideCtx.session.promoReturnDestination === 'shop' ? 'shop' : 'wallet'
+  );
+  const finishPromoFlow = () =>
+    conversation.external((outsideCtx) => {
+      delete outsideCtx.session.promoReturnDestination;
+    });
+
   await promptInConversation(
     conversation,
     ctx,
@@ -806,8 +815,11 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
     }),
     { parse_mode: 'Markdown' }
   );
-  const codeInput = await waitForTextInput(conversation);
-  if (codeInput === undefined) return;
+  const codeInput = await waitForTextInput(conversation, returnDestination);
+  if (codeInput === undefined) {
+    await finishPromoFlow();
+    return;
+  }
   const code = codeInput.trim();
 
   const res = await conversation.external((outsideCtx) =>
@@ -839,8 +851,9 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
         },
         footer: text,
       }),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, returnDestination) }
     );
+    await finishPromoFlow();
     return;
   }
   await replyInConversation(
@@ -853,8 +866,9 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
           subtitle: text,
         })
       : buildEmptyState('⚠️', t(ctx, 'promo_title'), text),
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, returnDestination) }
   );
+  await finishPromoFlow();
 }
 
 function parseBoundedWholeNumber(value: string, maximum: number): number | undefined {

@@ -63,7 +63,7 @@ export async function adminCustomVolumeConversation(
       .row()
       .text(t(ctx, 'admin_setting_custom_default_days'), 'cv:edit:custom_default_days')
       .row()
-      .text(t(ctx, 'admin_menu_back'), 'cv:back');
+      .text(t(ctx, 'admin_menu_back_to_sales'), 'cv:back');
 
     let renderedInPlace = false;
     const messageId = activeCtx.callbackQuery?.message?.message_id;

@@ -11,7 +11,8 @@ import {
   buildEmptyState,
   buildScreen,
   buildStatusBadge,
-  renderUiScreen,
+  deleteConsumedInputMessage,
+  renderScreen,
 } from '../../ui.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
@@ -56,7 +57,7 @@ export async function renderPanelRegistry(ctx: MenuContext, requestedPage = 1): 
   keyboard
     .text(t(ctx, 'admin_panel_add_button'), panelCallback('add'))
     .row()
-    .text(t(ctx, 'menu_back'), 'nav:admin');
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
   await renderPanelScreen(
     ctx,
     panels.length
@@ -303,15 +304,16 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     }
   );
 
-  // API keys bypass Conversation replay persistence. The private-chat UI
-  // middleware has already removed the user's secret-bearing message; only
-  // the encrypted panel record survives this handler.
+  // API keys bypass Conversation replay persistence. This one-shot handler
+  // explicitly removes the consumed secret message; ordinary user text is never
+  // deleted globally by the UI middleware.
   bot.on('message:text', async (ctx, next) => {
     const action = ctx.session.adminPanelAction;
     if (action !== 'await_add_key' && action !== 'await_api_key') return next();
     if (!ctx.services?.isAdmin(ctx.from.id)) return;
 
     const apiKey = ctx.message.text.trim();
+    await deleteConsumedInputMessage(ctx);
     if (apiKey === '/cancel') {
       clearPendingPanelSecret(ctx);
       await renderPanelScreen(
@@ -715,7 +717,7 @@ async function renderPanelScreen(
   keyboard: InlineKeyboard,
   parseMode?: 'Markdown'
 ): Promise<void> {
-  await renderUiScreen(ctx, text, {
+  await renderScreen(ctx, text, {
     ...(parseMode ? { parse_mode: parseMode } : {}),
     reply_markup: keyboard,
   });

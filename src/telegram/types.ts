@@ -35,6 +35,8 @@ export interface SessionData {
     value: number;
     selectedAt: number;
   };
+  /** Screen that launched promo entry so the flow returns to the same context. */
+  promoReturnDestination?: 'shop' | 'wallet';
   /** Bot messages that belong to the current private-chat UI screen. */
   uiMessageIds?: number[];
   /** Ephemeral prompt message IDs created during interactive step inputs. */

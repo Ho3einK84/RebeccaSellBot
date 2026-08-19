@@ -17,7 +17,7 @@ import {
   t,
 } from '../locale.js';
 import type { PackageOption } from '../../domain/services/PricingService.js';
-import { backKeyboard, buildEmptyState, buildScreen } from '../ui.js';
+import { backKeyboard, buildEmptyState, buildScreen, renderScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderAdminHome } from './adminMenu.js';
 import {
@@ -279,7 +279,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     async (ctx) => {
       trackFunnelEvent('shop_enter');
       ctx.menu.nav('shop-menu');
-      await ctx.editMessageText(await renderShopMenuText(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderShopMenuText(ctx), { parse_mode: 'Markdown' });
     }
   )
   .text(
@@ -293,7 +293,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     (ctx) => t(ctx, 'menu_wallet'),
     async (ctx) => {
       ctx.menu.nav('wallet-menu');
-      await ctx.editMessageText(await renderWalletDashboard(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderWalletDashboard(ctx), { parse_mode: 'Markdown' });
     }
   )
   .text(
@@ -305,7 +305,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       const previewKeyboard = new InlineKeyboard()
         .text(t(ctx, 'trial_start_button'), 'trial:claim')
         .row()
-        .text(t(ctx, 'menu_back'), 'nav:main');
+        .text(t(ctx, 'menu_back_main'), 'nav:main');
 
       const previewText = buildScreen({
         emoji: '🎁',
@@ -332,7 +332,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         footer: `ℹ️ ${t(ctx, 'trial_terms')}`,
       });
 
-      await ctx.editMessageText(previewText, {
+      await renderScreen(ctx, previewText, {
         parse_mode: 'Markdown',
         reply_markup: previewKeyboard,
       });
@@ -359,9 +359,10 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       const refKeyboard = new InlineKeyboard()
         .url(t(ctx, 'referral_share_button'), shareUrl)
         .row()
-        .text(t(ctx, 'menu_back'), 'nav:main');
+        .text(t(ctx, 'menu_back_main'), 'nav:main');
 
-      await ctx.editMessageText(
+      await renderScreen(
+        ctx,
         buildScreen({
           emoji: '👥',
           title: t(ctx, 'referral_title'),
@@ -397,7 +398,8 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       range.text(
         (c) => t(c, 'menu_language'),
         async (c) => {
-          await c.editMessageText(
+          await renderScreen(
+            c,
             buildScreen({
               emoji: '🌐',
               title: t(c, 'language_selection_title'),
@@ -423,8 +425,9 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           if (supportInfo.isConfigured && supportInfo.url) {
             keyboard.url(t(c, 'support_contact_button'), supportInfo.url).row();
           }
-          keyboard.text(t(c, 'menu_back'), 'nav:main');
-          await c.editMessageText(
+          keyboard.text(t(c, 'menu_back_main'), 'nav:main');
+          await renderScreen(
+            c,
             buildScreen({
               emoji: '💬',
               title: t(c, 'support_title'),
@@ -450,7 +453,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
             return;
           }
           c.menu.nav('admin-menu');
-          await c.editMessageText(await renderAdminHome(c), { parse_mode: 'Markdown' });
+          await renderScreen(c, await renderAdminHome(c), { parse_mode: 'Markdown' });
         }
       );
     }
@@ -494,7 +497,8 @@ function renderPackageButtons(
 
           const pendingPromo = await getPendingPromoPricing(c, telegramId, pkg.price, pkg.gbAmount);
           if (pendingPromo.messageKey) {
-            await c.editMessageText(
+            await renderScreen(
+              c,
               buildEmptyState('⚠️', t(c, 'purchase_review_title'), t(c, pendingPromo.messageKey)),
               { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
             );
@@ -506,9 +510,9 @@ function renderPackageButtons(
             const insufficientKeyboard = new InlineKeyboard()
               .text(t(c, 'direct_topup_button'), 'topup:direct')
               .row()
-              .text(t(c, 'menu_back'), 'shop:open');
+              .text(t(c, 'menu_back_shop'), 'nav:shop');
 
-            await c.editMessageText(buildInsufficientBalanceScreen(c, displayedPrice, balance), {
+            await renderScreen(c, buildInsufficientBalanceScreen(c, displayedPrice, balance), {
               parse_mode: 'Markdown',
               reply_markup: insufficientKeyboard,
             });
@@ -526,7 +530,8 @@ function renderPackageButtons(
             });
             trackFunnelEvent('checkout_start');
           } catch {
-            await c.editMessageText(
+            await renderScreen(
+              c,
               buildEmptyState(
                 '⚠️',
                 t(c, 'purchase_review_title'),
@@ -540,9 +545,10 @@ function renderPackageButtons(
           const confirmKeyboard = new InlineKeyboard()
             .text(t(c, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
             .row()
-            .text(t(c, 'menu_back'), 'shop:open');
+            .text(t(c, 'menu_back_shop'), 'nav:shop');
 
-          await c.editMessageText(
+          await renderScreen(
+            c,
             buildPurchaseCheckoutScreen(c, pkg, displayedPrice, pendingPromo.quote?.code),
             {
               parse_mode: 'Markdown',
@@ -562,11 +568,28 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
     if (ctx.session.pendingPromo) {
       range
         .text(
+          (c) => t(c, 'shop_change_promo_button'),
+          async (c) => {
+            c.session.promoReturnDestination = 'shop';
+            await c.conversation.enter('promoConversation');
+          }
+        )
+        .text(
           (c) => t(c, 'shop_clear_promo_button'),
           async (c) => {
             clearPendingPromo(c);
             await c.answerCallbackQuery({ text: t(c, 'operation_cancelled') });
-            await c.editMessageText(await renderShopMenuText(c), { parse_mode: 'Markdown' });
+            await renderScreen(c, await renderShopMenuText(c), { parse_mode: 'Markdown' });
+          }
+        )
+        .row();
+    } else {
+      range
+        .text(
+          (c) => t(c, 'shop_apply_promo_button'),
+          async (c) => {
+            c.session.promoReturnDestination = 'shop';
+            await c.conversation.enter('promoConversation');
           }
         )
         .row();
@@ -596,7 +619,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           (c) => t(c, 'shop_all_categories_button'),
           async (c) => {
             c.session.activeShopCategory = undefined;
-            await c.editMessageText(await renderShopMenuText(c), { parse_mode: 'Markdown' });
+            await renderScreen(c, await renderShopMenuText(c), { parse_mode: 'Markdown' });
           }
         )
         .row();
@@ -608,7 +631,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
         range
           .text(label, async (c) => {
             c.session.activeShopCategory = cat.id;
-            await c.editMessageText(await renderShopMenuText(c), { parse_mode: 'Markdown' });
+            await renderScreen(c, await renderShopMenuText(c), { parse_mode: 'Markdown' });
           })
           .row();
       }
@@ -630,7 +653,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
             (c) => t(c, 'menu_custom_amount', { price: localizedNumber(customPricePerGb, c) }),
             async (c) => {
               if (!c.services || !customVolumeEnabled(c.services.translationService)) {
-                await c.reply(t(c, 'custom_volume_unavailable'), {
+                await renderScreen(c, t(c, 'custom_volume_unavailable'), {
                   reply_markup: backKeyboard(c, 'main'),
                 });
                 return;
@@ -644,11 +667,11 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
   })
   .row()
   .text(
-    (ctx) => t(ctx, 'menu_back'),
+    (ctx) => t(ctx, 'menu_back_main'),
     async (ctx) => {
       ctx.session.activeShopCategory = undefined;
       ctx.menu.nav('main-menu');
-      await ctx.editMessageText(await renderHomeDashboard(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderHomeDashboard(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -664,6 +687,7 @@ export const walletMenu = new Menu<MenuContext>('wallet-menu')
   .text(
     (ctx) => t(ctx, 'menu_use_promo'),
     async (ctx) => {
+      ctx.session.promoReturnDestination = 'wallet';
       await ctx.conversation.enter('promoConversation');
     }
   )
@@ -685,7 +709,7 @@ export const walletMenu = new Menu<MenuContext>('wallet-menu')
     (ctx) => t(ctx, 'menu_back_main'),
     async (ctx) => {
       ctx.menu.nav('main-menu');
-      await ctx.editMessageText(await renderHomeDashboard(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderHomeDashboard(ctx), { parse_mode: 'Markdown' });
     }
   );
 

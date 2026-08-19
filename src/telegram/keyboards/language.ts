@@ -11,5 +11,8 @@ export function languageKeyboard(
     .text('🦁 فارسی', 'locale:fa')
     .text('🇬🇧 English', 'locale:en')
     .row()
-    .text(t(ctx, 'menu_back'), `nav:${destination}`);
+    .text(
+      t(ctx, destination === 'admin' ? 'admin_menu_back_to_admin' : 'menu_back_main'),
+      `nav:${destination}`
+    );
 }

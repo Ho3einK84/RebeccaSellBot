@@ -11,6 +11,8 @@ import {
   buildEmptyState,
   buildScreen,
   conversationOwnerId,
+  deleteConsumedInputMessage,
+  forwardConversationNavigation,
   handleConversationCancel,
   promptInConversation,
   rememberUiMessage,
@@ -161,6 +163,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     const input = await conversation.wait();
     if (!(await acceptConversationOwner(input, ownerId))) continue;
     if (await handleConversationCancel(conversation, input)) return;
+    await forwardConversationNavigation(conversation, input);
 
     const callbackData = input.callbackQuery?.data;
     if (callbackData && callbackData.startsWith('amount:')) {
@@ -174,6 +177,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
 
     const textInput = input.message && 'text' in input.message ? input.message.text : undefined;
     if (textInput) {
+      await deleteConsumedInputMessage(input);
       const parsed = parsePositiveSafeInteger(textInput);
       if (parsed !== undefined && parsed >= minimum && parsed <= maximum) {
         amountToman = parsed;
@@ -181,6 +185,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       }
     }
 
+    if (!textInput) await deleteConsumedInputMessage(input);
     await promptInConversation(
       conversation,
       ctx,
@@ -273,7 +278,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       reply_markup: new InlineKeyboard()
         .text(t(ctx, 'menu_wallet'), 'nav:wallet')
         .row()
-        .text(t(ctx, 'menu_back'), 'nav:main'),
+        .text(t(ctx, 'menu_back_main'), 'nav:main'),
     });
   } catch (err) {
     if (err instanceof PendingTopupReceiptError) {

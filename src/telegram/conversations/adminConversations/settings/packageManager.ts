@@ -374,7 +374,7 @@ export function buildPackageManagerKeyboard(
     .text(t(ctx, 'admin_pkg_categories_button'), 'pkg-categories')
     .text(t(ctx, 'admin_sales_package_policy_title'), 'pkg-settings')
     .row()
-    .text(t(ctx, 'admin_menu_back'), 'pkg-back');
+    .text(t(ctx, 'admin_menu_back_to_sales'), 'pkg-back');
 }
 
 export function generatePackageId(name: string, packages: readonly PackageOption[]): string {
@@ -667,7 +667,7 @@ async function showPackageNotice(
   const keyboard = new InlineKeyboard()
     .text(t(ctx, 'admin_pkg_continue_editing'), 'pkg-continue')
     .row()
-    .text(t(ctx, 'admin_settings_back_category'), 'pkg-back');
+    .text(t(ctx, 'admin_menu_back_to_packages'), 'pkg-back');
   await promptInConversation(conversation, ctx, text, {
     parse_mode: 'Markdown',
     reply_markup: keyboard,
@@ -754,7 +754,7 @@ async function manageCategories(
     keyboard
       .text(t(ctx, 'admin_category_add_button'), 'cat:add')
       .row()
-      .text(t(ctx, 'admin_menu_back'), 'cat:back');
+      .text(t(ctx, 'admin_menu_back_to_packages'), 'cat:back');
 
     const screenText = buildScreen({
       emoji: '🏷️',
@@ -879,7 +879,7 @@ async function manageCategories(
           callbackData('cat:toggle', catId)
         )
         .row()
-        .text(t(ctx, 'menu_back'), 'cat:edit-back');
+        .text(t(ctx, 'admin_menu_back_to_categories'), 'cat:edit-back');
 
       await promptInConversation(
         conversation,
@@ -1063,7 +1063,10 @@ export async function managePackagePolicies(
           fields: [
             {
               label: t(activeCtx, 'admin_setting_low_traffic_threshold_gb'),
-              value: `${localizedNumber(policy.lowTraffic, activeCtx)} GB`,
+              value: `${localizedNumber(policy.lowTraffic, activeCtx)} ${t(
+                activeCtx,
+                'traffic_unit_gb'
+              )}`,
             },
             {
               label: t(activeCtx, 'admin_setting_expiry_warning_days'),
@@ -1097,7 +1100,7 @@ export async function managePackagePolicies(
       .row()
       .text(t(activeCtx, 'admin_setting_refund_window_hours'), 'pp:edit:refund_window_hours')
       .row()
-      .text(t(activeCtx, 'admin_menu_back'), 'pp:back');
+      .text(t(activeCtx, 'admin_menu_back_to_packages'), 'pp:back');
 
     let renderedInPlace = false;
     const messageId = activeCtx.callbackQuery?.message?.message_id;

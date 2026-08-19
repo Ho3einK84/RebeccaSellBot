@@ -4,6 +4,7 @@ import { t } from '../../../locale.js';
 import {
   acceptConversationOwner,
   conversationOwnerId,
+  deleteConsumedInputMessage,
   forwardConversationNavigation,
   handleAdminConversationCancel,
   promptInConversation,
@@ -58,9 +59,11 @@ export async function waitForSettingsInput(
       'text' in input.message &&
       typeof input.message.text === 'string'
     ) {
+      await deleteConsumedInputMessage(input);
       return { type: 'text', value: input.message.text, ctx: input };
     }
 
+    await deleteConsumedInputMessage(input);
     await promptInConversation(
       conversation,
       input,

@@ -15,7 +15,7 @@ import { InlineKeyboard } from 'grammy';
 import { Menu } from '@grammyjs/menu';
 import type { ConversationContext, MenuContext } from '../types.js';
 import { localizedNumber, t } from '../locale.js';
-import { backKeyboard, buildScreen, buildStatusBadge, renderUiScreen } from '../ui.js';
+import { backKeyboard, buildScreen, buildStatusBadge, renderScreen } from '../ui.js';
 import { showPromoCenter } from '../promoAdminUi.js';
 import { renderUserListPage } from '../features/admin/userRoutes.js';
 import { showReceiptQueue } from '../features/admin/receiptRoutes.js';
@@ -105,7 +105,7 @@ export const adminDailyMenu = new Menu<MenuContext>('admin-daily-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(await renderAdminHome(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -119,7 +119,7 @@ export function salesMenuKeyboard(ctx: MenuContext | ConversationContext): Inlin
     .row()
     .text(t(ctx, 'admin_sales_wallet_transfer_button'), 'admin:sales:payment')
     .row()
-    .text(t(ctx, 'admin_menu_back'), 'nav:admin');
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 }
 
 export function renderAdminSalesMenuScreen(ctx: MenuContext | ConversationContext): string {
@@ -131,7 +131,7 @@ export function renderAdminSalesMenuScreen(ctx: MenuContext | ConversationContex
 }
 
 export async function renderSalesMenu(ctx: MenuContext): Promise<void> {
-  await renderUiScreen(ctx, renderAdminSalesMenuScreen(ctx), {
+  await renderScreen(ctx, renderAdminSalesMenuScreen(ctx), {
     parse_mode: 'Markdown',
     reply_markup: salesMenuKeyboard(ctx),
   });
@@ -175,7 +175,7 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(await renderAdminHome(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -199,7 +199,7 @@ export const adminPanelsMenu = new Menu<MenuContext>('admin-panels-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(await renderAdminHome(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -230,7 +230,7 @@ export const adminSystemMenu = new Menu<MenuContext>('admin-system-menu')
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),
     async (ctx) => {
       ctx.menu.nav('admin-menu');
-      await ctx.editMessageText(await renderAdminHome(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderAdminHome(ctx), { parse_mode: 'Markdown' });
     }
   );
 
@@ -268,7 +268,8 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
         panelPromise,
       ]);
 
-      await ctx.editMessageText(
+      await renderScreen(
+        ctx,
         buildScreen({
           emoji: '📊',
           title: t(ctx, 'admin_stats_title'),
@@ -377,7 +378,8 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     },
     async (ctx) => {
       ctx.menu.nav('admin-daily-menu');
-      await ctx.editMessageText(
+      await renderScreen(
+        ctx,
         renderAdminGroup(ctx, {
           emoji: '⚡',
           titleKey: 'admin_daily_title',
@@ -407,7 +409,8 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     },
     async (ctx) => {
       ctx.menu.nav('admin-panels-menu');
-      await ctx.editMessageText(
+      await renderScreen(
+        ctx,
         renderAdminGroup(ctx, {
           emoji: '🖥️',
           titleKey: 'admin_panels_group_title',
@@ -421,7 +424,8 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     (ctx) => t(ctx, 'admin_group_system'),
     async (ctx) => {
       ctx.menu.nav('admin-system-menu');
-      await ctx.editMessageText(
+      await renderScreen(
+        ctx,
         renderAdminGroup(ctx, {
           emoji: '⚙️',
           titleKey: 'admin_system_title',
@@ -433,10 +437,10 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
   )
   .row()
   .text(
-    (ctx) => t(ctx, 'admin_menu_back'),
+    (ctx) => t(ctx, 'menu_back_main'),
     async (ctx) => {
       ctx.menu.nav('main-menu');
-      await ctx.editMessageText(await renderHomeDashboard(ctx), { parse_mode: 'Markdown' });
+      await renderScreen(ctx, await renderHomeDashboard(ctx), { parse_mode: 'Markdown' });
     }
   );
 

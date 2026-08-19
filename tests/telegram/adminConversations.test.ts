@@ -50,7 +50,7 @@ describe('admin category and settings group keyboards', () => {
 
     const backBtn = buttons.find((btn) => btn.callback_data === 'nav:admin');
     expect(backBtn).toBeDefined();
-    expect(backBtn?.text).toBe('admin_menu_back');
+    expect(backBtn?.text).toBe('admin_menu_back_to_admin');
   });
 
   it('buildCategoryKeyboard builds one button per TEXT_CATEGORIES entry plus cancel', () => {

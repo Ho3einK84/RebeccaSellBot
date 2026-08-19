@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MenuContext, MyConversation } from '../../src/telegram/types.js';
 import {
+  backKeyboard,
   cleanChatUiMiddleware,
   dismissKeyboard,
   forgetUiMessage,
@@ -40,6 +41,25 @@ describe('private-chat UI cleanup', () => {
     expect(deleteMessage).toHaveBeenCalledWith(123, 10);
     expect(deleteMessage).toHaveBeenCalledWith(123, 11);
     expect(ctx.session.uiMessageIds).toEqual([12]);
+  });
+
+  it('does not delete ordinary user text globally', async () => {
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const ctx = {
+      chat: { id: 123, type: 'private' },
+      message: { message_id: 99, text: 'hello' },
+      session: { uiMessageIds: [10] },
+      api: { deleteMessage, config: { use: vi.fn() } },
+    } as unknown as MenuContext;
+    const middleware = cleanChatUiMiddleware() as (
+      ctx: MenuContext,
+      next: () => Promise<unknown>
+    ) => Promise<unknown>;
+
+    await middleware(ctx, async () => undefined);
+
+    expect(deleteMessage).toHaveBeenCalledWith(123, 10);
+    expect(deleteMessage).not.toHaveBeenCalledWith(123, 99);
   });
 
   it('dismisses only a QR popover and keeps the screen underneath', async () => {
@@ -89,6 +109,24 @@ describe('private-chat UI cleanup', () => {
     await expect(waitForTextInput(conversation)).resolves.toBeUndefined();
     expect(answerCallbackQuery).toHaveBeenCalled();
     expect(reply).toHaveBeenCalledWith('operation_cancelled', expect.any(Object));
+  });
+
+  it('deletes text only after a conversation consumes it', async () => {
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const input = {
+      from: { id: 123, is_bot: false, first_name: 'Test' },
+      chat: { id: 123, type: 'private' },
+      message: { message_id: 77, text: '250000' },
+      api: { deleteMessage },
+    } as unknown as ConversationContext;
+    const outsideCtx = { from: { id: 123 }, session: {} };
+    const conversation = {
+      wait: vi.fn().mockResolvedValue(input),
+      external: vi.fn(async (task: (ctx: typeof outsideCtx) => unknown) => task(outsideCtx)),
+    } as unknown as MyConversation;
+
+    await expect(waitForTextInput(conversation)).resolves.toBe('250000');
+    expect(deleteMessage).toHaveBeenCalledWith(123, 77);
   });
 
   it('accepts an image document when a receipt is sent as a file', async () => {
@@ -232,6 +270,23 @@ describe('shared screen rendering', () => {
 });
 
 describe('conversation escape navigation', () => {
+  it('uses destination-specific labels for global back navigation', () => {
+    const ctx = {
+      services: {
+        translationService: {
+          get: vi.fn((key: string) => key),
+          resolveLocale: vi.fn(() => 'en'),
+        },
+      },
+    } as unknown as ConversationContext;
+
+    expect(backKeyboard(ctx, 'shop').inline_keyboard[0]?.[0]?.text).toBe('menu_back_shop');
+    expect(backKeyboard(ctx, 'wallet').inline_keyboard[0]?.[0]?.text).toBe('menu_back_wallet');
+    expect(backKeyboard(ctx, 'admin').inline_keyboard[0]?.[0]?.text).toBe(
+      'admin_menu_back_to_admin'
+    );
+  });
+
   it('halts a waiting conversation and forwards navigation to normal routes', async () => {
     const halt = vi.fn().mockResolvedValue(undefined);
     const conversation = { halt } as unknown as MyConversation;

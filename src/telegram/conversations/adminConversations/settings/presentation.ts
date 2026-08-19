@@ -44,7 +44,7 @@ export function buildSettingsGroupKeyboard(
   for (const item of groups) {
     keyboard.text(t(ctx, item.labelKey), callbackData('set-group', item.id)).row();
   }
-  keyboard.text(t(ctx, 'admin_menu_back'), 'nav:admin');
+  keyboard.text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
   return keyboard;
 }
 
@@ -66,7 +66,7 @@ export function buildSettingsInGroupKeyboard(
   return keyboard
     .text(t(ctx, 'admin_settings_back_groups'), 'set-groups')
     .row()
-    .text(t(ctx, 'admin_menu_back'), 'nav:admin');
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 }
 
 export function buildBooleanSettingKeyboard(
@@ -219,7 +219,10 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
           {
             label: t(ctx, 'admin_setting_trial_enabled'),
             value: trialEnabled
-              ? `${onBadge} (${localizedNumber(trialGb, ctx)} GB / ${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')})`
+              ? `${onBadge} (${localizedNumber(trialGb, ctx)} ${t(
+                  ctx,
+                  'traffic_unit_gb'
+                )} / ${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')})`
               : offBadge,
           },
         ],

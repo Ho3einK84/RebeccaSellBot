@@ -8,7 +8,7 @@ import {
   t,
   tForLocale,
 } from '../../locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge } from '../../ui.js';
+import { buildEmptyState, buildScreen, buildStatusBadge, renderScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { logger } from '../../../infra/logger.js';
 
@@ -46,7 +46,7 @@ export async function showReceiptQueue(ctx: MenuContext, requestedPage = 1): Pro
         t(ctx, 'admin_receipt_queue_empty_title'),
         t(ctx, 'admin_receipt_queue_empty_body')
       ),
-      new InlineKeyboard().text(t(ctx, 'menu_back'), 'nav:admin')
+      new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin')
     );
     return;
   }
@@ -337,7 +337,7 @@ function buildReceiptQueueKeyboard(ctx: MenuContext, result: ReceiptPage): Inlin
   return keyboard
     .text(t(ctx, 'admin_receipt_batch_button'), `receipt:batch_prompt:${result.page}`)
     .row()
-    .text(t(ctx, 'menu_back'), 'nav:admin');
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 }
 
 function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): string {
@@ -491,10 +491,10 @@ async function renderReceiptText(
   keyboard: InlineKeyboard
 ): Promise<void> {
   if (ctx.callbackQuery?.message && !isPhotoCallback(ctx)) {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+    await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
     return;
   }
-  await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }
 
 function isPhotoCallback(ctx: MenuContext): boolean {

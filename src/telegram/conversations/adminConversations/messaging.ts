@@ -186,7 +186,7 @@ export async function adminBroadcastConversation(
           callbackData('admin', 'broadcast', 'cancel', job.id)
         )
         .row()
-        .text(t(ctx, 'menu_back'), 'nav:admin'),
+        .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
     }
   );
 }

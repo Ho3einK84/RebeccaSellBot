@@ -49,7 +49,7 @@ export async function adminReferralSettingsConversation(
       .row()
       .text(t(ctx, 'admin_setting_cashback_percent'), 'ref:edit:cashback_percent')
       .row()
-      .text(t(ctx, 'admin_menu_back'), 'ref:back');
+      .text(t(ctx, 'admin_menu_back_to_sales'), 'ref:back');
 
     let renderedInPlace = false;
     const messageId = activeCtx.callbackQuery?.message?.message_id;
