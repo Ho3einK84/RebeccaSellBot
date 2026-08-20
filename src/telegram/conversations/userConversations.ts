@@ -643,7 +643,6 @@ export async function renewConfigConversation(
         title: t(ctx, 'checkout_package_section'),
         fields: [
           {
-            emoji: '✅',
             label: t(ctx, 'renewal_success_package_label'),
             value: customPackageName(ctx, gbAmount, durationDays),
           },

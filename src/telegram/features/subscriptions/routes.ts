@@ -431,7 +431,6 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
             title: t(ctx, 'checkout_package_section'),
             fields: [
               {
-                emoji: '✅',
                 label: t(ctx, 'renewal_success_package_label'),
                 value: escapeTelegramMarkdown(
                   localizedPackageName(ctx, checkout.packageId, checkout.packageName)
