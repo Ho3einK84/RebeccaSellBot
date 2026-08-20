@@ -29,7 +29,7 @@ export const NOTIFICATION_TYPES = [
   'auto_renew_low_balance',
   'auto_renew_package_missing',
 ] as const;
-const RENEWABLE_STATUSES = new Set(['active', 'disabled', 'on_hold']);
+const RENEWABLE_STATUSES = new Set(['active', 'disabled', 'on_hold', 'limited', 'expired']);
 const NOTIFICATION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const BYTES_PER_GB = 1024 ** 3;
 

@@ -207,7 +207,7 @@ describe('runAutoRenewalSweep', () => {
   });
 
   it('skips a config in a non-renewable Rebecca status', async () => {
-    const ctx = services({ remote: remoteUser({ status: 'expired' }) });
+    const ctx = services({ remote: remoteUser({ status: 'deleted' }) });
 
     await expect(run(ctx)).resolves.toEqual({ checked: 1, renewed: 0, skipped: 1 });
     expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();

@@ -590,6 +590,58 @@ describe('WalletService reserve → remote → commit saga', () => {
     expect(mockRebeccaService.resetUserTraffic).toHaveBeenCalledWith('disabled_limited_user');
   });
 
+  it.each(['limited', 'expired'] as const)(
+    'allows renewal when remote configuration is in %s state',
+    async (remoteStatus) => {
+      const renewal = {
+        ...purchase,
+        type: 'renew_config' as const,
+        configUsername: `${remoteStatus}_user`,
+        gbAmount: 50,
+        durationDays: 30,
+      };
+      const { db } = createDbMock({
+        returningResults: [
+          [{ telegramId: renewal.telegramId }],
+          [{ id: 'pi_test' }],
+          [{ id: 'pi_test' }],
+          [{ balance: 50_000 }],
+        ],
+        selectResults: [[], [verifiedRenewalBinding(renewal.telegramId, renewal.configUsername)]],
+      });
+      vi.mocked(getDb).mockReturnValue(db as never);
+      mockRebeccaService.getUser.mockResolvedValue({
+        username: renewal.configUsername,
+        status: remoteStatus,
+        data_limit: 10 * 1024 * 1024 * 1024,
+        expire: 1_600_000_000,
+        created_at: RENEWAL_CREATED_AT,
+      });
+      mockRebeccaService.resetUserTraffic.mockResolvedValue({
+        username: renewal.configUsername,
+        status: 'active',
+        used_traffic: 0,
+      } as never);
+      mockRebeccaService.updateUser.mockResolvedValue({
+        username: renewal.configUsername,
+        status: 'active',
+        data_limit: 50 * 1024 * 1024 * 1024,
+        expire: Math.floor(Date.now() / 1000) + renewal.durationDays * 86400,
+        subscription_url: `https://sub.example.test/${remoteStatus}`,
+      });
+
+      await expect(walletService.executePurchaseSaga(renewal)).resolves.toMatchObject({
+        success: true,
+      });
+
+      expect(mockRebeccaService.resetUserTraffic).toHaveBeenCalledWith(`${remoteStatus}_user`);
+      expect(mockRebeccaService.updateUser).toHaveBeenCalledWith(
+        `${remoteStatus}_user`,
+        expect.objectContaining({ status: 'active', data_limit: 50 * 1024 * 1024 * 1024 })
+      );
+    }
+  );
+
   it('fails renewal and releases balance reservation if traffic reset fails', async () => {
     const renewal = {
       ...purchase,

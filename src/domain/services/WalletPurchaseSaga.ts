@@ -248,7 +248,7 @@ export class WalletPurchaseSaga {
         | {
             dataLimit: number | null;
             expire: number | null;
-            status: 'active' | 'disabled' | 'on_hold';
+            status: 'active' | 'disabled' | 'on_hold' | 'limited' | 'expired';
           }
         | undefined;
       let remoteMutationAttempted = false;
@@ -320,7 +320,9 @@ export class WalletPurchaseSaga {
           if (
             existing.status !== 'active' &&
             existing.status !== 'disabled' &&
-            existing.status !== 'on_hold'
+            existing.status !== 'on_hold' &&
+            existing.status !== 'limited' &&
+            existing.status !== 'expired'
           ) {
             throw new Error(`Cannot renew configuration in ${existing.status} state`);
           }

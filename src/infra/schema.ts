@@ -246,11 +246,11 @@ export const purchaseIntents = pgTable(
     ),
     check(
       'purchase_intents_previous_status_supported',
-      sql`${table.previousStatus} IS NULL OR ${table.previousStatus} IN ('active', 'disabled', 'on_hold')`
+      sql`${table.previousStatus} IS NULL OR ${table.previousStatus} IN ('active', 'disabled', 'on_hold', 'limited', 'expired')`
     ),
     check(
       'purchase_intents_expected_status_supported',
-      sql`${table.expectedStatus} IS NULL OR ${table.expectedStatus} IN ('active', 'disabled', 'on_hold')`
+      sql`${table.expectedStatus} IS NULL OR ${table.expectedStatus} IN ('active', 'disabled', 'on_hold', 'limited', 'expired')`
     ),
     check(
       'purchase_intents_cashback_percent_safe',
