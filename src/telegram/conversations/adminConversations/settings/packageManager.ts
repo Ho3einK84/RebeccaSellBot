@@ -1155,6 +1155,7 @@ export async function managePackagePolicies(
       if (definition) {
         const outcome = await editSetting(conversation, activeCtx, definition);
         if (outcome === 'cancel') return 'cancel';
+        activeCtx = ctx;
       }
     }
   }
