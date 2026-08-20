@@ -244,6 +244,7 @@ export class WalletPurchaseSaga {
     const executeMutationAndCommit = async (): Promise<PurchaseSagaResult> => {
       let subUrl: string | undefined;
       let confirmedRemote: RebeccaUserDetail | undefined;
+      let localConfig: typeof userConfigs.$inferSelect | undefined;
       let renewalBefore:
         | {
             dataLimit: number | null;
@@ -304,18 +305,21 @@ export class WalletPurchaseSaga {
           subUrl = res.subscription_url || Object.values(res.subscription_urls ?? {})[0];
         } else {
           const existing = await rebeccaService.getUser(params.configUsername);
-          const [localConfig] = await db
+          const [foundConfig] = await db
             .select()
             .from(userConfigs)
             .where(
               and(
-                eq(userConfigs.telegramId, params.telegramId),
                 eq(userConfigs.panelId, panelId),
                 eq(userConfigs.configUsername, params.configUsername)
               )
             )
             .limit(1);
-          if (!localConfig) throw new Error('CONFIG_NOT_OWNED');
+          localConfig = foundConfig;
+          if (!localConfig) throw new Error('CONFIG_NOT_FOUND');
+          if (localConfig.telegramId !== params.telegramId && !params.allowAdminOverride) {
+            throw new Error('CONFIG_NOT_OWNED');
+          }
           await verifyOrEstablishConfigIncarnation(localConfig, existing);
           if (
             existing.status !== 'active' &&
@@ -534,7 +538,10 @@ export class WalletPurchaseSaga {
                 and(
                   eq(userConfigs.panelId, panelId),
                   eq(userConfigs.configUsername, params.configUsername),
-                  eq(userConfigs.telegramId, params.telegramId)
+                  eq(
+                    userConfigs.telegramId,
+                    localConfig ? localConfig.telegramId : params.telegramId
+                  )
                 )
               )
               .returning({ id: userConfigs.id });
@@ -543,13 +550,18 @@ export class WalletPurchaseSaga {
             }
           }
 
-          await tx
-            .update(users)
-            .set({
-              activeSubscriptionCount: activeConfigCountSql(params.telegramId),
-              updatedAt: observedAt,
-            })
-            .where(eq(users.telegramId, params.telegramId));
+          const affectedUserIds = new Set(
+            [params.telegramId, localConfig?.telegramId].filter(Boolean) as number[]
+          );
+          for (const uid of affectedUserIds) {
+            await tx
+              .update(users)
+              .set({
+                activeSubscriptionCount: activeConfigCountSql(uid),
+                updatedAt: observedAt,
+              })
+              .where(eq(users.telegramId, uid));
+          }
 
           await this.promoService.finalizeReservedPurchasePromo(tx, intentId);
           return true;

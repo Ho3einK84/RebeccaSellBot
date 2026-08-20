@@ -18,6 +18,8 @@ export interface PurchaseSagaParams {
   checkoutId?: string;
   /** Maximum amount the user explicitly confirmed; authoritative pricing may only be lower. */
   maxAmount?: number;
+  /** Optional flag allowing an administrator to pay for another user's renewal without transferring ownership. */
+  allowAdminOverride?: boolean;
 }
 
 export class PendingTopupReceiptError extends Error {

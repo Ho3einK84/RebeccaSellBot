@@ -584,6 +584,9 @@ export async function renewConfigConversation(
       );
       return;
     }
+    const isAdmin = Boolean(
+      ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
+    );
     res = await ctx.services.walletService.executePurchaseSaga({
       telegramId,
       amount: checkout.amount,
@@ -596,6 +599,7 @@ export async function renewConfigConversation(
       serviceId: checkout.serviceId,
       checkoutId: checkout.id,
       ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
+      allowAdminOverride: isAdmin,
     });
   } catch (err: unknown) {
     await conversation.external((outsideCtx) =>

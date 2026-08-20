@@ -400,6 +400,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         serviceId: checkout.serviceId,
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
+        allowAdminOverride: isAdmin,
       });
     } catch (err) {
       await recordCheckoutFailed(ctx.services.purchaseCheckoutService, checkout.id);
