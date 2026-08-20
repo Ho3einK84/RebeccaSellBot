@@ -74,25 +74,8 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
 
 function qualify(locale: SupportedLocale, texts: Record<string, string>): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(texts).map(([key, value]) => [`${locale}.${key}`, addDefaultEmoji(key, value)])
+    Object.entries(texts).map(([key, value]) => [`${locale}.${key}`, value])
   );
-}
-
-/**
- * Every stock message should feel like part of the same friendly product.
- * Explicitly styled messages keep their own emoji; concise labels and legacy
- * copy receive a context-sensitive lead-in without changing placeholders.
- */
-function addDefaultEmoji(key: string, value: string): string {
-  if (/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(value)) return value;
-  if (/failed|invalid|denied|rejected|unavailable|not_found|expired|banned|inactive/u.test(key)) {
-    return `⚠️ ${value}`;
-  }
-  if (/success|approved|enabled|active|saved|created|sent|updated|valid/u.test(key)) {
-    return `✅ ${value}`;
-  }
-  if (/prompt|intro/u.test(key)) return `💬 ${value}`;
-  return value;
 }
 
 /**
