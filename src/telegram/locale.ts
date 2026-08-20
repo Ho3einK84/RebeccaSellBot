@@ -215,10 +215,19 @@ export function formatSubscriptionLink(url: string | undefined, unavailable: str
   }
 }
 
+const DEFAULT_PACKAGE_FALLBACK_NAMES = new Set([
+  '10 GB - 30 Days',
+  '30 GB - 30 Days',
+  '50 GB - 30 Days',
+  '100 GB - 60 Days',
+]);
+
 /**
- * Built-in packages have localized names; arbitrary admin-defined package
- * names retain their configured value until the settings editor supplies a
- * localized replacement.
+ * Localize package names, with fallback to configured package name.
+ *
+ * If the administrator configured a custom package name in packages_json, that name
+ * is preserved directly. Stock fallback translations only apply when the package
+ * name matches the default initial placeholder names.
  */
 export function localizedPackageName(
   ctx: LocaleAwareContext,
@@ -231,6 +240,12 @@ export function localizedPackageName(
     const gb = localizedNumber(gbAmount, ctx);
     const unit = t(ctx, 'traffic_unit_gb');
     return `${gb} ${unit}`;
+  }
+  if (fallback && !DEFAULT_PACKAGE_FALLBACK_NAMES.has(fallback.trim())) {
+    if (resolveContextLocale(ctx) === 'fa') {
+      return fallback.replace(/\b(\d+)\s*GB\b/gi, '$1 گیگ');
+    }
+    return fallback;
   }
   const key = `package_${packageId}_name`;
   const translated = t(ctx, key);

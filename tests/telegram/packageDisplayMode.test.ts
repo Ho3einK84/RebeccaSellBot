@@ -43,4 +43,28 @@ describe('packageDisplayMode', () => {
     const label = formatPackageButtonLabel(ctx as any, pkg);
     expect(label).toBe('100 گیگ - 60 Days');
   });
+
+  it('renders custom package name when package uses a stock ID but custom name in name mode', () => {
+    const customNamedPkg = {
+      id: 'pkg_50gb_30d',
+      name: 'سرویس پیش فرض',
+      price: 150_000,
+      gbAmount: 50,
+    };
+    const ctx = {
+      services: {
+        translationService: {
+          getSetting: vi.fn(() => 'name'),
+          resolveLocale: vi.fn(() => 'fa'),
+          get: vi.fn((key: string) => {
+            if (key === 'package_pkg_50gb_30d_name') return '۵۰ گیگ · ۳۰ روز';
+            return key;
+          }),
+        },
+      },
+    } as unknown as LocaleAwareContext;
+
+    const label = formatPackageButtonLabel(ctx as any, customNamedPkg);
+    expect(label).toBe('سرویس پیش فرض');
+  });
 });
