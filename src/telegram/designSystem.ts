@@ -16,11 +16,32 @@ export type ScreenDefinition = {
   footer?: string;
 };
 
+const EMOJI_PREFIX_REGEX =
+  /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|[\uE0020-\uE007F])*\s*)+/u;
+
+/**
+ * Strips leading emoji characters and following whitespace from a string.
+ */
+export function stripLeadingEmoji(text: string): string {
+  return text.replace(EMOJI_PREFIX_REGEX, '').trimStart();
+}
+
 /**
  * Format a unified header with an emoji and title, and optional italic subtitle.
+ * Prevents emoji duplication if the title string already contains a leading emoji.
  */
 export function buildHeader(emoji: string, title: string, subtitle?: string): string {
-  const headerLine = `${emoji} *${title}*`;
+  const cleanTitle = title.trim();
+  const titleWithoutEmoji = stripLeadingEmoji(cleanTitle);
+  const effectiveEmoji =
+    emoji ||
+    (cleanTitle !== titleWithoutEmoji
+      ? cleanTitle.slice(0, cleanTitle.length - titleWithoutEmoji.length).trim()
+      : '');
+  const unstarredTitle = titleWithoutEmoji.replace(/^\*+|\*+$/g, '').trim();
+  const headerLine = effectiveEmoji
+    ? `${effectiveEmoji} *${unstarredTitle}*`
+    : `*${unstarredTitle}*`;
   return subtitle ? `${headerLine}\n_${subtitle}_\n` : `${headerLine}\n`;
 }
 
@@ -104,7 +125,15 @@ export function buildSectionCard(
     const prefix = emoji && !hasSameStatusPrefix ? `${emoji} ` : '';
     return `${prefix}*${label}:* ${renderedValue}`;
   });
-  const heading = sectionEmoji ? `${sectionEmoji} *${title}*` : `*${title}*`;
+  const cleanTitle = title.trim();
+  const titleWithoutEmoji = stripLeadingEmoji(cleanTitle);
+  const effectiveEmoji =
+    sectionEmoji ||
+    (cleanTitle !== titleWithoutEmoji
+      ? cleanTitle.slice(0, cleanTitle.length - titleWithoutEmoji.length).trim()
+      : '');
+  const unstarredTitle = titleWithoutEmoji.replace(/^\*+|\*+$/g, '').trim();
+  const heading = effectiveEmoji ? `${effectiveEmoji} *${unstarredTitle}*` : `*${unstarredTitle}*`;
   return `${heading}\n\n${lines.join('\n')}`;
 }
 

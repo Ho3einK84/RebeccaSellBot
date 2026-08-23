@@ -123,6 +123,17 @@ ABC_456`;
     ).toBe('📱 *Status*\n\n*State:* 🟢 Active');
   });
 
+  it('does not duplicate emoji in headers or section cards when title starts with an emoji', () => {
+    expect(buildHeader('🚨', '🚨 Panel Connection Outage')).toBe('🚨 *Panel Connection Outage*\n');
+    expect(buildHeader('🚨', '🚨 اختلال در اتصال پنل')).toBe('🚨 *اختلال در اتصال پنل*\n');
+    expect(buildHeader('🔒', '🛠️ *Admin*')).toBe('🔒 *Admin*\n');
+    expect(buildHeader('🔒', '🛠️ *مدیریت*')).toBe('🔒 *مدیریت*\n');
+    expect(buildHeader('⚙️', '⚙️ تنظیمات')).toBe('⚙️ *تنظیمات*\n');
+    expect(buildSectionCard('📌 مشخصات', [{ label: 'نام', value: 'تست' }])).toBe(
+      '📌 *مشخصات*\n\n*نام:* تست'
+    );
+  });
+
   it('builds standard confirmation keyboard', () => {
     const ctx = {
       services: {

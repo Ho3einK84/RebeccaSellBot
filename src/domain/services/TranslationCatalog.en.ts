@@ -117,7 +117,7 @@ export const EN_TEXTS: Record<string, string> = {
   rate_limited: '⚠️ Too many requests. Try again shortly.',
   admin_access_denied: '⚠️ This section is for admins only.',
 
-  admin_menu_title: '🛠️ *Admin*',
+  admin_menu_title: 'Admin',
   admin_home_title: 'Admin',
   admin_home_subtitle: 'Receipts, sales, panels, and settings',
   admin_home_hint: 'Choose a section.',
@@ -784,7 +784,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_direct_confirm_button: '✅ Send Message',
   admin_direct_sent: '✅ Message sent.',
   admin_direct_failed: '❌ Message not sent.',
-  admin_panel_outage_title: '🚨 Panel Connection Outage',
+  admin_panel_outage_title: 'Panel Connection Outage',
   admin_panel_outage_subtitle: 'Communication with a panel has failed.',
   admin_panel_outage_attempts_label: 'Failed connection attempts',
   admin_panel_outage_hint: '💡 Check the panel server status and origin reachability.',

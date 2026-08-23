@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildBooleanSettingKeyboard,
   buildCustomNamingTemplatePrompt,
+  buildEditorNavigationKeyboard,
+  buildLocaleSettingKeyboard,
   buildSettingsGroupPrompt,
   displayAdminSettingValue,
 } from '../../src/telegram/conversations/adminConversations.js';
@@ -86,7 +88,7 @@ describe('admin settings presentation', () => {
     expect(prompt).not.toContain('`Name`_*[`');
   });
 
-  it('builds a compact toggle keyboard with active-state indication and back navigation', () => {
+  it('builds a compact toggle keyboard with active-state indication and single back navigation', () => {
     const ctx = createContext({ custom_volume_enabled: 'true' });
 
     const keyboard = buildBooleanSettingKeyboard(ctx, 'custom_volume_enabled', 'set-bool:');
@@ -96,10 +98,25 @@ describe('admin settings presentation', () => {
       'set-bool:true',
       'set-bool:false',
       'set-bool:back',
-      'conversation:cancel',
     ]);
     expect(buttons[0]?.text).toContain('✅');
     expect(buttons[1]?.text).not.toContain('✅');
+  });
+
+  it('builds editor and locale navigation keyboards with single clean back button', () => {
+    const ctx = createContext({ default_locale: 'fa' });
+
+    const editorKeyboard = buildEditorNavigationKeyboard(ctx, 'pricing');
+    expect(editorKeyboard.inline_keyboard.flat().map((b) => b.callback_data)).toEqual([
+      'set-edit-back:pricing',
+    ]);
+
+    const localeKeyboard = buildLocaleSettingKeyboard(ctx, 'fa', 'set-loc:');
+    expect(localeKeyboard.inline_keyboard.flat().map((b) => b.callback_data)).toEqual([
+      'set-loc:fa',
+      'set-loc:en',
+      'set-loc:back',
+    ]);
   });
 
   it('builds a concise settings card with readable names and values', () => {

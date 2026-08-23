@@ -20,6 +20,7 @@ export {
   buildBooleanSettingKeyboard,
   buildCustomNamingTemplatePrompt,
   buildEditorNavigationKeyboard,
+  buildLocaleSettingKeyboard,
   buildSelectionKeyboard,
   buildSettingsGroupKeyboard,
   buildSettingsGroupPrompt,

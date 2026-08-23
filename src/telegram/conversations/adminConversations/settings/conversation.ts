@@ -235,9 +235,7 @@ async function editNamingMode(
     .row()
     .text(t(ctx, 'admin_setting_naming_mode_custom'), 'set-nm:custom')
     .row()
-    .text(t(ctx, 'admin_settings_back_category'), 'set-nm:back')
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+    .text(t(ctx, 'admin_settings_back_category'), 'set-nm:back');
   await promptInConversation(
     conversation,
     ctx,
@@ -270,9 +268,7 @@ async function editSupportSetting(
     .text(t(ctx, 'admin_support_change'), 'set-support:edit')
     .text(t(ctx, 'admin_support_remove'), 'set-support:remove')
     .row()
-    .text(t(ctx, 'admin_settings_back_category'), 'set-support:back')
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+    .text(t(ctx, 'admin_settings_back_category'), 'set-support:back');
   await promptInConversation(
     conversation,
     ctx,
@@ -417,10 +413,10 @@ async function showSettingResult(
   text: string
 ): Promise<FlowOutcome> {
   const returnCallback = callbackData('set-return', groupId);
-  const keyboard = new InlineKeyboard()
-    .text(t(ctx, 'admin_settings_return_category'), returnCallback)
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+  const keyboard = new InlineKeyboard().text(
+    t(ctx, 'admin_settings_return_category'),
+    returnCallback
+  );
   await promptInConversation(conversation, ctx, text, {
     parse_mode: 'Markdown',
     reply_markup: keyboard,

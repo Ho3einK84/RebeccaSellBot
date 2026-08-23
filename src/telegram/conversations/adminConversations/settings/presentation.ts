@@ -81,9 +81,7 @@ export function buildBooleanSettingKeyboard(
     .text(current ? `✅ ${activeLabel}` : activeLabel, `${callbackPrefix}true`)
     .text(!current ? `✅ ${inactiveLabel}` : inactiveLabel, `${callbackPrefix}false`)
     .row()
-    .text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`)
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+    .text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`);
 }
 
 export function buildLocaleSettingKeyboard(
@@ -99,19 +97,17 @@ export function buildLocaleSettingKeyboard(
     .text(isFa ? `✅ ${faLabel}` : faLabel, `${callbackPrefix}fa`)
     .text(isEn ? `✅ ${enLabel}` : enLabel, `${callbackPrefix}en`)
     .row()
-    .text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`)
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+    .text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`);
 }
 
 export function buildEditorNavigationKeyboard(
   ctx: ConversationContext,
   groupId: SettingGroupId
 ): InlineKeyboard {
-  return new InlineKeyboard()
-    .text(t(ctx, 'admin_settings_back_category'), callbackData('set-edit-back', groupId))
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+  return new InlineKeyboard().text(
+    t(ctx, 'admin_settings_back_category'),
+    callbackData('set-edit-back', groupId)
+  );
 }
 
 export function buildSettingsPrompt(
