@@ -510,7 +510,9 @@ export class RebeccaPanelRegistry {
 
   async testConnection(panelId: string): Promise<boolean> {
     try {
-      await this.getService(panelId).getUsers(0, 1);
+      const service = this.getService(panelId);
+      service.resetCircuitBreaker();
+      await service.getUsers(0, 1);
       return true;
     } catch {
       return false;

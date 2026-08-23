@@ -200,10 +200,13 @@ export interface RebeccaDeleteResponse {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MAX_RETRIES = 4;
-const BASE_BACKOFF_MS = 1_000;
-const MAX_BACKOFF_MS = 16_000;
-const REQUEST_TIMEOUT_MS = 20_000;
+const MAX_RETRIES = 2;
+const BASE_BACKOFF_MS = 300;
+const MAX_BACKOFF_MS = 1_500;
+const REQUEST_TIMEOUT_MS = 5_000;
+const HEALTH_TIMEOUT_MS = 3_000;
+const CIRCUIT_OPEN_COOLDOWN_MS = 15_000;
+const CIRCUIT_FAILURE_THRESHOLD = 2;
 
 /** HTTP status codes that indicate Cloudflare / origin-level failure */
 const RETRYABLE_5XX = new Set([500, 502, 503, 504, 521, 522, 523, 524]);
@@ -239,11 +242,60 @@ export class RebeccaApiClient {
   /** Invalidates in-flight auth work when live panel credentials are reconfigured. */
   private authGeneration = 0;
 
+  /** Circuit breaker state to fast-fail on unreachable origins without hanging the process */
+  private circuitState: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
+  private consecutiveFailures = 0;
+  private circuitOpenedAt = 0;
+
   constructor(options: RebeccaConnectionOptions) {
     this.baseUrl = validateRebeccaBaseUrl(options.baseUrl);
     this.adminUsername = options.adminUsername ?? 'admin';
     this.adminPassword = options.adminPassword ?? '';
     this.apiKey = options.apiKey;
+  }
+
+  /**
+   * Check if circuit breaker is currently open (fast-failing).
+   */
+  isCircuitOpen(): boolean {
+    return (
+      this.circuitState === 'OPEN' && Date.now() - this.circuitOpenedAt < CIRCUIT_OPEN_COOLDOWN_MS
+    );
+  }
+
+  /**
+   * Reset circuit breaker state to closed (healthy).
+   */
+  resetCircuitBreaker(): void {
+    this.circuitState = 'CLOSED';
+    this.consecutiveFailures = 0;
+    this.circuitOpenedAt = 0;
+  }
+
+  private checkCircuit(endpoint: string): void {
+    if (this.circuitState === 'OPEN') {
+      if (Date.now() - this.circuitOpenedAt < CIRCUIT_OPEN_COOLDOWN_MS) {
+        throw new RebeccaOriginDownError(endpoint, null, 0, false);
+      }
+      this.circuitState = 'HALF_OPEN';
+    }
+  }
+
+  private recordSuccess(): void {
+    if (this.circuitState !== 'CLOSED' || this.consecutiveFailures > 0) {
+      this.resetCircuitBreaker();
+    }
+  }
+
+  private recordFailure(): void {
+    this.consecutiveFailures += 1;
+    if (
+      this.consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD ||
+      this.circuitState === 'HALF_OPEN'
+    ) {
+      this.circuitState = 'OPEN';
+      this.circuitOpenedAt = Date.now();
+    }
   }
 
   /**
@@ -256,12 +308,15 @@ export class RebeccaApiClient {
     if (options.adminPassword !== undefined) this.adminPassword = options.adminPassword;
     if (options.apiKey !== undefined) this.apiKey = options.apiKey || undefined;
     this.invalidateToken();
+    this.resetCircuitBreaker();
   }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
 
   private async getAuthToken(): Promise<string> {
     if (this.apiKey) return this.apiKey;
+
+    this.checkCircuit('/api/admin/token');
 
     const nowSec = Math.floor(Date.now() / 1000);
     // Reuse if not expiring within 60 s
@@ -291,6 +346,7 @@ export class RebeccaApiClient {
         body: JSON.stringify({ username: this.adminUsername, password: this.adminPassword }),
       });
     } catch (networkErr: unknown) {
+      this.recordFailure();
       logger.error(
         { err: networkErr, endpoint: '/api/admin/token' },
         'Rebecca API: token fetch network failure'
@@ -305,6 +361,7 @@ export class RebeccaApiClient {
         'Rebecca API: token fetch failed'
       );
       if (RETRYABLE_5XX.has(res.status)) {
+        this.recordFailure();
         throw new RebeccaOriginDownError('/api/admin/token', res.status, 1, false);
       }
       throw new RebeccaApiError(res.status, '/api/admin/token', errBody);
@@ -316,6 +373,7 @@ export class RebeccaApiClient {
       rebeccaTokenResponseSchema
     );
     const accessToken = data.access_token;
+    this.recordSuccess();
     // Live panel settings can change while the token request is in flight. Do
     // not cache or use a token produced from stale credentials against the new
     // connection; transparently join/start auth for the current generation.
@@ -351,6 +409,10 @@ export class RebeccaApiClient {
     attempt = 0,
     requestDispatched = false
   ): Promise<unknown> {
+    if (attempt === 0) {
+      this.checkCircuit(endpoint);
+    }
+
     // Auth failing — propagate immediately, no retry
     const token = await this.getAuthToken();
 
@@ -405,6 +467,9 @@ export class RebeccaApiClient {
       throw new RebeccaApiError(res.status, endpoint, errBody);
     }
 
+    // Successful response — recover circuit
+    this.recordSuccess();
+
     // 204 No Content
     if (res.status === 204) return undefined;
 
@@ -430,12 +495,13 @@ export class RebeccaApiClient {
       `Rebecca API retryable failure (${label}), attempt ${attempt + 1}/${MAX_RETRIES + 1}`
     );
 
-    if (attempt >= MAX_RETRIES) {
+    if (attempt >= MAX_RETRIES || (!requestDispatched && attempt >= 1)) {
+      this.recordFailure();
       throw new RebeccaOriginDownError(endpoint, statusCode, attempt + 1, requestDispatched);
     }
 
     const backoff = Math.min(BASE_BACKOFF_MS * 2 ** attempt, MAX_BACKOFF_MS);
-    const jitter = Math.random() * 500;
+    const jitter = Math.random() * 100;
     await new Promise((r) => setTimeout(r, backoff + jitter));
 
     return this.request(endpoint, options, attempt + 1, requestDispatched);
@@ -624,15 +690,22 @@ export class RebeccaApiClient {
     try {
       const url = `${this.baseUrl}/api/admin/token`;
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5_000);
+      const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
       // Bare GET to the token endpoint is expected to return a non-2xx (likely 404/405 since the endpoint is POST-only).
       // Panel is up if we get ANY HTTP response outside the retryable-5xx set (treated as "panel reachable").
       const res = await fetch(url, {
         method: 'GET',
         signal: controller.signal,
       }).finally(() => clearTimeout(timer));
-      return res.status < 500 || !RETRYABLE_5XX.has(res.status);
+      const healthy = res.status < 500 || !RETRYABLE_5XX.has(res.status);
+      if (healthy) {
+        this.resetCircuitBreaker();
+      } else {
+        this.recordFailure();
+      }
+      return healthy;
     } catch {
+      this.recordFailure();
       return false;
     }
   }

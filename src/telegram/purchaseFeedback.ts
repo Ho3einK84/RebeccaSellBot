@@ -28,7 +28,7 @@ export function purchaseFailureMessage(
     return translationService.get('insufficient_balance', locale);
   }
   if (err instanceof RebeccaOriginDownError) {
-    return translationService.get('purchase_failed', locale);
+    return translationService.get('purchase_failed_panel_down', locale);
   }
   return translationService.get('purchase_failed', locale);
 }

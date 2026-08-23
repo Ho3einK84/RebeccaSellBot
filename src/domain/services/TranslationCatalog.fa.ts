@@ -86,6 +86,14 @@ export const FA_TEXTS: Record<string, string> = {
   insufficient_balance: '⚠️ موجودی کافی نیست. کیف پول را شارژ کنید.',
   user_not_found: '⚠️ حساب کاربری پیدا نشد.',
   purchase_failed: '❌ خرید انجام نشد. مبلغی کسر نشد.',
+  purchase_failed_panel_down:
+    '⚠️ ارتباط با سرور موقتاً برقرار نشد. لطفاً چند لحظه بعد دوباره تلاش کنید. (هیچ مبلغی کسر نشد)',
+  config_action_panel_down:
+    '⚠️ ارتباط با سرور موقتاً برقرار نشد. لطفاً چند لحظه بعد دوباره تلاش کنید.',
+  claim_failed_panel_down:
+    '⚠️ ارتباط با سرور موقتاً برقرار نشد. لطفاً چند لحظه بعد دوباره تلاش کنید.',
+  panel_origin_down_user_notice:
+    '⚠️ ارتباط با سرور موقتاً قطع است. لطفاً چند لحظه بعد دوباره تلاش کنید.',
   purchase_outcome_pending: '⏳ نتیجه خرید هنوز مشخص نیست. مبلغ تا نتیجه نهایی رزرو می‌ماند.',
   purchase_in_progress: '⏳ یک خرید در حال پردازش است. کمی صبر کنید.',
 
@@ -774,9 +782,10 @@ export const FA_TEXTS: Record<string, string> = {
   admin_direct_confirm_button: '✅ ارسال پیام',
   admin_direct_sent: '✅ پیام ارسال شد.',
   admin_direct_failed: '❌ پیام ارسال نشد.',
-  admin_panel_outage_title: 'اختلال پنل',
-  admin_panel_outage_subtitle: 'یکی از پنل‌ها در دسترس نیست.',
+  admin_panel_outage_title: '🚨 اختلال در اتصال پنل',
+  admin_panel_outage_subtitle: 'ارتباط با یکی از پنل‌ها با خطا مواجه شد.',
   admin_panel_outage_attempts_label: 'تلاش‌های ناموفق',
+  admin_panel_outage_hint: '💡 وضعیت سرور و اتصال اینترنت پنل را بررسی کنید.',
 
   renewal_notification_title: 'سرویس نیاز به تمدید دارد',
   renewal_notification_subtitle: 'برای جلوگیری از قطع سرویس، آن را تمدید کنید.',

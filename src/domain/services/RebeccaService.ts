@@ -126,6 +126,16 @@ export class RebeccaService {
 
   private markHealthy(): void {
     markPanelHealthy(this.panel.panelId);
+    this.client.resetCircuitBreaker();
+  }
+
+  resetCircuitBreaker(): void {
+    this.client.resetCircuitBreaker();
+    markPanelHealthy(this.panel.panelId);
+  }
+
+  isCircuitOpen(): boolean {
+    return this.client.isCircuitOpen();
   }
 
   // ── Read operations ────────────────────────────────────────────────────────

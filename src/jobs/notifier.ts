@@ -228,7 +228,9 @@ export async function runNotifierSweep(
     translationService.getSettingNum('expiry_warning_days', 3)
   );
 
+  const downPanels = new Set<string>();
   for (const cfg of configs) {
+    if (downPanels.has(cfg.panelId)) continue;
     try {
       const apiUser = await getRebeccaService(panels, cfg.panelId).getUser(cfg.configUsername);
       const assessment = assessNotificationConditions(apiUser, {
@@ -309,13 +311,12 @@ export async function runNotifierSweep(
       }
     } catch (err) {
       if (err instanceof RebeccaOriginDownError) {
-        // Panel is unreachable — abort the whole sweep. RebeccaService has
-        // already triggered its deduplicated admin alert hook.
+        downPanels.add(cfg.panelId);
         logger.warn(
-          { configUsername: cfg.configUsername },
-          'Notifier sweep aborted: Rebecca panel origin down'
+          { panelId: cfg.panelId, configUsername: cfg.configUsername },
+          'Notifier: Rebecca panel origin down, skipping remaining configs for panel'
         );
-        return;
+        continue;
       }
       // A deleted/malformed config must not block warnings for other users.
       logger.debug({ configUsername: cfg.configUsername, err }, 'Notifier: skipping config');

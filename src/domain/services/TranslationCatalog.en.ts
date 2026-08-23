@@ -86,6 +86,14 @@ export const EN_TEXTS: Record<string, string> = {
   insufficient_balance: '⚠️ Insufficient balance. Top up your wallet.',
   user_not_found: '⚠️ Account not found.',
   purchase_failed: '❌ Purchase failed. No funds were deducted.',
+  purchase_failed_panel_down:
+    '⚠️ Server connection is temporarily unavailable. Please try again shortly. (No funds were deducted)',
+  config_action_panel_down:
+    '⚠️ Server connection is temporarily unavailable. Please try again shortly.',
+  claim_failed_panel_down:
+    '⚠️ Server connection is temporarily unavailable. Please try again in a few moments.',
+  panel_origin_down_user_notice:
+    '⚠️ Connection to the server is temporarily down. Please try again shortly.',
   purchase_outcome_pending: '⏳ The purchase result is still pending. Funds remain reserved.',
   purchase_in_progress: '⏳ A purchase is processing. Please wait.',
 
@@ -776,9 +784,10 @@ export const EN_TEXTS: Record<string, string> = {
   admin_direct_confirm_button: '✅ Send Message',
   admin_direct_sent: '✅ Message sent.',
   admin_direct_failed: '❌ Message not sent.',
-  admin_panel_outage_title: 'Panel Outage',
-  admin_panel_outage_subtitle: 'A panel is unavailable.',
+  admin_panel_outage_title: '🚨 Panel Connection Outage',
+  admin_panel_outage_subtitle: 'Communication with a panel has failed.',
   admin_panel_outage_attempts_label: 'Failed connection attempts',
+  admin_panel_outage_hint: '💡 Check the panel server status and origin reachability.',
 
   renewal_notification_title: 'Service Needs Renewal',
   renewal_notification_subtitle: 'Renew it to avoid interruption.',

@@ -31,7 +31,10 @@ import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js
 import { calculateTraffic } from '../../../domain/services/ConfigLifecycle.js';
 import { RefundOutcomePendingError } from '../../../domain/services/RefundService.js';
 import { PurchaseCheckoutUnavailableError } from '../../../domain/services/PurchaseCheckoutService.js';
-import type { RebeccaUserDetail } from '../../../domain/services/RebeccaService.js';
+import {
+  type RebeccaUserDetail,
+  RebeccaOriginDownError,
+} from '../../../domain/services/RebeccaService.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 import { packageCatalogToken } from '../../packageCatalog.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../../checkoutLifecycle.js';
@@ -687,10 +690,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       }
       const card = await buildSubscriptionCard(ctx, config, true);
       await renderSubscriptionScreen(ctx, card.text, card.keyboard);
-    } catch {
+    } catch (err) {
+      const message =
+        err instanceof RebeccaOriginDownError
+          ? t(ctx, 'config_action_panel_down')
+          : t(ctx, 'config_action_failed');
       await renderSubscriptionScreen(
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'subscription_status_label'), t(ctx, 'config_action_failed')),
+        buildEmptyState('⚠️', t(ctx, 'subscription_status_label'), message),
         backKeyboard(ctx)
       );
     }
@@ -710,7 +717,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     await renderSubscriptionScreen(
       ctx,
       buildScreen({
-        emoji: '🔐',
+        emoji: '🔄',
         title: t(ctx, 'subscription_revoke_title'),
         subtitle: t(ctx, 'subscription_revoke_subtitle'),
         primary: {
@@ -723,7 +730,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       new InlineKeyboard()
         .text(t(ctx, 'admin_confirm_button'), callbackData('config', 'revoke_confirm', config.id))
         .row()
-        .text(t(ctx, 'menu_back'), callbackData('config', 'refresh', config.id))
+        .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
     );
   });
 
@@ -778,14 +785,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
             .row()
             .text(t(ctx, 'menu_back_main'), 'nav:main'),
         });
-      } catch {
+      } catch (err) {
+        const message =
+          err instanceof RebeccaOriginDownError
+            ? t(ctx, 'config_action_panel_down')
+            : t(ctx, 'config_action_failed');
         await renderSubscriptionScreen(
           ctx,
-          buildEmptyState(
-            '⚠️',
-            t(ctx, 'subscription_revoke_title'),
-            t(ctx, 'config_action_failed')
-          ),
+          buildEmptyState('⚠️', t(ctx, 'subscription_revoke_title'), message),
           backKeyboard(ctx)
         );
       }

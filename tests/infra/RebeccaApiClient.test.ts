@@ -3,6 +3,7 @@ import {
   RebeccaApiClient,
   RebeccaApiError,
   RebeccaContractError,
+  RebeccaOriginDownError,
 } from '../../src/infra/RebeccaApiClient.js';
 import { RebeccaService } from '../../src/domain/services/RebeccaService.js';
 
@@ -53,8 +54,8 @@ describe('RebeccaApiClient & RebeccaService — 521 Cloudflare Resilience Tests'
       requestDispatched: true,
     });
 
-    // Should attempt original call + 4 retries = 5 total calls
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    // Should attempt original call + 2 retries = 3 total calls
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('marks connection-setup failures as pre-dispatch after retries are exhausted', async () => {
@@ -292,6 +293,37 @@ describe('RebeccaApiClient & RebeccaService — 521 Cloudflare Resilience Tests'
     });
 
     await expect(client.getUser('malformed_user')).rejects.toBeInstanceOf(RebeccaContractError);
+  });
+
+  it('trips the circuit breaker after repeated failures and fast-fails without network calls', async () => {
+    vi.spyOn(global, 'setTimeout').mockImplementation((fn: TimerHandler) => {
+      if (typeof fn === 'function') fn();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 521,
+      text: vi.fn().mockResolvedValue('Web server down'),
+    });
+    global.fetch = fetchMock;
+
+    // First attempt fails and exhausts retries (3 calls)
+    await expect(rebeccaService.getUser('user1')).rejects.toThrow(RebeccaOriginDownError);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    // Second failure trips circuit to OPEN (3 more calls -> 6 calls total)
+    await expect(rebeccaService.getUser('user2')).rejects.toThrow(RebeccaOriginDownError);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(client.isCircuitOpen()).toBe(true);
+
+    // Third call fast-fails immediately because circuit breaker is OPEN (0 network calls made!)
+    await expect(rebeccaService.getUser('user3')).rejects.toThrow(RebeccaOriginDownError);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+
+    // Resetting circuit breaker allows calls again
+    client.resetCircuitBreaker();
+    expect(client.isCircuitOpen()).toBe(false);
   });
 
   it('should mask API keys and secrets in logger redaction configuration', () => {

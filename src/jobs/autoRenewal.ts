@@ -149,8 +149,14 @@ export async function runAutoRenewalSweep(
   const thresholdGb = translationService.getSettingNum('low_traffic_threshold_gb', 2);
   const expiryWarningDays = translationService.getSettingNum('expiry_warning_days', 3);
   const summary: AutoRenewalSweepSummary = { checked: 0, renewed: 0, skipped: 0 };
+  const downPanels = new Set<string>();
 
   for (const config of configs) {
+    if (downPanels.has(config.panelId)) {
+      summary.checked += 1;
+      summary.skipped += 1;
+      continue;
+    }
     summary.checked += 1;
     try {
       const apiUser = await getRebeccaService(panels, config.panelId).getUser(
@@ -370,8 +376,9 @@ export async function runAutoRenewalSweep(
     } catch (err) {
       summary.skipped += 1;
       if (err instanceof RebeccaOriginDownError) {
+        downPanels.add(config.panelId);
         logger.warn(
-          { configUsername: config.configUsername },
+          { panelId: config.panelId, configUsername: config.configUsername },
           'Auto-renewal config skipped: its Rebecca panel origin is down'
         );
         continue;

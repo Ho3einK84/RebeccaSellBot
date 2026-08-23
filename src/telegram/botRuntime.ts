@@ -334,5 +334,6 @@ function buildAdminPanelOutageScreen(
         ],
       },
     ],
+    footer: tForLocale(services.translationService, locale, 'admin_panel_outage_hint'),
   });
 }

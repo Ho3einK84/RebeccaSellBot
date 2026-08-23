@@ -15,6 +15,7 @@ import {
 import { callbackData } from '../callbackData.js';
 import { buildSubscriptionActionKeyboard, showSubscriptionDetail } from './subscriptions/routes.js';
 import { sanitizeTelegramInlineCode } from '../rendering.js';
+import { RebeccaOriginDownError } from '../../domain/services/RebeccaService.js';
 
 export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   bot.callbackQuery(/^config_(toggle|revoke):(.+)$/, async (ctx) => {
@@ -207,9 +208,13 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
           { telegramId: ctx.from.id, errorName: err instanceof Error ? err.name : typeof err },
           'Subscription link claim handler failed'
         );
+        const messageKey =
+          err instanceof RebeccaOriginDownError
+            ? 'claim_failed_panel_down'
+            : 'claim_handler_failed';
         await renderScreen(
           ctx,
-          buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, 'claim_handler_failed')),
+          buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, messageKey)),
           { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
         );
       }

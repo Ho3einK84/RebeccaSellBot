@@ -224,13 +224,23 @@ describe('runAutoRenewalSweep', () => {
     expect(ctx.executePurchaseSaga).toHaveBeenCalledTimes(1);
   });
 
-  it('isolates an unavailable panel and continues checking other configs', async () => {
-    const second = { ...CANDIDATE, configUsername: 'bob' };
+  it('isolates an unavailable panel and continues checking other configs on healthy panels', async () => {
+    const second = { ...CANDIDATE, panelId: 'panel_b', configUsername: 'bob' };
     const originDown = new RebeccaOriginDownError('GET /api/user/alice', 521, 5);
     const ctx = services({ candidates: [CANDIDATE, second], getUserError: originDown });
 
     await expect(run(ctx)).resolves.toEqual({ checked: 2, renewed: 0, skipped: 2 });
     expect(ctx.getUser).toHaveBeenCalledTimes(2);
+    expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();
+  });
+
+  it('skips subsequent configs on the same down panel without redundant network calls', async () => {
+    const second = { ...CANDIDATE, configUsername: 'bob' };
+    const originDown = new RebeccaOriginDownError('GET /api/user/alice', 521, 5);
+    const ctx = services({ candidates: [CANDIDATE, second], getUserError: originDown });
+
+    await expect(run(ctx)).resolves.toEqual({ checked: 2, renewed: 0, skipped: 2 });
+    expect(ctx.getUser).toHaveBeenCalledTimes(1);
     expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();
   });
 });
