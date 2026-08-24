@@ -17,7 +17,7 @@ import {
 
 describe('Backup Settings Configuration & Validation', () => {
   describe('Catalog definitions', () => {
-    it('registers backup group in GENERAL_SETTING_GROUPS', () => {
+    it('registers backup group in SETTING_GROUPS and keeps GENERAL_SETTING_GROUPS separate', () => {
       const group = getSettingGroup('backup');
       expect(group).toBeDefined();
       expect(group?.id).toBe('backup');
@@ -27,7 +27,7 @@ describe('Backup Settings Configuration & Validation', () => {
       expect(group?.settings).toContain('backup_include_env');
 
       const inGeneral = GENERAL_SETTING_GROUPS.some((g) => g.id === 'backup');
-      expect(inGeneral).toBe(true);
+      expect(inGeneral).toBe(false);
     });
 
     it('has definitions for all backup setting keys', () => {

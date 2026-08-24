@@ -176,8 +176,6 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
   const trialDays = parseSettingNum(ts.getSetting('trial_days'), 3);
   const supportEnabled = ts.getSettingBool('support_enabled', true);
   const supportDest = ts.getSetting('support_destination', '') || '—';
-  const backupEnabledVal = ts.getSettingBool('backup_enabled', false);
-  const backupIntervalVal = parseSettingNum(ts.getSetting('backup_interval_hours'), 24);
 
   const onBadge = t(ctx, 'admin_overview_active');
   const offBadge = t(ctx, 'admin_overview_inactive');
@@ -207,18 +205,6 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
           {
             label: t(ctx, 'admin_setting_language_selection_enabled'),
             value: langEnabled ? onBadge : offBadge,
-          },
-        ],
-      },
-      {
-        emoji: '💾',
-        title: t(ctx, 'admin_setting_group_backup'),
-        fields: [
-          {
-            label: t(ctx, 'admin_setting_backup_enabled'),
-            value: backupEnabledVal
-              ? `${onBadge} (${localizedNumber(backupIntervalVal, ctx)} ${t(ctx, 'hours_unit')})`
-              : offBadge,
           },
         ],
       },

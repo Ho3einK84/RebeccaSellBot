@@ -116,7 +116,7 @@ export async function adminBackupSettingsConversation(
       .row()
       .text(t(ctx, 'admin_backup_send_now_button'), 'backup:action:send_now')
       .row()
-      .text(t(ctx, 'admin_menu_back_to_admin'), 'backup:back');
+      .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 
     let renderedInPlace = false;
     const messageId = activeCtx.callbackQuery?.message?.message_id;
@@ -144,11 +144,10 @@ export async function adminBackupSettingsConversation(
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['backup:edit:', 'backup:toggle:', 'backup:action:'],
-      backCallbacks: ['backup:back'],
       retryKeyboard: keyboard,
     });
 
-    if (input.type === 'cancel' || input.type === 'back') break;
+    if (input.type === 'cancel') break;
     if (input.type !== 'callback') continue;
     activeCtx = input.ctx;
 
