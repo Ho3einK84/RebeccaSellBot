@@ -94,6 +94,7 @@ const configSchema = z
     PANEL_CREDENTIALS_KEY: panelCredentialsKeySchema,
     HEALTH_CHECK_PORT: healthCheckPortSchema,
     DEFAULT_LOCALE: z.enum(['fa', 'en']).default('fa'),
+    INSTANCE_NAME: optionalStringWithDefault('main'),
     SUPPORT_URL: z
       .string()
       .optional()

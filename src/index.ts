@@ -115,6 +115,7 @@ async function main() {
   const paymentService = new PaymentService(translationService, walletService);
   const backupService = new BackupService(translationService, {
     databaseUrl: config.DATABASE_URL,
+    instanceName: config.INSTANCE_NAME,
   });
 
   const services = {

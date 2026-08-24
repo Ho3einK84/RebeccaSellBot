@@ -82,7 +82,7 @@ export class BackupService {
     options: BackupServiceOptions = {}
   ) {
     this.databaseUrl = options.databaseUrl ?? process.env.DATABASE_URL ?? '';
-    this.instanceName = options.instanceName ?? process.env.INSTANCE_NAME ?? 'rsbot';
+    this.instanceName = options.instanceName ?? process.env.INSTANCE_NAME ?? 'main';
     this.baseDir = options.baseDir ?? process.cwd();
     this.tempBaseDir = options.tempBaseDir ?? os.tmpdir();
   }

@@ -40,6 +40,7 @@ services:
       REBECCA_SERVICE_ID: ${REBECCA_SERVICE_ID:-1}
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-fa}
       SUPPORT_URL: ${SUPPORT_URL-}
+      INSTANCE_NAME: ${INSTANCE_NAME:-main}
       HEALTH_CHECK_PORT: 3001
     depends_on:
       db:
