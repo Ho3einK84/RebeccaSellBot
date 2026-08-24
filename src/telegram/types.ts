@@ -24,6 +24,7 @@ import type { ConfigReconciliationService } from '../domain/services/ConfigRecon
 import type { BroadcastService } from '../domain/services/BroadcastService.js';
 import type { PackageCategoryService } from '../domain/services/PackageCategoryService.js';
 import type { PaymentService } from '../domain/services/PaymentService.js';
+import type { BackupService } from '../domain/services/BackupService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
@@ -95,6 +96,7 @@ export type BotServices = {
   configTransferService: ConfigTransferService;
   configReconciliationService: ConfigReconciliationService;
   broadcastService: BroadcastService;
+  backupService: BackupService;
   /** Optional Telegram-compatible support destination rendered as a URL button. */
   supportUrl?: string;
   /** Telegram IDs authorized to use the administrative dashboard. */

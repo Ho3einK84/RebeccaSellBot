@@ -48,6 +48,8 @@ export function validateAdminSetting(key: SettingKey, rawValue: string): string 
         : undefined;
     case 'support':
       return normalizeSupportDestination(value);
+    case 'backup_target':
+      return normalizeBackupTarget(value);
     case 'packages': {
       const packages = parsePackageOptionsJson(value);
       return packages ? JSON.stringify(packages) : undefined;
@@ -75,6 +77,8 @@ export function settingValidationMessage(ctx: ConversationContext, key: SettingK
       return t(ctx, 'admin_setting_card_invalid');
     case 'support':
       return t(ctx, 'admin_setting_support_invalid');
+    case 'backup_target':
+      return t(ctx, 'admin_backup_target_invalid');
     case 'naming_prefix':
       return t(ctx, 'admin_setting_naming_prefix_invalid');
     case 'naming_template':
@@ -82,6 +86,24 @@ export function settingValidationMessage(ctx: ConversationContext, key: SettingK
     default:
       return t(ctx, 'admin_setting_invalid');
   }
+}
+
+export function normalizeBackupTarget(rawValue: string): string | undefined {
+  const value = rawValue.trim();
+  if (value === '') return '';
+  if (value.startsWith('@')) {
+    const username = value.replace(/^@/u, '');
+    return /^[a-zA-Z0-9_]{4,32}$/u.test(username) ? `@${username}` : undefined;
+  }
+  const isNegative = value.startsWith('-');
+  const digitsOnly = normalizeInputDigits(isNegative ? value.slice(1) : value);
+  if (/^\d{4,20}$/u.test(digitsOnly)) {
+    return isNegative ? `-${digitsOnly}` : digitsOnly;
+  }
+  if (/^[a-zA-Z][a-zA-Z0-9_]{3,31}$/u.test(value)) {
+    return `@${value}`;
+  }
+  return undefined;
 }
 
 export function normalizeSupportDestination(rawValue: string): string | undefined {

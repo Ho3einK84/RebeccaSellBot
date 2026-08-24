@@ -70,6 +70,14 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   bot_enabled: 'true',
   language_selection_enabled: 'true',
   default_locale: 'fa',
+
+  // Automated backup settings.
+  backup_enabled: 'false',
+  backup_interval_hours: '24',
+  backup_target_chat_id: '',
+  backup_include_env: 'true',
+  backup_last_run_at: '',
+  backup_last_status: '',
 };
 
 function qualify(locale: SupportedLocale, texts: Record<string, string>): Record<string, string> {

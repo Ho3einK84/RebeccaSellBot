@@ -176,6 +176,8 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
   const trialDays = parseSettingNum(ts.getSetting('trial_days'), 3);
   const supportEnabled = ts.getSettingBool('support_enabled', true);
   const supportDest = ts.getSetting('support_destination', '') || '—';
+  const backupEnabledVal = ts.getSettingBool('backup_enabled', false);
+  const backupIntervalVal = parseSettingNum(ts.getSetting('backup_interval_hours'), 24);
 
   const onBadge = t(ctx, 'admin_overview_active');
   const offBadge = t(ctx, 'admin_overview_inactive');
@@ -205,6 +207,18 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
           {
             label: t(ctx, 'admin_setting_language_selection_enabled'),
             value: langEnabled ? onBadge : offBadge,
+          },
+        ],
+      },
+      {
+        emoji: '💾',
+        title: t(ctx, 'admin_setting_group_backup'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_backup_enabled'),
+            value: backupEnabledVal
+              ? `${onBadge} (${localizedNumber(backupIntervalVal, ctx)} ${t(ctx, 'hours_unit')})`
+              : offBadge,
           },
         ],
       },
@@ -283,6 +297,15 @@ export function displayAdminSettingValue(ctx: ConversationContext, key: string):
       return value.startsWith('@') ? value : `@${value}`;
     }
     return value;
+  }
+  if (key === 'backup_target_chat_id') {
+    const value = ctx.services.translationService.getSetting(key)?.trim();
+    if (!value) return t(ctx, 'admin_setting_not_configured');
+    return value;
+  }
+  if (key === 'backup_interval_hours') {
+    const value = parseSettingNum(ctx.services.translationService.getSetting(key), 24);
+    return `${localizedNumber(value, ctx)} ${t(ctx, 'hours_unit')}`;
   }
   const definition = getSettingDefinition(key);
   if (definition?.editor.type === 'boolean') {

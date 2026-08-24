@@ -19,6 +19,7 @@ import { ConfigReconciliationService } from './domain/services/ConfigReconciliat
 import { BroadcastService } from './domain/services/BroadcastService.js';
 import { PackageCategoryService } from './domain/services/PackageCategoryService.js';
 import { PaymentService } from './domain/services/PaymentService.js';
+import { BackupService } from './domain/services/BackupService.js';
 import { initializeBot, setupBot, startBot } from './telegram/bot.js';
 import {
   markHealthFailed,
@@ -33,6 +34,7 @@ import { startReconciliationCron, stopReconciliationCron } from './jobs/reconcil
 import { startTrialCleanupCron, stopTrialCleanupCron } from './jobs/trialCleanup.js';
 import { startAutoRenewalCron, stopAutoRenewalCron } from './jobs/autoRenewal.js';
 import { startBroadcastWorker, stopBroadcastWorker } from './jobs/broadcast.js';
+import { startBackupCron, stopBackupCron } from './jobs/backup.js';
 import { jobRunner } from './jobs/workerRuntime.js';
 
 const WORKER_SHUTDOWN_TIMEOUT_MS = 30_000;
@@ -43,6 +45,7 @@ function stopScheduledWorkers(): void {
   stopTrialCleanupCron();
   stopAutoRenewalCron();
   stopBroadcastWorker();
+  stopBackupCron();
 }
 
 async function drainWorkers(): Promise<void> {
@@ -110,6 +113,9 @@ async function main() {
   const broadcastService = new BroadcastService();
   const packageCategoryService = new PackageCategoryService(translationService);
   const paymentService = new PaymentService(translationService, walletService);
+  const backupService = new BackupService(translationService, {
+    databaseUrl: config.DATABASE_URL,
+  });
 
   const services = {
     walletService,
@@ -128,6 +134,7 @@ async function main() {
     configTransferService,
     configReconciliationService,
     broadcastService,
+    backupService,
     supportUrl: config.SUPPORT_URL,
     adminIds: adminService.adminIds,
     isAdmin: (telegramId: number) => adminService.isAdmin(telegramId),
@@ -149,6 +156,7 @@ async function main() {
   startTrialCleanupCron(panelRegistry, configService);
   startAutoRenewalCron(panelRegistry, walletService, pricingService, translationService, bot.api);
   startBroadcastWorker(broadcastService, bot.api);
+  startBackupCron(backupService, bot.api);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

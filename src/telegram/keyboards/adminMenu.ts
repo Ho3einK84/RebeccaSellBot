@@ -213,12 +213,18 @@ export const adminSystemMenu = new Menu<MenuContext>('admin-system-menu')
     }
   )
   .text(
+    (ctx) => t(ctx, 'admin_menu_backup'),
+    async (ctx) => {
+      await ctx.conversation.enter('adminBackupSettingsConversation');
+    }
+  )
+  .row()
+  .text(
     (ctx) => t(ctx, 'admin_menu_admins'),
     async (ctx) => {
       await renderAdminRegistry(ctx);
     }
   )
-  .row()
   .text(
     (ctx) => t(ctx, 'admin_menu_texts'),
     async (ctx) => {

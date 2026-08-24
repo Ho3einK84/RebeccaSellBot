@@ -23,11 +23,23 @@ export const SETTING_KEYS = [
   'naming_mode',
   'naming_prefix',
   'custom_naming_template',
+  'backup_enabled',
+  'backup_interval_hours',
+  'backup_target_chat_id',
+  'backup_include_env',
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
 export type SettingGroupId =
-  'system' | 'pricing' | 'custom_volume' | 'payment' | 'support' | 'trial' | 'referral' | 'naming';
+  | 'system'
+  | 'pricing'
+  | 'custom_volume'
+  | 'payment'
+  | 'support'
+  | 'trial'
+  | 'referral'
+  | 'naming'
+  | 'backup';
 
 export type SettingEditor =
   | { type: 'packages' }
@@ -38,6 +50,7 @@ export type SettingEditor =
   | { type: 'card_number' }
   | { type: 'text'; minimumLength: number; maximumLength: number }
   | { type: 'support' }
+  | { type: 'backup_target' }
   | { type: 'naming_mode' }
   | { type: 'naming_prefix' }
   | { type: 'naming_template' };
@@ -194,6 +207,30 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     labelKey: 'admin_setting_custom_naming_template',
     editor: { type: 'naming_template' },
   },
+  {
+    key: 'backup_enabled',
+    group: 'backup',
+    labelKey: 'admin_setting_backup_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'backup_interval_hours',
+    group: 'backup',
+    labelKey: 'admin_setting_backup_interval_hours',
+    editor: { type: 'integer', minimum: 1, maximum: 720 },
+  },
+  {
+    key: 'backup_target_chat_id',
+    group: 'backup',
+    labelKey: 'admin_setting_backup_target_chat_id',
+    editor: { type: 'backup_target' },
+  },
+  {
+    key: 'backup_include_env',
+    group: 'backup',
+    labelKey: 'admin_setting_backup_include_env',
+    editor: { type: 'boolean' },
+  },
 ];
 
 export type SettingGroup = {
@@ -205,6 +242,7 @@ export type SettingGroup = {
 
 export const GENERAL_SETTING_GROUPS: readonly SettingGroup[] = [
   settingGroup('system', 'admin_setting_group_system', 'admin_setting_group_system_desc'),
+  settingGroup('backup', 'admin_setting_group_backup', 'admin_setting_group_backup_desc'),
   settingGroup('support', 'admin_setting_group_support', 'admin_setting_group_support_desc'),
   settingGroup('trial', 'admin_setting_group_trial', 'admin_setting_group_trial_desc'),
   settingGroup('naming', 'admin_setting_group_naming', 'admin_setting_group_naming_desc'),

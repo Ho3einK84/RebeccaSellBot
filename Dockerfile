@@ -24,6 +24,8 @@ COPY --from=builder --chown=node:node /app/dist ./dist
 # The application's compiled migrator consumes the SQL migration set directly.
 COPY --from=builder --chown=node:node /app/drizzle ./drizzle
 
+RUN apk add --no-cache postgresql-client tar gzip
+
 USER node
 
 # This port intentionally has no EXPOSE instruction or Compose port mapping.

@@ -309,10 +309,12 @@ async function editTextSetting(
         ? tm(ctx, 'admin_setting_naming_prefix_prompt', { current })
         : definition.key === 'support_destination'
           ? t(ctx, 'admin_setting_support_destination_prompt')
-          : tm(ctx, 'admin_setting_value_prompt', {
-              setting: t(ctx, definition.labelKey),
-              current_value: current,
-            });
+          : definition.key === 'backup_target_chat_id'
+            ? t(ctx, 'admin_backup_target_chat_prompt')
+            : tm(ctx, 'admin_setting_value_prompt', {
+                setting: t(ctx, definition.labelKey),
+                current_value: current,
+              });
   await promptInConversation(
     conversation,
     ctx,
