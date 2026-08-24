@@ -23,6 +23,7 @@ COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist ./dist
 # The application's compiled migrator consumes the SQL migration set directly.
 COPY --from=builder --chown=node:node /app/drizzle ./drizzle
+COPY --from=builder --chown=node:node /app/docker-compose.yml ./docker-compose.yml
 
 RUN apk add --no-cache postgresql-client tar gzip
 

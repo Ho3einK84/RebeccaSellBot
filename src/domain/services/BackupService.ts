@@ -169,19 +169,27 @@ export class BackupService {
 
       if (includeEnv) {
         const envCandidate = path.join(this.baseDir, '.env');
+        const targetEnv = path.join(tempDir, '.env');
         if (fsSync.existsSync(envCandidate)) {
-          const targetEnv = path.join(tempDir, '.env');
           await fs.copyFile(envCandidate, targetEnv);
           await fs.chmod(targetEnv, 0o600);
+          contents.push('.env');
+        } else {
+          const runtimeEnv = this.generateRuntimeEnv();
+          await fs.writeFile(targetEnv, runtimeEnv, { mode: 0o600 });
           contents.push('.env');
         }
       }
 
       const composeCandidate = path.join(this.baseDir, 'docker-compose.yml');
+      const targetCompose = path.join(tempDir, 'docker-compose.yml');
       if (fsSync.existsSync(composeCandidate)) {
-        const targetCompose = path.join(tempDir, 'docker-compose.yml');
         await fs.copyFile(composeCandidate, targetCompose);
         await fs.chmod(targetCompose, 0o600);
+        contents.push('docker-compose.yml');
+      } else {
+        const runtimeCompose = this.generateRuntimeCompose();
+        await fs.writeFile(targetCompose, runtimeCompose, { mode: 0o600 });
         contents.push('docker-compose.yml');
       }
 
@@ -387,6 +395,109 @@ export class BackupService {
     } catch {
       return 'unknown';
     }
+  }
+
+  private generateRuntimeEnv(): string {
+    let dbUser = process.env.DB_USER ?? '';
+    let dbPassword = process.env.DB_PASSWORD ?? '';
+    let dbName = process.env.DB_NAME ?? '';
+
+    if ((!dbUser || !dbPassword || !dbName) && this.databaseUrl) {
+      try {
+        const parsed = new URL(this.databaseUrl);
+        dbUser = dbUser || decodeURIComponent(parsed.username || '');
+        dbPassword = dbPassword || decodeURIComponent(parsed.password || '');
+        dbName = dbName || decodeURIComponent(parsed.pathname.replace(/^\//u, '') || '');
+      } catch {
+        // ignore url parse failure
+      }
+    }
+
+    const lines = [
+      `INSTANCE_NAME=${this.instanceName}`,
+      `NODE_ENV=${process.env.NODE_ENV ?? 'production'}`,
+      `BOT_TOKEN=${process.env.BOT_TOKEN ?? ''}`,
+      `ADMIN_IDS=${process.env.ADMIN_IDS ?? ''}`,
+      `DB_USER=${dbUser || 'rsbot_user'}`,
+      `DB_PASSWORD=${dbPassword || 'rsbot_pass'}`,
+      `DB_NAME=${dbName || 'rsbot_db'}`,
+      `PANEL_CREDENTIALS_KEY=${process.env.PANEL_CREDENTIALS_KEY ?? ''}`,
+      `REBECCA_API_URL=${process.env.REBECCA_API_URL ?? ''}`,
+      `REBECCA_API_KEY=${process.env.REBECCA_API_KEY ?? ''}`,
+      `REBECCA_ADMIN_USERNAME=${process.env.REBECCA_ADMIN_USERNAME ?? 'admin'}`,
+      `REBECCA_ADMIN_PASSWORD=${process.env.REBECCA_ADMIN_PASSWORD ?? ''}`,
+      `REBECCA_SERVICE_ID=${process.env.REBECCA_SERVICE_ID ?? '1'}`,
+      `DEFAULT_LOCALE=${process.env.DEFAULT_LOCALE ?? 'fa'}`,
+      `SUPPORT_URL=${process.env.SUPPORT_URL ?? ''}`,
+      `HEALTH_CHECK_PORT=${process.env.HEALTH_CHECK_PORT ?? '3001'}`,
+    ];
+
+    return lines.join('\n') + '\n';
+  }
+
+  private generateRuntimeCompose(): string {
+    return `services:
+  db:
+    image: postgres:16-alpine
+    container_name: \${INSTANCE_NAME:-rsbot}_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: \${DB_USER:-rsbot_user}
+      POSTGRES_PASSWORD: \${DB_PASSWORD:-rsbot_pass}
+      POSTGRES_DB: \${DB_NAME:-rsbot_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U \${DB_USER:-rsbot_user} -d \${DB_NAME:-rsbot_db}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - database
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: \${INSTANCE_NAME:-rsbot}_bot
+    restart: unless-stopped
+    stop_grace_period: 45s
+    environment:
+      NODE_ENV: production
+      BOT_TOKEN: \${BOT_TOKEN}
+      ADMIN_IDS: \${ADMIN_IDS}
+      DATABASE_URL: postgres://\${DB_USER:-rsbot_user}:\${DB_PASSWORD:-rsbot_pass}@db:5432/\${DB_NAME:-rsbot_db}
+      PANEL_CREDENTIALS_KEY: \${PANEL_CREDENTIALS_KEY-}
+      REBECCA_API_URL: \${REBECCA_API_URL-}
+      REBECCA_API_KEY: \${REBECCA_API_KEY-}
+      REBECCA_ADMIN_USERNAME: \${REBECCA_ADMIN_USERNAME:-admin}
+      REBECCA_ADMIN_PASSWORD: \${REBECCA_ADMIN_PASSWORD-}
+      REBECCA_SERVICE_ID: \${REBECCA_SERVICE_ID:-1}
+      DEFAULT_LOCALE: \${DEFAULT_LOCALE:-fa}
+      SUPPORT_URL: \${SUPPORT_URL-}
+      INSTANCE_NAME: \${INSTANCE_NAME:-main}
+      HEALTH_CHECK_PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      database:
+        gw_priority: 0
+      outbound:
+        gw_priority: 1
+
+volumes:
+  pgdata:
+    name: \${INSTANCE_NAME:-rsbot}_pgdata
+
+networks:
+  database:
+    name: \${INSTANCE_NAME:-rsbot}_database
+    internal: true
+  outbound:
+    name: \${INSTANCE_NAME:-rsbot}_outbound
+`;
   }
 
   private buildDefaultCaption(bundle: BackupBundleResult, locale = 'fa'): string {

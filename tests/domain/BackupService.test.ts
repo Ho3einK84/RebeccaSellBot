@@ -128,6 +128,20 @@ describe('BackupService', () => {
       await bundle.cleanup();
       await expect(fs.stat(bundle.archivePath)).rejects.toThrow();
     });
+
+    it('includes .env and docker-compose.yml when includeEnv is true', async () => {
+      const bundle = await backupService.createBackupBundle({
+        label: 'env_test',
+        includeEnv: true,
+      });
+
+      expect(bundle.manifest.contents).toContain('.env');
+      expect(bundle.manifest.contents).toContain('docker-compose.yml');
+      expect(bundle.manifest.contents).toContain('database.dump');
+      expect(bundle.manifest.contents).toContain('manifest.txt');
+
+      await bundle.cleanup();
+    });
   });
 
   describe('sendBackupToChat', () => {
