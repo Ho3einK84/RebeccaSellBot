@@ -387,6 +387,13 @@ export type KeyListState = {
   search: string;
 };
 
+export type IncatSearchPromptState = {
+  screen: 'incat_search_prompt';
+  categoryId: string;
+  page: number;
+  search: string;
+};
+
 export type SearchResultsState = {
   screen: 'search_results';
   query: string;
@@ -395,6 +402,12 @@ export type SearchResultsState = {
 
 export type KeyDetailState = {
   screen: 'key_detail';
+  key: string;
+  returnState: ReturnNavState;
+};
+
+export type KeyEditPromptState = {
+  screen: 'key_edit_prompt';
   key: string;
   returnState: ReturnNavState;
 };
@@ -413,12 +426,15 @@ export type KeyResetConfirmState = {
 
 export type EditorState =
   | { screen: 'mode_select' }
+  | { screen: 'global_search_prompt' }
   | { screen: 'essential_list'; page: number }
   | { screen: 'categories' }
   | KeyListState
+  | IncatSearchPromptState
   | { screen: 'customized_list'; page: number }
   | SearchResultsState
   | KeyDetailState
+  | KeyEditPromptState
   | KeyPreviewState
   | KeyResetConfirmState;
 
@@ -432,6 +448,7 @@ export async function adminEditTextsConversation(
   let currentLocale: SupportedLocale =
     ctx.services.translationService.resolveLocale(ctx.from?.language_code) ?? 'fa';
   let state: EditorState = { screen: 'mode_select' };
+  let activeCtx = ctx;
 
   for (;;) {
     const translationService = ctx.services.translationService;
@@ -443,36 +460,37 @@ export async function adminEditTextsConversation(
       const switchLangLabel = currentLocale === 'fa' ? '🇬🇧 English' : '🦁 فارسی';
 
       const keyboard = new InlineKeyboard()
-        .text(t(ctx, 'admin_text_mode_essential'), 'text-mode:essential')
+        .text(t(activeCtx, 'admin_text_mode_essential'), 'text-mode:essential')
         .row()
-        .text(t(ctx, 'admin_text_mode_advanced'), 'text-mode:advanced')
+        .text(t(activeCtx, 'admin_text_mode_advanced'), 'text-mode:advanced')
         .row()
         .text(
-          t(ctx, 'admin_text_mode_customized', {
-            count: localizedNumber(customizedCount, ctx),
+          t(activeCtx, 'admin_text_mode_customized', {
+            count: localizedNumber(customizedCount, activeCtx),
           }),
           'text-mode:customized'
         )
         .row()
-        .text(t(ctx, 'admin_text_mode_search'), 'text-mode:search')
+        .text(t(activeCtx, 'admin_text_mode_search'), 'text-mode:search')
         .row()
-        .text(t(ctx, 'admin_text_switch_lang', { lang: switchLangLabel }), 'text-lang:toggle')
+        .text(t(activeCtx, 'admin_text_switch_lang', { lang: switchLangLabel }), 'text-lang:toggle')
         .row()
-        .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
+        .text(t(activeCtx, 'admin_menu_back_to_admin'), 'nav:admin');
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildPromptScreen(
           '📝',
-          t(ctx, 'admin_text_mode_title'),
-          t(ctx, 'admin_text_mode_subtitle'),
-          escapeTelegramMarkdown(t(ctx, 'admin_text_current_lang', { lang: langLabel }))
+          t(activeCtx, 'admin_text_mode_title'),
+          t(activeCtx, 'admin_text_mode_subtitle'),
+          escapeTelegramMarkdown(t(activeCtx, 'admin_text_current_lang', { lang: langLabel }))
         ),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -497,46 +515,48 @@ export async function adminEditTextsConversation(
         continue;
       }
       if (data === 'text-mode:search') {
-        // Prompt for search query
-        await promptInConversation(
-          conversation,
-          ctx,
-          buildPromptScreen(
-            '🔍',
-            t(ctx, 'admin_text_search_title'),
-            t(ctx, 'admin_text_search_prompt'),
-            escapeTelegramMarkdown(t(ctx, 'admin_text_search_subtitle'))
-          ),
-          {
-            parse_mode: 'Markdown',
-            reply_markup: new InlineKeyboard().text(
-              t(ctx, 'admin_text_back_to_menu'),
-              'text-nav:mode_select'
-            ),
-          }
-        );
-
-        const searchInput = await conversation.wait();
-        if (!(await acceptConversationOwner(searchInput, ownerId))) continue;
-        if (await handleAdminConversationCancel(conversation, searchInput)) return;
-        await forwardConversationNavigation(conversation, searchInput);
-        if (searchInput.callbackQuery?.data === 'text-nav:mode_select') {
-          await searchInput.answerCallbackQuery?.();
-          state = { screen: 'mode_select' };
-          continue;
-        }
-        if (
-          searchInput.message &&
-          'text' in searchInput.message &&
-          typeof searchInput.message.text === 'string'
-        ) {
-          await deleteConsumedInputMessage(searchInput);
-          const query = searchInput.message.text.trim();
-          if (query) {
-            state = { screen: 'search_results', query, page: 0 };
-          }
-        }
+        state = { screen: 'global_search_prompt' };
         continue;
+      }
+      continue;
+    }
+
+    // ── 1.1 Global Search Prompt ─────────────────────────────────────────────
+    if (state.screen === 'global_search_prompt') {
+      await promptInConversation(
+        conversation,
+        activeCtx,
+        buildPromptScreen(
+          '🔍',
+          t(activeCtx, 'admin_text_search_title'),
+          t(activeCtx, 'admin_text_search_prompt'),
+          escapeTelegramMarkdown(t(activeCtx, 'admin_text_search_subtitle'))
+        ),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard().text(
+            t(activeCtx, 'admin_text_back_to_menu'),
+            'text-nav:mode_select'
+          ),
+        }
+      );
+
+      const input = await conversation.wait();
+      activeCtx = input;
+      if (!(await acceptConversationOwner(input, ownerId))) continue;
+      if (await handleAdminConversationCancel(conversation, input)) return;
+      await forwardConversationNavigation(conversation, input);
+      if (input.callbackQuery?.data === 'text-nav:mode_select') {
+        await input.answerCallbackQuery?.();
+        state = { screen: 'mode_select' };
+        continue;
+      }
+      if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
+        await deleteConsumedInputMessage(input);
+        const query = input.message.text.trim();
+        if (query) {
+          state = { screen: 'search_results', query, page: 0 };
+        }
       }
       continue;
     }
@@ -550,34 +570,35 @@ export async function adminEditTextsConversation(
 
       const keyboard = new InlineKeyboard();
       for (const item of pageItems) {
-        keyboard.text(t(ctx, item.labelKey), `text-pk:${item.key}`).row();
+        keyboard.text(t(activeCtx, item.labelKey), `text-pk:${item.key}`).row();
       }
       if (safePage > 0) {
-        keyboard.text(t(ctx, 'admin_text_prev_page'), 'text-p:prev');
+        keyboard.text(t(activeCtx, 'admin_text_prev_page'), 'text-p:prev');
       }
       if (safePage < pageCount - 1) {
-        keyboard.text(t(ctx, 'admin_text_next_page'), 'text-p:next');
+        keyboard.text(t(activeCtx, 'admin_text_next_page'), 'text-p:next');
       }
       if (safePage > 0 || safePage < pageCount - 1) keyboard.row();
-      keyboard.text(t(ctx, 'admin_text_back_to_menu'), 'text-nav:mode_select');
+      keyboard.text(t(activeCtx, 'admin_text_back_to_menu'), 'text-nav:mode_select');
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '🌟',
-          title: t(ctx, 'admin_text_essential_title'),
-          subtitle: escapeTelegramMarkdown(t(ctx, 'admin_text_essential_subtitle')),
+          title: t(activeCtx, 'admin_text_essential_title'),
+          subtitle: escapeTelegramMarkdown(t(activeCtx, 'admin_text_essential_subtitle')),
           primary: {
             emoji: '📚',
-            label: t(ctx, 'admin_text_key_label'),
-            value: localizedNumber(items.length, ctx),
+            label: t(activeCtx, 'admin_text_key_label'),
+            value: localizedNumber(items.length, activeCtx),
           },
         }),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -611,20 +632,21 @@ export async function adminEditTextsConversation(
 
     // ── 3. Advanced Mode: Categories Selection ───────────────────────────────
     if (state.screen === 'categories') {
-      const keyboard = buildCategoryKeyboard(ctx);
+      const keyboard = buildCategoryKeyboard(activeCtx);
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildPromptScreen(
           '📂',
-          t(ctx, 'admin_text_editor_title'),
-          t(ctx, 'admin_text_category_prompt'),
-          escapeTelegramMarkdown(t(ctx, 'admin_text_editor_subtitle'))
+          t(activeCtx, 'admin_text_editor_title'),
+          t(activeCtx, 'admin_text_category_prompt'),
+          escapeTelegramMarkdown(t(activeCtx, 'admin_text_editor_subtitle'))
         ),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -671,39 +693,39 @@ export async function adminEditTextsConversation(
       }
 
       if (current.search) {
-        keyboard.text(t(ctx, 'admin_text_search_clear'), 'text-incat-clear').row();
+        keyboard.text(t(activeCtx, 'admin_text_search_clear'), 'text-incat-clear').row();
       }
-      keyboard.text(t(ctx, 'admin_text_search_button'), 'text-incat-search').row();
+      keyboard.text(t(activeCtx, 'admin_text_search_button'), 'text-incat-search').row();
 
       if (safePage > 0) {
-        keyboard.text(t(ctx, 'admin_text_prev_page'), 'text-p:prev');
+        keyboard.text(t(activeCtx, 'admin_text_prev_page'), 'text-p:prev');
       }
       if (safePage < pageCount - 1) {
-        keyboard.text(t(ctx, 'admin_text_next_page'), 'text-p:next');
+        keyboard.text(t(activeCtx, 'admin_text_next_page'), 'text-p:next');
       }
       if (safePage > 0 || safePage < pageCount - 1) keyboard.row();
 
-      keyboard.text(t(ctx, 'admin_text_back_categories'), 'text-nav:categories');
+      keyboard.text(t(activeCtx, 'admin_text_back_categories'), 'text-nav:categories');
 
       const promptKey = current.search ? 'admin_text_key_prompt_search' : 'admin_text_key_prompt';
-      const footerMsg = t(ctx, promptKey, {
-        category: t(ctx, category.labelKey),
-        description: t(ctx, category.descriptionKey),
+      const footerMsg = t(activeCtx, promptKey, {
+        category: t(activeCtx, category.labelKey),
+        description: t(activeCtx, category.descriptionKey),
         count: allKeys.length,
         ...(current.search ? { search: escapeTelegramMarkdown(current.search) } : {}),
       });
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '📝',
-          title: t(ctx, 'admin_text_editor_title'),
-          subtitle: escapeTelegramMarkdown(t(ctx, category.labelKey)),
+          title: t(activeCtx, 'admin_text_editor_title'),
+          subtitle: escapeTelegramMarkdown(t(activeCtx, category.labelKey)),
           primary: {
             emoji: '🔑',
-            label: t(ctx, 'admin_text_key_label'),
-            value: localizedNumber(allKeys.length, ctx),
+            label: t(activeCtx, 'admin_text_key_label'),
+            value: localizedNumber(allKeys.length, activeCtx),
           },
           footer: footerMsg,
         }),
@@ -711,6 +733,7 @@ export async function adminEditTextsConversation(
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -750,45 +773,12 @@ export async function adminEditTextsConversation(
         continue;
       }
       if (data === 'text-incat-search') {
-        await promptInConversation(
-          conversation,
-          ctx,
-          buildPromptScreen(
-            '🔎',
-            t(ctx, 'admin_text_search_title'),
-            t(ctx, 'admin_text_search_prompt'),
-            escapeTelegramMarkdown(t(ctx, category.labelKey))
-          ),
-          {
-            parse_mode: 'Markdown',
-            reply_markup: new InlineKeyboard().text(
-              t(ctx, 'admin_text_back_to_list'),
-              'text-nav:incat_back'
-            ),
-          }
-        );
-
-        const searchInput = await conversation.wait();
-        if (!(await acceptConversationOwner(searchInput, ownerId))) continue;
-        if (await handleAdminConversationCancel(conversation, searchInput)) return;
-        await forwardConversationNavigation(conversation, searchInput);
-        if (searchInput.callbackQuery?.data === 'text-nav:incat_back') {
-          await searchInput.answerCallbackQuery?.();
-          continue;
-        }
-        if (
-          searchInput.message &&
-          'text' in searchInput.message &&
-          typeof searchInput.message.text === 'string'
-        ) {
-          await deleteConsumedInputMessage(searchInput);
-          state = {
-            screen: 'key_list',
-            categoryId: current.categoryId,
-            page: 0,
-            search: searchInput.message.text.trim(),
-          };
-        }
+        state = {
+          screen: 'incat_search_prompt',
+          categoryId: current.categoryId,
+          page: safePage,
+          search: current.search,
+        };
         continue;
       }
       if (data.startsWith('text-pk:')) {
@@ -808,34 +798,85 @@ export async function adminEditTextsConversation(
       continue;
     }
 
+    // ── 4.1 In-Category Search Prompt ─────────────────────────────────────────
+    if (state.screen === 'incat_search_prompt') {
+      const current: IncatSearchPromptState = state;
+      const category = TEXT_CATEGORIES.find((c) => c.id === current.categoryId);
+
+      await promptInConversation(
+        conversation,
+        activeCtx,
+        buildPromptScreen(
+          '🔎',
+          t(activeCtx, 'admin_text_search_title'),
+          t(activeCtx, 'admin_text_search_prompt'),
+          escapeTelegramMarkdown(category ? t(activeCtx, category.labelKey) : '')
+        ),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard().text(
+            t(activeCtx, 'admin_text_back_to_list'),
+            'text-nav:incat_back'
+          ),
+        }
+      );
+
+      const input = await conversation.wait();
+      activeCtx = input;
+      if (!(await acceptConversationOwner(input, ownerId))) continue;
+      if (await handleAdminConversationCancel(conversation, input)) return;
+      await forwardConversationNavigation(conversation, input);
+      if (input.callbackQuery?.data === 'text-nav:incat_back') {
+        await input.answerCallbackQuery?.();
+        state = {
+          screen: 'key_list',
+          categoryId: current.categoryId,
+          page: current.page,
+          search: current.search,
+        };
+        continue;
+      }
+      if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
+        await deleteConsumedInputMessage(input);
+        state = {
+          screen: 'key_list',
+          categoryId: current.categoryId,
+          page: 0,
+          search: input.message.text.trim(),
+        };
+      }
+      continue;
+    }
+
     // ── 5. Customized Texts List ─────────────────────────────────────────────
     if (state.screen === 'customized_list') {
       const keys = translationService.getCustomizedKeys(currentLocale);
       if (keys.length === 0) {
         await promptInConversation(
           conversation,
-          ctx,
+          activeCtx,
           buildScreen({
             emoji: '✏️',
-            title: t(ctx, 'admin_text_customized_title'),
-            subtitle: escapeTelegramMarkdown(t(ctx, 'admin_text_customized_subtitle')),
+            title: t(activeCtx, 'admin_text_customized_title'),
+            subtitle: escapeTelegramMarkdown(t(activeCtx, 'admin_text_customized_subtitle')),
             primary: {
               emoji: '📚',
-              label: t(ctx, 'admin_text_key_label'),
-              value: localizedNumber(0, ctx),
+              label: t(activeCtx, 'admin_text_key_label'),
+              value: localizedNumber(0, activeCtx),
             },
-            footer: t(ctx, 'admin_text_customized_empty'),
+            footer: t(activeCtx, 'admin_text_customized_empty'),
           }),
           {
             parse_mode: 'Markdown',
             reply_markup: new InlineKeyboard().text(
-              t(ctx, 'admin_text_back_to_menu'),
+              t(activeCtx, 'admin_text_back_to_menu'),
               'text-nav:mode_select'
             ),
           }
         );
 
         const input = await conversation.wait();
+        activeCtx = input;
         if (!(await acceptConversationOwner(input, ownerId))) continue;
         if (await handleAdminConversationCancel(conversation, input)) return;
         await forwardConversationNavigation(conversation, input);
@@ -855,31 +896,32 @@ export async function adminEditTextsConversation(
         keyboard.text(k, `text-pk:${k}`).row();
       }
       if (safePage > 0) {
-        keyboard.text(t(ctx, 'admin_text_prev_page'), 'text-p:prev');
+        keyboard.text(t(activeCtx, 'admin_text_prev_page'), 'text-p:prev');
       }
       if (safePage < pageCount - 1) {
-        keyboard.text(t(ctx, 'admin_text_next_page'), 'text-p:next');
+        keyboard.text(t(activeCtx, 'admin_text_next_page'), 'text-p:next');
       }
       if (safePage > 0 || safePage < pageCount - 1) keyboard.row();
-      keyboard.text(t(ctx, 'admin_text_back_to_menu'), 'text-nav:mode_select');
+      keyboard.text(t(activeCtx, 'admin_text_back_to_menu'), 'text-nav:mode_select');
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '✏️',
-          title: t(ctx, 'admin_text_customized_title'),
-          subtitle: escapeTelegramMarkdown(t(ctx, 'admin_text_customized_subtitle')),
+          title: t(activeCtx, 'admin_text_customized_title'),
+          subtitle: escapeTelegramMarkdown(t(activeCtx, 'admin_text_customized_subtitle')),
           primary: {
             emoji: '📚',
-            label: t(ctx, 'admin_text_key_label'),
-            value: localizedNumber(keys.length, ctx),
+            label: t(activeCtx, 'admin_text_key_label'),
+            value: localizedNumber(keys.length, activeCtx),
           },
         }),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -919,22 +961,23 @@ export async function adminEditTextsConversation(
       if (results.length === 0) {
         await promptInConversation(
           conversation,
-          ctx,
+          activeCtx,
           buildEmptyState(
             '📭',
-            t(ctx, 'admin_text_search_results_title'),
-            t(ctx, 'admin_text_no_keys_found')
+            t(activeCtx, 'admin_text_search_results_title'),
+            t(activeCtx, 'admin_text_no_keys_found')
           ),
           {
             parse_mode: 'Markdown',
             reply_markup: new InlineKeyboard()
-              .text(t(ctx, 'admin_text_mode_search'), 'text-search-again')
+              .text(t(activeCtx, 'admin_text_mode_search'), 'text-search-again')
               .row()
-              .text(t(ctx, 'admin_text_back_to_menu'), 'text-nav:mode_select'),
+              .text(t(activeCtx, 'admin_text_back_to_menu'), 'text-nav:mode_select'),
           }
         );
 
         const input = await conversation.wait();
+        activeCtx = input;
         if (!(await acceptConversationOwner(input, ownerId))) continue;
         if (await handleAdminConversationCancel(conversation, input)) return;
         await forwardConversationNavigation(conversation, input);
@@ -945,7 +988,7 @@ export async function adminEditTextsConversation(
         if (data === 'text-nav:mode_select') {
           state = { screen: 'mode_select' };
         } else if (data === 'text-search-again') {
-          state = { screen: 'mode_select' };
+          state = { screen: 'global_search_prompt' };
         }
         continue;
       }
@@ -959,36 +1002,37 @@ export async function adminEditTextsConversation(
         keyboard.text(k, `text-pk:${k}`).row();
       }
       if (safePage > 0) {
-        keyboard.text(t(ctx, 'admin_text_prev_page'), 'text-p:prev');
+        keyboard.text(t(activeCtx, 'admin_text_prev_page'), 'text-p:prev');
       }
       if (safePage < pageCount - 1) {
-        keyboard.text(t(ctx, 'admin_text_next_page'), 'text-p:next');
+        keyboard.text(t(activeCtx, 'admin_text_next_page'), 'text-p:next');
       }
       if (safePage > 0 || safePage < pageCount - 1) keyboard.row();
-      keyboard.text(t(ctx, 'admin_text_back_to_menu'), 'text-nav:mode_select');
+      keyboard.text(t(activeCtx, 'admin_text_back_to_menu'), 'text-nav:mode_select');
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '🔍',
-          title: t(ctx, 'admin_text_search_results_title'),
+          title: t(activeCtx, 'admin_text_search_results_title'),
           subtitle: escapeTelegramMarkdown(
-            t(ctx, 'admin_text_search_results_prompt', {
-              count: localizedNumber(results.length, ctx),
+            t(activeCtx, 'admin_text_search_results_prompt', {
+              count: localizedNumber(results.length, activeCtx),
               search: escapeTelegramMarkdown(current.query),
             })
           ),
           primary: {
             emoji: '📚',
-            label: t(ctx, 'admin_text_key_label'),
-            value: localizedNumber(results.length, ctx),
+            label: t(activeCtx, 'admin_text_key_label'),
+            value: localizedNumber(results.length, activeCtx),
           },
         }),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -1033,61 +1077,62 @@ export async function adminEditTextsConversation(
       const isCustomized = translationService.getStoredSetting(qualifiedKey) !== undefined;
 
       const placeholders = templatePlaceholders(defaultValue);
-      const placeholderInfoText = formatPlaceholdersInfo(placeholders, currentLocale, ctx);
+      const placeholderInfoText = formatPlaceholdersInfo(placeholders, currentLocale, activeCtx);
 
       const keyboard = new InlineKeyboard()
-        .text(t(ctx, 'admin_text_edit_button'), 'text-act:edit')
-        .text(t(ctx, 'admin_text_preview_button'), 'text-act:preview');
+        .text(t(activeCtx, 'admin_text_edit_button'), 'text-act:edit')
+        .text(t(activeCtx, 'admin_text_preview_button'), 'text-act:preview');
       if (isCustomized) {
-        keyboard.row().text(t(ctx, 'admin_text_reset_button'), 'text-act:reset');
+        keyboard.row().text(t(activeCtx, 'admin_text_reset_button'), 'text-act:reset');
       }
-      keyboard.row().text(t(ctx, 'admin_text_back_to_list'), 'text-nav:back');
+      keyboard.row().text(t(activeCtx, 'admin_text_back_to_list'), 'text-nav:back');
 
       const currentPreview = markdownSafePreview(currentValue);
       const defaultPreview = markdownSafePreview(defaultValue);
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '📝',
-          title: t(ctx, 'admin_text_editor_title'),
+          title: t(activeCtx, 'admin_text_editor_title'),
           subtitle: escapeTelegramMarkdown(
             `${current.key} · ${currentLocale === 'fa' ? 'فارسی' : 'English'}`
           ),
           primary: {
             emoji: '🔑',
-            label: t(ctx, 'admin_text_status_label'),
+            label: t(activeCtx, 'admin_text_status_label'),
             value: isCustomized
-              ? t(ctx, 'admin_text_status_customized')
-              : t(ctx, 'admin_text_status_default'),
+              ? t(activeCtx, 'admin_text_status_customized')
+              : t(activeCtx, 'admin_text_status_default'),
           },
           sections: [
             {
               emoji: '✏️',
-              title: t(ctx, 'admin_text_current_value_label'),
+              title: t(activeCtx, 'admin_text_current_value_label'),
               fields: [{ label: '—', value: currentPreview.text }],
             },
             {
               emoji: '📚',
-              title: t(ctx, 'admin_text_default_value_label'),
+              title: t(activeCtx, 'admin_text_default_value_label'),
               fields: [{ label: '—', value: defaultPreview.text }],
             },
             {
               emoji: '💡',
-              title: t(ctx, 'admin_text_placeholders_label'),
+              title: t(activeCtx, 'admin_text_placeholders_label'),
               fields: [{ label: '—', value: placeholderInfoText }],
             },
           ],
           footer:
             currentPreview.truncated || defaultPreview.truncated
-              ? t(ctx, 'admin_text_preview_truncated')
+              ? t(activeCtx, 'admin_text_preview_truncated')
               : undefined,
         }),
         { parse_mode: 'Markdown', reply_markup: keyboard }
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -1101,11 +1146,11 @@ export async function adminEditTextsConversation(
         if (!validation.valid) {
           await replyInAdminConversation(
             conversation,
-            ctx,
+            activeCtx,
             buildEmptyState(
               '⚠️',
-              t(ctx, 'admin_text_editor_title'),
-              formatValidationError(validation, ctx)
+              t(activeCtx, 'admin_text_editor_title'),
+              formatValidationError(validation, activeCtx)
             ),
             { parse_mode: 'Markdown' }
           );
@@ -1115,11 +1160,11 @@ export async function adminEditTextsConversation(
         if (!mdVal.valid) {
           await replyInAdminConversation(
             conversation,
-            ctx,
+            activeCtx,
             buildEmptyState(
               '⚠️',
-              t(ctx, 'admin_text_editor_title'),
-              `${t(ctx, 'admin_text_invalid_markdown')}: ${mdVal.error ?? ''}`
+              t(activeCtx, 'admin_text_editor_title'),
+              `${t(activeCtx, 'admin_text_invalid_markdown')}: ${mdVal.error ?? ''}`
             ),
             { parse_mode: 'Markdown' }
           );
@@ -1128,16 +1173,16 @@ export async function adminEditTextsConversation(
         await translationService.updateSetting(qualifiedKey, newText);
         await replyInAdminConversation(
           conversation,
-          ctx,
+          activeCtx,
           buildScreen({
             emoji: '✅',
-            title: t(ctx, 'admin_text_saved_title'),
+            title: t(activeCtx, 'admin_text_saved_title'),
             primary: {
               emoji: '📝',
-              label: t(ctx, 'admin_text_key_label'),
+              label: t(activeCtx, 'admin_text_key_label'),
               value: escapeTelegramMarkdown(qualifiedKey),
             },
-            footer: t(ctx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
+            footer: t(activeCtx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
           }),
           { parse_mode: 'Markdown' }
         );
@@ -1160,85 +1205,97 @@ export async function adminEditTextsConversation(
         continue;
       }
       if (data === 'text-act:edit') {
-        // Prompt for text input
-        await promptInConversation(
-          conversation,
-          ctx,
-          buildPromptScreen(
-            '✍️',
-            t(ctx, 'admin_text_editor_title'),
-            t(ctx, 'admin_text_edit_prompt'),
-            escapeTelegramMarkdown(qualifiedKey)
-          ),
-          {
-            parse_mode: 'Markdown',
-            reply_markup: new InlineKeyboard().text(
-              t(ctx, 'admin_text_back_to_list'),
-              'text-nav:edit_cancel'
-            ),
-          }
-        );
+        state = { screen: 'key_edit_prompt', key: current.key, returnState: current.returnState };
+        continue;
+      }
+      continue;
+    }
 
-        const editInput = await conversation.wait();
-        if (!(await acceptConversationOwner(editInput, ownerId))) continue;
-        if (await handleAdminConversationCancel(conversation, editInput)) return;
-        await forwardConversationNavigation(conversation, editInput);
-        if (editInput.callbackQuery?.data === 'text-nav:edit_cancel') {
-          await editInput.answerCallbackQuery?.();
-          continue;
+    // ── 7.1 Key Edit Text Prompt ─────────────────────────────────────────────
+    if (state.screen === 'key_edit_prompt') {
+      const current: KeyEditPromptState = state;
+      const qualifiedKey = `${currentLocale}.${current.key}`;
+      const currentValue = translationService.get(qualifiedKey);
+      const defaultValue = DEFAULT_SETTINGS[qualifiedKey] ?? currentValue;
+
+      await promptInConversation(
+        conversation,
+        activeCtx,
+        buildPromptScreen(
+          '✍️',
+          t(activeCtx, 'admin_text_editor_title'),
+          t(activeCtx, 'admin_text_edit_prompt'),
+          escapeTelegramMarkdown(qualifiedKey)
+        ),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard().text(
+            t(activeCtx, 'admin_text_back_to_list'),
+            'text-nav:edit_cancel'
+          ),
         }
-        if (
-          editInput.message &&
-          'text' in editInput.message &&
-          typeof editInput.message.text === 'string'
-        ) {
-          await deleteConsumedInputMessage(editInput);
-          const newText = editInput.message.text.trim();
-          const validation = validateTranslationOverrideDetailed(newText, defaultValue);
-          if (!validation.valid) {
-            await replyInAdminConversation(
-              conversation,
-              ctx,
-              buildEmptyState(
-                '⚠️',
-                t(ctx, 'admin_text_editor_title'),
-                formatValidationError(validation, ctx)
-              ),
-              { parse_mode: 'Markdown' }
-            );
-            continue;
-          }
-          const mdVal = validateTelegramMarkdown(newText);
-          if (!mdVal.valid) {
-            await replyInAdminConversation(
-              conversation,
-              ctx,
-              buildEmptyState(
-                '⚠️',
-                t(ctx, 'admin_text_editor_title'),
-                `${t(ctx, 'admin_text_invalid_markdown')}: ${mdVal.error ?? ''}`
-              ),
-              { parse_mode: 'Markdown' }
-            );
-            continue;
-          }
-          await translationService.updateSetting(qualifiedKey, newText);
+      );
+
+      const input = await conversation.wait();
+      activeCtx = input;
+      if (!(await acceptConversationOwner(input, ownerId))) continue;
+      if (await handleAdminConversationCancel(conversation, input)) return;
+      await forwardConversationNavigation(conversation, input);
+
+      if (input.callbackQuery?.data === 'text-nav:edit_cancel') {
+        await input.answerCallbackQuery?.();
+        state = { screen: 'key_detail', key: current.key, returnState: current.returnState };
+        continue;
+      }
+
+      if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
+        await deleteConsumedInputMessage(input);
+        const newText = input.message.text.trim();
+        const validation = validateTranslationOverrideDetailed(newText, defaultValue);
+        if (!validation.valid) {
           await replyInAdminConversation(
             conversation,
-            ctx,
-            buildScreen({
-              emoji: '✅',
-              title: t(ctx, 'admin_text_saved_title'),
-              primary: {
-                emoji: '📝',
-                label: t(ctx, 'admin_text_key_label'),
-                value: escapeTelegramMarkdown(qualifiedKey),
-              },
-              footer: t(ctx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
-            }),
+            activeCtx,
+            buildEmptyState(
+              '⚠️',
+              t(activeCtx, 'admin_text_editor_title'),
+              formatValidationError(validation, activeCtx)
+            ),
             { parse_mode: 'Markdown' }
           );
+          continue;
         }
+        const mdVal = validateTelegramMarkdown(newText);
+        if (!mdVal.valid) {
+          await replyInAdminConversation(
+            conversation,
+            activeCtx,
+            buildEmptyState(
+              '⚠️',
+              t(activeCtx, 'admin_text_editor_title'),
+              `${t(activeCtx, 'admin_text_invalid_markdown')}: ${mdVal.error ?? ''}`
+            ),
+            { parse_mode: 'Markdown' }
+          );
+          continue;
+        }
+        await translationService.updateSetting(qualifiedKey, newText);
+        await replyInAdminConversation(
+          conversation,
+          activeCtx,
+          buildScreen({
+            emoji: '✅',
+            title: t(activeCtx, 'admin_text_saved_title'),
+            primary: {
+              emoji: '📝',
+              label: t(activeCtx, 'admin_text_key_label'),
+              value: escapeTelegramMarkdown(qualifiedKey),
+            },
+            footer: t(activeCtx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
+          }),
+          { parse_mode: 'Markdown' }
+        );
+        state = { screen: 'key_detail', key: current.key, returnState: current.returnState };
         continue;
       }
       continue;
@@ -1256,20 +1313,20 @@ export async function adminEditTextsConversation(
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '👁️',
-          title: t(ctx, 'admin_text_preview_title'),
-          subtitle: escapeTelegramMarkdown(t(ctx, 'admin_text_preview_subtitle')),
+          title: t(activeCtx, 'admin_text_preview_title'),
+          subtitle: escapeTelegramMarkdown(t(activeCtx, 'admin_text_preview_subtitle')),
           primary: {
             emoji: '🔑',
-            label: t(ctx, 'admin_text_key_label'),
+            label: t(activeCtx, 'admin_text_key_label'),
             value: escapeTelegramMarkdown(qualifiedKey),
           },
           sections: [
             {
               emoji: '💬',
-              title: t(ctx, 'admin_text_preview_title'),
+              title: t(activeCtx, 'admin_text_preview_title'),
               fields: [{ label: '—', value: escapeTelegramMarkdown(renderedSample) }],
             },
           ],
@@ -1277,13 +1334,14 @@ export async function adminEditTextsConversation(
         {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard().text(
-            t(ctx, 'admin_text_preview_close'),
+            t(activeCtx, 'admin_text_preview_close'),
             'text-nav:detail'
           ),
         }
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -1301,28 +1359,29 @@ export async function adminEditTextsConversation(
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '⚠️',
-          title: t(ctx, 'admin_text_reset_title'),
-          subtitle: escapeTelegramMarkdown(t(ctx, 'admin_text_reset_subtitle')),
+          title: t(activeCtx, 'admin_text_reset_title'),
+          subtitle: escapeTelegramMarkdown(t(activeCtx, 'admin_text_reset_subtitle')),
           primary: {
             emoji: '📝',
-            label: t(ctx, 'admin_text_key_label'),
+            label: t(activeCtx, 'admin_text_key_label'),
             value: escapeTelegramMarkdown(qualifiedKey),
           },
-          footer: t(ctx, 'admin_text_reset_consequence'),
+          footer: t(activeCtx, 'admin_text_reset_consequence'),
         }),
         {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard()
-            .text(t(ctx, 'admin_confirm_button'), 'text-act:reset_confirm')
+            .text(t(activeCtx, 'admin_confirm_button'), 'text-act:reset_confirm')
             .row()
-            .text(t(ctx, 'menu_cancel'), 'text-nav:detail'),
+            .text(t(activeCtx, 'menu_cancel'), 'text-nav:detail'),
         }
       );
 
       const input = await conversation.wait();
+      activeCtx = input;
       if (!(await acceptConversationOwner(input, ownerId))) continue;
       if (await handleAdminConversationCancel(conversation, input)) return;
       await forwardConversationNavigation(conversation, input);
@@ -1339,16 +1398,16 @@ export async function adminEditTextsConversation(
           await translationService.deleteSetting(qualifiedKey);
           await replyInAdminConversation(
             conversation,
-            ctx,
+            activeCtx,
             buildScreen({
               emoji: '✅',
-              title: t(ctx, 'admin_text_reset_title'),
+              title: t(activeCtx, 'admin_text_reset_title'),
               primary: {
                 emoji: '📝',
-                label: t(ctx, 'admin_text_key_label'),
+                label: t(activeCtx, 'admin_text_key_label'),
                 value: escapeTelegramMarkdown(qualifiedKey),
               },
-              footer: t(ctx, 'admin_text_reset_success', {
+              footer: t(activeCtx, 'admin_text_reset_success', {
                 key: escapeTelegramMarkdown(qualifiedKey),
               }),
             }),
@@ -1358,8 +1417,12 @@ export async function adminEditTextsConversation(
           logger.error({ err, key: qualifiedKey }, 'Failed to reset text setting override');
           await replyInAdminConversation(
             conversation,
-            ctx,
-            buildEmptyState('⚠️', t(ctx, 'admin_text_editor_title'), t(ctx, 'operation_failed')),
+            activeCtx,
+            buildEmptyState(
+              '⚠️',
+              t(activeCtx, 'admin_text_editor_title'),
+              t(activeCtx, 'operation_failed')
+            ),
             { parse_mode: 'Markdown' }
           );
         }
@@ -1385,7 +1448,7 @@ function formatPlaceholdersInfo(
   return placeholders
     .map((p) => {
       const desc = PLACEHOLDER_DESCRIPTIONS[p]?.[locale] ?? PLACEHOLDER_DESCRIPTIONS[p]?.fa ?? '—';
-      return `• \`{${p}}\`: ${escapeTelegramMarkdown(desc)}`;
+      return `• {${escapeTelegramMarkdown(p)}}: ${escapeTelegramMarkdown(desc)}`;
     })
     .join('\n');
 }
@@ -1396,12 +1459,16 @@ function formatValidationError(
 ): string {
   if (validation.errorReason === 'MISSING_PLACEHOLDERS') {
     return t(ctx, 'admin_text_error_missing_placeholders', {
-      placeholders: validation.missingPlaceholders.map((p) => `\`{${p}}\``).join(' , '),
+      placeholders: validation.missingPlaceholders
+        .map((p) => `{${escapeTelegramMarkdown(p)}}`)
+        .join(' , '),
     });
   }
   if (validation.errorReason === 'EXTRA_PLACEHOLDERS') {
     return t(ctx, 'admin_text_error_extra_placeholders', {
-      placeholders: validation.extraPlaceholders.map((p) => `\`{${p}}\``).join(' , '),
+      placeholders: validation.extraPlaceholders
+        .map((p) => `{${escapeTelegramMarkdown(p)}}`)
+        .join(' , '),
     });
   }
   return t(ctx, 'admin_text_value_invalid');

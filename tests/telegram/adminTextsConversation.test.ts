@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { adminEditTextsConversation } from '../../src/telegram/conversations/adminConversations/texts.js';
-import type { ConversationContext, MyConversation } from '../../src/telegram/types.js';
 
 type ScriptedInput = { callback: string } | { text: string };
 
@@ -204,5 +203,35 @@ describe('adminEditTextsConversation', () => {
 
     await adminEditTextsConversation(harness.conversation as any, harness.ctx as any);
     expect(harness.translationService.searchTranslations).toHaveBeenCalledWith('shop', 'fa');
+  });
+
+  it('performs in-category search and filters keys', async () => {
+    const harness = createTextsHarness({}, [
+      { callback: 'text-mode:advanced' },
+      { callback: 'text-cat:user_home' },
+      { callback: 'text-incat-search' },
+      { text: 'welcome' },
+      { callback: 'text-incat-clear' },
+      { callback: 'text-nav:categories' },
+      { callback: 'text-nav:mode_select' },
+      { callback: 'nav:admin' },
+    ]);
+
+    await adminEditTextsConversation(harness.conversation as any, harness.ctx as any);
+    expect(harness.reply).toHaveBeenCalled();
+  });
+
+  it('supports direct text input on key detail screen to update text', async () => {
+    const harness = createTextsHarness({}, [
+      { callback: 'text-mode:essential' },
+      { callback: 'text-pk:welcome' },
+      { text: 'متن مستقیم جدید' },
+      { callback: 'text-nav:back' },
+      { callback: 'text-nav:mode_select' },
+      { callback: 'nav:admin' },
+    ]);
+
+    await adminEditTextsConversation(harness.conversation as any, harness.ctx as any);
+    expect(harness.updateSetting).toHaveBeenCalledWith('fa.welcome', 'متن مستقیم جدید');
   });
 });
