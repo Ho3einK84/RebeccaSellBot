@@ -134,15 +134,24 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
       (messageId) => !artifactIdsBefore.has(messageId)
     );
 
+    // Preserve the message the user just clicked — whether it was tracked as a
+    // screen or as a conversation prompt. Previously only uiMessageIds were
+    // preserved, so admin text-editor (and other conversation) buttons deleted
+    // their own message before the next prompt could be sent, leaving a blank chat.
+    const callbackIsScreen =
+      callbackMessageId !== undefined && previousUiIds.includes(callbackMessageId);
+    const callbackIsPrompt =
+      callbackMessageId !== undefined && promptIds.includes(callbackMessageId);
     const preservedIds =
-      callbackMessageId && previousUiIds.includes(callbackMessageId) ? [callbackMessageId] : [];
+      callbackMessageId && (callbackIsScreen || callbackIsPrompt) ? [callbackMessageId] : [];
     const failedScreenDeletes: number[] = [];
     const failedPromptDeletes: number[] = [];
 
     // Optimistically update session lists immediately so next() works with clean state,
     // and run network deletions in background concurrent with route execution.
-    ctx.session.uiMessageIds = [...preservedIds];
-    ctx.session.promptMessageIds = [];
+    // Keep the clicked message in the same role list it came from.
+    ctx.session.uiMessageIds = callbackIsScreen ? [...preservedIds] : [];
+    ctx.session.promptMessageIds = callbackIsPrompt ? [...preservedIds] : [];
 
     const cleanupPromise = Promise.all(
       cleanupCandidates
