@@ -272,7 +272,9 @@ export function isAdminCallbackData(data: string): boolean {
     data.startsWith('cv:') ||
     data.startsWith('ref:') ||
     data.startsWith('pay:') ||
-    data.startsWith('pp:')
+    data.startsWith('pp:') ||
+    data.startsWith('text-') ||
+    data.startsWith('text:')
   );
 }
 

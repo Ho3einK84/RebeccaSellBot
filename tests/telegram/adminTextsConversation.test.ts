@@ -91,6 +91,7 @@ function createTextsHarness(
         from: { id: 1001, first_name: 'Admin', language_code: 'fa' },
       };
     }),
+    halt: vi.fn(async () => undefined),
   };
 
   const ctx = {
