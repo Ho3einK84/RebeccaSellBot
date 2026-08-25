@@ -5,6 +5,7 @@ import {
   isEntityParseError,
   safeFormattingTransformer,
   sanitizeTelegramInlineCode,
+  validateTelegramMarkdown,
 } from '../../src/telegram/rendering.js';
 
 describe('Telegram rendering safety', () => {
@@ -69,5 +70,37 @@ describe('Telegram rendering safety', () => {
     expect(result.ok).toBe(true);
     expect(previous).toHaveBeenCalledTimes(2);
     expect(previous.mock.calls[1]![1]).toEqual({ chat_id: 1, text: 'broken _ entity' });
+  });
+
+  it('retries when previous returns ApiResponse with entity parse error (ok: false)', async () => {
+    const previous = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        error_code: 400,
+        description:
+          "Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 68",
+      })
+      .mockResolvedValueOnce({ ok: true, result: { message_id: 2 } });
+    const transformer = safeFormattingTransformer();
+
+    const result = await transformer(
+      previous,
+      'sendMessage',
+      { chat_id: 1, text: '_referral\\_subtitle · فارسی_', parse_mode: 'Markdown' },
+      undefined
+    );
+
+    expect(result.ok).toBe(true);
+    expect(previous).toHaveBeenCalledTimes(2);
+    expect(previous.mock.calls[1]![1]).toEqual({
+      chat_id: 1,
+      text: '_referral\\_subtitle · فارسی_',
+    });
+  });
+
+  it('validates telegram markdown correctly rejecting unclosed entities', () => {
+    expect(validateTelegramMarkdown('_referral\\_subtitle · فارسی_').valid).toBe(false);
+    expect(validateTelegramMarkdown('*bold* _italic_ `code`').valid).toBe(true);
   });
 });

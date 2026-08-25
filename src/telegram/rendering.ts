@@ -55,7 +55,20 @@ export function isEntityParseError(error: unknown): boolean {
 export function safeFormattingTransformer(): Transformer {
   return async (prev, method, payload, signal) => {
     try {
-      return await prev(method, payload, signal);
+      const res = await prev(method, payload, signal);
+      if (!res.ok && res.description && isEntityParseError(new Error(res.description))) {
+        const candidate = payload as { parse_mode?: string };
+        if (candidate.parse_mode) {
+          const plainPayload = { ...candidate };
+          delete plainPayload.parse_mode;
+          logger.warn(
+            { method, parseMode: candidate.parse_mode, description: res.description },
+            'Telegram template markup was invalid; retrying safely as plain text'
+          );
+          return await prev(method, plainPayload as typeof payload, signal);
+        }
+      }
+      return res;
     } catch (error) {
       const candidate = payload as { parse_mode?: string };
       if (!candidate.parse_mode || !isEntityParseError(error)) throw error;
@@ -63,7 +76,7 @@ export function safeFormattingTransformer(): Transformer {
       const plainPayload = { ...candidate };
       delete plainPayload.parse_mode;
       logger.warn(
-        { method, parseMode: candidate.parse_mode },
+        { method, parseMode: candidate.parse_mode, error },
         'Telegram template markup was invalid; retrying safely as plain text'
       );
       return prev(method, plainPayload as typeof payload, signal);
@@ -77,37 +90,44 @@ export function safeFormattingTransformer(): Transformer {
 export function validateTelegramMarkdown(text: string): { valid: boolean; error?: string } {
   if (!text) return { valid: true };
 
-  let backtickCount = 0;
-  let asteriskCount = 0;
-  let underscoreCount = 0;
+  let inBacktick = false;
+  let inAsterisk = false;
+  let inUnderscore = false;
   let inLinkText = false;
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     const prevChar = i > 0 ? text[i - 1] : '';
 
-    if (prevChar === '\\') continue; // Escaped character
-
     if (char === '`') {
-      backtickCount++;
-    } else if (char === '*') {
-      asteriskCount++;
+      inBacktick = !inBacktick;
+      continue;
+    }
+
+    if (inBacktick) continue;
+
+    if (char === '*') {
+      if (!inAsterisk && prevChar === '\\') continue;
+      inAsterisk = !inAsterisk;
     } else if (char === '_') {
-      underscoreCount++;
+      if (!inUnderscore && prevChar === '\\') continue;
+      inUnderscore = !inUnderscore;
     } else if (char === '[') {
+      if (prevChar === '\\') continue;
       inLinkText = true;
     } else if (char === ']') {
+      if (prevChar === '\\') continue;
       inLinkText = false;
     }
   }
 
-  if (backtickCount % 2 !== 0) {
+  if (inBacktick) {
     return { valid: false, error: 'Unmatched backtick (`) marker' };
   }
-  if (asteriskCount % 2 !== 0) {
+  if (inAsterisk) {
     return { valid: false, error: 'Unmatched asterisk (*) marker' };
   }
-  if (underscoreCount % 2 !== 0) {
+  if (inUnderscore) {
     return { valid: false, error: 'Unmatched underscore (_) marker' };
   }
   if (inLinkText) {

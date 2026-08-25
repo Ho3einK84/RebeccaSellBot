@@ -42,7 +42,14 @@ export function buildHeader(emoji: string, title: string, subtitle?: string): st
   const headerLine = effectiveEmoji
     ? `${effectiveEmoji} *${unstarredTitle}*`
     : `*${unstarredTitle}*`;
-  return subtitle ? `${headerLine}\n_${subtitle}_\n` : `${headerLine}\n`;
+  if (!subtitle) return `${headerLine}\n`;
+  const trimmedSubtitle = subtitle.trim();
+  const isAlreadyItalic = trimmedSubtitle.startsWith('_') && trimmedSubtitle.endsWith('_');
+  const hasUnderscore = trimmedSubtitle.includes('_');
+  if (isAlreadyItalic || hasUnderscore) {
+    return `${headerLine}\n${trimmedSubtitle}\n`;
+  }
+  return `${headerLine}\n_${trimmedSubtitle}_\n`;
 }
 
 /**
