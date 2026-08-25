@@ -53,7 +53,7 @@ describe('admin category and settings group keyboards', () => {
     expect(backBtn?.text).toBe('admin_menu_back_to_admin');
   });
 
-  it('buildCategoryKeyboard builds one button per TEXT_CATEGORIES entry plus cancel', () => {
+  it('buildCategoryKeyboard builds one button per TEXT_CATEGORIES entry plus back button', () => {
     const keyboard = buildCategoryKeyboard(fakeCtx);
     const buttons = keyboard.inline_keyboard.flat();
 
@@ -67,8 +67,8 @@ describe('admin category and settings group keyboards', () => {
       expect(match?.text).toBe(category.labelKey);
     }
 
-    const cancelBtn = buttons.find((btn) => btn.callback_data === 'conversation:cancel');
-    expect(cancelBtn).toBeDefined();
-    expect(cancelBtn?.text).toBe('menu_cancel');
+    const backBtn = buttons.find((btn) => btn.callback_data === 'text-nav:mode_select');
+    expect(backBtn).toBeDefined();
+    expect(backBtn?.text).toBe('admin_text_back_to_menu');
   });
 });

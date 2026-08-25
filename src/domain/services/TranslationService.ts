@@ -81,6 +81,52 @@ export class TranslationService {
     return Object.hasOwn(FA_TEXTS, key);
   }
 
+  /** Return list of un-prefixed keys that have active database overrides in the specified locale. */
+  getCustomizedKeys(locale?: SupportedLocale): string[] {
+    const targetLocale = locale ? normalizeLocale(locale) : undefined;
+    const customized: string[] = [];
+    for (const key of this.cache.keys()) {
+      const match = key.match(/^(fa|en)\.(.+)$/u);
+      if (match) {
+        const [, loc, bareKey] = match;
+        if (!targetLocale || loc === targetLocale) {
+          if (this.hasTranslationKey(bareKey!) && !customized.includes(bareKey!)) {
+            customized.push(bareKey!);
+          }
+        }
+      }
+    }
+    return customized.sort();
+  }
+
+  /**
+   * Search translation keys matching query by key name or translated text content.
+   */
+  searchTranslations(
+    query: string,
+    locale: SupportedLocale = DEFAULT_LOCALE,
+    filterFn?: (key: string) => boolean
+  ): string[] {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return [];
+
+    const targetLocale = normalizeLocale(locale);
+    const allKeys = this.getTranslationKeys();
+
+    return allKeys
+      .filter((key) => {
+        if (filterFn && !filterFn(key)) return false;
+        if (key.toLowerCase().includes(normalizedQuery)) return true;
+        const qualifiedKey = `${targetLocale}.${key}`;
+        const activeText = this.get(key, targetLocale);
+        if (activeText.toLowerCase().includes(normalizedQuery)) return true;
+        const defaultText = DEFAULT_SETTINGS[qualifiedKey];
+        if (defaultText && defaultText.toLowerCase().includes(normalizedQuery)) return true;
+        return false;
+      })
+      .sort();
+  }
+
   /**
    * Resolve a localized bot string. Translation lookup deliberately never
    * falls through to an unqualified setting key: a missing `en.foo` must use
@@ -310,10 +356,61 @@ export function templatePlaceholders(value: string): string[] {
   return [...new Set([...value.matchAll(/\{([a-z0-9_]+)\}/giu)].map((match) => match[1]!))].sort();
 }
 
+export type DetailedValidationResult = {
+  valid: boolean;
+  errorReason?: 'EMPTY' | 'TOO_LONG' | 'MISSING_PLACEHOLDERS' | 'EXTRA_PLACEHOLDERS';
+  missingPlaceholders: string[];
+  extraPlaceholders: string[];
+};
+
+export function validateTranslationOverrideDetailed(
+  value: string,
+  hardcoded?: string
+): DetailedValidationResult {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { valid: false, errorReason: 'EMPTY', missingPlaceholders: [], extraPlaceholders: [] };
+  }
+  if (value.length > 4_096) {
+    return {
+      valid: false,
+      errorReason: 'TOO_LONG',
+      missingPlaceholders: [],
+      extraPlaceholders: [],
+    };
+  }
+  if (hardcoded === undefined) {
+    return { valid: true, missingPlaceholders: [], extraPlaceholders: [] };
+  }
+
+  const valuePlaceholders = templatePlaceholders(value);
+  const hardcodedPlaceholders = templatePlaceholders(hardcoded);
+
+  const missingPlaceholders = hardcodedPlaceholders.filter((p) => !valuePlaceholders.includes(p));
+  const extraPlaceholders = valuePlaceholders.filter((p) => !hardcodedPlaceholders.includes(p));
+
+  if (missingPlaceholders.length > 0) {
+    return {
+      valid: false,
+      errorReason: 'MISSING_PLACEHOLDERS',
+      missingPlaceholders,
+      extraPlaceholders,
+    };
+  }
+  if (extraPlaceholders.length > 0) {
+    return {
+      valid: false,
+      errorReason: 'EXTRA_PLACEHOLDERS',
+      missingPlaceholders,
+      extraPlaceholders,
+    };
+  }
+
+  return { valid: true, missingPlaceholders: [], extraPlaceholders: [] };
+}
+
 export function isValidTranslationOverride(value: string, hardcoded?: string): boolean {
-  if (!value.trim() || value.length > 4_096) return false;
-  if (hardcoded === undefined) return true;
-  return arraysEqual(templatePlaceholders(value), templatePlaceholders(hardcoded));
+  return validateTranslationOverrideDetailed(value, hardcoded).valid;
 }
 
 function assertValidTranslationOverride(key: string, value: string): void {
@@ -328,8 +425,4 @@ function hasMissingTemplatePlaceholders(
   params?: Record<string, string | number>
 ): boolean {
   return templatePlaceholders(template).some((key) => !params || !Object.hasOwn(params, key));
-}
-
-function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

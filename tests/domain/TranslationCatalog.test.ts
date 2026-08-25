@@ -159,4 +159,27 @@ describe('Translation Catalog Parity and Standard', () => {
 
     expect(unusedKeys, 'Catalog entries must be referenced by production source').toEqual([]);
   });
+
+  it('guarantees 100% of catalog keys are covered by TEXT_CATEGORIES', async () => {
+    const { TEXT_CATEGORIES } =
+      await import('../../src/telegram/conversations/adminConversations/texts.js');
+    const faKeys = Object.keys(FA_TEXTS);
+
+    const uncategorized = faKeys.filter((key) => !TEXT_CATEGORIES.some((c) => c.matches(key)));
+    expect(uncategorized, 'All translation keys must be covered by TEXT_CATEGORIES').toEqual([]);
+  });
+
+  it('ensures all ESSENTIAL_USER_TEXTS exist in catalog', async () => {
+    const { ESSENTIAL_USER_TEXTS } =
+      await import('../../src/telegram/conversations/adminConversations/texts.js');
+    for (const item of ESSENTIAL_USER_TEXTS) {
+      expect(FA_TEXTS, `Essential text key "${item.key}" must exist`).toHaveProperty(item.key);
+      expect(FA_TEXTS, `Essential labelKey "${item.labelKey}" must exist`).toHaveProperty(
+        item.labelKey
+      );
+      expect(FA_TEXTS, `Essential descKey "${item.descKey}" must exist`).toHaveProperty(
+        item.descKey
+      );
+    }
+  });
 });

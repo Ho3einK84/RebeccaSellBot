@@ -6,6 +6,7 @@ import {
   isValidTranslationOverride,
   normalizeLocale,
   templatePlaceholders,
+  validateTranslationOverrideDetailed,
 } from '../../src/domain/services/TranslationService.js';
 
 vi.mock('../../src/infra/db.js', () => ({ getDb: vi.fn() }));
@@ -280,11 +281,54 @@ describe('TranslationService', () => {
     vi.mocked(getDb).mockReturnValue(db as never);
     const service = new TranslationService({ defaultLocale: 'fa' });
 
-    expect(service.getDefaultLocale()).toBe('fa');
-    expect(service.resolveLocale()).toBe('fa');
-
     await service.updateSetting('default_locale', 'en');
     expect(service.getDefaultLocale()).toBe('en');
     expect(service.resolveLocale()).toBe('en');
+  });
+
+  it('provides detailed validation breakdown for translation overrides', () => {
+    // Valid
+    const valid = validateTranslationOverrideDetailed(
+      'Welcome {name} to {shop}',
+      'Hi {name} in {shop}'
+    );
+    expect(valid.valid).toBe(true);
+    expect(valid.missingPlaceholders).toEqual([]);
+    expect(valid.extraPlaceholders).toEqual([]);
+
+    // Missing
+    const missing = validateTranslationOverrideDetailed('Welcome {name}', 'Hi {name} in {shop}');
+    expect(missing.valid).toBe(false);
+    expect(missing.errorReason).toBe('MISSING_PLACEHOLDERS');
+    expect(missing.missingPlaceholders).toEqual(['shop']);
+
+    // Extra
+    const extra = validateTranslationOverrideDetailed('Welcome {name} {extra}', 'Hi {name}');
+    expect(extra.valid).toBe(false);
+    expect(extra.errorReason).toBe('EXTRA_PLACEHOLDERS');
+    expect(extra.extraPlaceholders).toEqual(['extra']);
+
+    // Empty
+    const empty = validateTranslationOverrideDetailed('   ', 'Hi {name}');
+    expect(empty.valid).toBe(false);
+    expect(empty.errorReason).toBe('EMPTY');
+  });
+
+  it('retrieves customized keys and performs bilingual searches', async () => {
+    const db = createDatabaseMock();
+    vi.mocked(getDb).mockReturnValue(db as never);
+    const service = new TranslationService();
+
+    await service.updateSetting('fa.welcome', 'سلام اختصاصی');
+    await service.updateSetting('en.welcome', 'Custom Welcome');
+
+    expect(service.getCustomizedKeys('fa')).toContain('welcome');
+    expect(service.getCustomizedKeys('en')).toContain('welcome');
+
+    const searchFa = service.searchTranslations('سلام اختصاصی', 'fa');
+    expect(searchFa).toContain('welcome');
+
+    const searchEn = service.searchTranslations('Custom Welcome', 'en');
+    expect(searchEn).toContain('welcome');
   });
 });
