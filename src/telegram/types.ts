@@ -58,6 +58,8 @@ export interface SessionData {
   pendingAutoRenew?: { configId: string; packageId: string; price: number };
   adminPanelId?: string;
   adminPanelAction?: 'add' | 'name' | 'url' | 'add_service' | 'await_add_key' | 'await_api_key';
+  /** Timestamp when the admin panel secret input action was initiated. */
+  adminPanelActionAt?: number;
   /** Non-secret panel fields waiting for a one-shot API-key message. */
   adminPanelDraft?: {
     name: string;

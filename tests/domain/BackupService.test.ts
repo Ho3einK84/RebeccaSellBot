@@ -220,5 +220,17 @@ describe('BackupService', () => {
       expect(result.messageId).toBe(999);
       expect(mockApi.sendDocument).toHaveBeenCalledTimes(1);
     });
+
+    it('throws error in production when pg_dump fails', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      try {
+        process.env.NODE_ENV = 'production';
+        await expect(backupService.createBackupBundle({ label: 'test_prod' })).rejects.toThrow(
+          /DATABASE_DUMP_FAILED/
+        );
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    });
   });
 });

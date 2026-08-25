@@ -353,6 +353,7 @@ export class WalletService {
         }),
       });
 
+      this.invalidateUserCache(params.telegramId);
       return updated.balance;
     });
   }
@@ -402,6 +403,7 @@ export class WalletService {
         metadata: JSON.stringify({ amount: rec.amount }),
       });
 
+      this.invalidateUserCache(rec.telegramId);
       result = { telegramId: rec.telegramId, amount: rec.amount };
     });
     return result;
@@ -761,6 +763,9 @@ export class WalletService {
           txIdRecipient,
         }),
       });
+
+      this.invalidateUserCache(params.fromTelegramId);
+      this.invalidateUserCache(params.toTelegramId);
 
       return {
         success: true,

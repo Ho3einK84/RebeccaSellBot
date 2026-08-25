@@ -973,4 +973,30 @@ describe('WalletService reserve → remote → commit saga', () => {
     expect(state.updateCalls).toHaveLength(0);
     expect(state.insertValues).toHaveLength(0);
   });
+
+  it('invalidates in-memory userCache when adjustBalanceAdmin succeeds', async () => {
+    const { db } = createDbMock({
+      selectResults: [[{ telegramId: 4321, balance: 100, reservedBalance: 0 }]],
+      returningResults: [[{ balance: 150 }]],
+    });
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    // Warm user cache
+    (walletService as any).setUserCache(4321, {
+      telegramId: 4321,
+      balance: 100,
+      reservedBalance: 0,
+    });
+    expect((walletService as any).userCache.has(4321)).toBe(true);
+
+    await walletService.adjustBalanceAdmin({
+      telegramId: 4321,
+      operation: 'add',
+      amount: 50,
+      adminId: 99,
+      description: 'Admin deposit',
+    });
+
+    expect((walletService as any).userCache.has(4321)).toBe(false);
+  });
 });

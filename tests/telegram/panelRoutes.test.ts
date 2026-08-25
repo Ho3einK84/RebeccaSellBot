@@ -111,4 +111,38 @@ describe('admin panel routes', () => {
     expect(callbacks).toContain('a:p:v:panel_123:3');
     expect(callbacks).toContain('ui:noop');
   });
+
+  it('bypasses secret input and clears action when session is older than 5 minutes', async () => {
+    let messageHandler: ((ctx: any, next: () => Promise<void>) => Promise<void>) | undefined;
+    const bot = {
+      callbackQuery: vi.fn().mockReturnThis(),
+      on: vi.fn((event: string, handler: any) => {
+        if (event === 'message:text') messageHandler = handler;
+        return bot;
+      }),
+    };
+    registerAdminPanelRoutes(bot as unknown as Bot<MenuContext>);
+    expect(messageHandler).toBeDefined();
+
+    const next = vi.fn().mockResolvedValue(undefined);
+    const ctx = {
+      session: {
+        adminPanelAction: 'await_api_key',
+        adminPanelActionAt: Date.now() - 6 * 60 * 1000, // 6 minutes ago
+        adminPanelId: 'panel_123',
+      },
+      from: { id: 1 },
+      services: {
+        isAdmin: vi.fn(() => true),
+      },
+      message: { text: 'some-random-message' },
+    };
+
+    await messageHandler!(ctx, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(ctx.session.adminPanelAction).toBeUndefined();
+    expect(ctx.session.adminPanelActionAt).toBeUndefined();
+    expect(ctx.session.adminPanelId).toBeUndefined();
+  });
 });

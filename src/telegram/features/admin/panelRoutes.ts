@@ -19,6 +19,7 @@ import { escapeTelegramMarkdown } from '../../rendering.js';
 const PANEL_ID_CAPTURE = '([a-z0-9_-]{3,40})';
 const PANEL_PAGE_SIZE = 7;
 const PANEL_SERVICE_PAGE_SIZE = 4;
+const PANEL_SECRET_INPUT_TIMEOUT_MS = 5 * 60 * 1000;
 type PanelEditAction = 'name' | 'url' | 'api_key' | 'add_service';
 type PanelServiceAction = 'default' | 'custom';
 const COMPACT_PANEL_EDIT_ACTIONS: Record<string, PanelEditAction> = {
@@ -312,6 +313,12 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     if (action !== 'await_add_key' && action !== 'await_api_key') return next();
     if (!ctx.services?.isAdmin(ctx.from.id)) return;
 
+    const actionAt = ctx.session.adminPanelActionAt;
+    if (actionAt && Date.now() - actionAt > PANEL_SECRET_INPUT_TIMEOUT_MS) {
+      clearPendingPanelSecret(ctx);
+      return next();
+    }
+
     const apiKey = ctx.message.text.trim();
     await deleteConsumedInputMessage(ctx);
     if (apiKey === '/cancel') {
@@ -394,6 +401,7 @@ async function beginPanelEdit(
   await ctx.answerCallbackQuery();
   if (action === 'api_key') {
     ctx.session.adminPanelAction = 'await_api_key';
+    ctx.session.adminPanelActionAt = Date.now();
     await renderPanelScreen(
       ctx,
       buildScreen({
@@ -623,6 +631,7 @@ function isValidServiceId(serviceId: number): boolean {
 
 function clearPendingPanelSecret(ctx: MenuContext): void {
   ctx.session.adminPanelAction = undefined;
+  ctx.session.adminPanelActionAt = undefined;
   ctx.session.adminPanelId = undefined;
   ctx.session.adminPanelDraft = undefined;
 }

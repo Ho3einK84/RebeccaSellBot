@@ -340,6 +340,11 @@ export class BackupService {
         throw new Error('pg_dump produced an empty dump file');
       }
     } catch (dumpErr) {
+      if (process.env.NODE_ENV === 'production') {
+        const errorMsg = dumpErr instanceof Error ? dumpErr.message : String(dumpErr);
+        logger.error({ err: dumpErr }, 'pg_dump execution failed in production environment');
+        throw new Error(`DATABASE_DUMP_FAILED: ${errorMsg}`, { cause: dumpErr });
+      }
       logger.warn(
         { err: dumpErr },
         'pg_dump execution failed or pg_dump binary is missing; falling back to schema-metadata placeholder'

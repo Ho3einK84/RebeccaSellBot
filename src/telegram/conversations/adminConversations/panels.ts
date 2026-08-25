@@ -46,6 +46,7 @@ export async function adminPanelConversation(
           serviceName,
         };
         outsideCtx.session.adminPanelAction = 'await_add_key';
+        outsideCtx.session.adminPanelActionAt = Date.now();
       });
       await replyInAdminConversation(
         conversation,

@@ -339,4 +339,42 @@ describe('WalletService.transferBalance', () => {
       })
     ).rejects.toThrow('TRANSFER_ALREADY_PROCESSED');
   });
+
+  it('invalidates both sender and recipient userCache on successful transfer', async () => {
+    const sender = {
+      telegramId: 100,
+      balance: 50_000,
+      reservedBalance: 0,
+      isBanned: false,
+    };
+    const recipient = {
+      telegramId: 200,
+      balance: 10_000,
+      reservedBalance: 0,
+      isBanned: false,
+    };
+
+    const { db } = createDbMock({
+      selectResults: [[sender], [recipient], []],
+      returningResults: [
+        [{ telegramId: 100, balance: 45_000 }],
+        [{ telegramId: 200, balance: 15_000 }],
+      ],
+    });
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    (walletService as any).setUserCache(100, sender);
+    (walletService as any).setUserCache(200, recipient);
+    expect((walletService as any).userCache.has(100)).toBe(true);
+    expect((walletService as any).userCache.has(200)).toBe(true);
+
+    await walletService.transferBalance({
+      fromTelegramId: 100,
+      toTelegramId: 200,
+      amount: 5_000,
+    });
+
+    expect((walletService as any).userCache.has(100)).toBe(false);
+    expect((walletService as any).userCache.has(200)).toBe(false);
+  });
 });
