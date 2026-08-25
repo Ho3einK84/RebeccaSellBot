@@ -52,3 +52,7 @@ backups/
 *.db
 *.sqlite
 *.sqlite3
+
+# Agent directories
+.agents/
+.agent/
