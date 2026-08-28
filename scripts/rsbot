@@ -90,6 +90,17 @@ readonly ENV_FILE="$INSTANCE_DIR/.env"
 readonly COMPOSE_FILE="$INSTANCE_DIR/docker-compose.yml"
 readonly BACKUP_DIR="$BASE_PATH/backups/$INSTANCE"
 
+# If invoked through a global wrapper and the instance directory has its own script,
+# delegate execution to the instance's checkout (unless already delegated).
+if [[ "${RSBOT_DISPATCHED:-}" != "1" && -x "$INSTANCE_DIR/scripts/rsbot" ]]; then
+  current_script="$(realpath "$0" 2>/dev/null || printf '%s' "$0")"
+  target_script="$(realpath "$INSTANCE_DIR/scripts/rsbot" 2>/dev/null || printf '%s' "$INSTANCE_DIR/scripts/rsbot")"
+  if [[ "$current_script" != "$target_script" ]]; then
+    export RSBOT_DISPATCHED=1
+    exec "$INSTANCE_DIR/scripts/rsbot" "$INSTANCE" "$COMMAND" "$@"
+  fi
+fi
+
 [[ -d "$INSTANCE_DIR" ]] || die "Instance '$INSTANCE' was not found at $INSTANCE_DIR."
 [[ -f "$ENV_FILE" ]] || die "Missing instance environment file: $ENV_FILE"
 [[ -f "$COMPOSE_FILE" ]] || die "Missing Compose file: $COMPOSE_FILE"
@@ -134,7 +145,18 @@ env_value() {
 validate_database_dump() {
   local dump_file="$1"
   [[ -s "$dump_file" ]] || return 1
-  dc exec -T db pg_restore --list < "$dump_file" >/dev/null
+
+  # Check with db container native pg_restore
+  if dc exec -T db pg_restore --list < "$dump_file" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Fallback: check via bot container if dump format is newer than db container tools
+  if dc run --rm --no-deps -T bot pg_restore --list < "$dump_file" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  return 1
 }
 
 terminate_db_backends() {
@@ -149,6 +171,36 @@ terminate_db_backends() {
 
 restore_database_dump() {
   local dump_file="$1" db_user="$2" db_name="$3"
+  terminate_db_backends "$db_user" "$db_name"
+
+  # Strategy 1: Direct native pg_restore inside db container
+  if dc exec -T db pg_restore \
+    --single-transaction \
+    --exit-on-error \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges \
+    -U "$db_user" \
+    -d "$db_name" < "$dump_file" 2>/dev/null; then
+    return 0
+  fi
+
+  # Strategy 2: If direct restore failed (e.g. dump created by newer pg_dump client with
+  # unsupported format version or unrecognized PG17+ parameters like transaction_timeout),
+  # render SQL via bot container, strip incompatible GUCs, and pipe into psql in a single transaction.
+  terminate_db_backends "$db_user" "$db_name"
+  if dc run --rm --no-deps -T bot pg_restore -f - \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges < "$dump_file" 2>/dev/null | \
+    sed -E '/^SET (transaction_timeout|idle_session_timeout) =/d' | \
+    dc exec -T db psql -U "$db_user" -d "$db_name" -v ON_ERROR_STOP=1 --single-transaction >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # If both strategies failed, re-run Strategy 1 with full stderr to surface the diagnostic
   terminate_db_backends "$db_user" "$db_name"
   dc exec -T db pg_restore \
     --single-transaction \
@@ -488,6 +540,9 @@ case "$COMMAND" in
     wait_for_stack db
     dc run --rm --no-deps bot npm run db:migrate
     wait_for_stack
+    if [[ -w /usr/local/bin/rsbot || ( ! -e /usr/local/bin/rsbot && -w /usr/local/bin ) ]]; then
+      install -m 0755 "$INSTANCE_DIR/scripts/rsbot" /usr/local/bin/rsbot 2>/dev/null || true
+    fi
     printf "Updated '%s' successfully.\n" "$INSTANCE"
     ;;
   backup)
@@ -522,9 +577,16 @@ case "$COMMAND" in
       esac
     done
 
-    [[ -n "$restore_file" && -r "$restore_file" ]] ||
+    [[ -n "$restore_file" ]] ||
       die "Usage: rsbot $INSTANCE restore /path/to/backup.tar.gz [-y|--yes]"
-    restore_file="$(realpath "$restore_file")"
+
+    if [[ -r "$restore_file" ]]; then
+      restore_file="$(realpath "$restore_file")"
+    elif [[ -r "$BACKUP_DIR/$restore_file" ]]; then
+      restore_file="$(realpath "$BACKUP_DIR/$restore_file")"
+    else
+      die "Backup file '$restore_file' was not found or is not readable (checked '$PWD/$restore_file' and '$BACKUP_DIR/$restore_file')."
+    fi
 
     restore_workspace="$(mktemp -d)"
     rollback_workspace="$(mktemp -d)"

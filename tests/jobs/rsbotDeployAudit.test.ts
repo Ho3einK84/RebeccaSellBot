@@ -26,7 +26,7 @@ describe('Deployment & Backup Shell Logic Audit', () => {
       const rsbotPath = path.resolve('scripts/rsbot');
       const testScript = `
         set -- dummy-instance dummy-cmd
-        source <(sed -n '115,126p' "${rsbotPath}")
+        source <(awk '/^env_value_from_file\\(\\)/,/^}/' "${rsbotPath}")
         echo "DB_USER=$(env_value_from_file "${envPath}" DB_USER)"
         echo "DB_PASSWORD=$(env_value_from_file "${envPath}" DB_PASSWORD)"
         echo "DB_NAME=$(env_value_from_file "${envPath}" DB_NAME)"
@@ -63,7 +63,7 @@ describe('Deployment & Backup Shell Logic Audit', () => {
 
       const rsbotPath = path.resolve('scripts/rsbot');
       const testScript = `
-        source <(sed -n '216,240p' "${rsbotPath}")
+        source <(awk '/^is_complete_backup_bundle\\(\\)/,/^}/' "${rsbotPath}")
         if is_complete_backup_bundle "${archivePath}"; then
           echo "RESULT=VALID"
         else
@@ -94,7 +94,7 @@ describe('Deployment & Backup Shell Logic Audit', () => {
 
       const rsbotPath = path.resolve('scripts/rsbot');
       const testScript = `
-        source <(sed -n '216,240p' "${rsbotPath}")
+        source <(awk '/^is_complete_backup_bundle\\(\\)/,/^}/' "${rsbotPath}")
         if is_complete_backup_bundle "${archivePath}"; then
           echo "RESULT=VALID"
         else
@@ -117,7 +117,7 @@ describe('Deployment & Backup Shell Logic Audit', () => {
 
       const rsbotPath = path.resolve('scripts/rsbot');
       const testScript = `
-        source <(sed -n '216,240p' "${rsbotPath}")
+        source <(awk '/^is_complete_backup_bundle\\(\\)/,/^}/' "${rsbotPath}")
         if is_complete_backup_bundle "${archivePath}"; then
           echo "RESULT=VALID"
         else
@@ -331,6 +331,52 @@ describe('Deployment & Backup Shell Logic Audit', () => {
       expect(stdout).toContain('FINAL_ADMINS=88888888');
       expect(stdout).toContain('FINAL_PANEL_KEY=preserved_panel_key_123456789012');
       expect(stdout).toContain('FINAL_DB_USER=rsbot_main');
+    });
+  });
+
+  describe('rsbot: restore path resolution', () => {
+    it('resolves backup files from current directory and from instance backup dir, and fails on missing files', async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'restore_res_'));
+      const backupDir = path.join(tempDir, 'backups', 'main');
+      await fs.mkdir(backupDir, { recursive: true });
+
+      const inCwd = path.join(tempDir, 'cwd_backup.tar.gz');
+      const inBackupDir = path.join(backupDir, 'saved_backup.tar.gz');
+      await fs.writeFile(inCwd, 'dummy cwd content');
+      await fs.writeFile(inBackupDir, 'dummy backup dir content');
+
+      const testScript = `
+        BACKUP_DIR="${backupDir}"
+        die() { echo "ERROR: $*" >&2; exit 1; }
+
+        resolve_restore_target() {
+          local restore_file="$1"
+          [[ -n "$restore_file" ]] || die "Usage: rsbot restore /path/to/backup.tar.gz"
+          if [[ -r "$restore_file" ]]; then
+            realpath "$restore_file"
+          elif [[ -r "$BACKUP_DIR/$restore_file" ]]; then
+            realpath "$BACKUP_DIR/$restore_file"
+          else
+            die "Backup file '$restore_file' was not found or is not readable (checked '$PWD/$restore_file' and '$BACKUP_DIR/$restore_file')."
+          fi
+        }
+
+        cd "${tempDir}"
+        echo "TARGET_CWD=$(resolve_restore_target "cwd_backup.tar.gz")"
+        echo "TARGET_BACKUP_DIR=$(resolve_restore_target "saved_backup.tar.gz")"
+        if (resolve_restore_target "nonexistent.tar.gz") 2>/dev/null; then
+          echo "TARGET_NONEXISTENT=FOUND"
+        else
+          echo "TARGET_NONEXISTENT=REJECTED"
+        fi
+      `;
+
+      const { stdout } = await execFileAsync('bash', ['-c', testScript]);
+      await fs.rm(tempDir, { recursive: true, force: true });
+
+      expect(stdout).toContain(`TARGET_CWD=${inCwd}`);
+      expect(stdout).toContain(`TARGET_BACKUP_DIR=${inBackupDir}`);
+      expect(stdout).toContain('TARGET_NONEXISTENT=REJECTED');
     });
   });
 });

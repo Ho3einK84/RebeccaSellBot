@@ -208,11 +208,52 @@ terminate_db_backends() {
 validate_database_dump() {
   local dump_file="$1"
   [[ -s "$dump_file" ]] || return 1
-  dc exec -T db pg_restore --list < "$dump_file" >/dev/null
+
+  # Check with db container native pg_restore
+  if dc exec -T db pg_restore --list < "$dump_file" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Fallback: check via bot container if dump format is newer than db container tools
+  if dc run --rm --no-deps -T bot pg_restore --list < "$dump_file" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  return 1
 }
 
 restore_database_dump() {
   local dump_file="$1" db_user="$2" db_name="$3"
+  terminate_db_backends "$db_user" "$db_name"
+
+  # Strategy 1: Direct native pg_restore inside db container
+  if dc exec -T db pg_restore \
+    --single-transaction \
+    --exit-on-error \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges \
+    -U "$db_user" \
+    -d "$db_name" < "$dump_file" 2>/dev/null; then
+    return 0
+  fi
+
+  # Strategy 2: If direct restore failed (e.g. dump created by newer pg_dump client with
+  # unsupported format version or unrecognized PG17+ parameters like transaction_timeout),
+  # render SQL via bot container, strip incompatible GUCs, and pipe into psql in a single transaction.
+  terminate_db_backends "$db_user" "$db_name"
+  if dc run --rm --no-deps -T bot pg_restore -f - \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges < "$dump_file" 2>/dev/null | \
+    sed -E '/^SET (transaction_timeout|idle_session_timeout) =/d' | \
+    dc exec -T db psql -U "$db_user" -d "$db_name" -v ON_ERROR_STOP=1 --single-transaction >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # If both strategies failed, re-run Strategy 1 with full stderr to surface the diagnostic
   terminate_db_backends "$db_user" "$db_name"
   dc exec -T db pg_restore \
     --single-transaction \
