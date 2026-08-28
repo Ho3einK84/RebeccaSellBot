@@ -6,6 +6,7 @@ set -Eeuo pipefail
 
 readonly BASE_PATH="/opt/RebeccaSellBot"
 readonly BACKUP_FORMAT_VERSION="1"
+readonly DEFAULT_BACKUP_RETENTION=14
 
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
@@ -15,17 +16,20 @@ rsbot — RebeccaSellBot multi-instance manager
 
 Usage:
   rsbot list
-  rsbot <instance> <command>
+  rsbot <instance> <command> [options]
 
 Commands:
   up                 Build/start the instance and wait for health
   down               Stop the instance without deleting its data
   restart            Restart the instance containers
-  status             Show container status
+  status             Show container and service status
+  verify             Run deep stack diagnostics and health verification
   logs [-f]          Show logs (use -f to follow)
   update             Pull, rebuild, run Drizzle migrations, and start
   backup             Create a complete compressed backup (database + .env)
-  restore <file>     Safely restore a complete backup or legacy .dump
+  backups            List existing backups for this instance
+  prune-backups [N]  Retain only the most recent N backups (default: 14)
+  restore <file>     Safely restore a complete backup or legacy .dump (pass -y for unattended)
   uninstall          Permanently remove only this instance and its volume
 HELP
 }
@@ -127,8 +131,19 @@ validate_database_dump() {
   dc exec -T db pg_restore --list < "$dump_file" >/dev/null
 }
 
+terminate_db_backends() {
+  local db_user="$1" db_name="$2"
+  dc exec -T db psql -U "$db_user" -d "$db_name" -c "
+    SELECT pg_terminate_backend(pid)
+    FROM pg_stat_activity
+    WHERE datname = '$db_name'
+      AND pid <> pg_backend_pid();
+  " >/dev/null 2>&1 || true
+}
+
 restore_database_dump() {
   local dump_file="$1" db_user="$2" db_name="$3"
+  terminate_db_backends "$db_user" "$db_name"
   dc exec -T db pg_restore \
     --single-transaction \
     --exit-on-error \
@@ -166,7 +181,7 @@ create_backup_bundle() (
 
   printf "Creating PostgreSQL snapshot for '%s'...\n" "$INSTANCE" >&2
   wait_for_stack db >&2
-  dc exec -T db pg_dump -Fc --no-owner -U "$db_user" "$db_name" > "$temp_dir/database.dump"
+  dc exec -T db pg_dump -Fc --no-owner --no-privileges -U "$db_user" "$db_name" > "$temp_dir/database.dump"
   validate_database_dump "$temp_dir/database.dump"
 
   install -m 0600 "$ENV_FILE" "$temp_dir/.env"
@@ -196,13 +211,22 @@ is_complete_backup_bundle() {
   local backup_file="$1"
   tar -tzf "$backup_file" >/dev/null 2>&1 || return 1
   local entries
-  entries="$(tar -tzf "$backup_file")" || return 1
-  [[ "$(printf '%s\n' "$entries" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 4 ]] || return 1
-  for required in database.dump .env docker-compose.yml manifest.txt; do
-    [[ "$(printf '%s\n' "$entries" | grep -Fxc -- "$required")" -eq 1 ]] || return 1
-  done
-  # Refuse symlinks, directories, devices, and any other non-regular entry.
-  tar -tvzf "$backup_file" | awk '$1 !~ /^-/ { exit 1 }' || return 1
+  entries="$(tar -tzf "$backup_file" 2>/dev/null)" || return 1
+
+  # Refuse symlinks, devices, or directory traversal / absolute paths
+  tar -tvzf "$backup_file" | awk '
+    $1 !~ /^-/ { exit 1 }
+    $NF ~ /^\// || $NF ~ /\.\./ { exit 1 }
+  ' || return 1
+
+  local clean_entries
+  clean_entries="$(printf '%s\n' "$entries" | sed 's#^\./##g; /^$/d')"
+
+  # A bundle must contain manifest.txt and database.dump
+  printf '%s\n' "$clean_entries" | grep -q '^manifest\.txt$' || return 1
+  printf '%s\n' "$clean_entries" | grep -q '^database\.dump$' || return 1
+
+  return 0
 }
 
 extract_complete_backup_bundle() {
@@ -211,11 +235,10 @@ extract_complete_backup_bundle() {
   mkdir -p "$destination"
   chmod 700 "$destination"
   tar --no-same-owner --no-same-permissions -xzf "$backup_file" -C "$destination"
-  for required in database.dump .env docker-compose.yml manifest.txt; do
-    [[ -f "$destination/$required" && ! -L "$destination/$required" ]] || return 1
-  done
-  chmod 0600 "$destination/database.dump" "$destination/.env" \
-    "$destination/docker-compose.yml" "$destination/manifest.txt"
+
+  [[ -f "$destination/manifest.txt" && ! -L "$destination/manifest.txt" ]] || return 1
+  [[ -f "$destination/database.dump" && ! -L "$destination/database.dump" ]] || return 1
+  chmod 0600 "$destination"/* 2>/dev/null || true
 }
 
 validate_bundle_identity() {
@@ -228,24 +251,24 @@ validate_bundle_identity() {
   [[ "$manifest_instance" == "$INSTANCE" ]] ||
     die "Backup belongs to instance '${manifest_instance:-unknown}', not '$INSTANCE'."
 
-  backup_instance_name="$(env_value_from_file "$extracted_dir/.env" INSTANCE_NAME 2>/dev/null || true)"
-  if [[ -n "$backup_instance_name" && "$backup_instance_name" != "$INSTANCE" ]]; then
-    die "Backup .env belongs to INSTANCE_NAME '$backup_instance_name', not '$INSTANCE'."
+  if [[ -f "$extracted_dir/.env" ]]; then
+    backup_instance_name="$(env_value_from_file "$extracted_dir/.env" INSTANCE_NAME 2>/dev/null || true)"
+    if [[ -n "$backup_instance_name" && "$backup_instance_name" != "$INSTANCE" ]]; then
+      die "Backup .env belongs to INSTANCE_NAME '$backup_instance_name', not '$INSTANCE'."
+    fi
   fi
 }
 
 validate_bundle_database_identity() {
   local extracted_env="$1"
+  [[ -f "$extracted_env" ]] || return 0
   local key current_value backup_value
-  # PostgreSQL roles and databases live in the Docker volume and are not part
-  # of pg_dump --no-owner. Restoring an environment with different DB identity
-  # would make the restored bot unable to authenticate to the existing volume.
   for key in DB_USER DB_PASSWORD DB_NAME; do
     current_value="$(env_value_from_file "$ENV_FILE" "$key")" || die "$key is missing from $ENV_FILE."
     backup_value="$(env_value_from_file "$extracted_env" "$key")" ||
       die "$key is missing from the backup .env."
     [[ "$current_value" == "$backup_value" ]] ||
-      die "Backup $key differs from the current instance. Restore the saved .env before provisioning the database, or use a matching instance."
+      die "Backup $key differs from current instance. Restore the saved .env before provisioning the database, or use a matching instance."
   done
 }
 
@@ -254,6 +277,176 @@ atomic_install_env() {
   temp_env="$(mktemp "$INSTANCE_DIR/.env.restore.XXXXXX")"
   install -m 0600 "$source_env" "$temp_env"
   mv -f -- "$temp_env" "$ENV_FILE"
+}
+
+prune_old_backups() {
+  local keep="${1:-${RSBOT_BACKUP_RETENTION:-$DEFAULT_BACKUP_RETENTION}}"
+  [[ "$keep" =~ ^[1-9][0-9]*$ ]] || keep="$DEFAULT_BACKUP_RETENTION"
+  [[ -d "$BACKUP_DIR" ]] || return 0
+
+  shopt -s nullglob
+  local files=("$BACKUP_DIR"/*_"${INSTANCE}"_*.tar.gz "$BACKUP_DIR"/*_"${INSTANCE}"_*.dump)
+  shopt -u nullglob
+  local total="${#files[@]}"
+  if (( total <= keep )); then
+    return 0
+  fi
+
+  local sorted=()
+  while IFS= read -r f; do
+    sorted+=("$f")
+  done < <(ls -1tr "${files[@]}" 2>/dev/null)
+
+  local to_remove=$(( total - keep ))
+  for (( i=0; i<to_remove; i++ )); do
+    local victim="${sorted[$i]}"
+    if [[ -f "$victim" ]]; then
+      rm -f -- "$victim"
+      printf 'Pruned old backup: %s\n' "$(basename "$victim")" >&2
+    fi
+  done
+}
+
+list_backups() {
+  if [[ ! -d "$BACKUP_DIR" ]]; then
+    printf "No backups found for instance '%s' (directory does not exist).\n" "$INSTANCE"
+    return 0
+  fi
+
+  shopt -s nullglob
+  local files=("$BACKUP_DIR"/*_"${INSTANCE}"_*.tar.gz "$BACKUP_DIR"/*_"${INSTANCE}"_*.dump)
+  shopt -u nullglob
+
+  if [[ ${#files[@]} -eq 0 ]]; then
+    printf "No backups found for instance '%s' in %s\n" "$INSTANCE" "$BACKUP_DIR"
+    return 0
+  fi
+
+  printf "Backups for instance '%s' in %s:\n\n" "$INSTANCE" "$BACKUP_DIR"
+  printf "  %-44s %-10s %-20s %s\n" "FILENAME" "SIZE" "MODIFIED (UTC)" "TYPE / INFO"
+  printf "  %s\n" "─────────────────────────────────────────────────────────────────────────────────────────"
+
+  while IFS= read -r file; do
+    [[ -f "$file" ]] || continue
+    local fname size_human mod_date extra_info
+    fname="$(basename "$file")"
+    size_human="$(du -h "$file" 2>/dev/null | cut -f1)"
+    mod_date="$(date -u -r "$file" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || date -u -d "@$(stat -c %Y "$file" 2>/dev/null)" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || printf 'unknown')"
+
+    if is_complete_backup_bundle "$file"; then
+      local manifest_content commit format
+      manifest_content="$(tar -xzOf "$file" manifest.txt 2>/dev/null || tar -xzOf "$file" ./manifest.txt 2>/dev/null || true)"
+      commit="$(printf '%s\n' "$manifest_content" | sed -n 's/^git_commit=//p' | cut -c 1-8)"
+      format="$(printf '%s\n' "$manifest_content" | sed -n 's/^format_version=//p')"
+      extra_info="Bundle (v${format:-1}, git:${commit:-unknown})"
+    else
+      extra_info="Raw PostgreSQL dump"
+    fi
+
+    printf "  %-44s %-10s %-20s %s\n" "$fname" "$size_human" "$mod_date" "$extra_info"
+  done < <(ls -1t "${files[@]}" 2>/dev/null)
+  printf "\n"
+}
+
+verify_instance() {
+  local errors=0 warnings=0
+  printf "Verifying RebeccaSellBot instance '%s'...\n\n" "$INSTANCE"
+
+  # 1. Directory and file permissions
+  printf "[1/5] Checking configuration and directory permissions...\n"
+  if [[ -d "$INSTANCE_DIR" ]]; then
+    printf "  ✔ Instance directory exists: %s\n" "$INSTANCE_DIR"
+  else
+    printf "  ✘ Instance directory missing: %s\n" "$INSTANCE_DIR" >&2
+    ((errors++))
+  fi
+
+  if [[ -f "$ENV_FILE" ]]; then
+    local env_perm
+    env_perm="$(stat -c "%a" "$ENV_FILE" 2>/dev/null || stat -f "%OLp" "$ENV_FILE" 2>/dev/null || printf 'unknown')"
+    if [[ "$env_perm" == "600" || "$env_perm" == "400" ]]; then
+      printf "  ✔ .env permissions secure (%s): %s\n" "$env_perm" "$ENV_FILE"
+    else
+      printf "  ! .env permissions are %s (recommended: 0600): %s\n" "$env_perm" "$ENV_FILE"
+      ((warnings++))
+    fi
+  else
+    printf "  ✘ .env file missing: %s\n" "$ENV_FILE" >&2
+    ((errors++))
+  fi
+
+  if [[ -f "$COMPOSE_FILE" ]]; then
+    printf "  ✔ docker-compose.yml exists\n"
+  else
+    printf "  ✘ docker-compose.yml missing\n" >&2
+    ((errors++))
+  fi
+
+  # 2. Compose file validation
+  printf "\n[2/5] Checking Docker Compose configuration...\n"
+  if dc config --quiet 2>/dev/null; then
+    printf "  ✔ Compose configuration syntax is valid\n"
+  else
+    printf "  ✘ Compose configuration validation failed\n" >&2
+    ((errors++))
+  fi
+
+  # 3. Container statuses
+  printf "\n[3/5] Checking container statuses...\n"
+  local db_status bot_status
+  db_status="$(dc ps --format '{{.Status}}' db 2>/dev/null || true)"
+  bot_status="$(dc ps --format '{{.Status}}' bot 2>/dev/null || true)"
+
+  if [[ "$db_status" =~ (healthy|running) ]]; then
+    printf "  ✔ Database container: %s\n" "$db_status"
+  else
+    printf "  ✘ Database container not running/healthy: %s\n" "${db_status:-stopped}" >&2
+    ((errors++))
+  fi
+
+  if [[ "$bot_status" =~ (healthy|running) ]]; then
+    printf "  ✔ Bot container: %s\n" "$bot_status"
+  else
+    printf "  ✘ Bot container not running/healthy: %s\n" "${bot_status:-stopped}" >&2
+    ((errors++))
+  fi
+
+  # 4. Database connectivity
+  printf "\n[4/5] Testing PostgreSQL connectivity...\n"
+  local db_user db_name
+  db_user="$(env_value_from_file "$ENV_FILE" DB_USER 2>/dev/null || true)"
+  db_name="$(env_value_from_file "$ENV_FILE" DB_NAME 2>/dev/null || true)"
+  if [[ -n "$db_user" && -n "$db_name" ]]; then
+    if dc exec -T db pg_isready -U "$db_user" -d "$db_name" >/dev/null 2>&1; then
+      printf "  ✔ PostgreSQL accepts connections for database '%s'\n" "$db_name"
+      local table_count
+      table_count="$(dc exec -T db psql -U "$db_user" -d "$db_name" -t -A -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null || printf '0')"
+      printf "  ✔ Database schema contains %s public tables\n" "${table_count:-0}"
+    else
+      printf "  ✘ PostgreSQL connection check failed for '%s'\n" "$db_name" >&2
+      ((errors++))
+    fi
+  else
+    printf "  ✘ DB_USER or DB_NAME not configured in .env\n" >&2
+    ((errors++))
+  fi
+
+  # 5. Readyz endpoint probe
+  printf "\n[5/5] Probing internal health endpoint (/readyz)...\n"
+  local health_code
+  health_code="$(dc exec -T bot node -e "fetch('http://127.0.0.1:3001/readyz').then(r=>console.log(r.status)).catch(()=>console.log('err'))" 2>/dev/null || printf 'err')"
+  if [[ "$health_code" == "200" ]]; then
+    printf "  ✔ Bot health endpoint responded HTTP 200 (healthy)\n"
+  else
+    printf "  ! Bot health endpoint responded: %s (bot may be initializing or stopped)\n" "$health_code"
+    ((warnings++))
+  fi
+
+  printf "\nVerification Result: %s error(s), %s warning(s).\n\n" "$errors" "$warnings"
+  if (( errors > 0 )); then
+    return 1
+  fi
+  return 0
 }
 
 case "$COMMAND" in
@@ -275,6 +468,9 @@ case "$COMMAND" in
   status)
     dc ps
     ;;
+  verify)
+    verify_instance
+    ;;
   logs)
     dc logs --tail=100 "$@"
     ;;
@@ -290,13 +486,38 @@ case "$COMMAND" in
     ;;
   backup)
     backup_file="$(create_backup_bundle backup)"
+    prune_old_backups
     printf 'Complete backup created: %s\n' "$backup_file"
     printf 'Contains PostgreSQL data and .env secrets; store this unencrypted file securely.\n'
     ;;
+  backups)
+    list_backups
+    ;;
+  prune-backups)
+    keep_count="${1:-$DEFAULT_BACKUP_RETENTION}"
+    prune_old_backups "$keep_count"
+    printf "Backup retention applied for '%s' (retained up to %s backups).\n" "$INSTANCE" "$keep_count"
+    ;;
   restore)
-    restore_file="${1:-}"
+    restore_file=""
+    assume_yes=false
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -y|--yes)
+          assume_yes=true
+          shift
+          ;;
+        *)
+          if [[ -z "$restore_file" ]]; then
+            restore_file="$1"
+          fi
+          shift
+          ;;
+      esac
+    done
+
     [[ -n "$restore_file" && -r "$restore_file" ]] ||
-      die "Usage: rsbot $INSTANCE restore /path/to/backup.tar.gz"
+      die "Usage: rsbot $INSTANCE restore /path/to/backup.tar.gz [-y|--yes]"
     restore_file="$(realpath "$restore_file")"
 
     restore_workspace="$(mktemp -d)"
@@ -313,7 +534,9 @@ case "$COMMAND" in
       extract_complete_backup_bundle "$restore_file" "$restore_workspace" ||
         die "Backup archive failed structural validation."
       validate_bundle_identity "$restore_workspace"
-      validate_bundle_database_identity "$restore_workspace/.env"
+      if [[ -f "$restore_workspace/.env" ]]; then
+        validate_bundle_database_identity "$restore_workspace/.env"
+      fi
       restore_dump="$restore_workspace/database.dump"
     fi
 
@@ -321,8 +544,10 @@ case "$COMMAND" in
     printf "Validating PostgreSQL backup before making changes...\n"
     validate_database_dump "$restore_dump" || die "PostgreSQL backup validation failed."
 
-    read -r -p "Restore replaces database objects for '$INSTANCE' and may restore its .env. Type the instance name to continue: " confirmation
-    [[ "$confirmation" == "$INSTANCE" ]] || { printf 'Restore cancelled.\n'; exit 0; }
+    if [[ "$assume_yes" == false ]]; then
+      read -r -p "Restore replaces database objects for '$INSTANCE' and may restore its .env. Type the instance name to continue: " confirmation
+      [[ "$confirmation" == "$INSTANCE" ]] || { printf 'Restore cancelled.\n'; exit 0; }
+    fi
 
     printf "Creating automatic pre-restore safety backup...\n"
     safety_backup="$(create_backup_bundle pre_restore)"
@@ -358,9 +583,11 @@ case "$COMMAND" in
     dc stop bot
     restore_database_dump "$restore_dump" "$db_user" "$db_name"
 
-    if [[ "$bundle_restore" == true ]]; then
+    if [[ "$bundle_restore" == true && -f "$restore_workspace/.env" ]]; then
       atomic_install_env "$restore_workspace/.env"
       printf 'Restored .env from the backup bundle.\n'
+    elif [[ "$bundle_restore" == true ]]; then
+      printf 'Backup bundle contained no .env; current .env was preserved.\n'
     else
       printf 'Legacy .dump detected; current .env was preserved.\n'
     fi
@@ -385,6 +612,6 @@ case "$COMMAND" in
     printf "Instance '%s' was uninstalled. Other instances were not changed.\n" "$INSTANCE"
     ;;
   *)
-    die "Unknown command: $COMMAND"
+    die "Unknown command: $COMMAND. Run rsbot --help for available commands."
     ;;
 esac

@@ -76,6 +76,7 @@ export class BackupService {
   private readonly instanceName: string;
   private readonly baseDir: string;
   private readonly tempBaseDir: string;
+  private isBackingUp = false;
 
   constructor(
     private readonly translationService: TranslationService,
@@ -101,7 +102,7 @@ export class BackupService {
     const lastRun = new Date(lastRunRaw);
     if (Number.isNaN(lastRun.getTime())) return true;
 
-    const intervalHours = backupIntervalHours(this.translationService);
+    const intervalHours = Math.max(1, backupIntervalHours(this.translationService, 24));
     const intervalMs = intervalHours * 60 * 60 * 1000;
     return now.getTime() - lastRun.getTime() >= intervalMs;
   }
@@ -111,7 +112,7 @@ export class BackupService {
    */
   getBackupStatus(now = new Date()): BackupStatus {
     const enabled = backupEnabled(this.translationService);
-    const intervalHours = backupIntervalHours(this.translationService);
+    const intervalHours = Math.max(1, backupIntervalHours(this.translationService, 24));
     const targetChatId = backupTargetChatId(this.translationService);
     const includeEnv = backupIncludeEnv(this.translationService);
     const lastRun = backupLastRunAt(this.translationService) || null;
@@ -137,6 +138,11 @@ export class BackupService {
       includeEnv?: boolean;
     } = {}
   ): Promise<BackupBundleResult> {
+    if (this.isBackingUp) {
+      throw new Error('BACKUP_ALREADY_IN_PROGRESS: A backup operation is already running');
+    }
+    this.isBackingUp = true;
+
     const label = options.label ?? 'backup';
     const includeEnv = options.includeEnv ?? backupIncludeEnv(this.translationService);
     const timestamp = new Date()
@@ -156,7 +162,11 @@ export class BackupService {
 
     await fs.mkdir(tempDir, { recursive: true, mode: 0o700 });
 
+    let cleanedUp = false;
     const cleanup = async () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      this.isBackingUp = false;
       await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       await fs.rm(archivePath, { force: true }).catch(() => {});
     };
@@ -244,6 +254,13 @@ export class BackupService {
   ): Promise<BackupSendResult> {
     const bundle = await this.createBackupBundle({ label: options.label });
     try {
+      const MAX_TELEGRAM_DOCUMENT_SIZE = 50 * 1024 * 1024;
+      if (bundle.sizeBytes > MAX_TELEGRAM_DOCUMENT_SIZE) {
+        throw new Error(
+          `Backup archive size (${formatBytes(bundle.sizeBytes)}) exceeds Telegram 50 MB document limit. Retrieve directly using rsbot backup CLI.`
+        );
+      }
+
       const caption = options.customCaption ?? this.buildDefaultCaption(bundle, options.locale);
       const inputFile = new InputFile(bundle.archivePath, bundle.fileName);
 
@@ -339,6 +356,22 @@ export class BackupService {
       if (stats.size === 0) {
         throw new Error('pg_dump produced an empty dump file');
       }
+
+      // Verify dump integrity with pg_restore --list
+      try {
+        await execFileAsync('pg_restore', ['--list', outputFile], { timeout: 30_000 });
+      } catch (restoreCheckErr) {
+        if (process.env.NODE_ENV === 'production') {
+          const restoreErrMsg =
+            restoreCheckErr instanceof Error ? restoreCheckErr.message : String(restoreCheckErr);
+          throw new Error(
+            `DATABASE_DUMP_CORRUPT: pg_restore verification failed: ${restoreErrMsg}`,
+            {
+              cause: restoreCheckErr,
+            }
+          );
+        }
+      }
     } catch (dumpErr) {
       if (process.env.NODE_ENV === 'production') {
         const errorMsg = dumpErr instanceof Error ? dumpErr.message : String(dumpErr);
@@ -366,26 +399,9 @@ export class BackupService {
       });
       await fs.chmod(archivePath, 0o600);
     } catch (tarErr) {
-      logger.warn(
-        { err: tarErr },
-        'tar command execution failed; creating fallback compressed payload'
-      );
-      // Simple fallback: concatenate files and compress with node:zlib
-      const zlib = await import('node:zlib');
-      const chunks: Buffer[] = [];
-      for (const file of files) {
-        const filePath = path.join(tempDir, file);
-        if (fsSync.existsSync(filePath)) {
-          const content = await fs.readFile(filePath);
-          chunks.push(
-            Buffer.from(`\n--- BEGIN FILE: ${file} ---\n`),
-            content,
-            Buffer.from(`\n--- END FILE: ${file} ---\n`)
-          );
-        }
-      }
-      const gzipped = zlib.gzipSync(Buffer.concat(chunks));
-      await fs.writeFile(archivePath, gzipped, { mode: 0o600 });
+      const msg = tarErr instanceof Error ? tarErr.message : String(tarErr);
+      logger.error({ err: tarErr }, 'Failed to create compressed tar archive');
+      throw new Error(`ARCHIVE_PACKING_FAILED: ${msg}`, { cause: tarErr });
     }
   }
 

@@ -24,15 +24,15 @@ SSH_KEY_INPUT="${RSBOT_SSH_KEY_PATH:-}"
 CONFIG_SOURCE_FILE=""
 
 banner() {
-  printf '\n%s╔══════════════════════════════════════════════════════════════╗%s\n' "$PURPLE" "$RESET"
-  printf '%s║%s  %s✦ RebeccaSellBot%s  %sTelegram storefront deployment%s             %s║%s\n' \
-    "$PURPLE" "$RESET" "$BOLD$CYAN" "$RESET" "$DIM" "$RESET" "$PURPLE" "$RESET"
-  printf '%s║%s  %sUbuntu 24.04 · Docker · PostgreSQL · Multi-instance%s             %s║%s\n' \
+  printf '\n%s┌────────────────────────────────────────────────────────────┐%s\n' "$PURPLE" "$RESET"
+  printf '%s│%s  %sRebeccaSellBot%s  %sTelegram Storefront Deployment%s              %s│%s\n' \
+    "$PURPLE" "$RESET" "$BOLD$PURPLE" "$RESET" "$DIM" "$RESET" "$PURPLE" "$RESET"
+  printf '%s│%s  %sUbuntu 24.04 · Docker Engine · PostgreSQL · Multi-Instance%s   %s│%s\n' \
     "$PURPLE" "$RESET" "$DIM" "$RESET" "$PURPLE" "$RESET"
-  printf '%s╚══════════════════════════════════════════════════════════════╝%s\n\n' "$PURPLE" "$RESET"
+  printf '%s└────────────────────────────────────────────────────────────┘%s\n\n' "$PURPLE" "$RESET"
 }
 
-section() { printf '\n%s━━ %s%s%s\n' "$BLUE" "$BOLD" "$*" "$RESET"; }
+section() { printf '\n%s━━ %s%s%s\n' "$PURPLE" "$BOLD" "$*" "$RESET"; }
 step() { printf '%s[%s%s%s]%s %s\n' "$DIM" "$CYAN" "$1" "$DIM" "$RESET" "$2"; }
 info() { printf '%s•%s %s\n' "$CYAN" "$RESET" "$*"; }
 success() { printf '%s✔%s %s\n' "$GREEN" "$RESET" "$*"; }
@@ -380,20 +380,34 @@ configure_environment() {
   REBECCA_SERVICE_ID="${REBECCA_SERVICE_ID:-1}"
   validate_service_id "$REBECCA_SERVICE_ID" ||
     die "REBECCA_SERVICE_ID must be between 1 and 2147483647."
+
+  if [[ -z "${PANEL_CREDENTIALS_KEY:-}" && -f "$ENV_FILE" ]]; then
+    PANEL_CREDENTIALS_KEY="$(sed -n 's/^PANEL_CREDENTIALS_KEY=//p' "$ENV_FILE" | head -n 1)"
+  fi
   PANEL_CREDENTIALS_KEY="${PANEL_CREDENTIALS_KEY:-$(openssl rand -hex 32)}"
   validate_panel_credentials_key "$PANEL_CREDENTIALS_KEY" ||
     die "PANEL_CREDENTIALS_KEY must use 32–512 safe visible characters."
 
   safe_instance="${INSTANCE_NAME//-/_}"
+  if [[ -z "${DB_USER:-}" && -f "$ENV_FILE" ]]; then
+    DB_USER="$(sed -n 's/^DB_USER=//p' "$ENV_FILE" | head -n 1)"
+  fi
   if [[ -z "${DB_USER:-}" && "$NON_INTERACTIVE" == false ]]; then
     DB_USER="$(prompt_default "PostgreSQL username" "rsbot_$safe_instance")"
   fi
   DB_USER="$(validated_required "PostgreSQL username" "${DB_USER:-rsbot_$safe_instance}" validate_identifier "Use a lowercase PostgreSQL identifier." false)"
+
+  if [[ -z "${DB_NAME:-}" && -f "$ENV_FILE" ]]; then
+    DB_NAME="$(sed -n 's/^DB_NAME=//p' "$ENV_FILE" | head -n 1)"
+  fi
   if [[ -z "${DB_NAME:-}" && "$NON_INTERACTIVE" == false ]]; then
     DB_NAME="$(prompt_default "PostgreSQL database name" "rsbot_$safe_instance")"
   fi
   DB_NAME="$(validated_required "PostgreSQL database name" "${DB_NAME:-rsbot_$safe_instance}" validate_identifier "Use a lowercase PostgreSQL identifier." false)"
 
+  if [[ -z "${DB_PASSWORD:-}" && -f "$ENV_FILE" ]]; then
+    DB_PASSWORD="$(sed -n 's/^DB_PASSWORD=//p' "$ENV_FILE" | head -n 1)"
+  fi
   DB_PASSWORD="${DB_PASSWORD:-}"
   if [[ -z "$DB_PASSWORD" ]]; then
     if [[ "$NON_INTERACTIVE" == true ]]; then
@@ -465,7 +479,7 @@ for command_name in curl git openssl; do
 done
 success "System prerequisites are ready"
 
-step "2/5" "Checking Docker Engine and Compose"
+step "2/5" "Configuring Docker Engine and Compose"
 if ! command -v docker >/dev/null 2>&1; then
   info "Installing Docker Engine from Docker's signed official APT repository..."
   install_docker_engine
@@ -477,6 +491,11 @@ if ! "${DOCKER[@]}" compose version >/dev/null 2>&1; then
     "${SUDO[@]}" apt-get install -y docker-compose-v2
   fi
 fi
+if [[ "$INSTALL_OWNER" != "root" ]]; then
+  if ! id -nG "$INSTALL_OWNER" | grep -qw "docker"; then
+    "${SUDO[@]}" usermod -aG docker "$INSTALL_OWNER" 2>/dev/null || true
+  fi
+fi
 success "Docker and Compose are ready"
 
 INSTANCE_NAME="$(resolve_instance_name)"
@@ -484,8 +503,8 @@ readonly INSTANCE_NAME
 readonly INSTALL_DIR="$INSTALL_ROOT/$INSTANCE_NAME"
 readonly ENV_FILE="$INSTALL_DIR/.env"
 
-section "Installing instance: $INSTANCE_NAME"
-step "3/5" "Preparing isolated installation directory"
+section "Instance Setup: $INSTANCE_NAME"
+step "3/5" "Preparing instance directory and configuration"
 info "Target: $INSTALL_DIR"
 "${SUDO[@]}" mkdir -p "$INSTALL_ROOT"
 "${SUDO[@]}" chown "$INSTALL_OWNER:$(id -gn "$INSTALL_OWNER")" "$INSTALL_ROOT"
@@ -504,7 +523,9 @@ success "Source code is ready"
 
 if [[ -f "$ENV_FILE" ]]; then
   if [[ "$ASSUME_YES" == true ]]; then
-    "${SUDO[@]}" cp "$ENV_FILE" "$ENV_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+    env_backup="$ENV_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+    "${SUDO[@]}" cp "$ENV_FILE" "$env_backup"
+    "${SUDO[@]}" chmod 600 "$env_backup"
     info "Existing configuration backed up before replacement."
   elif [[ "$NON_INTERACTIVE" == true ]]; then
     die "An existing configuration requires --yes before unattended replacement."
@@ -514,7 +535,9 @@ if [[ -f "$ENV_FILE" ]]; then
       info "Keeping the existing .env configuration."
       CONFIGURE_ENV=false
     else
-      "${SUDO[@]}" cp "$ENV_FILE" "$ENV_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+      env_backup="$ENV_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+      "${SUDO[@]}" cp "$ENV_FILE" "$env_backup"
+      "${SUDO[@]}" chmod 600 "$env_backup"
       CONFIGURE_ENV=true
     fi
   fi
@@ -523,19 +546,15 @@ else
 fi
 
 if [[ "${CONFIGURE_ENV:-true}" == true ]]; then
-  # Reusing the encryption key is mandatory when an existing database already
-  # contains panel credentials. Rotating it implicitly would make them unreadable.
-  if [[ -z "${PANEL_CREDENTIALS_KEY:-}" && -f "$ENV_FILE" ]]; then
-    PANEL_CREDENTIALS_KEY="$(sed -n 's/^PANEL_CREDENTIALS_KEY=//p' "$ENV_FILE" | head -n 1)"
-  fi
   configure_environment
 fi
 
-step "4/5" "Installing the rsbot manager"
+step "4/5" "Installing rsbot management CLI"
+"${SUDO[@]}" install -d -m 0755 /usr/local/bin
 "${SUDO[@]}" install -m 0755 "$INSTALL_DIR/scripts/rsbot" /usr/local/bin/rsbot
 success "rsbot is available at /usr/local/bin/rsbot"
 
-step "5/5" "Building and starting services"
+step "5/5" "Building services and starting database stack"
 info "Building the bot image..."
 dc build bot
 info "Starting PostgreSQL and waiting for readiness..."
@@ -550,12 +569,13 @@ if ! dc up -d --wait; then
   die "Bot startup failed. Review the logs above, then run: rsbot $INSTANCE_NAME logs -f"
 fi
 
-printf '\n%s╔══════════════════════════════════════════════════════════════╗%s\n' "$GREEN" "$RESET"
-printf '%s║%s  %sInstallation complete%s                                              %s║%s\n' \
+printf '\n%s┌────────────────────────────────────────────────────────────┐%s\n' "$GREEN" "$RESET"
+printf '%s│%s  %sDeployment successful%s                                      %s│%s\n' \
   "$GREEN" "$RESET" "$BOLD" "$RESET" "$GREEN" "$RESET"
-printf '%s╚══════════════════════════════════════════════════════════════╝%s\n' "$GREEN" "$RESET"
+printf '%s└────────────────────────────────────────────────────────────┘%s\n' "$GREEN" "$RESET"
 printf '\n%sInstance:%s  %s\n' "$DIM" "$RESET" "$INSTANCE_NAME"
-printf '%sManage:%s    rsbot %s status\n' "$DIM" "$RESET" "$INSTANCE_NAME"
+printf '%sVerify:%s    rsbot %s verify\n' "$DIM" "$RESET" "$INSTANCE_NAME"
+printf '%sStatus:%s    rsbot %s status\n' "$DIM" "$RESET" "$INSTANCE_NAME"
 printf '%sLogs:%s      rsbot %s logs -f\n' "$DIM" "$RESET" "$INSTANCE_NAME"
 printf '%sBackup:%s    rsbot %s backup\n\n' "$DIM" "$RESET" "$INSTANCE_NAME"
-printf '%sNext:%s      Open /admin → Rebecca panels and add your panel/API keys.\n\n' "$DIM" "$RESET"
+printf '%sNext:%s      Open /admin → Rebecca panels in Telegram to configure panel API keys.\n\n' "$DIM" "$RESET"

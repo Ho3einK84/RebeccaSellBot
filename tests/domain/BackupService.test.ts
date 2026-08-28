@@ -232,5 +232,45 @@ describe('BackupService', () => {
         process.env.NODE_ENV = originalNodeEnv;
       }
     });
+
+    it('rejects concurrent backup generation requests', async () => {
+      const bundle1 = await backupService.createBackupBundle({ label: 'concurrent_1' });
+      try {
+        await expect(backupService.createBackupBundle({ label: 'concurrent_2' })).rejects.toThrow(
+          /BACKUP_ALREADY_IN_PROGRESS/
+        );
+      } finally {
+        await bundle1.cleanup();
+      }
+
+      // After cleanup, next backup should succeed
+      const bundle2 = await backupService.createBackupBundle({ label: 'concurrent_3' });
+      await bundle2.cleanup();
+    });
+
+    it('fails when backup size exceeds Telegram 50MB limit', async () => {
+      const mockApi = {
+        sendDocument: vi.fn(),
+      } as unknown as Api;
+
+      vi.spyOn(backupService, 'createBackupBundle').mockResolvedValueOnce({
+        archivePath: '/tmp/fake_large_backup.tar.gz',
+        fileName: 'fake_large_backup.tar.gz',
+        sizeBytes: 52 * 1024 * 1024,
+        manifest: {
+          format_version: BACKUP_FORMAT_VERSION,
+          instance: 'test_instance',
+          created_at_utc: new Date().toISOString(),
+          git_commit: 'unknown',
+          contents: ['database.dump'],
+        },
+        cleanup: vi.fn().mockResolvedValue(undefined),
+      });
+
+      const result = await backupService.sendBackupToChat(mockApi, '-1001234567890');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('exceeds Telegram 50 MB document limit');
+      expect(mockApi.sendDocument).not.toHaveBeenCalled();
+    });
   });
 });
