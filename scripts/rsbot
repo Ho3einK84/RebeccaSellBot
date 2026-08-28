@@ -113,9 +113,15 @@ wait_for_stack() {
 }
 
 env_value_from_file() {
-  local file="$1" key="$2" value
-  value="$(sed -n "s/^$key=//p" "$file" | head -n 1)"
-  [[ -n "$value" ]] || return 1
+  local file="$1" key="$2" raw_value value cr=$'\r' sq="'"
+  raw_value="$(sed -n "s/^${key}=//p" "$file" | head -n 1)"
+  [[ -n "$raw_value" ]] || return 1
+  value="${raw_value%"$cr"}"
+  if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+    value="${BASH_REMATCH[1]}"
+  elif [[ "$value" =~ ^$sq(.*)$sq$ ]]; then
+    value="${BASH_REMATCH[1]}"
+  fi
   printf '%s' "$value"
 }
 
@@ -213,9 +219,9 @@ is_complete_backup_bundle() {
   local entries
   entries="$(tar -tzf "$backup_file" 2>/dev/null)" || return 1
 
-  # Refuse symlinks, devices, or directory traversal / absolute paths
-  tar -tvzf "$backup_file" | awk '
-    $1 !~ /^-/ { exit 1 }
+  # Refuse symlinks, devices, pipes, sockets, or directory traversal / absolute paths
+  tar -tvzf "$backup_file" 2>/dev/null | awk '
+    $1 ~ /^[lspbc]/ { exit 1 }
     $NF ~ /^\// || $NF ~ /\.\./ { exit 1 }
   ' || return 1
 
@@ -285,7 +291,7 @@ prune_old_backups() {
   [[ -d "$BACKUP_DIR" ]] || return 0
 
   shopt -s nullglob
-  local files=("$BACKUP_DIR"/*_"${INSTANCE}"_*.tar.gz "$BACKUP_DIR"/*_"${INSTANCE}"_*.dump)
+  local files=("$BACKUP_DIR"/*.tar.gz "$BACKUP_DIR"/*.dump)
   shopt -u nullglob
   local total="${#files[@]}"
   if (( total <= keep )); then
@@ -314,7 +320,7 @@ list_backups() {
   fi
 
   shopt -s nullglob
-  local files=("$BACKUP_DIR"/*_"${INSTANCE}"_*.tar.gz "$BACKUP_DIR"/*_"${INSTANCE}"_*.dump)
+  local files=("$BACKUP_DIR"/*.tar.gz "$BACKUP_DIR"/*.dump)
   shopt -u nullglob
 
   if [[ ${#files[@]} -eq 0 ]]; then
@@ -477,7 +483,7 @@ case "$COMMAND" in
   update)
     [[ -d "$INSTANCE_DIR/.git" ]] || die "Instance repository is not a Git checkout."
     printf "Updating '%s'...\n" "$INSTANCE"
-    git -C "$INSTANCE_DIR" pull --ff-only
+    git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" pull --ff-only
     dc build bot
     wait_for_stack db
     dc run --rm --no-deps bot npm run db:migrate
@@ -528,21 +534,34 @@ case "$COMMAND" in
     trap cleanup_restore_workspaces EXIT
 
     bundle_restore=false
-    restore_dump="$restore_file"
-    if is_complete_backup_bundle "$restore_file"; then
+    restore_dump=""
+
+    if [[ "$restore_file" =~ \.(tar\.gz|tgz|tar)$ ]] || tar -tzf "$restore_file" >/dev/null 2>&1; then
       bundle_restore=true
+      if ! is_complete_backup_bundle "$restore_file"; then
+        die "The archive '$restore_file' is not a valid RebeccaSellBot backup bundle (missing manifest.txt / database.dump or failed security checks)."
+      fi
       extract_complete_backup_bundle "$restore_file" "$restore_workspace" ||
-        die "Backup archive failed structural validation."
+        die "Backup archive failed structural extraction."
       validate_bundle_identity "$restore_workspace"
       if [[ -f "$restore_workspace/.env" ]]; then
         validate_bundle_database_identity "$restore_workspace/.env"
       fi
       restore_dump="$restore_workspace/database.dump"
+    else
+      # Legacy or raw PostgreSQL custom-format dump
+      restore_dump="$restore_file"
     fi
 
     wait_for_stack db
     printf "Validating PostgreSQL backup before making changes...\n"
-    validate_database_dump "$restore_dump" || die "PostgreSQL backup validation failed."
+    if ! validate_database_dump "$restore_dump"; then
+      if [[ "$bundle_restore" == true ]]; then
+        die "The database dump inside the backup bundle ('database.dump') failed PostgreSQL validation."
+      else
+        die "The file '$restore_file' is neither a valid backup bundle (.tar.gz) nor a valid PostgreSQL custom-format dump (.dump)."
+      fi
+    fi
 
     if [[ "$assume_yes" == false ]]; then
       read -r -p "Restore replaces database objects for '$INSTANCE' and may restore its .env. Type the instance name to continue: " confirmation
@@ -561,7 +580,9 @@ case "$COMMAND" in
       trap - ERR
       set +e
       printf '\nRestore failed. Rolling back the database and .env from: %s\n' "$safety_backup" >&2
-      atomic_install_env "$rollback_workspace/.env"
+      if [[ -f "$rollback_workspace/.env" ]]; then
+        atomic_install_env "$rollback_workspace/.env"
+      fi
       dc stop bot >/dev/null 2>&1 || true
       if restore_database_dump "$rollback_workspace/database.dump" "$rollback_db_user" "$rollback_db_name"; then
         dc run --rm --no-deps bot npm run db:migrate >/dev/null 2>&1 || true

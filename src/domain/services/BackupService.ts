@@ -264,10 +264,23 @@ export class BackupService {
       const caption = options.customCaption ?? this.buildDefaultCaption(bundle, options.locale);
       const inputFile = new InputFile(bundle.archivePath, bundle.fileName);
 
-      const sent = await telegramApi.sendDocument(targetChatId, inputFile, {
-        caption,
-        parse_mode: 'Markdown',
-      });
+      let sent;
+      try {
+        sent = await telegramApi.sendDocument(targetChatId, inputFile, {
+          caption,
+          parse_mode: 'Markdown',
+        });
+      } catch (sendErr) {
+        logger.warn(
+          { sendErr, targetChatId },
+          'Failed to send backup document with Markdown caption; retrying with plain text caption'
+        );
+        const plainCaption = `💾 RebeccaSellBot Backup (${bundle.manifest.instance}) - ${bundle.fileName}`;
+        const retryInputFile = new InputFile(bundle.archivePath, bundle.fileName);
+        sent = await telegramApi.sendDocument(targetChatId, retryInputFile, {
+          caption: plainCaption,
+        });
+      }
 
       await this.translationService.updateSettings({
         backup_last_run_at: new Date().toISOString(),
@@ -345,48 +358,28 @@ export class BackupService {
       throw new Error('DATABASE_URL is required to create a database dump');
     }
 
-    // Try standard pg_dump command with custom format (-Fc)
     try {
       await execFileAsync(
         'pg_dump',
         [this.databaseUrl, '-Fc', '--no-owner', '--no-privileges', '-f', outputFile],
         { timeout: 60_000 }
       );
-      const stats = await fs.stat(outputFile);
-      if (stats.size === 0) {
-        throw new Error('pg_dump produced an empty dump file');
-      }
-
       // Verify dump integrity with pg_restore --list
-      try {
-        await execFileAsync('pg_restore', ['--list', outputFile], { timeout: 30_000 });
-      } catch (restoreCheckErr) {
-        if (process.env.NODE_ENV === 'production') {
-          const restoreErrMsg =
-            restoreCheckErr instanceof Error ? restoreCheckErr.message : String(restoreCheckErr);
-          throw new Error(
-            `DATABASE_DUMP_CORRUPT: pg_restore verification failed: ${restoreErrMsg}`,
-            {
-              cause: restoreCheckErr,
-            }
-          );
-        }
-      }
+      await execFileAsync('pg_restore', ['--list', outputFile], { timeout: 30_000 });
     } catch (dumpErr) {
       if (process.env.NODE_ENV === 'production') {
         const errorMsg = dumpErr instanceof Error ? dumpErr.message : String(dumpErr);
-        logger.error({ err: dumpErr }, 'pg_dump execution failed in production environment');
+        logger.error({ err: dumpErr }, 'Database dump creation or verification failed');
         throw new Error(`DATABASE_DUMP_FAILED: ${errorMsg}`, { cause: dumpErr });
       }
+
       logger.warn(
         { err: dumpErr },
-        'pg_dump execution failed or pg_dump binary is missing; falling back to schema-metadata placeholder'
+        'pg_dump or pg_restore execution unavailable in non-production environment; using test placeholder'
       );
-      // Resilient fallback for test suites or environments lacking pg_dump CLI
-      const fallbackContent = `-- RebeccaSellBot Database Snapshot
+      const fallbackContent = `-- RebeccaSellBot Database Snapshot Test Placeholder
 -- Instance: ${this.instanceName}
 -- Created: ${new Date().toISOString()}
--- Notice: pg_dump CLI was unavailable in current runtime environment.
 `;
       await fs.writeFile(outputFile, fallbackContent, { mode: 0o600 });
     }

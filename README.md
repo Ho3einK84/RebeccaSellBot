@@ -98,6 +98,59 @@ curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/insta
   | sudo bash -s -- --instance bot1 --env-file /root/rsbot.env --non-interactive --yes
 ```
 
+### Option C: Server-to-Server Migration (`--from-backup`)
+
+Use this mode when moving an existing RebeccaSellBot instance from one server to another, or recovering after server replacement. The target server does not need an existing installation or database volume.
+
+#### 1. Create a backup on the source server:
+
+```bash
+rsbot main backup
+# Output: /opt/RebeccaSellBot/backups/main/manual_backup_main_YYYYMMDD_HHMMSS_xxxxxx.tar.gz
+```
+
+Transfer this `.tar.gz` bundle to the new server via `scp` or `rsync`.
+
+#### 2. Install and restore on the target server:
+
+**Guided Interactive Migration:**
+
+```bash
+git clone https://github.com/Ho3einK84/RebeccaSellBot.git
+cd RebeccaSellBot
+./install.sh --from-backup /root/manual_backup_main_20260828_154208_01dfb1.tar.gz
+```
+
+**Unattended 1-Command Migration:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
+  | sudo bash -s -- --from-backup /root/manual_backup_main_20260828_154208_01dfb1.tar.gz --non-interactive --yes
+```
+
+**Migration with Configuration Overrides (e.g. new `BOT_TOKEN` or `ADMIN_IDS`):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
+  | sudo bash -s -- --from-backup /root/manual_backup_main_20260828_154208_01dfb1.tar.gz --env-file /root/overrides.env --non-interactive --yes
+```
+
+#### What the Migration Flow Does:
+
+1. Validates the archive integrity, manifest version (`format_version=1`), and structural security (rejecting symlinks, devices, or traversal).
+2. Adopts baseline secrets from the backup's `.env` (preserving `PANEL_CREDENTIALS_KEY` and PostgreSQL credentials).
+3. Defaults the instance name to the backup manifest's instance (unless overridden via `--instance`).
+4. Provisions Docker Engine, Git checkout, and isolated instance workspace.
+5. Boots PostgreSQL, verifies custom-format dump integrity, and restores the database transactionally.
+6. Runs latest Drizzle schema migrations and boots the bot container with verified health checks.
+
+> [!IMPORTANT]
+> **Key Migration Caveats:**
+>
+> - **Preserve `PANEL_CREDENTIALS_KEY`:** Panel API keys and passwords in PostgreSQL are encrypted with AES-256-GCM. The installer automatically imports `PANEL_CREDENTIALS_KEY` from the backup `.env` so panels remain connected without re-entering credentials.
+> - **Overriding `BOT_TOKEN`:** If you wish to switch to a new Telegram bot token while migrating, provide the new token during guided prompts or in `--env-file`. Customer subscriptions and wallet balances are stored in PostgreSQL and will map seamlessly.
+> - **Large Backups & Telegram Limits:** Automated in-app Telegram backups are subject to Telegram's 50 MB document size ceiling. For databases exceeding 50 MB, always generate backups with `rsbot <instance> backup` for server migrations.
+
 ---
 
 ## Managing Instances (`rsbot`)

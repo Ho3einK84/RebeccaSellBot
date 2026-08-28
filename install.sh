@@ -22,6 +22,9 @@ REPOSITORY_INPUT="$DEFAULT_REPOSITORY_URL"
 ACCESS_METHOD_INPUT="${RSBOT_ACCESS_METHOD:-}"
 SSH_KEY_INPUT="${RSBOT_SSH_KEY_PATH:-}"
 CONFIG_SOURCE_FILE=""
+BACKUP_INPUT="${RSBOT_FROM_BACKUP:-}"
+BACKUP_WORKSPACE=""
+MANIFEST_INSTANCE=""
 
 banner() {
   printf '\n%s┌────────────────────────────────────────────────────────────┐%s\n' "$PURPLE" "$RESET"
@@ -56,6 +59,7 @@ Usage:
 
 Options:
   --instance <name>          Instance namespace (default: main)
+  --from-backup <path>       Restore and migrate from a complete backup bundle (.tar.gz)
   --repository <url>         GitHub HTTPS or SSH repository URL
   --access-method <method>   public, ssh, or pat
   --ssh-key <path>           SSH deploy-key path (for --access-method ssh)
@@ -64,9 +68,9 @@ Options:
   --yes                      Replace an existing instance .env automatically
   -h, --help                 Show this help
 
-For unattended installation, pass --non-interactive --yes and provide an
---env-file. Supported file keys are documented in README.md. Keep that file
-mode 0600 and remove it after installation.
+For unattended installation or server migration, pass --non-interactive --yes and
+provide an --env-file or --from-backup. Supported file keys are documented in
+README.md. Keep sensitive files mode 0600 and remove temporary config files after installation.
 EOF
 }
 
@@ -80,6 +84,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --instance)
       INSTANCE_INPUT="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --from-backup)
+      BACKUP_INPUT="$(option_value "$1" "${2:-}")"
       shift 2
       ;;
     --repository)
@@ -133,16 +141,113 @@ validate_service_id() {
 }
 validate_panel_credentials_key() { [[ "$1" =~ ^[A-Za-z0-9._~+=/-]{32,512}$ ]]; }
 
+env_value_from_file() {
+  local file="$1" key="$2" raw_value value cr=$'\r' sq="'"
+  raw_value="$(sed -n "s/^${key}=//p" "$file" | head -n 1)"
+  [[ -n "$raw_value" ]] || return 1
+  value="${raw_value%"$cr"}"
+  if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+    value="${BASH_REMATCH[1]}"
+  elif [[ "$value" =~ ^$sq(.*)$sq$ ]]; then
+    value="${BASH_REMATCH[1]}"
+  fi
+  printf '%s' "$value"
+}
+
+is_complete_backup_bundle() {
+  local backup_file="$1"
+  tar -tzf "$backup_file" >/dev/null 2>&1 || return 1
+  local entries
+  entries="$(tar -tzf "$backup_file" 2>/dev/null)" || return 1
+
+  # Refuse symlinks, devices, pipes, sockets, or directory traversal / absolute paths
+  tar -tvzf "$backup_file" 2>/dev/null | awk '
+    $1 ~ /^[lspbc]/ { exit 1 }
+    $NF ~ /^\// || $NF ~ /\.\./ { exit 1 }
+  ' || return 1
+
+  local clean_entries
+  clean_entries="$(printf '%s\n' "$entries" | sed 's#^\./##g; /^$/d')"
+
+  # A bundle must contain manifest.txt and database.dump
+  printf '%s\n' "$clean_entries" | grep -q '^manifest\.txt$' || return 1
+  printf '%s\n' "$clean_entries" | grep -q '^database\.dump$' || return 1
+
+  return 0
+}
+
+extract_complete_backup_bundle() {
+  local backup_file="$1" destination="$2"
+  is_complete_backup_bundle "$backup_file" || return 1
+  mkdir -p "$destination"
+  chmod 700 "$destination"
+  tar --no-same-owner --no-same-permissions -xzf "$backup_file" -C "$destination"
+
+  [[ -f "$destination/manifest.txt" && ! -L "$destination/manifest.txt" ]] || return 1
+  [[ -f "$destination/database.dump" && ! -L "$destination/database.dump" ]] || return 1
+  chmod 0600 "$destination"/* 2>/dev/null || true
+}
+
+cleanup_workspaces() {
+  if [[ -n "${BACKUP_WORKSPACE:-}" && -d "$BACKUP_WORKSPACE" ]]; then
+    rm -rf -- "$BACKUP_WORKSPACE"
+  fi
+}
+trap cleanup_workspaces EXIT
+
+terminate_db_backends() {
+  local db_user="$1" db_name="$2"
+  dc exec -T db psql -U "$db_user" -d "$db_name" -c "
+    SELECT pg_terminate_backend(pid)
+    FROM pg_stat_activity
+    WHERE datname = '$db_name'
+      AND pid <> pg_backend_pid();
+  " >/dev/null 2>&1 || true
+}
+
+validate_database_dump() {
+  local dump_file="$1"
+  [[ -s "$dump_file" ]] || return 1
+  dc exec -T db pg_restore --list < "$dump_file" >/dev/null
+}
+
+restore_database_dump() {
+  local dump_file="$1" db_user="$2" db_name="$3"
+  terminate_db_backends "$db_user" "$db_name"
+  dc exec -T db pg_restore \
+    --single-transaction \
+    --exit-on-error \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges \
+    -U "$db_user" \
+    -d "$db_name" < "$dump_file"
+}
+
 load_config_file() {
-  local source_file="$1" line key value
+  local source_file="$1" line key value cr=$'\r' sq="'"
   [[ -f "$source_file" && -r "$source_file" ]] || die "Cannot read configuration file: $source_file"
 
   while IFS= read -r line || [[ -n "$line" ]]; do
-    line="${line%$'\r'}"
+    line="${line%"$cr"}"
     [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
     [[ "$line" == *=* ]] || die "Invalid configuration line in $source_file. Use KEY=value."
     key="${line%%=*}"
     value="${line#*=}"
+
+    # Trim whitespace from key and value
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+
+    # Strip surrounding matching quotes if present
+    if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+      value="${BASH_REMATCH[1]}"
+    elif [[ "$value" =~ ^$sq(.*)$sq$ ]]; then
+      value="${BASH_REMATCH[1]}"
+    fi
 
     case "$key" in
       BOT_TOKEN|ADMIN_IDS|PANEL_CREDENTIALS_KEY|REBECCA_API_URL|REBECCA_API_KEY|REBECCA_ADMIN_USERNAME|REBECCA_ADMIN_PASSWORD|REBECCA_SERVICE_ID|DB_USER|DB_PASSWORD|DB_NAME|DEFAULT_LOCALE|SUPPORT_URL|GITHUB_PAT|RSBOT_ACCESS_METHOD|RSBOT_REPOSITORY_URL|RSBOT_SSH_KEY_PATH)
@@ -155,6 +260,31 @@ load_config_file() {
     esac
   done < "$source_file"
 }
+
+if [[ -n "$BACKUP_INPUT" ]]; then
+  [[ -f "$BACKUP_INPUT" && -r "$BACKUP_INPUT" ]] || die "Backup file not found or not readable: $BACKUP_INPUT"
+  BACKUP_INPUT="$(realpath "$BACKUP_INPUT")"
+  BACKUP_WORKSPACE="$(mktemp -d)"
+
+  extract_complete_backup_bundle "$BACKUP_INPUT" "$BACKUP_WORKSPACE" ||
+    die "The backup file '$BACKUP_INPUT' is not a valid RebeccaSellBot backup bundle."
+
+  format_version="$(sed -n 's/^format_version=//p' "$BACKUP_WORKSPACE/manifest.txt" | head -n 1)"
+  [[ "$format_version" == "1" ]] ||
+    die "Unsupported backup format version: ${format_version:-missing}."
+
+  MANIFEST_INSTANCE="$(sed -n 's/^instance=//p' "$BACKUP_WORKSPACE/manifest.txt" | head -n 1)"
+
+  if [[ -f "$BACKUP_WORKSPACE/.env" ]]; then
+    for k in BOT_TOKEN ADMIN_IDS PANEL_CREDENTIALS_KEY DB_USER DB_PASSWORD DB_NAME REBECCA_API_URL REBECCA_API_KEY REBECCA_ADMIN_USERNAME REBECCA_ADMIN_PASSWORD REBECCA_SERVICE_ID DEFAULT_LOCALE SUPPORT_URL; do
+      val="$(env_value_from_file "$BACKUP_WORKSPACE/.env" "$k" 2>/dev/null || true)"
+      if [[ -n "$val" && -z "${!k:-}" ]]; then
+        printf -v "$k" '%s' "$val"
+        export "$k"
+      fi
+    done
+  fi
+fi
 
 if [[ -n "$CONFIG_SOURCE_FILE" ]]; then
   load_config_file "$CONFIG_SOURCE_FILE"
@@ -221,11 +351,30 @@ prompt_secret() {
 
 required_value() {
   local label="$1" supplied="${2:-}" secret="${3:-false}"
-  if [[ -n "$supplied" ]]; then
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    [[ -n "$supplied" ]] || die "$label must be supplied in --non-interactive mode."
     printf '%s' "$supplied"
     return
   fi
-  [[ "$NON_INTERACTIVE" == false ]] || die "$label must be supplied in --non-interactive mode."
+  if [[ -n "$supplied" ]]; then
+    local prompt_label="$label"
+    if [[ "$secret" == true ]]; then
+      local masked="[keep current value]"
+      if ((${#supplied} >= 10)); then
+        masked="[keep: ${supplied:0:4}...${supplied: -4}]"
+      fi
+      local input=""
+      read -r -s -p "$label $masked: " input
+      printf '\n' >&2
+      printf '%s' "${input:-$supplied}"
+      return
+    else
+      local input=""
+      read -r -p "$label [$supplied]: " input
+      printf '%s' "${input:-$supplied}"
+      return
+    fi
+  fi
   if [[ "$secret" == true ]]; then
     prompt_secret "$label"
   else
@@ -343,6 +492,9 @@ clone_repository() {
 
 resolve_instance_name() {
   local candidate="$INSTANCE_INPUT"
+  if [[ -z "$candidate" && -n "$MANIFEST_INSTANCE" ]]; then
+    candidate="$MANIFEST_INSTANCE"
+  fi
   while true; do
     if [[ -z "$candidate" ]]; then
       [[ "$NON_INTERACTIVE" == false ]] || candidate="main"
@@ -351,7 +503,13 @@ resolve_instance_name() {
       fi
     fi
     candidate="${candidate,,}"
-    validate_instance "$candidate" && { printf '%s' "$candidate"; return; }
+    if validate_instance "$candidate"; then
+      if [[ -n "$MANIFEST_INSTANCE" && "$candidate" != "$MANIFEST_INSTANCE" ]]; then
+        warn "Restoring backup originally created from instance '$MANIFEST_INSTANCE' into instance '$candidate'."
+      fi
+      printf '%s' "$candidate"
+      return
+    fi
     [[ "$NON_INTERACTIVE" == false ]] || die "Invalid instance name: $candidate"
     warn "Use 1–32 lowercase letters, numbers, underscores, or hyphens; start with a letter or number."
     candidate=""
@@ -559,6 +717,26 @@ info "Building the bot image..."
 dc build bot
 info "Starting PostgreSQL and waiting for readiness..."
 dc up -d --wait db
+
+if [[ -n "$BACKUP_INPUT" && -f "$BACKUP_WORKSPACE/database.dump" ]]; then
+  info "Validating PostgreSQL database snapshot from backup bundle..."
+  if ! validate_database_dump "$BACKUP_WORKSPACE/database.dump"; then
+    die "The database dump inside backup bundle '$BACKUP_INPUT' failed PostgreSQL validation."
+  fi
+  info "Restoring database snapshot for instance '$INSTANCE_NAME'..."
+  restore_database_dump "$BACKUP_WORKSPACE/database.dump" "$DB_USER" "$DB_NAME"
+  success "Database snapshot restored successfully"
+
+  # Store migrated backup in instance backups directory
+  "${SUDO[@]}" mkdir -p "$INSTALL_ROOT/backups/$INSTANCE_NAME"
+  "${SUDO[@]}" chown "$INSTALL_OWNER:$(id -gn "$INSTALL_OWNER")" "$INSTALL_ROOT/backups/$INSTANCE_NAME" 2>/dev/null || true
+  "${SUDO[@]}" chmod 700 "$INSTALL_ROOT/backups/$INSTANCE_NAME" 2>/dev/null || true
+  dest_backup="$INSTALL_ROOT/backups/$INSTANCE_NAME/migrated_$(basename "$BACKUP_INPUT")"
+  "${SUDO[@]}" cp "$BACKUP_INPUT" "$dest_backup" 2>/dev/null || true
+  "${SUDO[@]}" chown "$INSTALL_OWNER:$(id -gn "$INSTALL_OWNER")" "$dest_backup" 2>/dev/null || true
+  "${SUDO[@]}" chmod 600 "$dest_backup" 2>/dev/null || true
+fi
+
 info "Applying pending Drizzle migrations..."
 dc run --rm --no-deps bot npm run db:migrate
 info "Starting the bot and checking its internal health endpoint..."
