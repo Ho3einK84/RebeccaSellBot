@@ -25,7 +25,9 @@ COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --from=builder --chown=node:node /app/drizzle ./drizzle
 COPY --from=builder --chown=node:node /app/docker-compose.yml ./docker-compose.yml
 
-RUN apk add --no-cache postgresql16-client tar gzip
+RUN apk add --no-cache postgresql16-client postgresql18-client tar gzip && \
+    ln -sf /usr/libexec/postgresql16/pg_dump /usr/bin/pg_dump && \
+    ln -sf /usr/libexec/postgresql18/pg_restore /usr/bin/pg_restore
 
 USER node
 
