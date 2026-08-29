@@ -26,6 +26,7 @@ import type { BroadcastService } from '../domain/services/BroadcastService.js';
 import type { PackageCategoryService } from '../domain/services/PackageCategoryService.js';
 import type { PaymentService } from '../domain/services/PaymentService.js';
 import type { BackupService } from '../domain/services/BackupService.js';
+import type { LuckyWheelService } from '../domain/services/LuckyWheelService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
@@ -101,6 +102,7 @@ export type BotServices = {
   configReconciliationService: ConfigReconciliationService;
   broadcastService: BroadcastService;
   backupService: BackupService;
+  luckyWheelService: LuckyWheelService;
   /** Optional Telegram-compatible support destination rendered as a URL button. */
   supportUrl?: string;
   /** Telegram IDs authorized to use the administrative dashboard. */

@@ -20,6 +20,7 @@ import { BroadcastService } from './domain/services/BroadcastService.js';
 import { PackageCategoryService } from './domain/services/PackageCategoryService.js';
 import { PaymentService } from './domain/services/PaymentService.js';
 import { BackupService } from './domain/services/BackupService.js';
+import { LuckyWheelService } from './domain/services/LuckyWheelService.js';
 import { initializeBot, setupBot, startBot } from './telegram/bot.js';
 import {
   markHealthFailed,
@@ -117,6 +118,10 @@ async function main() {
     databaseUrl: config.DATABASE_URL,
     instanceName: config.INSTANCE_NAME,
   });
+  const luckyWheelService = new LuckyWheelService(translationService);
+  luckyWheelService.registerInvalidationHook((telegramId) =>
+    walletService.invalidateUserCache(telegramId)
+  );
 
   const services = {
     walletService,
@@ -137,6 +142,7 @@ async function main() {
     configReconciliationService,
     broadcastService,
     backupService,
+    luckyWheelService,
     supportUrl: config.SUPPORT_URL,
     adminIds: adminService.adminIds,
     isAdmin: (telegramId: number) => adminService.isAdmin(telegramId),

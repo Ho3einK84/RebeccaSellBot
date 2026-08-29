@@ -43,6 +43,13 @@
       "when": 1787247000000,
       "tag": "0005_allow_limited_expired_renewal_status",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787963000000,
+      "tag": "0006_add_lucky_wheel",
+      "breakpoints": true
     }
   ]
 }

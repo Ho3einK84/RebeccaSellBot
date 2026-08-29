@@ -170,6 +170,12 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
       await ctx.conversation.enter('adminPaymentSettingsConversation');
     }
   )
+  .text(
+    (ctx) => t(ctx, 'admin_sales_lucky_wheel_button'),
+    async (ctx) => {
+      await ctx.conversation.enter('adminLuckyWheelSettingsConversation');
+    }
+  )
   .row()
   .text(
     (ctx) => t(ctx, 'admin_menu_back_to_admin'),

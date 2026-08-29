@@ -191,7 +191,9 @@ export const TEXT_CATEGORIES: readonly TextCategory[] = [
     matches: (k) =>
       k.startsWith('trial_') ||
       (k.startsWith('promo_') && !k.startsWith('admin_promo_')) ||
-      k.startsWith('referral_'),
+      k.startsWith('referral_') ||
+      k.startsWith('wheel_') ||
+      k.startsWith('lucky_wheel_'),
   },
   {
     id: 'user_services',

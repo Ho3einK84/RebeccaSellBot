@@ -19,6 +19,7 @@ import {
 import type { PackageOption } from '../../domain/services/PricingService.js';
 import { backKeyboard, buildEmptyState, buildScreen, renderScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
+import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
 import { renderAdminHome } from './adminMenu.js';
 import {
   customVolumeEnabled,
@@ -426,6 +427,19 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     }
   )
   .dynamic((ctx, range) => {
+    const wheelEnabled =
+      ctx.services?.translationService.getSettingBool('lucky_wheel_enabled', true) ?? true;
+    if (wheelEnabled || (ctx.from?.id && ctx.services?.isAdmin(ctx.from.id))) {
+      range.text(
+        (c) => t(c, 'menu_lucky_wheel'),
+        async (c) => {
+          await renderLuckyWheelScreen(c);
+        }
+      );
+    }
+  })
+  .row()
+  .dynamic((ctx, range) => {
     const languageSelectionEnabled =
       ctx.services?.translationService.getSettingBool('language_selection_enabled', true) ?? true;
     if (languageSelectionEnabled || (ctx.from?.id && ctx.services?.isAdmin(ctx.from.id))) {
@@ -776,6 +790,8 @@ export async function renderWalletStatementScreen(
         return '📥';
       case 'promo':
         return '🎟️';
+      case 'lucky_wheel':
+        return '🎡';
       default:
         return amount >= 0 ? '➕' : '➖';
     }
@@ -792,6 +808,7 @@ export async function renderWalletStatementScreen(
     trial: 'tx_type_trial',
     transfer_sent: 'tx_type_transfer_sent',
     transfer_received: 'tx_type_transfer_received',
+    lucky_wheel: 'tx_type_lucky_wheel',
   };
 
   const screen = buildScreen({

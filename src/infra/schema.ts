@@ -148,7 +148,7 @@ export const walletTransactions = pgTable(
     ),
     check(
       'wallet_transactions_type_supported',
-      sql`${table.type} IN ('topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial', 'transfer_sent', 'transfer_received')`
+      sql`${table.type} IN ('topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial', 'transfer_sent', 'transfer_received', 'lucky_wheel')`
     ),
   ]
 );
@@ -857,5 +857,26 @@ export const packageCategories = pgTable(
     check('package_categories_name_safe', sql`length(btrim(${table.name})) BETWEEN 1 AND 100`),
     check('package_categories_display_order_safe', sql`${table.displayOrder} >= 0`),
     index('package_categories_order_idx').on(table.displayOrder, table.createdAt),
+  ]
+);
+
+// Lucky Wheel Spins Table
+export const luckyWheelSpins = pgTable(
+  'lucky_wheel_spins',
+  {
+    id: text('id').primaryKey(),
+    telegramId: bigint('telegram_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.telegramId, { onDelete: 'cascade' }),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    effectiveLuckPercent: integer('effective_luck_percent').notNull(),
+    spinNumber: integer('spin_number').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('lucky_wheel_spins_telegram_id_idx').on(table.telegramId),
+    index('lucky_wheel_spins_created_at_idx').on(table.createdAt),
+    check('lucky_wheel_spins_amount_safe', sql`${table.amount} >= 0`),
+    check('lucky_wheel_spins_spin_number_safe', sql`${table.spinNumber} >= 1`),
   ]
 );

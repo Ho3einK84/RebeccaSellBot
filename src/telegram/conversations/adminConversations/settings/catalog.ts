@@ -20,6 +20,13 @@ export const SETTING_KEYS = [
   'trial_days',
   'referral_bonus_toman',
   'cashback_percent',
+  'lucky_wheel_enabled',
+  'lucky_wheel_min_amount',
+  'lucky_wheel_max_amount',
+  'lucky_wheel_base_luck_percent',
+  'lucky_wheel_decay_percent',
+  'lucky_wheel_cooldown_hours',
+  'lucky_wheel_max_spins',
   'naming_mode',
   'naming_prefix',
   'custom_naming_template',
@@ -38,6 +45,7 @@ export type SettingGroupId =
   | 'support'
   | 'trial'
   | 'referral'
+  | 'lucky_wheel'
   | 'naming'
   | 'backup';
 
@@ -190,6 +198,48 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     editor: { type: 'integer', minimum: 0, maximum: 100 },
   },
   {
+    key: 'lucky_wheel_enabled',
+    group: 'lucky_wheel',
+    labelKey: 'admin_setting_lucky_wheel_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'lucky_wheel_min_amount',
+    group: 'lucky_wheel',
+    labelKey: 'admin_setting_lucky_wheel_min_amount',
+    editor: { type: 'integer', minimum: 0, maximum: 10_000_000 },
+  },
+  {
+    key: 'lucky_wheel_max_amount',
+    group: 'lucky_wheel',
+    labelKey: 'admin_setting_lucky_wheel_max_amount',
+    editor: { type: 'integer', minimum: 100, maximum: 50_000_000 },
+  },
+  {
+    key: 'lucky_wheel_base_luck_percent',
+    group: 'lucky_wheel',
+    labelKey: 'admin_setting_lucky_wheel_base_luck_percent',
+    editor: { type: 'integer', minimum: 1, maximum: 100 },
+  },
+  {
+    key: 'lucky_wheel_decay_percent',
+    group: 'lucky_wheel',
+    labelKey: 'admin_setting_lucky_wheel_decay_percent',
+    editor: { type: 'integer', minimum: 0, maximum: 100 },
+  },
+  {
+    key: 'lucky_wheel_cooldown_hours',
+    group: 'lucky_wheel',
+    labelKey: 'admin_setting_lucky_wheel_cooldown_hours',
+    editor: { type: 'integer', minimum: 1, maximum: 720 },
+  },
+  {
+    key: 'lucky_wheel_max_spins',
+    group: 'lucky_wheel',
+    labelKey: 'admin_setting_lucky_wheel_max_spins',
+    editor: { type: 'integer', minimum: 1, maximum: 1000 },
+  },
+  {
     key: 'naming_mode',
     group: 'naming',
     labelKey: 'admin_setting_naming_mode',
@@ -258,6 +308,11 @@ export const SETTING_GROUPS: readonly SettingGroup[] = [
   ),
   settingGroup('payment', 'admin_setting_group_payment', 'admin_setting_group_payment_desc'),
   settingGroup('referral', 'admin_setting_group_referral', 'admin_setting_group_referral_desc'),
+  settingGroup(
+    'lucky_wheel',
+    'admin_setting_group_lucky_wheel',
+    'admin_setting_group_lucky_wheel_desc'
+  ),
 ];
 
 export const SETTING_LABELS: Readonly<Record<SettingKey, string>> = Object.fromEntries(

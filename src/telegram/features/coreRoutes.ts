@@ -15,6 +15,7 @@ import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { registerBaseRoutes } from './baseRoutes.js';
 import { registerPurchaseRoutes } from './purchaseRoutes.js';
 import { registerConfigRoutes } from './configRoutes.js';
+import { registerLuckyWheelRoutes } from './luckyWheelRoutes.js';
 
 export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   registerBaseRoutes(bot, services);
@@ -29,6 +30,7 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
 
   registerPurchaseRoutes(bot, services);
   registerConfigRoutes(bot, services);
+  registerLuckyWheelRoutes(bot, services);
 
   // Plain text that was not consumed by a conversation, secret-input route, or
   // subscription-link handler remains visible and gets an explicit home state.
