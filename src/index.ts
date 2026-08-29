@@ -126,6 +126,7 @@ async function main() {
     paymentService,
     purchaseCheckoutService,
     promoService,
+    referralService,
     trialService,
     translationService,
     panelRegistry,

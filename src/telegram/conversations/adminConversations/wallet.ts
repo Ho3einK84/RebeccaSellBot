@@ -29,6 +29,21 @@ import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import { parseNonnegativeSafeInteger, parsePositiveSafeInteger, requireAdmin } from './shared.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
+export function formatCardNumberGrouped(rawCard: string): string {
+  const digits = rawCard.replace(/\D/g, '');
+  if (digits.length === 16) {
+    return `${digits.slice(0, 4)} ${digits.slice(4, 8)} ${digits.slice(8, 12)} ${digits.slice(12, 16)}`;
+  }
+  return rawCard;
+}
+
+export function buildTopupPresets(min: number, max: number): number[] {
+  const base = Math.max(10_000, min);
+  const candidates = [base, base * 2, base * 5, base * 10].filter((v) => v >= min && v <= max);
+  const unique = Array.from(new Set(candidates)).sort((a, b) => a - b);
+  return unique.length > 0 ? unique : [min];
+}
+
 function buildPaymentInfoCard(
   ctx: ConversationContext,
   cardNumber: string,
@@ -57,7 +72,7 @@ function buildPaymentInfoCard(
           {
             emoji: '💳',
             label: t(ctx, 'topup_card_number_label'),
-            value: `\`${sanitizeTelegramInlineCode(cardNumber)}\``,
+            value: `\`${sanitizeTelegramInlineCode(formatCardNumberGrouped(cardNumber))}\``,
           },
           {
             emoji: '👤',
@@ -135,15 +150,25 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
 
   const cardNumber = ctx.services.translationService.getSetting('card_number', '—');
   const cardHolder = ctx.services.translationService.getSetting('card_holder', '—');
+  const minimum = ctx.services.translationService.getSettingNum('topup_min_amount', 10_000);
+  const maximum = ctx.services.translationService.getSettingNum('topup_max_amount', 10_000_000);
 
-  const presetKeyboard = new InlineKeyboard()
-    .text(`${localizedNumber(50_000, ctx)} ${t(ctx, 'currency_toman')}`, 'amount:50000')
-    .text(`${localizedNumber(100_000, ctx)} ${t(ctx, 'currency_toman')}`, 'amount:100000')
-    .row()
-    .text(`${localizedNumber(200_000, ctx)} ${t(ctx, 'currency_toman')}`, 'amount:200000')
-    .text(`${localizedNumber(500_000, ctx)} ${t(ctx, 'currency_toman')}`, 'amount:500000')
-    .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+  const presets = buildTopupPresets(minimum, maximum);
+  const presetKeyboard = new InlineKeyboard();
+  for (let i = 0; i < presets.length; i += 2) {
+    presetKeyboard.text(
+      `${localizedNumber(presets[i]!, ctx)} ${t(ctx, 'currency_toman')}`,
+      `amount:${presets[i]}`
+    );
+    if (presets[i + 1] !== undefined) {
+      presetKeyboard.text(
+        `${localizedNumber(presets[i + 1]!, ctx)} ${t(ctx, 'currency_toman')}`,
+        `amount:${presets[i + 1]}`
+      );
+    }
+    presetKeyboard.row();
+  }
+  presetKeyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
   await promptInConversation(
     conversation,
@@ -154,8 +179,6 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     { parse_mode: 'Markdown', reply_markup: presetKeyboard }
   );
 
-  const minimum = ctx.services.translationService.getSettingNum('topup_min_amount', 10_000);
-  const maximum = ctx.services.translationService.getSettingNum('topup_max_amount', 10_000_000);
   let amountToman: number | undefined;
 
   const ownerId = await conversationOwnerId(conversation);

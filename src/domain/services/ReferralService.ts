@@ -292,6 +292,48 @@ export class ReferralService {
       throw err;
     }
   }
+
+  async getReferralStats(telegramId: number): Promise<{
+    totalInvited: number;
+    activeBuyers: number;
+    totalReferralBonus: number;
+    totalCashback: number;
+  }> {
+    const db = getDb();
+    const [invitedRes] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(eq(users.referrerId, telegramId));
+    const totalInvited = Number(invitedRes?.count ?? 0);
+
+    const [activeBuyersRes] = await db
+      .select({ count: sql<number>`count(distinct ${users.telegramId})` })
+      .from(users)
+      .innerJoin(walletTransactions, eq(users.telegramId, walletTransactions.telegramId))
+      .where(and(eq(users.referrerId, telegramId), eq(walletTransactions.type, 'purchase')));
+    const activeBuyers = Number(activeBuyersRes?.count ?? 0);
+
+    const [bonusRes] = await db
+      .select({ sum: sql<number>`COALESCE(sum(${walletTransactions.amount}), 0)` })
+      .from(walletTransactions)
+      .where(
+        and(
+          eq(walletTransactions.telegramId, telegramId),
+          eq(walletTransactions.type, 'referral_bonus')
+        )
+      );
+    const totalReferralBonus = Number(bonusRes?.sum ?? 0);
+
+    const [cashbackRes] = await db
+      .select({ sum: sql<number>`COALESCE(sum(${walletTransactions.amount}), 0)` })
+      .from(walletTransactions)
+      .where(
+        and(eq(walletTransactions.telegramId, telegramId), eq(walletTransactions.type, 'cashback'))
+      );
+    const totalCashback = Number(cashbackRes?.sum ?? 0);
+
+    return { totalInvited, activeBuyers, totalReferralBonus, totalCashback };
+  }
 }
 
 function asPositiveSafeInteger(value: number): number {

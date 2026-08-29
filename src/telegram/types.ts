@@ -10,6 +10,7 @@ import type { WalletService } from '../domain/services/WalletService.js';
 import type { ConfigService } from '../domain/services/ConfigService.js';
 import type { PricingService } from '../domain/services/PricingService.js';
 import type { PromoService } from '../domain/services/PromoService.js';
+import type { ReferralService } from '../domain/services/ReferralService.js';
 import type { TranslationService } from '../domain/services/TranslationService.js';
 import type { TrialService } from '../domain/services/TrialService.js';
 import type { RebeccaPanelRegistry } from '../domain/services/RebeccaPanelRegistry.js';
@@ -89,6 +90,7 @@ export type BotServices = {
   paymentService: PaymentService;
   purchaseCheckoutService: PurchaseCheckoutService;
   promoService: PromoService;
+  referralService: ReferralService;
   trialService: TrialService;
   translationService: TranslationService;
   panelRegistry: RebeccaPanelRegistry;

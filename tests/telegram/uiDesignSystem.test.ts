@@ -13,9 +13,20 @@ import {
   normalizeInputDigits,
   rememberArtifactMessage,
   rememberUiMessage,
+  renderProgressBar,
 } from '../../src/telegram/ui.js';
 
 describe('Design System and Number Normalization', () => {
+  it('renders visual emoji progress bars correctly', () => {
+    expect(renderProgressBar(0, 100, { barLength: 8 })).toBe('[⬜️⬜️⬜️⬜️⬜️⬜️⬜️⬜️] 0%');
+    expect(renderProgressBar(50, 100, { barLength: 8 })).toBe('[🟩🟩🟩🟩⬜️⬜️⬜️⬜️] 50%');
+    expect(renderProgressBar(75, 100, { barLength: 8 })).toBe('[🟨🟨🟨🟨🟨🟨⬜️⬜️] 75%');
+    expect(renderProgressBar(90, 100, { barLength: 8 })).toBe('[🟥🟥🟥🟥🟥🟥🟥⬜️] 90%');
+    expect(renderProgressBar(100, 100, { barLength: 8 })).toBe('[🟥🟥🟥🟥🟥🟥🟥🟥] 100%');
+    expect(renderProgressBar(6, 10, { barLength: 5, theme: 'time' })).toBe('[🟪🟪🟪⬜️⬜️] 60%');
+    expect(renderProgressBar(0, 0)).toBe('');
+  });
+
   it('normalizes Persian and Arabic digits and strips formatting separators', () => {
     expect(normalizeInputDigits('۵۰۰۰۰')).toBe('50000');
     expect(normalizeInputDigits('۵۰,۰۰۰')).toBe('50000');

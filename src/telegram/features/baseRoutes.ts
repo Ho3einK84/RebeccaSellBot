@@ -8,6 +8,7 @@ import {
   renderShopMenuText,
   shopMenu,
   renderWalletDashboard,
+  renderWalletStatementScreen,
   walletMenu,
 } from '../keyboards/mainMenu.js';
 import { adminMenu, renderAdminHome, renderSalesMenu } from '../keyboards/adminMenu.js';
@@ -256,6 +257,12 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     await ctx.reply(t(ctx, 'navigation_continue_hint'), {
       reply_markup: backKeyboard(ctx, 'main'),
     });
+  });
+
+  // Wallet transaction statement pagination
+  bot.callbackQuery(/^wallet:history:page:(\d+)$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderWalletStatementScreen(ctx, Number(ctx.match[1]) || 1);
   });
 
   // Direct top-up CTA from insufficient balance screen

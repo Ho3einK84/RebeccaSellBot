@@ -17,6 +17,7 @@ import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import { logger } from '../../infra/logger.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
+import { renderShopMenuText, shopMenu } from '../keyboards/mainMenu.js';
 
 export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   bot.callbackQuery(/^buy:confirm:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
@@ -162,6 +163,21 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
 
   bot.callbackQuery('purchase:pending', async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+  });
+
+  bot.callbackQuery(/^checkout:promo:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
+    ctx.session.promoReturnDestination = 'shop';
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('promoConversation');
+  });
+
+  bot.callbackQuery(/^checkout:clear_promo:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
+    clearPendingPromo(ctx);
+    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
+    await renderScreen(ctx, await renderShopMenuText(ctx), {
+      parse_mode: 'Markdown',
+      reply_markup: shopMenu,
+    });
   });
 
   // Buttons emitted by pre-upgrade deployments carried package indexes or

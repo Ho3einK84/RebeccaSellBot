@@ -344,17 +344,21 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     async (ctx) => {
       const telegramId = ctx.from?.id;
       if (!telegramId || !ctx.services) return;
-      const u = await ctx.services.walletService.getOrCreateUser(
-        telegramId,
-        ctx.from?.username ?? null,
-        ctx.from?.first_name ?? null,
-        ctx.from?.last_name ?? null,
-        undefined,
-        observedContextLocale(ctx)
-      );
+      const [u, stats] = await Promise.all([
+        ctx.services.walletService.getOrCreateUser(
+          telegramId,
+          ctx.from?.username ?? null,
+          ctx.from?.first_name ?? null,
+          ctx.from?.last_name ?? null,
+          undefined,
+          observedContextLocale(ctx)
+        ),
+        ctx.services.referralService.getReferralStats(telegramId),
+      ]);
       const botUsername = ctx.me?.username ?? 'RebeccaSellBot';
       const refLink = `https://t.me/${botUsername}?start=${u.referralCode}`;
       const bonus = ctx.services.translationService.getSettingNum('referral_bonus_toman', 10_000);
+      const cashbackPercent = ctx.services.translationService.getSettingNum('cashback_percent', 0);
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}`;
       const refKeyboard = new InlineKeyboard()
         .url(t(ctx, 'referral_share_button'), shareUrl)
@@ -375,12 +379,42 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           sections: [
             {
               emoji: '🎁',
-              title: t(ctx, 'referral_title'),
+              title: t(ctx, 'referral_terms_section'),
               fields: [
                 {
                   emoji: '💰',
                   label: t(ctx, 'referral_reward_label'),
                   value: `${localizedNumber(bonus, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                ...(cashbackPercent > 0
+                  ? [
+                      {
+                        emoji: '💸',
+                        label: t(ctx, 'referral_cashback_label'),
+                        value: `${localizedNumber(cashbackPercent, ctx)}%`,
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            {
+              emoji: '📊',
+              title: t(ctx, 'referral_stats_section'),
+              fields: [
+                {
+                  emoji: '👥',
+                  label: t(ctx, 'referral_total_invited_label'),
+                  value: `${localizedNumber(stats.totalInvited, ctx)} ${t(ctx, 'user_unit')}`,
+                },
+                {
+                  emoji: '🛍️',
+                  label: t(ctx, 'referral_active_buyers_label'),
+                  value: `${localizedNumber(stats.activeBuyers, ctx)} ${t(ctx, 'user_unit')}`,
+                },
+                {
+                  emoji: '💰',
+                  label: t(ctx, 'referral_total_earned_label'),
+                  value: `${localizedNumber(stats.totalReferralBonus, ctx)} ${t(ctx, 'currency_toman')}`,
                 },
               ],
             },
@@ -544,8 +578,18 @@ function renderPackageButtons(
 
           const confirmKeyboard = new InlineKeyboard()
             .text(t(c, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
-            .row()
-            .text(t(c, 'menu_back_shop'), 'nav:shop');
+            .row();
+          if (pendingPromo.quote?.code) {
+            confirmKeyboard
+              .text(t(c, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
+              .text(t(c, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
+              .row();
+          } else {
+            confirmKeyboard
+              .text(t(c, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`)
+              .row();
+          }
+          confirmKeyboard.text(t(c, 'menu_back_shop'), 'nav:shop');
 
           await renderScreen(
             c,
@@ -675,6 +719,116 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
     }
   );
 
+// ── Wallet Statement Renderer ───────────────────────────────────────────────
+
+export async function renderWalletStatementScreen(
+  ctx: MenuContext,
+  requestedPage = 1
+): Promise<void> {
+  const telegramId = ctx.from?.id;
+  if (!telegramId || !ctx.services) return;
+
+  const result = await ctx.services.walletService.listTransactionsForUser(
+    telegramId,
+    requestedPage,
+    5
+  );
+  if (result.transactions.length === 0) {
+    await renderScreen(
+      ctx,
+      buildEmptyState('📜', t(ctx, 'wallet_history_title'), t(ctx, 'wallet_history_empty')),
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'wallet') }
+    );
+    return;
+  }
+
+  const keyboard = new InlineKeyboard();
+  if (result.totalPages > 1) {
+    if (result.page > 1) {
+      keyboard.text(t(ctx, 'pagination_previous'), `wallet:history:page:${result.page - 1}`);
+    }
+    keyboard.text(
+      `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+      'ui:noop'
+    );
+    if (result.page < result.totalPages) {
+      keyboard.text(t(ctx, 'pagination_next'), `wallet:history:page:${result.page + 1}`);
+    }
+    keyboard.row();
+  }
+  keyboard.text(t(ctx, 'menu_back_wallet'), 'nav:wallet');
+
+  const typeIcon = (type: string, amount: number) => {
+    switch (type) {
+      case 'topup':
+        return '➕';
+      case 'purchase':
+        return '🛍️';
+      case 'refund':
+        return '↩️';
+      case 'referral_bonus':
+        return '🎁';
+      case 'cashback':
+        return '💸';
+      case 'transfer_sent':
+        return '📤';
+      case 'transfer_received':
+        return '📥';
+      case 'promo':
+        return '🎟️';
+      default:
+        return amount >= 0 ? '➕' : '➖';
+    }
+  };
+
+  const TRANSACTION_TYPE_MAP: Record<string, string> = {
+    topup: 'tx_type_topup',
+    purchase: 'tx_type_purchase',
+    refund: 'tx_type_refund',
+    admin_adjustment: 'tx_type_admin_adjustment',
+    promo: 'tx_type_promo',
+    referral_bonus: 'tx_type_referral_bonus',
+    cashback: 'tx_type_cashback',
+    trial: 'tx_type_trial',
+    transfer_sent: 'tx_type_transfer_sent',
+    transfer_received: 'tx_type_transfer_received',
+  };
+
+  const screen = buildScreen({
+    emoji: '📜',
+    title: t(ctx, 'wallet_history_title'),
+    subtitle: t(ctx, 'wallet_dashboard_subtitle'),
+    sections: result.transactions.map((tx) => {
+      const icon = typeIcon(tx.type, tx.amount);
+      const sign = tx.amount > 0 ? '+' : '';
+      const typeKey = TRANSACTION_TYPE_MAP[tx.type];
+      const typeLabel = typeKey ? t(ctx, typeKey) : tx.type;
+      return {
+        emoji: icon,
+        title: `${typeLabel} · ${localizedDate(new Date(tx.createdAt), ctx)}`,
+        fields: [
+          {
+            emoji: '💰',
+            label: t(ctx, 'wallet_pending_amount'),
+            value: `${sign}${localizedNumber(tx.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            emoji: '👛',
+            label: t(ctx, 'wallet_available_balance'),
+            value: `${localizedNumber(tx.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      };
+    }),
+    footer: t(ctx, 'subscription_list_page', {
+      page: localizedNumber(result.page, ctx),
+      total_pages: localizedNumber(result.totalPages, ctx),
+    }),
+  });
+
+  await renderScreen(ctx, screen, { parse_mode: 'Markdown', reply_markup: keyboard });
+}
+
 // ── Wallet Menu ──────────────────────────────────────────────────────────────
 
 export const walletMenu = new Menu<MenuContext>('wallet-menu')
@@ -692,19 +846,24 @@ export const walletMenu = new Menu<MenuContext>('wallet-menu')
     }
   )
   .row()
+  .text(
+    (ctx) => t(ctx, 'wallet_history_button'),
+    async (ctx) => {
+      await renderWalletStatementScreen(ctx, 1);
+    }
+  )
   .dynamic((ctx, range) => {
     const transferEnabled = !ctx.services || walletTransferEnabled(ctx.services.translationService);
     if (transferEnabled) {
-      range
-        .text(
-          (c) => t(c, 'menu_wallet_transfer'),
-          async (c) => {
-            await c.conversation.enter('transferBalanceConversation');
-          }
-        )
-        .row();
+      range.text(
+        (c) => t(c, 'menu_wallet_transfer'),
+        async (c) => {
+          await c.conversation.enter('transferBalanceConversation');
+        }
+      );
     }
   })
+  .row()
   .text(
     (ctx) => t(ctx, 'menu_back_main'),
     async (ctx) => {

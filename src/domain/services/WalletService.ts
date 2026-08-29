@@ -779,4 +779,35 @@ export class WalletService {
       };
     });
   }
+
+  /**
+   * List paginated wallet transactions for a specific user.
+   */
+  async listTransactionsForUser(
+    telegramId: number,
+    page = 1,
+    pageSize = 5
+  ): Promise<{
+    transactions: Array<typeof walletTransactions.$inferSelect>;
+    total: number;
+    totalPages: number;
+    page: number;
+  }> {
+    const db = getDb();
+    const [countRes] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(walletTransactions)
+      .where(eq(walletTransactions.telegramId, telegramId));
+    const total = Number(countRes?.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const rows = await db
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.telegramId, telegramId))
+      .orderBy(desc(walletTransactions.createdAt))
+      .limit(pageSize)
+      .offset((safePage - 1) * pageSize);
+    return { transactions: rows, total, totalPages, page: safePage };
+  }
 }

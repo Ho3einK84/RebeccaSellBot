@@ -20,6 +20,25 @@ const EMOJI_PREFIX_REGEX =
   /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|[\uE0020-\uE007F])*\s*)+/u;
 
 /**
+ * Render a visual progress bar with emojis.
+ */
+export function renderProgressBar(
+  used: number,
+  total: number,
+  options: { barLength?: number; theme?: 'traffic' | 'time' } = {}
+): string {
+  const { barLength = 8, theme = 'traffic' } = options;
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(used) || used < 0) return '';
+  const ratio = Math.max(0, Math.min(1, used / total));
+  const percent = Math.round(ratio * 100);
+  const filledCount = Math.round(ratio * barLength);
+  const emptyCount = Math.max(0, barLength - filledCount);
+  const fillIcon = theme === 'time' ? '🟪' : percent > 85 ? '🟥' : percent > 60 ? '🟨' : '🟩';
+  const emptyIcon = '⬜️';
+  return `[${fillIcon.repeat(filledCount)}${emptyIcon.repeat(emptyCount)}] ${percent}%`;
+}
+
+/**
  * Strips leading emoji characters and following whitespace from a string.
  */
 export function stripLeadingEmoji(text: string): string {

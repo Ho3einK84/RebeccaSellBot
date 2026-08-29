@@ -9,6 +9,7 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
 
   let balance: number;
   let activeCount = 0;
+  let totalConfigsCount = 0;
   let servicesAvailable = true;
   let nearExpiryInfo: { username: string; daysLeft: number } | undefined;
 
@@ -18,6 +19,7 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
       ctx.services.configService.listConfigsForOwner(telegramId),
     ]);
     balance = fetchedBalance;
+    totalConfigsCount = configs.length;
     const now = Math.floor(Date.now() / 1000);
     const activeConfigs = configs.filter(
       (config) =>
@@ -43,7 +45,11 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
   if (!servicesAvailable) {
     notices.push(`⚠️ ${t(ctx, 'home_services_unavailable_hint')}`);
   } else if (activeCount === 0) {
-    notices.push(`📭 ${t(ctx, 'home_no_active_services_hint')}`);
+    if (totalConfigsCount > 0) {
+      notices.push(`⌛ ${t(ctx, 'home_has_expired_services_hint')}`);
+    } else {
+      notices.push(`📭 ${t(ctx, 'home_no_active_services_hint')}`);
+    }
   }
   if (nearExpiryInfo) {
     notices.push(
