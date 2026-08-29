@@ -125,7 +125,9 @@ export async function showUserSubscriptions(
     page * SUBSCRIPTION_PAGE_SIZE
   );
   const cards = await Promise.all(
-    pageConfigs.map((config) => buildSubscriptionSnapshot(ctx, config, { includeProgressBars: false }))
+    pageConfigs.map((config) =>
+      buildSubscriptionSnapshot(ctx, config, { includeProgressBars: false })
+    )
   );
   const navigation = new InlineKeyboard();
   for (const [index, config] of pageConfigs.entries()) {
@@ -1133,7 +1135,12 @@ async function buildSubscriptionSnapshot(
     remaining = `${localizedNumber(gb, ctx)} ${t(ctx, 'traffic_unit_gb')}${
       traffic.isCached ? ` · ${t(ctx, 'cached_data_label')}` : ''
     }`;
-    if (options.includeProgressBars && traffic.dataLimit != null && traffic.dataLimit > 0 && traffic.usedTraffic != null) {
+    if (
+      options.includeProgressBars &&
+      traffic.dataLimit != null &&
+      traffic.dataLimit > 0 &&
+      traffic.usedTraffic != null
+    ) {
       const bar = renderProgressBar(traffic.usedTraffic, traffic.dataLimit, {
         barLength: 8,
         theme: 'traffic',
