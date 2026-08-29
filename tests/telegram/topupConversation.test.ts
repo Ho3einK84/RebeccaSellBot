@@ -5,9 +5,13 @@ import {
 } from '../../src/telegram/conversations/adminConversations/wallet.js';
 
 describe('Topup Helpers', () => {
-  it('formats 16-digit card number with 4-digit groups using hyphens for BiDi stability', () => {
-    expect(formatCardNumberGrouped('6037991812345678')).toBe('6037-9918-1234-5678');
-    expect(formatCardNumberGrouped('6037-9918-1234-5678')).toBe('6037-9918-1234-5678');
+  it('formats 16-digit card number with 4-digit groups using spaces and LRM for BiDi stability', () => {
+    expect(formatCardNumberGrouped('6037991812345678')).toBe(
+      '\u200E6037 \u200E9918 \u200E1234 \u200E5678'
+    );
+    expect(formatCardNumberGrouped('6037-9918-1234-5678')).toBe(
+      '\u200E6037 \u200E9918 \u200E1234 \u200E5678'
+    );
     expect(formatCardNumberGrouped('12345')).toBe('12345');
   });
 

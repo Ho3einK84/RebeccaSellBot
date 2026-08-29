@@ -32,7 +32,7 @@ import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../render
 export function formatCardNumberGrouped(rawCard: string): string {
   const digits = rawCard.replace(/\D/g, '');
   if (digits.length === 16) {
-    return `${digits.slice(0, 4)}-${digits.slice(4, 8)}-${digits.slice(8, 12)}-${digits.slice(12, 16)}`;
+    return `\u200E${digits.slice(0, 4)} \u200E${digits.slice(4, 8)} \u200E${digits.slice(8, 12)} \u200E${digits.slice(12, 16)}`;
   }
   return rawCard;
 }

@@ -148,7 +148,7 @@ export function ensurePersianLineDirection(value: string): string {
   return value
     .split('\n')
     .map((line) => {
-      if (!line || line.startsWith(rlm)) return line;
+      if (!line || line.startsWith(rlm) || line.includes('\u200e')) return line;
       const cleanLine = line.replace(/^[\s*_`[\]()#-]+/u, '');
       if (/^[@A-Za-z0-9]/u.test(cleanLine)) {
         return `${rlm}${line}`;
