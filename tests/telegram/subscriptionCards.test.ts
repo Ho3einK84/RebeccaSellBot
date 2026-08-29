@@ -690,4 +690,116 @@ describe('subscription card actions', () => {
     expect(session.artifactMessageIds as number[]).not.toContain(50);
     expect(session.artifactMessageIds as number[]).toContain(100);
   });
+
+  it('does not include progress bars in the subscription overview/selection list', async () => {
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const configs = [
+      {
+        id: 'uc_list_123',
+        telegramId: 42,
+        configUsername: 'test_overview_user',
+        subUrl: 'https://example.test/test_overview_user',
+        panelStatus: 'active',
+        panelDataLimit: 10 * 1024 ** 3,
+        panelExpire: Math.floor(Date.now() / 1000) + 86_400,
+        createdAt: new Date(Date.now() - 86_400 * 1000),
+      },
+    ];
+    const ctx = {
+      ...context(),
+      from: { id: 42, is_bot: false, first_name: 'Test' },
+      reply,
+      services: {
+        translationService: { get: vi.fn((key: string) => key), resolveLocale: vi.fn(() => 'fa') },
+        configService: {
+          listConfigsForOwner: vi.fn().mockResolvedValue(configs),
+          getRemoteConfigDetail: vi.fn().mockResolvedValue({
+            username: 'test_overview_user',
+            status: 'active',
+            data_limit: 10 * 1024 ** 3,
+            used_traffic: 5 * 1024 ** 3,
+            expire: Math.floor(Date.now() / 1000) + 86_400,
+            created_at: new Date(Date.now() - 86_400 * 1000).toISOString(),
+          }),
+        },
+        pricingService: { getPackageById: vi.fn() },
+      },
+    } as unknown as MenuContext;
+
+    await showUserSubscriptions(ctx);
+
+    expect(reply).toHaveBeenCalledTimes(1);
+    const text = reply.mock.calls[0]?.[0] as string;
+    expect(text).toContain('`test_overview_user`');
+    // Progress bar emojis should NOT be present in list/selection view
+    expect(text).not.toContain('🟩');
+    expect(text).not.toContain('🟪');
+    expect(text).not.toContain('⬜️');
+  });
+
+  it('includes progress bars in the detail view when inspecting a subscription', async () => {
+    const listeners: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const fakeBot = {
+      callbackQuery: vi.fn((pattern: RegExp | string, handler: (ctx: unknown) => Promise<void>) => {
+        const key = pattern instanceof RegExp ? pattern.source : String(pattern);
+        listeners[key] = handler;
+      }),
+    };
+    registerSubscriptionRoutes(fakeBot as unknown as Bot<MenuContext>);
+
+    const viewHandler = Object.entries(listeners).find(([key]) =>
+      key.includes('config:view:')
+    )?.[1];
+    expect(viewHandler).toBeDefined();
+
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const answerCallbackQuery = vi.fn().mockResolvedValue(true);
+    const config = {
+      id: 'uc_detail_123',
+      telegramId: 42,
+      configUsername: 'detail_user',
+      subUrl: 'https://example.test/detail_user',
+      panelStatus: 'active',
+      panelDataLimit: 10 * 1024 ** 3,
+      panelExpire: Math.floor(Date.now() / 1000) + 86_400 * 10,
+      createdAt: new Date(Date.now() - 86_400 * 5 * 1000),
+    };
+    const ctx = {
+      ...context(),
+      match: ['config:view:uc_detail_123', 'uc_detail_123'],
+      from: { id: 42 },
+      reply,
+      answerCallbackQuery,
+      services: {
+        translationService: {
+          get: vi.fn((key: string) => key),
+          resolveLocale: vi.fn(() => 'fa'),
+        },
+        configService: {
+          getOwnedConfigById: vi.fn().mockResolvedValue(config),
+          getRemoteConfigDetail: vi.fn().mockResolvedValue({
+            username: 'detail_user',
+            status: 'active',
+            data_limit: 10 * 1024 ** 3,
+            used_traffic: 5 * 1024 ** 3,
+            expire: Math.floor(Date.now() / 1000) + 86_400 * 10,
+            created_at: new Date(Date.now() - 86_400 * 5 * 1000).toISOString(),
+          }),
+        },
+        pricingService: {
+          getPackageById: vi.fn(),
+        },
+      },
+    };
+
+    await viewHandler!(ctx);
+
+    expect(reply).toHaveBeenCalledTimes(1);
+    const text = reply.mock.calls[0]?.[0] as string;
+    expect(text).toContain('subscription_detail_heading');
+    // Progress bar emojis SHOULD be present in detail view
+    expect(text).toContain('🟩');
+    expect(text).toContain('🟪');
+    expect(text).toContain('⬜️');
+  });
 });

@@ -125,7 +125,7 @@ export async function showUserSubscriptions(
     page * SUBSCRIPTION_PAGE_SIZE
   );
   const cards = await Promise.all(
-    pageConfigs.map((config) => buildSubscriptionSnapshot(ctx, config))
+    pageConfigs.map((config) => buildSubscriptionSnapshot(ctx, config, { includeProgressBars: false }))
   );
   const navigation = new InlineKeyboard();
   for (const [index, config] of pageConfigs.entries()) {
@@ -990,7 +990,9 @@ async function buildSubscriptionCard(
   isDetailView = false,
   backCallback?: string
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
-  const snapshot = await buildSubscriptionSnapshot(ctx, config);
+  const snapshot = await buildSubscriptionSnapshot(ctx, config, {
+    includeProgressBars: isDetailView,
+  });
   const isAdmin = Boolean(
     ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
   );
@@ -1104,7 +1106,8 @@ async function buildSubscriptionCard(
 
 async function buildSubscriptionSnapshot(
   ctx: MenuContext,
-  config: UserConfigRecord
+  config: UserConfigRecord,
+  options: { includeProgressBars?: boolean } = {}
 ): Promise<SubscriptionSnapshot & { remoteAvailable: boolean }> {
   let remote: RebeccaUserDetail | undefined;
   try {
@@ -1130,7 +1133,7 @@ async function buildSubscriptionSnapshot(
     remaining = `${localizedNumber(gb, ctx)} ${t(ctx, 'traffic_unit_gb')}${
       traffic.isCached ? ` · ${t(ctx, 'cached_data_label')}` : ''
     }`;
-    if (traffic.dataLimit != null && traffic.dataLimit > 0 && traffic.usedTraffic != null) {
+    if (options.includeProgressBars && traffic.dataLimit != null && traffic.dataLimit > 0 && traffic.usedTraffic != null) {
       const bar = renderProgressBar(traffic.usedTraffic, traffic.dataLimit, {
         barLength: 8,
         theme: 'traffic',
@@ -1143,7 +1146,7 @@ async function buildSubscriptionSnapshot(
     remaining = t(ctx, 'traffic_unavailable');
   }
   let expiryInfo = formatExpiry(ctx, expire);
-  if (expire != null && expire * 1000 > Date.now()) {
+  if (options.includeProgressBars && expire != null && expire * 1000 > Date.now()) {
     const createdAtMs = new Date(remote?.created_at || config.createdAt).getTime();
     const expireMs = expire * 1000;
     const totalMs = expireMs - createdAtMs;
