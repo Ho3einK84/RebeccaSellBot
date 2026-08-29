@@ -272,9 +272,12 @@ async function promptReceiptReview(
     ];
 
     const keyboard = new InlineKeyboard();
-    for (const r of reasons) {
+    for (const reason of reasons) {
       keyboard
-        .text(t(ctx, `admin_receipt_reject_reason_${r}`), `rcpt:rej:${receipt.id}:${page}:${r}`)
+        .text(
+          t(ctx, `admin_receipt_reject_reason_${reason}`),
+          `rcpt:rej:${receipt.id}:${page}:${reason}`
+        )
         .row();
     }
     keyboard.text(t(ctx, 'menu_cancel'), `receipt:view:${receipt.id}:${page}`);

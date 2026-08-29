@@ -39,6 +39,16 @@ const DYNAMIC_TRANSLATION_KEYS = [
     generator: '`admin_panel_credential_${panel.credentialMode}`',
     pattern: /^admin_panel_credential_(api_key|password|none)$/u,
   },
+  {
+    generator: '`admin_receipt_reject_reason_${reason}`',
+    pattern:
+      /^admin_receipt_reject_reason_(unclear|not_received|duplicate|amount_mismatch|other)$/u,
+  },
+  {
+    generator: '`receipt_result_rejected_reason_${reason}`',
+    pattern:
+      /^receipt_result_rejected_reason_(unclear|not_received|duplicate|amount_mismatch|other)$/u,
+  },
 ] as const;
 
 function listTypeScriptFiles(directory: string): string[] {
