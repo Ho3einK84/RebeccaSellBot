@@ -172,7 +172,17 @@ export const EN_TEXTS: Record<string, string> = {
   receipt_result_approved_title: 'Wallet Credited',
   receipt_result_rejected_title: 'Receipt Rejected',
   receipt_result_approved_subtitle: 'Receipt amount added to your wallet.',
-  receipt_result_rejected_subtitle: 'Receipt not approved. Contact support if needed.',
+  receipt_result_rejected_subtitle: 'Payment receipt was rejected by admin.',
+  receipt_result_rejected_reason_label: 'Reason',
+  receipt_result_rejected_reason_unclear:
+    'The receipt image is unreadable or invalid. Please upload a clear receipt.',
+  receipt_result_rejected_reason_not_received: 'Payment was not received in the bank account.',
+  receipt_result_rejected_reason_duplicate:
+    'This receipt was already submitted or used previously.',
+  receipt_result_rejected_reason_amount_mismatch:
+    'The transfer amount does not match the requested top-up amount.',
+  receipt_result_rejected_reason_other:
+    'Payment details are incomplete or invalid. Please contact support if needed.',
   receipt_result_amount_label: 'Top-up amount',
   receipt_result_next_hint: 'Return to your wallet to see the new balance.',
   claim_handler_failed: '❌ Could not add the service. Try again.',
@@ -455,6 +465,13 @@ export const EN_TEXTS: Record<string, string> = {
   admin_receipt_created_label: 'Submitted at',
   admin_receipt_approve_title: 'Approve Receipt',
   admin_receipt_reject_title: 'Reject Receipt',
+  admin_receipt_reject_select_reason: 'Select rejection reason:',
+  admin_receipt_reject_reason_label: 'Rejection Reason',
+  admin_receipt_reject_reason_unclear: '📸 Unreadable / Invalid Image',
+  admin_receipt_reject_reason_not_received: '💳 Payment Not Received',
+  admin_receipt_reject_reason_duplicate: '⚠️ Duplicate Receipt',
+  admin_receipt_reject_reason_amount_mismatch: '🔢 Amount Mismatch',
+  admin_receipt_reject_reason_other: '❓ Other / Incomplete Info',
   admin_receipt_approve_consequence:
     'The receipt amount is added to the customer wallet immediately. This cannot be undone here.',
   admin_receipt_reject_consequence:

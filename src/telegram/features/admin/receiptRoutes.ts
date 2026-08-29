@@ -58,6 +58,9 @@ export async function showReceiptQueue(ctx: MenuContext, requestedPage = 1): Pro
   );
 }
 
+export type ReceiptRejectReason =
+  'unclear' | 'not_received' | 'duplicate' | 'amount_mismatch' | 'other';
+
 export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(/^receipt:page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
@@ -72,6 +75,25 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
     /^receipt:(approve|reject)_prompt:([a-zA-Z0-9_-]+)(?::(\d+))?$/u,
     async (ctx) => {
       await promptReceiptReview(ctx, ctx.match[1]!, ctx.match[2]!, Number(ctx.match[3]) || 1);
+    }
+  );
+
+  bot.callbackQuery(
+    /^(?:receipt:reject_confirm|rcpt:rej):([a-zA-Z0-9_-]+):(\d+):([a-z_]+)$/u,
+    async (ctx) => {
+      if (!ctx.services) return;
+      const receiptId = ctx.match[1]!;
+      const page = Number(ctx.match[2]) || 1;
+      const reason = ctx.match[3]! as ReceiptRejectReason;
+      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+
+      const result = await ctx.services.walletService.rejectTopup(receiptId, ctx.from.id);
+      if (result) {
+        await notifyReceiptResult(ctx, result.telegramId, false, undefined, receiptId, reason);
+        await renderReceiptResult(ctx, 'reject', page, reason);
+      } else {
+        await renderReceiptAlreadyReviewed(ctx, page);
+      }
     }
   );
 
@@ -97,8 +119,8 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
 
       const result = await ctx.services.walletService.rejectTopup(receiptId, ctx.from.id);
       if (result) {
-        await notifyReceiptResult(ctx, result.telegramId, false, undefined, receiptId);
-        await renderReceiptResult(ctx, 'reject', page);
+        await notifyReceiptResult(ctx, result.telegramId, false, undefined, receiptId, 'other');
+        await renderReceiptResult(ctx, 'reject', page, 'other');
       } else {
         await renderReceiptAlreadyReviewed(ctx, page);
       }
@@ -239,12 +261,59 @@ async function promptReceiptReview(
 
   const normalizedAction = action === 'approve' ? 'approve' : 'reject';
   await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+
+  if (normalizedAction === 'reject') {
+    const reasons: ReceiptRejectReason[] = [
+      'unclear',
+      'not_received',
+      'duplicate',
+      'amount_mismatch',
+      'other',
+    ];
+
+    const keyboard = new InlineKeyboard();
+    for (const r of reasons) {
+      keyboard
+        .text(t(ctx, `admin_receipt_reject_reason_${r}`), `rcpt:rej:${receipt.id}:${page}:${r}`)
+        .row();
+    }
+    keyboard.text(t(ctx, 'menu_cancel'), `receipt:view:${receipt.id}:${page}`);
+
+    const text = buildScreen({
+      emoji: '⛔',
+      title: t(ctx, 'admin_receipt_reject_title'),
+      subtitle: t(ctx, 'admin_receipt_reject_select_reason'),
+      primary: {
+        emoji: '💰',
+        label: t(ctx, 'admin_receipt_amount_label'),
+        value: `${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      },
+      sections: [
+        {
+          emoji: '👤',
+          title: t(ctx, 'admin_receipt_review_title'),
+          fields: [
+            {
+              label: t(ctx, 'admin_receipt_id_label'),
+              value: `\`${receipt.id}\``,
+            },
+            {
+              label: t(ctx, 'admin_receipt_user_label'),
+              value: String(receipt.telegramId),
+            },
+          ],
+        },
+      ],
+      footer: t(ctx, 'admin_receipt_reject_consequence'),
+    });
+
+    await renderReceiptCaptionOrText(ctx, text, keyboard);
+    return;
+  }
+
   const text = buildScreen({
-    emoji: normalizedAction === 'approve' ? '✅' : '⛔',
-    title: t(
-      ctx,
-      normalizedAction === 'approve' ? 'admin_receipt_approve_title' : 'admin_receipt_reject_title'
-    ),
+    emoji: '✅',
+    title: t(ctx, 'admin_receipt_approve_title'),
     subtitle: t(ctx, 'admin_receipt_review_subtitle'),
     primary: {
       emoji: '💰',
@@ -267,18 +336,10 @@ async function promptReceiptReview(
         ],
       },
     ],
-    footer: t(
-      ctx,
-      normalizedAction === 'approve'
-        ? 'admin_receipt_approve_consequence'
-        : 'admin_receipt_reject_consequence'
-    ),
+    footer: t(ctx, 'admin_receipt_approve_consequence'),
   });
   const keyboard = new InlineKeyboard()
-    .text(
-      t(ctx, 'admin_confirm_button'),
-      `receipt:${normalizedAction}_confirm:${receipt.id}:${page}`
-    )
+    .text(t(ctx, 'admin_confirm_button'), `receipt:approve_confirm:${receipt.id}:${page}`)
     .row()
     .text(t(ctx, 'menu_cancel'), `receipt:view:${receipt.id}:${page}`);
   await renderReceiptCaptionOrText(ctx, text, keyboard);
@@ -380,8 +441,12 @@ function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): st
 async function renderReceiptResult(
   ctx: MenuContext,
   action: 'approve' | 'reject',
-  page: number
+  page: number,
+  reason?: ReceiptRejectReason
 ): Promise<void> {
+  const reasonLabelKey = reason ? `admin_receipt_reject_reason_${reason}` : undefined;
+  const reasonLabel = reasonLabelKey ? t(ctx, reasonLabelKey) : undefined;
+
   await renderReceiptCaptionOrText(
     ctx,
     buildScreen({
@@ -398,6 +463,22 @@ async function renderReceiptResult(
         label: t(ctx, 'admin_receipt_queue_pending_label'),
         value: buildStatusBadge(ctx, action === 'approve' ? 'active' : 'inactive'),
       },
+      ...(action === 'reject' && reasonLabel
+        ? {
+            sections: [
+              {
+                emoji: '📋',
+                title: t(ctx, 'admin_receipt_reject_reason_label'),
+                fields: [
+                  {
+                    label: t(ctx, 'admin_receipt_reject_reason_label'),
+                    value: reasonLabel,
+                  },
+                ],
+              },
+            ],
+          }
+        : {}),
     }),
     new InlineKeyboard().text(t(ctx, 'menu_back'), `receipt:page:${page}`)
   );
@@ -420,13 +501,19 @@ async function notifyReceiptResult(
   telegramId: number,
   approved: boolean,
   amount: number | undefined,
-  receiptId: string
+  receiptId: string,
+  reason?: ReceiptRejectReason
 ): Promise<void> {
   if (!ctx.services) return;
   try {
     const locale =
       (await ctx.services.userService.getLocale(telegramId)) ??
       resolveServiceLocale(ctx.services.translationService);
+    const reasonDetailKey = reason ? `receipt_result_rejected_reason_${reason}` : undefined;
+    const reasonDetail = reasonDetailKey
+      ? tForLocale(ctx.services.translationService, locale, reasonDetailKey)
+      : undefined;
+
     await ctx.api.sendMessage(
       telegramId,
       buildScreen({
@@ -453,7 +540,19 @@ async function notifyReceiptResult(
                 value: `${localizedNumberForLocale(amount, locale)} ${tForLocale(ctx.services.translationService, locale, 'currency_toman')}`,
               },
             }
-          : {}),
+          : !approved && reasonDetail
+            ? {
+                primary: {
+                  emoji: '⚠️',
+                  label: tForLocale(
+                    ctx.services.translationService,
+                    locale,
+                    'receipt_result_rejected_reason_label'
+                  ),
+                  value: reasonDetail,
+                },
+              }
+            : {}),
         footer: tForLocale(ctx.services.translationService, locale, 'receipt_result_next_hint'),
       }),
       {

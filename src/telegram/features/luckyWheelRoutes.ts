@@ -123,27 +123,30 @@ export function registerLuckyWheelRoutes(bot: Bot<MenuContext>, services: BotSer
       const chatId = ctx.chat?.id;
       const messageId = ctx.callbackQuery?.message?.message_id;
 
-      // Suspense Animation Frame 1
+      // 5-Frame Text Slot Machine Animation (~2.7-3.0s total)
       if (chatId && messageId) {
-        try {
-          const frame1 = buildScreen({
-            emoji: '🎡',
-            title: t(ctx, 'wheel_spinning_title'),
-            subtitle: t(ctx, 'wheel_spinning_step1'),
-          });
-          await ctx.api.editMessageText(chatId, messageId, frame1, { parse_mode: 'Markdown' });
-          await new Promise((r) => setTimeout(r, 400));
+        const slotFrames = [
+          { reel: '[ 🍉 | 🍋 | 🍒 ]', delay: 500 },
+          { reel: '[ 🍇 | 🔔 | 💎 ]', delay: 500 },
+          { reel: '[ 🍋 | 🍓 | 🍉 ]', delay: 500 },
+          { reel: '[ 💎 | 🎁 | 💎 ]', delay: 550 },
+          { reel: '[ 🎁 | 🎁 | 🎁 ]', delay: 600 },
+        ];
 
-          // Suspense Animation Frame 2
-          const frame2 = buildScreen({
-            emoji: '✨',
-            title: t(ctx, 'wheel_spinning_title'),
-            subtitle: t(ctx, 'wheel_spinning_step2'),
-          });
-          await ctx.api.editMessageText(chatId, messageId, frame2, { parse_mode: 'Markdown' });
-          await new Promise((r) => setTimeout(r, 500));
-        } catch {
-          // If intermediate frame edits fail (e.g. rate limit), continue to result frame
+        for (const frame of slotFrames) {
+          try {
+            const frameScreen = buildScreen({
+              emoji: '🎰',
+              title: t(ctx, 'wheel_title'),
+              footer: `🎰  *${frame.reel}*`,
+            });
+            await ctx.api.editMessageText(chatId, messageId, frameScreen, {
+              parse_mode: 'Markdown',
+            });
+            await new Promise((r) => setTimeout(r, frame.delay));
+          } catch {
+            // If an intermediate frame edit fails (e.g. rate limit), proceed to next/final frame
+          }
         }
       }
 
