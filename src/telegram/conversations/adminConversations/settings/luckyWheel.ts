@@ -26,19 +26,23 @@ export async function adminLuckyWheelSettingsConversation(
     const cooldownHours = ts.getSettingNum('lucky_wheel_cooldown_hours', 24);
     const maxSpins = ts.getSettingNum('lucky_wheel_max_spins', 5);
 
+    const onBadge = t(ctx, 'admin_overview_active');
+    const offBadge = t(ctx, 'admin_overview_inactive');
+
     const screenText = buildScreen({
       emoji: '🎡',
       title: t(ctx, 'admin_sales_lucky_wheel_title'),
       subtitle: t(ctx, 'admin_sales_lucky_wheel_subtitle'),
+      primary: {
+        emoji: enabled ? '🟢' : '⚪️',
+        label: t(ctx, 'admin_setting_lucky_wheel_enabled'),
+        value: enabled ? onBadge : offBadge,
+      },
       sections: [
         {
           emoji: '⚙️',
           title: t(ctx, 'admin_setting_group_lucky_wheel'),
           fields: [
-            {
-              label: t(ctx, 'admin_setting_lucky_wheel_enabled'),
-              value: enabled ? t(ctx, 'ui_status_active') : t(ctx, 'ui_status_inactive'),
-            },
             {
               label: t(ctx, 'admin_setting_lucky_wheel_min_amount'),
               value: `${localizedNumber(minAmount, ctx)} ${t(ctx, 'currency_toman')}`,
@@ -70,7 +74,10 @@ export async function adminLuckyWheelSettingsConversation(
     });
 
     const keyboard = new InlineKeyboard()
-      .text(t(ctx, 'admin_setting_lucky_wheel_enabled'), 'wheel_cfg:edit:lucky_wheel_enabled')
+      .text(
+        `${t(ctx, 'admin_setting_lucky_wheel_enabled')}: ${enabled ? onBadge : offBadge}`,
+        'wheel_cfg:toggle'
+      )
       .row()
       .text(t(ctx, 'admin_setting_lucky_wheel_min_amount'), 'wheel_cfg:edit:lucky_wheel_min_amount')
       .text(t(ctx, 'admin_setting_lucky_wheel_max_amount'), 'wheel_cfg:edit:lucky_wheel_max_amount')
@@ -117,7 +124,7 @@ export async function adminLuckyWheelSettingsConversation(
     }
 
     const input = await waitForSettingsInput(conversation, {
-      callbackPrefixes: ['wheel_cfg:edit:'],
+      callbackPrefixes: ['wheel_cfg:toggle', 'wheel_cfg:edit:'],
       backCallbacks: ['wheel_cfg:back'],
       retryKeyboard: keyboard,
     });
@@ -125,6 +132,15 @@ export async function adminLuckyWheelSettingsConversation(
     if (input.type === 'cancel' || input.type === 'back') break;
     if (input.type !== 'callback') continue;
     activeCtx = input.ctx;
+
+    if (input.data === 'wheel_cfg:toggle') {
+      const nextVal = (!enabled).toString();
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting('lucky_wheel_enabled', nextVal);
+      });
+      continue;
+    }
 
     if (input.data.startsWith('wheel_cfg:edit:')) {
       const key = input.data.slice('wheel_cfg:edit:'.length);

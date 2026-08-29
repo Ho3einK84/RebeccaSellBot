@@ -35,11 +35,6 @@ export async function renderLuckyWheelScreen(ctx: MenuContext): Promise<void> {
       value: `${localizedNumber(spinsLeft, ctx)} / ${localizedNumber(status.maxSpins, ctx)}`,
     },
     {
-      emoji: '🍀',
-      label: t(ctx, 'wheel_luck_label'),
-      value: `${localizedNumber(status.currentEffectiveLuck, ctx)}%`,
-    },
-    {
       emoji: '🎁',
       label: t(ctx, 'wheel_prize_label'),
       value: `${localizedNumber(status.minPrize, ctx)} تا ${localizedNumber(status.maxPrize, ctx)} ${t(ctx, 'currency_toman')}`,
@@ -140,11 +135,11 @@ export function registerLuckyWheelRoutes(bot: Bot<MenuContext>, services: BotSer
 
       // Final Prize Frame
       const winScreen = buildScreen({
-        emoji: '🎉',
+        emoji: '🎁',
         title: t(ctx, 'wheel_win_title'),
         subtitle: t(ctx, 'wheel_win_subtitle'),
         primary: {
-          emoji: '🎁',
+          emoji: '💰',
           label: t(ctx, 'wheel_prize_label'),
           value: `+${localizedNumber(result.amount, ctx)} ${t(ctx, 'currency_toman')}`,
         },

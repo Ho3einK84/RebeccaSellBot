@@ -68,8 +68,9 @@ export function calculateLuckyWheelPrize(
   const exponent = 100 / luck;
   const clampedRandom = Math.max(0, Math.min(1, randomValue));
   const factor = Math.pow(clampedRandom, exponent);
-  const prize = safeMin + Math.floor((safeMax - safeMin) * factor);
-  return Math.max(safeMin, Math.min(safeMax, prize));
+  const rawPrize = safeMin + (safeMax - safeMin) * factor;
+  const roundedPrize = Math.round(rawPrize / 1000) * 1000;
+  return Math.max(safeMin, Math.min(safeMax, roundedPrize));
 }
 
 export class LuckyWheelService {

@@ -34,6 +34,12 @@ describe('LuckyWheel Calculations', () => {
     const highLuckPrize = calculateLuckyWheelPrize(min, max, 90, 0.5);
     const lowLuckPrize = calculateLuckyWheelPrize(min, max, 10, 0.5);
     expect(highLuckPrize).toBeGreaterThan(lowLuckPrize);
+
+    // always rounded to multiple of 1000
+    for (let r = 0; r <= 1; r += 0.05) {
+      const prize = calculateLuckyWheelPrize(min, max, 50, r);
+      expect(prize % 1000).toBe(0);
+    }
   });
 });
 
