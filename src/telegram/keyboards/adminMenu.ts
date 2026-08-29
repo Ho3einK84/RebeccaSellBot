@@ -118,6 +118,7 @@ export function salesMenuKeyboard(ctx: MenuContext | ConversationContext): Inlin
     .text(t(ctx, 'admin_sales_referral_button'), 'admin:sales:referral')
     .row()
     .text(t(ctx, 'admin_sales_wallet_transfer_button'), 'admin:sales:payment')
+    .text(t(ctx, 'admin_sales_lucky_wheel_button'), 'admin:sales:lucky_wheel')
     .row()
     .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 }

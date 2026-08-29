@@ -294,6 +294,11 @@ export const GENERAL_SETTING_GROUPS: readonly SettingGroup[] = [
   settingGroup('system', 'admin_setting_group_system', 'admin_setting_group_system_desc'),
   settingGroup('support', 'admin_setting_group_support', 'admin_setting_group_support_desc'),
   settingGroup('trial', 'admin_setting_group_trial', 'admin_setting_group_trial_desc'),
+  settingGroup(
+    'lucky_wheel',
+    'admin_setting_group_lucky_wheel',
+    'admin_setting_group_lucky_wheel_desc'
+  ),
   settingGroup('naming', 'admin_setting_group_naming', 'admin_setting_group_naming_desc'),
 ];
 

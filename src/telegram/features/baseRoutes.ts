@@ -194,6 +194,11 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     await ctx.conversation.enter('adminPaymentSettingsConversation');
   });
 
+  bot.callbackQuery('admin:sales:lucky_wheel', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminLuckyWheelSettingsConversation');
+  });
+
   // Free Trial Claim Handler
   bot.callbackQuery('trial:claim', async (ctx) => {
     const telegramId = ctx.from?.id;
