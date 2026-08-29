@@ -137,6 +137,7 @@ export const TEXT_CATEGORIES: readonly TextCategory[] = [
         'service_unit',
         'days_unit',
         'hours_unit',
+        'minutes_unit',
         'remaining',
         'expiry',
         'renewing',

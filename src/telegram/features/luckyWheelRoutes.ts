@@ -10,15 +10,24 @@ import { buildScreen, renderScreen } from '../ui.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { logger } from '../../infra/logger.js';
 
-function formatRemainingTime(seconds: number, ctx: MenuContext): string {
-  if (seconds <= 0) return '0';
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.ceil((seconds % 3600) / 60);
+export function formatRemainingTime(seconds: number, ctx: MenuContext): string {
+  if (seconds <= 0) return `${localizedNumber(0, ctx)} ${t(ctx, 'minutes_unit')}`;
+  const totalMinutes = Math.ceil(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
 
-  if (hours > 0) {
-    return `${localizedNumber(hours, ctx)} ${t(ctx, 'hours_unit')} و ${localizedNumber(minutes, ctx)} دقیقه`;
+  if (hours > 0 && minutes > 0) {
+    return t(ctx, 'wheel_time_hours_and_minutes', {
+      hours: localizedNumber(hours, ctx),
+      hours_unit: t(ctx, 'hours_unit'),
+      minutes: localizedNumber(minutes, ctx),
+      minutes_unit: t(ctx, 'minutes_unit'),
+    });
   }
-  return `${localizedNumber(minutes, ctx)} دقیقه`;
+  if (hours > 0) {
+    return `${localizedNumber(hours, ctx)} ${t(ctx, 'hours_unit')}`;
+  }
+  return `${localizedNumber(minutes, ctx)} ${t(ctx, 'minutes_unit')}`;
 }
 
 export async function renderLuckyWheelScreen(ctx: MenuContext): Promise<void> {
@@ -27,6 +36,15 @@ export async function renderLuckyWheelScreen(ctx: MenuContext): Promise<void> {
 
   const status = await ctx.services.luckyWheelService.getStatus(telegramId);
   const spinsLeft = Math.max(0, status.maxSpins - status.totalSpins);
+
+  const prizeValue =
+    status.minPrize === status.maxPrize
+      ? `${localizedNumber(status.minPrize, ctx)} ${t(ctx, 'currency_toman')}`
+      : t(ctx, 'wheel_prize_range', {
+          min: localizedNumber(status.minPrize, ctx),
+          max: localizedNumber(status.maxPrize, ctx),
+          currency: t(ctx, 'currency_toman'),
+        });
 
   const fields = [
     {
@@ -37,7 +55,7 @@ export async function renderLuckyWheelScreen(ctx: MenuContext): Promise<void> {
     {
       emoji: '🎁',
       label: t(ctx, 'wheel_prize_label'),
-      value: `${localizedNumber(status.minPrize, ctx)} تا ${localizedNumber(status.maxPrize, ctx)} ${t(ctx, 'currency_toman')}`,
+      value: prizeValue,
     },
   ];
 

@@ -65,7 +65,7 @@ export async function adminLuckyWheelSettingsConversation(
             },
             {
               label: t(ctx, 'admin_setting_lucky_wheel_max_spins'),
-              value: `${localizedNumber(maxSpins, ctx)} ${t(ctx, 'service_unit')}`,
+              value: `${localizedNumber(maxSpins, ctx)}`,
             },
           ],
         },
