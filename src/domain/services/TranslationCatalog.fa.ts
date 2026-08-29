@@ -1184,7 +1184,6 @@ export const FA_TEXTS: Record<string, string> = {
   wheel_status_section: 'وضعیت گردونه',
   wheel_spins_left_label: 'فرصت‌های باقیمانده',
   wheel_next_spin_label: 'چرخش بعدی',
-  wheel_cooldown_active: '⏳ فرصت بعدی شما: {time}',
   wheel_max_spins_reached: '🏁 شما از تمام فرصت‌های گردونه شانس خود استفاده کرده‌اید.',
   wheel_disabled: '⚠️ گردونه شانس در حال حاضر غیرفعال است.',
   wheel_error: '❌ خطا در چرخاندن گردونه. لطفاً دوباره تلاش کنید.',

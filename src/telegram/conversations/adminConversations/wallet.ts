@@ -32,15 +32,20 @@ import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../render
 export function formatCardNumberGrouped(rawCard: string): string {
   const digits = rawCard.replace(/\D/g, '');
   if (digits.length === 16) {
-    return `${digits.slice(0, 4)} ${digits.slice(4, 8)} ${digits.slice(8, 12)} ${digits.slice(12, 16)}`;
+    return `${digits.slice(0, 4)}-${digits.slice(4, 8)}-${digits.slice(8, 12)}-${digits.slice(12, 16)}`;
   }
   return rawCard;
 }
 
 export function buildTopupPresets(min: number, max: number): number[] {
+  const defaultPresets = [50_000, 100_000, 200_000, 500_000];
+  const candidates = defaultPresets.filter((v) => v >= min && v <= max);
+  if (candidates.length > 0) {
+    return candidates;
+  }
   const base = Math.max(10_000, min);
-  const candidates = [base, base * 2, base * 5, base * 10].filter((v) => v >= min && v <= max);
-  const unique = Array.from(new Set(candidates)).sort((a, b) => a - b);
+  const fallback = [base, base * 2, base * 5, base * 10].filter((v) => v >= min && v <= max);
+  const unique = Array.from(new Set(fallback)).sort((a, b) => a - b);
   return unique.length > 0 ? unique : [min];
 }
 

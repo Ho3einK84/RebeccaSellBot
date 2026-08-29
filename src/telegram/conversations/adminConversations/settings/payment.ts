@@ -8,6 +8,7 @@ import { waitForSettingsInput } from './navigation.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
 import { renderSalesMenu } from '../../../keyboards/adminMenu.js';
+import { formatCardNumberGrouped } from '../wallet.js';
 
 export async function adminPaymentSettingsConversation(
   conversation: MyConversation,
@@ -38,7 +39,7 @@ export async function adminPaymentSettingsConversation(
           fields: [
             {
               label: t(ctx, 'admin_setting_card_number'),
-              value: `\`${escapeTelegramMarkdown(cardNumber)}\``,
+              value: `\`${escapeTelegramMarkdown(formatCardNumberGrouped(cardNumber))}\``,
             },
             {
               label: t(ctx, 'admin_setting_card_holder'),

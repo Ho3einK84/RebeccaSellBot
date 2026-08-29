@@ -54,10 +54,6 @@ export async function renderLuckyWheelScreen(ctx: MenuContext): Promise<void> {
     footer = t(ctx, 'wheel_disabled');
   } else if (status.reason === 'max_spins_reached') {
     footer = t(ctx, 'wheel_max_spins_reached');
-  } else if (status.reason === 'cooldown_active' && status.secondsRemaining) {
-    footer = t(ctx, 'wheel_cooldown_active', {
-      time: formatRemainingTime(status.secondsRemaining, ctx),
-    });
   }
 
   const screenText = buildScreen({

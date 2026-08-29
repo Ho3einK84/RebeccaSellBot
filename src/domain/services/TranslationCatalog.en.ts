@@ -1191,7 +1191,6 @@ export const EN_TEXTS: Record<string, string> = {
   wheel_status_section: 'Wheel Status',
   wheel_spins_left_label: 'Spins Remaining',
   wheel_next_spin_label: 'Next Spin',
-  wheel_cooldown_active: '⏳ Next spin available: {time}',
   wheel_max_spins_reached: '🏁 You have used all available spins.',
   wheel_disabled: '⚠️ Lucky wheel is currently disabled.',
   wheel_error: '❌ Error spinning the wheel. Please try again.',
