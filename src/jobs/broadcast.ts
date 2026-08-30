@@ -81,7 +81,23 @@ export async function processNextBroadcast(
         await broadcastService.markRecipientSent(current.id, telegramId);
       } catch (err) {
         await broadcastService.markRecipientFailed(current.id, telegramId, err);
-        logger.warn({ err, telegramId, broadcastId: current.id }, 'Broadcast recipient failed');
+        const retryAfter =
+          typeof err === 'object' &&
+          err !== null &&
+          'parameters' in err &&
+          typeof (err as { parameters?: { retry_after?: number } }).parameters?.retry_after ===
+            'number'
+            ? (err as { parameters?: { retry_after?: number } }).parameters!.retry_after!
+            : undefined;
+        if (retryAfter && retryAfter > 0) {
+          logger.warn(
+            { retryAfter, broadcastId: current.id },
+            'Broadcast rate limit reached; backing off'
+          );
+          await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        } else {
+          logger.warn({ err, telegramId, broadcastId: current.id }, 'Broadcast recipient failed');
+        }
       }
     });
 

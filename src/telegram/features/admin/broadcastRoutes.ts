@@ -13,6 +13,18 @@ import { escapeTelegramMarkdown } from '../../rendering.js';
 
 const UUID_CAPTURE = '([0-9a-fA-F-]{36})';
 
+export function renderBroadcastProgressBar(
+  processed: number,
+  total: number,
+  barLength = 10
+): string {
+  if (total <= 0) return `\`[${'░'.repeat(barLength)}]\` 0%`;
+  const percent = Math.min(100, Math.max(0, Math.round((processed / total) * 100)));
+  const filled = Math.min(barLength, Math.max(0, Math.round((percent / 100) * barLength)));
+  const empty = barLength - filled;
+  return `\`[${'█'.repeat(filled)}${'░'.repeat(empty)}]\` ${percent}%`;
+}
+
 export async function renderBroadcastStatus(
   ctx: MenuContext,
   jobId: string,
@@ -33,6 +45,9 @@ export async function renderBroadcastStatus(
     return;
   }
   const processed = job.sentCount + job.failedCount;
+  const remaining = Math.max(0, job.recipientCount - processed);
+  const progressBar = renderBroadcastProgressBar(processed, job.recipientCount);
+
   const keyboard = new InlineKeyboard();
   if (job.status === 'queued' || job.status === 'running') {
     keyboard
@@ -58,11 +73,11 @@ export async function renderBroadcastStatus(
       primary: {
         emoji: '📡',
         label: t(ctx, 'admin_panel_status_label'),
-        value: buildStatusBadge(
+        value: `${buildStatusBadge(
           ctx,
           broadcastStatusBadgeType(job.status),
           t(ctx, `admin_broadcast_status_${job.status}`)
-        ),
+        )} · ${progressBar}`,
       },
       sections: [
         {
@@ -85,16 +100,24 @@ export async function renderBroadcastStatus(
           title: t(ctx, 'admin_broadcast_status_title'),
           fields: [
             {
+              label: t(ctx, 'admin_broadcast_progress_label'),
+              value: progressBar,
+            },
+            {
               label: t(ctx, 'admin_broadcast_processed_label'),
               value: `${localizedNumber(processed, ctx)} / ${localizedNumber(job.recipientCount, ctx)}`,
             },
             {
               label: t(ctx, 'admin_broadcast_sent_label'),
-              value: localizedNumber(job.sentCount, ctx),
+              value: `${localizedNumber(job.sentCount, ctx)} 🟢`,
             },
             {
               label: t(ctx, 'admin_broadcast_failed_label'),
-              value: localizedNumber(job.failedCount, ctx),
+              value: `${localizedNumber(job.failedCount, ctx)} ⚠️`,
+            },
+            {
+              label: t(ctx, 'admin_broadcast_remaining_label'),
+              value: localizedNumber(remaining, ctx),
             },
           ],
         },

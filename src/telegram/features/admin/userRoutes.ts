@@ -1,7 +1,13 @@
 import crypto from 'node:crypto';
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
-import { backKeyboard, buildEmptyState, buildScreen, renderScreen } from '../../ui.js';
+import {
+  backKeyboard,
+  buildEmptyState,
+  buildScreen,
+  buildStatusBadge,
+  renderScreen,
+} from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
@@ -461,9 +467,9 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
     title: t(ctx, 'admin_user_profile_title'),
     subtitle: `\`${user.telegramId}\``,
     primary: {
-      emoji: user.isBanned ? '⚠️' : '🟢',
+      emoji: user.isBanned ? '⚠️' : '💰',
       label: t(ctx, 'admin_user_status_label'),
-      value: user.isBanned ? t(ctx, 'admin_banned') : t(ctx, 'admin_active'),
+      value: `${user.isBanned ? buildStatusBadge(ctx, 'inactive', t(ctx, 'admin_banned')) : buildStatusBadge(ctx, 'active', t(ctx, 'admin_active'))} · ${localizedNumber(user.balance, ctx)} ${t(ctx, 'currency_toman')}`,
     },
     sections: [
       {
@@ -491,7 +497,7 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
         ],
       },
       {
-        emoji: '👛',
+        emoji: '💳',
         title: t(ctx, 'admin_user_wallet_section'),
         fields: [
           {
@@ -500,23 +506,21 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
             value: `${localizedNumber(user.balance, ctx)} ${t(ctx, 'currency_toman')}`,
           },
           {
-            emoji: '🔒',
-            label: t(ctx, 'admin_user_reserved_balance_label'),
-            value: `${localizedNumber(user.reservedBalance, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-          {
             emoji: '💳',
             label: t(ctx, 'admin_user_total_spend_label'),
             value: `${localizedNumber(user.totalSpend, ctx)} ${t(ctx, 'currency_toman')}`,
           },
-        ],
-      },
-      {
-        emoji: '📱',
-        title: t(ctx, 'admin_user_services_section'),
-        fields: [
+          ...(user.reservedBalance > 0
+            ? [
+                {
+                  emoji: '🔒',
+                  label: t(ctx, 'admin_user_reserved_balance_label'),
+                  value: `${localizedNumber(user.reservedBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+              ]
+            : []),
           {
-            emoji: '🟢',
+            emoji: '📦',
             label: t(ctx, 'admin_user_active_services_label'),
             value: localizedNumber(user.activeSubscriptionCount, ctx),
           },
@@ -525,16 +529,21 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
             label: t(ctx, 'admin_user_trial_label'),
             value: user.hasUsedTrial ? t(ctx, 'admin_yes') : t(ctx, 'admin_no'),
           },
+          {
+            emoji: '🧾',
+            label: t(ctx, 'admin_user_transactions_label'),
+            value: localizedNumber(user.transactionCount, ctx),
+          },
         ],
       },
       {
-        emoji: '📜',
+        emoji: '🎁',
         title: t(ctx, 'admin_user_history_section'),
         fields: [
           {
             emoji: '🎟️',
             label: t(ctx, 'admin_user_referral_code_label'),
-            value: `\`${user.referralCode}\``,
+            value: `\`${sanitizeTelegramInlineCode(user.referralCode)}\``,
           },
           {
             emoji: '👥',
@@ -551,11 +560,6 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
             label: t(ctx, 'admin_user_cashback_label'),
             value: `${localizedNumber(user.cashbackEarned, ctx)} ${t(ctx, 'currency_toman')}`,
           },
-          {
-            emoji: '🧾',
-            label: t(ctx, 'admin_user_transactions_label'),
-            value: localizedNumber(user.transactionCount, ctx),
-          },
         ],
       },
     ],
@@ -565,16 +569,16 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
     .text(t(ctx, 'admin_user_quick_topup_100k'), `admin:user:quick_topup:${user.telegramId}:100000`)
     .text(t(ctx, 'admin_user_quick_topup_200k'), `admin:user:quick_topup:${user.telegramId}:200000`)
     .row()
+    .text(t(ctx, 'admin_user_balance_button'), `admin:user:balance:${user.telegramId}`)
+    .text(t(ctx, 'admin_user_subscriptions_button'), `admin:user:subscriptions:${user.telegramId}`)
+    .row()
+    .text(t(ctx, 'admin_user_message_button'), `admin:user:message:${user.telegramId}`)
+    .text(t(ctx, 'admin_user_audit_button'), `admin:user:audit:${user.telegramId}`)
+    .row()
     .text(
       t(ctx, user.isBanned ? 'admin_user_unban_button' : 'admin_user_ban_button'),
       `admin:user:ban_prompt:${user.telegramId}`
     )
-    .text(t(ctx, 'admin_user_balance_button'), `admin:user:balance:${user.telegramId}`)
-    .row()
-    .text(t(ctx, 'admin_user_subscriptions_button'), `admin:user:subscriptions:${user.telegramId}`)
-    .text(t(ctx, 'admin_user_audit_button'), `admin:user:audit:${user.telegramId}`)
-    .row()
-    .text(t(ctx, 'admin_user_message_button'), `admin:user:message:${user.telegramId}`)
     .row()
     .text(t(ctx, 'admin_users_back_button'), 'admin:users:page:1');
   await renderUserScreen(ctx, text, keyboard, 'Markdown');

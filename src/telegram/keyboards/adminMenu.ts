@@ -82,6 +82,12 @@ export const adminDailyMenu = new Menu<MenuContext>('admin-daily-menu')
   )
   .row()
   .text(
+    (ctx) => t(ctx, 'admin_user_search_button'),
+    async (ctx) => {
+      await ctx.conversation.enter('adminSearchUserConversation');
+    }
+  )
+  .text(
     (ctx) => t(ctx, 'admin_menu_manual_topup'),
     async (ctx) => {
       await ctx.conversation.enter('adminSetBalanceConversation');

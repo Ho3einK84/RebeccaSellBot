@@ -539,10 +539,11 @@ export class WalletService {
   async getDashboardStats(): Promise<DashboardStats> {
     const db = getDb();
     const now = new Date();
-    const dayStart = new Date(now);
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const weekStart = new Date(dayStart);
-    weekStart.setUTCDate(weekStart.getUTCDate() - 6);
+    const IRAN_TZ_OFFSET_MS = 3.5 * 60 * 60 * 1000;
+    const tehranNowMs = now.getTime() + IRAN_TZ_OFFSET_MS;
+    const tehranDayStartMs = tehranNowMs - (tehranNowMs % (24 * 60 * 60 * 1000));
+    const dayStart = new Date(tehranDayStartMs - IRAN_TZ_OFFSET_MS);
+    const weekStart = new Date(dayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const purchaseSum = (since?: Date) =>
       db

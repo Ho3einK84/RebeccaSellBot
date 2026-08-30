@@ -110,41 +110,63 @@ export async function adminBroadcastConversation(
   }
 
   const preview = markdownSafePreview(broadcastText);
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildScreen({
-      emoji: '📣',
-      title: t(ctx, 'admin_broadcast_preview_title'),
-      subtitle: t(ctx, 'admin_broadcast_preview_subtitle'),
-      primary: {
-        emoji: '👥',
-        label: t(ctx, 'admin_broadcast_recipient_count_label'),
-        value: localizedNumber(recipientCount, ctx),
-      },
-      sections: [
-        {
-          emoji: '🎯',
-          title: t(ctx, 'admin_broadcast_audience_section'),
-          fields: [{ label: t(ctx, 'admin_broadcast_audience_label'), value: audienceLabel }],
+  let testSentNotice: string | undefined;
+  while (true) {
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildScreen({
+        emoji: '📣',
+        title: t(ctx, 'admin_broadcast_preview_title'),
+        subtitle: t(ctx, 'admin_broadcast_preview_subtitle'),
+        primary: {
+          emoji: '👥',
+          label: t(ctx, 'admin_broadcast_recipient_count_label'),
+          value: localizedNumber(recipientCount, ctx),
         },
-        {
-          emoji: '💬',
-          title: t(ctx, 'admin_broadcast_message_section'),
-          fields: [{ label: '—', value: preview.text }],
-        },
-      ],
-      footer: preview.truncated ? t(ctx, 'admin_message_preview_truncated') : undefined,
-    }),
-    {
-      parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard()
-        .text(t(ctx, 'admin_broadcast_confirm_button'), 'broadcast:confirm')
-        .row()
-        .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
+        sections: [
+          {
+            emoji: '🎯',
+            title: t(ctx, 'admin_broadcast_audience_section'),
+            fields: [{ label: t(ctx, 'admin_broadcast_audience_label'), value: audienceLabel }],
+          },
+          {
+            emoji: '💬',
+            title: t(ctx, 'admin_broadcast_message_section'),
+            fields: [{ label: '—', value: preview.text }],
+          },
+        ],
+        footer:
+          testSentNotice ??
+          (preview.truncated ? t(ctx, 'admin_message_preview_truncated') : undefined),
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_broadcast_confirm_button'), 'broadcast:confirm')
+          .text(t(ctx, 'admin_broadcast_test_button'), 'broadcast:test')
+          .row()
+          .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
+      }
+    );
+    const action = await waitForAdminCallbackInput(conversation, [
+      'broadcast:confirm',
+      'broadcast:test',
+    ]);
+    if (action === undefined) return;
+    if (action === 'broadcast:test') {
+      try {
+        await ctx.api.sendMessage(adminId, broadcastText);
+        testSentNotice = t(ctx, 'admin_broadcast_test_sent');
+      } catch (err) {
+        logger.warn({ err, adminId }, 'Failed to deliver test broadcast to admin');
+      }
+      continue;
     }
-  );
-  if ((await waitForAdminCallbackInput(conversation, ['broadcast:confirm'])) === undefined) return;
+    if (action === 'broadcast:confirm') {
+      break;
+    }
+  }
 
   const job = await ctx.services.broadcastService.createJob({
     actorTelegramId: adminId,

@@ -1,7 +1,13 @@
 import { and, count, desc, eq, ne, sql } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { getDb } from '../../infra/db.js';
-import { auditLogs, userConfigs, users, walletTransactions } from '../../infra/schema.js';
+import {
+  auditLogs,
+  topupReceipts,
+  userConfigs,
+  users,
+  walletTransactions,
+} from '../../infra/schema.js';
 import type { SupportedLocale } from './TranslationService.js';
 import { dbIntegerToSafeNumber } from './DbNumber.js';
 
@@ -44,12 +50,20 @@ export class UserService {
     return user?.isBanned ?? false;
   }
 
+  /**
+   * Omnisearch: Find a user profile by Telegram ID, UUID, username (exact or partial),
+   * display name, Rebecca config username, subscription link, topup receipt ID,
+   * or transaction ID.
+   */
   async findProfile(rawQuery: string): Promise<LocalUserProfile | null> {
     const db = getDb();
     const query = rawQuery.trim().replace(/^@/, '');
+    if (!query) return null;
     const parsedTelegramId = /^\d+$/.test(query) ? Number(query) : Number.NaN;
     const telegramId = Number.isSafeInteger(parsedTelegramId) ? parsedTelegramId : null;
     const normalizedUuid = isUuid(query) ? query.toLowerCase() : undefined;
+
+    // 1. Direct search on users table by ID, UUID, or exact username
     let [user] = await db
       .select()
       .from(users)
@@ -62,8 +76,7 @@ export class UserService {
       )
       .limit(1);
 
-    // Support can paste a Rebecca username or an exact subscription URL and
-    // jump straight to the owning Telegram profile.
+    // 2. Search on user_configs table by exact subUrl or configUsername
     if (!user) {
       const [owner] = await db
         .select({ telegramId: userConfigs.telegramId })
@@ -82,6 +95,55 @@ export class UserService {
           .limit(1);
       }
     }
+
+    // 3. Search on topup_receipts table by receipt ID
+    if (!user && (query.startsWith('rec_') || query.length >= 6)) {
+      const [receipt] = await db
+        .select({ telegramId: topupReceipts.telegramId })
+        .from(topupReceipts)
+        .where(
+          sql`LOWER(${topupReceipts.id}) = LOWER(${query}) OR LOWER(${topupReceipts.id}) = LOWER(${'rec_' + query})`
+        )
+        .limit(1);
+      if (receipt) {
+        [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.telegramId, receipt.telegramId))
+          .limit(1);
+      }
+    }
+
+    // 4. Search on wallet_transactions by referenceId or transaction ID
+    if (!user && (query.startsWith('tx_') || query.startsWith('ref_') || query.length >= 6)) {
+      const [txRow] = await db
+        .select({ telegramId: walletTransactions.telegramId })
+        .from(walletTransactions)
+        .where(
+          sql`LOWER(${walletTransactions.id}) = LOWER(${query}) OR LOWER(${walletTransactions.referenceId}) = LOWER(${query})`
+        )
+        .limit(1);
+      if (txRow) {
+        [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.telegramId, txRow.telegramId))
+          .limit(1);
+      }
+    }
+
+    // 5. Fuzzy match on username, firstName, or lastName
+    if (!user && query.length >= 2) {
+      const pattern = `%${query.toLowerCase()}%`;
+      [user] = await db
+        .select()
+        .from(users)
+        .where(
+          sql`LOWER(${users.username}) LIKE ${pattern} OR LOWER(${users.firstName}) LIKE ${pattern} OR LOWER(${users.lastName}) LIKE ${pattern}`
+        )
+        .limit(1);
+    }
+
     if (!user) return null;
 
     const [[transactionCount], [referredUserCount], [referralBonus], [cashback]] =

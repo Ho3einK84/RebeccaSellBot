@@ -62,4 +62,39 @@ describe('UserService administrative profile lookup', () => {
       cashbackEarned: 750,
     });
   });
+
+  it('returns profile when searched by receipt ID', async () => {
+    const user = {
+      id: '4e602ae8-4398-4ce0-a084-10a5860ce1a5',
+      telegramId: 44,
+      username: 'alice',
+      firstName: 'Alice',
+      lastName: null,
+      balance: 25_000,
+      reservedBalance: 0,
+      isBanned: false,
+      hasUsedTrial: false,
+      locale: 'fa',
+      referrerId: null,
+      referralCode: 'ref_44_abc',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    vi.mocked(getDb).mockReturnValue(
+      databaseWithSelectResults([
+        [], // user lookup
+        [], // userConfigs lookup
+        [{ telegramId: 44 }], // topupReceipts lookup
+        [user], // user by telegramId
+        [{ value: 2 }],
+        [{ value: 0 }],
+        [{ value: 0 }],
+        [{ value: 0 }],
+      ]) as never
+    );
+
+    const profile = await new UserService().findProfile('rec_123456');
+    expect(profile).not.toBeNull();
+    expect(profile?.telegramId).toBe(44);
+  });
 });

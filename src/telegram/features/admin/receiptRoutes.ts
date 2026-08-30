@@ -71,6 +71,21 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
     await showReceiptReview(ctx, ctx.match[1]!, Number(ctx.match[2]) || 1);
   });
 
+  bot.callbackQuery(/^receipt:quick_approve:([a-zA-Z0-9_-]+)(?::(\d+))?$/u, async (ctx) => {
+    if (!ctx.services) return;
+    const receiptId = ctx.match[1]!;
+    const page = Number(ctx.match[2]) || 1;
+    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+
+    const result = await ctx.services.walletService.approveTopup(receiptId, ctx.from.id);
+    if (result) {
+      await notifyReceiptResult(ctx, result.telegramId, true, result.amount, receiptId);
+      await renderReceiptResult(ctx, 'approve', page);
+    } else {
+      await renderReceiptAlreadyReviewed(ctx, page);
+    }
+  });
+
   bot.callbackQuery(
     /^receipt:(approve|reject)_prompt:([a-zA-Z0-9_-]+)(?::(\d+))?$/u,
     async (ctx) => {
@@ -220,9 +235,10 @@ async function showReceiptReview(ctx: MenuContext, receiptId: string, page: numb
 
   await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
   const keyboard = new InlineKeyboard()
-    .text(t(ctx, 'admin_receipt_approve'), `receipt:approve_prompt:${receipt.id}:${page}`)
+    .text(t(ctx, 'admin_receipt_quick_approve'), `receipt:quick_approve:${receipt.id}:${page}`)
     .text(t(ctx, 'admin_receipt_reject'), `receipt:reject_prompt:${receipt.id}:${page}`)
     .row()
+    .text(t(ctx, 'admin_receipt_approve'), `receipt:approve_prompt:${receipt.id}:${page}`)
     .text(t(ctx, 'menu_back'), `receipt:page:${page}`);
   const text = buildReceiptReviewScreen(ctx, receipt);
 
@@ -576,7 +592,7 @@ async function renderReceiptCaptionOrText(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  if (isPhotoCallback(ctx)) {
+  if (isMediaCallback(ctx)) {
     await ctx.editMessageCaption({
       caption: text,
       parse_mode: 'Markdown',
@@ -592,14 +608,14 @@ async function renderReceiptText(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  if (ctx.callbackQuery?.message && !isPhotoCallback(ctx)) {
+  if (ctx.callbackQuery?.message && !isMediaCallback(ctx)) {
     await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
     return;
   }
   await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }
 
-function isPhotoCallback(ctx: MenuContext): boolean {
+function isMediaCallback(ctx: MenuContext): boolean {
   const message = ctx.callbackQuery?.message;
-  return Boolean(message && 'photo' in message);
+  return Boolean(message && ('photo' in message || 'document' in message));
 }

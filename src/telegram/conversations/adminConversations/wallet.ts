@@ -411,12 +411,17 @@ async function notifyAdminsOfReceipt(
       });
       const receiptMenu = new InlineKeyboard()
         .text(
-          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_approve'),
-          `receipt:approve_prompt:${receiptId}`
+          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_quick_approve'),
+          `receipt:quick_approve:${receiptId}`
         )
         .text(
           tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_reject'),
           `receipt:reject_prompt:${receiptId}`
+        )
+        .row()
+        .text(
+          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_review_full'),
+          `receipt:view:${receiptId}:1`
         );
       if (mediaType === 'document') {
         await ctx.api.sendDocument(adminId, photoFileId, {
@@ -664,12 +669,14 @@ async function applyAdminBalanceOperation(
   if (!(await waitForAdminCallbackInput(conversation, ['balance-confirm']))) return;
 
   try {
+    const referenceId = `admin_bal_${operation}_${telegramId}_${Date.now()}`;
     const updated = await ctx.services.walletService.adjustBalanceAdmin({
       telegramId,
       operation,
       amount,
       adminId,
       description: `Admin dashboard ${source}`,
+      referenceId,
     });
     await replyInAdminConversation(
       conversation,
