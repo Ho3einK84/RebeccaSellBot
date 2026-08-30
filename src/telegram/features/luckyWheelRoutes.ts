@@ -72,6 +72,8 @@ export async function renderLuckyWheelScreen(ctx: MenuContext): Promise<void> {
     footer = t(ctx, 'wheel_disabled');
   } else if (status.reason === 'max_spins_reached') {
     footer = t(ctx, 'wheel_max_spins_reached');
+  } else if (status.reason === 'user_banned') {
+    footer = `🚫 ${t(ctx, 'access_denied')}`;
   }
 
   const screenText = buildScreen({
@@ -115,73 +117,94 @@ export function registerLuckyWheelRoutes(bot: Bot<MenuContext>, services: BotSer
       return;
     }
 
+    // Step 1: Execute spin transactionally in domain service
+    let result;
     try {
-      // Step 1: Trigger spin logic
-      const result = await services.luckyWheelService.spin(telegramId);
+      result = await services.luckyWheelService.spin(telegramId);
       await ctx.answerCallbackQuery();
+    } catch (error: any) {
+      logger.error({ error, telegramId }, 'Failed to spin lucky wheel');
+      const errCode = error?.message;
+      if (
+        errCode === 'COOLDOWN_ACTIVE' ||
+        errCode === 'MAX_SPINS_REACHED' ||
+        errCode === 'LUCKY_WHEEL_DISABLED' ||
+        errCode === 'USER_BANNED'
+      ) {
+        await renderLuckyWheelScreen(ctx);
+      } else {
+        await ctx.answerCallbackQuery({
+          text: t(ctx, 'wheel_error'),
+          show_alert: true,
+        });
+      }
+      return;
+    }
 
-      const chatId = ctx.chat?.id;
-      const messageId = ctx.callbackQuery?.message?.message_id;
+    // Step 2: Render animation & final win screen safely
+    const chatId = ctx.chat?.id;
+    const messageId = ctx.callbackQuery?.message?.message_id;
 
-      // 5-Frame Text Slot Machine Animation (~2.7-3.0s total)
-      if (chatId && messageId) {
-        const slotFrames = [
-          { reel: '[ 🍉 | 🍋 | 🍒 ]', delay: 500 },
-          { reel: '[ 🍇 | 🔔 | 💎 ]', delay: 500 },
-          { reel: '[ 🍋 | 🍓 | 🍉 ]', delay: 500 },
-          { reel: '[ 💎 | 🎁 | 💎 ]', delay: 550 },
-          { reel: '[ 🎁 | 🎁 | 🎁 ]', delay: 600 },
-        ];
+    // 5-Frame Text Slot Machine Animation (~2.7-3.0s total)
+    if (chatId && messageId) {
+      const slotFrames = [
+        { reel: '[ 🍉 | 🍋 | 🍒 ]', delay: 500 },
+        { reel: '[ 🍇 | 🔔 | 💎 ]', delay: 500 },
+        { reel: '[ 🍋 | 🍓 | 🍉 ]', delay: 500 },
+        { reel: '[ 💎 | 🎁 | 💎 ]', delay: 550 },
+        { reel: '[ 🎁 | 🎁 | 🎁 ]', delay: 600 },
+      ];
 
-        for (const frame of slotFrames) {
-          try {
-            const frameScreen = buildScreen({
-              emoji: '🎰',
-              title: t(ctx, 'wheel_title'),
-              footer: `🎰  *${frame.reel}*`,
-            });
-            await ctx.api.editMessageText(chatId, messageId, frameScreen, {
-              parse_mode: 'Markdown',
-            });
-            await new Promise((r) => setTimeout(r, frame.delay));
-          } catch {
-            // If an intermediate frame edit fails (e.g. rate limit), proceed to next/final frame
-          }
+      for (const frame of slotFrames) {
+        try {
+          const frameScreen = buildScreen({
+            emoji: '🎰',
+            title: t(ctx, 'wheel_title'),
+            footer: `🎰  *${frame.reel}*`,
+          });
+          await ctx.api.editMessageText(chatId, messageId, frameScreen, {
+            parse_mode: 'Markdown',
+          });
+          await new Promise((r) => setTimeout(r, frame.delay));
+        } catch {
+          // If an intermediate frame edit fails (e.g. rate limit), proceed to next/final frame
         }
       }
+    }
 
-      // Final Prize Frame
-      const winScreen = buildScreen({
-        emoji: '🎁',
-        title: t(ctx, 'wheel_win_title'),
-        subtitle: t(ctx, 'wheel_win_subtitle'),
-        primary: {
-          emoji: '💰',
-          label: t(ctx, 'wheel_prize_label'),
-          value: `+${localizedNumber(result.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+    // Final Prize Screen
+    const winScreen = buildScreen({
+      emoji: '🎁',
+      title: t(ctx, 'wheel_win_title'),
+      subtitle: t(ctx, 'wheel_win_subtitle'),
+      primary: {
+        emoji: '💰',
+        label: t(ctx, 'wheel_prize_label'),
+        value: `+${localizedNumber(result.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      },
+      sections: [
+        {
+          emoji: '👛',
+          title: t(ctx, 'wallet_dashboard_title'),
+          fields: [
+            {
+              emoji: '💰',
+              label: t(ctx, 'wallet_available_balance'),
+              value: `${localizedNumber(result.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
+            },
+            {
+              emoji: '🎯',
+              label: t(ctx, 'wheel_spins_left_label'),
+              value: `${localizedNumber(result.spinsRemaining, ctx)}`,
+            },
+          ],
         },
-        sections: [
-          {
-            emoji: '👛',
-            title: t(ctx, 'wallet_dashboard_title'),
-            fields: [
-              {
-                emoji: '💰',
-                label: t(ctx, 'wallet_available_balance'),
-                value: `${localizedNumber(result.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
-              },
-              {
-                emoji: '🎯',
-                label: t(ctx, 'wheel_spins_left_label'),
-                value: `${localizedNumber(result.spinsRemaining, ctx)}`,
-              },
-            ],
-          },
-        ],
-      });
+      ],
+    });
 
-      const keyboard = new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:main');
+    const keyboard = new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:main');
 
+    try {
       if (chatId && messageId) {
         await ctx.api.editMessageText(chatId, messageId, winScreen, {
           parse_mode: 'Markdown',
@@ -193,20 +216,18 @@ export function registerLuckyWheelRoutes(bot: Bot<MenuContext>, services: BotSer
           reply_markup: keyboard,
         });
       }
-    } catch (error: any) {
-      logger.error({ error, telegramId }, 'Failed to spin lucky wheel');
-      const errCode = error?.message;
-      if (
-        errCode === 'COOLDOWN_ACTIVE' ||
-        errCode === 'MAX_SPINS_REACHED' ||
-        errCode === 'LUCKY_WHEEL_DISABLED'
-      ) {
-        await renderLuckyWheelScreen(ctx);
-      } else {
-        await ctx.answerCallbackQuery({
-          text: t(ctx, 'wheel_error'),
-          show_alert: true,
+    } catch (renderError) {
+      logger.warn(
+        { renderError, telegramId },
+        'Failed to edit lucky wheel win message; replying fallback'
+      );
+      try {
+        await ctx.reply(winScreen, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
         });
+      } catch {
+        // Ignored if user blocked bot
       }
     }
   });

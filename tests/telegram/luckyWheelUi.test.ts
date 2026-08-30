@@ -194,5 +194,20 @@ describe('Lucky Wheel UI & Localization', () => {
       row.some((b: any) => b.callback_data === 'wheel:spin')
     );
     expect(hasCooldownSpinBtn).toBe(false);
+
+    const {
+      ctx: bannedCtx,
+      getRenderedText: getBannedText,
+      getRenderedOptions: getBannedOpts,
+    } = createMockContext('fa', {
+      canSpin: false,
+      reason: 'user_banned',
+    });
+    await renderLuckyWheelScreen(bannedCtx);
+    expect(getBannedText()).toContain('اجازهٔ انجام این کار را ندارید');
+    const hasBannedSpinBtn = getBannedOpts().reply_markup?.inline_keyboard?.some((row: any[]) =>
+      row.some((b: any) => b.callback_data === 'wheel:spin')
+    );
+    expect(hasBannedSpinBtn).toBe(false);
   });
 });

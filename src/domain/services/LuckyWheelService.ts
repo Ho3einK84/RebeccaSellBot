@@ -14,7 +14,7 @@ import { logger } from '../../infra/logger.js';
 export interface LuckyWheelStatus {
   enabled: boolean;
   canSpin: boolean;
-  reason?: 'disabled' | 'max_spins_reached' | 'cooldown_active' | 'user_not_found';
+  reason?: 'disabled' | 'max_spins_reached' | 'cooldown_active' | 'user_not_found' | 'user_banned';
   nextSpinAt?: Date;
   secondsRemaining?: number;
   totalSpins: number;
@@ -108,6 +108,38 @@ export class LuckyWheelService {
     }
 
     const db = getDb();
+    const [user] = await db
+      .select({ isBanned: users.isBanned })
+      .from(users)
+      .where(eq(users.telegramId, telegramId))
+      .limit(1);
+
+    if (!user) {
+      return {
+        enabled: true,
+        canSpin: false,
+        reason: 'user_not_found',
+        totalSpins: 0,
+        maxSpins,
+        minPrize,
+        maxPrize,
+        currentEffectiveLuck: baseLuck,
+      };
+    }
+
+    if (user.isBanned) {
+      return {
+        enabled: true,
+        canSpin: false,
+        reason: 'user_banned',
+        totalSpins: 0,
+        maxSpins,
+        minPrize,
+        maxPrize,
+        currentEffectiveLuck: baseLuck,
+      };
+    }
+
     const [countRes] = await db
       .select({ count: sql<number>`count(*)` })
       .from(luckyWheelSpins)

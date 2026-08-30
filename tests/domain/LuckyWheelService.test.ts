@@ -74,6 +74,13 @@ describe('LuckyWheelService', () => {
         .fn()
         .mockReturnValueOnce({
           from: vi.fn().mockReturnValueOnce({
+            where: vi.fn().mockReturnValueOnce({
+              limit: vi.fn().mockResolvedValueOnce([{ isBanned: false }]),
+            }),
+          }),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValueOnce({
             where: vi.fn().mockResolvedValueOnce([{ count: 3 }]),
           }),
         })
@@ -110,6 +117,13 @@ describe('LuckyWheelService', () => {
         .fn()
         .mockReturnValueOnce({
           from: vi.fn().mockReturnValueOnce({
+            where: vi.fn().mockReturnValueOnce({
+              limit: vi.fn().mockResolvedValueOnce([{ isBanned: false }]),
+            }),
+          }),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn().mockReturnValueOnce({
             where: vi.fn().mockResolvedValueOnce([{ count: 1 }]),
           }),
         })
@@ -131,5 +145,25 @@ describe('LuckyWheelService', () => {
     expect(status.canSpin).toBe(false);
     expect(status.reason).toBe('cooldown_active');
     expect(status.secondsRemaining).toBeGreaterThan(0);
+  });
+
+  it('detects banned user and prevents spinning', async () => {
+    const ts = createMockTranslationService();
+    const mockDb = {
+      select: vi.fn().mockReturnValueOnce({
+        from: vi.fn().mockReturnValueOnce({
+          where: vi.fn().mockReturnValueOnce({
+            limit: vi.fn().mockResolvedValueOnce([{ isBanned: true }]),
+          }),
+        }),
+      }),
+    };
+    getDbMock.mockReturnValue(mockDb as any);
+
+    const service = new LuckyWheelService(ts);
+    const status = await service.getStatus(12345);
+
+    expect(status.canSpin).toBe(false);
+    expect(status.reason).toBe('user_banned');
   });
 });

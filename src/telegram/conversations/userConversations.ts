@@ -387,20 +387,38 @@ export async function buyConfigConversation(
   if (!ctx.from?.id || !ctx.services) return;
   if (!(await requireCustomVolume(conversation, ctx))) return;
 
-  await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
-    parse_mode: 'Markdown',
-  });
-  const gbInput = await waitForTextInput(conversation);
-  if (gbInput === undefined) return;
-  const gbAmount = parseBoundedWholeNumber(gbInput, 10_000);
-
-  if (gbAmount === undefined) {
-    await replyInConversation(
-      conversation,
-      ctx,
-      t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
-    );
-    return;
+  let gbAmount: number | undefined;
+  while (gbAmount === undefined) {
+    await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
+      parse_mode: 'Markdown',
+    });
+    const gbInput = await waitForTextInput(conversation);
+    if (gbInput === undefined) return;
+    const trimmed = normalizeInputDigits(gbInput);
+    if (!/^[1-9]\d*$/.test(trimmed)) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    const val = Number(trimmed);
+    if (!Number.isSafeInteger(val) || val < 1 || val > 10_000) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'custom_volume_title'),
+          t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    gbAmount = val;
   }
 
   // The custom volume flow no longer asks for a duration. It reuses the
@@ -416,16 +434,38 @@ export async function customAmountConversation(
   if (!ctx.from?.id || !ctx.services) return;
   if (!(await requireCustomVolume(conversation, ctx))) return;
 
-  await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
-    parse_mode: 'Markdown',
-  });
-  const gbInput = await waitForTextInput(conversation);
-  if (gbInput === undefined) return;
-  const gbAmount = parseBoundedWholeNumber(gbInput, 10_000);
-
-  if (gbAmount === undefined) {
-    await replyInConversation(conversation, ctx, t(ctx, 'custom_gb_invalid'));
-    return;
+  let gbAmount: number | undefined;
+  while (gbAmount === undefined) {
+    await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
+      parse_mode: 'Markdown',
+    });
+    const gbInput = await waitForTextInput(conversation);
+    if (gbInput === undefined) return;
+    const trimmed = normalizeInputDigits(gbInput);
+    if (!/^[1-9]\d*$/.test(trimmed)) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    const val = Number(trimmed);
+    if (!Number.isSafeInteger(val) || val < 1 || val > 10_000) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'custom_volume_title'),
+          t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    gbAmount = val;
   }
 
   // Use the admin-configured default duration instead of asking the user.
@@ -453,16 +493,39 @@ export async function renewConfigConversation(
     return;
   }
 
-  // Step 1: prompt for a custom traffic quota in the same structured flow.
-  await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
-    parse_mode: 'Markdown',
-  });
-  const gbInput = await waitForTextInput(conversation);
-  if (gbInput === undefined) return;
-  const gbAmount = parseBoundedWholeNumber(gbInput, 10_000);
-  if (gbAmount === undefined) {
-    await replyInConversation(conversation, ctx, t(ctx, 'custom_gb_invalid'));
-    return;
+  // Step 1: prompt for a custom traffic quota in the same structured flow with retry loop.
+  let gbAmount: number | undefined;
+  while (gbAmount === undefined) {
+    await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
+      parse_mode: 'Markdown',
+    });
+    const gbInput = await waitForTextInput(conversation);
+    if (gbInput === undefined) return;
+    const trimmed = normalizeInputDigits(gbInput);
+    if (!/^[1-9]\d*$/.test(trimmed)) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    const val = Number(trimmed);
+    if (!Number.isSafeInteger(val) || val < 1 || val > 10_000) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'custom_volume_title'),
+          t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    gbAmount = val;
   }
 
   // Use the admin-configured default duration instead of prompting for custom days
@@ -693,16 +756,39 @@ export async function autoRenewCustomConversation(
     return;
   }
 
-  // Step 1: prompt for a custom traffic quota in the same structured flow.
-  await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
-    parse_mode: 'Markdown',
-  });
-  const gbInput = await waitForTextInput(conversation);
-  if (gbInput === undefined) return;
-  const gbAmount = parseBoundedWholeNumber(gbInput, 10_000);
-  if (gbAmount === undefined) {
-    await replyInConversation(conversation, ctx, t(ctx, 'custom_gb_invalid'));
-    return;
+  // Step 1: prompt for a custom traffic quota in the same structured flow with retry loop.
+  let gbAmount: number | undefined;
+  while (gbAmount === undefined) {
+    await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
+      parse_mode: 'Markdown',
+    });
+    const gbInput = await waitForTextInput(conversation);
+    if (gbInput === undefined) return;
+    const trimmed = normalizeInputDigits(gbInput);
+    if (!/^[1-9]\d*$/.test(trimmed)) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    const val = Number(trimmed);
+    if (!Number.isSafeInteger(val) || val < 1 || val > 10_000) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'custom_volume_title'),
+          t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    gbAmount = val;
   }
 
   const durationDays = customDurationDays(ctx);
@@ -874,14 +960,6 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
   await finishPromoFlow();
 }
 
-function parseBoundedWholeNumber(value: string, maximum: number): number | undefined {
-  const trimmed = normalizeInputDigits(value);
-  if (!/^[1-9]\d*$/.test(trimmed)) return undefined;
-  const parsed = Number(trimmed);
-  if (!Number.isSafeInteger(parsed) || parsed > maximum) return undefined;
-  return parsed;
-}
-
 /**
  * Admin-configurable default subscription length for the custom-volume flow.
  * Falls back to 30 days if the stored value is missing or not a usable integer.
@@ -925,37 +1003,50 @@ export async function transferConfigConversation(
     return;
   }
 
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildScreen({
-      emoji: '🔁',
-      title: t(ctx, 'transfer_title'),
-      subtitle: t(ctx, 'transfer_subtitle'),
-      footer: `ℹ️ ${t(ctx, 'transfer_target_hint')}`,
-    }),
-    { parse_mode: 'Markdown' }
-  );
-  const targetInput = await waitForTextInput(conversation);
-  if (targetInput === undefined) return;
-  const target = await ctx.services.userService.findProfile(targetInput);
-  if (!target) {
-    await replyInConversation(
+  let target;
+  while (!target) {
+    await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_not_found')),
+      buildScreen({
+        emoji: '🔁',
+        title: t(ctx, 'transfer_title'),
+        subtitle: t(ctx, 'transfer_subtitle'),
+        footer: `ℹ️ ${t(ctx, 'transfer_target_hint')}`,
+      }),
       { parse_mode: 'Markdown' }
     );
-    return;
-  }
-  if (target.telegramId === ownerTelegramId) {
-    await replyInConversation(
-      conversation,
-      ctx,
-      buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_same_user')),
-      { parse_mode: 'Markdown' }
-    );
-    return;
+    const targetInput = await waitForTextInput(conversation);
+    if (targetInput === undefined) return;
+    const found = await ctx.services.userService.findProfile(targetInput);
+    if (!found) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_not_found')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    if (found.telegramId === ownerTelegramId) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_same_user')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    if (found.isBanned) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_banned')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+    target = found;
   }
 
   const confirmKeyboard = new InlineKeyboard()
@@ -1150,132 +1241,146 @@ export async function transferBalanceConversation(
     return;
   }
 
-  // Step 1: Prompt for recipient
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildScreen({
-      emoji: '💸',
-      title: t(ctx, 'wallet_transfer_title'),
-      subtitle: t(ctx, 'wallet_transfer_subtitle'),
-      footer: `ℹ️ ${t(ctx, 'wallet_transfer_target_hint')}`,
-    }),
-    { parse_mode: 'Markdown' }
-  );
-
-  const targetInput = await waitForTextInput(conversation);
-  if (targetInput === undefined) return;
-
-  const target = await ctx.services.userService.findProfile(targetInput);
-  if (!target) {
-    await replyInConversation(
+  // Step 1: Prompt for recipient in loop
+  let target;
+  while (!target) {
+    await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'transfer_target_not_found')),
+      buildScreen({
+        emoji: '💸',
+        title: t(ctx, 'wallet_transfer_title'),
+        subtitle: t(ctx, 'wallet_transfer_subtitle'),
+        footer: `ℹ️ ${t(ctx, 'wallet_transfer_target_hint')}`,
+      }),
       { parse_mode: 'Markdown' }
     );
-    return;
+
+    const targetInput = await waitForTextInput(conversation);
+    if (targetInput === undefined) return;
+
+    const found = await ctx.services.userService.findProfile(targetInput);
+    if (!found) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'transfer_target_not_found')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+
+    if (found.telegramId === senderTelegramId) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'wallet_transfer_title'),
+          t(ctx, 'wallet_transfer_self_error')
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+
+    if (found.isBanned) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'transfer_target_banned')),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+
+    target = found;
   }
 
-  if (target.telegramId === senderTelegramId) {
-    await replyInConversation(
+  // Step 2: Prompt for amount in loop
+  let parsedAmount: number | undefined;
+  while (parsedAmount === undefined) {
+    await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'wallet_transfer_self_error')),
-      { parse_mode: 'Markdown' }
-    );
-    return;
-  }
-
-  if (target.isBanned) {
-    await replyInConversation(
-      conversation,
-      ctx,
-      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'transfer_target_banned')),
-      { parse_mode: 'Markdown' }
-    );
-    return;
-  }
-
-  // Step 2: Prompt for amount
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildScreen({
-      emoji: '💰',
-      title: t(ctx, 'wallet_transfer_title'),
-      subtitle: t(ctx, 'wallet_transfer_amount_prompt'),
-      primary: {
-        emoji: '👤',
-        label: t(ctx, 'wallet_transfer_recipient_label'),
-        value: target.username
-          ? `@${escapeTelegramMarkdown(target.username)}`
-          : `\`${target.telegramId}\``,
-      },
-      sections: [
-        {
-          emoji: '👛',
-          title: t(ctx, 'wallet_available_balance'),
-          fields: [
-            {
-              emoji: '💰',
-              label: t(ctx, 'wallet_available_balance'),
-              value: `${localizedNumber(senderBalance, ctx)} ${t(ctx, 'currency_toman')}`,
-            },
-          ],
+      buildScreen({
+        emoji: '💰',
+        title: t(ctx, 'wallet_transfer_title'),
+        subtitle: t(ctx, 'wallet_transfer_amount_prompt'),
+        primary: {
+          emoji: '👤',
+          label: t(ctx, 'wallet_transfer_recipient_label'),
+          value: target.username
+            ? `@${escapeTelegramMarkdown(target.username)}`
+            : `\`${target.telegramId}\``,
         },
-      ],
-      footer: `ℹ️ ${t(ctx, 'wallet_transfer_min_amount_hint', { min: localizedNumber(minAmount, ctx) })}`,
-    }),
-    { parse_mode: 'Markdown' }
-  );
-
-  const amountInput = await waitForTextInput(conversation);
-  if (amountInput === undefined) return;
-
-  const normalized = normalizeInputDigits(amountInput).replace(/[,_\s]/g, '');
-  const parsedAmount = /^\d+$/.test(normalized) ? Number(normalized) : Number.NaN;
-
-  if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-    await replyInConversation(
-      conversation,
-      ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'wallet_transfer_title'),
-        t(ctx, 'wallet_transfer_invalid_amount')
-      ),
+        sections: [
+          {
+            emoji: '👛',
+            title: t(ctx, 'wallet_available_balance'),
+            fields: [
+              {
+                emoji: '💰',
+                label: t(ctx, 'wallet_available_balance'),
+                value: `${localizedNumber(senderBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+              },
+            ],
+          },
+        ],
+        footer: `ℹ️ ${t(ctx, 'wallet_transfer_min_amount_hint', { min: localizedNumber(minAmount, ctx) })}`,
+      }),
       { parse_mode: 'Markdown' }
     );
-    return;
-  }
 
-  if (parsedAmount < minAmount) {
-    await replyInConversation(
-      conversation,
-      ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'wallet_transfer_title'),
-        t(ctx, 'wallet_transfer_below_min', { min: localizedNumber(minAmount, ctx) })
-      ),
-      { parse_mode: 'Markdown' }
-    );
-    return;
-  }
+    const amountInput = await waitForTextInput(conversation);
+    if (amountInput === undefined) return;
 
-  if (parsedAmount > senderBalance) {
-    await replyInConversation(
-      conversation,
-      ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'wallet_transfer_title'),
-        t(ctx, 'wallet_transfer_insufficient_balance')
-      ),
-      { parse_mode: 'Markdown' }
-    );
-    return;
+    const normalized = normalizeInputDigits(amountInput).replace(/[,_\s]/g, '');
+    const amountVal = /^\d+$/.test(normalized) ? Number(normalized) : Number.NaN;
+
+    if (!Number.isSafeInteger(amountVal) || amountVal <= 0) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'wallet_transfer_title'),
+          t(ctx, 'wallet_transfer_invalid_amount')
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+
+    if (amountVal < minAmount) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'wallet_transfer_title'),
+          t(ctx, 'wallet_transfer_below_min', { min: localizedNumber(minAmount, ctx) })
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+
+    if (amountVal > senderBalance) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'wallet_transfer_title'),
+          t(ctx, 'wallet_transfer_insufficient_balance')
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      continue;
+    }
+
+    parsedAmount = amountVal;
   }
 
   // Step 3: Review & Confirm Screen

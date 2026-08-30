@@ -117,6 +117,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
     } catch (error) {
       trackFunnelEvent('purchase_failed');
       await recordCheckoutFailed(services.purchaseCheckoutService, checkout.id);
+      if (checkout.promoCode) clearPendingPromo(ctx);
       await renderScreen(
         ctx,
         buildEmptyState(

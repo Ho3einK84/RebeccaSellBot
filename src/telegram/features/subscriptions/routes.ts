@@ -410,6 +410,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
     } catch (err) {
       await recordCheckoutFailed(ctx.services.purchaseCheckoutService, checkout.id);
+      if (checkout.promoCode) clearPendingPromo(ctx);
       await renderScreen(
         ctx,
         purchaseFailureMessage(ctx.services!.translationService, err, resolveContextLocale(ctx)),
