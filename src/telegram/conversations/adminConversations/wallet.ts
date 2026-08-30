@@ -356,48 +356,43 @@ async function notifyAdminsOfReceipt(
           'admin_receipt_review_subtitle'
         ),
         primary: {
-          emoji: '⏳',
+          emoji: '💰',
           label: tForLocale(
             ctx.services.translationService,
             adminLocale,
-            'admin_receipt_queue_pending_label'
+            'admin_receipt_amount_label'
           ),
-          value: tForLocale(ctx.services.translationService, adminLocale, 'ui_status_pending'),
+          value: `${localizedNumberForLocale(amount, adminLocale)} ${tForLocale(ctx.services.translationService, adminLocale, 'currency_toman')}`,
         },
         sections: [
           {
-            emoji: '💳',
+            emoji: '👤',
             title: tForLocale(
               ctx.services.translationService,
               adminLocale,
-              'admin_receipt_queue_section'
+              'admin_receipt_user_section'
             ),
             fields: [
               {
-                label: tForLocale(
-                  ctx.services.translationService,
-                  adminLocale,
-                  'admin_receipt_id_label'
-                ),
-                value: escapeTelegramMarkdown(receiptId),
-              },
-              {
+                emoji: '🆔',
                 label: tForLocale(
                   ctx.services.translationService,
                   adminLocale,
                   'admin_receipt_user_label'
                 ),
-                value: String(telegramId),
+                value: `\`${telegramId}\``,
               },
               {
+                emoji: '🧾',
                 label: tForLocale(
                   ctx.services.translationService,
                   adminLocale,
-                  'admin_receipt_amount_label'
+                  'admin_receipt_id_label'
                 ),
-                value: `${localizedNumberForLocale(amount, adminLocale)} ${tForLocale(ctx.services.translationService, adminLocale, 'currency_toman')}`,
+                value: `\`#${receiptId}\``,
               },
               {
+                emoji: '📅',
                 label: tForLocale(
                   ctx.services.translationService,
                   adminLocale,
@@ -408,20 +403,16 @@ async function notifyAdminsOfReceipt(
             ],
           },
         ],
+        footer: `⚡ ${tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_approve_hint')}`,
       });
       const receiptMenu = new InlineKeyboard()
         .text(
-          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_quick_approve'),
+          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_approve'),
           `receipt:quick_approve:${receiptId}`
         )
         .text(
           tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_reject'),
           `receipt:reject_prompt:${receiptId}`
-        )
-        .row()
-        .text(
-          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_review_full'),
-          `receipt:view:${receiptId}:1`
         );
       if (mediaType === 'document') {
         await ctx.api.sendDocument(adminId, photoFileId, {

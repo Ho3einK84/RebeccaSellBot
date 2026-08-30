@@ -235,10 +235,9 @@ async function showReceiptReview(ctx: MenuContext, receiptId: string, page: numb
 
   await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
   const keyboard = new InlineKeyboard()
-    .text(t(ctx, 'admin_receipt_quick_approve'), `receipt:quick_approve:${receipt.id}:${page}`)
+    .text(t(ctx, 'admin_receipt_approve'), `receipt:quick_approve:${receipt.id}:${page}`)
     .text(t(ctx, 'admin_receipt_reject'), `receipt:reject_prompt:${receipt.id}:${page}`)
     .row()
-    .text(t(ctx, 'admin_receipt_approve'), `receipt:approve_prompt:${receipt.id}:${page}`)
     .text(t(ctx, 'menu_back'), `receipt:page:${page}`);
   const text = buildReceiptReviewScreen(ctx, receipt);
 
@@ -372,16 +371,16 @@ function buildReceiptQueueScreen(ctx: MenuContext, result: ReceiptPage): string 
     primary: {
       emoji: '⏳',
       label: t(ctx, 'admin_receipt_queue_pending_label'),
-      value: `${buildStatusBadge(ctx, 'pending')} · ${localizedNumber(result.total, ctx)}`,
+      value: `${buildStatusBadge(ctx, 'pending')} · ${localizedNumber(result.total, ctx)} فیش`,
     },
     sections: [
       {
         emoji: '📋',
         title: t(ctx, 'admin_receipt_queue_section'),
         fields: result.items.map((receipt) => ({
-          emoji: '🧾',
-          label: t(ctx, 'admin_receipt_id_label'),
-          value: `\`#${receipt.id}\` · ${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')} · ${receipt.createdAt ? localizedDate(receipt.createdAt, ctx) : '—'}`,
+          emoji: '💳',
+          label: `فیش #${receipt.id}`,
+          value: `${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')} · کاربر: \`${receipt.telegramId}\``,
         })),
       },
     ],
@@ -426,34 +425,34 @@ function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): st
     title: t(ctx, 'admin_receipt_review_title'),
     subtitle: t(ctx, 'admin_receipt_review_subtitle'),
     primary: {
-      emoji: '⏳',
-      label: t(ctx, 'admin_receipt_queue_pending_label'),
-      value: buildStatusBadge(ctx, 'pending'),
+      emoji: '💰',
+      label: t(ctx, 'admin_receipt_amount_label'),
+      value: `${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
     },
     sections: [
       {
-        emoji: '💳',
-        title: t(ctx, 'admin_receipt_queue_section'),
+        emoji: '👤',
+        title: t(ctx, 'admin_receipt_user_section'),
         fields: [
           {
-            label: t(ctx, 'admin_receipt_id_label'),
-            value: `\`${receipt.id}\``,
-          },
-          {
+            emoji: '🆔',
             label: t(ctx, 'admin_receipt_user_label'),
-            value: String(receipt.telegramId),
+            value: `\`${receipt.telegramId}\``,
           },
           {
-            label: t(ctx, 'admin_receipt_amount_label'),
-            value: `${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+            emoji: '🧾',
+            label: t(ctx, 'admin_receipt_id_label'),
+            value: `\`#${receipt.id}\``,
           },
           {
+            emoji: '📅',
             label: t(ctx, 'admin_receipt_created_label'),
             value: receipt.createdAt ? localizedDate(receipt.createdAt, ctx) : '—',
           },
         ],
       },
     ],
+    footer: `⚡ ${t(ctx, 'admin_receipt_approve_hint')}`,
   });
 }
 
