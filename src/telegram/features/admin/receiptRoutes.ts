@@ -510,7 +510,9 @@ async function renderReceiptResult(
           }
         : {}),
     }),
-    new InlineKeyboard().text(t(ctx, 'menu_back'), `receipt:page:${page}`)
+    new InlineKeyboard()
+      .text(t(ctx, 'menu_close'), 'ui:dismiss')
+      .text(t(ctx, 'menu_back'), `receipt:page:${page}`)
   );
 }
 
@@ -522,7 +524,9 @@ async function renderReceiptAlreadyReviewed(ctx: MenuContext, page: number): Pro
       t(ctx, 'admin_receipt_already_reviewed_title'),
       t(ctx, 'receipt_already_reviewed')
     ),
-    new InlineKeyboard().text(t(ctx, 'menu_back'), `receipt:page:${page}`)
+    new InlineKeyboard()
+      .text(t(ctx, 'menu_close'), 'ui:dismiss')
+      .text(t(ctx, 'menu_back'), `receipt:page:${page}`)
   );
 }
 

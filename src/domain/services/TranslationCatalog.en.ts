@@ -445,6 +445,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_no_pending_receipts: '📭 No pending receipts.',
   admin_receipt_approve: '✅ Approve',
   admin_receipt_reject: '❌ Reject',
+  admin_receipt_dismiss_button: '🗑 Dismiss',
   admin_pending_receipt:
     '🧾 *Receipt {receipt_id}*\n\nUser: {telegram_id}\nAmount: {amount} Toman\nTime: {created_at}',
   receipt_already_reviewed: '⚠️ This receipt has already been reviewed.',

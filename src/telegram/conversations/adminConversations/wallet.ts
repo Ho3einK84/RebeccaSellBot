@@ -413,6 +413,11 @@ async function notifyAdminsOfReceipt(
         .text(
           tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_reject'),
           `receipt:reject_prompt:${receiptId}`
+        )
+        .row()
+        .text(
+          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_dismiss_button'),
+          'ui:dismiss'
         );
       if (mediaType === 'document') {
         await ctx.api.sendDocument(adminId, photoFileId, {

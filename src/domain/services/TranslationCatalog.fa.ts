@@ -442,6 +442,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_no_pending_receipts: '📭 رسیدی در انتظار نیست.',
   admin_receipt_approve: '✅ تأیید',
   admin_receipt_reject: '❌ رد',
+  admin_receipt_dismiss_button: '🗑 نادیده گرفتن',
   admin_pending_receipt:
     '🧾 *رسید {receipt_id}*\n\nکاربر: {telegram_id}\nمبلغ: {amount} تومان\nزمان: {created_at}',
   receipt_already_reviewed: '⚠️ این رسید قبلاً بررسی شده است.',
