@@ -363,6 +363,12 @@ async function promptReceiptReview(
   await renderReceiptCaptionOrText(ctx, text, keyboard);
 }
 
+export function formatReceiptShortId(receiptId: string): string {
+  const match = receiptId.match(/_([a-zA-Z0-9]{4,8})$/u);
+  if (match) return match[1]!;
+  return receiptId.length > 8 ? receiptId.slice(-6) : receiptId;
+}
+
 function buildReceiptQueueScreen(ctx: MenuContext, result: ReceiptPage): string {
   return buildScreen({
     emoji: '🧾',
@@ -377,11 +383,14 @@ function buildReceiptQueueScreen(ctx: MenuContext, result: ReceiptPage): string 
       {
         emoji: '📋',
         title: t(ctx, 'admin_receipt_queue_section'),
-        fields: result.items.map((receipt) => ({
-          emoji: '💳',
-          label: `فیش #${receipt.id}`,
-          value: `${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')} · کاربر: \`${receipt.telegramId}\``,
-        })),
+        fields: result.items.map((receipt) => {
+          const shortId = formatReceiptShortId(receipt.id);
+          return {
+            emoji: '💳',
+            label: `${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+            value: `کاربر: \`${receipt.telegramId}\` (شناسه: \`${shortId}\`)`,
+          };
+        }),
       },
     ],
   });
@@ -390,11 +399,13 @@ function buildReceiptQueueScreen(ctx: MenuContext, result: ReceiptPage): string 
 function buildReceiptQueueKeyboard(ctx: MenuContext, result: ReceiptPage): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   for (const receipt of result.items) {
+    const shortId = formatReceiptShortId(receipt.id);
     keyboard
       .text(
         t(ctx, 'admin_receipt_queue_item_label', {
-          receipt_id: receipt.id,
           amount: localizedNumber(receipt.amount, ctx),
+          telegram_id: receipt.telegramId,
+          short_id: shortId,
         }),
         callbackData('receipt', 'view', receipt.id, result.page)
       )
@@ -420,6 +431,7 @@ function buildReceiptQueueKeyboard(ctx: MenuContext, result: ReceiptPage): Inlin
 }
 
 function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): string {
+  const shortId = formatReceiptShortId(receipt.id);
   return buildScreen({
     emoji: '🧾',
     title: t(ctx, 'admin_receipt_review_title'),
@@ -442,7 +454,7 @@ function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): st
           {
             emoji: '🧾',
             label: t(ctx, 'admin_receipt_id_label'),
-            value: `\`#${receipt.id}\``,
+            value: `\`${receipt.id}\` (#${shortId})`,
           },
           {
             emoji: '📅',
