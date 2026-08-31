@@ -218,7 +218,7 @@ ABC_456`;
     // In Persian screen, subtitle promo code and service label must have \u200f (RLM)
     expect(persianPromoScreen).toContain('\u200f_`SUMMER2026`_');
     expect(persianPromoScreen).toContain('\u200f🔹 *[1] xray:* (پیش‌فرض)');
-    expect(persianPromoScreen).toContain('*وضعیت*\n🟢 فعال');
+    expect(persianPromoScreen).toContain('\u200f*وضعیت*\n\u200f🟢 فعال');
   });
 
   it('ensureEnglishLineDirection strips stray RLM and forces Persian lines to LTR', () => {

@@ -372,7 +372,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_users_total_label: 'کل کاربران',
   admin_users_page_label: 'صفحه {page} از {total_pages}',
   admin_user_search_button: '🔍 جست‌وجوی کاربر',
-  admin_user_btn_format: '👤 {name} | 💰 {balance} تومان',
+  admin_user_btn_format: '👤 \u200e{name}\u200e | 💰 {balance} تومان',
   admin_menu_settings: '⚙️ تنظیمات',
   admin_menu_backup: '💾 بکاپ خودکار',
   admin_settings_title: 'تنظیمات',

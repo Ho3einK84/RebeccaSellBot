@@ -3,7 +3,7 @@ import type { ConversationContext } from './types.js';
 import {
   EMOJI_PREFIX_REGEX,
   ensureEnglishLineDirection,
-  ensurePersianLineDirection,
+  formatPersianScreen,
   t,
 } from './locale.js';
 
@@ -209,7 +209,7 @@ export function buildScreen(definition: ScreenDefinition): string {
   if (definition.footer) blocks.push(definition.footer);
   const content = blocks.join('\n\n');
   return isPersianScreen(definition)
-    ? ensurePersianLineDirection(content)
+    ? formatPersianScreen(content)
     : ensureEnglishLineDirection(content);
 }
 

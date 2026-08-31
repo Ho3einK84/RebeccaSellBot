@@ -157,13 +157,27 @@ export function ensurePersianLineDirection(value: string): string {
     .split('\n')
     .map((line) => {
       if (!line || line.startsWith(rlm) || line.includes(lrm)) return line;
-      const strippedMarkdown = line.replace(/^[\s*_`[\]()#-]+/u, '');
-      const textAfterEmoji = stripLeadingEmoji(strippedMarkdown).replace(/^[\s*_`[\]()#-]+/u, '');
-      const candidate = textAfterEmoji || strippedMarkdown;
+      const cleanLine = line.replace(/^[\s*_`[\]()#-]+/u, '');
+      const textAfterEmoji = stripLeadingEmoji(cleanLine).replace(/^[\s*_`[\]()#-]+/u, '');
+      const candidate = textAfterEmoji || cleanLine;
       if (/^[@A-Za-z0-9]/u.test(candidate)) {
         return `${rlm}${line}`;
       }
       return line;
+    })
+    .join('\n');
+}
+
+/** Ensure every line and paragraph of a Persian screen has strong RTL base direction. */
+export function formatPersianScreen(content: string): string {
+  if (!content) return content;
+  const rlm = '\u200f';
+  const lrm = '\u200e';
+  return content
+    .split('\n')
+    .map((line) => {
+      if (!line || line.startsWith(rlm) || line.includes(lrm)) return line;
+      return `${rlm}${line}`;
     })
     .join('\n');
 }

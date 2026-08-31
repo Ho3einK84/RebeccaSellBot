@@ -16,6 +16,7 @@ export {
   formatRtlLabeledValue,
   ensurePersianLineDirection,
   ensureEnglishLineDirection,
+  formatPersianScreen,
 } from './locale.js';
 
 export type BackDestination = 'home' | 'main' | 'admin' | 'admin:sales' | 'wallet' | 'shop';
