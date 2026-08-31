@@ -508,15 +508,25 @@ export class RebeccaPanelRegistry {
     await this.reload();
   }
 
-  async testConnection(panelId: string): Promise<boolean> {
+  async testConnection(panelId: string): Promise<{ ok: boolean; latencyMs: number }> {
+    const startedAt = performance.now();
     try {
       const service = this.getService(panelId);
       service.resetCircuitBreaker();
       await service.getUsers(0, 1);
-      return true;
+      return { ok: true, latencyMs: Math.max(1, Math.round(performance.now() - startedAt)) };
     } catch {
-      return false;
+      return { ok: false, latencyMs: Math.max(1, Math.round(performance.now() - startedAt)) };
     }
+  }
+
+  async getPanelUsage(panelId: string): Promise<{ activeConfigsCount: number }> {
+    const db = getDb();
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(userConfigs)
+      .where(eq(userConfigs.panelId, panelId));
+    return { activeConfigsCount: Number(row?.count ?? 0) };
   }
 
   async healthSummary(): Promise<{ configured: number; healthy: number }> {
