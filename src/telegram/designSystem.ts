@@ -1,6 +1,11 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext } from './types.js';
-import { ensurePersianLineDirection, t } from './locale.js';
+import {
+  EMOJI_PREFIX_REGEX,
+  ensureEnglishLineDirection,
+  ensurePersianLineDirection,
+  t,
+} from './locale.js';
 
 export type StatusType =
   'active' | 'inactive' | 'pending' | 'expired' | 'disabled' | 'healthy' | 'warning' | 'error';
@@ -14,10 +19,10 @@ export type ScreenDefinition = {
   primary?: { label: string; value: string | number; emoji?: string };
   sections?: ScreenSection[];
   footer?: string;
+  direction?: 'rtl' | 'ltr' | 'auto';
 };
 
-const EMOJI_PREFIX_REGEX =
-  /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|[\uE0020-\uE007F])*\s*)+/u;
+export { EMOJI_PREFIX_REGEX };
 
 /**
  * Render a visual progress bar with emojis.
@@ -164,6 +169,25 @@ export function buildSectionCard(
 }
 
 /**
+ * Determine whether a screen definition represents a Persian (RTL) or English (LTR) screen.
+ */
+export function isPersianScreen(definition: ScreenDefinition): boolean {
+  if (definition.direction === 'rtl') return true;
+  if (definition.direction === 'ltr') return false;
+  if (/[\u0600-\u06ff]/u.test(definition.title)) return true;
+  if (definition.primary?.label && /[\u0600-\u06ff]/u.test(String(definition.primary.label))) {
+    return true;
+  }
+  if (definition.sections?.some((s) => /[\u0600-\u06ff]/u.test(s.title))) {
+    return true;
+  }
+  if (definition.footer && /[\u0600-\u06ff]/u.test(definition.footer)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Compose a scannable Telegram screen: one header, one primary state, then
  * compact supporting cards. Callers supply already-localized and markdown-safe
  * values; this helper owns hierarchy and icon discipline only.
@@ -183,7 +207,10 @@ export function buildScreen(definition: ScreenDefinition): string {
     blocks.push(buildSectionCard(section.title, section.fields, section.emoji ?? '📌'));
   }
   if (definition.footer) blocks.push(definition.footer);
-  return ensurePersianLineDirection(blocks.join('\n\n'));
+  const content = blocks.join('\n\n');
+  return isPersianScreen(definition)
+    ? ensurePersianLineDirection(content)
+    : ensureEnglishLineDirection(content);
 }
 
 /** A friendly, actionable empty state built with the same screen hierarchy. */
@@ -191,9 +218,15 @@ export function buildEmptyState(
   emoji: string,
   title: string,
   body: string,
-  actionHint?: string
+  actionHint?: string,
+  direction?: 'rtl' | 'ltr' | 'auto'
 ): string {
-  return buildScreen({ emoji, title, footer: [body, actionHint].filter(Boolean).join('\n\n') });
+  return buildScreen({
+    emoji,
+    title,
+    footer: [body, actionHint].filter(Boolean).join('\n\n'),
+    direction,
+  });
 }
 
 /** A focused input step for conversations that need the user to type or upload something. */
@@ -201,7 +234,8 @@ export function buildPromptScreen(
   emoji: string,
   title: string,
   body: string,
-  subtitle?: string
+  subtitle?: string,
+  direction?: 'rtl' | 'ltr' | 'auto'
 ): string {
-  return buildScreen({ emoji, title, subtitle, footer: body });
+  return buildScreen({ emoji, title, subtitle, footer: body, direction });
 }

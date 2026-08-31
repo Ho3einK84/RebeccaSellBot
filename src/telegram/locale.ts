@@ -89,16 +89,23 @@ export function resolveServiceLocale(
   return rawLocale?.toLowerCase().startsWith('en') ? 'en' : 'fa';
 }
 
+export const EMOJI_PREFIX_REGEX =
+  /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|[\uE0020-\uE007F])*\s*)+/u;
+
+export function stripLeadingEmoji(text: string): string {
+  return text.replace(EMOJI_PREFIX_REGEX, '').trimStart();
+}
+
 /**
  * Resolve a user-facing key through the dynamic, DB-backed translation
- * service.  Context service injection happens before all handlers, but the
+ * service. Context service injection happens before all handlers, but the
  * key itself is retained as a defensive last-resort value for isolated tests
  * and malformed contexts.
  */
 export function t(ctx: LocaleAwareContext, key: string, params?: TranslationParams): string {
   const locale = resolveContextLocale(ctx);
   const value = ctx.services?.translationService.get(key, locale, params) ?? key;
-  return locale === 'fa' ? ensurePersianLineDirection(value) : value;
+  return locale === 'fa' ? ensurePersianLineDirection(value) : ensureEnglishLineDirection(value);
 }
 
 /**
@@ -123,7 +130,7 @@ export function tForLocale(
   params?: TranslationParams
 ): string {
   const value = translationService.get(key, locale, params);
-  return locale === 'fa' ? ensurePersianLineDirection(value) : value;
+  return locale === 'fa' ? ensurePersianLineDirection(value) : ensureEnglishLineDirection(value);
 }
 
 export function tmForLocale(
@@ -138,22 +145,44 @@ export function tmForLocale(
     locale,
     escapeTelegramMarkdownParams(params, trustedKeys)
   );
-  return locale === 'fa' ? ensurePersianLineDirection(value) : value;
+  return locale === 'fa' ? ensurePersianLineDirection(value) : ensureEnglishLineDirection(value);
 }
 
 /** Force every Persian Telegram line to RTL even when it begins with Latin text, @handles, or a URL. */
 export function ensurePersianLineDirection(value: string): string {
-  if (!/[\u0600-\u06ff]/u.test(value)) return value;
+  if (!value || !/[\u0600-\u06ff]/u.test(value)) return value;
+  const rlm = '\u200f';
+  const lrm = '\u200e';
+  return value
+    .split('\n')
+    .map((line) => {
+      if (!line || line.startsWith(rlm) || line.includes(lrm)) return line;
+      const strippedMarkdown = line.replace(/^[\s*_`[\]()#-]+/u, '');
+      const textAfterEmoji = stripLeadingEmoji(strippedMarkdown).replace(/^[\s*_`[\]()#-]+/u, '');
+      const candidate = textAfterEmoji || strippedMarkdown;
+      if (/^[@A-Za-z0-9]/u.test(candidate)) {
+        return `${rlm}${line}`;
+      }
+      return line;
+    })
+    .join('\n');
+}
+
+/** Force every English Telegram line to LTR and strip accidental RTL marks. */
+export function ensureEnglishLineDirection(value: string): string {
+  if (!value) return value;
+  const lrm = '\u200e';
   const rlm = '\u200f';
   return value
     .split('\n')
     .map((line) => {
-      if (!line || line.startsWith(rlm) || line.includes('\u200e')) return line;
-      const cleanLine = line.replace(/^[\s*_`[\]()#-]+/u, '');
-      if (/^[@A-Za-z0-9]/u.test(cleanLine)) {
-        return `${rlm}${line}`;
+      if (!line) return line;
+      const clean = line.replaceAll(rlm, '');
+      if (clean.startsWith(lrm)) return clean;
+      if (/[\u0600-\u06ff]/u.test(clean)) {
+        return `${lrm}${clean}`;
       }
-      return line;
+      return clean;
     })
     .join('\n');
 }

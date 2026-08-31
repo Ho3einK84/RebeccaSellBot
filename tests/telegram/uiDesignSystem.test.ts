@@ -8,8 +8,10 @@ import {
   buildSectionCard,
   buildStatusBadge,
   cleanChatUiMiddleware,
+  ensureEnglishLineDirection,
   ensurePersianLineDirection,
   formatRtlLabeledValue,
+  isPersianScreen,
   normalizeInputDigits,
   rememberArtifactMessage,
   rememberUiMessage,
@@ -158,6 +160,74 @@ ABC_456`;
     const kb = buildConfirmationKeyboard(ctx, 'buy:confirm');
     expect(kb).toBeInstanceOf(InlineKeyboard);
     expect(kb.inline_keyboard).toHaveLength(2);
+  });
+
+  it('correctly detects Persian (RTL) vs English (LTR) screens', () => {
+    expect(isPersianScreen({ emoji: '🖥️', title: 'جزئیات پنل' })).toBe(true);
+    expect(isPersianScreen({ emoji: '🎟️', title: 'کدهای تخفیف' })).toBe(true);
+    expect(isPersianScreen({ emoji: '🖥️', title: 'Panel Details' })).toBe(false);
+    expect(isPersianScreen({ emoji: '🎟️', title: 'Discount Codes' })).toBe(false);
+    expect(isPersianScreen({ emoji: '🏠', title: 'Home', direction: 'rtl' })).toBe(true);
+    expect(isPersianScreen({ emoji: '🏠', title: 'منوی اصلی', direction: 'ltr' })).toBe(false);
+  });
+
+  it('ensures English panel details and promo screens keep "Status" and labels LTR without RLM', () => {
+    const englishPanelScreen = buildScreen({
+      emoji: '🖥️',
+      title: 'Panel Details',
+      subtitle: 'سرور ایران', // Persian subtitle in an English screen
+      primary: { emoji: '🟢', label: 'Status', value: '🟢 Enabled' },
+      sections: [
+        {
+          emoji: '🔌',
+          title: 'Connection',
+          fields: [{ emoji: '🌐', label: 'Endpoint', value: 'https://hermes.netiva.pro:8642' }],
+        },
+      ],
+      footer: 'Configure services below.',
+    });
+
+    // English labels like "Status", "Connection", "Endpoint" must NEVER have \u200f (RLM)
+    expect(englishPanelScreen).not.toContain('\u200f*Status*');
+    expect(englishPanelScreen).not.toContain('\u200f*Connection*');
+    expect(englishPanelScreen).not.toContain('\u200f🌐 *Endpoint:*');
+    expect(englishPanelScreen).toContain('*Status*\n🟢 Enabled');
+
+    // Persian subtitle inside English screen gets \u200e (LRM) so it stays LTR
+    expect(englishPanelScreen).toContain('\u200e_سرور ایران_');
+  });
+
+  it('ensures Persian screens keep Latin codes and service IDs aligned RTL with RLM', () => {
+    const persianPromoScreen = buildScreen({
+      emoji: '🎟️',
+      title: 'جزئیات کد تخفیف',
+      subtitle: '`SUMMER2026`',
+      primary: { emoji: '🟢', label: 'وضعیت', value: '🟢 فعال' },
+      sections: [
+        {
+          emoji: '⚙️',
+          title: 'تنظیمات',
+          fields: [
+            { emoji: '🏷️', label: 'نوع', value: 'تخفیف درصدی' },
+            { emoji: '🔹', label: '[1] xray', value: '(پیش‌فرض)' },
+          ],
+        },
+      ],
+    });
+
+    // In Persian screen, subtitle promo code and service label must have \u200f (RLM)
+    expect(persianPromoScreen).toContain('\u200f_`SUMMER2026`_');
+    expect(persianPromoScreen).toContain('\u200f🔹 *[1] xray:* (پیش‌فرض)');
+    expect(persianPromoScreen).toContain('*وضعیت*\n🟢 فعال');
+  });
+
+  it('ensureEnglishLineDirection strips stray RLM and forces Persian lines to LTR', () => {
+    const mixed = `\u200fStatus\n\u200fConnection\nسرور ایران\n🟢 Active`;
+    const cleaned = ensureEnglishLineDirection(mixed);
+    expect(cleaned).not.toContain('\u200f');
+    expect(cleaned).toContain('Status');
+    expect(cleaned).toContain('Connection');
+    expect(cleaned).toContain('\u200eسرور ایران');
   });
 });
 

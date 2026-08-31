@@ -15,6 +15,7 @@ export {
   normalizeInputDigits,
   formatRtlLabeledValue,
   ensurePersianLineDirection,
+  ensureEnglishLineDirection,
 } from './locale.js';
 
 export type BackDestination = 'home' | 'main' | 'admin' | 'admin:sales' | 'wallet' | 'shop';
