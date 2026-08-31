@@ -174,11 +174,11 @@ export async function renderPromoScreen(
   ctx: MenuContext,
   text: string,
   keyboard: InlineKeyboard,
-  parseMode?: 'Markdown'
+  parseMode: 'Markdown' | undefined = 'Markdown'
 ): Promise<void> {
   const isPromoCallback = ctx.callbackQuery?.data?.startsWith('promo:');
   await renderScreen(ctx, text, {
-    ...(parseMode ? { parse_mode: parseMode } : {}),
+    parse_mode: parseMode,
     reply_markup: keyboard,
     preferEdit: isPromoCallback,
   });

@@ -255,7 +255,10 @@ export function renderScreen(
   content: UiScreenContent,
   options: RenderUiScreenOptions = {}
 ): Promise<RenderUiScreenResult> {
-  return renderUiScreen(ctx, resolveScreenContent(content), options);
+  return renderUiScreen(ctx, resolveScreenContent(content), {
+    parse_mode: 'Markdown',
+    ...options,
+  });
 }
 
 /** Semantic renderer for read-only detail views. */

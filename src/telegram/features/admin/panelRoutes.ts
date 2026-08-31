@@ -957,10 +957,10 @@ async function renderPanelScreen(
   ctx: MenuContext,
   text: string,
   keyboard: InlineKeyboard,
-  parseMode?: 'Markdown'
+  parseMode: 'Markdown' | undefined = 'Markdown'
 ): Promise<void> {
   await renderScreen(ctx, text, {
-    ...(parseMode ? { parse_mode: parseMode } : {}),
+    parse_mode: parseMode,
     reply_markup: keyboard,
   });
 }
