@@ -1,9 +1,11 @@
+import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { t } from '../../locale.js';
 import {
   buildEmptyState,
   buildPromptScreen,
   buildScreen,
+  cancelKeyboard,
   promptInConversation,
   replyInAdminConversation,
   waitForAdminTextInput,
@@ -26,21 +28,49 @@ export async function adminAddAdminConversation(
       t(ctx, 'admin_add_admin_prompt'),
       t(ctx, 'admin_registry_subtitle')
     ),
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: cancelKeyboard(ctx) }
   );
   const input = await waitForAdminTextInput(conversation);
   if (input === undefined) return;
-  const telegramId = parsePositiveSafeInteger(input);
+
+  let telegramId = parsePositiveSafeInteger(input);
+  let resolvedUsername: string | undefined;
+
+  if (!telegramId) {
+    const profile = await conversation.external(async (outsideCtx) => {
+      if (!outsideCtx.services) return null;
+      return outsideCtx.services.userService.findProfile(input);
+    });
+    if (profile?.telegramId) {
+      telegramId = profile.telegramId;
+      resolvedUsername = profile.username ?? undefined;
+    }
+  }
+
+  const returnKeyboard = new InlineKeyboard()
+    .text(t(ctx, 'admin_menu_back_to_admins'), 'admin:admins:open')
+    .row()
+    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
+
   if (!telegramId) {
     await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_registry_title'), t(ctx, 'admin_invalid_telegram_id')),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: returnKeyboard }
     );
     return;
   }
-  const added = await ctx.services.adminService.addAdmin(telegramId, actorTelegramId);
+
+  const added = await conversation.external(async (outsideCtx) => {
+    if (!outsideCtx.services) return false;
+    return outsideCtx.services.adminService.addAdmin(telegramId!, actorTelegramId);
+  });
+
+  const valueDisplay = resolvedUsername
+    ? `@${resolvedUsername} (\`${telegramId}\`)`
+    : `\`${telegramId}\``;
+
   await replyInAdminConversation(
     conversation,
     ctx,
@@ -50,13 +80,13 @@ export async function adminAddAdminConversation(
       primary: {
         emoji: '👤',
         label: t(ctx, 'admin_registry_id_label'),
-        value: `\`${telegramId}\``,
+        value: valueDisplay,
       },
       footer: t(ctx, added ? 'admin_admin_added' : 'admin_admin_already_exists', {
         telegram_id: telegramId,
       }),
     }),
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: returnKeyboard }
   );
 }
 

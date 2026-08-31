@@ -27,13 +27,24 @@ type OrphanIssuePage = {
 export async function renderAdminRegistry(ctx: MenuContext): Promise<void> {
   if (!ctx.services) return;
   const admins = await ctx.services.adminService.listAdmins();
+  const adminProfiles = await Promise.all(
+    admins.map(async (admin) => ({
+      admin,
+      profile: await ctx.services?.userService.findProfile(String(admin.telegramId)),
+    }))
+  );
+
   const keyboard = new InlineKeyboard();
-  for (const admin of admins) {
+  for (const { admin, profile } of adminProfiles) {
     const isCurrentAdmin = admin.telegramId === ctx.from?.id;
-    keyboard.text(
-      `🛡️ ${String(admin.telegramId)}${isCurrentAdmin ? ` · ${t(ctx, 'admin_admin_you')}` : ''}`,
-      callbackData('admin', 'admins', 'noop', admin.telegramId)
-    );
+    const namePart = profile?.username
+      ? `@${profile.username}`
+      : profile?.firstName
+        ? `${profile.firstName} (${admin.telegramId})`
+        : String(admin.telegramId);
+
+    const buttonLabel = `${isCurrentAdmin ? '⭐' : '🛡️'} ${namePart}${isCurrentAdmin ? ` · ${t(ctx, 'admin_admin_you')}` : ''}`;
+    keyboard.text(buttonLabel, callbackData('admin', 'admins', 'view', admin.telegramId));
     if (!isCurrentAdmin) {
       keyboard.text(
         t(ctx, 'admin_remove_admin_button'),
@@ -61,14 +72,22 @@ export async function renderAdminRegistry(ctx: MenuContext): Promise<void> {
           {
             emoji: '👤',
             title: t(ctx, 'admin_registry_section'),
-            fields: admins.map((admin) => ({
-              emoji: admin.telegramId === ctx.from?.id ? '⭐' : '🛡️',
-              label: String(admin.telegramId),
-              value:
-                admin.telegramId === ctx.from?.id
+            fields: adminProfiles.map(({ admin, profile }) => {
+              const isCurrentAdmin = admin.telegramId === ctx.from?.id;
+              let label = String(admin.telegramId);
+              if (profile?.username) {
+                label = `@${profile.username} (${admin.telegramId})`;
+              } else if (profile?.firstName) {
+                label = `${profile.firstName} (${admin.telegramId})`;
+              }
+              return {
+                emoji: isCurrentAdmin ? '⭐' : '🛡️',
+                label,
+                value: isCurrentAdmin
                   ? buildStatusBadge(ctx, 'active', t(ctx, 'admin_admin_you'))
                   : buildStatusBadge(ctx, 'active'),
-            })),
+              };
+            }),
           },
         ],
       })
@@ -114,6 +133,91 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(/^admin:admins:noop:\d+$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
   });
+  bot.callbackQuery(/^admin:admins:view:(\d+)$/u, async (ctx) => {
+    if (!ctx.services) return;
+    const target = Number(ctx.match[1]);
+    const admins = await ctx.services.adminService.listAdmins();
+    const adminRecord = admins.find((a) => a.telegramId === target);
+    if (!adminRecord) {
+      await ctx.answerCallbackQuery({
+        text: t(ctx, 'admin_admin_not_found', { telegram_id: target }),
+        show_alert: true,
+      });
+      await renderAdminRegistry(ctx);
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    const profile = await ctx.services.userService.findProfile(String(target));
+    const isCurrentAdmin = target === ctx.from?.id;
+
+    const profileFields = [];
+    if (profile?.username) {
+      profileFields.push({
+        emoji: '👤',
+        label: t(ctx, 'admin_detail_username_label'),
+        value: `@${profile.username}`,
+      });
+    }
+    if (profile?.firstName) {
+      const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+      profileFields.push({
+        emoji: '📝',
+        label: t(ctx, 'admin_detail_name_label'),
+        value: fullName,
+      });
+    }
+    profileFields.push({
+      emoji: '📅',
+      label: t(ctx, 'admin_detail_created_at_label'),
+      value: localizedDate(adminRecord.createdAt, ctx),
+    });
+    if (adminRecord.addedBy) {
+      profileFields.push({
+        emoji: '🛡️',
+        label: t(ctx, 'admin_detail_added_by_label'),
+        value: `\`${adminRecord.addedBy}\``,
+      });
+    } else {
+      profileFields.push({
+        emoji: '⚙️',
+        label: t(ctx, 'admin_detail_added_by_label'),
+        value: t(ctx, 'admin_detail_added_by_system'),
+      });
+    }
+
+    const keyboard = new InlineKeyboard();
+    if (!isCurrentAdmin) {
+      keyboard
+        .text(
+          t(ctx, 'admin_remove_admin_button'),
+          callbackData('admin', 'admins', 'remove', target)
+        )
+        .row();
+    }
+    keyboard.text(t(ctx, 'admin_menu_back_to_admins'), 'admin:admins:open');
+
+    await renderMaintenanceScreen(
+      ctx,
+      buildScreen({
+        emoji: '🛡️',
+        title: t(ctx, 'admin_detail_title'),
+        subtitle: t(ctx, 'admin_detail_subtitle'),
+        primary: {
+          emoji: '👤',
+          label: t(ctx, 'admin_registry_id_label'),
+          value: `\`${target}\``,
+        },
+        sections: [
+          {
+            emoji: '📋',
+            title: t(ctx, 'admin_detail_section_info'),
+            fields: profileFields,
+          },
+        ],
+      }),
+      keyboard
+    );
+  });
   bot.callbackQuery('admin:admins:add', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminAddAdminConversation');
@@ -121,6 +225,11 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(/^admin:admins:remove:(\d+)$/u, async (ctx) => {
     const target = Number(ctx.match[1]);
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    const profile = await ctx.services?.userService.findProfile(String(target));
+    const targetDisplay = profile?.username
+      ? `@${profile.username} (\`${target}\`)`
+      : `\`${target}\``;
+
     await renderMaintenanceScreen(
       ctx,
       buildScreen({
@@ -130,7 +239,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
         primary: {
           emoji: '👤',
           label: t(ctx, 'admin_registry_id_label'),
-          value: String(target),
+          value: targetDisplay,
         },
         footer: t(ctx, 'admin_remove_admin_consequence'),
       }),
@@ -159,7 +268,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
               primary: {
                 emoji: '👤',
                 label: t(ctx, 'admin_registry_id_label'),
-                value: String(target),
+                value: `\`${target}\``,
               },
             })
           : buildEmptyState(
@@ -167,7 +276,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
               t(ctx, 'admin_registry_title'),
               t(ctx, 'admin_admin_not_found', { telegram_id: target })
             ),
-        new InlineKeyboard().text(t(ctx, 'menu_back'), 'admin:admins:open')
+        new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admins'), 'admin:admins:open')
       );
     } catch (err) {
       await renderMaintenanceScreen(
@@ -182,7 +291,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
               : 'operation_failed'
           )
         ),
-        new InlineKeyboard().text(t(ctx, 'menu_back'), 'admin:admins:open')
+        new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admins'), 'admin:admins:open')
       );
     }
   });

@@ -8,6 +8,7 @@ describe('packageDisplayMode', () => {
     name: '100 GB - 60 Days',
     price: 150_000,
     gbAmount: 100,
+    durationDays: 60,
   };
 
   it('renders volume + days + price when display mode is specs (default)', () => {
@@ -17,7 +18,10 @@ describe('packageDisplayMode', () => {
           getSetting: vi.fn(() => 'specs'),
           resolveLocale: vi.fn(() => 'fa'),
           get: vi.fn((key: string, _loc?: string, params?: Record<string, string | number>) => {
-            if (key === 'package_button') return `📦 ${params?.name} · ${params?.price} تومان`;
+            if (key === 'package_button_specs')
+              return `📦 ${params?.volume} · ${params?.days} · ${params?.price} تومان`;
+            if (key === 'traffic_unit_gb') return 'گیگ';
+            if (key === 'days_unit') return 'روز';
             return key;
           }),
         },
@@ -25,8 +29,33 @@ describe('packageDisplayMode', () => {
     } as unknown as LocaleAwareContext;
 
     const label = formatPackageButtonLabel(ctx as any, pkg);
-    expect(label).toContain('100 گیگ');
-    expect(label).toContain('۱۵۰٬۰۰۰ تومان');
+    expect(label).toBe('📦 ۱۰۰ گیگ · ۶۰ روز · ۱۵۰٬۰۰۰ تومان');
+  });
+
+  it('infers volume and days from custom package ID pattern if missing on object in specs mode', () => {
+    const customPkg = {
+      id: 'custom_50gb_30d',
+      name: 'Custom',
+      price: 200_000,
+    };
+    const ctx = {
+      services: {
+        translationService: {
+          getSetting: vi.fn(() => 'specs'),
+          resolveLocale: vi.fn(() => 'fa'),
+          get: vi.fn((key: string, _loc?: string, params?: Record<string, string | number>) => {
+            if (key === 'package_button_specs')
+              return `${params?.volume} · ${params?.days} · ${params?.price} تومان`;
+            if (key === 'traffic_unit_gb') return 'گیگ';
+            if (key === 'days_unit') return 'روز';
+            return key;
+          }),
+        },
+      },
+    } as unknown as LocaleAwareContext;
+
+    const label = formatPackageButtonLabel(ctx as any, customPkg);
+    expect(label).toBe('۵۰ گیگ · ۳۰ روز · ۲۰۰٬۰۰۰ تومان');
   });
 
   it('renders package name only when display mode is name', () => {
@@ -50,6 +79,7 @@ describe('packageDisplayMode', () => {
       name: 'سرویس پیش فرض',
       price: 150_000,
       gbAmount: 50,
+      durationDays: 30,
     };
     const ctx = {
       services: {

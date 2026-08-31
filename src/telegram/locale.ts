@@ -262,7 +262,13 @@ export function formatPackageButtonLabel(
   ctx: LocaleAwareContext & {
     services?: { translationService?: { getSetting: (k: string, d?: string) => string } };
   },
-  pkg: { id: string; name: string; price: number; gbAmount: number },
+  pkg: {
+    id: string;
+    name: string;
+    price: number;
+    gbAmount?: number;
+    durationDays?: number;
+  },
   options?: {
     effectivePrice?: number;
     tag?: string;
@@ -272,11 +278,36 @@ export function formatPackageButtonLabel(
     ctx.services?.translationService?.getSetting('package_display_mode', 'specs') ?? 'specs';
   const tag = options?.tag ?? '';
   const effectivePrice = options?.effectivePrice ?? pkg.price;
-  const name = localizedPackageName(ctx, pkg.id, pkg.name);
 
   if (displayMode === 'name') {
+    const name = localizedPackageName(ctx, pkg.id, pkg.name);
     return `${tag}${name}`;
   }
 
+  let gbAmount = pkg.gbAmount;
+  let durationDays = pkg.durationDays;
+
+  if (gbAmount === undefined || durationDays === undefined) {
+    const match = /^(?:pkg|custom)_(\d+)gb(?:_(\d+)d)?$/i.exec(pkg.id);
+    if (match) {
+      if (gbAmount === undefined) gbAmount = Number(match[1]);
+      if (durationDays === undefined && match[2]) durationDays = Number(match[2]);
+    }
+  }
+
+  if (gbAmount !== undefined && durationDays !== undefined && gbAmount > 0 && durationDays > 0) {
+    const volume = `${localizedNumber(gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`;
+    const days = `${localizedNumber(durationDays, ctx)} ${t(ctx, 'days_unit')}`;
+    const price = localizedNumber(effectivePrice, ctx);
+    return `${tag}${t(ctx, 'package_button_specs', { volume, days, price })}`;
+  }
+
+  if (gbAmount !== undefined && gbAmount > 0) {
+    const volume = `${localizedNumber(gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`;
+    const price = localizedNumber(effectivePrice, ctx);
+    return `${tag}${t(ctx, 'package_button', { name: volume, price })}`;
+  }
+
+  const name = localizedPackageName(ctx, pkg.id, pkg.name);
   return `${tag}${t(ctx, 'package_button', { name, price: localizedNumber(effectivePrice, ctx) })}`;
 }
