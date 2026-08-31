@@ -115,7 +115,7 @@ export async function adminCustomVolumeConversation(
       const key = input.data.slice('cv:edit:'.length);
       const definition = getSettingDefinition(key);
       if (definition) {
-        await editSetting(conversation, ctx, definition);
+        await editSetting(conversation, activeCtx, definition);
       }
     }
   }

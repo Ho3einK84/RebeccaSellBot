@@ -146,7 +146,7 @@ export async function adminLuckyWheelSettingsConversation(
       const key = input.data.slice('wheel_cfg:edit:'.length);
       const definition = getSettingDefinition(key);
       if (definition) {
-        await editSetting(conversation, ctx, definition);
+        await editSetting(conversation, activeCtx, definition);
       }
     }
   }

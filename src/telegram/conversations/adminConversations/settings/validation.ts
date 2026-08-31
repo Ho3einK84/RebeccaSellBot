@@ -113,8 +113,12 @@ export function normalizeSupportDestination(rawValue: string): string | undefine
     const username = value.replace(/^@/u, '');
     return /^[a-zA-Z0-9_]{5,32}$/u.test(username) ? `@${username}` : undefined;
   }
-  const numeric = normalizeInputDigits(value);
-  return /^[1-9]\d{4,16}$/u.test(numeric) ? numeric : undefined;
+  const isNegative = value.startsWith('-');
+  const digitsOnly = normalizeInputDigits(isNegative ? value.slice(1) : value);
+  if (/^\d{4,20}$/u.test(digitsOnly)) {
+    return isNegative ? `-${digitsOnly}` : digitsOnly;
+  }
+  return undefined;
 }
 
 export function isValidNamingTemplate(value: string): boolean {

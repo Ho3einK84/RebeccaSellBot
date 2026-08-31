@@ -34,9 +34,12 @@ import { waitForSettingsInput } from './navigation.js';
 import { settingValidationMessage, validateAdminSetting } from './validation.js';
 
 type FlowOutcome = 'continue' | 'back' | 'cancel';
-type GroupChoice = { type: 'group'; group: SettingGroup } | { type: 'cancel' };
+type GroupChoice =
+  { type: 'group'; group: SettingGroup; ctx?: ConversationContext } | { type: 'cancel' };
 type SettingChoice =
-  { type: 'setting'; definition: SettingDefinition } | { type: 'back' } | { type: 'cancel' };
+  | { type: 'setting'; definition: SettingDefinition; ctx?: ConversationContext }
+  | { type: 'back'; ctx?: ConversationContext }
+  | { type: 'cancel' };
 
 export async function adminEditSettingsConversation(
   conversation: MyConversation,
@@ -48,35 +51,39 @@ export async function adminEditSettingsConversation(
   let activeGroup =
     entryPoint === 'packages' ? getSettingGroup('pricing') : getSettingGroup(entryPoint ?? '');
   let openPackages = entryPoint === 'packages';
+  let activeCtx: ConversationContext = ctx;
 
   for (;;) {
     if (!activeGroup) {
-      const choice = await chooseSettingsGroup(conversation, ctx);
+      const choice = await chooseSettingsGroup(conversation, activeCtx);
       if (choice.type === 'cancel') return;
       activeGroup = choice.group;
+      if (choice.ctx) activeCtx = choice.ctx;
     }
 
     if (openPackages) {
       openPackages = false;
-      const outcome = await managePackages(conversation, ctx);
+      const outcome = await managePackages(conversation, activeCtx);
       if (outcome === 'cancel') return;
     }
 
-    const choice = await chooseSettingInGroup(conversation, ctx, activeGroup);
+    const choice = await chooseSettingInGroup(conversation, activeCtx, activeGroup);
     if (choice.type === 'cancel') return;
     if (choice.type === 'back') {
       activeGroup = undefined;
+      if (choice.ctx) activeCtx = choice.ctx;
       continue;
     }
+    if (choice.ctx) activeCtx = choice.ctx;
 
     if (choice.definition.editor.type === 'packages') {
-      const outcome = await managePackages(conversation, ctx);
+      const outcome = await managePackages(conversation, activeCtx);
       if (outcome === 'cancel') return;
       continue;
     }
 
     if (choice.definition.editor.type === 'boolean') {
-      const current = readSettingBool(ctx, choice.definition.key);
+      const current = readSettingBool(activeCtx, choice.definition.key);
       const nextVal = (!current).toString();
       await conversation.external(async (outsideCtx) => {
         if (!outsideCtx.services) return;
@@ -85,7 +92,7 @@ export async function adminEditSettingsConversation(
       continue;
     }
 
-    const outcome = await editSetting(conversation, ctx, choice.definition);
+    const outcome = await editSetting(conversation, activeCtx, choice.definition);
     if (outcome === 'cancel') return;
     // Both save and Back return to the category that owns the setting.
   }
@@ -109,7 +116,7 @@ async function chooseSettingsGroup(
   });
   if (input.type !== 'callback') return { type: 'cancel' };
   const group = getSettingGroup(input.data.slice('set-group:'.length));
-  return group ? { type: 'group', group } : { type: 'cancel' };
+  return group ? { type: 'group', group, ctx: input.ctx } : { type: 'cancel' };
 }
 
 async function chooseSettingInGroup(
@@ -133,11 +140,11 @@ async function chooseSettingInGroup(
     retryKeyboard: keyboard,
   });
   if (input.type === 'cancel') return { type: 'cancel' };
-  if (input.type !== 'callback') return { type: 'back' };
+  if (input.type !== 'callback') return { type: 'back', ctx: input.ctx };
   const definition = getSettingDefinition(input.data.slice('set-edit:'.length));
   return definition && definition.group === group.id
-    ? { type: 'setting', definition }
-    : { type: 'back' };
+    ? { type: 'setting', definition, ctx: input.ctx }
+    : { type: 'back', ctx: input.ctx };
 }
 
 export async function editSetting(
@@ -185,7 +192,7 @@ async function editLocaleSetting(
   if (input.type !== 'callback') return 'back';
   const chosen = input.data.slice(callbackPrefix.length);
   const validLocale = chosen === 'en' ? 'en' : 'fa';
-  return saveSetting(conversation, ctx, definition, validLocale);
+  return saveSetting(conversation, input.ctx ?? ctx, definition, validLocale);
 }
 
 async function editBooleanSetting(
@@ -193,7 +200,7 @@ async function editBooleanSetting(
   ctx: ConversationContext,
   definition: SettingDefinition
 ): Promise<FlowOutcome> {
-  const callbackPrefix = definition.key === 'trial_enabled' ? 'set-tr:' : 'set-cv:';
+  const callbackPrefix = `set-bool-${definition.key}:`;
   const keyboard = buildBooleanSettingKeyboard(ctx, definition.key, callbackPrefix);
   await promptInConversation(
     conversation,
@@ -220,7 +227,7 @@ async function editBooleanSetting(
   if (input.type !== 'callback') return 'back';
   const value = validateAdminSetting(definition.key, input.data.slice(callbackPrefix.length));
   if (value === undefined) return 'back';
-  return saveSetting(conversation, ctx, definition, value);
+  return saveSetting(conversation, input.ctx ?? ctx, definition, value);
 }
 
 async function editNamingMode(
@@ -256,7 +263,9 @@ async function editNamingMode(
   if (input.type === 'cancel') return 'cancel';
   if (input.type !== 'callback') return 'back';
   const value = validateAdminSetting('naming_mode', input.data.slice('set-nm:'.length));
-  return value === undefined ? 'back' : saveSetting(conversation, ctx, definition, value);
+  return value === undefined
+    ? 'back'
+    : saveSetting(conversation, input.ctx ?? ctx, definition, value);
 }
 
 async function editSupportSetting(
@@ -289,10 +298,10 @@ async function editSupportSetting(
   if (choice.type === 'cancel') return 'cancel';
   if (choice.type !== 'callback') return 'back';
   if (choice.data === 'set-support:remove') {
-    return saveSetting(conversation, ctx, definition, '');
+    return saveSetting(conversation, choice.ctx ?? ctx, definition, '');
   }
   if (choice.data !== 'set-support:edit') return 'back';
-  return editTextSetting(conversation, ctx, definition);
+  return editTextSetting(conversation, choice.ctx ?? ctx, definition);
 }
 
 async function editTextSetting(
@@ -331,7 +340,7 @@ async function editTextSetting(
     if (input.type === 'cancel') return 'cancel';
     if (input.type !== 'text') return 'back';
     const value = validateAdminSetting(definition.key, input.value);
-    if (value !== undefined) return saveSetting(conversation, ctx, definition, value);
+    if (value !== undefined) return saveSetting(conversation, input.ctx ?? ctx, definition, value);
 
     await promptInConversation(
       conversation,

@@ -132,7 +132,7 @@ export async function adminPaymentSettingsConversation(
       const key = input.data.slice('pay:edit:'.length);
       const definition = getSettingDefinition(key);
       if (definition) {
-        await editSetting(conversation, ctx, definition);
+        await editSetting(conversation, activeCtx, definition);
       }
     }
   }

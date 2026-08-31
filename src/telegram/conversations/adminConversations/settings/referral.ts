@@ -89,7 +89,7 @@ export async function adminReferralSettingsConversation(
       const key = input.data.slice('ref:edit:'.length);
       const definition = getSettingDefinition(key);
       if (definition) {
-        await editSetting(conversation, ctx, definition);
+        await editSetting(conversation, activeCtx, definition);
       }
     }
   }

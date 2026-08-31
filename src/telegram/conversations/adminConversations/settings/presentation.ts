@@ -209,6 +209,18 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
         ],
       },
       {
+        emoji: '💬',
+        title: t(ctx, 'admin_overview_support'),
+        fields: [
+          {
+            label: t(ctx, 'admin_setting_support_enabled'),
+            value: supportEnabled
+              ? `${onBadge} (\`${escapeTelegramMarkdown(supportDest)}\`)`
+              : offBadge,
+          },
+        ],
+      },
+      {
         emoji: '🎁',
         title: t(ctx, 'admin_overview_trial'),
         fields: [
@@ -219,18 +231,6 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
                   ctx,
                   'traffic_unit_gb'
                 )} / ${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')})`
-              : offBadge,
-          },
-        ],
-      },
-      {
-        emoji: '💬',
-        title: t(ctx, 'admin_overview_support'),
-        fields: [
-          {
-            label: t(ctx, 'admin_setting_support_enabled'),
-            value: supportEnabled
-              ? `${onBadge} (\`${escapeTelegramMarkdown(supportDest)}\`)`
               : offBadge,
           },
         ],

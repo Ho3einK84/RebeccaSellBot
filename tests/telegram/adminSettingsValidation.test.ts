@@ -40,6 +40,8 @@ describe('admin settings validation', () => {
     expect(normalizeSupportDestination('support_team')).toBe('@support_team');
     expect(normalizeSupportDestination(' @support_team ')).toBe('@support_team');
     expect(normalizeSupportDestination('۱۲۳۴۵۶۷۸۹')).toBe('123456789');
+    expect(normalizeSupportDestination('-1001234567890')).toBe('-1001234567890');
+    expect(normalizeSupportDestination('-۱۰۰۱۲۳۴۵۶۷۸۹۰')).toBe('-1001234567890');
     expect(normalizeSupportDestination('')).toBe('');
     expect(normalizeSupportDestination('@bad')).toBeUndefined();
     expect(normalizeSupportDestination('https://t.me/support_team')).toBeUndefined();

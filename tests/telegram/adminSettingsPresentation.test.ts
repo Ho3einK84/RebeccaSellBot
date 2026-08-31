@@ -135,7 +135,7 @@ describe('admin settings presentation', () => {
     expect(prompt).not.toContain('—_{telegram_id}_—');
   });
 
-  it('builds settings overview screen with general system settings', () => {
+  it('builds settings overview screen with general system settings in exact button order', () => {
     const ctx = createContext({
       bot_enabled: 'true',
       trial_enabled: 'true',
@@ -147,5 +147,14 @@ describe('admin settings presentation', () => {
     expect(overview).toContain('admin_overview_bot_status');
     expect(overview).toContain('admin_setting_trial_enabled');
     expect(overview).toContain('@support\\_admin');
+
+    const sysIdx = overview.indexOf('admin_overview_language');
+    const supIdx = overview.indexOf('admin_overview_support');
+    const trlIdx = overview.indexOf('admin_overview_trial');
+    const namIdx = overview.indexOf('admin_overview_naming');
+    expect(sysIdx).toBeGreaterThan(-1);
+    expect(supIdx).toBeGreaterThan(sysIdx);
+    expect(trlIdx).toBeGreaterThan(supIdx);
+    expect(namIdx).toBeGreaterThan(trlIdx);
   });
 });
