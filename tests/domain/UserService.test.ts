@@ -97,4 +97,57 @@ describe('UserService administrative profile lookup', () => {
     expect(profile).not.toBeNull();
     expect(profile?.telegramId).toBe(44);
   });
+
+  it('returns aggregated summary for user report', async () => {
+    const user = {
+      id: '4e602ae8-4398-4ce0-a084-10a5860ce1a5',
+      telegramId: 44,
+      username: 'alice',
+      firstName: 'Alice',
+      lastName: null,
+      balance: 25_000,
+      reservedBalance: 0,
+      totalSpend: 150_000,
+      isBanned: false,
+      hasUsedTrial: true,
+      locale: 'fa',
+      referrerId: null,
+      referralCode: 'ref_44_abc',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
+    };
+
+    vi.mocked(getDb).mockReturnValue(
+      databaseWithSelectResults([
+        [user], // findProfile -> users table
+        [{ value: 5 }], // transactionCount
+        [{ value: 2 }], // referredUserCount
+        [{ value: 10_000 }], // referralBonus
+        [{ value: 5_000 }], // cashback
+        [{ value: 200_000 }], // depositRow
+        [{ value: 0 }], // refundRow
+        [{ value: 15_000 }], // luckyWheelRow
+        [{ count: 4 }], // configsCountRow
+        [{ count: 2 }], // activeConfigsCountRow
+        [{ count: 3 }], // ordersCountRow
+        [{ count: 5 }], // approvedReceiptsRow
+        [{ count: 1 }], // rejectedReceiptsRow
+        [{ count: 0 }], // pendingReceiptsRow
+        [{ count: 7 }], // auditCountRow
+      ]) as never
+    );
+
+    const summary = await new UserService().getUserReportSummary(44);
+    expect(summary).not.toBeNull();
+    expect(summary?.totalDeposit).toBe(200_000);
+    expect(summary?.totalSpend).toBe(150_000);
+    expect(summary?.totalLuckyWheel).toBe(15_000);
+    expect(summary?.activeConfigsCount).toBe(2);
+    expect(summary?.totalConfigsCount).toBe(4);
+    expect(summary?.totalOrdersCount).toBe(3);
+    expect(summary?.receiptsApprovedCount).toBe(5);
+    expect(summary?.receiptsRejectedCount).toBe(1);
+    expect(summary?.totalReceiptsCount).toBe(6);
+    expect(summary?.auditEventsCount).toBe(7);
+  });
 });

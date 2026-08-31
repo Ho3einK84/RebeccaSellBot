@@ -35,10 +35,17 @@ export async function renderUserListPage(ctx: MenuContext, requestedPage = 1): P
       `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
       user.username ||
       String(user.telegramId);
+    const badge = user.isBanned
+      ? '🚫 '
+      : user.activeSubscriptionCount > 0
+        ? '🟢 '
+        : user.totalSpend >= 500_000
+          ? '💎 '
+          : '';
     keyboard
       .text(
         t(ctx, 'admin_user_btn_format', {
-          name: displayName,
+          name: `${badge}${displayName}`,
           balance: localizedNumber(user.balance, ctx),
         }),
         `admin:user:view:${user.telegramId}`
@@ -340,39 +347,34 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     );
   });
 
-  bot.callbackQuery(/^admin:user:audit:(\d+)$/u, async (ctx) => {
-    if (!ctx.services) return;
-    const targetId = Number(ctx.match[1]);
+  bot.callbackQuery(/^admin:user:reports:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
-    const events = await ctx.services.userService.listAuditForUser(targetId, 12);
-    await renderUserScreen(
-      ctx,
-      events.length
-        ? buildScreen({
-            emoji: '📜',
-            title: t(ctx, 'admin_user_audit_title'),
-            subtitle: `\`${targetId}\``,
-            primary: {
-              emoji: '🧾',
-              label: t(ctx, 'admin_user_transactions_label'),
-              value: localizedNumber(events.length, ctx),
-            },
-            sections: [
-              {
-                emoji: '🕒',
-                title: t(ctx, 'admin_user_audit_title'),
-                fields: events.map((event) => ({
-                  emoji: '•',
-                  label: localizedDate(event.createdAt, ctx),
-                  value: `${escapeTelegramMarkdown(event.action)} · ${event.actorTelegramId ?? 'system'}`,
-                })),
-              },
-            ],
-          })
-        : buildEmptyState('📭', t(ctx, 'admin_user_audit_title'), t(ctx, 'admin_user_no_audit')),
-      new InlineKeyboard().text(t(ctx, 'menu_back'), `admin:user:view:${targetId}`),
-      'Markdown'
-    );
+    await renderUserReportsHub(ctx, Number(ctx.match[1]));
+  });
+
+  bot.callbackQuery(/^admin:user:reports:ledger:(\d+)(?::(\d+))?$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderUserReportsLedger(ctx, Number(ctx.match[1]), Number(ctx.match[2]) || 1);
+  });
+
+  bot.callbackQuery(/^admin:user:reports:orders:(\d+)(?::(\d+))?$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderUserReportsOrders(ctx, Number(ctx.match[1]), Number(ctx.match[2]) || 1);
+  });
+
+  bot.callbackQuery(/^admin:user:reports:receipts:(\d+)(?::(\d+))?$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderUserReportsReceipts(ctx, Number(ctx.match[1]), Number(ctx.match[2]) || 1);
+  });
+
+  bot.callbackQuery(/^admin:user:reports:audit:(\d+)(?::(\d+))?$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderUserReportsAudit(ctx, Number(ctx.match[1]), Number(ctx.match[2]) || 1);
+  });
+
+  bot.callbackQuery(/^admin:user:audit:(\d+)$/u, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderUserReportsHub(ctx, Number(ctx.match[1]));
   });
 
   bot.callbackQuery(/^admin:user:message:(\d+)$/u, async (ctx) => {
@@ -573,7 +575,7 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
     .text(t(ctx, 'admin_user_subscriptions_button'), `admin:user:subscriptions:${user.telegramId}`)
     .row()
     .text(t(ctx, 'admin_user_message_button'), `admin:user:message:${user.telegramId}`)
-    .text(t(ctx, 'admin_user_audit_button'), `admin:user:audit:${user.telegramId}`)
+    .text(t(ctx, 'admin_user_audit_button'), `admin:user:reports:${user.telegramId}`)
     .row()
     .text(
       t(ctx, user.isBanned ? 'admin_user_unban_button' : 'admin_user_ban_button'),
@@ -582,6 +584,613 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
     .row()
     .text(t(ctx, 'admin_users_back_button'), 'admin:users:page:1');
   await renderUserScreen(ctx, text, keyboard, 'Markdown');
+}
+
+const TRANSACTION_TYPE_MAP: Record<string, string> = {
+  topup: 'tx_type_topup',
+  purchase: 'tx_type_purchase',
+  refund: 'tx_type_refund',
+  admin_adjustment: 'tx_type_admin_adjustment',
+  promo: 'tx_type_promo',
+  referral_bonus: 'tx_type_referral_bonus',
+  cashback: 'tx_type_cashback',
+  trial: 'tx_type_trial',
+  transfer_sent: 'tx_type_transfer_sent',
+  transfer_received: 'tx_type_transfer_received',
+  lucky_wheel: 'tx_type_lucky_wheel',
+};
+
+function transactionIcon(type: string, amount: number): string {
+  switch (type) {
+    case 'topup':
+      return '➕';
+    case 'purchase':
+      return '🛍️';
+    case 'refund':
+      return '↩️';
+    case 'referral_bonus':
+      return '🎁';
+    case 'cashback':
+      return '💸';
+    case 'transfer_sent':
+      return '📤';
+    case 'transfer_received':
+      return '📥';
+    case 'promo':
+      return '🎟️';
+    case 'lucky_wheel':
+      return '🎡';
+    default:
+      return amount >= 0 ? '➕' : '➖';
+  }
+}
+
+function formatAuditAction(ctx: MenuContext, action: string): string {
+  switch (action) {
+    case 'user_banned':
+      return t(ctx, 'admin_user_audit_action_banned');
+    case 'user_unbanned':
+      return t(ctx, 'admin_user_audit_action_unbanned');
+    case 'manual_topup':
+      return t(ctx, 'admin_user_audit_action_manual_topup');
+    case 'manual_deduct':
+      return t(ctx, 'admin_user_audit_action_manual_deduct');
+    case 'balance_set':
+      return t(ctx, 'admin_user_audit_action_balance_set');
+    case 'receipt_approved':
+      return t(ctx, 'admin_user_audit_action_receipt_approved');
+    case 'receipt_rejected':
+      return t(ctx, 'admin_user_audit_action_receipt_rejected');
+    case 'config_transferred_out':
+      return t(ctx, 'admin_user_audit_action_config_transfer_out');
+    case 'config_transferred_in':
+      return t(ctx, 'admin_user_audit_action_config_transfer_in');
+    case 'refund_processed':
+      return t(ctx, 'admin_user_audit_action_refund_processed');
+    default:
+      return escapeTelegramMarkdown(action);
+  }
+}
+
+function formatAuditActor(ctx: MenuContext, actorId?: number | null): string {
+  if (!actorId) {
+    return t(ctx, 'admin_user_audit_actor_system');
+  }
+  return tm(ctx, 'admin_user_audit_actor_admin', { id: actorId });
+}
+
+function formatAuditMetadata(ctx: MenuContext, rawMetadata?: string | null): string | undefined {
+  if (!rawMetadata) return undefined;
+  try {
+    const meta = JSON.parse(rawMetadata) as Record<string, unknown>;
+    const parts: string[] = [];
+    if (meta.amount !== undefined) {
+      parts.push(`${localizedNumber(Number(meta.amount), ctx)} ${t(ctx, 'currency_toman')}`);
+    }
+    if (typeof meta.reason === 'string' && meta.reason.trim()) {
+      parts.push(escapeTelegramMarkdown(meta.reason.trim()));
+    }
+    if (typeof meta.configUsername === 'string' && meta.configUsername.trim()) {
+      parts.push(`\`${sanitizeTelegramInlineCode(meta.configUsername.trim())}\``);
+    }
+    if (typeof meta.description === 'string' && meta.description.trim()) {
+      parts.push(escapeTelegramMarkdown(meta.description.trim()));
+    }
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function renderUserReportsHub(ctx: MenuContext, targetId: number): Promise<void> {
+  if (!ctx.services) return;
+  const summary = await ctx.services.userService.getUserReportSummary(targetId);
+  if (!summary) {
+    await renderUserScreen(
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_user_reports_title'), t(ctx, 'admin_user_not_found')),
+      new InlineKeyboard().text(t(ctx, 'admin_users_back_button'), 'admin:users:page:1'),
+      'Markdown'
+    );
+    return;
+  }
+
+  const keyboard = new InlineKeyboard()
+    .text(t(ctx, 'admin_user_report_btn_ledger'), `admin:user:reports:ledger:${targetId}:1`)
+    .text(t(ctx, 'admin_user_report_btn_orders'), `admin:user:reports:orders:${targetId}:1`)
+    .row()
+    .text(t(ctx, 'admin_user_report_btn_receipts'), `admin:user:reports:receipts:${targetId}:1`)
+    .text(t(ctx, 'admin_user_report_btn_audit'), `admin:user:reports:audit:${targetId}:1`)
+    .row()
+    .text(t(ctx, 'admin_user_report_btn_back_profile'), `admin:user:view:${targetId}`);
+
+  const financialFields = [
+    {
+      emoji: '💳',
+      label: t(ctx, 'admin_user_reports_total_deposit_label'),
+      value: `${localizedNumber(summary.totalDeposit, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    {
+      emoji: '🛍️',
+      label: t(ctx, 'admin_user_reports_total_spend_label'),
+      value: `${localizedNumber(summary.totalSpend, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    ...(summary.totalRefund > 0
+      ? [
+          {
+            emoji: '↩️',
+            label: t(ctx, 'admin_user_reports_total_refund_label'),
+            value: `${localizedNumber(summary.totalRefund, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ]
+      : []),
+    {
+      emoji: '🧾',
+      label: t(ctx, 'admin_user_transactions_label'),
+      value: localizedNumber(summary.totalTransactions, ctx),
+    },
+  ];
+
+  const activityFields = [
+    {
+      emoji: '📦',
+      label: t(ctx, 'admin_user_reports_configs_stat_label'),
+      value: tm(ctx, 'admin_user_reports_configs_stat_value', {
+        active: localizedNumber(summary.activeConfigsCount, ctx),
+        total: localizedNumber(summary.totalConfigsCount, ctx),
+      }),
+    },
+    {
+      emoji: '🏷️',
+      label: t(ctx, 'admin_user_reports_total_orders_label'),
+      value: localizedNumber(summary.totalOrdersCount, ctx),
+    },
+    ...(summary.totalLuckyWheel > 0
+      ? [
+          {
+            emoji: '🎡',
+            label: t(ctx, 'admin_user_reports_lucky_wheel_label'),
+            value: `${localizedNumber(summary.totalLuckyWheel, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ]
+      : []),
+  ];
+
+  const receiptsFields = [
+    {
+      emoji: '🧾',
+      label: t(ctx, 'admin_user_reports_receipts_stat_label'),
+      value: tm(ctx, 'admin_user_reports_receipts_stat_value', {
+        approved: localizedNumber(summary.receiptsApprovedCount, ctx),
+        rejected: localizedNumber(summary.receiptsRejectedCount, ctx),
+        pending: localizedNumber(summary.receiptsPendingCount, ctx),
+      }),
+    },
+  ];
+
+  const referralFields = [
+    {
+      emoji: '👥',
+      label: t(ctx, 'admin_user_referred_count_label'),
+      value: localizedNumber(summary.user.referredUserCount, ctx),
+    },
+    {
+      emoji: '🎁',
+      label: t(ctx, 'admin_user_referral_bonus_label'),
+      value: `${localizedNumber(summary.totalReferralBonus, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    {
+      emoji: '💸',
+      label: t(ctx, 'admin_user_cashback_label'),
+      value: `${localizedNumber(summary.totalCashback, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+  ];
+
+  const screen = buildScreen({
+    emoji: '📜',
+    title: t(ctx, 'admin_user_reports_title'),
+    subtitle: tm(ctx, 'admin_user_reports_subtitle', { telegram_id: targetId }),
+    primary: {
+      emoji: '💰',
+      label: t(ctx, 'admin_user_balance_label'),
+      value: `${localizedNumber(summary.user.balance, ctx)} ${t(ctx, 'currency_toman')}`,
+    },
+    sections: [
+      {
+        emoji: '💳',
+        title: t(ctx, 'admin_user_reports_financial_section'),
+        fields: financialFields,
+      },
+      {
+        emoji: '📱',
+        title: t(ctx, 'admin_user_reports_activity_section'),
+        fields: activityFields,
+      },
+      {
+        emoji: '🧾',
+        title: t(ctx, 'admin_user_reports_receipts_section'),
+        fields: receiptsFields,
+      },
+      {
+        emoji: '👥',
+        title: t(ctx, 'admin_user_reports_referral_section'),
+        fields: referralFields,
+      },
+    ],
+    footer: `ℹ️ ${t(ctx, 'admin_user_reports_hint')}`,
+  });
+
+  await renderUserScreen(ctx, screen, keyboard, 'Markdown');
+}
+
+export async function renderUserReportsLedger(
+  ctx: MenuContext,
+  targetId: number,
+  requestedPage = 1
+): Promise<void> {
+  if (!ctx.services) return;
+  const result = await ctx.services.walletService.listTransactionsForUser(
+    targetId,
+    requestedPage,
+    5
+  );
+
+  if (result.transactions.length === 0) {
+    await renderUserScreen(
+      ctx,
+      buildEmptyState('💳', t(ctx, 'admin_user_ledger_title'), t(ctx, 'admin_user_ledger_empty')),
+      new InlineKeyboard().text(
+        t(ctx, 'admin_user_report_btn_back_hub'),
+        `admin:user:reports:${targetId}`
+      ),
+      'Markdown'
+    );
+    return;
+  }
+
+  const keyboard = new InlineKeyboard();
+  if (result.totalPages > 1) {
+    if (result.page > 1) {
+      keyboard.text(
+        t(ctx, 'pagination_previous'),
+        `admin:user:reports:ledger:${targetId}:${result.page - 1}`
+      );
+    }
+    keyboard.text(
+      `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+      'ui:noop'
+    );
+    if (result.page < result.totalPages) {
+      keyboard.text(
+        t(ctx, 'pagination_next'),
+        `admin:user:reports:ledger:${targetId}:${result.page + 1}`
+      );
+    }
+    keyboard.row();
+  }
+  keyboard.text(t(ctx, 'admin_user_report_btn_back_hub'), `admin:user:reports:${targetId}`);
+
+  const screen = buildScreen({
+    emoji: '💳',
+    title: t(ctx, 'admin_user_ledger_title'),
+    subtitle: `\`${targetId}\``,
+    sections: result.transactions.map((tx) => {
+      const icon = transactionIcon(tx.type, tx.amount);
+      const sign = tx.amount > 0 ? '+' : '';
+      const typeKey = TRANSACTION_TYPE_MAP[tx.type];
+      const typeLabel = typeKey ? t(ctx, typeKey) : tx.type;
+      return {
+        emoji: icon,
+        title: `${typeLabel} · ${localizedDate(new Date(tx.createdAt), ctx)}`,
+        fields: [
+          {
+            emoji: '💰',
+            label: t(ctx, 'wallet_pending_amount'),
+            value: `${sign}${localizedNumber(tx.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            emoji: '👛',
+            label: t(ctx, 'wallet_available_balance'),
+            value: `${localizedNumber(tx.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          ...(tx.referenceId
+            ? [
+                {
+                  emoji: '🏷️',
+                  label: t(ctx, 'admin_user_ledger_ref_id'),
+                  value: `\`${sanitizeTelegramInlineCode(tx.referenceId)}\``,
+                },
+              ]
+            : []),
+        ],
+      };
+    }),
+    footer: `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+  });
+
+  await renderUserScreen(ctx, screen, keyboard, 'Markdown');
+}
+
+export async function renderUserReportsOrders(
+  ctx: MenuContext,
+  targetId: number,
+  requestedPage = 1
+): Promise<void> {
+  if (!ctx.services) return;
+  const result = await ctx.services.userService.listOrdersForUser(targetId, requestedPage, 5);
+
+  if (result.orders.length === 0) {
+    await renderUserScreen(
+      ctx,
+      buildEmptyState('🛍️', t(ctx, 'admin_user_orders_title'), t(ctx, 'admin_user_orders_empty')),
+      new InlineKeyboard().text(
+        t(ctx, 'admin_user_report_btn_back_hub'),
+        `admin:user:reports:${targetId}`
+      ),
+      'Markdown'
+    );
+    return;
+  }
+
+  const keyboard = new InlineKeyboard();
+  if (result.totalPages > 1) {
+    if (result.page > 1) {
+      keyboard.text(
+        t(ctx, 'pagination_previous'),
+        `admin:user:reports:orders:${targetId}:${result.page - 1}`
+      );
+    }
+    keyboard.text(
+      `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+      'ui:noop'
+    );
+    if (result.page < result.totalPages) {
+      keyboard.text(
+        t(ctx, 'pagination_next'),
+        `admin:user:reports:orders:${targetId}:${result.page + 1}`
+      );
+    }
+    keyboard.row();
+  }
+  keyboard.text(t(ctx, 'admin_user_report_btn_back_hub'), `admin:user:reports:${targetId}`);
+
+  const screen = buildScreen({
+    emoji: '🛍️',
+    title: t(ctx, 'admin_user_orders_title'),
+    subtitle: `\`${targetId}\``,
+    sections: result.orders.map((order) => {
+      const typeLabel =
+        order.type === 'renew_config'
+          ? t(ctx, 'admin_user_order_type_renew')
+          : t(ctx, 'admin_user_order_type_new');
+
+      let statusEmoji = '🟢';
+      let statusLabel = t(ctx, 'admin_user_order_status_completed');
+      if (order.status === 'pending' || order.status === 'reconciliation_required') {
+        statusEmoji = '🟡';
+        statusLabel = t(ctx, 'admin_user_order_status_pending');
+      } else if (order.status === 'failed') {
+        statusEmoji = '🔴';
+        statusLabel = t(ctx, 'admin_user_order_status_failed');
+      } else if (order.status === 'refunded') {
+        statusEmoji = '↩️';
+        statusLabel = t(ctx, 'admin_user_order_status_refunded');
+      }
+
+      return {
+        emoji: statusEmoji,
+        title: `${typeLabel} · ${localizedDate(new Date(order.createdAt), ctx)}`,
+        fields: [
+          {
+            emoji: '💰',
+            label: t(ctx, 'checkout_total_label'),
+            value: `${localizedNumber(order.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          ...(order.gbAmount && order.durationDays
+            ? [
+                {
+                  emoji: '📦',
+                  label: t(ctx, 'checkout_package_section'),
+                  value: tm(ctx, 'admin_user_order_package_spec', {
+                    gb: localizedNumber(order.gbAmount, ctx),
+                    days: localizedNumber(order.durationDays, ctx),
+                  }),
+                },
+              ]
+            : []),
+          ...(order.configUsername
+            ? [
+                {
+                  emoji: '📱',
+                  label: t(ctx, 'admin_user_order_config_label'),
+                  value: `\`${sanitizeTelegramInlineCode(order.configUsername)}\``,
+                },
+              ]
+            : []),
+          {
+            emoji: '⚡',
+            label: t(ctx, 'subscription_status_label'),
+            value: statusLabel,
+          },
+        ],
+      };
+    }),
+    footer: `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+  });
+
+  await renderUserScreen(ctx, screen, keyboard, 'Markdown');
+}
+
+export async function renderUserReportsReceipts(
+  ctx: MenuContext,
+  targetId: number,
+  requestedPage = 1
+): Promise<void> {
+  if (!ctx.services) return;
+  const result = await ctx.services.userService.listReceiptsForUser(targetId, requestedPage, 5);
+
+  if (result.receipts.length === 0) {
+    await renderUserScreen(
+      ctx,
+      buildEmptyState(
+        '🧾',
+        t(ctx, 'admin_user_receipts_title'),
+        t(ctx, 'admin_user_receipts_empty')
+      ),
+      new InlineKeyboard().text(
+        t(ctx, 'admin_user_report_btn_back_hub'),
+        `admin:user:reports:${targetId}`
+      ),
+      'Markdown'
+    );
+    return;
+  }
+
+  const keyboard = new InlineKeyboard();
+  if (result.totalPages > 1) {
+    if (result.page > 1) {
+      keyboard.text(
+        t(ctx, 'pagination_previous'),
+        `admin:user:reports:receipts:${targetId}:${result.page - 1}`
+      );
+    }
+    keyboard.text(
+      `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+      'ui:noop'
+    );
+    if (result.page < result.totalPages) {
+      keyboard.text(
+        t(ctx, 'pagination_next'),
+        `admin:user:reports:receipts:${targetId}:${result.page + 1}`
+      );
+    }
+    keyboard.row();
+  }
+  keyboard.text(t(ctx, 'admin_user_report_btn_back_hub'), `admin:user:reports:${targetId}`);
+
+  const screen = buildScreen({
+    emoji: '🧾',
+    title: t(ctx, 'admin_user_receipts_title'),
+    subtitle: `\`${targetId}\``,
+    sections: result.receipts.map((rec) => {
+      let statusEmoji = '✅';
+      let statusLabel = t(ctx, 'admin_user_receipt_status_approved');
+      if (rec.status === 'rejected') {
+        statusEmoji = '❌';
+        statusLabel = t(ctx, 'admin_user_receipt_status_rejected');
+      } else if (rec.status === 'pending') {
+        statusEmoji = '⏳';
+        statusLabel = t(ctx, 'admin_user_receipt_status_pending');
+      }
+
+      return {
+        emoji: statusEmoji,
+        title: `${statusLabel} · ${localizedDate(new Date(rec.createdAt), ctx)}`,
+        fields: [
+          {
+            emoji: '💰',
+            label: t(ctx, 'receipt_result_amount_label'),
+            value: `${localizedNumber(rec.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            emoji: '🏷️',
+            label: t(ctx, 'admin_user_ledger_tx_id'),
+            value: `\`${sanitizeTelegramInlineCode(rec.id)}\``,
+          },
+          ...(rec.reviewedBy
+            ? [
+                {
+                  emoji: '👤',
+                  label: t(ctx, 'admin_user_receipt_reviewer_label'),
+                  value: formatAuditActor(ctx, rec.reviewedBy),
+                },
+              ]
+            : []),
+        ],
+      };
+    }),
+    footer: `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+  });
+
+  await renderUserScreen(ctx, screen, keyboard, 'Markdown');
+}
+
+export async function renderUserReportsAudit(
+  ctx: MenuContext,
+  targetId: number,
+  requestedPage = 1
+): Promise<void> {
+  if (!ctx.services) return;
+  const result = await ctx.services.userService.listAuditLogsForUser(targetId, requestedPage, 5);
+
+  if (result.logs.length === 0) {
+    await renderUserScreen(
+      ctx,
+      buildEmptyState('🛡️', t(ctx, 'admin_user_audit_tab_title'), t(ctx, 'admin_user_no_audit')),
+      new InlineKeyboard().text(
+        t(ctx, 'admin_user_report_btn_back_hub'),
+        `admin:user:reports:${targetId}`
+      ),
+      'Markdown'
+    );
+    return;
+  }
+
+  const keyboard = new InlineKeyboard();
+  if (result.totalPages > 1) {
+    if (result.page > 1) {
+      keyboard.text(
+        t(ctx, 'pagination_previous'),
+        `admin:user:reports:audit:${targetId}:${result.page - 1}`
+      );
+    }
+    keyboard.text(
+      `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+      'ui:noop'
+    );
+    if (result.page < result.totalPages) {
+      keyboard.text(
+        t(ctx, 'pagination_next'),
+        `admin:user:reports:audit:${targetId}:${result.page + 1}`
+      );
+    }
+    keyboard.row();
+  }
+  keyboard.text(t(ctx, 'admin_user_report_btn_back_hub'), `admin:user:reports:${targetId}`);
+
+  const screen = buildScreen({
+    emoji: '🛡️',
+    title: t(ctx, 'admin_user_audit_tab_title'),
+    subtitle: `\`${targetId}\``,
+    sections: result.logs.map((log) => {
+      const actionLabel = formatAuditAction(ctx, log.action);
+      const actorLabel = formatAuditActor(ctx, log.actorTelegramId);
+      const details = formatAuditMetadata(ctx, log.metadata);
+      return {
+        emoji: '•',
+        title: `${actionLabel} · ${localizedDate(new Date(log.createdAt), ctx)}`,
+        fields: [
+          {
+            emoji: '👤',
+            label: t(ctx, 'admin_user_receipt_reviewer_label'),
+            value: actorLabel,
+          },
+          ...(details
+            ? [
+                {
+                  emoji: '📝',
+                  label: t(ctx, 'admin_user_audit_details_label'),
+                  value: details,
+                },
+              ]
+            : []),
+        ],
+      };
+    }),
+    footer: `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`,
+  });
+
+  await renderUserScreen(ctx, screen, keyboard, 'Markdown');
 }
 
 function isSafePositiveInteger(value: number): boolean {

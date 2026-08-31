@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { getDb } from '../../infra/db.js';
 import {
   auditLogs,
+  purchaseIntents,
   topupReceipts,
   userConfigs,
   users,
@@ -16,6 +17,25 @@ export type LocalUserProfile = typeof users.$inferSelect & {
   referredUserCount: number;
   referralBonusEarned: number;
   cashbackEarned: number;
+};
+
+export type UserReportSummary = {
+  user: LocalUserProfile;
+  totalDeposit: number;
+  totalSpend: number;
+  totalRefund: number;
+  totalCashback: number;
+  totalReferralBonus: number;
+  totalLuckyWheel: number;
+  totalTransactions: number;
+  activeConfigsCount: number;
+  totalConfigsCount: number;
+  totalOrdersCount: number;
+  receiptsApprovedCount: number;
+  receiptsRejectedCount: number;
+  receiptsPendingCount: number;
+  totalReceiptsCount: number;
+  auditEventsCount: number;
 };
 
 export type UserLocale = SupportedLocale;
@@ -252,6 +272,190 @@ export class UserService {
       .where(eq(auditLogs.targetTelegramId, telegramId))
       .orderBy(desc(auditLogs.createdAt))
       .limit(Math.max(1, Math.min(limit, 50)));
+  }
+
+  async getUserReportSummary(telegramId: number): Promise<UserReportSummary | null> {
+    const user = await this.findProfile(String(telegramId));
+    if (!user) return null;
+
+    const db = getDb();
+    const [
+      [depositRow],
+      [refundRow],
+      [luckyWheelRow],
+      [configsCountRow],
+      [activeConfigsCountRow],
+      [ordersCountRow],
+      [approvedReceiptsRow],
+      [rejectedReceiptsRow],
+      [pendingReceiptsRow],
+      [auditCountRow],
+    ] = await Promise.all([
+      db
+        .select({ value: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)` })
+        .from(walletTransactions)
+        .where(
+          and(
+            eq(walletTransactions.telegramId, telegramId),
+            sql`${walletTransactions.amount} > 0 AND ${walletTransactions.type} IN ('topup', 'admin_adjustment', 'transfer_received')`
+          )
+        ),
+      db
+        .select({ value: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)` })
+        .from(walletTransactions)
+        .where(
+          and(eq(walletTransactions.telegramId, telegramId), eq(walletTransactions.type, 'refund'))
+        ),
+      db
+        .select({ value: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)` })
+        .from(walletTransactions)
+        .where(
+          and(
+            eq(walletTransactions.telegramId, telegramId),
+            eq(walletTransactions.type, 'lucky_wheel')
+          )
+        ),
+      db.select({ count: count() }).from(userConfigs).where(eq(userConfigs.telegramId, telegramId)),
+      db
+        .select({ count: count() })
+        .from(userConfigs)
+        .where(
+          and(
+            eq(userConfigs.telegramId, telegramId),
+            eq(userConfigs.panelStatus, 'active'),
+            sql`${userConfigs.panelExpire} IS NULL OR ${userConfigs.panelExpire} > EXTRACT(EPOCH FROM NOW())`
+          )
+        ),
+      db
+        .select({ count: count() })
+        .from(purchaseIntents)
+        .where(
+          and(eq(purchaseIntents.telegramId, telegramId), eq(purchaseIntents.status, 'completed'))
+        ),
+      db
+        .select({ count: count() })
+        .from(topupReceipts)
+        .where(and(eq(topupReceipts.telegramId, telegramId), eq(topupReceipts.status, 'approved'))),
+      db
+        .select({ count: count() })
+        .from(topupReceipts)
+        .where(and(eq(topupReceipts.telegramId, telegramId), eq(topupReceipts.status, 'rejected'))),
+      db
+        .select({ count: count() })
+        .from(topupReceipts)
+        .where(and(eq(topupReceipts.telegramId, telegramId), eq(topupReceipts.status, 'pending'))),
+      db
+        .select({ count: count() })
+        .from(auditLogs)
+        .where(eq(auditLogs.targetTelegramId, telegramId)),
+    ]);
+
+    const approvedCount = Number(approvedReceiptsRow?.count ?? 0);
+    const rejectedCount = Number(rejectedReceiptsRow?.count ?? 0);
+    const pendingCount = Number(pendingReceiptsRow?.count ?? 0);
+
+    return {
+      user,
+      totalDeposit: dbIntegerToSafeNumber(depositRow?.value ?? 0, 'report_total_deposit'),
+      totalSpend: Number(user.totalSpend),
+      totalRefund: dbIntegerToSafeNumber(refundRow?.value ?? 0, 'report_total_refund'),
+      totalCashback: Number(user.cashbackEarned),
+      totalReferralBonus: Number(user.referralBonusEarned),
+      totalLuckyWheel: dbIntegerToSafeNumber(luckyWheelRow?.value ?? 0, 'report_total_lucky_wheel'),
+      totalTransactions: Number(user.transactionCount),
+      activeConfigsCount: Number(activeConfigsCountRow?.count ?? 0),
+      totalConfigsCount: Number(configsCountRow?.count ?? 0),
+      totalOrdersCount: Number(ordersCountRow?.count ?? 0),
+      receiptsApprovedCount: approvedCount,
+      receiptsRejectedCount: rejectedCount,
+      receiptsPendingCount: pendingCount,
+      totalReceiptsCount: approvedCount + rejectedCount + pendingCount,
+      auditEventsCount: Number(auditCountRow?.count ?? 0),
+    };
+  }
+
+  async listAuditLogsForUser(
+    telegramId: number,
+    page = 1,
+    pageSize = 5
+  ): Promise<{
+    logs: Array<typeof auditLogs.$inferSelect>;
+    total: number;
+    totalPages: number;
+    page: number;
+  }> {
+    const db = getDb();
+    const [countRes] = await db
+      .select({ count: count() })
+      .from(auditLogs)
+      .where(eq(auditLogs.targetTelegramId, telegramId));
+    const total = Number(countRes?.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.targetTelegramId, telegramId))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(pageSize)
+      .offset((safePage - 1) * pageSize);
+    return { logs: rows, total, totalPages, page: safePage };
+  }
+
+  async listReceiptsForUser(
+    telegramId: number,
+    page = 1,
+    pageSize = 5
+  ): Promise<{
+    receipts: Array<typeof topupReceipts.$inferSelect>;
+    total: number;
+    totalPages: number;
+    page: number;
+  }> {
+    const db = getDb();
+    const [countRes] = await db
+      .select({ count: count() })
+      .from(topupReceipts)
+      .where(eq(topupReceipts.telegramId, telegramId));
+    const total = Number(countRes?.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const rows = await db
+      .select()
+      .from(topupReceipts)
+      .where(eq(topupReceipts.telegramId, telegramId))
+      .orderBy(desc(topupReceipts.createdAt))
+      .limit(pageSize)
+      .offset((safePage - 1) * pageSize);
+    return { receipts: rows, total, totalPages, page: safePage };
+  }
+
+  async listOrdersForUser(
+    telegramId: number,
+    page = 1,
+    pageSize = 5
+  ): Promise<{
+    orders: Array<typeof purchaseIntents.$inferSelect>;
+    total: number;
+    totalPages: number;
+    page: number;
+  }> {
+    const db = getDb();
+    const [countRes] = await db
+      .select({ count: count() })
+      .from(purchaseIntents)
+      .where(eq(purchaseIntents.telegramId, telegramId));
+    const total = Number(countRes?.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const rows = await db
+      .select()
+      .from(purchaseIntents)
+      .where(eq(purchaseIntents.telegramId, telegramId))
+      .orderBy(desc(purchaseIntents.createdAt))
+      .limit(pageSize)
+      .offset((safePage - 1) * pageSize);
+    return { orders: rows, total, totalPages, page: safePage };
   }
 
   /** Persist an explicit language choice from the bot's language menu. */
