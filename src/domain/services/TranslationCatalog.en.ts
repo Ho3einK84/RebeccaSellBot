@@ -721,7 +721,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_pkg_add: '➕ Add New Package',
   admin_pkg_default_target: 'Default panel & service',
   admin_pkg_name_prompt:
-    '📌 *Enter package name:*\n(e.g., Bronze 30-Day Plan)\n\nCurrent: `{current}`',
+    '📌 *Enter package name:*\n(e.g., Bronze Plan or پلن طلایی | Gold Plan for bilingual)\n\nCurrent: `{current}`',
   admin_pkg_gb_prompt: '📶 *Enter traffic limit (GB):*\n\nCurrent: `{current}` GB',
   admin_pkg_days_prompt: '⏳ *Enter validity duration (Days):*\n\nCurrent: `{current}` days',
   admin_pkg_price_prompt: '💳 *Enter price (Toman):*\n\nCurrent: `{current}` Toman',

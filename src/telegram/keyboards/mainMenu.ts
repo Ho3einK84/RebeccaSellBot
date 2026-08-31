@@ -7,7 +7,7 @@ import { Menu } from '@grammyjs/menu';
 import type { MenuContext, MyConversation } from '../types.js';
 import { languageKeyboard } from './language.js';
 import { renderHomeDashboard } from './homeDashboard.js';
-import { clearPendingPromo, getPendingPromoPricing } from '../promoSelection.js';
+import { getPendingPromoPricing } from '../promoSelection.js';
 import {
   formatPackageButtonLabel,
   localizedDate,
@@ -622,36 +622,6 @@ function renderPackageButtons(
 export const shopMenu = new Menu<MenuContext>('shop-menu')
   .dynamic(async (ctx, range) => {
     if (!ctx.services) return;
-
-    if (ctx.session.pendingPromo) {
-      range
-        .text(
-          (c) => t(c, 'shop_change_promo_button'),
-          async (c) => {
-            c.session.promoReturnDestination = 'shop';
-            await c.conversation.enter('promoConversation');
-          }
-        )
-        .text(
-          (c) => t(c, 'shop_clear_promo_button'),
-          async (c) => {
-            clearPendingPromo(c);
-            await c.answerCallbackQuery({ text: t(c, 'operation_cancelled') });
-            await renderScreen(c, await renderShopMenuText(c), { parse_mode: 'Markdown' });
-          }
-        )
-        .row();
-    } else {
-      range
-        .text(
-          (c) => t(c, 'shop_apply_promo_button'),
-          async (c) => {
-            c.session.promoReturnDestination = 'shop';
-            await c.conversation.enter('promoConversation');
-          }
-        )
-        .row();
-    }
 
     if (ctx.session.activeShopCategory) {
       const categoryPackages = ctx.services.pricingService.getPackages(

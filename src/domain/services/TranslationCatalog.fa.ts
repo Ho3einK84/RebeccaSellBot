@@ -714,7 +714,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_pkg_add: '➕ افزودن بسته جدید',
   admin_pkg_default_target: 'پنل و سرویس پیش‌فرض',
   admin_pkg_name_prompt:
-    '📌 *نام بسته را وارد کنید:*\n(مثال: پلن برنزی ۱ ماهه)\n\nمقدار فعلی: `{current}`',
+    '📌 *نام بسته را وارد کنید:*\n(مثال: پلن برنزی یا پلن طلایی | Gold Plan برای دو زبانه)\n\nمقدار فعلی: `{current}`',
   admin_pkg_gb_prompt:
     '📶 *میزان ترافیک (گیگابایت) را وارد کنید:*\n(فقط عدد انگلیسی یا فارسی)\n\nمقدار فعلی: `{current}` گیگابایت',
   admin_pkg_days_prompt:

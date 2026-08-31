@@ -116,7 +116,50 @@ describe('Telegram locale resolution', () => {
     expect(localizedPackageName(ctx, 'custom_30gb_30d', '30 GB')).toBe('۳۰ گیگابایت');
   });
 
-  it('keeps every Latin-first line RTL inside multiline Persian Telegram copy', () => {
+  it('supports bilingual pipe separator in package names', () => {
+    const ctxFa = {
+      from: { language_code: 'fa' },
+      userLocale: 'fa',
+      services: {
+        translationService: {
+          resolveLocale: vi.fn(() => 'fa'),
+          get: vi.fn((key: string) => key),
+        },
+      },
+    } as unknown as MenuContext;
+
+    const ctxEn = {
+      from: { language_code: 'en' },
+      userLocale: 'en',
+      services: {
+        translationService: {
+          resolveLocale: vi.fn(() => 'en'),
+          get: vi.fn((key: string) => key),
+        },
+      },
+    } as unknown as MenuContext;
+
+    expect(localizedPackageName(ctxFa, 'pkg_custom_1', 'پلن طلایی | Gold Plan')).toBe('پلن طلایی');
+    expect(localizedPackageName(ctxEn, 'pkg_custom_1', 'پلن طلایی | Gold Plan')).toBe('Gold Plan');
+  });
+
+  it('automatically converts Persian package names to English when viewing in English locale', () => {
+    const ctxEn = {
+      from: { language_code: 'en' },
+      userLocale: 'en',
+      services: {
+        translationService: {
+          resolveLocale: vi.fn(() => 'en'),
+          get: vi.fn((key: string) => key),
+        },
+      },
+    } as unknown as MenuContext;
+
+    expect(localizedPackageName(ctxEn, 'pkg_50gb', '۵۰ گیگ')).toBe('50 GB');
+    expect(localizedPackageName(ctxEn, 'pkg_50gb_30d', '۵۰ گیگ · ۳۰ روز')).toBe('50 GB · 30 days');
+  });
+
+  it('keeps Latin-first Persian lines RTL without breaking pure English lines or punctuation', () => {
     const rendered = ensurePersianLineDirection(
       '🛡️ مدیریت ادمین‌ها\nADMIN_IDS فقط برای راه‌اندازی است.\n`https://panel.example`'
     );
@@ -126,6 +169,9 @@ describe('Telegram locale resolution', () => {
     );
     expect(ensurePersianLineDirection('ADMIN_IDS فقط برای راه‌اندازی است.')).toBe(
       '\u200fADMIN_IDS فقط برای راه‌اندازی است.'
+    );
+    expect(ensurePersianLineDirection('Check the package and final amount.')).toBe(
+      'Check the package and final amount.'
     );
     expect(ensurePersianLineDirection('ADMIN_IDS')).toBe('ADMIN_IDS');
   });

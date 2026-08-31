@@ -225,15 +225,19 @@ const DEFAULT_PACKAGE_FALLBACK_NAMES = new Set([
 /**
  * Localize package names, with fallback to configured package name.
  *
- * If the administrator configured a custom package name in packages_json, that name
- * is preserved directly. Stock fallback translations only apply when the package
- * name matches the default initial placeholder names.
+ * Supports:
+ * 1. Generated custom package IDs (custom_10gb_30d).
+ * 2. Bilingual separator: "نام فارسی | English Name".
+ * 3. Catalog translations (package_pkg_10gb_30d_name).
+ * 4. Automatic smart volume/day translation between English and Persian.
  */
 export function localizedPackageName(
   ctx: LocaleAwareContext,
   packageId: string,
   fallback: string
 ): string {
+  const isFa = resolveContextLocale(ctx) === 'fa';
+
   const customMatch = /^custom_(\d+)gb(?:_(\d+)d)?$/i.exec(packageId);
   if (customMatch) {
     const gbAmount = Number(customMatch[1]);
@@ -241,18 +245,42 @@ export function localizedPackageName(
     const unit = t(ctx, 'traffic_unit_gb');
     return `${gb} ${unit}`;
   }
+
+  if (fallback && fallback.includes('|')) {
+    const parts = fallback.split('|').map((s) => s.trim());
+    const faPart = parts[0] || '';
+    const enPart = parts[1] || faPart;
+    return isFa ? faPart : enPart;
+  }
+
   if (fallback && !DEFAULT_PACKAGE_FALLBACK_NAMES.has(fallback.trim())) {
-    if (resolveContextLocale(ctx) === 'fa') {
+    if (isFa) {
       return fallback.replace(/\b(\d+)\s*GB\b/gi, '$1 گیگ');
+    }
+    // In English locale, translate Persian-named fallback (e.g. "۵۰ گیگ" -> "50 GB")
+    const faDigitsToEn = (str: string) =>
+      str.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+    const normalizedFallback = faDigitsToEn(fallback);
+    const match = /^(\d+)\s*(?:گیگ|گیگابایت)(?:\s*[-·]\s*(\d+)\s*روز)?$/i.exec(
+      normalizedFallback.trim()
+    );
+    if (match) {
+      const gb = match[1];
+      const days = match[2];
+      if (days) {
+        return `${gb} GB · ${days} days`;
+      }
+      return `${gb} GB`;
     }
     return fallback;
   }
+
   const key = `package_${packageId}_name`;
   const translated = t(ctx, key);
   if (translated !== key) {
     return translated;
   }
-  if (resolveContextLocale(ctx) === 'fa') {
+  if (isFa) {
     return fallback.replace(/\b(\d+)\s*GB\b/gi, '$1 گیگ');
   }
   return fallback;
