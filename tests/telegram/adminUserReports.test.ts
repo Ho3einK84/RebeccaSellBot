@@ -294,6 +294,16 @@ describe('admin user reports hub and sub-reports', () => {
         {
           id: 'audit_1',
           actorTelegramId: 1,
+          action: 'topup_receipt_approved',
+          entityType: 'topup_receipt',
+          entityId: 'rec_1001',
+          targetTelegramId: 455713813,
+          metadata: JSON.stringify({ amount: 200_000 }),
+          createdAt: new Date('2026-08-28T15:00:00Z'),
+        },
+        {
+          id: 'audit_2',
+          actorTelegramId: 1,
           action: 'manual_topup',
           entityType: 'telegram_user',
           entityId: '455713813',
@@ -302,7 +312,7 @@ describe('admin user reports hub and sub-reports', () => {
           createdAt: new Date('2026-08-28T15:00:00Z'),
         },
       ],
-      total: 1,
+      total: 2,
       totalPages: 1,
       page: 1,
     });
@@ -330,6 +340,9 @@ describe('admin user reports hub and sub-reports', () => {
     const [renderedText, renderedOptions] = reply.mock.calls[0] ?? [];
 
     expect(renderedText).toContain('🛡️');
+    expect(renderedText).toContain('admin_user_audit_action_receipt_approved');
+    expect(renderedText).toContain('admin_user_audit_action_manual_topup');
+    expect(renderedText).not.toContain('topup\\_receipt\\_approved');
     const keyboard = renderedOptions.reply_markup;
     const callbacks = (keyboard.inline_keyboard.flat() as Array<{ callback_data?: string }>).map(
       (btn) => btn.callback_data

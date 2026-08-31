@@ -632,23 +632,40 @@ function formatAuditAction(ctx: MenuContext, action: string): string {
     case 'user_unbanned':
       return t(ctx, 'admin_user_audit_action_unbanned');
     case 'manual_topup':
+    case 'wallet_deposit':
       return t(ctx, 'admin_user_audit_action_manual_topup');
     case 'manual_deduct':
+    case 'wallet_deduct':
       return t(ctx, 'admin_user_audit_action_manual_deduct');
     case 'balance_set':
+    case 'wallet_set':
       return t(ctx, 'admin_user_audit_action_balance_set');
     case 'receipt_approved':
+    case 'topup_receipt_approved':
       return t(ctx, 'admin_user_audit_action_receipt_approved');
     case 'receipt_rejected':
+    case 'topup_receipt_rejected':
       return t(ctx, 'admin_user_audit_action_receipt_rejected');
     case 'config_transferred_out':
+    case 'subscription_transferred':
       return t(ctx, 'admin_user_audit_action_config_transfer_out');
     case 'config_transferred_in':
       return t(ctx, 'admin_user_audit_action_config_transfer_in');
     case 'refund_processed':
+    case 'subscription_refunded_deleted':
       return t(ctx, 'admin_user_audit_action_refund_processed');
+    case 'wallet_transfer':
+      return t(ctx, 'admin_user_audit_action_wallet_transfer');
+    case 'admin_added':
+      return t(ctx, 'admin_user_audit_action_admin_added');
+    case 'admin_removed':
+      return t(ctx, 'admin_user_audit_action_admin_removed');
+    case 'orphan_local_binding_removed':
+      return t(ctx, 'admin_user_audit_action_orphan_removed');
+    case 'orphan_remote_service_assigned':
+      return t(ctx, 'admin_user_audit_action_orphan_assigned');
     default:
-      return escapeTelegramMarkdown(action);
+      return escapeTelegramMarkdown(action.replace(/_/g, ' '));
   }
 }
 
