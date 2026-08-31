@@ -1,33 +1,42 @@
-FROM node:24.18.0-alpine AS builder
-
-WORKDIR /app
-
-COPY package.json package-lock.json .npmrc tsconfig.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-# Keep the runtime dependency tree generated from the locked builder install.
-# This avoids a second, independent npm install and guarantees the migration
-# CLI uses exactly the dependency versions that were compiled and tested.
-RUN npm prune --omit=dev && npm cache clean --force
-
-FROM node:24.18.0-alpine AS runner
-
-WORKDIR /app
-ENV NODE_ENV=production
-
-COPY --from=builder --chown=node:node /app/package.json ./package.json
-COPY --from=builder --chown=node:node /app/package-lock.json ./package-lock.json
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
-COPY --from=builder --chown=node:node /app/dist ./dist
-# The application's compiled migrator consumes the SQL migration set directly.
-COPY --from=builder --chown=node:node /app/drizzle ./drizzle
-COPY --from=builder --chown=node:node /app/docker-compose.yml ./docker-compose.yml
+# 1. Base runtime image with system tools (cached permanently across application builds)
+FROM node:24.18.0-alpine AS base
 
 RUN apk add --no-cache postgresql16-client postgresql18-client tar gzip && \
     ln -sf /usr/libexec/postgresql16/pg_dump /usr/bin/pg_dump && \
     ln -sf /usr/libexec/postgresql18/pg_restore /usr/bin/pg_restore
+
+# 2. Production dependencies stage (cached whenever package.json/package-lock.json are unchanged)
+FROM node:24.18.0-alpine AS prod-deps
+
+WORKDIR /app
+COPY package.json package-lock.json .npmrc ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --no-audit --no-fund
+
+# 3. Builder stage (compiles TypeScript source code with esbuild in <1s)
+FROM node:24.18.0-alpine AS builder
+
+WORKDIR /app
+COPY package.json package-lock.json .npmrc tsconfig.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
+
+COPY . .
+RUN npm run build
+
+# 4. Final runtime container
+FROM base AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=prod-deps --chown=node:node /app/package.json ./package.json
+COPY --from=prod-deps --chown=node:node /app/package-lock.json ./package-lock.json
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/dist ./dist
+# The application's compiled migrator consumes the SQL migration set directly.
+COPY --from=builder --chown=node:node /app/drizzle ./drizzle
+COPY --from=builder --chown=node:node /app/docker-compose.yml ./docker-compose.yml
 
 USER node
 

@@ -8,6 +8,9 @@ readonly BASE_PATH="/opt/RebeccaSellBot"
 readonly BACKUP_FORMAT_VERSION="1"
 readonly DEFAULT_BACKUP_RETENTION=14
 
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
 show_help() {
@@ -537,8 +540,6 @@ case "$COMMAND" in
     printf "Updating '%s'...\n" "$INSTANCE"
     git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" pull --ff-only
     dc build bot
-    wait_for_stack db
-    dc run --rm --no-deps bot npm run db:migrate
     wait_for_stack
     if [[ -w /usr/local/bin/rsbot || ( ! -e /usr/local/bin/rsbot && -w /usr/local/bin ) ]]; then
       install -m 0755 "$INSTANCE_DIR/scripts/rsbot" /usr/local/bin/rsbot 2>/dev/null || true
