@@ -546,6 +546,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_users_back_button: '‹ کاربران',
   admin_user_ban_confirm: 'کاربر {telegram_id} مسدود شود؟',
   admin_user_unban_confirm: 'مسدودی کاربر {telegram_id} برداشته شود؟',
+  admin_user_cannot_ban_admin: '⚠️ امکان مسدودسازی مدیران ربات وجود ندارد.',
   admin_confirm_button: '✅ تأیید',
   admin_user_no_subscriptions: '📭 این کاربر سرویسی ندارد.',
   admin_user_no_audit: 'رویدادی ثبت نشده است.',

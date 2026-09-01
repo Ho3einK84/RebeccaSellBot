@@ -261,4 +261,60 @@ describe('legacy admin callback compatibility', () => {
       expect.objectContaining({ reply_markup: expect.anything() })
     );
   });
+
+  it('rejects banning an administrator from ban_prompt with an alert', async () => {
+    const setBanned = vi.fn();
+    const findProfile = vi.fn().mockResolvedValue({ telegramId: 6_698_253_699, isBanned: false });
+    const reply = vi.fn().mockResolvedValue({ message_id: 1 });
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+    const route = matchRoute(
+      collectRoutes(registerAdminUserRoutes),
+      'admin:user:ban_prompt:6698253699'
+    );
+    const ctx = {
+      match: route.match,
+      from: { id: 1, is_bot: false, first_name: 'Admin' },
+      reply,
+      answerCallbackQuery,
+      services: {
+        translationService: translationServiceStub(),
+        userService: { findProfile, setBanned },
+        isAdmin: vi.fn((id: number) => id === 6_698_253_699),
+      },
+    } as unknown as MenuContext & { match: RegExpMatchArray };
+
+    await route.handler(ctx);
+
+    expect(findProfile).toHaveBeenCalledWith('6698253699');
+    expect(setBanned).not.toHaveBeenCalled();
+    expect(answerCallbackQuery).toHaveBeenCalledWith({
+      text: 'admin_user_cannot_ban_admin',
+      show_alert: true,
+    });
+    expect(reply).not.toHaveBeenCalled();
+  });
+
+  it('rejects executing a ban on an administrator with an alert', async () => {
+    const setBanned = vi.fn();
+    const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+    const route = matchRoute(collectRoutes(registerAdminUserRoutes), 'admin:user:ban:6698253699:1');
+    const ctx = {
+      match: route.match,
+      from: { id: 1, is_bot: false, first_name: 'Admin' },
+      answerCallbackQuery,
+      services: {
+        translationService: translationServiceStub(),
+        userService: { setBanned },
+        isAdmin: vi.fn((id: number) => id === 6_698_253_699),
+      },
+    } as unknown as MenuContext & { match: RegExpMatchArray };
+
+    await route.handler(ctx);
+
+    expect(setBanned).not.toHaveBeenCalled();
+    expect(answerCallbackQuery).toHaveBeenCalledWith({
+      text: 'admin_user_cannot_ban_admin',
+      show_alert: true,
+    });
+  });
 });

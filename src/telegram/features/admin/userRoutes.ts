@@ -181,6 +181,16 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       await ctx.answerCallbackQuery({ text: t(ctx, 'admin_user_not_found'), show_alert: true });
       return;
     }
+    const isTargetAdmin = Boolean(
+      typeof ctx.services.isAdmin === 'function' && ctx.services.isAdmin(targetId)
+    );
+    if (!user.isBanned && isTargetAdmin) {
+      await ctx.answerCallbackQuery({
+        text: t(ctx, 'admin_user_cannot_ban_admin'),
+        show_alert: true,
+      });
+      return;
+    }
     await ctx.answerCallbackQuery();
     const desired = user.isBanned ? 0 : 1;
     await renderUserScreen(
@@ -209,6 +219,16 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     if (!ctx.services) return;
     const targetId = Number(ctx.match[1]);
     const banned = ctx.match[2] === '1';
+    const isTargetAdmin = Boolean(
+      typeof ctx.services.isAdmin === 'function' && ctx.services.isAdmin(targetId)
+    );
+    if (banned && isTargetAdmin) {
+      await ctx.answerCallbackQuery({
+        text: t(ctx, 'admin_user_cannot_ban_admin'),
+        show_alert: true,
+      });
+      return;
+    }
     const updated = await ctx.services.userService.setBanned(targetId, banned, ctx.from.id);
     await ctx.answerCallbackQuery({
       text: t(
@@ -423,6 +443,16 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     const user = await ctx.services.userService.findProfile(String(targetId));
     if (!user) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'admin_user_not_found'), show_alert: true });
+      return;
+    }
+    const isTargetAdmin = Boolean(
+      typeof ctx.services.isAdmin === 'function' && ctx.services.isAdmin(targetId)
+    );
+    if (!user.isBanned && isTargetAdmin) {
+      await ctx.answerCallbackQuery({
+        text: t(ctx, 'admin_user_cannot_ban_admin'),
+        show_alert: true,
+      });
       return;
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });

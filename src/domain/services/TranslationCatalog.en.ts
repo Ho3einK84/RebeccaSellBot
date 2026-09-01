@@ -551,6 +551,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_users_back_button: '‹ Users',
   admin_user_ban_confirm: 'Ban user {telegram_id}?',
   admin_user_unban_confirm: 'Unban user {telegram_id}?',
+  admin_user_cannot_ban_admin: '⚠️ Bot administrators cannot be banned.',
   admin_confirm_button: '✅ Confirm',
   admin_user_no_subscriptions: '📭 This user has no services.',
   admin_user_no_audit: 'No activity recorded.',
