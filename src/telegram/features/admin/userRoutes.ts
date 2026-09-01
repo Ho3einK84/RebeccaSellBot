@@ -625,6 +625,49 @@ function transactionIcon(type: string, amount: number): string {
   }
 }
 
+function getAuditActionEmoji(action: string): string {
+  switch (action) {
+    case 'manual_topup':
+    case 'wallet_deposit':
+    case 'wallet_add':
+      return '➕';
+    case 'manual_deduct':
+    case 'wallet_deduct':
+      return '➖';
+    case 'balance_set':
+    case 'wallet_set':
+      return '💳';
+    case 'receipt_approved':
+    case 'topup_receipt_approved':
+      return '✅';
+    case 'receipt_rejected':
+    case 'topup_receipt_rejected':
+      return '❌';
+    case 'user_banned':
+      return '🚫';
+    case 'user_unbanned':
+      return '🟢';
+    case 'config_transferred_out':
+    case 'subscription_transferred':
+    case 'config_transferred_in':
+    case 'wallet_transfer':
+      return '🔁';
+    case 'refund_processed':
+    case 'subscription_refunded_deleted':
+      return '↩️';
+    case 'direct_message_sent':
+      return '✉️';
+    case 'broadcast_created':
+    case 'broadcast_cancelled':
+      return '📣';
+    case 'admin_added':
+    case 'admin_removed':
+      return '👑';
+    default:
+      return '🛡️';
+  }
+}
+
 function formatAuditAction(ctx: MenuContext, action: string): string {
   switch (action) {
     case 'user_banned':
@@ -633,6 +676,7 @@ function formatAuditAction(ctx: MenuContext, action: string): string {
       return t(ctx, 'admin_user_audit_action_unbanned');
     case 'manual_topup':
     case 'wallet_deposit':
+    case 'wallet_add':
       return t(ctx, 'admin_user_audit_action_manual_topup');
     case 'manual_deduct':
     case 'wallet_deduct':
@@ -664,6 +708,12 @@ function formatAuditAction(ctx: MenuContext, action: string): string {
       return t(ctx, 'admin_user_audit_action_orphan_removed');
     case 'orphan_remote_service_assigned':
       return t(ctx, 'admin_user_audit_action_orphan_assigned');
+    case 'direct_message_sent':
+      return t(ctx, 'admin_user_audit_action_direct_message');
+    case 'broadcast_created':
+      return t(ctx, 'admin_user_audit_action_broadcast_created');
+    case 'broadcast_cancelled':
+      return t(ctx, 'admin_user_audit_action_broadcast_cancelled');
     default:
       return escapeTelegramMarkdown(action.replace(/_/g, ' '));
   }
@@ -890,7 +940,7 @@ export async function renderUserReportsLedger(
   const screen = buildScreen({
     emoji: '💳',
     title: t(ctx, 'admin_user_ledger_title'),
-    subtitle: `\`${targetId}\``,
+    subtitle: t(ctx, 'admin_user_audit_subtitle', { telegram_id: targetId }),
     sections: result.transactions.map((tx) => {
       const icon = transactionIcon(tx.type, tx.amount);
       const sign = tx.amount > 0 ? '+' : '';
@@ -974,7 +1024,7 @@ export async function renderUserReportsOrders(
   const screen = buildScreen({
     emoji: '🛍️',
     title: t(ctx, 'admin_user_orders_title'),
-    subtitle: `\`${targetId}\``,
+    subtitle: t(ctx, 'admin_user_audit_subtitle', { telegram_id: targetId }),
     sections: result.orders.map((order) => {
       const typeLabel =
         order.type === 'renew_config'
@@ -1088,7 +1138,7 @@ export async function renderUserReportsReceipts(
   const screen = buildScreen({
     emoji: '🧾',
     title: t(ctx, 'admin_user_receipts_title'),
-    subtitle: `\`${targetId}\``,
+    subtitle: t(ctx, 'admin_user_audit_subtitle', { telegram_id: targetId }),
     sections: result.receipts.map((rec) => {
       let statusEmoji = '✅';
       let statusLabel = t(ctx, 'admin_user_receipt_status_approved');
@@ -1178,13 +1228,14 @@ export async function renderUserReportsAudit(
   const screen = buildScreen({
     emoji: '🛡️',
     title: t(ctx, 'admin_user_audit_tab_title'),
-    subtitle: `\`${targetId}\``,
+    subtitle: t(ctx, 'admin_user_audit_subtitle', { telegram_id: targetId }),
     sections: result.logs.map((log) => {
       const actionLabel = formatAuditAction(ctx, log.action);
+      const actionEmoji = getAuditActionEmoji(log.action);
       const actorLabel = formatAuditActor(ctx, log.actorTelegramId);
       const details = formatAuditMetadata(ctx, log.metadata);
       return {
-        emoji: '•',
+        emoji: actionEmoji,
         title: `${actionLabel} · ${localizedDate(new Date(log.createdAt), ctx)}`,
         fields: [
           {
