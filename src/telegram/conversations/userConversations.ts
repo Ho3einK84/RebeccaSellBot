@@ -1554,9 +1554,7 @@ export async function transferBalanceConversation(
                     recipientLocale,
                     'wallet_available_balance'
                   ),
-                  value: `${result.toBalanceAfter.toLocaleString(
-                    recipientLocale === 'fa' ? 'fa-IR' : 'en-US'
-                  )} ${tForLocale(ctx.services.translationService, recipientLocale, 'currency_toman')}`,
+                  value: `${localizedNumberForLocale(result.toBalanceAfter, recipientLocale)} ${tForLocale(ctx.services.translationService, recipientLocale, 'currency_toman')}`,
                 },
               ],
             },

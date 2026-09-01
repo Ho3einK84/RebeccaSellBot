@@ -143,6 +143,17 @@ describe('loadConfig', () => {
     expect(config.REBECCA_ADMIN_USERNAME).toBe('admin');
     expect(config.REBECCA_SERVICE_ID).toBe(1);
     expect(config.HEALTH_CHECK_PORT).toBe(3001);
+    expect(config.DATABASE_POOL_SIZE).toBe(20);
+  });
+
+  it('accepts a custom DATABASE_POOL_SIZE', async () => {
+    const loadConfig = await loadConfigWithEnv({
+      ...requiredConfig,
+      DATABASE_POOL_SIZE: '40',
+    });
+
+    const config = loadConfig();
+    expect(config.DATABASE_POOL_SIZE).toBe(40);
   });
 
   it('allows a fresh production install to defer Rebecca panel setup', async () => {

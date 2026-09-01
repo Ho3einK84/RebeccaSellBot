@@ -8,12 +8,12 @@ const { Pool } = pg;
 let pool: pg.Pool | null = null;
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
-export function initDatabase(connectionString: string) {
+export function initDatabase(connectionString: string, maxPoolSize = 20) {
   if (db && pool) return { db, pool };
 
   pool = new Pool({
     connectionString,
-    max: 20,
+    max: maxPoolSize,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
   });

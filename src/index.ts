@@ -67,7 +67,7 @@ async function main() {
   await startHealthCheckServer(config.HEALTH_CHECK_PORT);
 
   setHealthPhase('database_migrations');
-  const { db } = initDatabase(config.DATABASE_URL);
+  const { db } = initDatabase(config.DATABASE_URL, config.DATABASE_POOL_SIZE);
   await autoMigrate(db);
 
   setHealthPhase('services_initialization');

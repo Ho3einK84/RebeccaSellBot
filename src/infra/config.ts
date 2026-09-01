@@ -82,6 +82,9 @@ const configSchema = z
       })
       .pipe(z.array(z.number().int().positive())),
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+    DATABASE_POOL_SIZE: positiveIntegerSchema('DATABASE_POOL_SIZE', 20).pipe(
+      z.number().max(100, 'DATABASE_POOL_SIZE is out of range')
+    ),
     // Legacy single-panel bootstrap only. A fresh installation may leave all
     // Rebecca values empty and configure one or more panels from Telegram.
     REBECCA_API_URL: optionalUrlSchema,

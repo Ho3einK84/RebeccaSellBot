@@ -819,6 +819,8 @@ export const topupReceipts = pgTable(
       'topup_receipts_reviewed_by_safe_integer',
       sql`${table.reviewedBy} IS NULL OR (${table.reviewedBy} > 0 AND ${table.reviewedBy} <= 9007199254740991)`
     ),
+    index('topup_receipts_status_created_idx').on(table.status, table.createdAt),
+    index('topup_receipts_user_status_idx').on(table.telegramId, table.status),
   ]
 );
 

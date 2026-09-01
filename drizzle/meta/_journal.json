@@ -50,6 +50,13 @@
       "when": 1787963000000,
       "tag": "0006_add_lucky_wheel",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788245000000,
+      "tag": "0007_add_topup_receipts_indexes",
+      "breakpoints": true
     }
   ]
 }
