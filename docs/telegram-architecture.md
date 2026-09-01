@@ -1,6 +1,6 @@
 # Telegram Delivery Layer & UI Architecture
 
-This document provides a comprehensive architectural specification for the Telegram subsystem in **RebeccaSellBot**.
+This document provides a comprehensive architectural specification for the Telegram subsystem in **RebeccaSellBot**. For the complete end-to-end system architecture (including financial sagas, database schema, and background jobs), see [docs/architecture.md](architecture.md).
 
 RebeccaSellBot treats Telegram strictly as an **ephemeral delivery and interaction layer**. Telegram handlers, conversations, and keyboards never query the database directly or dispatch direct HTTP requests to Rebecca panels. All business operations are mediated through typed domain services and saga orchestrators.
 
@@ -78,6 +78,7 @@ Incoming Update
           ├─ Core & Base Routes             (/start, /admin, /help, /lang, navigation)
           ├─ Purchase & Checkout Routes     (Package browsing, checkout confirmation, promo input)
           ├─ Subscription Management        (Config details, QR codes, sub links, auto-renew, refund)
+          ├─ Gamification Routes            (Lucky wheel daily spins, rewards, cooldown checks)
           └─ Admin Backoffice Routes        (Receipts, users, panels, maintenance, broadcasts)
 ```
 
@@ -203,8 +204,10 @@ src/telegram/conversations/
     │   ├── navigation.ts               (Settings hierarchy & breadcrumbs)
     │   ├── packageManager.ts           (Full CRUD for packages & panel bindings)
     │   ├── customVolume.ts             (Custom volume price & default days editor)
+    │   ├── luckyWheel.ts               (Lucky wheel reward tiers & daily spin odds)
     │   ├── payment.ts                  (Card number, holder, and transfer rules)
     │   ├── referral.ts                 (Referral bonus & cashback percentages)
+    │   ├── backup.ts                   (Automated backup intervals & delivery)
     │   └── conversation.ts             (Settings conversation orchestrator)
     ├── texts.ts                        (Customizable bot messages & localization overrides)
     ├── wallet.ts                       (Manual balance adjustments & audit logs)

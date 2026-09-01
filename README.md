@@ -3,7 +3,7 @@
 <p align="center">
   <strong>A resilient, multi-panel Telegram storefront for Rebecca Panel VPN subscriptions.</strong>
   <br />
-  Automate sales, renewals, wallet payments, and customer support entirely inside Telegram.
+  Automate sales, renewals, wallet payments, customer subscriptions, and multi-panel fleets entirely inside Telegram.
 </p>
 
 <p align="center">
@@ -15,10 +15,15 @@
   <img src="https://img.shields.io/badge/platform-Ubuntu%2024.04-E95420?style=flat-square" alt="Ubuntu 24.04" />
 </p>
 
+> [!NOTE]
+> **وضعیت پروژه و یادداشت توسعه:** این پروژه همچنان در دست طراحی و ساخت است و ممکن است شامل باگ‌ها، ناپایداری‌ها یا تغییرات مداوم باشد. در توسعه و کدنویسی بخش‌های مختلف این پروژه از هوش مصنوعی (AI) بهره گرفته شده و یک پروژه مبتنی بر Vibe Coding است.
+>
+> **Project Status & Development Notice:** This project is under active development and may contain bugs, experimental behaviors, or architectural changes. It has been built with AI assistance (Vibe Coding).
+
 > [!IMPORTANT]
 > **Zero Database Touch:** RebeccaSellBot communicates with Rebecca panels exclusively via their official HTTPS REST APIs. It never reads from or writes to the Rebecca database directly.
 
-Detailed Telegram delivery layer and screen rendering specifications are documented in [docs/telegram-architecture.md](docs/telegram-architecture.md).
+Detailed system architecture and Telegram delivery layer specifications are documented in [docs/architecture.md](docs/architecture.md) and [docs/telegram-architecture.md](docs/telegram-architecture.md).
 
 ---
 
@@ -30,7 +35,7 @@ Detailed Telegram delivery layer and screen rendering specifications are documen
 | 💳 **Wallet & Transfers:** Top up via card-to-card receipts; transfer balance to peers.        | 🛡️ **Financial Backoffice:** Review payment receipts, adjust balances, and audit transaction logs.  |
 | 📊 **Subscription Portal:** Real-time quota, expiry dates, QR codes, and sub links.            | ⚙️ **In-Bot Settings:** Manage pricing, packages, categories, card info, and trial limits directly. |
 | 🔄 **Auto-Renewal & Refunds:** Automatic renewal safeguards and one-click unused-plan refunds. | 📢 **Segmented Broadcasts:** Send cancelable, throttled broadcasts by user subscription status.     |
-| 🎁 **Growth Tools:** Earn referral rewards, cashback percentages, and redeem promo codes.      | 🔍 **Reconciliation Engine:** Detect and resolve orphaned subscriptions and remote state drifts.    |
+| 🎰 **Growth & Gamification:** Lucky Wheel with odds tuning, referral rewards, and promo codes. | 🔍 **Reconciliation Engine:** Detect and resolve orphaned subscriptions and remote state drifts.    |
 | 🌐 **Bilingual UX:** Seamless Persian (FA) and English (EN) localized interfaces.              | 📦 **Multi-Instance Ready:** Run isolated bot instances with separate databases on a single server. |
 
 ---
@@ -80,76 +85,33 @@ The installer verifies prerequisites, installs Docker if needed, configures your
 
 ### Option B: Unattended 1-Command Deployment
 
-For automated provisioning, create a restricted environment file (`/root/rsbot.env`, permission `0600`):
-
-```dotenv
+```bash
+# 1. Create a restricted environment file (/root/rsbot.env, chmod 0600)
+cat << 'EOF' > /root/rsbot.env
 BOT_TOKEN=123456789:AAExampleTelegramBotTokenHere
 ADMIN_IDS=123456789
 DB_USER=rsbot_bot1
 DB_PASSWORD=ChooseAStrong16CharPassword
 DB_NAME=rsbot_bot1
 DEFAULT_LOCALE=fa
-```
+EOF
 
-Execute the unattended installation command:
-
-```bash
+# 2. Run automated installation
 curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
   | sudo bash -s -- --instance bot1 --env-file /root/rsbot.env --non-interactive --yes
 ```
 
 ### Option C: Server-to-Server Migration (`--from-backup`)
 
-Use this mode when moving an existing RebeccaSellBot instance from one server to another, or recovering after server replacement. The target server does not need an existing installation or database volume.
-
-#### 1. Create a backup on the source server:
+Move an existing instance to a new server with zero data loss:
 
 ```bash
+# 1. On source server: Create full backup bundle (.tar.gz)
 rsbot main backup
-# Output: /opt/RebeccaSellBot/backups/main/manual_backup_main_YYYYMMDD_HHMMSS_xxxxxx.tar.gz
+
+# 2. On target server: Restore directly from backup bundle
+./install.sh --from-backup /path/to/manual_backup_main_YYYYMMDD_HHMMSS_xxxxxx.tar.gz
 ```
-
-Transfer this `.tar.gz` bundle to the new server via `scp` or `rsync`.
-
-#### 2. Install and restore on the target server:
-
-**Guided Interactive Migration:**
-
-```bash
-git clone https://github.com/Ho3einK84/RebeccaSellBot.git
-cd RebeccaSellBot
-./install.sh --from-backup /root/manual_backup_main_20260828_154208_01dfb1.tar.gz
-```
-
-**Unattended 1-Command Migration:**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
-  | sudo bash -s -- --from-backup /root/manual_backup_main_20260828_154208_01dfb1.tar.gz --non-interactive --yes
-```
-
-**Migration with Configuration Overrides (e.g. new `BOT_TOKEN` or `ADMIN_IDS`):**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
-  | sudo bash -s -- --from-backup /root/manual_backup_main_20260828_154208_01dfb1.tar.gz --env-file /root/overrides.env --non-interactive --yes
-```
-
-#### What the Migration Flow Does:
-
-1. Validates the archive integrity, manifest version (`format_version=1`), and structural security (rejecting symlinks, devices, or traversal).
-2. Adopts baseline secrets from the backup's `.env` (preserving `PANEL_CREDENTIALS_KEY` and PostgreSQL credentials).
-3. Defaults the instance name to the backup manifest's instance (unless overridden via `--instance`).
-4. Provisions Docker Engine, Git checkout, and isolated instance workspace.
-5. Boots PostgreSQL, verifies custom-format dump integrity, and restores the database transactionally.
-6. Runs latest Drizzle schema migrations and boots the bot container with verified health checks.
-
-> [!IMPORTANT]
-> **Key Migration Caveats:**
->
-> - **Preserve `PANEL_CREDENTIALS_KEY`:** Panel API keys and passwords in PostgreSQL are encrypted with AES-256-GCM. The installer automatically imports `PANEL_CREDENTIALS_KEY` from the backup `.env` so panels remain connected without re-entering credentials.
-> - **Overriding `BOT_TOKEN`:** If you wish to switch to a new Telegram bot token while migrating, provide the new token during guided prompts or in `--env-file`. Customer subscriptions and wallet balances are stored in PostgreSQL and will map seamlessly.
-> - **Large Backups & Telegram Limits:** Automated in-app Telegram backups are subject to Telegram's 50 MB document size ceiling. For databases exceeding 50 MB, always generate backups with `rsbot <instance> backup` for server migrations.
 
 ---
 
@@ -173,17 +135,6 @@ rsbot <name> logs -f           # Stream real-time structured logs
 | `rsbot <name> restore <file>` | Validate and transactionally restore a full backup with automatic rollback.       |
 | `rsbot <name> uninstall`      | Safely tear down containers and delete the designated instance data.              |
 
-### Backup and Restore Safety
-
-`rsbot <name> backup` creates a `.tar.gz` bundle containing the PostgreSQL custom-format dump, the instance `.env`, `docker-compose.yml`, and a small manifest. The archive itself is written with permission `0600` and the database dump is validated before the bundle is finalized.
-
-> [!WARNING]
-> Backups are **compressed but not encrypted**. Because the bundle contains `.env` (including the Telegram token, database password, and panel credential encryption key), copy it only to trusted storage with appropriate access controls.
-
-Before a restore, `rsbot` validates the archive and PostgreSQL dump, verifies that the backup belongs to the selected instance, and creates a separate `pre_restore_*.tar.gz` safety backup. Database replacement runs in a single PostgreSQL transaction. The saved `.env` is installed atomically only after the database restore succeeds, current migrations are applied, and the bot must become healthy. If any restore step fails, `rsbot` attempts to restore both the previous database and previous `.env` automatically. Legacy PostgreSQL `.dump` files remain supported, but they do not replace the current `.env`.
-
-For safety, restoring a full bundle into an already-provisioned instance requires `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in the saved `.env` to match the existing database volume. For disaster recovery onto a fresh server, provision the instance with the saved `.env` values first, then restore the bundle.
-
 ---
 
 ## Environment Variables
@@ -202,8 +153,6 @@ For safety, restoring a full bundle into an already-provisioned instance require
 
 ## Development & Verification
 
-### Local Setup
-
 ```bash
 # Clone and install dependencies
 git clone https://github.com/Ho3einK84/RebeccaSellBot.git
@@ -216,23 +165,18 @@ npm run db:migrate
 
 # Start with live reloading
 npm run dev
-```
 
-### Quality Verification Suite
-
-Ensure code quality, typing, formatting, and architecture rules pass before committing:
-
-```bash
+# Run quality verification pipeline
 npm run verify
 ```
 
-The `verify` script runs the complete pipeline:
+The `verify` script runs:
 
-- `npm run architecture:check` — Enforces structural and API isolation rules.
+- `npm run architecture:check` — Structural and API isolation rules.
 - `npm run typecheck` — Strict TypeScript compiler checks.
 - `npm run lint` — ESLint static analysis.
 - `npm run format:check` — Prettier code style validation.
-- `npm test` — Comprehensive Vitest test suite (67+ test files, 390+ unit tests).
+- `npm test` — Comprehensive Vitest test suite.
 - `npm run build` — Production TypeScript bundle compilation.
 
 ---
