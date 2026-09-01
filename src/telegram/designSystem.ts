@@ -154,7 +154,11 @@ export function buildSectionCard(
     const renderedValue = String(value);
     const hasSameStatusPrefix = emoji ? renderedValue.trimStart().startsWith(emoji) : false;
     const prefix = emoji && !hasSameStatusPrefix ? `${emoji} ` : '';
-    return `${prefix}*${label}:* ${renderedValue}`;
+    const cleanLabel = label.trim();
+    if (!cleanLabel || cleanLabel === '—') {
+      return `${prefix}${renderedValue}`;
+    }
+    return `${prefix}*${cleanLabel}:* ${renderedValue}`;
   });
   const cleanTitle = title.trim();
   const titleWithoutEmoji = stripLeadingEmoji(cleanTitle);

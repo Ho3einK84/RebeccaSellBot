@@ -9,7 +9,6 @@ import {
   type StatusType,
 } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
-import { escapeTelegramMarkdown } from '../../rendering.js';
 
 const UUID_CAPTURE = '([0-9a-fA-F-]{36})';
 
@@ -81,14 +80,14 @@ export async function renderBroadcastStatus(
       },
       sections: [
         {
-          emoji: '🎯',
-          title: t(ctx, 'admin_broadcast_audience_section'),
+          emoji: '📋',
+          title: t(ctx, 'admin_broadcast_details_section'),
           fields: [
             {
               label: t(ctx, 'admin_broadcast_audience_label'),
               value: t(ctx, `admin_broadcast_audience_${job.audience}`),
             },
-            { label: t(ctx, 'admin_broadcast_id_label'), value: escapeTelegramMarkdown(job.id) },
+            { label: t(ctx, 'admin_broadcast_id_label'), value: `\`${job.id}\`` },
             {
               label: t(ctx, 'admin_broadcast_created_label'),
               value: localizedDate(job.createdAt, ctx),
@@ -96,8 +95,8 @@ export async function renderBroadcastStatus(
           ],
         },
         {
-          emoji: '📈',
-          title: t(ctx, 'admin_broadcast_status_title'),
+          emoji: '📊',
+          title: t(ctx, 'admin_broadcast_delivery_stats_section'),
           fields: [
             {
               label: t(ctx, 'admin_broadcast_progress_label'),

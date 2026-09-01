@@ -37,6 +37,7 @@ export async function adminBroadcastConversation(
     .text(t(ctx, 'admin_broadcast_audience_inactive'), 'broadcast:audience:no_active_subscription')
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+
   await promptInConversation(
     conversation,
     ctx,
@@ -48,10 +49,14 @@ export async function adminBroadcastConversation(
     ),
     { parse_mode: 'Markdown', reply_markup: audienceKeyboard }
   );
+
   const audienceChoice = await waitForAdminCallbackInput(conversation, ['broadcast:audience:']);
   if (!audienceChoice) return;
+
   const audience = audienceChoice.slice('broadcast:audience:'.length) as BroadcastAudience;
   const recipientCount = await ctx.services.broadcastService.countAudience(audience);
+  const audienceLabel = t(ctx, `admin_broadcast_audience_${audience}`);
+
   if (recipientCount === 0) {
     await replyInAdminConversation(
       conversation,
@@ -61,111 +66,118 @@ export async function adminBroadcastConversation(
         t(ctx, 'admin_broadcast_title'),
         t(ctx, 'admin_broadcast_empty_audience')
       ),
-      { parse_mode: 'Markdown' }
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
+      }
     );
     return;
   }
 
-  const audienceLabel = t(ctx, `admin_broadcast_audience_${audience}`);
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildScreen({
-      emoji: '✍️',
-      title: t(ctx, 'admin_broadcast_compose_title'),
-      subtitle: t(ctx, 'admin_broadcast_compose_subtitle'),
-      primary: {
-        emoji: '👥',
-        label: t(ctx, 'admin_broadcast_recipient_count_label'),
-        value: localizedNumber(recipientCount, ctx),
-      },
-      sections: [
-        {
-          emoji: '🎯',
-          title: t(ctx, 'admin_broadcast_audience_section'),
-          fields: [{ label: t(ctx, 'admin_broadcast_audience_label'), value: audienceLabel }],
-        },
-      ],
-      footer: t(ctx, 'admin_broadcast_prompt_for_audience', {
-        audience: audienceLabel,
-        recipient_count: localizedNumber(recipientCount, ctx),
-      }),
-    }),
-    { parse_mode: 'Markdown' }
-  );
-  const broadcastText = await waitForAdminTextInput(conversation);
-  if (broadcastText === undefined) return;
-  if ([...broadcastText].length > 4_096) {
-    await replyInAdminConversation(
-      conversation,
-      ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'admin_broadcast_compose_title'),
-        t(ctx, 'admin_broadcast_too_long')
-      ),
-      { parse_mode: 'Markdown' }
-    );
-    return;
-  }
+  let broadcastText: string | undefined;
+  let validationError: string | undefined;
 
-  const preview = markdownSafePreview(broadcastText);
-  let testSentNotice: string | undefined;
   while (true) {
     await promptInConversation(
       conversation,
       ctx,
       buildScreen({
-        emoji: '📣',
-        title: t(ctx, 'admin_broadcast_preview_title'),
-        subtitle: t(ctx, 'admin_broadcast_preview_subtitle'),
+        emoji: '✍️',
+        title: t(ctx, 'admin_broadcast_compose_title'),
+        subtitle: t(ctx, 'admin_broadcast_compose_subtitle'),
         primary: {
-          emoji: '👥',
-          label: t(ctx, 'admin_broadcast_recipient_count_label'),
-          value: localizedNumber(recipientCount, ctx),
+          emoji: '🎯',
+          label: t(ctx, 'admin_broadcast_audience_label'),
+          value: `${audienceLabel} · ${localizedNumber(recipientCount, ctx)} ${t(ctx, 'admin_broadcast_users_unit')}`,
         },
-        sections: [
-          {
-            emoji: '🎯',
-            title: t(ctx, 'admin_broadcast_audience_section'),
-            fields: [{ label: t(ctx, 'admin_broadcast_audience_label'), value: audienceLabel }],
-          },
-          {
-            emoji: '💬',
-            title: t(ctx, 'admin_broadcast_message_section'),
-            fields: [{ label: '—', value: preview.text }],
-          },
-        ],
-        footer:
-          testSentNotice ??
-          (preview.truncated ? t(ctx, 'admin_message_preview_truncated') : undefined),
+        footer: [validationError, t(ctx, 'admin_broadcast_prompt_for_audience')]
+          .filter(Boolean)
+          .join('\n\n'),
       }),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'admin_broadcast_confirm_button'), 'broadcast:confirm')
-          .text(t(ctx, 'admin_broadcast_test_button'), 'broadcast:test')
-          .row()
-          .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
-      }
+      { parse_mode: 'Markdown' }
     );
-    const action = await waitForAdminCallbackInput(conversation, [
-      'broadcast:confirm',
-      'broadcast:test',
-    ]);
-    if (action === undefined) return;
-    if (action === 'broadcast:test') {
-      try {
-        await ctx.api.sendMessage(adminId, broadcastText);
-        testSentNotice = t(ctx, 'admin_broadcast_test_sent');
-      } catch (err) {
-        logger.warn({ err, adminId }, 'Failed to deliver test broadcast to admin');
-      }
+
+    broadcastText = await waitForAdminTextInput(conversation);
+    if (broadcastText === undefined) return;
+
+    if ([...broadcastText].length > 4_096) {
+      validationError = t(ctx, 'admin_broadcast_too_long');
       continue;
     }
-    if (action === 'broadcast:confirm') {
-      break;
+    validationError = undefined;
+
+    const preview = markdownSafePreview(broadcastText);
+    let testSentNotice: string | undefined;
+    let shouldEdit = false;
+
+    while (true) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildScreen({
+          emoji: '📣',
+          title: t(ctx, 'admin_broadcast_preview_title'),
+          subtitle: t(ctx, 'admin_broadcast_preview_subtitle'),
+          primary: {
+            emoji: '🎯',
+            label: t(ctx, 'admin_broadcast_audience_label'),
+            value: `${audienceLabel} · ${localizedNumber(recipientCount, ctx)} ${t(ctx, 'admin_broadcast_users_unit')}`,
+          },
+          sections: [
+            {
+              emoji: '💬',
+              title: t(ctx, 'admin_broadcast_message_section'),
+              fields: [{ label: '', value: preview.text }],
+            },
+          ],
+          footer:
+            testSentNotice ??
+            (preview.truncated ? t(ctx, 'admin_message_preview_truncated') : undefined),
+        }),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard()
+            .text(t(ctx, 'admin_broadcast_confirm_button'), 'broadcast:confirm')
+            .text(t(ctx, 'admin_broadcast_test_button'), 'broadcast:test')
+            .row()
+            .text(t(ctx, 'admin_broadcast_edit_button'), 'broadcast:edit')
+            .row()
+            .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
+        }
+      );
+
+      const action = await waitForAdminCallbackInput(conversation, [
+        'broadcast:confirm',
+        'broadcast:test',
+        'broadcast:edit',
+      ]);
+
+      if (action === undefined) return;
+
+      if (action === 'broadcast:test') {
+        try {
+          await ctx.api.sendMessage(adminId, broadcastText);
+          testSentNotice = t(ctx, 'admin_broadcast_test_sent');
+        } catch (err) {
+          logger.warn({ err, adminId }, 'Failed to deliver test broadcast to admin');
+        }
+        continue;
+      }
+
+      if (action === 'broadcast:edit') {
+        shouldEdit = true;
+        break;
+      }
+
+      if (action === 'broadcast:confirm') {
+        break;
+      }
     }
+
+    if (shouldEdit) {
+      continue;
+    }
+    break;
   }
 
   const job = await ctx.services.broadcastService.createJob({
@@ -173,6 +185,7 @@ export async function adminBroadcastConversation(
     audience,
     message: broadcastText,
   });
+
   await replyInAdminConversation(
     conversation,
     ctx,
@@ -181,18 +194,15 @@ export async function adminBroadcastConversation(
       title: t(ctx, 'admin_broadcast_queued_title'),
       subtitle: t(ctx, 'admin_broadcast_queued_subtitle'),
       primary: {
-        emoji: '👥',
-        label: t(ctx, 'admin_broadcast_recipient_count_label'),
-        value: localizedNumber(job.recipientCount, ctx),
+        emoji: '🎯',
+        label: t(ctx, 'admin_broadcast_audience_label'),
+        value: `${audienceLabel} · ${localizedNumber(job.recipientCount, ctx)} ${t(ctx, 'admin_broadcast_users_unit')}`,
       },
       sections: [
         {
-          emoji: '📣',
-          title: t(ctx, 'admin_broadcast_audience_section'),
-          fields: [
-            { label: t(ctx, 'admin_broadcast_audience_label'), value: audienceLabel },
-            { label: t(ctx, 'admin_broadcast_id_label'), value: escapeTelegramMarkdown(job.id) },
-          ],
+          emoji: '📋',
+          title: t(ctx, 'admin_broadcast_details_section'),
+          fields: [{ label: t(ctx, 'admin_broadcast_id_label'), value: `\`${job.id}\`` }],
         },
       ],
     }),
