@@ -77,7 +77,7 @@ export class UserService {
    */
   async findProfile(rawQuery: string): Promise<LocalUserProfile | null> {
     const db = getDb();
-    const query = rawQuery.trim().replace(/^@/, '');
+    const query = cleanUserSearchQuery(rawQuery);
     if (!query) return null;
     const parsedTelegramId = /^\d+$/.test(query) ? Number(query) : Number.NaN;
     const telegramId = Number.isSafeInteger(parsedTelegramId) ? parsedTelegramId : null;
@@ -211,6 +211,139 @@ export class UserService {
       ),
       cashbackEarned: dbIntegerToSafeNumber(cashback?.value ?? 0, 'profile_cashback'),
     };
+  }
+
+  /**
+   * Search multiple user profiles across all identifier types:
+   * Telegram ID, @username, name, UUID, subscription URL, config username,
+   * receipt ID, transaction ID, or referral code.
+   */
+  async searchProfiles(rawQuery: string, limit = 8): Promise<LocalUserProfile[]> {
+    const db = getDb();
+    const query = cleanUserSearchQuery(rawQuery);
+    if (!query) return [];
+
+    const parsedTelegramId = /^\d+$/.test(query) ? Number(query) : Number.NaN;
+    const telegramId =
+      Number.isSafeInteger(parsedTelegramId) && parsedTelegramId > 0 ? parsedTelegramId : null;
+    const normalizedUuid = isUuid(query) ? query.toLowerCase() : undefined;
+
+    const candidateIds: number[] = [];
+    const addCandidate = (id: number | null | undefined) => {
+      if (id && Number.isSafeInteger(id) && id > 0 && !candidateIds.includes(id)) {
+        candidateIds.push(id);
+      }
+    };
+
+    // 1. Exact Telegram ID
+    if (telegramId !== null) {
+      const [u] = await db
+        .select({ telegramId: users.telegramId })
+        .from(users)
+        .where(eq(users.telegramId, telegramId))
+        .limit(1);
+      if (u) addCandidate(u.telegramId);
+    }
+
+    // 2. Exact UUID
+    if (normalizedUuid) {
+      const [u] = await db
+        .select({ telegramId: users.telegramId })
+        .from(users)
+        .where(eq(users.id, normalizedUuid))
+        .limit(1);
+      if (u) addCandidate(u.telegramId);
+    }
+
+    // 3. Exact username or referral code
+    const exactUsers = await db
+      .select({ telegramId: users.telegramId })
+      .from(users)
+      .where(
+        sql`LOWER(${users.username}) = LOWER(${query}) OR LOWER(${users.referralCode}) = LOWER(${query})`
+      )
+      .limit(limit);
+    for (const u of exactUsers) addCandidate(u.telegramId);
+
+    // 4. Exact SubUrl or configUsername
+    const configOwners = await db
+      .select({ telegramId: userConfigs.telegramId })
+      .from(userConfigs)
+      .where(
+        /^https?:\/\//iu.test(rawQuery.trim())
+          ? eq(userConfigs.subUrl, rawQuery.trim())
+          : sql`LOWER(${userConfigs.configUsername}) = LOWER(${query})`
+      )
+      .limit(limit);
+    for (const o of configOwners) addCandidate(o.telegramId);
+
+    // 5. Receipts match
+    if (query.startsWith('rec_') || query.length >= 6) {
+      const receipts = await db
+        .select({ telegramId: topupReceipts.telegramId })
+        .from(topupReceipts)
+        .where(
+          sql`LOWER(${topupReceipts.id}) = LOWER(${query}) OR LOWER(${topupReceipts.id}) = LOWER(${'rec_' + query})`
+        )
+        .limit(limit);
+      for (const r of receipts) addCandidate(r.telegramId);
+    }
+
+    // 6. Wallet transactions match
+    if (query.startsWith('tx_') || query.startsWith('ref_') || query.length >= 6) {
+      const txRows = await db
+        .select({ telegramId: walletTransactions.telegramId })
+        .from(walletTransactions)
+        .where(
+          sql`LOWER(${walletTransactions.id}) = LOWER(${query}) OR LOWER(${walletTransactions.referenceId}) = LOWER(${query})`
+        )
+        .limit(limit);
+      for (const tx of txRows) addCandidate(tx.telegramId);
+    }
+
+    // 7. Purchase intents match
+    if (query.startsWith('pi_') || query.length >= 6) {
+      const piRows = await db
+        .select({ telegramId: purchaseIntents.telegramId })
+        .from(purchaseIntents)
+        .where(
+          sql`LOWER(${purchaseIntents.id}) = LOWER(${query}) OR LOWER(${purchaseIntents.checkoutId}) = LOWER(${query})`
+        )
+        .limit(limit);
+      for (const pi of piRows) addCandidate(pi.telegramId);
+    }
+
+    // 8. Partial match on username, firstName, lastName, or full display name
+    if (candidateIds.length < limit && query.length >= 2) {
+      const pattern = `%${query.toLowerCase()}%`;
+      const fuzzyUsers = await db
+        .select({ telegramId: users.telegramId })
+        .from(users)
+        .where(
+          sql`LOWER(${users.username}) LIKE ${pattern} OR LOWER(${users.firstName}) LIKE ${pattern} OR LOWER(${users.lastName}) LIKE ${pattern} OR LOWER(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, ''))) LIKE ${pattern}`
+        )
+        .limit(limit);
+      for (const fu of fuzzyUsers) addCandidate(fu.telegramId);
+    }
+
+    // 9. Partial match on config username or sub URL if space remains
+    if (candidateIds.length < limit && query.length >= 3) {
+      const pattern = `%${query.toLowerCase()}%`;
+      const partialConfigs = await db
+        .select({ telegramId: userConfigs.telegramId })
+        .from(userConfigs)
+        .where(
+          sql`LOWER(${userConfigs.configUsername}) LIKE ${pattern} OR LOWER(${userConfigs.subUrl}) LIKE ${pattern}`
+        )
+        .limit(limit);
+      for (const pc of partialConfigs) addCandidate(pc.telegramId);
+    }
+
+    if (candidateIds.length === 0) return [];
+
+    const selectedIds = candidateIds.slice(0, limit);
+    const enrichedList = await Promise.all(selectedIds.map((id) => this.findProfile(String(id))));
+    return enrichedList.filter((p): p is LocalUserProfile => p !== null);
   }
 
   async setBanned(
@@ -553,4 +686,19 @@ export class UserService {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
+}
+
+export function cleanUserSearchQuery(rawQuery: string): string {
+  if (!rawQuery) return '';
+  let cleaned = rawQuery.trim();
+  // Normalize Persian (۰-۹) and Arabic (٠-٩) digits to ASCII (0-9)
+  cleaned = cleaned
+    .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660));
+  // Strip t.me URLs if present
+  cleaned = cleaned.replace(/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\//iu, '');
+  cleaned = cleaned.replace(/^tg:\/\/resolve\?domain=/iu, '');
+  // Strip leading @
+  cleaned = cleaned.replace(/^@+/u, '');
+  return cleaned.trim();
 }

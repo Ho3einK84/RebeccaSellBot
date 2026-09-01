@@ -11,7 +11,7 @@ import {
   waitForAdminCallbackInput,
   waitForAdminTextInput,
 } from '../../ui.js';
-import { requireAdmin } from './shared.js';
+import { promptAndResolveAdminTargetUser, requireAdmin } from './shared.js';
 import { callbackData } from '../../callbackData.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
@@ -219,49 +219,25 @@ export async function adminDirectMessageConversation(
 ) {
   const adminId = await requireAdmin(conversation, ctx);
   if (!adminId || !ctx.services) return;
-  let telegramId = await conversation.external((outsideCtx) => {
+  const preselectedTelegramId = await conversation.external((outsideCtx) => {
     const selected = outsideCtx.session.adminDirectMessageTargetTelegramId;
     delete outsideCtx.session.adminDirectMessageTargetTelegramId;
     return selected;
   });
-  while (telegramId === undefined) {
-    await promptInConversation(
-      conversation,
-      ctx,
-      buildPromptScreen(
-        '✉️',
-        t(ctx, 'admin_direct_title'),
-        t(ctx, 'admin_direct_telegram_id_prompt'),
-        t(ctx, 'admin_direct_subtitle')
-      ),
-      { parse_mode: 'Markdown' }
-    );
-    const idInput = await waitForAdminTextInput(conversation);
-    if (idInput === undefined) return;
-    const parsed = Number(idInput.trim());
-    if (Number.isSafeInteger(parsed) && parsed > 0) telegramId = parsed;
-    else {
-      await replyInAdminConversation(
-        conversation,
-        ctx,
-        buildEmptyState(
-          '⚠️',
-          t(ctx, 'admin_direct_title'),
-          t(ctx, 'admin_direct_invalid_telegram_id')
-        ),
-        { parse_mode: 'Markdown' }
-      );
-    }
-  }
-  if (!(await ctx.services.userService.exists(telegramId))) {
-    await replyInAdminConversation(
-      conversation,
-      ctx,
-      buildEmptyState('⚠️', t(ctx, 'admin_direct_title'), t(ctx, 'admin_direct_user_not_found')),
-      { parse_mode: 'Markdown' }
-    );
-    return;
-  }
+
+  const user = await promptAndResolveAdminTargetUser(conversation, ctx, {
+    titleKey: 'admin_direct_title',
+    subtitleKey: 'admin_direct_subtitle',
+    initialTelegramId: preselectedTelegramId,
+  });
+
+  if (!user) return;
+
+  const telegramId = user.telegramId;
+  const displayName =
+    `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
+    (user.username ? `@${user.username}` : String(user.telegramId));
+
   await promptInConversation(
     conversation,
     ctx,
@@ -272,7 +248,7 @@ export async function adminDirectMessageConversation(
       primary: {
         emoji: '👤',
         label: t(ctx, 'admin_direct_recipient_label'),
-        value: `\`${telegramId}\``,
+        value: `${escapeTelegramMarkdown(displayName)} (\`${telegramId}\`)`,
       },
       footer: t(ctx, 'admin_direct_message_prompt'),
     }),
@@ -291,7 +267,7 @@ export async function adminDirectMessageConversation(
       primary: {
         emoji: '👤',
         label: t(ctx, 'admin_direct_recipient_label'),
-        value: `\`${telegramId}\``,
+        value: `${escapeTelegramMarkdown(displayName)} (\`${telegramId}\`)`,
       },
       sections: [
         {
@@ -332,11 +308,17 @@ export async function adminDirectMessageConversation(
         primary: {
           emoji: '👤',
           label: t(ctx, 'admin_direct_recipient_label'),
-          value: `\`${telegramId}\``,
+          value: `${escapeTelegramMarkdown(displayName)} (\`${telegramId}\`)`,
         },
         footer: t(ctx, 'admin_direct_sent'),
       }),
-      { parse_mode: 'Markdown' }
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_user_open_profile_button'), `admin:user:view:${telegramId}`)
+          .row()
+          .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
+      }
     );
   } catch (err) {
     logger.warn({ err, telegramId }, 'Direct admin message failed');
@@ -344,7 +326,10 @@ export async function adminDirectMessageConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_direct_title'), t(ctx, 'admin_direct_failed')),
-      { parse_mode: 'Markdown' }
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
+      }
     );
   }
 }

@@ -150,4 +150,16 @@ describe('UserService administrative profile lookup', () => {
     expect(summary?.totalReceiptsCount).toBe(6);
     expect(summary?.auditEventsCount).toBe(7);
   });
+
+  it('cleanUserSearchQuery normalizes Persian/Arabic digits, URLs, and @ prefix', async () => {
+    const { cleanUserSearchQuery } = await import('../../src/domain/services/UserService.js');
+
+    expect(cleanUserSearchQuery('  @john_doe  ')).toBe('john_doe');
+    expect(cleanUserSearchQuery('https://t.me/super_user')).toBe('super_user');
+    expect(cleanUserSearchQuery('http://t.me/testuser')).toBe('testuser');
+    expect(cleanUserSearchQuery('tg://resolve?domain=botfather')).toBe('botfather');
+    expect(cleanUserSearchQuery('۱۲۳۴۵۶۷۸۹')).toBe('123456789');
+    expect(cleanUserSearchQuery('٠١٢٣٤٥٦٧٨٩')).toBe('0123456789');
+    expect(cleanUserSearchQuery('')).toBe('');
+  });
 });
