@@ -17,6 +17,9 @@ export type BonusSnapshot = {
   referralBonusAmount: number;
 };
 
+type DbInstance = ReturnType<typeof getDb>;
+type DbTransaction = Parameters<Parameters<DbInstance['transaction']>[0]>[0];
+
 export class ReferralService {
   constructor(private readonly translationService: TranslationService) {}
 
@@ -46,9 +49,7 @@ export class ReferralService {
   }
 
   async calculateBonusSnapshot(
-    tx: {
-      select: (args?: any) => any;
-    },
+    tx: Pick<DbTransaction, 'select'>,
     telegramId: number,
     purchaseAmount: number
   ): Promise<BonusSnapshot> {
@@ -239,11 +240,7 @@ export class ReferralService {
    * failures propagate so the durable reconciliation retry can see them.
    */
   private async creditWalletInTransaction(
-    tx: {
-      select: (args?: any) => any;
-      update: (table: any) => any;
-      insert: (table: any) => any;
-    },
+    tx: Pick<DbTransaction, 'select' | 'update' | 'insert'>,
     params: {
       telegramId: number;
       amount: number;

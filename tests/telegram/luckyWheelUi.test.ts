@@ -5,8 +5,6 @@ import {
 } from '../../src/telegram/features/luckyWheelRoutes.js';
 import type { MenuContext } from '../../src/telegram/types.js';
 import { TranslationService } from '../../src/domain/services/TranslationService.js';
-import { FA_TEXTS } from '../../src/domain/services/TranslationCatalog.fa.js';
-import { EN_TEXTS } from '../../src/domain/services/TranslationCatalog.en.js';
 
 describe('Lucky Wheel UI & Localization', () => {
   function createMockContext(
@@ -63,7 +61,7 @@ describe('Lucky Wheel UI & Localization', () => {
   }
 
   it('renders lucky wheel screen in English with complete LTR/English purity and no Persian artifacts', async () => {
-    const { ctx, getRenderedText, getRenderedOptions } = createMockContext('en', {
+    const { ctx, getRenderedText } = createMockContext('en', {
       canSpin: false,
       reason: 'cooldown_active',
       secondsRemaining: 23 * 3600 + 27 * 60, // 23h 27m

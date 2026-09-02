@@ -97,7 +97,7 @@ describe('PackageCategoryService', () => {
         }),
       })),
       update: vi.fn(() => ({
-        set: vi.fn((updates: any) => ({
+        set: vi.fn((_updates: any) => ({
           where: vi.fn(() => {
             return Promise.resolve();
           }),

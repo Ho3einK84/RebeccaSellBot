@@ -122,9 +122,9 @@ export function registerLuckyWheelRoutes(bot: Bot<MenuContext>, services: BotSer
     try {
       result = await services.luckyWheelService.spin(telegramId);
       await ctx.answerCallbackQuery();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ error, telegramId }, 'Failed to spin lucky wheel');
-      const errCode = error?.message;
+      const errCode = error instanceof Error ? error.message : undefined;
       if (
         errCode === 'COOLDOWN_ACTIVE' ||
         errCode === 'MAX_SPINS_REACHED' ||

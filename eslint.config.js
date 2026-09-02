@@ -24,5 +24,12 @@ export default tseslint.config(
       // Consistent use of type imports
       '@typescript-eslint/consistent-type-imports': ['warn', { prefer: 'type-imports' }],
     },
+  },
+  // Test-specific overrides (allow mock objects and fixtures to use any)
+  {
+    files: ['tests/**'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
   }
 );

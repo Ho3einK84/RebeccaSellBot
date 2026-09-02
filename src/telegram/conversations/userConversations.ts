@@ -412,7 +412,10 @@ export async function buyConfigConversation(
         buildEmptyState(
           '⚠️',
           t(ctx, 'custom_volume_title'),
-          t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
+          t(ctx, 'custom_gb_invalid_range', {
+            min: localizedNumber(1, ctx),
+            max: localizedNumber(10_000, ctx),
+          })
         ),
         { parse_mode: 'Markdown' }
       );
@@ -459,7 +462,10 @@ export async function customAmountConversation(
         buildEmptyState(
           '⚠️',
           t(ctx, 'custom_volume_title'),
-          t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
+          t(ctx, 'custom_gb_invalid_range', {
+            min: localizedNumber(1, ctx),
+            max: localizedNumber(10_000, ctx),
+          })
         ),
         { parse_mode: 'Markdown' }
       );
@@ -519,7 +525,10 @@ export async function renewConfigConversation(
         buildEmptyState(
           '⚠️',
           t(ctx, 'custom_volume_title'),
-          t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
+          t(ctx, 'custom_gb_invalid_range', {
+            min: localizedNumber(1, ctx),
+            max: localizedNumber(10_000, ctx),
+          })
         ),
         { parse_mode: 'Markdown' }
       );
@@ -782,7 +791,10 @@ export async function autoRenewCustomConversation(
         buildEmptyState(
           '⚠️',
           t(ctx, 'custom_volume_title'),
-          t(ctx, 'custom_gb_invalid_range', { min: 1, max: 10_000 })
+          t(ctx, 'custom_gb_invalid_range', {
+            min: localizedNumber(1, ctx),
+            max: localizedNumber(10_000, ctx),
+          })
         ),
         { parse_mode: 'Markdown' }
       );

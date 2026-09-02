@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigService } from '../../src/domain/services/ConfigService.js';
 import { ConfigTransferService } from '../../src/domain/services/ConfigTransferService.js';
-import { RefundService } from '../../src/domain/services/RefundService.js';
 import { WalletPurchaseSaga } from '../../src/domain/services/WalletPurchaseSaga.js';
 import { getDb, getPool } from '../../src/infra/db.js';
 import type { RebeccaService } from '../../src/domain/services/RebeccaService.js';

@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  PaymentService,
-  CardToCardPaymentProvider,
-} from '../../src/domain/services/PaymentService.js';
+import { PaymentService } from '../../src/domain/services/PaymentService.js';
 import type { TranslationService } from '../../src/domain/services/TranslationService.js';
 
 describe('PaymentService', () => {

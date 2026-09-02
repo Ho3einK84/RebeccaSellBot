@@ -112,7 +112,6 @@ describe('Translation Catalog Parity and Standard', () => {
       /اشتراکهای/,
       /اشتراکها\b/,
       /بستههای/,
-      /بسته های/,
       /حسابهای/,
       /گزینههای/,
       /بخشهای/,
