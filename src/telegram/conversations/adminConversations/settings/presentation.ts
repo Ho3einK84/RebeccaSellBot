@@ -1,6 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import type { PackageOption } from '../../../../domain/services/PricingService.js';
 import { parsePackageOptionsJson } from '../../../../domain/services/PricingService.js';
+import { previewConfigName } from '../../../../domain/services/ConfigService.js';
 import type { ConversationContext } from '../../../types.js';
 import { localizedNumber, t, tm } from '../../../locale.js';
 import { callbackData } from '../../../callbackData.js';
@@ -171,9 +172,6 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
   const botEnabled = ts.getSettingBool('bot_enabled', true);
   const langEnabled = ts.getSettingBool('language_selection_enabled', true);
   const defLocale = ts.getSetting('default_locale', 'fa');
-  const trialEnabled = ts.getSettingBool('trial_enabled', true);
-  const trialGb = parseSettingNum(ts.getSetting('trial_gb'), 1);
-  const trialDays = parseSettingNum(ts.getSetting('trial_days'), 3);
   const supportEnabled = ts.getSettingBool('support_enabled', true);
   const supportDest = ts.getSetting('support_destination', '') || '—';
 
@@ -221,21 +219,6 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
         ],
       },
       {
-        emoji: '🎁',
-        title: t(ctx, 'admin_overview_trial'),
-        fields: [
-          {
-            label: t(ctx, 'admin_setting_trial_enabled'),
-            value: trialEnabled
-              ? `${onBadge} (${localizedNumber(trialGb, ctx)} ${t(
-                  ctx,
-                  'traffic_unit_gb'
-                )} / ${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')})`
-              : offBadge,
-          },
-        ],
-      },
-      {
         emoji: '🏷️',
         title: t(ctx, 'admin_overview_naming'),
         fields: [
@@ -272,6 +255,10 @@ export function displayAdminSettingValue(ctx: ConversationContext, key: string):
     const labels: Readonly<Record<string, string>> = {
       prefix_number: 'admin_setting_naming_mode_val_prefix_number',
       telegramid_number: 'admin_setting_naming_mode_val_telegramid_number',
+      prefix_telegramid_number: 'admin_setting_naming_mode_val_prefix_telegramid_number',
+      prefix_random: 'admin_setting_naming_mode_val_prefix_random',
+      random_alphanumeric: 'admin_setting_naming_mode_val_random_alphanumeric',
+      prefix_date_counter: 'admin_setting_naming_mode_val_prefix_date_counter',
       custom: 'admin_setting_naming_mode_val_custom',
     };
     return labels[mode] ? t(ctx, labels[mode]) : mode;
@@ -326,8 +313,11 @@ export function buildCustomNamingTemplatePrompt(ctx: ConversationContext): strin
       code_telegram_id: '{telegram_id}',
       code_counter: '{counter}',
       code_random4: '{random4}',
+      code_random6: '{random6}',
+      code_random8: '{random8}',
+      code_date: '{date}',
       example_primary: '{prefix}_{telegram_id}_{counter}',
-      example_random: '{prefix}_{counter}_{random4}',
+      example_random: '{prefix}_{counter}_{random6}',
     },
     [
       'current',
@@ -336,10 +326,62 @@ export function buildCustomNamingTemplatePrompt(ctx: ConversationContext): strin
       'code_telegram_id',
       'code_counter',
       'code_random4',
+      'code_random6',
+      'code_random8',
+      'code_date',
       'example_primary',
       'example_random',
     ]
   );
+}
+
+export function buildNamingDashboardScreen(
+  ctx: ConversationContext,
+  sampleTelegramId?: number,
+  sampleCounter?: number
+): string {
+  if (!ctx.services) return '';
+  const ts = ctx.services.translationService;
+  const mode = ts.getSetting('naming_mode', 'custom');
+  const prefix = ts.getSetting('naming_prefix', 'rebecca');
+  const template = ts.getSetting('custom_naming_template', '{prefix}_{telegram_id}_{counter}');
+  const preview = previewConfigName(ts, sampleTelegramId, sampleCounter);
+
+  return buildScreen({
+    emoji: '🏷️',
+    title: t(ctx, 'admin_naming_dashboard_title'),
+    subtitle: t(ctx, 'admin_naming_dashboard_subtitle'),
+    primary: {
+      emoji: '✨',
+      label: t(ctx, 'admin_naming_preview_label'),
+      value: `\`${escapeInlineCode(preview)}\``,
+    },
+    sections: [
+      {
+        emoji: '⚙️',
+        title: t(ctx, 'admin_naming_config_section'),
+        fields: [
+          {
+            label: t(ctx, 'admin_naming_active_mode'),
+            value: displayAdminSettingValue(ctx, 'naming_mode'),
+          },
+          {
+            label: t(ctx, 'admin_naming_prefix_label'),
+            value: `\`${escapeInlineCode(prefix)}\``,
+          },
+          ...(mode === 'custom'
+            ? [
+                {
+                  label: t(ctx, 'admin_naming_template_label'),
+                  value: `\`${escapeInlineCode(template)}\``,
+                },
+              ]
+            : []),
+        ],
+      },
+    ],
+    footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+  });
 }
 
 export function buildPackageManagerScreen(

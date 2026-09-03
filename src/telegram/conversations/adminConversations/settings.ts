@@ -7,6 +7,8 @@ export { adminCustomVolumeConversation } from './settings/customVolume.js';
 export { adminReferralSettingsConversation } from './settings/referral.js';
 export { adminPaymentSettingsConversation } from './settings/payment.js';
 export { adminLuckyWheelSettingsConversation } from './settings/luckyWheel.js';
+export { adminTrialSettingsConversation } from './settings/trial.js';
+export { adminNamingSettingsConversation, manageNamingSettings } from './settings/naming.js';
 export {
   SETTING_DEFINITIONS,
   SETTING_GROUPS,
@@ -23,6 +25,7 @@ export {
   buildCustomNamingTemplatePrompt,
   buildEditorNavigationKeyboard,
   buildLocaleSettingKeyboard,
+  buildNamingDashboardScreen,
   buildSelectionKeyboard,
   buildSettingsGroupKeyboard,
   buildSettingsGroupPrompt,

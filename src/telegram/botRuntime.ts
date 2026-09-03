@@ -29,6 +29,8 @@ import {
   adminReferralSettingsConversation,
   adminPaymentSettingsConversation,
   adminLuckyWheelSettingsConversation,
+  adminTrialSettingsConversation,
+  adminNamingSettingsConversation,
   adminEditTextsConversation,
   adminDirectMessageConversation,
   adminAddAdminConversation,
@@ -258,6 +260,8 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   bot.use(
     createConversation(adminLuckyWheelSettingsConversation, 'adminLuckyWheelSettingsConversation')
   );
+  bot.use(createConversation(adminTrialSettingsConversation, 'adminTrialSettingsConversation'));
+  bot.use(createConversation(adminNamingSettingsConversation, 'adminNamingSettingsConversation'));
   bot.use(createConversation(adminEditTextsConversation, 'adminEditTextsConversation'));
   bot.use(createConversation(adminDirectMessageConversation, 'adminDirectMessageConversation'));
   bot.use(createConversation(adminAddAdminConversation, 'adminAddAdminConversation'));

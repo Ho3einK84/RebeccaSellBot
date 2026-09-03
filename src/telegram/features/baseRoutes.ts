@@ -185,6 +185,11 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     await ctx.conversation.enter('adminCustomVolumeConversation');
   });
 
+  bot.callbackQuery('admin:sales:trial', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminTrialSettingsConversation');
+  });
+
   bot.callbackQuery('admin:sales:promo', async (ctx) => {
     await ctx.answerCallbackQuery();
     await showPromoCenter(ctx);

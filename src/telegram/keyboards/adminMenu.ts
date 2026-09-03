@@ -120,10 +120,12 @@ export function salesMenuKeyboard(ctx: MenuContext | ConversationContext): Inlin
     .text(t(ctx, 'admin_sales_packages_button'), 'admin:sales:packages')
     .text(t(ctx, 'admin_sales_custom_volume_button'), 'admin:sales:custom_volume')
     .row()
+    .text(t(ctx, 'admin_sales_trial_button'), 'admin:sales:trial')
     .text(t(ctx, 'admin_menu_promo_codes'), 'admin:sales:promo')
-    .text(t(ctx, 'admin_sales_referral_button'), 'admin:sales:referral')
     .row()
+    .text(t(ctx, 'admin_sales_referral_button'), 'admin:sales:referral')
     .text(t(ctx, 'admin_sales_wallet_transfer_button'), 'admin:sales:payment')
+    .row()
     .text(t(ctx, 'admin_sales_lucky_wheel_button'), 'admin:sales:lucky_wheel')
     .row()
     .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
@@ -158,6 +160,12 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
     }
   )
   .row()
+  .text(
+    (ctx) => t(ctx, 'admin_sales_trial_button'),
+    async (ctx) => {
+      await ctx.conversation.enter('adminTrialSettingsConversation');
+    }
+  )
   .text(
     (ctx) => t(ctx, 'admin_menu_promo_codes'),
     async (ctx) => {

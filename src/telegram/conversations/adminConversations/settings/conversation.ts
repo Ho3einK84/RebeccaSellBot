@@ -30,6 +30,7 @@ import {
   readSettingBool,
 } from './presentation.js';
 import { managePackages } from './packageManager.js';
+import { manageNamingSettings } from './naming.js';
 import { waitForSettingsInput } from './navigation.js';
 import { settingValidationMessage, validateAdminSetting } from './validation.js';
 
@@ -65,6 +66,13 @@ export async function adminEditSettingsConversation(
       openPackages = false;
       const outcome = await managePackages(conversation, activeCtx);
       if (outcome === 'cancel') return;
+    }
+
+    if (activeGroup.id === 'naming') {
+      const outcome = await manageNamingSettings(conversation, activeCtx);
+      if (outcome === 'cancel') return;
+      activeGroup = undefined;
+      continue;
     }
 
     const choice = await chooseSettingInGroup(conversation, activeCtx, activeGroup);
@@ -240,6 +248,17 @@ async function editNamingMode(
     .row()
     .text(t(ctx, 'admin_setting_naming_mode_telegramid_number'), 'set-nm:telegramid_number')
     .row()
+    .text(
+      t(ctx, 'admin_setting_naming_mode_prefix_telegramid_number'),
+      'set-nm:prefix_telegramid_number'
+    )
+    .row()
+    .text(t(ctx, 'admin_setting_naming_mode_prefix_random'), 'set-nm:prefix_random')
+    .row()
+    .text(t(ctx, 'admin_setting_naming_mode_random_alphanumeric'), 'set-nm:random_alphanumeric')
+    .row()
+    .text(t(ctx, 'admin_setting_naming_mode_prefix_date_counter'), 'set-nm:prefix_date_counter')
+    .row()
     .text(t(ctx, 'admin_setting_naming_mode_custom'), 'set-nm:custom')
     .row()
     .text(t(ctx, 'admin_settings_back_category'), 'set-nm:back');
@@ -355,7 +374,7 @@ async function editTextSetting(
   }
 }
 
-async function saveSetting(
+export async function saveSetting(
   conversation: MyConversation,
   ctx: ConversationContext,
   definition: SettingDefinition,

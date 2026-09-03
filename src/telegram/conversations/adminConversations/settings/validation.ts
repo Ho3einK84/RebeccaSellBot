@@ -3,8 +3,24 @@ import { localizedNumber, normalizeInputDigits, t } from '../../../locale.js';
 import { parsePackageOptionsJson } from '../../../../domain/services/PricingService.js';
 import { getSettingDefinition, type SettingKey } from './catalog.js';
 
-const NAMING_MODES = new Set(['custom', 'prefix_number', 'telegramid_number']);
-const NAMING_TOKENS = ['{prefix}', '{telegram_id}', '{counter}', '{random4}'] as const;
+const NAMING_MODES = new Set([
+  'custom',
+  'prefix_number',
+  'telegramid_number',
+  'prefix_telegramid_number',
+  'prefix_random',
+  'random_alphanumeric',
+  'prefix_date_counter',
+]);
+const NAMING_TOKENS = [
+  '{prefix}',
+  '{telegram_id}',
+  '{counter}',
+  '{random4}',
+  '{random6}',
+  '{random8}',
+  '{date}',
+] as const;
 
 /** Validate and canonicalize one persisted setting value. */
 export function validateAdminSetting(key: SettingKey, rawValue: string): string | undefined {

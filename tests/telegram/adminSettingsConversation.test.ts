@@ -125,9 +125,9 @@ function createHarness(
 
 describe('admin settings conversation', () => {
   it('navigates home, category, instant toggle save, Back, and Cancel', async () => {
-    const harness = createHarness({ trial_enabled: 'true', trial_gb: '1', trial_days: '3' }, [
-      { callback: 'set-group:trial' },
-      { callback: 'set-edit:trial_enabled' },
+    const harness = createHarness({ support_enabled: 'true', support_destination: '@support' }, [
+      { callback: 'set-group:support' },
+      { callback: 'set-edit:support_enabled' },
       { callback: 'set-groups' },
       { callback: 'conversation:cancel' },
     ]);
@@ -135,10 +135,10 @@ describe('admin settings conversation', () => {
     await adminEditSettingsConversation(harness.conversation, harness.ctx);
 
     expect(harness.updateSetting).toHaveBeenCalledOnce();
-    expect(harness.updateSetting).toHaveBeenCalledWith('trial_enabled', 'false');
-    expect(harness.settings.get('trial_enabled')).toBe('false');
-    expect(keyboardRenderCount(harness.reply, 'set-group:trial')).toBe(2);
-    expect(keyboardRenderCount(harness.reply, 'set-edit:trial_enabled')).toBe(2);
+    expect(harness.updateSetting).toHaveBeenCalledWith('support_enabled', 'false');
+    expect(harness.settings.get('support_enabled')).toBe('false');
+    expect(keyboardRenderCount(harness.reply, 'set-group:support')).toBe(2);
+    expect(keyboardRenderCount(harness.reply, 'set-edit:support_enabled')).toBe(2);
     expect(harness.remaining).toHaveLength(0);
   });
 

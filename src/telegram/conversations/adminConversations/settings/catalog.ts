@@ -293,12 +293,12 @@ export type SettingGroup = {
 export const GENERAL_SETTING_GROUPS: readonly SettingGroup[] = [
   settingGroup('system', 'admin_setting_group_system', 'admin_setting_group_system_desc'),
   settingGroup('support', 'admin_setting_group_support', 'admin_setting_group_support_desc'),
-  settingGroup('trial', 'admin_setting_group_trial', 'admin_setting_group_trial_desc'),
   settingGroup('naming', 'admin_setting_group_naming', 'admin_setting_group_naming_desc'),
 ];
 
 export const SETTING_GROUPS: readonly SettingGroup[] = [
   ...GENERAL_SETTING_GROUPS,
+  settingGroup('trial', 'admin_setting_group_trial', 'admin_setting_group_trial_desc'),
   settingGroup('backup', 'admin_setting_group_backup', 'admin_setting_group_backup_desc'),
   settingGroup('pricing', 'admin_setting_group_pricing', 'admin_setting_group_pricing_desc'),
   settingGroup(

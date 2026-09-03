@@ -231,6 +231,31 @@ export class ConfigService {
       return toRebeccaUsername(`${telegramId}_${counter}`, counter);
     }
 
+    if (mode === 'prefix_telegramid_number') {
+      const counter = await this.incrementCounter('custom');
+      return toRebeccaUsername(`${prefix}_${telegramId}_${counter}`, counter);
+    }
+
+    if (mode === 'prefix_random') {
+      const random6 = crypto.randomBytes(3).toString('hex');
+      return toRebeccaUsername(`${prefix}_${random6}`, 1);
+    }
+
+    if (mode === 'random_alphanumeric') {
+      const random8 = crypto.randomBytes(4).toString('hex');
+      const shortPrefix = sanitize(prefix).slice(0, 4) || 'cfg';
+      return toRebeccaUsername(`${shortPrefix}_${random8}`, 1);
+    }
+
+    if (mode === 'prefix_date_counter') {
+      const counter = await this.incrementCounter('custom');
+      const now = new Date();
+      const yy = String(now.getFullYear()).slice(-2);
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dateStr = `${yy}${mm}`;
+      return toRebeccaUsername(`${prefix}_${dateStr}_${counter}`, counter);
+    }
+
     // Default 'custom' template mode
     const template = this.translationService.getSetting(
       'custom_naming_template',
@@ -238,12 +263,21 @@ export class ConfigService {
     );
     const counter = await this.incrementCounter('custom');
     const random4 = crypto.randomBytes(2).toString('hex');
+    const random6 = crypto.randomBytes(3).toString('hex');
+    const random8 = crypto.randomBytes(4).toString('hex');
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dateStr = `${yy}${mm}`;
 
     const rendered = template
       .replaceAll('{prefix}', prefix)
       .replaceAll('{telegram_id}', String(telegramId))
       .replaceAll('{counter}', String(counter))
-      .replaceAll('{random4}', random4);
+      .replaceAll('{random4}', random4)
+      .replaceAll('{random6}', random6)
+      .replaceAll('{random8}', random8)
+      .replaceAll('{date}', dateStr);
 
     // Templates without a counter are allowed for administrator convenience,
     // but the generated username must still be collision-resistant.
@@ -947,7 +981,10 @@ function templateCounterPattern(template: string, prefix: string): RegExp {
   source = source
     .replaceAll('{prefix}', prefix)
     .replaceAll('{telegram_id}', '__telegram__')
-    .replaceAll('{random4}', '__random__');
+    .replaceAll('{random4}', '__random__')
+    .replaceAll('{random6}', '__random6__')
+    .replaceAll('{random8}', '__random8__')
+    .replaceAll('{date}', '__date__');
   // Long templates are truncated by toRebeccaUsername and retain a trailing
   // counter. In that form the literal template prefix is no longer reliable;
   // a conservative suffix scan may skip numbers from another naming mode but
@@ -956,7 +993,10 @@ function templateCounterPattern(template: string, prefix: string): RegExp {
     .replace(primaryMarker, '0')
     .replaceAll(additionalMarker, '0')
     .replace('__telegram__', '999999999999999')
-    .replace('__random__', '0000');
+    .replace('__random__', '0000')
+    .replace('__random6__', '000000')
+    .replace('__random8__', '00000000')
+    .replace('__date__', '0000');
   if (projected.length > MAX_REBECCA_USERNAME_LENGTH) {
     return /_(?<counter>\d+)$/i;
   }
@@ -964,8 +1004,58 @@ function templateCounterPattern(template: string, prefix: string): RegExp {
     .replace(primaryMarker, '(?<counter>\\d+)')
     .replaceAll(additionalMarker, '\\d+')
     .replace('__telegram__', '\\d+')
-    .replace('__random__', '[a-f0-9]{4}');
+    .replace('__random__', '[a-f0-9]{4}')
+    .replace('__random6__', '[a-f0-9]{6}')
+    .replace('__random8__', '[a-f0-9]{8}')
+    .replace('__date__', '\\d{4}');
   return new RegExp(`^${source}$`, 'i');
+}
+
+export function previewConfigName(
+  translationService: { getSetting: (key: string, fallback?: string) => string },
+  sampleTelegramId = 6698253699,
+  sampleCounter = 1
+): string {
+  const mode = translationService.getSetting('naming_mode', 'custom');
+  const prefix = translationService.getSetting('naming_prefix', 'rebecca');
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dateStr = `${yy}${mm}`;
+
+  if (mode === 'prefix_number') {
+    return `${prefix}_${sampleCounter}`.toLowerCase();
+  }
+  if (mode === 'telegramid_number') {
+    return `${sampleTelegramId}_${sampleCounter}`.toLowerCase();
+  }
+  if (mode === 'prefix_telegramid_number') {
+    return `${prefix}_${sampleTelegramId}_${sampleCounter}`.toLowerCase();
+  }
+  if (mode === 'prefix_random') {
+    return `${prefix}_a7f9b2`.toLowerCase();
+  }
+  if (mode === 'random_alphanumeric') {
+    const shortPrefix = sanitize(prefix).slice(0, 4) || 'cfg';
+    return `${shortPrefix}_d3f1a24c`.toLowerCase();
+  }
+  if (mode === 'prefix_date_counter') {
+    return `${prefix}_${dateStr}_${sampleCounter}`.toLowerCase();
+  }
+  const template = translationService.getSetting(
+    'custom_naming_template',
+    '{prefix}_{telegram_id}_{counter}'
+  );
+  const rendered = template
+    .replaceAll('{prefix}', prefix)
+    .replaceAll('{telegram_id}', String(sampleTelegramId))
+    .replaceAll('{counter}', String(sampleCounter))
+    .replaceAll('{random4}', '8f2d')
+    .replaceAll('{random6}', 'a7f9b2')
+    .replaceAll('{random8}', 'd3f1a24c')
+    .replaceAll('{date}', dateStr);
+  const name = template.includes('{counter}') ? rendered : `${rendered}_${sampleCounter}`;
+  return sanitize(name);
 }
 
 function prefixCounterPattern(prefix: string): RegExp {

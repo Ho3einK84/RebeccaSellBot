@@ -145,16 +145,15 @@ describe('admin settings presentation', () => {
 
     const overview = buildSettingsOverviewScreen(ctx);
     expect(overview).toContain('admin_overview_bot_status');
-    expect(overview).toContain('admin_setting_trial_enabled');
     expect(overview).toContain('@support\\_admin');
+    expect(overview).toContain('admin_overview_naming');
+    expect(overview).not.toContain('admin_setting_trial_enabled');
 
     const sysIdx = overview.indexOf('admin_overview_language');
     const supIdx = overview.indexOf('admin_overview_support');
-    const trlIdx = overview.indexOf('admin_overview_trial');
     const namIdx = overview.indexOf('admin_overview_naming');
     expect(sysIdx).toBeGreaterThan(-1);
     expect(supIdx).toBeGreaterThan(sysIdx);
-    expect(trlIdx).toBeGreaterThan(supIdx);
-    expect(namIdx).toBeGreaterThan(trlIdx);
+    expect(namIdx).toBeGreaterThan(supIdx);
   });
 });
