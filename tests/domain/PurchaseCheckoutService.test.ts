@@ -73,6 +73,48 @@ describe('PurchaseCheckoutService input boundary', () => {
     ).rejects.toThrow('PURCHASE_CHECKOUT_CONFIG_REQUIRED');
     expect(resolveTarget).not.toHaveBeenCalled();
   });
+
+  it('rejects claiming by non-owner when allowAdminOverride is false', async () => {
+    const getDbMock = vi.mocked(getDb);
+    const checkout = {
+      id: 'co_user_1',
+      telegramId: 100,
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    const db = mockDb([[checkout]], [], []);
+    // claimPending returns empty (not updated due to id mismatch), then select returns existing
+    getDbMock.mockReturnValue(db as never);
+
+    const { service } = checkoutService();
+    await expect(service.claim('co_user_1', 999, false)).rejects.toThrow(
+      'PURCHASE_CHECKOUT_OWNER_MISMATCH'
+    );
+  });
+
+  it('allows claiming by admin when allowAdminOverride is true', async () => {
+    const getDbMock = vi.mocked(getDb);
+    const checkout = {
+      id: 'co_user_1',
+      telegramId: 100,
+      status: 'processing',
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+    // claimPending updates and returns claimed row
+    const updateReturn = [checkout];
+    const select = vi.fn();
+    const update = vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn().mockResolvedValue(updateReturn),
+        })),
+      })),
+    }));
+    getDbMock.mockReturnValue({ select, update, transaction: vi.fn() } as never);
+
+    const { service } = checkoutService();
+    await expect(service.claim('co_user_1', 999, true)).resolves.toEqual(checkout);
+  });
 });
 
 describe('PurchaseCheckoutService stale processing recovery', () => {
@@ -150,7 +192,11 @@ describe('PurchaseCheckoutService stale processing recovery', () => {
   });
 });
 
-function mockDb(selectResults: unknown[][], setCalls: unknown[]) {
+function mockDb(
+  selectResults: unknown[][],
+  setCalls: unknown[],
+  updateReturn: unknown[] = [{ id: 'co_stale' }]
+) {
   const queued = [...selectResults];
   const select = vi.fn(() => {
     const query = {
@@ -168,7 +214,7 @@ function mockDb(selectResults: unknown[][], setCalls: unknown[]) {
         return query;
       }),
       where: vi.fn(() => query),
-      returning: vi.fn().mockResolvedValue([{ id: 'co_stale' }]),
+      returning: vi.fn().mockResolvedValue(updateReturn),
     };
     return query;
   });

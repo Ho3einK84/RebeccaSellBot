@@ -14,6 +14,7 @@ import {
 } from '../../locale.js';
 import {
   backKeyboard,
+  backToKeyboard,
   buildEmptyState,
   buildScreen,
   buildStatusBadge,
@@ -279,6 +280,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     async (ctx) => {
       const config = await ownedConfig(ctx, ctx.match[1]!);
       if (!config) return;
+      const targetTelegramId = config.telegramId;
       const packageIndex = Number(ctx.match[2]);
       const packages = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId);
       const pkg =
@@ -292,7 +294,12 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         });
         return;
       }
-      const pendingPromo = await getPendingPromoPricing(ctx, ctx.from.id, pkg.price, pkg.gbAmount);
+      const pendingPromo = await getPendingPromoPricing(
+        ctx,
+        targetTelegramId,
+        pkg.price,
+        pkg.gbAmount
+      );
       if (pendingPromo.messageKey) {
         await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable'), show_alert: true });
         await renderSubscriptionScreen(
@@ -303,7 +310,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         return;
       }
       const price = pendingPromo.quote?.finalAmount ?? pkg.price;
-      if ((await ctx.services!.walletService.getBalance(ctx.from.id)) < price) {
+      if ((await ctx.services!.walletService.getBalance(targetTelegramId)) < price) {
         await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
         await renderSubscriptionScreen(
           ctx,
@@ -322,7 +329,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       }
       await ctx.answerCallbackQuery();
       const checkout = await ctx.services!.purchaseCheckoutService.create({
-        telegramId: ctx.from.id,
+        telegramId: targetTelegramId,
         kind: 'renew_config',
         configId: config.id,
         pkg,
@@ -363,9 +370,16 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
 
   bot.callbackQuery(/^renew:confirm:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
     if (!ctx.services) return;
+    const isAdmin = Boolean(
+      ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
+    );
     let checkout;
     try {
-      checkout = await ctx.services.purchaseCheckoutService.claim(ctx.match[1]!, ctx.from.id);
+      checkout = await ctx.services.purchaseCheckoutService.claim(
+        ctx.match[1]!,
+        ctx.from.id,
+        isAdmin
+      );
     } catch (error) {
       await ctx.answerCallbackQuery({
         text: t(
@@ -378,9 +392,6 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       });
       return;
     }
-    const isAdmin = Boolean(
-      ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
-    );
     const config = checkout.configId
       ? isAdmin
         ? await ctx.services.configService.getConfigById(checkout.configId)
@@ -395,7 +406,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     let result: { configUsername: string; subUrl?: string };
     try {
       result = await ctx.services!.walletService.executePurchaseSaga({
-        telegramId: ctx.from.id,
+        telegramId: checkout.telegramId,
         amount: checkout.amount,
         maxAmount: checkout.quotedAmount,
         type: 'renew_config',
@@ -411,16 +422,24 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     } catch (err) {
       await recordCheckoutFailed(ctx.services.purchaseCheckoutService, checkout.id);
       if (checkout.promoCode) clearPendingPromo(ctx);
+      const failureMarkup =
+        isAdmin && config.telegramId !== ctx.from.id
+          ? backToKeyboard(ctx, `admin:user:subscriptions:${config.telegramId}:1`)
+          : backKeyboard(ctx, 'main');
       await renderScreen(
         ctx,
         purchaseFailureMessage(ctx.services!.translationService, err, resolveContextLocale(ctx)),
-        { reply_markup: backKeyboard(ctx, 'main') }
+        { reply_markup: failureMarkup }
       );
       return;
     }
 
     await recordCheckoutCompleted(ctx.services.purchaseCheckoutService, checkout.id);
     if (checkout.promoCode) clearPendingPromo(ctx);
+    const successMarkup =
+      isAdmin && config.telegramId !== ctx.from.id
+        ? backToKeyboard(ctx, `admin:user:subscriptions:${config.telegramId}:1`)
+        : backKeyboard(ctx, 'main');
     await renderSubscriptionScreen(
       ctx,
       buildScreen({
@@ -447,7 +466,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           },
         ],
       }),
-      backKeyboard(ctx, 'main')
+      successMarkup
     );
   });
 

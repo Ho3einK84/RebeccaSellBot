@@ -482,22 +482,30 @@ export async function renewConfigConversation(
   conversation: MyConversation,
   ctx: ConversationContext
 ) {
-  const telegramId = ctx.from?.id;
-  if (!telegramId || !ctx.services) return;
+  const actorTelegramId = ctx.from?.id;
+  if (!actorTelegramId || !ctx.services) return;
   if (!(await requireCustomVolume(conversation, ctx, true))) return;
+
+  const isAdmin = Boolean(
+    ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
+  );
 
   const configId = await conversation.external(
     (outsideCtx) => outsideCtx.session.renewConfigId as string | undefined
   );
   const config = configId
     ? await conversation.external((outsideCtx) =>
-        outsideCtx.services!.configService.getOwnedConfigById(telegramId, configId)
+        isAdmin
+          ? outsideCtx.services!.configService.getConfigById(configId)
+          : outsideCtx.services!.configService.getOwnedConfigById(actorTelegramId, configId)
       )
     : undefined;
   if (!config) {
     await replyInConversation(conversation, ctx, t(ctx, 'user_not_found'));
     return;
   }
+
+  const targetTelegramId = config.telegramId;
 
   // Step 1: prompt for a custom traffic quota in the same structured flow with retry loop.
   let gbAmount: number | undefined;
@@ -545,7 +553,7 @@ export async function renewConfigConversation(
   const totalCost = customQuote.totalPrice;
 
   const pendingPromo = await conversation.external((outsideCtx) =>
-    getPendingPromoPricing(outsideCtx, telegramId, totalCost, gbAmount)
+    getPendingPromoPricing(outsideCtx, targetTelegramId, totalCost, gbAmount)
   );
   if (pendingPromo.messageKey) {
     await replyInConversation(conversation, ctx, t(ctx, pendingPromo.messageKey));
@@ -553,7 +561,7 @@ export async function renewConfigConversation(
   }
   const displayedCost = pendingPromo.quote?.finalAmount ?? totalCost;
 
-  const balance = await ctx.services.walletService.getBalance(telegramId);
+  const balance = await ctx.services.walletService.getBalance(targetTelegramId);
   if (balance < displayedCost) {
     await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'));
     return;
@@ -569,7 +577,7 @@ export async function renewConfigConversation(
   try {
     checkout = await conversation.external((outsideCtx) =>
       outsideCtx.services!.purchaseCheckoutService.create({
-        telegramId,
+        telegramId: targetTelegramId,
         kind: 'renew_config',
         configId: config.id,
         pkg: {
@@ -612,7 +620,7 @@ export async function renewConfigConversation(
 
   try {
     checkout = await conversation.external((outsideCtx) =>
-      outsideCtx.services!.purchaseCheckoutService.claim(checkout.id, telegramId)
+      outsideCtx.services!.purchaseCheckoutService.claim(checkout.id, actorTelegramId, isAdmin)
     );
   } catch (error) {
     await replyInConversation(
@@ -647,6 +655,11 @@ export async function renewConfigConversation(
     }
   );
 
+  const resolvedBack =
+    isAdmin && targetTelegramId !== actorTelegramId
+      ? `admin:user:subscriptions:${targetTelegramId}:1`
+      : 'subs:page:1';
+
   try {
     // This is the authoritative last check: no awaited work may occur between
     // it and entering the purchase saga.
@@ -656,11 +669,8 @@ export async function renewConfigConversation(
       );
       return;
     }
-    const isAdmin = Boolean(
-      ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
-    );
     res = await ctx.services.walletService.executePurchaseSaga({
-      telegramId,
+      telegramId: targetTelegramId,
       amount: checkout.amount,
       maxAmount: checkout.quotedAmount,
       type: 'renew_config',
@@ -687,7 +697,7 @@ export async function renewConfigConversation(
       ),
       {
         parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
+        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack),
       }
     );
     return;
@@ -725,7 +735,7 @@ export async function renewConfigConversation(
   try {
     await ctx.api.editMessageText(ctx.chat!.id, progressMessage.message_id, renewalSuccessText, {
       parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
+      reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack),
     });
   } catch (err) {
     logger.warn(
@@ -734,7 +744,7 @@ export async function renewConfigConversation(
     );
     await replyInConversation(conversation, ctx, renewalSuccessText, {
       parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), 'subs:page:1'),
+      reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack),
     });
   }
 }
@@ -743,9 +753,13 @@ export async function autoRenewCustomConversation(
   conversation: MyConversation,
   ctx: ConversationContext
 ) {
-  const telegramId = ctx.from?.id;
-  if (!telegramId || !ctx.services) return;
+  const actorTelegramId = ctx.from?.id;
+  if (!actorTelegramId || !ctx.services) return;
   if (!(await requireCustomVolume(conversation, ctx, true))) return;
+
+  const isAdmin = Boolean(
+    ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
+  );
 
   const configId = await conversation.external((outsideCtx) => {
     const pendingConfigId = outsideCtx.session.pendingConfigId as string | undefined;
@@ -758,7 +772,9 @@ export async function autoRenewCustomConversation(
   }
 
   const config = await conversation.external((outsideCtx) =>
-    outsideCtx.services!.configService.getOwnedConfigById(telegramId, configId)
+    isAdmin
+      ? outsideCtx.services!.configService.getConfigById(configId)
+      : outsideCtx.services!.configService.getOwnedConfigById(actorTelegramId, configId)
   );
   if (!config) {
     await replyInConversation(conversation, ctx, t(ctx, 'user_not_found'));
@@ -867,7 +883,7 @@ export async function autoRenewCustomConversation(
 
   await conversation.external((outsideCtx) =>
     outsideCtx.services!.configService.setAutoRenew(
-      telegramId,
+      config.telegramId,
       config.id,
       true,
       customPackageId,

@@ -60,9 +60,13 @@ export class PurchaseCheckoutService {
     return checkout;
   }
 
-  async claim(checkoutId: string, telegramId: number): Promise<PurchaseCheckout> {
+  async claim(
+    checkoutId: string,
+    telegramId: number,
+    allowAdminOverride = false
+  ): Promise<PurchaseCheckout> {
     let now = new Date();
-    const claimed = await this.claimPending(checkoutId, telegramId, now);
+    const claimed = await this.claimPending(checkoutId, telegramId, now, allowAdminOverride);
     if (claimed) return claimed;
 
     let [existing] = await getDb()
@@ -71,7 +75,7 @@ export class PurchaseCheckoutService {
       .where(eq(purchaseCheckouts.id, checkoutId))
       .limit(1);
     if (!existing) throw new PurchaseCheckoutUnavailableError('missing');
-    if (existing.telegramId !== telegramId) {
+    if (existing.telegramId !== telegramId && !allowAdminOverride) {
       throw new PurchaseCheckoutUnavailableError('owner_mismatch');
     }
 
@@ -85,7 +89,7 @@ export class PurchaseCheckoutService {
       if (!existing) throw new PurchaseCheckoutUnavailableError('missing');
       now = new Date();
       if (existing.status === 'pending') {
-        const reclaimed = await this.claimPending(checkoutId, telegramId, now);
+        const reclaimed = await this.claimPending(checkoutId, telegramId, now, allowAdminOverride);
         if (reclaimed) return reclaimed;
       }
     }
@@ -137,16 +141,19 @@ export class PurchaseCheckoutService {
   private async claimPending(
     checkoutId: string,
     telegramId: number,
-    now: Date
+    now: Date,
+    allowAdminOverride = false
   ): Promise<PurchaseCheckout | undefined> {
     const [claimed] = await getDb()
       .update(purchaseCheckouts)
       .set({ status: 'processing', claimedAt: now, updatedAt: now })
       .where(
-        sql`${purchaseCheckouts.id} = ${checkoutId}
-          AND ${purchaseCheckouts.telegramId} = ${telegramId}
-          AND ${purchaseCheckouts.status} = 'pending'
-          AND ${purchaseCheckouts.expiresAt} > ${now}`
+        and(
+          eq(purchaseCheckouts.id, checkoutId),
+          allowAdminOverride ? sql`1=1` : eq(purchaseCheckouts.telegramId, telegramId),
+          eq(purchaseCheckouts.status, 'pending'),
+          sql`${purchaseCheckouts.expiresAt} > ${now}`
+        )
       )
       .returning();
     return claimed;

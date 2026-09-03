@@ -16,7 +16,7 @@ import { showPromoCenter } from '../promoAdminUi.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
-import { formatSubscriptionLink, observedContextLocale, t } from '../locale.js';
+import { formatSubscriptionLink, resolveServiceLocale, t } from '../locale.js';
 import {
   backKeyboard,
   buildEmptyState,
@@ -40,16 +40,22 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     const payload = ctx.match;
     const referralCode = payload?.startsWith('ref_') ? payload : undefined;
     const isFirstVisit = !(await services.userService.exists(telegramId));
+    const defaultLocale =
+      typeof services.translationService?.getDefaultLocale === 'function'
+        ? services.translationService.getDefaultLocale()
+        : resolveServiceLocale(services.translationService);
 
-    await services.walletService.getOrCreateUser(
+    const user = await services.walletService.getOrCreateUser(
       telegramId,
       ctx.from?.username ?? null,
       ctx.from?.first_name ?? null,
       ctx.from?.last_name ?? null,
       referralCode,
-      observedContextLocale(ctx),
+      defaultLocale,
       referralCode ? 'telegram_referral_start' : 'telegram_start'
     );
+
+    ctx.userLocale = isFirstVisit ? defaultLocale : user.locale === 'en' ? 'en' : 'fa';
 
     if (isFirstVisit) {
       const languageSelectionEnabled = services.translationService.getSettingBool(

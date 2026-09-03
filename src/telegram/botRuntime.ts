@@ -38,7 +38,7 @@ import {
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { registerAdminAlertHook } from '../domain/services/RebeccaService.js';
 import { logger } from '../infra/logger.js';
-import { observedContextLocale, resolveServiceLocale, t, tForLocale } from './locale.js';
+import { resolveServiceLocale, t, tForLocale } from './locale.js';
 import { buildScreen, cleanChatUiMiddleware, uiMessageTrackingTransformer } from './ui.js';
 import { escapeTelegramMarkdown, safeFormattingTransformer } from './rendering.js';
 
@@ -95,19 +95,32 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     }
   });
 
-  // Follow Telegram's app locale until a user makes an explicit choice in the
-  // language picker. Background jobs use this persisted preference later.
+  // Follow the configured default locale initially, and allow users to make an explicit
+  // choice in the language picker. Background jobs use this persisted preference later.
   bot.use(async (ctx, next) => {
-    const observedLocale = observedContextLocale(ctx);
+    const defaultLocale =
+      typeof services.translationService?.getDefaultLocale === 'function'
+        ? services.translationService.getDefaultLocale()
+        : resolveServiceLocale(services.translationService);
+    const isStartCommand = Boolean(ctx.message?.text && /^\/start(?:\s|$)/u.test(ctx.message.text));
+
     if (ctx.from?.id && ctx.chat?.type === 'private') {
       try {
+        const exists = await services.userService.exists(ctx.from.id);
+        if (!exists && isStartCommand) {
+          // Allow /start command to handle first registration with referral and language onboarding
+          ctx.userLocale = defaultLocale;
+          knownBanStatus.set(ctx, false);
+          return next();
+        }
+
         const user = await services.walletService.getOrCreateUser(
           ctx.from.id,
           ctx.from.username ?? null,
           ctx.from.first_name ?? null,
           ctx.from.last_name ?? null,
           undefined,
-          observedLocale,
+          defaultLocale,
           'telegram_interaction'
         );
         ctx.userLocale = user.locale === 'en' ? 'en' : 'fa';
@@ -121,16 +134,13 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     }
     if (ctx.from?.id && !ctx.userLocale) {
       try {
-        ctx.userLocale =
-          (await services.userService.getLocale(ctx.from.id)) ??
-          observedLocale ??
-          resolveServiceLocale(services.translationService);
+        ctx.userLocale = (await services.userService.getLocale(ctx.from.id)) ?? defaultLocale;
       } catch (err) {
         logger.debug(
           { telegramId: ctx.from.id, errorName: err instanceof Error ? err.name : typeof err },
           'Could not load saved Telegram locale'
         );
-        ctx.userLocale = observedLocale ?? resolveServiceLocale(services.translationService);
+        ctx.userLocale = defaultLocale;
       }
     }
     return next();
@@ -285,18 +295,18 @@ export function isAdminCallbackData(data: string): boolean {
 export function conversationContextMiddleware(services: BotServices) {
   return async (ctx: ConversationContext, next: () => Promise<void>): Promise<void> => {
     ctx.services = services;
-    const observedLocale = observedContextLocale(ctx);
+    const defaultLocale =
+      typeof services.translationService?.getDefaultLocale === 'function'
+        ? services.translationService.getDefaultLocale()
+        : resolveServiceLocale(services.translationService);
     if (ctx.from?.id) {
       try {
-        ctx.userLocale =
-          (await services.userService.getLocale(ctx.from.id)) ??
-          observedLocale ??
-          resolveServiceLocale(services.translationService);
+        ctx.userLocale = (await services.userService.getLocale(ctx.from.id)) ?? defaultLocale;
       } catch {
-        ctx.userLocale = observedLocale ?? resolveServiceLocale(services.translationService);
+        ctx.userLocale = defaultLocale;
       }
     } else {
-      ctx.userLocale = observedLocale ?? resolveServiceLocale(services.translationService);
+      ctx.userLocale = defaultLocale;
     }
     await next();
   };
