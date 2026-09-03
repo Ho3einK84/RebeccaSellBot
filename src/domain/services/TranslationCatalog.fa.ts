@@ -786,6 +786,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_setting_naming_mode_val_custom: 'قالب سفارشی',
   admin_naming_dashboard_title: 'مدیریت نام‌گذاری سرویس‌ها',
   admin_naming_dashboard_subtitle: 'روش و الگوی ساخت نام کانفیگ‌ها در پنل',
+  admin_naming_preview_label: 'پیش‌نمایش زنده نام کانفیگ',
+  admin_naming_config_section: 'پیکربندی فعلی',
   admin_naming_active_mode: 'روش فعال نام‌گذاری',
   admin_naming_prefix_label: 'پیشوند جاری',
   admin_naming_template_label: 'قالب سفارشی جاری',

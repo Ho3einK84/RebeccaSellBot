@@ -790,6 +790,8 @@ export const EN_TEXTS: Record<string, string> = {
   admin_setting_naming_mode_val_custom: 'Custom Template',
   admin_naming_dashboard_title: 'Service Naming Center',
   admin_naming_dashboard_subtitle: 'Pattern and structure for panel usernames',
+  admin_naming_preview_label: 'Live Config Name Preview',
+  admin_naming_config_section: 'Current Configuration',
   admin_naming_active_mode: 'Active Method',
   admin_naming_prefix_label: 'Current Prefix',
   admin_naming_template_label: 'Custom Template',
