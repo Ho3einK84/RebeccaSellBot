@@ -51,6 +51,12 @@ describe('admin settings validation', () => {
     expect(validateAdminSetting('naming_prefix', ' Rebecca_2 ')).toBe('Rebecca_2');
     expect(validateAdminSetting('naming_prefix', '_hidden')).toBeUndefined();
     expect(isValidNamingTemplate('{prefix}_{telegram_id}_{counter}')).toBe(true);
+    expect(isValidNamingTemplate('{prefix}_{year}_{month}_{counter}')).toBe(true);
+    expect(isValidNamingTemplate('{prefix}_{yy}{month}_{counter}')).toBe(true);
+    expect(isValidNamingTemplate('{prefix}_{jyear}_{jmonth}_{day}_{counter}')).toBe(true);
+    expect(
+      isValidNamingTemplate('{prefix}_{jalali_year}_{jalali_month}_{jalali_day}_{counter}')
+    ).toBe(true);
     expect(isValidNamingTemplate('{prefix}-{random4}.user')).toBe(true);
     expect(isValidNamingTemplate('{unknown}_{counter}')).toBe(false);
     expect(isValidNamingTemplate('{prefix}_{counter}!')).toBe(false);

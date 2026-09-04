@@ -776,7 +776,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_setting_naming_mode_prefix_date_counter: '📅 Prefix + Date + Counter (e.g. rebecca_2609_1)',
   admin_setting_naming_mode_custom: '🎨 Custom Template (e.g. rebecca_123456789_1)',
   admin_setting_custom_naming_template_prompt:
-    'Current template: `{current}`\n\n*Variables*\n• `{code_prefix}` — current prefix: `{prefix_value}`\n• `{code_telegram_id}` — Telegram ID\n• `{code_counter}` — counter\n• `{code_random4}` — random 4-character code\n\n*Examples*\n• `{example_primary}`\n• `{example_random}`\n\nSend the new template.',
+    'Current template: `{current}`\n\n*Available Variables:*\n• `{code_prefix}` — prefix: `{prefix_value}`\n• `{code_telegram_id}` — Telegram ID\n• `{code_counter}` — counter\n• `{code_year}` — 4-digit year (e.g. 2026)\n• `{code_yy}` — 2-digit year (e.g. 26)\n• `{code_month}` — 2-digit month (e.g. 09)\n• `{code_day}` — 2-digit day (e.g. 04)\n• `{code_jyear}` — 4-digit Solar/Persian year (e.g. 1405)\n• `{code_jmonth}` — 2-digit Solar/Persian month (e.g. 06)\n• `{code_jday}` — 2-digit Solar/Persian day (e.g. 13)\n• `{code_date}` — year & month (e.g. 2609)\n• `{code_random4}` — 4-character random code\n• `{code_random6}` — 6-character random code\n• `{code_random8}` — 8-character random code\n\n*Examples:*\n• `{example_primary}`\n• `{example_date}`\n• `{example_random}`\n\nSend your custom template code:',
   admin_setting_naming_prefix_prompt:
     'Current prefix: `{current}`\n\nSend 1–24 letters, digits, hyphens, or underscores.',
   admin_setting_trial_enabled_prompt:
@@ -800,12 +800,6 @@ export const EN_TEXTS: Record<string, string> = {
   admin_naming_btn_edit_template: '🎨 Edit Custom Template',
   admin_naming_btn_refresh_preview: '🎲 Refresh Preview',
   admin_naming_back_to_naming: '‹ Back to Naming',
-  admin_naming_presets_title: 'Recommended Presets:',
-  admin_naming_preset_prefix_id_counter: 'Prefix + ID + Counter',
-  admin_naming_preset_prefix_counter_rnd4: 'Prefix + Counter + Random 4',
-  admin_naming_preset_prefix_date_counter: 'Prefix + Date + Counter',
-  admin_naming_preset_id_rnd6: 'ID + Random 6',
-  admin_naming_preset_prefix_rnd8: 'Prefix + Random 8',
   admin_sales_trial_button: '🎁 Free Trial',
   admin_sales_trial_title: 'Free Trial Settings',
   admin_sales_trial_subtitle: 'Configure trial availability, volume and validity',

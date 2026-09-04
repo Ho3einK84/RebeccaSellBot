@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConfigService } from '../../src/domain/services/ConfigService.js';
+import {
+  ConfigService,
+  getDateTokens,
+  previewConfigName,
+} from '../../src/domain/services/ConfigService.js';
 import { getDb } from '../../src/infra/db.js';
 import type {
   RebeccaService,
@@ -462,5 +466,33 @@ describe('ConfigService subscription claims', () => {
       'CONFIG_COUNTER_SYNC_FAILED:panel_b'
     );
     expect(unavailableCounters).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders extended date tokens in previewConfigName and generateConfigName', async () => {
+    const dt = getDateTokens();
+    const mockTranslationService = {
+      getSetting: vi.fn((key: string, fallback?: string) => {
+        if (key === 'naming_mode') return 'custom';
+        if (key === 'naming_prefix') return 'reb';
+        if (key === 'custom_naming_template') return '{prefix}_{year}_{month}_{counter}';
+        return fallback ?? '';
+      }),
+    };
+
+    const preview = previewConfigName(mockTranslationService, 12345, 5);
+    expect(preview).toBe(`reb_${dt.year}_${dt.month}_5`);
+
+    const returning = vi.fn().mockResolvedValue([{ currentCount: 5 }]);
+    const insert = vi.fn(() => ({
+      values: vi.fn(() => ({ onConflictDoUpdate: vi.fn(() => ({ returning })) })),
+    }));
+    vi.mocked(getDb).mockReturnValue({ insert } as never);
+
+    const configService = new ConfigService(
+      {} as unknown as RebeccaPanelRegistry,
+      mockTranslationService as unknown as TranslationService
+    );
+    const generated = await configService.generateConfigName(12345);
+    expect(generated).toBe(`reb_${dt.year}_${dt.month}_5`);
   });
 });

@@ -16,10 +16,20 @@ const NAMING_TOKENS = [
   '{prefix}',
   '{telegram_id}',
   '{counter}',
+  '{year}',
+  '{yy}',
+  '{month}',
+  '{day}',
+  '{jyear}',
+  '{jalali_year}',
+  '{jmonth}',
+  '{jalali_month}',
+  '{jday}',
+  '{jalali_day}',
+  '{date}',
   '{random4}',
   '{random6}',
   '{random8}',
-  '{date}',
 ] as const;
 
 /** Validate and canonicalize one persisted setting value. */

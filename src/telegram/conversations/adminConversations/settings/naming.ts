@@ -20,26 +20,6 @@ import { isValidNamingTemplate, validateAdminSetting } from './validation.js';
 
 type FlowOutcome = 'continue' | 'back' | 'cancel';
 
-const NAMING_PRESETS = [
-  {
-    id: 'p1',
-    template: '{prefix}_{telegram_id}_{counter}',
-    labelKey: 'admin_naming_preset_prefix_id_counter',
-  },
-  {
-    id: 'p2',
-    template: '{prefix}_{counter}_{random4}',
-    labelKey: 'admin_naming_preset_prefix_counter_rnd4',
-  },
-  {
-    id: 'p3',
-    template: '{prefix}_{date}_{counter}',
-    labelKey: 'admin_naming_preset_prefix_date_counter',
-  },
-  { id: 'p4', template: '{telegram_id}_{random6}', labelKey: 'admin_naming_preset_id_rnd6' },
-  { id: 'p5', template: '{prefix}_{random8}', labelKey: 'admin_naming_preset_prefix_rnd8' },
-] as const;
-
 export async function manageNamingSettings(
   conversation: MyConversation,
   ctx: ConversationContext
@@ -266,13 +246,9 @@ async function editNamingTemplate(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<FlowOutcome> {
-  const keyboard = new InlineKeyboard();
-  for (const preset of NAMING_PRESETS) {
-    keyboard.text(t(ctx, preset.labelKey), `tmpl-preset:${preset.id}`).row();
-  }
-  keyboard.text(t(ctx, 'admin_naming_back_to_naming'), 'tmpl:back');
+  const keyboard = new InlineKeyboard().text(t(ctx, 'admin_naming_back_to_naming'), 'tmpl:back');
 
-  const body = `${buildCustomNamingTemplatePrompt(ctx)}\n\n*${t(ctx, 'admin_naming_presets_title')}*`;
+  const body = buildCustomNamingTemplatePrompt(ctx);
 
   await promptInConversation(
     conversation,
@@ -284,7 +260,6 @@ async function editNamingTemplate(
   for (;;) {
     const input = await waitForSettingsInput(conversation, {
       allowText: true,
-      callbackPrefixes: ['tmpl-preset:'],
       backCallbacks: ['tmpl:back'],
       retryKeyboard: keyboard,
     });
@@ -292,21 +267,8 @@ async function editNamingTemplate(
     if (input.type === 'cancel') return 'cancel';
     if (input.type === 'back') return 'back';
 
-    let selectedTemplate: string | undefined;
-
-    if (input.type === 'callback' && input.data.startsWith('tmpl-preset:')) {
-      const presetId = input.data.slice('tmpl-preset:'.length);
-      const preset = NAMING_PRESETS.find((p) => p.id === presetId);
-      if (preset) {
-        selectedTemplate = preset.template;
-      }
-    } else if (input.type === 'text') {
-      if (isValidNamingTemplate(input.value)) {
-        selectedTemplate = input.value.trim();
-      }
-    }
-
-    if (selectedTemplate !== undefined) {
+    if (input.type === 'text' && isValidNamingTemplate(input.value)) {
+      const selectedTemplate = input.value.trim();
       const def = getSettingDefinition('custom_naming_template');
       if (def) {
         await saveSetting(conversation, input.ctx ?? ctx, def, selectedTemplate);

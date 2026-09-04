@@ -772,7 +772,7 @@ export const FA_TEXTS: Record<string, string> = {
     '📅 پیشوند + تاریخ + شمارنده (مثال: rebecca_2609_1)',
   admin_setting_naming_mode_custom: '🎨 قالب سفارشی (فرمول دلخواه)',
   admin_setting_custom_naming_template_prompt:
-    'قالب فعلی: `{current}`\n\n*متغیرها*\n• `{code_prefix}` — پیشوند: `{prefix_value}`\n• `{code_telegram_id}` — شناسهٔ تلگرام\n• `{code_counter}` — شمارنده\n• `{code_random4}` — کد تصادفی ۴ کاراکتری\n\n*نمونه*\n• `{example_primary}`\n• `{example_random}`\n\nقالب جدید:',
+    'قالب فعلی: `{current}`\n\n*متغیرهای در دسترس:*\n• `{code_prefix}` — پیشوند: `{prefix_value}`\n• `{code_telegram_id}` — شناسه تلگرام\n• `{code_counter}` — شمارنده\n• `{code_year}` — سال میلادی ۴ رقمی (مثال: 2026)\n• `{code_yy}` — سال میلادی ۲ رقمی (مثال: 26)\n• `{code_month}` — ماه میلادی ۲ رقمی (مثال: 09)\n• `{code_day}` — روز میلادی ۲ رقمی (مثال: 04)\n• `{code_jyear}` — سال شمسی (مثال: 1405)\n• `{code_jmonth}` — ماه شمسی ۲ رقمی (مثال: 06)\n• `{code_jday}` — روز شمسی ۲ رقمی (مثال: 13)\n• `{code_date}` — تاریخ میلادی سال و ماه (مثال: 2609)\n• `{code_random4}` — کد تصادفی ۴ کاراکتری\n• `{code_random6}` — کد تصادفی ۶ کاراکتری\n• `{code_random8}` — کد تصادفی ۸ کاراکتری\n\n*نمونه ها:*\n• `{example_primary}`\n• `{example_date}`\n• `{example_random}`\n\nکد قالب دلخواه را بفرستین:',
   admin_setting_naming_prefix_prompt:
     'پیشوند فعلی: `{current}`\n\nپیشوند جدید؛ ۱ تا ۲۴ حرف انگلیسی، عدد، خط تیره یا زیرخط:',
   admin_setting_trial_enabled_prompt:
@@ -796,12 +796,6 @@ export const FA_TEXTS: Record<string, string> = {
   admin_naming_btn_edit_template: '🎨 ویرایش قالب دلخواه',
   admin_naming_btn_refresh_preview: '🎲 نمونه تصادفی جدید',
   admin_naming_back_to_naming: '‹ بازگشت به نام سرویس',
-  admin_naming_presets_title: 'قالب‌های پیشنهادی آماده:',
-  admin_naming_preset_prefix_id_counter: 'پیشوند + شناسه + شمارنده',
-  admin_naming_preset_prefix_counter_rnd4: 'پیشوند + شمارنده + تصادفی ۴',
-  admin_naming_preset_prefix_date_counter: 'پیشوند + تاریخ + شمارنده',
-  admin_naming_preset_id_rnd6: 'شناسه + تصادفی ۶',
-  admin_naming_preset_prefix_rnd8: 'پیشوند + تصادفی ۸',
   admin_sales_trial_button: '🎁 سرویس تست',
   admin_sales_trial_title: 'سرویس تست رایگان',
   admin_sales_trial_subtitle: 'مدیریت فعال‌سازی، حجم و مدت زمان تست',

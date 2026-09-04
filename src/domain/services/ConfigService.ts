@@ -266,18 +266,17 @@ export class ConfigService {
     const random6 = crypto.randomBytes(3).toString('hex');
     const random8 = crypto.randomBytes(4).toString('hex');
     const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dateStr = `${yy}${mm}`;
+    const dateTokens = getDateTokens(now);
 
-    const rendered = template
-      .replaceAll('{prefix}', prefix)
-      .replaceAll('{telegram_id}', String(telegramId))
-      .replaceAll('{counter}', String(counter))
-      .replaceAll('{random4}', random4)
-      .replaceAll('{random6}', random6)
-      .replaceAll('{random8}', random8)
-      .replaceAll('{date}', dateStr);
+    const rendered = renderNamingTemplate(template, {
+      prefix,
+      telegramId,
+      counter,
+      random4,
+      random6,
+      random8,
+      dateTokens,
+    });
 
     // Templates without a counter are allowed for administrator convenience,
     // but the generated username must still be collision-resistant.
@@ -966,6 +965,92 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+export function getDateTokens(now = new Date()): {
+  date: string;
+  year: string;
+  yy: string;
+  month: string;
+  day: string;
+  jalali_year: string;
+  jyear: string;
+  jalali_month: string;
+  jmonth: string;
+  jalali_day: string;
+  jday: string;
+} {
+  const yy = String(now.getFullYear()).slice(-2);
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${yy}${month}`;
+
+  let jyear = '1405';
+  let jmonth = '01';
+  let jday = '01';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now);
+    const pYear = parts.find((p) => p.type === 'year')?.value;
+    const pMonth = parts.find((p) => p.type === 'month')?.value;
+    const pDay = parts.find((p) => p.type === 'day')?.value;
+    if (pYear) jyear = pYear;
+    if (pMonth) jmonth = pMonth.padStart(2, '0');
+    if (pDay) jday = pDay.padStart(2, '0');
+  } catch {
+    // Fallback if Persian calendar locale not supported in environment
+  }
+
+  return {
+    date: dateStr,
+    year,
+    yy,
+    month,
+    day,
+    jalali_year: jyear,
+    jyear,
+    jalali_month: jmonth,
+    jmonth,
+    jalali_day: jday,
+    jday,
+  };
+}
+
+export function renderNamingTemplate(
+  template: string,
+  values: {
+    prefix: string;
+    telegramId: number | string;
+    counter?: number | string;
+    random4: string;
+    random6: string;
+    random8: string;
+    dateTokens?: ReturnType<typeof getDateTokens>;
+  }
+): string {
+  const dt = values.dateTokens ?? getDateTokens();
+  return template
+    .replaceAll('{prefix}', values.prefix)
+    .replaceAll('{telegram_id}', String(values.telegramId))
+    .replaceAll('{counter}', values.counter !== undefined ? String(values.counter) : '')
+    .replaceAll('{random4}', values.random4)
+    .replaceAll('{random6}', values.random6)
+    .replaceAll('{random8}', values.random8)
+    .replaceAll('{date}', dt.date)
+    .replaceAll('{year}', dt.year)
+    .replaceAll('{yy}', dt.yy)
+    .replaceAll('{month}', dt.month)
+    .replaceAll('{day}', dt.day)
+    .replaceAll('{jalali_year}', dt.jalali_year)
+    .replaceAll('{jyear}', dt.jyear)
+    .replaceAll('{jalali_month}', dt.jalali_month)
+    .replaceAll('{jmonth}', dt.jmonth)
+    .replaceAll('{jalali_day}', dt.jalali_day)
+    .replaceAll('{jday}', dt.jday);
+}
+
 function templateCounterPattern(template: string, prefix: string): RegExp {
   const primaryMarker = '__counter_primary__';
   const additionalMarker = '__counter_additional__';
@@ -984,7 +1069,17 @@ function templateCounterPattern(template: string, prefix: string): RegExp {
     .replaceAll('{random4}', '__random__')
     .replaceAll('{random6}', '__random6__')
     .replaceAll('{random8}', '__random8__')
-    .replaceAll('{date}', '__date__');
+    .replaceAll('{date}', '__date__')
+    .replaceAll('{year}', '__year__')
+    .replaceAll('{yy}', '__yy__')
+    .replaceAll('{month}', '__month__')
+    .replaceAll('{day}', '__day__')
+    .replaceAll('{jalali_year}', '__jyear__')
+    .replaceAll('{jyear}', '__jyear__')
+    .replaceAll('{jalali_month}', '__jmonth__')
+    .replaceAll('{jmonth}', '__jmonth__')
+    .replaceAll('{jalali_day}', '__jday__')
+    .replaceAll('{jday}', '__jday__');
   // Long templates are truncated by toRebeccaUsername and retain a trailing
   // counter. In that form the literal template prefix is no longer reliable;
   // a conservative suffix scan may skip numbers from another naming mode but
@@ -992,22 +1087,36 @@ function templateCounterPattern(template: string, prefix: string): RegExp {
   const projected = sanitize(source)
     .replace(primaryMarker, '0')
     .replaceAll(additionalMarker, '0')
-    .replace('__telegram__', '999999999999999')
-    .replace('__random__', '0000')
-    .replace('__random6__', '000000')
-    .replace('__random8__', '00000000')
-    .replace('__date__', '0000');
+    .replaceAll('__telegram__', '999999999999999')
+    .replaceAll('__random__', '0000')
+    .replaceAll('__random6__', '000000')
+    .replaceAll('__random8__', '00000000')
+    .replaceAll('__date__', '0000')
+    .replaceAll('__year__', '0000')
+    .replaceAll('__yy__', '00')
+    .replaceAll('__month__', '00')
+    .replaceAll('__day__', '00')
+    .replaceAll('__jyear__', '0000')
+    .replaceAll('__jmonth__', '00')
+    .replaceAll('__jday__', '00');
   if (projected.length > MAX_REBECCA_USERNAME_LENGTH) {
     return /_(?<counter>\d+)$/i;
   }
   source = escapeRegExp(sanitize(source))
     .replace(primaryMarker, '(?<counter>\\d+)')
     .replaceAll(additionalMarker, '\\d+')
-    .replace('__telegram__', '\\d+')
-    .replace('__random__', '[a-f0-9]{4}')
-    .replace('__random6__', '[a-f0-9]{6}')
-    .replace('__random8__', '[a-f0-9]{8}')
-    .replace('__date__', '\\d{4}');
+    .replaceAll('__telegram__', '\\d+')
+    .replaceAll('__random__', '[a-f0-9]{4}')
+    .replaceAll('__random6__', '[a-f0-9]{6}')
+    .replaceAll('__random8__', '[a-f0-9]{8}')
+    .replaceAll('__date__', '\\d{4}')
+    .replaceAll('__year__', '\\d{4}')
+    .replaceAll('__yy__', '\\d{2}')
+    .replaceAll('__month__', '\\d{2}')
+    .replaceAll('__day__', '\\d{2}')
+    .replaceAll('__jyear__', '\\d{4}')
+    .replaceAll('__jmonth__', '\\d{2}')
+    .replaceAll('__jday__', '\\d{2}');
   return new RegExp(`^${source}$`, 'i');
 }
 
@@ -1046,14 +1155,16 @@ export function previewConfigName(
     'custom_naming_template',
     '{prefix}_{telegram_id}_{counter}'
   );
-  const rendered = template
-    .replaceAll('{prefix}', prefix)
-    .replaceAll('{telegram_id}', String(sampleTelegramId))
-    .replaceAll('{counter}', String(sampleCounter))
-    .replaceAll('{random4}', '8f2d')
-    .replaceAll('{random6}', 'a7f9b2')
-    .replaceAll('{random8}', 'd3f1a24c')
-    .replaceAll('{date}', dateStr);
+  const dateTokens = getDateTokens(now);
+  const rendered = renderNamingTemplate(template, {
+    prefix,
+    telegramId: sampleTelegramId,
+    counter: sampleCounter,
+    random4: '8f2d',
+    random6: 'a7f9b2',
+    random8: 'd3f1a24c',
+    dateTokens,
+  });
   const name = template.includes('{counter}') ? rendered : `${rendered}_${sampleCounter}`;
   return sanitize(name);
 }

@@ -73,8 +73,19 @@ describe('TranslationService', () => {
       code_prefix: '{prefix}',
       code_telegram_id: '{telegram_id}',
       code_counter: '{counter}',
+      code_year: '{year}',
+      code_yy: '{yy}',
+      code_month: '{month}',
+      code_day: '{day}',
+      code_jyear: '{jyear}',
+      code_jmonth: '{jmonth}',
+      code_jday: '{jday}',
+      code_date: '{date}',
       code_random4: '{random4}',
+      code_random6: '{random6}',
+      code_random8: '{random8}',
       example_primary: '{prefix}_{telegram_id}_{counter}',
+      example_date: '{prefix}_{year}_{month}_{counter}',
       example_random: '{prefix}_{counter}_{random4}',
     });
 
@@ -82,7 +93,13 @@ describe('TranslationService', () => {
     expect(rendered).toContain('`{prefix}`');
     expect(rendered).toContain('`{telegram_id}`');
     expect(rendered).toContain('`{counter}`');
+    expect(rendered).toContain('`{year}`');
+    expect(rendered).toContain('`{month}`');
+    expect(rendered).toContain('`{jyear}`');
+    expect(rendered).toContain('`{jmonth}`');
+    expect(rendered).toContain('`{date}`');
     expect(rendered).toContain('`{random4}`');
+    expect(rendered).toContain('کد قالب دلخواه را بفرستین');
     expect(rendered).not.toContain('`—`');
     expect(rendered).not.toContain('h_—_—');
   });

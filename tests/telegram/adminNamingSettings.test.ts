@@ -88,7 +88,7 @@ describe('admin naming settings center', () => {
     expect(harness.syncCounters).toHaveBeenCalled();
   });
 
-  it('allows editing custom template via preset buttons', async () => {
+  it('allows editing custom template via text input', async () => {
     const harness = createHarness(
       {
         naming_mode: 'prefix_number',
@@ -97,7 +97,7 @@ describe('admin naming settings center', () => {
       },
       [
         { callback: 'naming:template' },
-        { callback: 'tmpl-preset:p3' }, // preset: {prefix}_{date}_{counter}
+        { text: '{prefix}_{year}_{month}_{counter}' },
         { callback: 'set-return:naming' },
         { callback: 'set-return:naming' },
         { callback: 'naming:back' },
@@ -108,7 +108,7 @@ describe('admin naming settings center', () => {
 
     expect(harness.updateSetting).toHaveBeenCalledWith(
       'custom_naming_template',
-      '{prefix}_{date}_{counter}'
+      '{prefix}_{year}_{month}_{counter}'
     );
     expect(harness.updateSetting).toHaveBeenCalledWith('naming_mode', 'custom');
   });
