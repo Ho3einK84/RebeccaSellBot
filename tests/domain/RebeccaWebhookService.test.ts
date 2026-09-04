@@ -224,5 +224,57 @@ describe('RebeccaWebhookService', () => {
       expect(telegramApiMock.sendMessage).not.toHaveBeenCalled();
       expect(result.actionsPerformed).toContain('recorded_remote_deletion:cfg-303');
     });
+
+    it('handles batch array payloads from Rebecca panel webhook dispatcher', async () => {
+      const service = createService();
+      const mockConfig1 = {
+        configId: 'cfg-401',
+        panelId: 'panel-main',
+        serviceId: 1,
+        configUsername: 'batch_user_1',
+        telegramId: 1001,
+        autoRenewEnabled: false,
+        autoRenewPackageId: null,
+        autoRenewPrice: null,
+        locale: 'fa',
+      };
+
+      const mockQuery = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockResolvedValue([mockConfig1]),
+      };
+      getDbMock.mockReturnValue(mockQuery as any);
+
+      const result = await service.handleWebhook([
+        { username: 'batch_user_1', action: 'user_limited' },
+        { username: 'batch_user_2', action: 'user_expired' },
+      ]);
+
+      expect(result.handled).toBe(true);
+      expect(result.statusCode).toBe(200);
+      expect(result.matchedConfigs).toBe(2);
+      expect(telegramApiMock.sendMessage).toHaveBeenCalled();
+    });
+
+    it('returns 200 with 0 matched configs for empty array batch', async () => {
+      const service = createService();
+      const result = await service.handleWebhook([]);
+      expect(result.handled).toBe(true);
+      expect(result.statusCode).toBe(200);
+      expect(result.matchedConfigs).toBe(0);
+      expect(result.actionsPerformed).toEqual([]);
+    });
+
+    it('returns 400 if an item in the batch array is malformed', async () => {
+      const service = createService();
+      const result = await service.handleWebhook([
+        { username: 'valid_user', action: 'user_limited' },
+        { action: 'user_expired' } as unknown as RebeccaWebhookPayload,
+      ]);
+      expect(result.handled).toBe(false);
+      expect(result.statusCode).toBe(400);
+    });
   });
 });

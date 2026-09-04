@@ -28,6 +28,11 @@ export interface RebeccaWebhookPayload {
   action: RebeccaWebhookAction;
   enqueued_at?: number;
   tries?: number;
+  send_at?: number;
+  by?: string;
+  user?: Record<string, unknown>;
+  admin?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface RebeccaWebhookServiceOptions {
@@ -106,7 +111,7 @@ export class RebeccaWebhookService {
   }
 
   async handleWebhook(
-    payload: RebeccaWebhookPayload,
+    payload: RebeccaWebhookPayload | RebeccaWebhookPayload[],
     secretHeader?: string | string[],
     now = Date.now()
   ): Promise<RebeccaWebhookResult> {
@@ -115,15 +120,48 @@ export class RebeccaWebhookService {
       return { handled: false, statusCode: 401, message: 'Unauthorized' };
     }
 
-    if (
-      !payload ||
-      typeof payload !== 'object' ||
-      typeof payload.username !== 'string' ||
-      typeof payload.action !== 'string'
-    ) {
+    if (!payload || typeof payload !== 'object') {
       return { handled: false, statusCode: 400, message: 'Invalid payload structure' };
     }
 
+    const events: RebeccaWebhookPayload[] = Array.isArray(payload) ? payload : [payload];
+
+    if (events.length === 0) {
+      return { handled: true, statusCode: 200, matchedConfigs: 0, actionsPerformed: [] };
+    }
+
+    for (const event of events) {
+      if (
+        !event ||
+        typeof event !== 'object' ||
+        typeof event.username !== 'string' ||
+        typeof event.action !== 'string'
+      ) {
+        return { handled: false, statusCode: 400, message: 'Invalid payload structure' };
+      }
+    }
+
+    let totalMatchedConfigs = 0;
+    const allActionsPerformed: string[] = [];
+
+    for (const event of events) {
+      const { matched, actions } = await this.processEvent(event, now);
+      totalMatchedConfigs += matched;
+      allActionsPerformed.push(...actions);
+    }
+
+    return {
+      handled: true,
+      statusCode: 200,
+      matchedConfigs: totalMatchedConfigs,
+      actionsPerformed: allActionsPerformed,
+    };
+  }
+
+  private async processEvent(
+    payload: RebeccaWebhookPayload,
+    now: number
+  ): Promise<{ matched: number; actions: string[] }> {
     const { username, action } = payload;
     logger.info({ username, action }, 'Processing Rebecca panel webhook event');
 
@@ -145,7 +183,7 @@ export class RebeccaWebhookService {
 
     if (matchingConfigs.length === 0) {
       logger.info({ username, action }, 'Rebecca webhook received for unknown or untracked config');
-      return { handled: true, statusCode: 200, matchedConfigs: 0 };
+      return { matched: 0, actions: [] };
     }
 
     const actionsPerformed: string[] = [];
@@ -217,10 +255,8 @@ export class RebeccaWebhookService {
     void this.pricingService;
 
     return {
-      handled: true,
-      statusCode: 200,
-      matchedConfigs: matchingConfigs.length,
-      actionsPerformed,
+      matched: matchingConfigs.length,
+      actions: actionsPerformed,
     };
   }
 }

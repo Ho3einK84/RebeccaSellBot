@@ -65,7 +65,7 @@ Telegram Customer
 - **3-Phase Purchase Saga:** Balances are reserved prior to external API dispatch and committed only upon verified creation.
 - **Idempotent Rewards:** Referral bonuses, cashback, and promo usages are bound to unique transaction references.
 - **Encrypted Credentials:** Panel API keys and admin passwords are encrypted at rest using AES-256-GCM.
-- **Dual-Mode Delivery:** Supports zero-maintenance outbound Long Polling by default, alongside high-throughput Webhook delivery with `X-Telegram-Bot-Api-Secret-Token` authentication for reverse-proxied or Rebecca External App setups.
+- **Dual-Mode Delivery:** Supports zero-maintenance outbound Long Polling by default, alongside high-throughput Webhook delivery with `X-Telegram-Bot-Api-Secret-Token` authentication for reverse-proxied setups.
 
 ---
 
@@ -173,7 +173,7 @@ When switching back from Webhook to Long Polling, RebeccaSellBot automatically i
 
 ### 2. Webhook Mode
 
-Designed for production environments behind reverse proxies or when hosted inside **Rebecca Panel External Apps**:
+Designed for production environments behind reverse proxies (Caddy, Nginx):
 
 ```env
 BOT_DELIVERY_MODE=webhook
@@ -222,15 +222,6 @@ server {
     }
 }
 ```
-
-#### Rebecca Panel External App Integration
-
-Rebecca Panel (`dev` branch) includes an **External Apps** manager that can host Node.js services directly on the panel host:
-
-1. In Rebecca Panel, add an External App with Node.js runtime.
-2. In the app's `.env` configuration, configure the bot's required settings (`BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_URL`, `BOT_DELIVERY_MODE=webhook`, etc.).
-3. Rebecca automatically sets `PORT` and `HOST=127.0.0.1`, which RebeccaSellBot auto-detects.
-4. Rebecca's internal reverse proxy automatically terminates SSL and forwards public domain requests directly to the bot.
 
 ---
 

@@ -64,7 +64,7 @@ flowchart TD
 ### Invariant Architectural Rules
 
 1. **Zero Database Touch on Rebecca Panels:** RebeccaSellBot communicates with external Rebecca panels exclusively through their official HTTPS REST APIs (`RebeccaApiClient`). It never connects directly to or mutates remote panel databases.
-2. **Dual-Mode Delivery Architecture (Long Polling & Webhook):** The bot operates by default with outbound HTTPS long polling (`bot.start()`), requiring zero inbound ports or public domains. For deployments behind reverse proxies or hosted within **Rebecca Panel External Apps**, an optional Webhook mode (`webhookCallback()`) can be enabled with strict `X-Telegram-Bot-Api-Secret-Token` validation. Returning to polling automatically clears active webhooks.
+2. **Dual-Mode Delivery Architecture (Long Polling & Webhook):** The bot operates by default with outbound HTTPS long polling (`bot.start()`), requiring zero inbound ports or public domains. For deployments behind reverse proxies, an optional Webhook mode (`webhookCallback()`) can be enabled with strict `X-Telegram-Bot-Api-Secret-Token` validation. Returning to polling automatically clears active webhooks.
 3. **Layered Separation of Concerns:**
    - Presentation files (`src/telegram/*`) are strictly decoupled from database queries; all state changes flow through typed domain services.
    - Domain services (`src/domain/services/*`) encapsulate business rules, financial invariants, and sagas.
@@ -243,16 +243,15 @@ location /rsbot/ {
 }
 ```
 
-#### Rebecca Panel External App Integration & Unified Server
+#### Unified HTTP Server & Reverse Proxy Integration
 
-Rebecca Panel (branch `dev`) features isolated Node.js application hosting under its `externalapps` subsystem:
+RebeccaSellBot features dynamic port and server unification for production reverse-proxy environments:
 
-- **Dynamic Port Sensing (`PORT`):** Rebecca Panel executes apps under systemd (`rbnode_<id>.service`) with `Environment=PORT=<assigned_port>` and polls `127.0.0.1:$PORT` within 20 seconds. RebeccaSellBot automatically detects `PORT` and unifies both health checks and webhooks onto that single listening port.
-- **Unified Multiplexed Server:** When `PORT` is assigned or `WEBHOOK_PORT` matches `HEALTH_CHECK_PORT`, RebeccaSellBot runs a single HTTP server on that port, routing:
+- **Dynamic Port Sensing (`PORT`):** When deployed in environments where a dynamic port is injected via `PORT` (or when `WEBHOOK_PORT` matches `HEALTH_CHECK_PORT`), RebeccaSellBot automatically unifies both health checks and webhooks onto that single listening port.
+- **Unified Multiplexed Server:** Runs a single HTTP server on that port, routing:
   - Internal health & readiness probes (`/health`, `/healthz`, `/ready`, `/readyz`)
   - Inbound Telegram bot updates (`/webhook` or custom subpaths)
-  - Inbound Rebecca Panel webhook events (`REBECCA_WEBHOOK_PATH`, default `/api/webhook/rebecca`)
-- **Systemd & Reverse Proxy:** Rebecca Panel manages systemd supervision, TLS termination, and reverse-proxies requests directly to the bot.
+  - Inbound Rebecca Panel webhook events (`REBECCA_WEBHOOK_PATH`, default `/api/rebecca-webhook`)
 
 #### Inbound Rebecca Panel Webhooks (`RebeccaWebhookService.ts`)
 

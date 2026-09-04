@@ -299,8 +299,3 @@ server {
     }
 }
 ```
-
-4. **Hosting Inside Rebecca Panel External Apps:**
-   - Rebecca Panel (dev branch) provides isolated Node.js application hosting under `/var/lib/rebecca/external-apps/`.
-   - Rebecca Panel injects environment variables (`EnvironmentFile=-.env`, `PORT=20xxx`, `HOST=127.0.0.1`) and manages reverse proxy routing from the application's domain.
-   - RebeccaSellBot automatically adopts `process.env.PORT` if `WEBHOOK_PORT` is omitted, running natively as a Rebecca External App.
