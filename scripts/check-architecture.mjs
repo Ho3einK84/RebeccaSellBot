@@ -104,8 +104,14 @@ for (const absolutePath of sourceFiles) {
       `${relativePath} reaches through the panel registry; use a domain-level config or panel operation instead.`
     );
   }
-  if (/\b(?:setWebhook|createWebhook|webhookCallback)\b/.test(source)) {
-    failures.push(`${relativePath} configures a webhook; RSBot must use long polling only.`);
+  const webhookAllowlist = new Set(['src/telegram/bot.ts']);
+  if (
+    /\b(?:setWebhook|createWebhook|webhookCallback)\b/.test(source) &&
+    !webhookAllowlist.has(relativePath)
+  ) {
+    failures.push(
+      `${relativePath} configures a webhook; webhook delivery must only be managed in src/telegram/bot.ts.`
+    );
   }
 }
 
@@ -115,7 +121,16 @@ const coreRoutesSource = await readFile(
   'utf8'
 );
 if (!/\bbot\.start\s*\(/.test(botSource)) {
-  failures.push('src/telegram/bot.ts must start grammY using long polling (bot.start()).');
+  failures.push('src/telegram/bot.ts must support long polling via bot.start().');
+}
+if (!/\bwebhookCallback\s*\(/.test(botSource)) {
+  failures.push('src/telegram/bot.ts must support webhook delivery via webhookCallback().');
+}
+if (!/\bsetWebhook\s*\(/.test(botSource)) {
+  failures.push('src/telegram/bot.ts must register webhook via bot.api.setWebhook().');
+}
+if (!/\bdeleteWebhook\s*\(/.test(botSource)) {
+  failures.push('src/telegram/bot.ts must clear webhook via bot.api.deleteWebhook().');
 }
 
 const mainMenuSource = await readFile(
@@ -163,5 +178,7 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log('Architecture check passed: layered API access and long polling are enforced.');
+  console.log(
+    'Architecture check passed: layered API access and dual delivery (long polling / webhook) are enforced.'
+  );
 }

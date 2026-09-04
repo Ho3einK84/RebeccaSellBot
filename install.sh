@@ -64,6 +64,11 @@ Options:
   --access-method <method>   public, ssh, or pat
   --ssh-key <path>           SSH deploy-key path (for --access-method ssh)
   --env-file <path>          Plain KEY=value deployment configuration file
+  --webhook                  Enable Telegram webhook delivery mode
+  --webhook-url <url>        Public Telegram webhook HTTPS URL
+  --webhook-secret <token>   Webhook secret token (auto-generated if omitted)
+  --webhook-port <port>      Internal container webhook port (default: 3000)
+  --webhook-host-port <port> Host published port for reverse proxy (default: 3000)
   --non-interactive          Never prompt; fail if required values are absent
   --yes                      Replace an existing instance .env automatically
   -h, --help                 Show this help
@@ -106,6 +111,27 @@ while [[ $# -gt 0 ]]; do
       CONFIG_SOURCE_FILE="$(option_value "$1" "${2:-}")"
       shift 2
       ;;
+    --webhook)
+      BOT_DELIVERY_MODE="webhook"
+      shift
+      ;;
+    --webhook-url)
+      WEBHOOK_URL="$(option_value "$1" "${2:-}")"
+      BOT_DELIVERY_MODE="webhook"
+      shift 2
+      ;;
+    --webhook-secret)
+      WEBHOOK_SECRET_TOKEN="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --webhook-port)
+      WEBHOOK_PORT="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --webhook-host-port)
+      WEBHOOK_HOST_PORT="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
     --non-interactive)
       NON_INTERACTIVE=true
       shift
@@ -140,6 +166,14 @@ validate_service_id() {
   ((${#1} < 10)) || [[ ${#1} -eq 10 && "$1" < "2147483648" ]]
 }
 validate_panel_credentials_key() { [[ "$1" =~ ^[A-Za-z0-9._~+=/-]{32,512}$ ]]; }
+validate_webhook_url() {
+  local port
+  [[ "$1" =~ ^https://[A-Za-z0-9][A-Za-z0-9.-]*(:([0-9]{1,5}))?(/.*)?$ ]] || return 1
+  port="${BASH_REMATCH[2]:-}"
+  [[ -z "$port" ]] || ((10#$port >= 1 && 10#$port <= 65535))
+}
+validate_webhook_secret_token() { [[ "$1" =~ ^[A-Za-z0-9_-]{1,256}$ ]]; }
+validate_port() { [[ "$1" =~ ^[1-9][0-9]{0,4}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
 
 env_value_from_file() {
   local file="$1" key="$2" raw_value value cr=$'\r' sq="'"
@@ -291,7 +325,7 @@ load_config_file() {
     fi
 
     case "$key" in
-      BOT_TOKEN|ADMIN_IDS|PANEL_CREDENTIALS_KEY|REBECCA_API_URL|REBECCA_API_KEY|REBECCA_ADMIN_USERNAME|REBECCA_ADMIN_PASSWORD|REBECCA_SERVICE_ID|DB_USER|DB_PASSWORD|DB_NAME|DEFAULT_LOCALE|SUPPORT_URL|GITHUB_PAT|RSBOT_ACCESS_METHOD|RSBOT_REPOSITORY_URL|RSBOT_SSH_KEY_PATH)
+      BOT_TOKEN|ADMIN_IDS|PANEL_CREDENTIALS_KEY|REBECCA_API_URL|REBECCA_API_KEY|REBECCA_ADMIN_USERNAME|REBECCA_ADMIN_PASSWORD|REBECCA_SERVICE_ID|DB_USER|DB_PASSWORD|DB_NAME|DEFAULT_LOCALE|SUPPORT_URL|GITHUB_PAT|RSBOT_ACCESS_METHOD|RSBOT_REPOSITORY_URL|RSBOT_SSH_KEY_PATH|BOT_DELIVERY_MODE|WEBHOOK_URL|WEBHOOK_SECRET_TOKEN|WEBHOOK_PORT|WEBHOOK_PATH|WEBHOOK_HOST|WEBHOOK_HOST_PORT|WEBHOOK_BIND_HOST)
         printf -v "$key" '%s' "$value"
         export "$key"
         ;;
@@ -317,7 +351,7 @@ if [[ -n "$BACKUP_INPUT" ]]; then
   MANIFEST_INSTANCE="$(sed -n 's/^instance=//p' "$BACKUP_WORKSPACE/manifest.txt" | head -n 1)"
 
   if [[ -f "$BACKUP_WORKSPACE/.env" ]]; then
-    for k in BOT_TOKEN ADMIN_IDS PANEL_CREDENTIALS_KEY DB_USER DB_PASSWORD DB_NAME REBECCA_API_URL REBECCA_API_KEY REBECCA_ADMIN_USERNAME REBECCA_ADMIN_PASSWORD REBECCA_SERVICE_ID DEFAULT_LOCALE SUPPORT_URL; do
+    for k in BOT_TOKEN ADMIN_IDS PANEL_CREDENTIALS_KEY DB_USER DB_PASSWORD DB_NAME REBECCA_API_URL REBECCA_API_KEY REBECCA_ADMIN_USERNAME REBECCA_ADMIN_PASSWORD REBECCA_SERVICE_ID DEFAULT_LOCALE SUPPORT_URL BOT_DELIVERY_MODE WEBHOOK_URL WEBHOOK_SECRET_TOKEN WEBHOOK_PORT WEBHOOK_PATH WEBHOOK_HOST WEBHOOK_HOST_PORT WEBHOOK_BIND_HOST; do
       val="$(env_value_from_file "$BACKUP_WORKSPACE/.env" "$k" 2>/dev/null || true)"
       if [[ -n "$val" && -z "${!k:-}" ]]; then
         printf -v "$k" '%s' "$val"
@@ -633,6 +667,105 @@ configure_environment() {
     validate_https_url "$SUPPORT_URL" || warn "SUPPORT_URL should be a valid HTTPS URL."
   fi
 
+  # Webhook & Delivery configuration
+  if [[ -z "${BOT_DELIVERY_MODE:-}" && -f "$ENV_FILE" ]]; then
+    BOT_DELIVERY_MODE="$(sed -n 's/^BOT_DELIVERY_MODE=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  BOT_DELIVERY_MODE="${BOT_DELIVERY_MODE:-polling}"
+
+  if [[ -z "${WEBHOOK_URL:-}" && -f "$ENV_FILE" ]]; then
+    WEBHOOK_URL="$(sed -n 's/^WEBHOOK_URL=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBHOOK_URL="${WEBHOOK_URL:-}"
+
+  if [[ -z "${WEBHOOK_SECRET_TOKEN:-}" && -f "$ENV_FILE" ]]; then
+    WEBHOOK_SECRET_TOKEN="$(sed -n 's/^WEBHOOK_SECRET_TOKEN=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBHOOK_SECRET_TOKEN="${WEBHOOK_SECRET_TOKEN:-}"
+
+  if [[ -z "${WEBHOOK_PORT:-}" && -f "$ENV_FILE" ]]; then
+    WEBHOOK_PORT="$(sed -n 's/^WEBHOOK_PORT=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBHOOK_PORT="${WEBHOOK_PORT:-3000}"
+
+  if [[ -z "${WEBHOOK_PATH:-}" && -f "$ENV_FILE" ]]; then
+    WEBHOOK_PATH="$(sed -n 's/^WEBHOOK_PATH=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBHOOK_PATH="${WEBHOOK_PATH:-/webhook}"
+
+  if [[ -z "${WEBHOOK_BIND_HOST:-}" && -f "$ENV_FILE" ]]; then
+    WEBHOOK_BIND_HOST="$(sed -n 's/^WEBHOOK_BIND_HOST=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBHOOK_BIND_HOST="${WEBHOOK_BIND_HOST:-127.0.0.1}"
+
+  if [[ -z "${WEBHOOK_HOST_PORT:-}" && -f "$ENV_FILE" ]]; then
+    WEBHOOK_HOST_PORT="$(sed -n 's/^WEBHOOK_HOST_PORT=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBHOOK_HOST_PORT="${WEBHOOK_HOST_PORT:-$WEBHOOK_PORT}"
+
+  if [[ "$NON_INTERACTIVE" == false ]]; then
+    local default_mode_idx="1"
+    if [[ "$BOT_DELIVERY_MODE" == "webhook" ]]; then
+      default_mode_idx="2"
+    fi
+    info "Telegram delivery mode: Long Polling works out-of-the-box. Webhook requires a public HTTPS domain."
+    read -r -p "Telegram delivery: 1) Long Polling  2) Webhook [$default_mode_idx]: " delivery_choice
+    delivery_choice="${delivery_choice:-$default_mode_idx}"
+    case "$delivery_choice" in
+      1)
+        BOT_DELIVERY_MODE="polling"
+        ;;
+      2)
+        BOT_DELIVERY_MODE="webhook"
+        ;;
+      *)
+        warn "Unknown choice '${delivery_choice}', defaulting to Long Polling."
+        BOT_DELIVERY_MODE="polling"
+        ;;
+    esac
+
+    if [[ "$BOT_DELIVERY_MODE" == "webhook" ]]; then
+      WEBHOOK_URL="$(required_value "Public Webhook HTTPS URL (e.g. https://example.com/rsbot/webhook)" "$WEBHOOK_URL" false)"
+      validate_webhook_url "$WEBHOOK_URL" || die "WEBHOOK_URL must be a valid HTTPS URL."
+
+      local default_secret="${WEBHOOK_SECRET_TOKEN:-$(openssl rand -hex 32)}"
+      WEBHOOK_SECRET_TOKEN="$(prompt_default "Webhook secret token (leave default for random 32-byte hex)" "$default_secret")"
+      validate_webhook_secret_token "$WEBHOOK_SECRET_TOKEN" || die "Invalid secret token (use alphanumeric characters, - or _)."
+
+      WEBHOOK_PORT="$(prompt_default "Internal webhook listening port" "${WEBHOOK_PORT:-3000}")"
+      validate_port "$WEBHOOK_PORT" || die "Invalid webhook port."
+
+      WEBHOOK_HOST_PORT="$(prompt_default "Host published port for Caddy/Nginx reverse proxy" "${WEBHOOK_HOST_PORT:-$WEBHOOK_PORT}")"
+      validate_port "$WEBHOOK_HOST_PORT" || die "Invalid host port."
+
+      local auto_path="/webhook"
+      if [[ "$WEBHOOK_URL" =~ ^https://[^/]+(/.*)$ ]]; then
+        auto_path="${BASH_REMATCH[1]}"
+      fi
+      WEBHOOK_PATH="$(prompt_default "Webhook path" "${WEBHOOK_PATH:-$auto_path}")"
+      [[ "$WEBHOOK_PATH" == /* ]] || WEBHOOK_PATH="/$WEBHOOK_PATH"
+    fi
+  else
+    if [[ "$BOT_DELIVERY_MODE" == "webhook" ]]; then
+      [[ -n "$WEBHOOK_URL" ]] || die "WEBHOOK_URL is required when BOT_DELIVERY_MODE=webhook in non-interactive mode."
+      validate_webhook_url "$WEBHOOK_URL" || die "WEBHOOK_URL must be a valid HTTPS URL."
+      WEBHOOK_SECRET_TOKEN="${WEBHOOK_SECRET_TOKEN:-$(openssl rand -hex 32)}"
+      validate_webhook_secret_token "$WEBHOOK_SECRET_TOKEN" || die "Invalid secret token."
+      WEBHOOK_PORT="${WEBHOOK_PORT:-3000}"
+      validate_port "$WEBHOOK_PORT" || die "Invalid webhook port."
+      WEBHOOK_HOST_PORT="${WEBHOOK_HOST_PORT:-$WEBHOOK_PORT}"
+      validate_port "$WEBHOOK_HOST_PORT" || die "Invalid host port."
+      if [[ -z "${WEBHOOK_PATH:-}" ]]; then
+        if [[ "$WEBHOOK_URL" =~ ^https://[^/]+(/.*)$ ]]; then
+          WEBHOOK_PATH="${BASH_REMATCH[1]}"
+        else
+          WEBHOOK_PATH="/webhook"
+        fi
+      fi
+      [[ "$WEBHOOK_PATH" == /* ]] || WEBHOOK_PATH="/$WEBHOOK_PATH"
+    fi
+  fi
+
   umask 077
   {
     printf 'INSTANCE_NAME=%s\n' "$INSTANCE_NAME"
@@ -651,6 +784,13 @@ configure_environment() {
     printf 'DEFAULT_LOCALE=%s\n' "$DEFAULT_LOCALE"
     printf 'SUPPORT_URL=%s\n' "$SUPPORT_URL"
     printf 'HEALTH_CHECK_PORT=3001\n'
+    printf 'BOT_DELIVERY_MODE=%s\n' "$BOT_DELIVERY_MODE"
+    printf 'WEBHOOK_URL=%s\n' "$WEBHOOK_URL"
+    printf 'WEBHOOK_SECRET_TOKEN=%s\n' "$WEBHOOK_SECRET_TOKEN"
+    printf 'WEBHOOK_PORT=%s\n' "$WEBHOOK_PORT"
+    printf 'WEBHOOK_PATH=%s\n' "$WEBHOOK_PATH"
+    printf 'WEBHOOK_BIND_HOST=%s\n' "$WEBHOOK_BIND_HOST"
+    printf 'WEBHOOK_HOST_PORT=%s\n' "$WEBHOOK_HOST_PORT"
   } > "$ENV_FILE"
   "${SUDO[@]}" chown "$INSTALL_OWNER:$(id -gn "$INSTALL_OWNER")" "$ENV_FILE"
   "${SUDO[@]}" chmod 600 "$ENV_FILE"

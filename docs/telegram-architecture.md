@@ -12,7 +12,7 @@ RebeccaSellBot treats Telegram strictly as an **ephemeral delivery and interacti
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        Telegram Bot API                                │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Outbound Long Polling (bot.start())
+                                    │ Outbound Polling or Inbound Webhook
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │                       Delivery Layer (grammY)                          │
@@ -39,7 +39,7 @@ RebeccaSellBot treats Telegram strictly as an **ephemeral delivery and interacti
 
 1. **No Direct DB Access from Telegram:** Files under `src/telegram/` must never import from `src/infra/db.js` or `src/infra/schema.js`. All state mutations and queries route through domain services (e.g., `WalletService`, `ConfigService`).
 2. **No Direct HTTP / API Client Access:** Telegram code must never instantiate `RebeccaApiClient` or perform raw `fetch()` calls. All panel interactions go through `RebeccaService` or the `RebeccaPanelRegistry`.
-3. **Outbound Long Polling Only:** The bot starts exclusively with `bot.start()` (long polling). Inbound webhook endpoints are strictly forbidden, eliminating public attack vectors.
+3. **Dual-Mode Delivery Architecture:** The bot starts with long polling (`bot.start()`) by default. For reverse-proxied or panel-hosted deployments, webhook delivery (`webhookCallback()`) can be enabled. Webhook updates require `X-Telegram-Bot-Api-Secret-Token` authentication, and switching to polling automatically clears active webhooks.
 4. **Automated Enforcement:** The architectural test script [`scripts/check-architecture.mjs`](../scripts/check-architecture.mjs) runs during CI and pre-commit verification to statically enforce these import boundaries and conventions.
 
 ---
@@ -252,3 +252,55 @@ RebeccaSellBot supports full internationalization in **Persian (fa)** and **Engl
 - **WeakMap Ban Status Cache:** Prevents duplicate database queries for banned users during rapid update batches.
 - **Purchase Checkouts Guard:** Checkouts snapshot packages and prices with expiration timestamps (`PurchaseCheckoutService`), preventing Time-of-Check to Time-of-Use (TOCTOU) exploits if an admin changes package prices while a user is on the checkout screen.
 - **Private Chat Gate:** Financial and management features are strictly blocked in group chats to protect sensitive user subscriptions and balance details.
+
+---
+
+## 9. Webhook Ingress & Reverse Proxy Architecture
+
+When `BOT_DELIVERY_MODE=webhook` is configured:
+
+1. **HTTP Server & Security Header Enforcement:**
+   - A dedicated Node.js HTTP server listens on `WEBHOOK_PORT` (default: 3000) and `WEBHOOK_HOST` (default: `0.0.0.0`).
+   - Routes updates through `webhookCallback(bot, 'http', { secretToken })`.
+   - Every webhook POST is authenticated against the `X-Telegram-Bot-Api-Secret-Token` header. Unauthenticated or malformed requests receive an immediate `401 Unauthorized`.
+   - Health probes (`/health`, `/healthz`, `/ready`, `/readyz`) return `200 OK` with `{ "status": "ok", "mode": "webhook" }`.
+
+2. **Automated Telegram Webhook Synchronization:**
+   - On startup, `registerWebhook()` registers `WEBHOOK_URL` with Telegram using `bot.api.setWebhook()`.
+   - When restarting in polling mode, `startBot()` invokes `clearWebhook()` via `bot.api.deleteWebhook()` before initiating polling, avoiding Telegram 409 conflict errors.
+
+3. **Reverse Proxy Configurations:**
+
+**Caddy (Recommended):**
+
+```caddy
+bot.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+**Nginx:**
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name bot.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/bot.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bot.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+4. **Hosting Inside Rebecca Panel External Apps:**
+   - Rebecca Panel (dev branch) provides isolated Node.js application hosting under `/var/lib/rebecca/external-apps/`.
+   - Rebecca Panel injects environment variables (`EnvironmentFile=-.env`, `PORT=20xxx`, `HOST=127.0.0.1`) and manages reverse proxy routing from the application's domain.
+   - RebeccaSellBot automatically adopts `process.env.PORT` if `WEBHOOK_PORT` is omitted, running natively as a Rebecca External App.

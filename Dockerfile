@@ -40,9 +40,9 @@ COPY --from=builder --chown=node:node /app/docker-compose.yml ./docker-compose.y
 
 USER node
 
-# This port intentionally has no EXPOSE instruction or Compose port mapping.
-# Docker probes localhost inside the bot container; Telegram uses outbound long
-# polling, so the deployment has no inbound network surface.
+# Internal health check runs on 3001. Webhook mode listens on port 3000 by default.
+EXPOSE 3000
+
 HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --start-interval=5s --retries=4 \
   CMD node -e "fetch('http://127.0.0.1:3001/readyz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
 

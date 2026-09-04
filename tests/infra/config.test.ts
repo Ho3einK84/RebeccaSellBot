@@ -182,4 +182,127 @@ describe('loadConfig', () => {
     });
     expect(() => loadWithWeakKey()).toThrow('Invalid environment configuration');
   });
+
+  describe('BOT_DELIVERY_MODE and webhook configuration', () => {
+    it('defaults to polling mode with default webhook port and path when unset', async () => {
+      const loadConfig = await loadConfigWithEnv({
+        ...requiredConfig,
+      });
+
+      const config = loadConfig();
+      expect(config.BOT_DELIVERY_MODE).toBe('polling');
+      expect(config.WEBHOOK_PORT).toBe(3000);
+      expect(config.WEBHOOK_PATH).toBe('/webhook');
+      expect(config.WEBHOOK_HOST).toBe('0.0.0.0');
+      expect(config.WEBHOOK_URL).toBeUndefined();
+      expect(config.WEBHOOK_SECRET_TOKEN).toBeUndefined();
+    });
+
+    it('infers webhook mode when WEBHOOK_URL is configured without BOT_DELIVERY_MODE', async () => {
+      const loadConfig = await loadConfigWithEnv({
+        ...requiredConfig,
+        WEBHOOK_URL: 'https://example.com/rsbot/webhook',
+        WEBHOOK_SECRET_TOKEN: 'valid_secret_123',
+      });
+
+      const config = loadConfig();
+      expect(config.BOT_DELIVERY_MODE).toBe('webhook');
+      expect(config.WEBHOOK_URL).toBe('https://example.com/rsbot/webhook');
+      expect(config.WEBHOOK_PATH).toBe('/rsbot/webhook');
+      expect(config.WEBHOOK_SECRET_TOKEN).toBe('valid_secret_123');
+    });
+
+    it('honors explicit BOT_DELIVERY_MODE=polling even when WEBHOOK_URL is provided', async () => {
+      const loadConfig = await loadConfigWithEnv({
+        ...requiredConfig,
+        BOT_DELIVERY_MODE: 'polling',
+        WEBHOOK_URL: 'https://example.com/rsbot/webhook',
+        // In polling mode, WEBHOOK_SECRET_TOKEN is not required even if URL is provided
+      });
+
+      const config = loadConfig();
+      expect(config.BOT_DELIVERY_MODE).toBe('polling');
+      expect(config.WEBHOOK_URL).toBe('https://example.com/rsbot/webhook');
+    });
+
+    it('requires WEBHOOK_URL and WEBHOOK_SECRET_TOKEN when BOT_DELIVERY_MODE is webhook', async () => {
+      const loadMissingUrl = await loadConfigWithEnv({
+        ...requiredConfig,
+        BOT_DELIVERY_MODE: 'webhook',
+        WEBHOOK_SECRET_TOKEN: 'valid_secret_123',
+      });
+      expect(() => loadMissingUrl()).toThrow('Invalid environment configuration');
+
+      const loadMissingSecret = await loadConfigWithEnv({
+        ...requiredConfig,
+        BOT_DELIVERY_MODE: 'webhook',
+        WEBHOOK_URL: 'https://example.com/rsbot/webhook',
+      });
+      expect(() => loadMissingSecret()).toThrow('Invalid environment configuration');
+    });
+
+    it('rejects insecure HTTP WEBHOOK_URL', async () => {
+      const loadInsecure = await loadConfigWithEnv({
+        ...requiredConfig,
+        BOT_DELIVERY_MODE: 'webhook',
+        WEBHOOK_URL: 'http://example.com/rsbot/webhook',
+        WEBHOOK_SECRET_TOKEN: 'valid_secret_123',
+      });
+      expect(() => loadInsecure()).toThrow('Invalid environment configuration');
+    });
+
+    it('validates WEBHOOK_SECRET_TOKEN format (rejects spaces, special disallowed chars)', async () => {
+      const loadBadChars = await loadConfigWithEnv({
+        ...requiredConfig,
+        BOT_DELIVERY_MODE: 'webhook',
+        WEBHOOK_URL: 'https://example.com/rsbot/webhook',
+        WEBHOOK_SECRET_TOKEN: 'bad secret token with spaces!',
+      });
+      expect(() => loadBadChars()).toThrow('Invalid environment configuration');
+    });
+
+    it('normalizes explicit WEBHOOK_PATH without leading slash', async () => {
+      const loadConfig = await loadConfigWithEnv({
+        ...requiredConfig,
+        BOT_DELIVERY_MODE: 'webhook',
+        WEBHOOK_URL: 'https://example.com/custom',
+        WEBHOOK_SECRET_TOKEN: 'valid_secret_123',
+        WEBHOOK_PATH: 'my-path/webhook',
+      });
+
+      const config = loadConfig();
+      expect(config.WEBHOOK_PATH).toBe('/my-path/webhook');
+    });
+
+    it('rejects equal WEBHOOK_PORT and HEALTH_CHECK_PORT in webhook mode', async () => {
+      const loadPortConflict = await loadConfigWithEnv({
+        ...requiredConfig,
+        BOT_DELIVERY_MODE: 'webhook',
+        WEBHOOK_URL: 'https://example.com/rsbot/webhook',
+        WEBHOOK_SECRET_TOKEN: 'valid_secret_123',
+        WEBHOOK_PORT: '3001',
+        HEALTH_CHECK_PORT: '3001',
+      });
+      expect(() => loadPortConflict()).toThrow('Invalid environment configuration');
+    });
+
+    it('accepts custom WEBHOOK_PORT, WEBHOOK_HOST, and WEBHOOK_PATH in webhook mode', async () => {
+      const loadConfig = await loadConfigWithEnv({
+        ...requiredConfig,
+        BOT_DELIVERY_MODE: 'webhook',
+        WEBHOOK_URL: 'https://example.com/rsbot/hook',
+        WEBHOOK_SECRET_TOKEN: 'secret_ABC-123_xyz',
+        WEBHOOK_PORT: '8443',
+        WEBHOOK_HOST: '127.0.0.1',
+        WEBHOOK_PATH: '/custom/hook',
+      });
+
+      const config = loadConfig();
+      expect(config.BOT_DELIVERY_MODE).toBe('webhook');
+      expect(config.WEBHOOK_PORT).toBe(8443);
+      expect(config.WEBHOOK_HOST).toBe('127.0.0.1');
+      expect(config.WEBHOOK_PATH).toBe('/custom/hook');
+      expect(config.WEBHOOK_SECRET_TOKEN).toBe('secret_ABC-123_xyz');
+    });
+  });
 });

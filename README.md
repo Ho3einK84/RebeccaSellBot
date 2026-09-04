@@ -65,7 +65,7 @@ Telegram Customer
 - **3-Phase Purchase Saga:** Balances are reserved prior to external API dispatch and committed only upon verified creation.
 - **Idempotent Rewards:** Referral bonuses, cashback, and promo usages are bound to unique transaction references.
 - **Encrypted Credentials:** Panel API keys and admin passwords are encrypted at rest using AES-256-GCM.
-- **Isolated Network Model:** PostgreSQL is accessible only within a private Docker bridge network; Telegram operates via outbound long polling with zero open public ports.
+- **Dual-Mode Delivery:** Supports zero-maintenance outbound Long Polling by default, alongside high-throughput Webhook delivery with `X-Telegram-Bot-Api-Secret-Token` authentication for reverse-proxied or Rebecca External App setups.
 
 ---
 
@@ -148,6 +148,89 @@ rsbot <name> logs -f           # Stream real-time structured logs
 | `DEFAULT_LOCALE`        | Default language for newly registered users (`fa` or `en`).            | `fa`                                 |
 | `SUPPORT_URL`           | Optional Telegram support username/link (e.g. `https://t.me/support`). | First `ADMIN_ID`                     |
 | `HEALTH_CHECK_PORT`     | Internal HTTP port used by Docker for container health probes.         | `3001`                               |
+| `BOT_DELIVERY_MODE`     | Telegram delivery mode: `polling` (default) or `webhook`.              | `polling`                            |
+| `WEBHOOK_URL`           | Public HTTPS URL registered with Telegram (required in webhook mode).  | `https://example.com/rsbot/webhook`  |
+| `WEBHOOK_SECRET_TOKEN`  | Secret token verifying `X-Telegram-Bot-Api-Secret-Token` header.       | 32+ character alphanumeric string    |
+| `WEBHOOK_PORT`          | Internal HTTP listening port for incoming Telegram updates.            | `3000`                               |
+| `WEBHOOK_PATH`          | Local URL path handled by the webhook server.                          | `/webhook` (or derived from URL)     |
+| `WEBHOOK_HOST_PORT`     | Host port bound in Docker Compose for reverse proxy forwarding.        | `3000`                               |
+
+---
+
+## Dual-Mode Delivery: Long Polling & Webhook
+
+RebeccaSellBot can operate in two distinct modes without touching code:
+
+### 1. Long Polling Mode (Default)
+
+Requires no domain name, no open ports, and zero firewall changes:
+
+```env
+BOT_DELIVERY_MODE=polling
+```
+
+When switching back from Webhook to Long Polling, RebeccaSellBot automatically invokes `bot.api.deleteWebhook()` on startup to clear previous webhook registrations and prevent 409 conflict errors.
+
+### 2. Webhook Mode
+
+Designed for production environments behind reverse proxies or when hosted inside **Rebecca Panel External Apps**:
+
+```env
+BOT_DELIVERY_MODE=webhook
+WEBHOOK_URL=https://bot.example.com/rsbot/webhook
+WEBHOOK_SECRET_TOKEN=random_secret_token_at_least_32_characters_123
+WEBHOOK_PORT=3000
+WEBHOOK_PATH=/rsbot/webhook
+WEBHOOK_HOST_PORT=3000
+```
+
+#### Reverse Proxy Configurations
+
+##### Caddy (Recommended)
+
+```caddy
+# Standalone domain
+bot.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+
+# Or as a subpath on an existing site:
+example.com {
+    handle /rsbot/* {
+        reverse_proxy 127.0.0.1:3000
+    }
+}
+```
+
+##### Nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name bot.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/bot.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bot.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+#### Rebecca Panel External App Integration
+
+Rebecca Panel (`dev` branch) includes an **External Apps** manager that can host Node.js services directly on the panel host:
+
+1. In Rebecca Panel, add an External App with Node.js runtime.
+2. In the app's `.env` configuration, configure the bot's required settings (`BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_URL`, `BOT_DELIVERY_MODE=webhook`, etc.).
+3. Rebecca automatically sets `PORT` and `HOST=127.0.0.1`, which RebeccaSellBot auto-detects.
+4. Rebecca's internal reverse proxy automatically terminates SSL and forwards public domain requests directly to the bot.
 
 ---
 

@@ -21,7 +21,14 @@ import { PackageCategoryService } from './domain/services/PackageCategoryService
 import { PaymentService } from './domain/services/PaymentService.js';
 import { BackupService } from './domain/services/BackupService.js';
 import { LuckyWheelService } from './domain/services/LuckyWheelService.js';
-import { initializeBot, setupBot, startBot } from './telegram/bot.js';
+import {
+  initializeBot,
+  setupBot,
+  startBot,
+  startWebhookServer,
+  registerWebhook,
+  type WebhookServerHandle,
+} from './telegram/bot.js';
 import {
   markHealthFailed,
   markHealthReady,
@@ -39,6 +46,7 @@ import { startBackupCron, stopBackupCron } from './jobs/backup.js';
 import { jobRunner } from './jobs/workerRuntime.js';
 
 const WORKER_SHUTDOWN_TIMEOUT_MS = 30_000;
+let activeWebhookHandle: WebhookServerHandle | null = null;
 
 function stopScheduledWorkers(): void {
   stopReconciliationCron();
@@ -166,6 +174,9 @@ async function main() {
   startBroadcastWorker(broadcastService, bot.api);
   startBackupCron(backupService, bot.api);
 
+  let webhookHandle: WebhookServerHandle | null = null;
+  let pollingTask: Promise<void> | null = null;
+
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
@@ -174,6 +185,15 @@ async function main() {
     logger.info({ signal }, 'Shutting down gracefully...');
     let exitCode = 0;
     stopScheduledWorkers();
+
+    if (webhookHandle) {
+      await webhookHandle.close().catch((err) => {
+        exitCode = 1;
+        logger.error({ err }, 'Failed to close webhook server during shutdown');
+      });
+      activeWebhookHandle = null;
+    }
+
     if (bot.isRunning()) {
       await bot.stop().catch((err) => {
         exitCode = 1;
@@ -198,7 +218,19 @@ async function main() {
   process.once('SIGINT', () => void shutdown('SIGINT'));
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
-  const pollingTask = startBot(bot);
+  if (config.BOT_DELIVERY_MODE === 'webhook') {
+    webhookHandle = await startWebhookServer(bot, config);
+    activeWebhookHandle = webhookHandle;
+    await registerWebhook(bot, config);
+    logger.info(
+      { url: config.WEBHOOK_URL, port: config.WEBHOOK_PORT },
+      'RebeccaSellBot running in webhook mode'
+    );
+  } else {
+    pollingTask = startBot(bot);
+    logger.info('RebeccaSellBot running in long-polling mode');
+  }
+
   markHealthReady();
 
   // A full Rebecca counter scan can take seconds on a large or degraded panel.
@@ -214,13 +246,20 @@ async function main() {
       logger.warn({ err }, 'Background counter warm-up failed; will sync on-demand per panel');
     });
 
-  await pollingTask;
+  if (pollingTask) {
+    await pollingTask;
+  }
 }
 
 main().catch(async (err) => {
   markHealthFailed(err);
-  logger.fatal({ err }, 'Fatal error on application startup or long-polling');
+  logger.fatal({ err }, 'Fatal error on application startup or delivery lifecycle');
   stopScheduledWorkers();
+  if (activeWebhookHandle) {
+    await activeWebhookHandle.close().catch((closeErr) => {
+      logger.error({ err: closeErr }, 'Failed to close webhook server after fatal error');
+    });
+  }
   await drainWorkers().catch((drainErr) => {
     logger.error({ err: drainErr }, 'Failed to drain workers after fatal error');
   });

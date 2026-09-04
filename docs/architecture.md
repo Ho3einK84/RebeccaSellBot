@@ -15,7 +15,7 @@ flowchart TD
 
     subgraph RSBot["RebeccaSellBot Subsystem"]
         subgraph Delivery["Delivery Layer (grammY)"]
-            BotRuntime["botRuntime.ts\n(Long Polling)"]
+            BotRuntime["botRuntime.ts\n(Long Polling & Webhook)"]
             UIEngine["UI Engine & Screen Manager\n(AsyncLocalStorage)"]
             Router["Feature Routes & Conversations"]
         end
@@ -51,8 +51,8 @@ flowchart TD
         PN["Panel N (HTTPS REST)"]
     end
 
-    User <-->|TLS Polling| BotRuntime
-    Admin <-->|TLS Polling| BotRuntime
+    User <-->|TLS Polling / Webhook| BotRuntime
+    Admin <-->|TLS Polling / Webhook| BotRuntime
     BotRuntime --> UIEngine --> Router
     Router --> Domain
     WorkerRuntime --> Workers --> Domain
@@ -64,7 +64,7 @@ flowchart TD
 ### Invariant Architectural Rules
 
 1. **Zero Database Touch on Rebecca Panels:** RebeccaSellBot communicates with external Rebecca panels exclusively through their official HTTPS REST APIs (`RebeccaApiClient`). It never connects directly to or mutates remote panel databases.
-2. **Outbound Long Polling Exclusively:** The bot operates via `bot.start()` using outbound HTTPS long polling. No inbound webhook ports are opened, eliminating direct external attack surfaces and port-scanning vulnerabilities.
+2. **Dual-Mode Delivery Architecture (Long Polling & Webhook):** The bot operates by default with outbound HTTPS long polling (`bot.start()`), requiring zero inbound ports or public domains. For deployments behind reverse proxies or hosted within **Rebecca Panel External Apps**, an optional Webhook mode (`webhookCallback()`) can be enabled with strict `X-Telegram-Bot-Api-Secret-Token` validation. Returning to polling automatically clears active webhooks.
 3. **Layered Separation of Concerns:**
    - Presentation files (`src/telegram/*`) are strictly decoupled from database queries; all state changes flow through typed domain services.
    - Domain services (`src/domain/services/*`) encapsulate business rules, financial invariants, and sagas.
@@ -192,6 +192,64 @@ Incoming Update
 ### Zero-Secret Replay Principle
 
 `@grammyjs/conversations` records message steps into database sessions to support replay. To prevent unencrypted secrets from leaking into session stores, sensitive administrator inputs (e.g. Rebecca panel API keys) are routed through dedicated one-shot handlers (`bot.on('message:text')`), encrypted immediately with `CredentialCipher`, and deleted from Telegram chat history.
+
+### Dual-Mode Delivery (Long Polling & Webhook)
+
+RebeccaSellBot supports two mutually exclusive delivery modes configured via environment variables:
+
+1. **Long Polling (`BOT_DELIVERY_MODE=polling`, default):**
+   - Starts via `bot.start()`.
+   - Clears any existing Telegram webhook via `bot.api.deleteWebhook({ drop_pending_updates: false })` before polling to prevent 409 conflict errors.
+   - Ideal for standard installations, servers without domain names, or zero-maintenance deployments.
+
+2. **Webhook (`BOT_DELIVERY_MODE=webhook`):**
+   - Starts an internal HTTP server that listens on `WEBHOOK_PORT` (default: 3000) and `WEBHOOK_HOST` (default: `0.0.0.0`).
+   - Delegates incoming updates to grammY's `webhookCallback(bot, 'http', { secretToken })`.
+   - Enforces the `X-Telegram-Bot-Api-Secret-Token` header, immediately rejecting unauthorized probes with HTTP 401.
+   - Automatically answers internal health probes (`/health`, `/healthz`, `/ready`, `/readyz`) with HTTP 200.
+   - Dispatches `bot.api.setWebhook()` once the HTTP server is bound.
+   - Gracefully closes connections on `SIGINT`/`SIGTERM` with socket drain timeouts.
+
+#### Reverse Proxy Integration
+
+When running in Webhook mode, terminate SSL and forward traffic via **Caddy** or **Nginx**:
+
+**Caddyfile:**
+
+```caddy
+# Standalone domain
+bot.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+
+# Subpath on existing domain
+example.com {
+    handle /rsbot/* {
+        reverse_proxy 127.0.0.1:3000
+    }
+}
+```
+
+**Nginx:**
+
+```nginx
+location /rsbot/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+#### Rebecca Panel External App Integration
+
+Rebecca Panel (branch `dev`) features isolated Node.js application hosting under its `externalapps` subsystem:
+
+- When hosted as an External App, Rebecca Panel assigns a dynamic port via `PORT=20xxx` and sets `HOST=127.0.0.1`.
+- RebeccaSellBot automatically senses `PORT` as the default `WEBHOOK_PORT` if not explicitly overridden.
+- Rebecca Panel manages systemd supervision, SSL certificate provisioning, and HTTP reverse proxy routing directly to the bot.
 
 ---
 

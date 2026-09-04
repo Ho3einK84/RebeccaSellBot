@@ -112,6 +112,58 @@ const configSchema = z
           .startsWith('https://', 'SUPPORT_URL must start with https://')
           .optional()
       ),
+    BOT_DELIVERY_MODE: z.enum(['polling', 'webhook']).optional(),
+    WEBHOOK_URL: z
+      .string()
+      .optional()
+      .transform((val) => val?.trim() || undefined)
+      .refine((val) => {
+        if (!val) return true;
+        if (!val.startsWith('https://')) return false;
+        try {
+          new URL(val);
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'WEBHOOK_URL must be a valid HTTPS URL'),
+    WEBHOOK_SECRET_TOKEN: optionalSecretSchema,
+    WEBHOOK_PORT: positiveIntegerSchema(
+      'WEBHOOK_PORT',
+      process.env.PORT ? Number(process.env.PORT) : 3000
+    ).pipe(z.number().max(65_535, 'WEBHOOK_PORT is out of range')),
+    WEBHOOK_PATH: z
+      .string()
+      .optional()
+      .transform((val) => {
+        const trimmed = val?.trim();
+        if (!trimmed) return undefined;
+        return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      }),
+    WEBHOOK_HOST: optionalStringWithDefault(process.env.HOST?.trim() || '0.0.0.0'),
+  })
+  .transform((val) => {
+    const effectiveMode: 'polling' | 'webhook' =
+      val.BOT_DELIVERY_MODE ?? (val.WEBHOOK_URL ? 'webhook' : 'polling');
+    let effectivePath = val.WEBHOOK_PATH;
+    if (!effectivePath) {
+      if (val.WEBHOOK_URL) {
+        try {
+          const parsed = new URL(val.WEBHOOK_URL);
+          if (parsed.pathname && parsed.pathname !== '/') {
+            effectivePath = parsed.pathname;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      effectivePath = effectivePath || '/webhook';
+    }
+    return {
+      ...val,
+      BOT_DELIVERY_MODE: effectiveMode,
+      WEBHOOK_PATH: effectivePath,
+    };
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV === 'production' && !value.PANEL_CREDENTIALS_KEY) {
@@ -120,6 +172,36 @@ const configSchema = z
         path: ['PANEL_CREDENTIALS_KEY'],
         message: 'PANEL_CREDENTIALS_KEY is required in production',
       });
+    }
+    if (value.BOT_DELIVERY_MODE === 'webhook') {
+      if (!value.WEBHOOK_URL) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['WEBHOOK_URL'],
+          message: 'WEBHOOK_URL is required when webhook delivery is enabled',
+        });
+      }
+      if (!value.WEBHOOK_SECRET_TOKEN) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['WEBHOOK_SECRET_TOKEN'],
+          message: 'WEBHOOK_SECRET_TOKEN is required when webhook delivery is enabled',
+        });
+      } else if (!/^[A-Za-z0-9_-]{1,256}$/.test(value.WEBHOOK_SECRET_TOKEN)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['WEBHOOK_SECRET_TOKEN'],
+          message:
+            'WEBHOOK_SECRET_TOKEN must contain only 1–256 alphanumeric characters, underscores, or hyphens',
+        });
+      }
+      if (value.WEBHOOK_PORT === value.HEALTH_CHECK_PORT) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['WEBHOOK_PORT'],
+          message: 'WEBHOOK_PORT must differ from HEALTH_CHECK_PORT',
+        });
+      }
     }
     if (!value.REBECCA_API_URL) return;
     if (value.REBECCA_API_KEY || value.REBECCA_ADMIN_PASSWORD) return;
