@@ -304,5 +304,32 @@ describe('loadConfig', () => {
       expect(config.WEBHOOK_PATH).toBe('/custom/hook');
       expect(config.WEBHOOK_SECRET_TOKEN).toBe('secret_ABC-123_xyz');
     });
+
+    it('accepts unified PORT for both healthcheck and webhook without conflict', async () => {
+      const loadConfig = await loadConfigWithEnv({
+        ...requiredConfig,
+        PORT: '8080',
+        BOT_DELIVERY_MODE: 'webhook',
+        WEBHOOK_URL: 'https://example.com/rsbot/webhook',
+        WEBHOOK_SECRET_TOKEN: 'valid_secret_123',
+      });
+
+      const config = loadConfig();
+      expect(config.PORT).toBe(8080);
+      expect(config.HEALTH_CHECK_PORT).toBe(8080);
+      expect(config.WEBHOOK_PORT).toBe(8080);
+    });
+
+    it('defaults REBECCA_WEBHOOK_PATH and accepts REBECCA_WEBHOOK_SECRET', async () => {
+      const loadConfig = await loadConfigWithEnv({
+        ...requiredConfig,
+        REBECCA_WEBHOOK_SECRET: 'rebecca_secret_xyz',
+        REBECCA_WEBHOOK_PATH: 'custom/rebecca-hook',
+      });
+
+      const config = loadConfig();
+      expect(config.REBECCA_WEBHOOK_SECRET).toBe('rebecca_secret_xyz');
+      expect(config.REBECCA_WEBHOOK_PATH).toBe('/custom/rebecca-hook');
+    });
   });
 });

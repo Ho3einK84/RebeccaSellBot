@@ -1329,4 +1329,14 @@ export const FA_TEXTS: Record<string, string> = {
   wheel_max_spins_reached: '🏁 شما از تمام فرصت‌های گردونه شانس خود استفاده کرده‌اید.',
   wheel_disabled: '⚠️ گردونه شانس در حال حاضر غیرفعال است.',
   wheel_error: '❌ خطا در چرخاندن گردونه. لطفاً دوباره تلاش کنید.',
+
+  // اعلانات وب‌هوک پنل ربکا
+  webhook_alert_limited_title: '⚠️ پایان حجم سرویس',
+  webhook_alert_limited_body:
+    'حجم اشتراک سرویس شما به پایان رسیده است. برای جلوگیری از قطعی، سرویس خود را تمدید کنید.',
+  webhook_alert_expired_title: '⏳ پایان اعتبار زمانی',
+  webhook_alert_expired_body:
+    'اعتبار زمانی اشتراک سرویس شما به پایان رسیده است. برای جلوگیری از قطعی، سرویس خود را تمدید کنید.',
+  webhook_renew_button: '🔄 تمدید سرویس',
+  webhook_service_label: 'سرویس',
 };

@@ -14,7 +14,27 @@ interface HealthSnapshot {
 }
 
 let server: http.Server | null = null;
+let serverPort: number | null = null;
 let snapshot: HealthSnapshot = createInitialSnapshot();
+
+export type HttpFallbackHandler = (
+  req: http.IncomingMessage,
+  res: http.ServerResponse
+) => Promise<boolean>;
+
+let fallbackHandler: HttpFallbackHandler | null = null;
+
+export function registerHealthCheckFallbackHandler(handler: HttpFallbackHandler | null): void {
+  fallbackHandler = handler;
+}
+
+export function getHealthCheckServer(): http.Server | null {
+  return server;
+}
+
+export function isHealthCheckServerRunningOn(port: number): boolean {
+  return Boolean(server?.listening && serverPort === port);
+}
 
 function createInitialSnapshot(): HealthSnapshot {
   const now = new Date().toISOString();
@@ -65,10 +85,12 @@ export async function startHealthCheckServer(port: number): Promise<http.Server>
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error) => {
       server?.off('listening', onListening);
+      serverPort = null;
       reject(error);
     };
     const onListening = () => {
       server?.off('error', onError);
+      serverPort = port;
       resolve();
     };
     server!.once('error', onError);
@@ -88,18 +110,30 @@ async function handleHealthRequest(
   res: http.ServerResponse
 ): Promise<void> {
   try {
+    const rawUrl = req.url ?? '/';
+    const pathname = rawUrl.split('?')[0].replace(/\/+$/, '') || '/';
     const body = JSON.stringify({
       ...snapshot,
       uptime: process.uptime(),
     });
 
-    if (req.url === '/health' || req.url === '/healthz') {
+    if (
+      pathname === '/health' ||
+      pathname === '/healthz' ||
+      pathname.endsWith('/health') ||
+      pathname.endsWith('/healthz')
+    ) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(body);
       return;
     }
 
-    if (req.url === '/ready' || req.url === '/readyz') {
+    if (
+      pathname === '/ready' ||
+      pathname === '/readyz' ||
+      pathname.endsWith('/ready') ||
+      pathname.endsWith('/readyz')
+    ) {
       const databaseReady = snapshot.state === 'ready' && (await probeDatabase());
       res.writeHead(databaseReady ? 200 : 503, {
         'Content-Type': 'application/json',
@@ -107,6 +141,12 @@ async function handleHealthRequest(
       res.end(body);
       return;
     }
+
+    if (fallbackHandler) {
+      const handled = await fallbackHandler(req, res);
+      if (handled) return;
+    }
+
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found');
   } catch {
@@ -135,6 +175,8 @@ async function probeDatabase(): Promise<boolean> {
 export async function stopHealthCheckServer(): Promise<void> {
   const activeServer = server;
   server = null;
+  serverPort = null;
+  fallbackHandler = null;
   if (!activeServer?.listening) return;
   await new Promise<void>((resolve, reject) => {
     activeServer.close((error) => (error ? reject(error) : resolve()));

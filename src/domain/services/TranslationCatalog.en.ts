@@ -1337,4 +1337,14 @@ export const EN_TEXTS: Record<string, string> = {
   wheel_max_spins_reached: '🏁 You have used all available spins.',
   wheel_disabled: '⚠️ Lucky wheel is currently disabled.',
   wheel_error: '❌ Error spinning the wheel. Please try again.',
+
+  // Rebecca panel webhook notifications
+  webhook_alert_limited_title: '⚠️ Data Limit Depleted',
+  webhook_alert_limited_body:
+    'Your subscription data limit has been reached. Please renew your service to avoid interruption.',
+  webhook_alert_expired_title: '⏳ Subscription Expired',
+  webhook_alert_expired_body:
+    'Your subscription validity period has expired. Please renew your service to avoid interruption.',
+  webhook_renew_button: '🔄 Renew Service',
+  webhook_service_label: 'Service',
 };

@@ -95,6 +95,9 @@ const configSchema = z
       z.number().max(2_147_483_647, 'REBECCA_SERVICE_ID is out of range')
     ),
     PANEL_CREDENTIALS_KEY: panelCredentialsKeySchema,
+    PORT: positiveIntegerSchema('PORT')
+      .pipe(z.number().max(65_535, 'PORT is out of range'))
+      .optional(),
     HEALTH_CHECK_PORT: healthCheckPortSchema,
     DEFAULT_LOCALE: z.enum(['fa', 'en']).default('fa'),
     INSTANCE_NAME: optionalStringWithDefault('main'),
@@ -141,6 +144,15 @@ const configSchema = z
         return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
       }),
     WEBHOOK_HOST: optionalStringWithDefault(process.env.HOST?.trim() || '0.0.0.0'),
+    REBECCA_WEBHOOK_SECRET: optionalSecretSchema,
+    REBECCA_WEBHOOK_PATH: z
+      .string()
+      .optional()
+      .transform((val) => {
+        const trimmed = val?.trim();
+        if (!trimmed) return '/api/rebecca-webhook';
+        return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      }),
   })
   .transform((val) => {
     const effectiveMode: 'polling' | 'webhook' =
@@ -159,8 +171,22 @@ const configSchema = z
       }
       effectivePath = effectivePath || '/webhook';
     }
+
+    let effectiveHealthPort = val.HEALTH_CHECK_PORT;
+    let effectiveWebhookPort = val.WEBHOOK_PORT;
+    if (val.PORT) {
+      if (!process.env.HEALTH_CHECK_PORT) {
+        effectiveHealthPort = val.PORT;
+      }
+      if (!process.env.WEBHOOK_PORT) {
+        effectiveWebhookPort = val.PORT;
+      }
+    }
+
     return {
       ...val,
+      HEALTH_CHECK_PORT: effectiveHealthPort,
+      WEBHOOK_PORT: effectiveWebhookPort,
       BOT_DELIVERY_MODE: effectiveMode,
       WEBHOOK_PATH: effectivePath,
     };
@@ -195,7 +221,7 @@ const configSchema = z
             'WEBHOOK_SECRET_TOKEN must contain only 1–256 alphanumeric characters, underscores, or hyphens',
         });
       }
-      if (value.WEBHOOK_PORT === value.HEALTH_CHECK_PORT) {
+      if (!value.PORT && value.WEBHOOK_PORT === value.HEALTH_CHECK_PORT) {
         ctx.addIssue({
           code: 'custom',
           path: ['WEBHOOK_PORT'],

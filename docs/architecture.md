@@ -243,13 +243,48 @@ location /rsbot/ {
 }
 ```
 
-#### Rebecca Panel External App Integration
+#### Rebecca Panel External App Integration & Unified Server
 
 Rebecca Panel (branch `dev`) features isolated Node.js application hosting under its `externalapps` subsystem:
 
-- When hosted as an External App, Rebecca Panel assigns a dynamic port via `PORT=20xxx` and sets `HOST=127.0.0.1`.
-- RebeccaSellBot automatically senses `PORT` as the default `WEBHOOK_PORT` if not explicitly overridden.
-- Rebecca Panel manages systemd supervision, SSL certificate provisioning, and HTTP reverse proxy routing directly to the bot.
+- **Dynamic Port Sensing (`PORT`):** Rebecca Panel executes apps under systemd (`rbnode_<id>.service`) with `Environment=PORT=<assigned_port>` and polls `127.0.0.1:$PORT` within 20 seconds. RebeccaSellBot automatically detects `PORT` and unifies both health checks and webhooks onto that single listening port.
+- **Unified Multiplexed Server:** When `PORT` is assigned or `WEBHOOK_PORT` matches `HEALTH_CHECK_PORT`, RebeccaSellBot runs a single HTTP server on that port, routing:
+  - Internal health & readiness probes (`/health`, `/healthz`, `/ready`, `/readyz`)
+  - Inbound Telegram bot updates (`/webhook` or custom subpaths)
+  - Inbound Rebecca Panel webhook events (`REBECCA_WEBHOOK_PATH`, default `/api/webhook/rebecca`)
+- **Systemd & Reverse Proxy:** Rebecca Panel manages systemd supervision, TLS termination, and reverse-proxies requests directly to the bot.
+
+#### Inbound Rebecca Panel Webhooks (`RebeccaWebhookService.ts`)
+
+In addition to outbound REST calls to Rebecca panels, RebeccaSellBot receives real-time webhook push events from Rebecca panels:
+
+```text
+Rebecca Panel (Outbound Webhook)
+              │
+              │ POST /api/webhook/rebecca
+              │ Header: x-webhook-secret
+              ▼
+┌──────────────────────────────────────────────┐
+│ RebeccaWebhookService (Timing-Safe Auth)     │
+└──────────────────────┬───────────────────────┘
+                       │
+         ┌─────────────┴─────────────┐
+         ▼                           ▼
+┌───────────────────┐       ┌───────────────────┐
+│ DB State Update   │       │ User Telegram UI  │
+│ - status: limited │       │ - Push Alert Msg  │
+│ - status: expired │       │ - Direct Renew Btn│
+│ - trigger auto-ren│       │   (sub:detail:id) │
+└───────────────────┘       └───────────────────┘
+```
+
+- **Authentication:** Validated via constant-time comparison (`crypto.timingSafeEqual`) on the `x-webhook-secret` header against `REBECCA_WEBHOOK_SECRET`.
+- **Supported Events:**
+  - `user_limited`: Triggered when a VPN configuration consumes 100% of its data traffic allowance. Updates local configuration status, attempts auto-renewal if enabled, and sends an urgent Persian/English notification to the user with a 1-tap renewal button.
+  - `user_expired`: Triggered when subscription validity time lapses. Updates status, triggers auto-renewal if configured, and alerts the user.
+  - `user_disabled` / `user_enabled`: Keeps configuration status synchronized in real time without waiting for the reconciler worker.
+  - `user_deleted`: Marks configuration revoked/deleted in local records.
+- **Resilience:** Unrecognized events or configurations not tracked by the bot respond with HTTP 200 `{ ok: true, ignored: true }` to prevent remote webhook retry storms.
 
 ---
 

@@ -1,4 +1,4 @@
-import http from 'node:http';
+import type http from 'node:http';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { Bot } from 'grammy';
 import type { Config } from '../../src/infra/config.js';
@@ -10,6 +10,7 @@ import {
   startWebhookServer,
   startBot,
 } from '../../src/telegram/bot.js';
+import { startHealthCheckServer, stopHealthCheckServer } from '../../src/infra/healthcheck.js';
 
 function createMockBot() {
   const bot = new Bot<MenuContext>('123456:mock_token_for_tests');
@@ -229,6 +230,81 @@ describe('Telegram Dual-Mode Delivery (Polling & Webhook)', () => {
       // 5. Close gracefully
       await handle.close();
       expect(handle.server.listening).toBe(false);
+    });
+
+    it('routes requests on REBECCA_WEBHOOK_PATH to the rebecca webhook handler', async () => {
+      const bot = createMockBot();
+      const rebeccaHandler = vi.fn().mockImplementation(async (_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'rebecca_ok' }));
+        return true;
+      });
+
+      const config = createBaseConfig({
+        REBECCA_WEBHOOK_PATH: '/custom/rebecca-webhook',
+      });
+      const handler = createWebhookHandler(bot, config, rebeccaHandler);
+
+      const req = {
+        method: 'POST',
+        url: '/custom/rebecca-webhook',
+      } as http.IncomingMessage;
+      let statusCode = 0;
+      let responseBody = '';
+      const res = {
+        writeHead: vi.fn((status: number) => {
+          statusCode = status;
+        }),
+        end: vi.fn((body: string) => {
+          responseBody = body;
+        }),
+        headersSent: false,
+      } as unknown as http.ServerResponse;
+
+      await handler(req, res);
+      expect(rebeccaHandler).toHaveBeenCalled();
+      expect(statusCode).toBe(200);
+      expect(responseBody).toBe(JSON.stringify({ status: 'rebecca_ok' }));
+    });
+
+    it('attaches to existing healthcheck server when ports match instead of opening duplicate server', async () => {
+      const bot = createMockBot();
+      // Start health check server on an ephemeral port (e.g. 39485)
+      const testPort = 39485;
+      const baseServer = await startHealthCheckServer(testPort);
+
+      const config = createBaseConfig({
+        WEBHOOK_PORT: testPort,
+        WEBHOOK_HOST: '127.0.0.1',
+        WEBHOOK_PATH: '/unified-webhook',
+        WEBHOOK_SECRET_TOKEN: 'unified_secret',
+      });
+
+      const handle = await startWebhookServer(bot, config);
+      expect(handle.server).toBe(baseServer);
+
+      // Verify health endpoint on base server works
+      const healthRes = await fetch(`http://127.0.0.1:${testPort}/health`);
+      expect(healthRes.status).toBe(200);
+
+      // Verify webhook endpoint on base server works
+      const webhookRes = await fetch(`http://127.0.0.1:${testPort}/unified-webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-telegram-bot-api-secret-token': 'unified_secret',
+        },
+        body: JSON.stringify({ update_id: 10 }),
+      });
+      expect(webhookRes.status).toBe(200);
+
+      // Close webhook handle - server should remain open
+      await handle.close();
+      expect(baseServer.listening).toBe(true);
+
+      // Stop base server
+      await stopHealthCheckServer();
+      expect(baseServer.listening).toBe(false);
     });
   });
 });

@@ -29,6 +29,8 @@ import {
   registerWebhook,
   type WebhookServerHandle,
 } from './telegram/bot.js';
+import type http from 'node:http';
+import { RebeccaWebhookService } from './domain/services/RebeccaWebhookService.js';
 import {
   markHealthFailed,
   markHealthReady,
@@ -36,6 +38,7 @@ import {
   setHealthPhase,
   startHealthCheckServer,
   stopHealthCheckServer,
+  registerHealthCheckFallbackHandler,
 } from './infra/healthcheck.js';
 import { startNotifierCron, stopNotifierCron } from './jobs/notifier.js';
 import { startReconciliationCron, stopReconciliationCron } from './jobs/reconciler.js';
@@ -174,6 +177,61 @@ async function main() {
   startBroadcastWorker(broadcastService, bot.api);
   startBackupCron(backupService, bot.api);
 
+  const rebeccaWebhookService = new RebeccaWebhookService({
+    panels: panelRegistry,
+    translationService,
+    telegramApi: bot.api,
+    walletService,
+    pricingService,
+    configReconciliationService,
+    secret: config.REBECCA_WEBHOOK_SECRET,
+  });
+
+  const handleRebeccaWebhookRequest = async (
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<boolean> => {
+    const rawUrl = req.url ?? '/';
+    const pathname = rawUrl.split('?')[0].replace(/\/+$/, '') || '/';
+    const targetPath =
+      (config.REBECCA_WEBHOOK_PATH || '/api/rebecca-webhook').replace(/\/+$/, '') || '/';
+
+    if (pathname !== targetPath && !pathname.endsWith(targetPath)) {
+      return false;
+    }
+
+    if (req.method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'text/plain' });
+      res.end('Method Not Allowed');
+      return true;
+    }
+
+    let body = '';
+    req.setEncoding('utf8');
+    try {
+      for await (const chunk of req) {
+        body += chunk;
+        if (body.length > 1024 * 1024) {
+          res.writeHead(413, { 'Content-Type': 'text/plain' });
+          res.end('Payload Too Large');
+          return true;
+        }
+      }
+
+      const parsed = JSON.parse(body);
+      const secretHeader = req.headers['x-webhook-secret'];
+      const result = await rebeccaWebhookService.handleWebhook(parsed, secretHeader);
+      res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+    }
+    return true;
+  };
+
+  registerHealthCheckFallbackHandler(handleRebeccaWebhookRequest);
+
   let webhookHandle: WebhookServerHandle | null = null;
   let pollingTask: Promise<void> | null = null;
 
@@ -219,7 +277,7 @@ async function main() {
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
   if (config.BOT_DELIVERY_MODE === 'webhook') {
-    webhookHandle = await startWebhookServer(bot, config);
+    webhookHandle = await startWebhookServer(bot, config, handleRebeccaWebhookRequest);
     activeWebhookHandle = webhookHandle;
     await registerWebhook(bot, config);
     logger.info(

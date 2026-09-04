@@ -9,6 +9,11 @@ import { t } from './locale.js';
 import { backKeyboard, buildEmptyState } from './ui.js';
 import { extractBotErrorDiagnostics } from './telegramLogging.js';
 import { RebeccaOriginDownError } from '../domain/services/RebeccaService.js';
+import {
+  getHealthCheckServer,
+  isHealthCheckServerRunningOn,
+  registerHealthCheckFallbackHandler,
+} from '../infra/healthcheck.js';
 
 export { conversationContextMiddleware } from './botRuntime.js';
 
@@ -87,33 +92,59 @@ export async function registerWebhook(bot: Bot<MenuContext>, config: Config): Pr
   logger.info({ url: config.WEBHOOK_URL }, 'Telegram webhook registered successfully');
 }
 
+export type RebeccaHttpWebhookHandler = (
+  req: http.IncomingMessage,
+  res: http.ServerResponse
+) => Promise<boolean>;
+
 export function createWebhookHandler(
   bot: Bot<MenuContext>,
-  config: Config
+  config: Config,
+  rebeccaWebhookHandler?: RebeccaHttpWebhookHandler
 ): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
   const callback = webhookCallback(bot, 'http', {
     secretToken: config.WEBHOOK_SECRET_TOKEN,
   });
   const targetPath = config.WEBHOOK_PATH;
+  const rebeccaPath = config.REBECCA_WEBHOOK_PATH || '/api/rebecca-webhook';
 
   return async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     try {
       const rawUrl = req.url ?? '/';
-      const pathname = rawUrl.split('?')[0];
+      const pathname = rawUrl.split('?')[0].replace(/\/+$/, '') || '/';
+      const cleanTargetPath = targetPath.replace(/\/+$/, '') || '/';
+      const cleanRebeccaPath = rebeccaPath.replace(/\/+$/, '') || '/';
 
       if (
         req.method === 'GET' &&
         (pathname === '/health' ||
           pathname === '/healthz' ||
           pathname === '/ready' ||
-          pathname === '/readyz')
+          pathname === '/readyz' ||
+          pathname.endsWith('/health') ||
+          pathname.endsWith('/healthz') ||
+          pathname.endsWith('/ready') ||
+          pathname.endsWith('/readyz'))
       ) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', mode: 'webhook' }));
         return;
       }
 
-      if (pathname !== targetPath) {
+      if (
+        rebeccaWebhookHandler &&
+        (pathname === cleanRebeccaPath || pathname.endsWith(cleanRebeccaPath))
+      ) {
+        const handled = await rebeccaWebhookHandler(req, res);
+        if (handled) return;
+      }
+
+      const matchesTarget =
+        pathname === cleanTargetPath ||
+        pathname === targetPath ||
+        (cleanTargetPath !== '/' && pathname.endsWith(cleanTargetPath));
+
+      if (!matchesTarget) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found');
         return;
@@ -138,9 +169,31 @@ export function createWebhookHandler(
 
 export async function startWebhookServer(
   bot: Bot<MenuContext>,
-  config: Config
+  config: Config,
+  rebeccaWebhookHandler?: RebeccaHttpWebhookHandler
 ): Promise<WebhookServerHandle> {
-  const handler = createWebhookHandler(bot, config);
+  const handler = createWebhookHandler(bot, config, rebeccaWebhookHandler);
+
+  if (isHealthCheckServerRunningOn(config.WEBHOOK_PORT)) {
+    const existingServer = getHealthCheckServer()!;
+    logger.info(
+      { host: config.WEBHOOK_HOST, port: config.WEBHOOK_PORT, path: config.WEBHOOK_PATH },
+      'Attaching Telegram webhook handler to unified HTTP server'
+    );
+    registerHealthCheckFallbackHandler(async (req, res) => {
+      await handler(req, res);
+      return true;
+    });
+
+    return {
+      server: existingServer,
+      close: async () => {
+        registerHealthCheckFallbackHandler(null);
+        logger.info('Telegram webhook detached from unified HTTP server');
+      },
+    };
+  }
+
   const server = http.createServer(handler);
 
   await new Promise<void>((resolve, reject) => {
