@@ -44,16 +44,16 @@
   },
   "dependencies": {
     "@grammyjs/conversations": "2.1.1",
-    "@grammyjs/menu": "1.4.0",
+    "@grammyjs/menu": "1.5.0",
     "@grammyjs/transformer-throttler": "1.2.1",
     "dotenv": "17.4.2",
     "drizzle-orm": "0.45.2",
-    "grammy": "1.45.1",
+    "grammy": "1.46.0",
     "node-cron": "4.6.0",
     "pg": "8.23.0",
     "pino": "10.3.1",
     "qrcode": "1.5.4",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
