@@ -169,3 +169,167 @@ html[dir='ltr'] body {
   opacity: 0.3;
   mix-blend-mode: screen;
 }
+
+/* ===== Coming Soon Page Styles ===== */
+
+/* Page-level: prevent body-scroll rubber banding on iOS */
+.cs-page {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Floating gradient orbs */
+.cs-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.cs-orb-1 {
+  width: 280px;
+  height: 280px;
+  top: -80px;
+  left: -60px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+  animation: cs-drift-1 18s ease-in-out infinite;
+}
+
+.cs-orb-2 {
+  width: 240px;
+  height: 240px;
+  top: 35%;
+  right: -80px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%);
+  animation: cs-drift-2 22s ease-in-out infinite;
+}
+
+.cs-orb-3 {
+  width: 200px;
+  height: 200px;
+  bottom: 5%;
+  left: -40px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 70%);
+  animation: cs-drift-3 20s ease-in-out infinite;
+}
+
+@keyframes cs-drift-1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, 20px) scale(1.05);
+  }
+  66% {
+    transform: translate(-15px, 35px) scale(0.97);
+  }
+}
+
+@keyframes cs-drift-2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  40% {
+    transform: translate(-25px, -30px) scale(1.08);
+  }
+  70% {
+    transform: translate(15px, 20px) scale(0.95);
+  }
+}
+
+@keyframes cs-drift-3 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(20px, -25px) scale(1.03);
+  }
+}
+
+/* Subtle dot grid overlay */
+.cs-grid-overlay {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Avatar entrance animation */
+.cs-avatar-entrance {
+  animation: cs-avatar-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes cs-avatar-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Breathing glow behind avatar */
+.cs-breathe {
+  animation: cs-breathe-pulse 4s ease-in-out infinite;
+}
+
+@keyframes cs-breathe-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.1);
+  }
+}
+
+/* Staggered fade-in for content sections */
+.cs-fade-in {
+  animation: cs-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.15s;
+}
+
+.cs-fade-in-delay-1 {
+  animation: cs-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.25s;
+}
+
+.cs-fade-in-delay-2 {
+  animation: cs-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.4s;
+}
+
+.cs-fade-in-delay-3 {
+  animation: cs-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.55s;
+}
+
+@keyframes cs-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .cs-orb,
+  .cs-breathe,
+  .cs-avatar-entrance,
+  .cs-fade-in,
+  .cs-fade-in-delay-1,
+  .cs-fade-in-delay-2,
+  .cs-fade-in-delay-3,
+  .animate-wave {
+    animation: none !important;
+  }
+}
