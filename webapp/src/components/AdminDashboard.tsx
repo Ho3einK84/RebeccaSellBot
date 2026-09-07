@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { TelegramWebAppUser } from '../types/telegram.js';
 import { useLanguage } from '../i18n/LanguageContext.js';
+import { useTheme } from '../theme/ThemeContext.js';
 import {
   LayoutDashboard,
   Receipt,
@@ -39,6 +40,9 @@ import {
   Plus,
   Minus,
   Settings2,
+  Moon,
+  Sun,
+  LogOut,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -142,6 +146,7 @@ interface PanelSummary {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
   const { t, locale, languageSelectionEnabled, setLocale } = useLanguage();
+  const { isDark, toggleTheme } = useTheme();
   const numLocale = locale === 'fa' ? 'fa-IR' : 'en-US';
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -198,12 +203,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
   } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const triggerHaptic = (type: 'light' | 'medium' | 'success' | 'warning' | 'error' = 'light') => {
-    if (!window.Telegram?.WebApp?.HapticFeedback) return;
-    if (type === 'light' || type === 'medium') {
-      window.Telegram.WebApp.HapticFeedback.impactOccurred(type);
+  const triggerHaptic = (
+    type: 'light' | 'medium' | 'heavy' | 'selection' | 'success' | 'warning' | 'error' = 'light'
+  ) => {
+    const haptic = window.Telegram?.WebApp?.HapticFeedback;
+    if (!haptic) return;
+    if (type === 'selection') {
+      haptic.selectionChanged();
+    } else if (type === 'success' || type === 'warning' || type === 'error') {
+      haptic.notificationOccurred(type);
     } else {
-      window.Telegram.WebApp.HapticFeedback.notificationOccurred(type);
+      haptic.impactOccurred(type);
     }
   };
 
@@ -213,10 +223,88 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  const handleClose = () => {
+    triggerHaptic('medium');
+    if (window.Telegram?.WebApp?.close) {
+      window.Telegram.WebApp.close();
+    } else {
+      window.close();
+    }
+  };
+
+  // Telegram BackButton integration: closes modals first, or exits dashboard if none open
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.disableVerticalSwipes) {
+      tg.disableVerticalSwipes();
+    }
+
+    if (tg?.BackButton) {
+      tg.BackButton.show();
+      const onBackClick = () => {
+        if (photoModalUrl) {
+          setPhotoModalUrl(null);
+          return;
+        }
+        if (receiptApproveTarget) {
+          setReceiptApproveTarget(null);
+          return;
+        }
+        if (receiptActionTarget) {
+          setReceiptActionTarget(null);
+          return;
+        }
+        if (balanceModalUser) {
+          setBalanceModalUser(null);
+          return;
+        }
+        if (selectedUserSummary) {
+          setSelectedUserSummary(null);
+          return;
+        }
+        handleClose();
+      };
+      tg.BackButton.onClick(onBackClick);
+      return () => {
+        tg.BackButton?.offClick(onBackClick);
+      };
+    }
+  }, [
+    photoModalUrl,
+    receiptApproveTarget,
+    receiptActionTarget,
+    balanceModalUser,
+    selectedUserSummary,
+  ]);
+
+  const legacyCopy = (text: string) => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.pointerEvents = 'none';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    } catch {
+      // ignore
+    }
+  };
+
   const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {
+        legacyCopy(text);
+      });
+    } else {
+      legacyCopy(text);
+    }
     setCopiedId(id);
-    triggerHaptic('light');
+    triggerHaptic('success');
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -347,11 +435,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
     const numAmount = parseInt(balanceAmount, 10);
     if (isNaN(numAmount) || numAmount < 0) {
-      notify('مبلغ نامعتبر است', 'error');
+      notify(locale === 'fa' ? 'مبلغ نامعتبر است' : 'Invalid amount', 'error');
       return;
     }
     if (!balanceReason.trim()) {
-      notify('ثبت دلیل الزامی است', 'error');
+      notify(locale === 'fa' ? 'ثبت دلیل الزامی است' : 'Reason is required', 'error');
       return;
     }
 
@@ -451,66 +539,174 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
   }, [activeTab]);
 
   const switchTab = (tab: TabType) => {
-    triggerHaptic('light');
+    triggerHaptic('selection');
     setActiveTab(tab);
   };
 
+  // Dynamic Theme Class Tokens
+  const cardClass = isDark
+    ? 'bg-white/[0.03] border-white/[0.08] text-slate-100 shadow-xl shadow-black/20'
+    : 'bg-white border-slate-200/90 text-slate-900 shadow-2xs';
+
+  const subCardClass = isDark
+    ? 'bg-white/[0.02] border-white/[0.06] text-slate-200'
+    : 'bg-slate-50/90 border-slate-200/80 text-slate-800';
+
+  const inputClass = isDark
+    ? 'bg-white/[0.04] border-white/10 text-white placeholder:text-zinc-500 focus:border-indigo-400'
+    : 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-indigo-600';
+
+  const modalBoxClass = isDark
+    ? 'bg-[#0f1118] border-white/10 text-slate-100 shadow-2xl'
+    : 'bg-white border-slate-200 text-slate-900 shadow-2xl';
+
+  const textPrimary = isDark ? 'text-white' : 'text-slate-900';
+  const textSecondary = isDark ? 'text-zinc-400' : 'text-slate-600';
+  const textMuted = isDark ? 'text-zinc-500' : 'text-slate-400';
+
+  const rawAdminName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+  const adminDisplayName = rawAdminName || 'Admin';
+
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-slate-100 mobile-safe-bottom">
-      <div className="max-w-6xl mx-auto p-3 sm:p-5">
-        {/* Header Bar */}
-        <header className="glass-panel p-3.5 sm:p-4 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 border-indigo-500/15">
+    <div
+      className={`w-full min-h-screen min-h-[100dvh] flex flex-col relative transition-colors duration-200 safe-top ${
+        isDark ? 'bg-[#090a0f] text-slate-100' : 'bg-[#f8fafc] text-slate-900'
+      }`}
+    >
+      {/* Fixed background ambient lights & grid - zero scroll lag, hardware accelerated */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0" aria-hidden="true">
+        <div className="cs-orb cs-orb-1" />
+        <div className="cs-orb cs-orb-2" />
+        <div className="cs-orb cs-orb-3" />
+        <div className="absolute inset-0 cs-grid-overlay" />
+      </div>
+
+      {/* Main Container */}
+      <main className="w-full max-w-6xl mx-auto p-3 sm:p-5 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] relative z-10 flex-1 flex flex-col">
+        {/* Top Header Bar */}
+        <header
+          className={`rounded-2xl p-3.5 sm:p-4 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 border transition-colors ${cardClass}`}
+        >
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600/20 to-violet-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md shadow-indigo-950/40 shrink-0">
-              <ShieldCheck className="w-6 h-6 text-indigo-400" />
+            <div
+              className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border transition-colors ${
+                isDark
+                  ? 'bg-gradient-to-tr from-indigo-600/20 to-violet-500/20 border-indigo-500/30 text-indigo-400 shadow-md shadow-indigo-950/40'
+                  : 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm'
+              }`}
+            >
+              <ShieldCheck className="w-6 h-6" />
             </div>
+
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-sm sm:text-base font-bold text-white m-0 truncate">
+                <h1 className={`text-sm sm:text-base font-bold m-0 truncate ${textPrimary}`}>
                   {t('adminTitle')}
                 </h1>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-300 shadow-sm">
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                    isDark
+                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}
+                >
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                   <span>{t('betaBadge')}</span>
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 flex-wrap">
-                <span>{locale === 'fa' ? 'خوش آمدید،' : 'Welcome,'}</span>
-                <span className="text-white font-medium">{user.first_name || 'Admin'}</span>
-                <span className="text-slate-600">·</span>
-                <span
-                  dir="ltr"
-                  className="font-mono text-slate-300 text-[11px] bg-white/5 px-1.5 py-0.5 rounded-md border border-white/5"
+
+              <div className="flex items-center gap-2 text-xs mt-1 flex-wrap">
+                <span className={textSecondary}>{locale === 'fa' ? 'خوش آمدید،' : 'Welcome,'}</span>
+                <span className={`font-semibold ${textPrimary}`}>{adminDisplayName}</span>
+                <span className={textMuted}>·</span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(String(user.id), 'header-id')}
+                  className={`inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer ${
+                    isDark
+                      ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/10'
+                      : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                  }`}
+                  title={t('copy')}
                 >
-                  ID: {user.id}
-                </span>
-                <span className="text-slate-600">·</span>
-                <span className="text-indigo-300 text-[11px] font-medium bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md">
+                  <span>🆔</span>
+                  <span dir="ltr">{user.id}</span>
+                  {copiedId === 'header-id' ? (
+                    <Check className="w-3 h-3 text-emerald-500" />
+                  ) : (
+                    <Copy className="w-3 h-3 opacity-60" />
+                  )}
+                </button>
+                <span className={textMuted}>·</span>
+                <span
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${
+                    isDark
+                      ? 'text-indigo-300 bg-indigo-500/10 border-indigo-500/20'
+                      : 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                  }`}
+                >
                   {t('adminRole')}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t border-white/5 sm:border-0">
+          {/* Right Utility Buttons: Theme, Language, Refresh, Exit */}
+          <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t border-slate-200/50 dark:border-white/5 sm:border-0">
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              className={`inline-flex items-center justify-center w-8 h-8 rounded-full border transition-all active:scale-95 cursor-pointer ${
+                isDark
+                  ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-slate-300'
+                  : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-sm'
+              }`}
+              onClick={() => {
+                triggerHaptic('light');
+                toggleTheme();
+              }}
+              aria-label={t('themeToggle')}
+              title={isDark ? t('themeLight') : t('themeDark')}
+            >
+              {isDark ? (
+                <Sun className="w-4 h-4 text-amber-300" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-700" />
+              )}
+            </button>
+
+            {/* Language Toggle Button */}
             {languageSelectionEnabled && (
               <button
-                className="btn btn-ghost btn-sm text-xs gap-1.5 border border-white/10 hover:bg-white/10 text-slate-300 rounded-xl"
+                type="button"
+                className={`inline-flex items-center gap-1.5 px-3 h-8 rounded-full border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
+                  isDark
+                    ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-slate-300'
+                    : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-sm'
+                }`}
                 onClick={async () => {
+                  triggerHaptic('light');
                   const next = locale === 'fa' ? 'en' : 'fa';
                   const ok = await setLocale(next);
                   if (ok) {
                     notify(t('langChangeSuccess'));
                   }
                 }}
+                aria-label={t('switchLang')}
               >
-                <Globe className="w-3.5 h-3.5" />
+                <Globe className="w-3.5 h-3.5 opacity-70" />
                 <span>{t('switchLang')}</span>
               </button>
             )}
 
+            {/* Refresh Button */}
             <button
-              className="btn btn-ghost btn-sm text-xs gap-1.5 border border-white/10 hover:bg-white/10 text-slate-300 rounded-xl"
+              type="button"
+              className={`inline-flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 h-8 rounded-full border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
+                isDark
+                  ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-slate-300'
+                  : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-sm'
+              }`}
               onClick={() => {
                 triggerHaptic('light');
                 if (activeTab === 'overview') loadStats();
@@ -518,105 +714,100 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 if (activeTab === 'users') loadUsers(usersPage, searchQuery);
                 if (activeTab === 'panels') loadPanels();
               }}
+              title={t('refresh')}
             >
               <RotateCw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t('refresh')}</span>
+              <span className="hidden sm:inline ms-1">{t('refresh')}</span>
+            </button>
+
+            {/* Exit Button */}
+            <button
+              type="button"
+              className={`inline-flex items-center justify-center w-8 h-8 rounded-full border transition-all active:scale-95 cursor-pointer ${
+                isDark
+                  ? 'bg-rose-500/10 border-rose-500/20 hover:bg-rose-500/20 text-rose-300'
+                  : 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700 shadow-sm'
+              }`}
+              onClick={handleClose}
+              aria-label={t('adminExit')}
+              title={t('adminExit')}
+            >
+              <LogOut className="w-3.5 h-3.5 rtl:rotate-180" />
             </button>
           </div>
         </header>
 
-        {/* Notifications */}
+        {/* Global Notifications */}
         {notification && (
           <div
             className={`p-3.5 mb-4 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 transition-all ${
               notification.type === 'success'
-                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
-                : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+                ? isDark
+                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                  : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                : isDark
+                  ? 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+                  : 'bg-rose-50 border border-rose-200 text-rose-800'
             }`}
           >
             {notification.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
             ) : (
-              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
             )}
             <span>{notification.message}</span>
           </div>
         )}
 
-        {/* Desktop Navigation Tabs */}
+        {/* Desktop Navigation Tabs (Hidden on mobile) */}
         <nav className="hidden md:flex gap-2 mb-5 overflow-x-auto pb-1">
-          <button
-            className={`btn btn-sm text-xs gap-2 font-medium ${
-              activeTab === 'overview'
-                ? 'btn-primary text-white shadow-lg shadow-indigo-600/30'
-                : 'btn-ghost text-slate-300 border border-white/10 hover:bg-white/5'
-            }`}
-            onClick={() => switchTab('overview')}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            <span>{t('tabOverview')}</span>
-          </button>
-
-          <button
-            className={`btn btn-sm text-xs gap-2 font-medium relative ${
-              activeTab === 'receipts'
-                ? 'btn-primary text-white shadow-lg shadow-indigo-600/30'
-                : 'btn-ghost text-slate-300 border border-white/10 hover:bg-white/5'
-            }`}
-            onClick={() => switchTab('receipts')}
-          >
-            <Receipt className="w-4 h-4" />
-            <span>{t('tabReceipts')}</span>
-            {receipts.length > 0 && (
-              <span className="badge badge-warning badge-xs px-1.5 py-0.5 text-[10px] font-bold">
-                {receipts.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            className={`btn btn-sm text-xs gap-2 font-medium ${
-              activeTab === 'users'
-                ? 'btn-primary text-white shadow-lg shadow-indigo-600/30'
-                : 'btn-ghost text-slate-300 border border-white/10 hover:bg-white/5'
-            }`}
-            onClick={() => switchTab('users')}
-          >
-            <Users className="w-4 h-4" />
-            <span>{t('tabUsers')}</span>
-          </button>
-
-          <button
-            className={`btn btn-sm text-xs gap-2 font-medium ${
-              activeTab === 'panels'
-                ? 'btn-primary text-white shadow-lg shadow-indigo-600/30'
-                : 'btn-ghost text-slate-300 border border-white/10 hover:bg-white/5'
-            }`}
-            onClick={() => switchTab('panels')}
-          >
-            <Server className="w-4 h-4" />
-            <span>{t('tabPanels')}</span>
-          </button>
-
-          <button
-            className={`btn btn-sm text-xs gap-2 font-medium ${
-              activeTab === 'coming-soon'
-                ? 'btn-primary text-white shadow-lg shadow-indigo-600/30'
-                : 'btn-ghost text-slate-300 border border-white/10 hover:bg-white/5'
-            }`}
-            onClick={() => switchTab('coming-soon')}
-          >
-            <Layers className="w-4 h-4" />
-            <span>{t('tabComingSoon')}</span>
-          </button>
+          {[
+            { id: 'overview' as const, label: t('tabOverview'), icon: LayoutDashboard },
+            {
+              id: 'receipts' as const,
+              label: t('tabReceipts'),
+              icon: Receipt,
+              count: receipts.length,
+            },
+            { id: 'users' as const, label: t('tabUsers'), icon: Users },
+            { id: 'panels' as const, label: t('tabPanels'), icon: Server },
+            { id: 'coming-soon' as const, label: t('tabComingSoon'), icon: Layers },
+          ].map((tab) => {
+            const isActive = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                className={`btn btn-sm text-xs gap-2 font-semibold rounded-xl transition-all cursor-pointer ${
+                  isActive
+                    ? isDark
+                      ? 'bg-white text-black hover:bg-zinc-200 shadow-md border-transparent'
+                      : 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm border-transparent'
+                    : isDark
+                      ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-2xs'
+                }`}
+                onClick={() => switchTab(tab.id)}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className="badge badge-warning badge-xs px-1.5 py-0.5 text-[10px] font-bold">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
 
-        {/* Tab 1: Overview */}
+        {/* ===================== TAB 1: OVERVIEW ===================== */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
             {loadingStats && (
-              <div className="flex items-center justify-center p-8 gap-3 text-slate-400">
-                <RotateCw className="w-5 h-5 animate-spin text-indigo-400" />
+              <div className={`flex items-center justify-center p-8 gap-3 ${textSecondary}`}>
+                <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
                 <span className="text-sm">{t('statsLoading')}</span>
               </div>
             )}
@@ -625,138 +816,224 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {/* Pending Receipts */}
                 <div
-                  className="glass-panel p-4 flex items-center justify-between cursor-pointer hover:border-amber-500/40 transition-all"
+                  className={`rounded-2xl p-4 flex items-center justify-between cursor-pointer border transition-all active:scale-[0.99] ${cardClass} hover:border-amber-500/50`}
                   onClick={() => switchTab('receipts')}
                 >
                   <div className="space-y-1">
-                    <span className="text-xs text-slate-400">{t('statPendingReceipts')}</span>
-                    <div className="text-xl font-bold text-amber-400">
+                    <span className={`text-xs block ${textSecondary}`}>
+                      {t('statPendingReceipts')}
+                    </span>
+                    <div className="text-xl font-bold font-mono text-amber-500">
                       {stats.pendingReceipts.toLocaleString(numLocale)}
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className={`text-[11px] block ${textMuted}`}>
                       {t('statPendingReceiptsSub')}
                     </span>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <div
+                    className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                        : 'bg-amber-50 border-amber-200 text-amber-700'
+                    }`}
+                  >
                     <Clock className="w-5 h-5" />
                   </div>
                 </div>
 
                 {/* Total Users */}
                 <div
-                  className="glass-panel p-4 flex items-center justify-between cursor-pointer hover:border-indigo-500/40 transition-all"
+                  className={`rounded-2xl p-4 flex items-center justify-between cursor-pointer border transition-all active:scale-[0.99] ${cardClass} hover:border-indigo-500/50`}
                   onClick={() => switchTab('users')}
                 >
                   <div className="space-y-1">
-                    <span className="text-xs text-slate-400">{t('statTotalUsers')}</span>
-                    <div className="text-xl font-bold text-white">
+                    <span className={`text-xs block ${textSecondary}`}>{t('statTotalUsers')}</span>
+                    <div className={`text-xl font-bold font-mono ${textPrimary}`}>
                       {stats.totalUsers.toLocaleString(numLocale)}
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className={`text-[11px] block ${textMuted}`}>
                       {t('statTotalUsersSub')}
                     </span>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <div
+                    className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                        : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                    }`}
+                  >
                     <Users className="w-5 h-5" />
                   </div>
                 </div>
 
                 {/* Total Sales */}
-                <div className="glass-panel p-4 flex items-center justify-between">
+                <div
+                  className={`rounded-2xl p-4 flex items-center justify-between border ${cardClass}`}
+                >
                   <div className="space-y-1">
-                    <span className="text-xs text-slate-400">{t('statTotalSales')}</span>
-                    <div className="text-xl font-bold text-emerald-400">
+                    <span className={`text-xs block ${textSecondary}`}>{t('statTotalSales')}</span>
+                    <div
+                      className={`text-xl font-bold font-mono ${
+                        isDark ? 'text-emerald-400' : 'text-emerald-600'
+                      }`}
+                    >
                       {formatMoney(stats.totalSales)}{' '}
-                      <span className="text-xs font-normal text-slate-400">{t('currency')}</span>
+                      <span className={`text-xs font-normal ${textSecondary}`}>
+                        {t('currency')}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className={`text-[11px] block ${textMuted}`}>
                       {t('statTotalSalesSub')}
                     </span>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <div
+                    className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    }`}
+                  >
                     <TrendingUp className="w-5 h-5" />
                   </div>
                 </div>
 
                 {/* Daily Revenue */}
-                <div className="glass-panel p-4 flex items-center justify-between">
+                <div
+                  className={`rounded-2xl p-4 flex items-center justify-between border ${cardClass}`}
+                >
                   <div className="space-y-1">
-                    <span className="text-xs text-slate-400">{t('statDailyRevenue')}</span>
-                    <div className="text-lg font-bold text-white">
+                    <span className={`text-xs block ${textSecondary}`}>
+                      {t('statDailyRevenue')}
+                    </span>
+                    <div className={`text-lg font-bold font-mono ${textPrimary}`}>
                       {formatMoney(stats.dailyRevenue)}{' '}
-                      <span className="text-xs font-normal text-slate-400">{t('currency')}</span>
+                      <span className={`text-xs font-normal ${textSecondary}`}>
+                        {t('currency')}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className={`text-[11px] block ${textMuted}`}>
                       {t('statDailyRevenueSub')}
                     </span>
                   </div>
-                  <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-indigo-300">
+                  <div
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+                        : 'bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
                     <Calendar className="w-4 h-4" />
                   </div>
                 </div>
 
                 {/* Weekly Revenue */}
-                <div className="glass-panel p-4 flex items-center justify-between">
+                <div
+                  className={`rounded-2xl p-4 flex items-center justify-between border ${cardClass}`}
+                >
                   <div className="space-y-1">
-                    <span className="text-xs text-slate-400">{t('statWeeklyRevenue')}</span>
-                    <div className="text-lg font-bold text-white">
+                    <span className={`text-xs block ${textSecondary}`}>
+                      {t('statWeeklyRevenue')}
+                    </span>
+                    <div className={`text-lg font-bold font-mono ${textPrimary}`}>
                       {formatMoney(stats.weeklyRevenue)}{' '}
-                      <span className="text-xs font-normal text-slate-400">{t('currency')}</span>
+                      <span className={`text-xs font-normal ${textSecondary}`}>
+                        {t('currency')}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className={`text-[11px] block ${textMuted}`}>
                       {t('statWeeklyRevenueSub')}
                     </span>
                   </div>
-                  <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-indigo-300">
+                  <div
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+                        : 'bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
                     <CalendarDays className="w-4 h-4" />
                   </div>
                 </div>
 
                 {/* Monthly Revenue */}
-                <div className="glass-panel p-4 flex items-center justify-between">
+                <div
+                  className={`rounded-2xl p-4 flex items-center justify-between border ${cardClass}`}
+                >
                   <div className="space-y-1">
-                    <span className="text-xs text-slate-400">{t('statMonthlyRevenue')}</span>
-                    <div className="text-lg font-bold text-white">
+                    <span className={`text-xs block ${textSecondary}`}>
+                      {t('statMonthlyRevenue')}
+                    </span>
+                    <div className={`text-lg font-bold font-mono ${textPrimary}`}>
                       {formatMoney(stats.monthlyRevenue)}{' '}
-                      <span className="text-xs font-normal text-slate-400">{t('currency')}</span>
+                      <span className={`text-xs font-normal ${textSecondary}`}>
+                        {t('currency')}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className={`text-[11px] block ${textMuted}`}>
                       {t('statMonthlyRevenueSub')}
                     </span>
                   </div>
-                  <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-indigo-300">
+                  <div
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+                        : 'bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
                     <CalendarRange className="w-4 h-4" />
                   </div>
                 </div>
 
                 {/* Active Subs */}
-                <div className="glass-panel p-4 flex items-center justify-between">
+                <div
+                  className={`rounded-2xl p-4 flex items-center justify-between border ${cardClass}`}
+                >
                   <div className="space-y-1">
-                    <span className="text-xs text-slate-400">{t('statActiveSubs')}</span>
-                    <div className="text-lg font-bold text-emerald-400">
+                    <span className={`text-xs block ${textSecondary}`}>{t('statActiveSubs')}</span>
+                    <div
+                      className={`text-lg font-bold font-mono ${
+                        isDark ? 'text-emerald-400' : 'text-emerald-600'
+                      }`}
+                    >
                       {stats.activeSubscriptions.toLocaleString(numLocale)}
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className={`text-[11px] block ${textMuted}`}>
                       {t('statActiveSubsSub')}
                     </span>
                   </div>
-                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <div
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    }`}
+                  >
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                 </div>
 
                 {/* Inactive Subs */}
-                <div className="glass-panel p-4 flex items-center justify-between">
+                <div
+                  className={`rounded-2xl p-4 flex items-center justify-between border ${cardClass}`}
+                >
                   <div className="space-y-1">
-                    <span className="text-xs text-slate-400">{t('statInactiveSubs')}</span>
-                    <div className="text-lg font-bold text-slate-400">
+                    <span className={`text-xs block ${textSecondary}`}>
+                      {t('statInactiveSubs')}
+                    </span>
+                    <div className={`text-lg font-bold font-mono ${textSecondary}`}>
                       {stats.inactiveSubscriptions.toLocaleString(numLocale)}
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className={`text-[11px] block ${textMuted}`}>
                       {t('statInactiveSubsSub')}
                     </span>
                   </div>
-                  <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-400">
+                  <div
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                      isDark
+                        ? 'bg-white/[0.04] border-white/10 text-zinc-400'
+                        : 'bg-slate-100 border-slate-200 text-slate-500'
+                    }`}
+                  >
                     <XCircle className="w-4 h-4" />
                   </div>
                 </div>
@@ -764,23 +1041,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 {/* Panels Health Summary */}
                 {panelHealth && (
                   <div
-                    className="glass-panel p-4 flex items-center justify-between cursor-pointer hover:border-indigo-500/40 transition-all"
+                    className={`rounded-2xl p-4 flex items-center justify-between cursor-pointer border transition-all active:scale-[0.99] ${cardClass} hover:border-indigo-500/50`}
                     onClick={() => switchTab('panels')}
                   >
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-400">{t('panelHealthTitle')}</span>
+                      <span className={`text-xs block ${textSecondary}`}>
+                        {t('panelHealthTitle')}
+                      </span>
                       <div
                         className={`text-lg font-bold ${
                           panelHealth.healthy === panelHealth.configured
-                            ? 'text-emerald-400'
-                            : 'text-rose-400'
+                            ? isDark
+                              ? 'text-emerald-400'
+                              : 'text-emerald-600'
+                            : isDark
+                              ? 'text-rose-400'
+                              : 'text-rose-600'
                         }`}
                       >
                         {panelHealth.healthy === panelHealth.configured
                           ? t('panelHealthOk')
                           : t('panelHealthError')}
                       </div>
-                      <span className="text-[11px] text-slate-500 block">
+                      <span className={`text-[11px] block ${textMuted}`}>
                         {t('panelHealthSub', {
                           healthy: panelHealth.healthy,
                           configured: panelHealth.configured,
@@ -788,10 +1071,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                       </span>
                     </div>
                     <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                      className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
                         panelHealth.healthy === panelHealth.configured
-                          ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                          : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                          ? isDark
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          : isDark
+                            ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                            : 'bg-rose-50 border-rose-200 text-rose-700'
                       }`}
                     >
                       <Activity className="w-4 h-4" />
@@ -803,32 +1090,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
           </div>
         )}
 
-        {/* Tab 2: Receipts Queue */}
+        {/* ===================== TAB 2: RECEIPTS QUEUE ===================== */}
         {activeTab === 'receipts' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white m-0">{t('receiptsQueueTitle')}</h2>
+                <Receipt className="w-5 h-5 text-indigo-500" />
+                <h2 className={`text-base font-bold m-0 ${textPrimary}`}>
+                  {t('receiptsQueueTitle')}
+                </h2>
               </div>
-              <span className="badge badge-outline badge-sm text-xs">
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full border font-mono ${
+                  isDark
+                    ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+                    : 'bg-slate-100 border-slate-200 text-slate-700'
+                }`}
+              >
                 {receipts.length} {t('all')}
               </span>
             </div>
 
             {loadingReceipts && (
-              <div className="flex items-center justify-center p-8 gap-3 text-slate-400">
-                <RotateCw className="w-5 h-5 animate-spin text-indigo-400" />
+              <div className={`flex items-center justify-center p-8 gap-3 ${textSecondary}`}>
+                <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
                 <span className="text-sm">{t('receiptsLoading')}</span>
               </div>
             )}
 
             {!loadingReceipts && receipts.length === 0 && (
-              <div className="glass-panel p-8 text-center flex flex-col items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-slate-800/80 border border-white/10 flex items-center justify-center text-slate-400">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              <div
+                className={`rounded-2xl p-8 text-center flex flex-col items-center gap-3 border ${cardClass}`}
+              >
+                <div
+                  className={`w-12 h-12 rounded-full border flex items-center justify-center ${
+                    isDark
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                  }`}
+                >
+                  <CheckCircle2 className="w-6 h-6" />
                 </div>
-                <p className="text-sm text-slate-400 m-0">{t('receiptsEmpty')}</p>
+                <p className={`text-sm m-0 ${textSecondary}`}>{t('receiptsEmpty')}</p>
               </div>
             )}
 
@@ -837,22 +1140,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 {receipts.map((rec) => (
                   <div
                     key={rec.id}
-                    className="glass-panel p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-indigo-500/30 transition-all"
+                    className={`rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border transition-all hover:border-indigo-500/40 ${cardClass}`}
                   >
                     <div className="space-y-1.5 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-base font-bold text-emerald-400 font-mono">
+                        <span
+                          className={`text-base font-bold font-mono ${
+                            isDark ? 'text-emerald-400' : 'text-emerald-600'
+                          }`}
+                        >
                           {formatMoney(rec.amount)} {t('currency')}
                         </span>
-                        <span className="badge badge-warning badge-sm text-[10px]">
+                        <span className="badge badge-warning badge-sm text-[10px] font-medium">
                           {rec.status}
                         </span>
                         {rec.photoFileId && (
                           <button
-                            className="badge badge-ghost badge-sm text-[11px] gap-1 hover:bg-white/10 cursor-pointer text-indigo-300"
+                            type="button"
+                            className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full border transition-all cursor-pointer ${
+                              isDark
+                                ? 'bg-indigo-500/10 border-indigo-500/20 hover:bg-indigo-500/20 text-indigo-300'
+                                : 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700'
+                            }`}
                             onClick={() => {
                               setPhotoModalUrl(`/api/admin/receipts/${rec.id}/photo`);
-                              setPhotoModalTitle(`رسید ${rec.id}`);
+                              setPhotoModalTitle(
+                                locale === 'fa' ? `رسید ${rec.id}` : `Receipt ${rec.id}`
+                              );
                             }}
                           >
                             <ImageIcon className="w-3 h-3" />
@@ -861,11 +1175,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-slate-300 flex-wrap">
+                      <div className="flex items-center gap-2 text-xs flex-wrap">
                         <span className="flex items-center gap-1">
-                          <User className="w-3.5 h-3.5 text-slate-400" />
+                          <User className={`w-3.5 h-3.5 ${textMuted}`} />
                           <button
-                            className="underline hover:text-indigo-300 text-slate-300 font-mono"
+                            type="button"
+                            className="underline font-mono text-indigo-500 hover:text-indigo-400 cursor-pointer"
                             onClick={() => {
                               switchTab('users');
                               inspectUser(rec.telegramId);
@@ -874,11 +1189,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                             <span dir="ltr">{rec.telegramId}</span>
                           </button>
                         </span>
-                        <span className="text-slate-500">·</span>
-                        <span className="font-mono text-slate-400 text-[11px]">ID: {rec.id}</span>
+                        <span className={textMuted}>·</span>
+                        <span className={`font-mono text-[11px] ${textSecondary}`}>
+                          ID: <span dir="ltr">{rec.id}</span>
+                        </span>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <div className={`flex items-center gap-1.5 text-[11px] ${textMuted}`}>
                         <Clock className="w-3 h-3" />
                         <span>{new Date(rec.createdAt).toLocaleString(numLocale)}</span>
                       </div>
@@ -886,7 +1203,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
                     <div className="flex items-center gap-2 w-full sm:w-auto self-end">
                       <button
-                        className="btn btn-success btn-sm flex-1 sm:flex-none gap-1 text-xs text-white shadow-md shadow-emerald-500/20"
+                        type="button"
+                        className="btn btn-success btn-sm flex-1 sm:flex-none gap-1 text-xs text-white shadow-sm cursor-pointer"
                         disabled={processingAction}
                         onClick={() => setReceiptApproveTarget(rec)}
                       >
@@ -895,7 +1213,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                       </button>
 
                       <button
-                        className="btn btn-error btn-sm flex-1 sm:flex-none gap-1 text-xs text-white shadow-md shadow-rose-500/20"
+                        type="button"
+                        className="btn btn-error btn-sm flex-1 sm:flex-none gap-1 text-xs text-white shadow-sm cursor-pointer"
                         disabled={processingAction}
                         onClick={() => {
                           setReceiptActionTarget(rec);
@@ -914,15 +1233,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
           </div>
         )}
 
-        {/* Tab 3: Users Management */}
+        {/* ===================== TAB 3: USERS ===================== */}
         {activeTab === 'users' && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white m-0">{t('usersTitle')}</h2>
+                <Users className="w-5 h-5 text-indigo-500" />
+                <h2 className={`text-base font-bold m-0 ${textPrimary}`}>{t('usersTitle')}</h2>
               </div>
-              <span className="text-xs text-slate-400">
+              <span className={`text-xs ${textSecondary}`}>
                 {t('usersTotalCount', { count: usersTotalCount.toLocaleString(numLocale) })}
               </span>
             </div>
@@ -930,10 +1249,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             {/* Search Bar */}
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute start-3.5 top-3 pointer-events-none" />
+                <Search
+                  className={`w-4 h-4 absolute start-3.5 top-3 pointer-events-none ${textMuted}`}
+                />
                 <input
                   type="text"
-                  className="input input-bordered w-full text-xs sm:text-sm bg-slate-900/60 border-white/10 ps-10 pe-10 rounded-xl"
+                  className={`input input-bordered w-full text-xs sm:text-sm ps-10 pe-10 rounded-xl ${inputClass}`}
                   placeholder={t('usersSearchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -944,7 +1265,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 {searchQuery && (
                   <button
                     type="button"
-                    className="absolute end-3 top-3 text-slate-400 hover:text-white p-0.5"
+                    className={`absolute end-3 top-3 p-0.5 hover:text-white cursor-pointer ${textMuted}`}
                     onClick={() => {
                       setSearchQuery('');
                       loadUsers(1, '');
@@ -955,7 +1276,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 )}
               </div>
               <button
-                className="btn btn-primary btn-sm h-10 px-4 text-xs gap-1.5 text-white shadow-md shadow-indigo-600/30 rounded-xl shrink-0"
+                type="button"
+                className="btn btn-primary btn-sm h-10 px-4 text-xs gap-1.5 text-white shadow-sm rounded-xl shrink-0 cursor-pointer"
                 onClick={() => loadUsers(1, searchQuery)}
               >
                 <Search className="w-3.5 h-3.5" />
@@ -964,14 +1286,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             </div>
 
             {loadingUsers && (
-              <div className="flex items-center justify-center p-8 gap-3 text-slate-400">
-                <RotateCw className="w-5 h-5 animate-spin text-indigo-400" />
+              <div className={`flex items-center justify-center p-8 gap-3 ${textSecondary}`}>
+                <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
                 <span className="text-sm">{t('usersSearching')}</span>
               </div>
             )}
 
             {!loadingUsers && usersList.length === 0 && (
-              <div className="glass-panel p-8 text-center text-slate-400 text-sm">
+              <div className={`rounded-2xl p-8 text-center text-sm border ${cardClass}`}>
                 {t('usersNotFound')}
               </div>
             )}
@@ -982,26 +1304,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 {usersList.map((u) => (
                   <div
                     key={u.telegramId}
-                    className="glass-panel p-3.5 sm:p-4 space-y-3 hover:border-indigo-500/30 transition-all border-white/5"
+                    className={`rounded-2xl p-3.5 sm:p-4 space-y-3 border transition-all hover:border-indigo-500/40 ${cardClass}`}
                   >
                     {/* User Info Header */}
                     <div className="flex justify-between items-start gap-2">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-base shadow-md shrink-0 border border-white/10">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-base shadow-sm shrink-0 border border-white/10">
                           {getAvatarChar(u.firstName, u.username)}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-sm text-white truncate">
+                          <div className={`font-bold text-sm truncate ${textPrimary}`}>
                             {[u.firstName, u.lastName].filter(Boolean).join(' ') ||
-                              'کاربر بدون نام'}
+                              (locale === 'fa' ? 'کاربر بدون نام' : 'Unnamed User')}
                           </div>
-                          <div className="text-xs text-indigo-300 font-mono mt-0.5">
+                          <div className="text-xs text-indigo-500 font-mono mt-0.5">
                             {u.username ? (
                               <span dir="ltr" className="inline-block unicode-isolate font-medium">
                                 @{u.username}
                               </span>
                             ) : (
-                              <span className="text-slate-500 font-sans">{t('noUsername')}</span>
+                              <span className={`font-sans ${textMuted}`}>{t('noUsername')}</span>
                             )}
                           </div>
                         </div>
@@ -1010,15 +1332,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                       {/* Telegram ID Chip */}
                       <button
                         type="button"
-                        className="flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-lg bg-slate-800/80 border border-white/5 hover:border-indigo-500/40 text-slate-300 transition-all active:scale-95 shrink-0"
+                        className={`flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 rounded-lg border transition-all active:scale-95 shrink-0 cursor-pointer ${
+                          isDark
+                            ? 'bg-white/[0.04] border-white/10 hover:border-white/20 text-zinc-300'
+                            : 'bg-slate-100 border-slate-200 hover:border-slate-300 text-slate-700'
+                        }`}
                         onClick={() =>
                           copyToClipboard(String(u.telegramId), `user-${u.telegramId}`)
                         }
                       >
-                        <Copy className="w-3 h-3 text-slate-400" />
+                        <Copy className={`w-3 h-3 ${textMuted}`} />
                         <span dir="ltr">{u.telegramId}</span>
                         {copiedId === `user-${u.telegramId}` && (
-                          <span className="text-[10px] text-emerald-400 font-sans font-medium">
+                          <span className="text-[10px] text-emerald-500 font-sans font-medium">
                             {t('copied')}
                           </span>
                         )}
@@ -1026,26 +1352,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                     </div>
 
                     {/* Financial & Status Metrics */}
-                    <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-900/60 border border-white/5 text-xs">
+                    <div
+                      className={`flex items-center justify-between py-2 px-3 rounded-xl border text-xs ${subCardClass}`}
+                    >
                       <div className="flex items-center gap-1.5">
-                        <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="font-bold text-emerald-400 text-sm font-mono">
+                        <Wallet
+                          className={`w-3.5 h-3.5 ${
+                            isDark ? 'text-emerald-400' : 'text-emerald-600'
+                          }`}
+                        />
+                        <span
+                          className={`font-bold text-sm font-mono ${
+                            isDark ? 'text-emerald-400' : 'text-emerald-600'
+                          }`}
+                        >
                           {formatMoney(u.balance)}
                         </span>
-                        <span className="text-slate-400 text-[11px]">{t('currency')}</span>
+                        <span className={`text-[11px] ${textMuted}`}>{t('currency')}</span>
                       </div>
 
                       <div>
                         {u.activeSubscriptionCount > 0 ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 status-pulse" />
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+                              isDark
+                                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-pulse" />
                             <span>
                               {t('activeSubsCount', { count: u.activeSubscriptionCount })}
                             </span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] bg-white/5 border border-white/5 text-slate-400">
-                            <span>۰ سرویس</span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] border ${
+                              isDark
+                                ? 'bg-white/5 border-white/5 text-zinc-400'
+                                : 'bg-slate-100 border-slate-200 text-slate-500'
+                            }`}
+                          >
+                            <span>{locale === 'fa' ? '۰ سرویس فعال' : '0 active'}</span>
                           </span>
                         )}
                       </div>
@@ -1055,21 +1403,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                     <div className="grid grid-cols-2 gap-2 pt-0.5">
                       <button
                         type="button"
-                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700/80 border border-white/10 text-slate-200 text-xs font-medium transition-all active:scale-[0.98]"
+                        className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-medium transition-all active:scale-[0.98] cursor-pointer ${
+                          isDark
+                            ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-200'
+                            : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-2xs'
+                        }`}
                         disabled={inspectingUser}
                         onClick={() => inspectUser(u.telegramId)}
                       >
                         {inspectingUser ? (
-                          <RotateCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                          <RotateCw className="w-3.5 h-3.5 animate-spin text-indigo-500" />
                         ) : (
-                          <Eye className="w-3.5 h-3.5 text-slate-400" />
+                          <Eye className={`w-3.5 h-3.5 ${textMuted}`} />
                         )}
                         <span>{t('btnDetails')}</span>
                       </button>
 
                       <button
                         type="button"
-                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all active:scale-[0.98]"
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-semibold shadow-sm transition-all active:scale-[0.98] cursor-pointer"
                         onClick={() => setBalanceModalUser(u)}
                       >
                         <Wallet className="w-3.5 h-3.5" />
@@ -1083,9 +1435,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
             {/* Desktop Table View (>= md) */}
             {!loadingUsers && usersList.length > 0 && (
-              <div className="hidden md:block glass-panel overflow-x-auto">
+              <div className={`hidden md:block rounded-2xl overflow-x-auto border ${cardClass}`}>
                 <table className="table table-zebra w-full text-xs">
-                  <thead className="text-slate-400 border-b border-white/10">
+                  <thead
+                    className={`text-xs border-b ${
+                      isDark ? 'text-zinc-400 border-white/10' : 'text-slate-500 border-slate-200'
+                    }`}
+                  >
                     <tr>
                       <th>{t('colId')}</th>
                       <th>{t('colUsername')}</th>
@@ -1097,19 +1453,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                   </thead>
                   <tbody>
                     {usersList.map((u) => (
-                      <tr key={u.telegramId} className="hover:bg-white/5">
+                      <tr
+                        key={u.telegramId}
+                        className={`transition-colors ${
+                          isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50'
+                        }`}
+                      >
                         <td className="font-mono">
                           <button
-                            className="flex items-center gap-1.5 hover:text-indigo-300"
+                            type="button"
+                            className="flex items-center gap-1.5 hover:text-indigo-400 cursor-pointer"
                             onClick={() =>
                               copyToClipboard(String(u.telegramId), `table-user-${u.telegramId}`)
                             }
                           >
                             <span dir="ltr">{u.telegramId}</span>
-                            <Copy className="w-3 h-3 text-slate-500" />
+                            <Copy className={`w-3 h-3 ${textMuted}`} />
                           </button>
                         </td>
-                        <td className="text-indigo-300 font-mono">
+                        <td className="text-indigo-500 font-mono">
                           {u.username ? (
                             <span dir="ltr" className="inline-block unicode-isolate">
                               @{u.username}
@@ -1119,13 +1481,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                           )}
                         </td>
                         <td>{[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}</td>
-                        <td className="font-bold text-emerald-400 font-mono">
+                        <td
+                          className={`font-bold font-mono ${
+                            isDark ? 'text-emerald-400' : 'text-emerald-600'
+                          }`}
+                        >
                           {formatMoney(u.balance)} {t('currency')}
                         </td>
                         <td>
                           <span
                             className={`badge badge-sm text-[10px] ${
-                              u.activeSubscriptionCount > 0 ? 'badge-success' : 'badge-ghost'
+                              u.activeSubscriptionCount > 0
+                                ? 'badge-success text-white'
+                                : 'badge-ghost'
                             }`}
                           >
                             {t('activeSubsCount', { count: u.activeSubscriptionCount })}
@@ -1134,22 +1502,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                         <td>
                           <div className="flex items-center justify-center gap-2">
                             <button
-                              className="btn btn-ghost btn-xs gap-1 border border-white/10 text-slate-300 hover:bg-white/10"
+                              type="button"
+                              className={`btn btn-ghost btn-xs gap-1 border rounded-lg cursor-pointer ${
+                                isDark
+                                  ? 'border-white/10 text-slate-300 hover:bg-white/10'
+                                  : 'border-slate-200 text-slate-700 hover:bg-slate-100'
+                              }`}
                               disabled={inspectingUser}
                               onClick={() => inspectUser(u.telegramId)}
                             >
                               {inspectingUser ? (
-                                <RotateCw className="w-3 h-3 animate-spin" />
+                                <RotateCw className="w-3.5 h-3.5 animate-spin" />
                               ) : (
-                                <Eye className="w-3 h-3" />
+                                <Eye className="w-3.5 h-3.5" />
                               )}
                               <span>{t('btnDetails')}</span>
                             </button>
                             <button
-                              className="btn btn-primary btn-xs gap-1 text-white shadow-sm"
+                              type="button"
+                              className="btn btn-primary btn-xs gap-1 text-white shadow-sm rounded-lg cursor-pointer"
                               onClick={() => setBalanceModalUser(u)}
                             >
-                              <Wallet className="w-3 h-3" />
+                              <Wallet className="w-3.5 h-3.5" />
                               <span>{t('btnChangeBalance')}</span>
                             </button>
                           </div>
@@ -1163,9 +1537,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
             {/* Pagination Controls */}
             {!loadingUsers && usersTotalPages > 1 && (
-              <div className="flex items-center justify-between p-2 glass-panel">
+              <div
+                className={`flex items-center justify-between p-2 rounded-2xl border ${cardClass}`}
+              >
                 <button
-                  className="btn btn-ghost btn-sm text-xs gap-1 text-slate-300"
+                  type="button"
+                  className={`btn btn-ghost btn-sm text-xs gap-1 cursor-pointer ${textSecondary}`}
                   disabled={usersPage <= 1}
                   onClick={() => loadUsers(usersPage - 1, searchQuery)}
                 >
@@ -1173,7 +1550,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                   <span>{t('paginationPrev')}</span>
                 </button>
 
-                <span className="text-xs text-slate-400 font-medium">
+                <span className={`text-xs font-medium ${textSecondary}`}>
                   {t('paginationPage', {
                     page: usersPage.toLocaleString(numLocale),
                     totalPages: usersTotalPages.toLocaleString(numLocale),
@@ -1181,7 +1558,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 </span>
 
                 <button
-                  className="btn btn-ghost btn-sm text-xs gap-1 text-slate-300"
+                  type="button"
+                  className={`btn btn-ghost btn-sm text-xs gap-1 cursor-pointer ${textSecondary}`}
                   disabled={usersPage >= usersTotalPages}
                   onClick={() => loadUsers(usersPage + 1, searchQuery)}
                 >
@@ -1193,52 +1571,66 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
           </div>
         )}
 
-        {/* Tab 4: Panels Fleet Status */}
+        {/* ===================== TAB 4: PANELS FLEET ===================== */}
         {activeTab === 'panels' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <Server className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white m-0">{t('panelsFleetTitle')}</h2>
+                <Server className="w-5 h-5 text-indigo-500" />
+                <h2 className={`text-base font-bold m-0 ${textPrimary}`}>
+                  {t('panelsFleetTitle')}
+                </h2>
               </div>
               <button
-                className="btn btn-ghost btn-xs text-xs gap-1 border border-white/10 text-slate-300 hover:bg-white/10"
+                type="button"
+                className={`btn btn-ghost btn-xs text-xs gap-1 border rounded-lg cursor-pointer ${
+                  isDark
+                    ? 'border-white/10 text-slate-300 hover:bg-white/10'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
                 onClick={loadPanels}
               >
-                <RotateCw className="w-3 h-3" />
+                <RotateCw className="w-3.5 h-3.5" />
                 <span>{t('refresh')}</span>
               </button>
             </div>
 
             {loadingPanels && (
-              <div className="flex items-center justify-center p-8 gap-3 text-slate-400">
-                <RotateCw className="w-5 h-5 animate-spin text-indigo-400" />
+              <div className={`flex items-center justify-center p-8 gap-3 ${textSecondary}`}>
+                <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
                 <span className="text-sm">{t('panelsLoading')}</span>
               </div>
             )}
 
-            {/* Fleet Status Card */}
+            {/* Fleet Status Summary Card */}
             {!loadingPanels && panels.length > 0 && (
-              <div className="glass-panel p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-indigo-500/20">
+              <div
+                className={`rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border ${cardClass}`}
+              >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${
                       panels.every((p) => p.healthy !== false)
-                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                        ? isDark
+                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : isDark
+                          ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
                     }`}
                   >
                     <Activity className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white m-0">
+                    <h3 className={`text-sm font-bold m-0 ${textPrimary}`}>
                       {panels.every((p) => p.healthy !== false)
                         ? t('panelFleetStatusOk')
                         : t('panelFleetStatusWarning')}
                     </h3>
-                    <p className="text-xs text-slate-400 m-0 mt-0.5">
-                      {panels.filter((p) => p.healthy !== false).length} از {panels.length} پنل فعال
-                      و پاسخگو
+                    <p className={`text-xs m-0 mt-0.5 ${textSecondary}`}>
+                      {locale === 'fa'
+                        ? `${panels.filter((p) => p.healthy !== false).length} از ${panels.length} پنل فعال و پاسخگو`
+                        : `${panels.filter((p) => p.healthy !== false).length} of ${panels.length} panels active`}
                     </p>
                   </div>
                 </div>
@@ -1246,7 +1638,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             )}
 
             {!loadingPanels && panels.length === 0 && (
-              <div className="glass-panel p-8 text-center text-slate-400 text-sm">
+              <div className={`rounded-2xl p-8 text-center text-sm border ${cardClass}`}>
                 {t('panelsEmpty')}
               </div>
             )}
@@ -1257,47 +1649,60 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 {panels.map((p) => (
                   <div
                     key={p.id}
-                    className="glass-panel p-4 sm:p-5 space-y-4 hover:border-indigo-500/30 transition-all"
+                    className={`rounded-2xl p-4 sm:p-5 space-y-4 border transition-all hover:border-indigo-500/40 ${cardClass}`}
                   >
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div className="flex items-center gap-3 flex-wrap">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`w-3 h-3 rounded-full ${
+                            className={`w-3 h-3 rounded-full shrink-0 ${
                               p.healthy !== false ? 'bg-emerald-500 status-pulse' : 'bg-rose-500'
                             }`}
                           />
-                          <h3 className="text-base font-bold text-white m-0">{p.name}</h3>
+                          <h3 className={`text-base font-bold m-0 ${textPrimary}`}>{p.name}</h3>
                         </div>
 
                         {p.isDefault && (
-                          <span className="badge badge-warning badge-sm text-[10px]">
+                          <span className="badge badge-warning badge-sm text-[10px] font-medium">
                             {t('panelDefault')}
                           </span>
                         )}
 
                         <span
-                          className={`badge badge-sm text-[10px] ${
-                            p.healthy !== false ? 'badge-success' : 'badge-error'
+                          className={`badge badge-sm text-[10px] font-medium ${
+                            p.healthy !== false
+                              ? 'badge-success text-white'
+                              : 'badge-error text-white'
                           }`}
                         >
                           {p.healthy !== false ? t('panelOnline') : t('panelOffline')}
                         </span>
 
                         {p.latencyMs !== undefined && (
-                          <span className="badge badge-ghost badge-sm text-[10px] font-mono text-indigo-300">
+                          <span
+                            className={`badge badge-sm text-[10px] font-mono border ${
+                              isDark
+                                ? 'bg-white/[0.04] border-white/10 text-indigo-300'
+                                : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                            }`}
+                          >
                             {t('panelLatency', { ms: p.latencyMs })}
                           </span>
                         )}
                       </div>
 
                       <button
-                        className="btn btn-ghost btn-sm text-xs gap-1.5 border border-white/10 hover:bg-white/10 text-slate-300"
+                        type="button"
+                        className={`btn btn-ghost btn-sm text-xs gap-1.5 border rounded-xl cursor-pointer ${
+                          isDark
+                            ? 'border-white/10 hover:bg-white/10 text-slate-300'
+                            : 'border-slate-200 hover:bg-slate-100 text-slate-700 shadow-2xs'
+                        }`}
                         disabled={testingPanelId === p.id}
                         onClick={() => testPanelConnection(p.id)}
                       >
                         <RotateCw
-                          className={`w-3.5 h-3.5 ${testingPanelId === p.id ? 'animate-spin text-indigo-400' : ''}`}
+                          className={`w-3.5 h-3.5 ${testingPanelId === p.id ? 'animate-spin text-indigo-500' : ''}`}
                         />
                         <span>
                           {testingPanelId === p.id ? t('panelTesting') : t('panelTestBtn')}
@@ -1307,21 +1712,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                       {p.baseUrl && (
-                        <div className="bg-slate-900/40 p-2.5 rounded-lg border border-white/5 space-y-1">
-                          <span className="text-slate-400 block">{t('panelAddress')}</span>
-                          <code className="text-slate-200 break-all font-mono text-[11px]">
+                        <div className={`p-2.5 rounded-xl border space-y-1 ${subCardClass}`}>
+                          <span className={`block ${textMuted}`}>{t('panelAddress')}</span>
+                          <code className="break-all font-mono text-[11px] text-indigo-500">
                             {p.baseUrl}
                           </code>
                         </div>
                       )}
 
-                      <div className="bg-slate-900/40 p-2.5 rounded-lg border border-white/5 space-y-1">
-                        <span className="text-slate-400 block">{t('panelAuthMode')}</span>
-                        <div className="flex items-center gap-1.5 font-mono text-slate-200">
-                          <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>{p.credentialMode}</span>
-                          <span className="text-slate-500">·</span>
-                          <span className="text-emerald-400">
+                      <div className={`p-2.5 rounded-xl border space-y-1 ${subCardClass}`}>
+                        <span className={`block ${textMuted}`}>{t('panelAuthMode')}</span>
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
+                          <span className={textPrimary}>{p.credentialMode}</span>
+                          <span className={textMuted}>·</span>
+                          <span
+                            className={
+                              isDark
+                                ? 'text-emerald-400 font-semibold'
+                                : 'text-emerald-600 font-semibold'
+                            }
+                          >
                             {t('panelConfigsCount', {
                               count: (p.activeConfigsCount ?? 0).toLocaleString(numLocale),
                             })}
@@ -1332,16 +1743,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
                     {p.services.length > 0 && (
                       <div className="space-y-1.5 pt-1">
-                        <span className="text-xs text-slate-400 font-medium block">
+                        <span className={`text-xs font-medium block ${textSecondary}`}>
                           {t('panelConnectedServices')}
                         </span>
                         <div className="flex gap-2 flex-wrap">
                           {p.services.map((s) => (
                             <span
                               key={s.serviceId}
-                              className="badge badge-ghost text-xs py-1 px-2.5 bg-white/5 border border-white/10 text-slate-300"
+                              className={`text-xs py-1 px-2.5 rounded-lg border font-mono ${
+                                isDark
+                                  ? 'bg-white/[0.03] border-white/10 text-zinc-300'
+                                  : 'bg-slate-100 border-slate-200 text-slate-700'
+                              }`}
                             >
-                              {s.name} (ID: {s.serviceId}){' '}
+                              <span className="font-sans">{s.name}</span> (ID: {s.serviceId}){' '}
                               {s.isDefault ? `· ${t('panelDefaultService')}` : ''}
                             </span>
                           ))}
@@ -1355,89 +1770,87 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
           </div>
         )}
 
-        {/* Tab 5: Other Modules (Coming Soon) */}
+        {/* ===================== TAB 5: MODULES (COMING SOON) ===================== */}
         {activeTab === 'coming-soon' && (
           <div className="space-y-4">
             <div>
-              <h2 className="text-base font-bold text-white m-0">{t('modulesTitle')}</h2>
-              <p className="text-xs text-slate-400 m-0 mt-1">{t('modulesDesc')}</p>
+              <h2 className={`text-base font-bold m-0 ${textPrimary}`}>{t('modulesTitle')}</h2>
+              <p className={`text-xs m-0 mt-1 ${textSecondary}`}>{t('modulesDesc')}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="glass-panel p-4 space-y-2 border-dashed border-white/15 relative overflow-hidden">
-                <span className="badge badge-warning badge-sm text-[10px] absolute top-3 left-3 rtl:left-auto rtl:right-3">
-                  {t('tagComingSoon')}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <Radio className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white m-0">{t('modBroadcast')}</h3>
-                <p className="text-xs text-slate-400 m-0">{t('modBroadcastSub')}</p>
-              </div>
-
-              <div className="glass-panel p-4 space-y-2 border-dashed border-white/15 relative overflow-hidden">
-                <span className="badge badge-warning badge-sm text-[10px] absolute top-3 left-3 rtl:left-auto rtl:right-3">
-                  {t('tagComingSoon')}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <Package className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white m-0">{t('modPlans')}</h3>
-                <p className="text-xs text-slate-400 m-0">{t('modPlansSub')}</p>
-              </div>
-
-              <div className="glass-panel p-4 space-y-2 border-dashed border-white/15 relative overflow-hidden">
-                <span className="badge badge-warning badge-sm text-[10px] absolute top-3 left-3 rtl:left-auto rtl:right-3">
-                  {t('tagComingSoon')}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <Ticket className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white m-0">{t('modPromo')}</h3>
-                <p className="text-xs text-slate-400 m-0">{t('modPromoSub')}</p>
-              </div>
-
-              <div className="glass-panel p-4 space-y-2 border-dashed border-white/15 relative overflow-hidden">
-                <span className="badge badge-warning badge-sm text-[10px] absolute top-3 left-3 rtl:left-auto rtl:right-3">
-                  {t('tagComingSoon')}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <CreditCard className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white m-0">{t('modGateways')}</h3>
-                <p className="text-xs text-slate-400 m-0">{t('modGatewaysSub')}</p>
-              </div>
-
-              <div className="glass-panel p-4 space-y-2 border-dashed border-white/15 relative overflow-hidden">
-                <span className="badge badge-warning badge-sm text-[10px] absolute top-3 left-3 rtl:left-auto rtl:right-3">
-                  {t('tagComingSoon')}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <HardDrive className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white m-0">{t('modBackups')}</h3>
-                <p className="text-xs text-slate-400 m-0">{t('modBackupsSub')}</p>
-              </div>
-
-              <div className="glass-panel p-4 space-y-2 border-dashed border-white/15 relative overflow-hidden">
-                <span className="badge badge-warning badge-sm text-[10px] absolute top-3 left-3 rtl:left-auto rtl:right-3">
-                  {t('tagComingSoon')}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white m-0">{t('modWheel')}</h3>
-                <p className="text-xs text-slate-400 m-0">{t('modWheelSub')}</p>
-              </div>
+              {[
+                {
+                  icon: Radio,
+                  title: t('modBroadcast'),
+                  desc: t('modBroadcastSub'),
+                },
+                {
+                  icon: Package,
+                  title: t('modPlans'),
+                  desc: t('modPlansSub'),
+                },
+                {
+                  icon: Ticket,
+                  title: t('modPromo'),
+                  desc: t('modPromoSub'),
+                },
+                {
+                  icon: CreditCard,
+                  title: t('modGateways'),
+                  desc: t('modGatewaysSub'),
+                },
+                {
+                  icon: HardDrive,
+                  title: t('modBackups'),
+                  desc: t('modBackupsSub'),
+                },
+                {
+                  icon: Sparkles,
+                  title: t('modWheel'),
+                  desc: t('modWheelSub'),
+                },
+              ].map((mod, i) => {
+                const Icon = mod.icon;
+                return (
+                  <div
+                    key={i}
+                    className={`rounded-2xl p-4 space-y-2 border-dashed border transition-all relative overflow-hidden ${
+                      isDark
+                        ? 'bg-white/[0.02] border-white/15'
+                        : 'bg-white border-slate-300 shadow-2xs'
+                    }`}
+                  >
+                    <span className="badge badge-warning badge-sm text-[10px] absolute top-3 left-3 rtl:left-auto rtl:right-3 font-medium">
+                      {t('tagComingSoon')}
+                    </span>
+                    <div
+                      className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+                        isDark
+                          ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                          : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <h3 className={`text-sm font-bold m-0 ${textPrimary}`}>{mod.title}</h3>
+                    <p className={`text-xs m-0 ${textSecondary}`}>{mod.desc}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
-      </div>
+      </main>
 
-      {/* Mobile Bottom Navigation Bar (Resilient CSS Grid) */}
+      {/* ===================== MOBILE BOTTOM NAVIGATION BAR ===================== */}
       <nav
         aria-label="Mobile Navigation"
-        className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-slate-900/95 backdrop-blur-2xl border-t border-slate-800/90 shadow-[0_-8px_30px_rgba(0,0,0,0.6)] px-1.5 pt-1.5 pb-[max(env(safe-area-inset-bottom,0px),0.5rem)]"
+        className={`md:hidden fixed bottom-0 inset-x-0 z-40 backdrop-blur-2xl border-t px-1.5 pt-1.5 pb-[max(env(safe-area-inset-bottom,0px),0.5rem)] transition-colors ${
+          isDark
+            ? 'bg-[#090a0f]/95 border-white/[0.08] shadow-[0_-8px_30px_rgba(0,0,0,0.6)]'
+            : 'bg-white/95 border-slate-200/90 shadow-[0_-8px_30px_rgba(0,0,0,0.08)]'
+        }`}
       >
         <div className="grid grid-cols-5 gap-0.5 max-w-md mx-auto items-center">
           {[
@@ -1459,36 +1872,66 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                 key={tab.id}
                 type="button"
                 onClick={() => {
-                  triggerHaptic('light');
+                  triggerHaptic('selection');
                   switchTab(tab.id);
                 }}
-                className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-200 relative min-w-0 select-none ${
+                className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-150 relative min-w-0 select-none cursor-pointer ${
                   isActive
-                    ? 'text-indigo-400 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 active:scale-95'
+                    ? isDark
+                      ? 'text-indigo-400 font-bold'
+                      : 'text-indigo-600 font-bold'
+                    : isDark
+                      ? 'text-zinc-400 hover:text-zinc-200 active:scale-95'
+                      : 'text-slate-500 hover:text-slate-800 active:scale-95'
                 }`}
               >
                 <div
                   className={`p-1.5 rounded-xl transition-all relative ${
-                    isActive ? 'bg-indigo-600/20 shadow-inner' : 'hover:bg-white/5'
+                    isActive
+                      ? isDark
+                        ? 'bg-white/[0.06]'
+                        : 'bg-indigo-50'
+                      : 'hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
+                  <Icon
+                    className={`w-5 h-5 ${
+                      isActive
+                        ? isDark
+                          ? 'text-indigo-400'
+                          : 'text-indigo-600'
+                        : isDark
+                          ? 'text-zinc-400'
+                          : 'text-slate-500'
+                    }`}
+                  />
                   {tab.count !== undefined && tab.count > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-slate-950 font-black text-[9px] flex items-center justify-center shadow-md">
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-slate-950 font-black text-[9px] flex items-center justify-center shadow-xs">
                       {tab.count}
                     </span>
                   )}
                 </div>
                 <span
                   className={`text-[10px] leading-tight mt-1 truncate max-w-full text-center tracking-tight ${
-                    isActive ? 'text-indigo-300 font-bold' : 'text-slate-400 font-medium'
+                    isActive
+                      ? isDark
+                        ? 'text-indigo-300 font-bold'
+                        : 'text-indigo-600 font-bold'
+                      : isDark
+                        ? 'text-zinc-400 font-medium'
+                        : 'text-slate-500 font-medium'
                   }`}
                 >
                   {tab.label}
                 </span>
                 {isActive && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-0.5 shadow-sm shadow-indigo-400/50" />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full mt-0.5 shadow-xs ${
+                      isDark
+                        ? 'bg-indigo-400 shadow-indigo-400/50'
+                        : 'bg-indigo-600 shadow-indigo-600/30'
+                    }`}
+                  />
                 )}
               </button>
             );
@@ -1496,23 +1939,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
         </div>
       </nav>
 
-      {/* MODAL 1: Receipt Photo Lightbox */}
+      {/* ===================== MODAL 1: RECEIPT PHOTO LIGHTBOX ===================== */}
       {photoModalUrl && (
         <div className="modal modal-open">
-          <div className="modal-box max-w-lg bg-slate-900 border border-white/10 p-4">
+          <div className={`modal-box max-w-lg p-4 rounded-2xl border ${modalBoxClass}`}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-indigo-400" />
+              <h3 className={`font-bold text-sm flex items-center gap-2 ${textPrimary}`}>
+                <ImageIcon className="w-4 h-4 text-indigo-500" />
                 <span>{photoModalTitle}</span>
               </h3>
               <button
-                className="btn btn-ghost btn-circle btn-xs text-slate-400 hover:text-white"
+                type="button"
+                className={`btn btn-ghost btn-circle btn-xs cursor-pointer ${textMuted} hover:text-white`}
                 onClick={() => setPhotoModalUrl(null)}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="rounded-xl overflow-hidden bg-black/50 border border-white/10 flex items-center justify-center min-h-[260px] max-h-[70vh]">
+            <div
+              className={`rounded-xl overflow-hidden border flex items-center justify-center min-h-[260px] max-h-[70vh] ${
+                isDark ? 'bg-black/50 border-white/10' : 'bg-slate-100 border-slate-200'
+              }`}
+            >
               <img
                 src={photoModalUrl}
                 alt="Receipt proof"
@@ -1525,56 +1973,80 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             </div>
             <div className="modal-action mt-4">
               <button
-                className="btn btn-ghost btn-sm text-xs border border-white/10 text-slate-300"
+                type="button"
+                className={`btn btn-ghost btn-sm text-xs border rounded-xl cursor-pointer ${
+                  isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+                }`}
                 onClick={() => setPhotoModalUrl(null)}
               >
                 {t('close')}
               </button>
             </div>
           </div>
-          <div className="modal-backdrop bg-black/70" onClick={() => setPhotoModalUrl(null)} />
+          <div
+            className="modal-backdrop bg-black/60 backdrop-blur-xs"
+            onClick={() => setPhotoModalUrl(null)}
+          />
         </div>
       )}
 
-      {/* MODAL 2: Approve Receipt Confirmation */}
+      {/* ===================== MODAL 2: APPROVE RECEIPT CONFIRMATION ===================== */}
       {receiptApproveTarget && (
         <div className="modal modal-open">
-          <div className="modal-box max-w-sm bg-slate-900 border border-white/10 p-5 space-y-4">
+          <div className={`modal-box max-w-sm p-5 space-y-4 rounded-2xl border ${modalBoxClass}`}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <div
+                className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+                  isDark
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                }`}
+              >
                 <CheckCircle2 className="w-5 h-5" />
               </div>
-              <h3 className="font-bold text-base text-white m-0">
+              <h3 className={`font-bold text-base m-0 ${textPrimary}`}>
                 {t('receiptApproveConfirmTitle')}
               </h3>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed m-0">
+            <p className={`text-xs leading-relaxed m-0 ${textSecondary}`}>
               {t('receiptApproveConfirmBody', {
-                amount: formatMoney(receiptApproveTarget.amount),
+                amount: `${formatMoney(receiptApproveTarget.amount)} ${t('currency')}`,
               })}
             </p>
 
-            <div className="bg-slate-800/60 p-3 rounded-xl border border-white/5 text-xs space-y-1 font-mono">
+            <div className={`p-3 rounded-xl border text-xs space-y-1 font-mono ${subCardClass}`}>
               <div className="flex justify-between">
-                <span className="text-slate-400 font-sans">شناسه کاربر:</span>
-                <span dir="ltr">{receiptApproveTarget.telegramId}</span>
+                <span className={`font-sans ${textMuted}`}>
+                  {locale === 'fa' ? 'شناسه کاربر:' : 'User ID:'}
+                </span>
+                <span dir="ltr" className={textPrimary}>
+                  {receiptApproveTarget.telegramId}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400 font-sans">کد رسید:</span>
-                <span dir="ltr">{receiptApproveTarget.id}</span>
+                <span className={`font-sans ${textMuted}`}>
+                  {locale === 'fa' ? 'کد رسید:' : 'Receipt ID:'}
+                </span>
+                <span dir="ltr" className={textPrimary}>
+                  {receiptApproveTarget.id}
+                </span>
               </div>
             </div>
 
             <div className="modal-action mt-4 flex gap-2">
               <button
-                className="btn btn-ghost btn-sm flex-1 text-xs border border-white/10 text-slate-300"
+                type="button"
+                className={`btn btn-ghost btn-sm flex-1 text-xs border rounded-xl cursor-pointer ${
+                  isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+                }`}
                 onClick={() => setReceiptApproveTarget(null)}
               >
                 {t('cancel')}
               </button>
               <button
-                className="btn btn-success btn-sm flex-1 text-xs text-white shadow-lg shadow-emerald-500/20"
+                type="button"
+                className="btn btn-success btn-sm flex-1 text-xs text-white shadow-sm rounded-xl cursor-pointer"
                 disabled={processingAction}
                 onClick={() => handleReceiptAction(receiptApproveTarget.id, 'approve')}
               >
@@ -1588,30 +2060,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             </div>
           </div>
           <div
-            className="modal-backdrop bg-black/70"
+            className="modal-backdrop bg-black/60 backdrop-blur-xs"
             onClick={() => setReceiptApproveTarget(null)}
           />
         </div>
       )}
 
-      {/* MODAL 3: Reject Receipt Modal with Quick Presets */}
+      {/* ===================== MODAL 3: REJECT RECEIPT MODAL ===================== */}
       {receiptActionTarget && (
         <div className="modal modal-open">
-          <div className="modal-box max-w-md bg-slate-900 border border-white/10 p-5 space-y-4">
+          <div className={`modal-box max-w-md p-5 space-y-4 rounded-2xl border ${modalBoxClass}`}>
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-white flex items-center gap-2">
-                <XCircle className="w-5 h-5 text-rose-400" />
+              <h3 className={`font-bold text-base flex items-center gap-2 ${textPrimary}`}>
+                <XCircle className="w-5 h-5 text-rose-500" />
                 <span>{t('modalRejectTitle')}</span>
               </h3>
               <button
-                className="btn btn-ghost btn-circle btn-xs text-slate-400 hover:text-white"
+                type="button"
+                className={`btn btn-ghost btn-circle btn-xs cursor-pointer ${textMuted} hover:text-white`}
                 onClick={() => setReceiptActionTarget(null)}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-400 m-0">
+            <p className={`text-xs m-0 ${textSecondary}`}>
               {t('modalRejectConfirm', {
                 id: receiptActionTarget.id,
                 userId: receiptActionTarget.telegramId,
@@ -1620,7 +2093,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
             {/* Presets Chips */}
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-300 font-medium block">
+              <label className={`text-xs font-medium block ${textPrimary}`}>
                 {t('modalRejectReasonLabel')}
               </label>
               <div className="flex flex-wrap gap-1.5">
@@ -1634,10 +2107,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                   <button
                     key={preset.key}
                     type="button"
-                    className={`badge badge-sm py-2 px-2.5 text-[11px] cursor-pointer transition-all ${
+                    className={`badge badge-sm py-2 px-2.5 text-[11px] cursor-pointer transition-all border ${
                       selectedReasonPreset === preset.key
                         ? 'badge-error text-white font-medium'
-                        : 'badge-ghost bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
+                        : isDark
+                          ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/10'
+                          : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                     }`}
                     onClick={() => {
                       setSelectedReasonPreset(preset.key);
@@ -1651,7 +2126,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             </div>
 
             <textarea
-              className="textarea textarea-bordered w-full text-xs bg-slate-800/60 border-white/10 text-white"
+              className={`textarea textarea-bordered w-full text-xs rounded-xl ${inputClass}`}
               rows={2}
               placeholder={t('modalRejectReasonPlaceholder')}
               value={rejectionReason}
@@ -1660,13 +2135,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
             <div className="modal-action mt-4 flex gap-2">
               <button
-                className="btn btn-ghost btn-sm flex-1 text-xs border border-white/10 text-slate-300"
+                type="button"
+                className={`btn btn-ghost btn-sm flex-1 text-xs border rounded-xl cursor-pointer ${
+                  isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+                }`}
                 onClick={() => setReceiptActionTarget(null)}
               >
                 {t('cancel')}
               </button>
               <button
-                className="btn btn-error btn-sm flex-1 text-xs text-white shadow-lg shadow-rose-500/20"
+                type="button"
+                className="btn btn-error btn-sm flex-1 text-xs text-white shadow-sm rounded-xl cursor-pointer"
                 disabled={processingAction}
                 onClick={() =>
                   handleReceiptAction(receiptActionTarget.id, 'reject', rejectionReason)
@@ -1684,32 +2163,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             </div>
           </div>
           <div
-            className="modal-backdrop bg-black/70"
+            className="modal-backdrop bg-black/60 backdrop-blur-xs"
             onClick={() => setReceiptActionTarget(null)}
           />
         </div>
       )}
 
-      {/* MODAL 4: User Dossier & Details */}
+      {/* ===================== MODAL 4: USER DOSSIER & DETAILS ===================== */}
       {selectedUserSummary && (
         <div className="modal modal-open">
-          <div className="modal-box max-w-2xl bg-slate-900 border border-white/10 p-5 space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div
+            className={`modal-box max-w-2xl p-5 space-y-4 max-h-[82dvh] overflow-y-auto rounded-2xl border ${modalBoxClass}`}
+          >
+            <div
+              className={`flex items-center justify-between pb-3 border-b ${
+                isDark ? 'border-white/10' : 'border-slate-200'
+              }`}
+            >
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-base shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-base shadow-sm shrink-0">
                   {getAvatarChar(
                     selectedUserSummary.user.firstName,
                     selectedUserSummary.user.username
                   )}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white m-0">
+                  <h3 className={`text-base font-bold m-0 ${textPrimary}`}>
                     {[selectedUserSummary.user.firstName, selectedUserSummary.user.lastName]
                       .filter(Boolean)
-                      .join(' ') || 'کاربر سیستم'}
+                      .join(' ') || (locale === 'fa' ? 'کاربر سیستم' : 'System User')}
                   </h3>
-                  <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                    <span className="text-indigo-300 font-mono">
+                  <div className={`flex items-center gap-2 text-xs mt-0.5 ${textSecondary}`}>
+                    <span className="text-indigo-500 font-mono">
                       {selectedUserSummary.user.username ? (
                         <span dir="ltr" className="inline-block unicode-isolate">
                           @{selectedUserSummary.user.username}
@@ -1720,7 +2205,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                     </span>
                     <span>·</span>
                     <button
-                      className="font-mono hover:text-white flex items-center gap-1"
+                      type="button"
+                      className="font-mono hover:text-indigo-400 flex items-center gap-1 cursor-pointer"
                       onClick={() =>
                         copyToClipboard(String(selectedUserSummary.user.telegramId), 'dossier-id')
                       }
@@ -1733,7 +2219,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
               </div>
 
               <button
-                className="btn btn-ghost btn-circle btn-xs text-slate-400 hover:text-white"
+                type="button"
+                className={`btn btn-ghost btn-circle btn-xs cursor-pointer ${textMuted} hover:text-white`}
                 onClick={() => setSelectedUserSummary(null)}
               >
                 <X className="w-4 h-4" />
@@ -1741,21 +2228,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             </div>
 
             {/* Dossier Tabs */}
-            <div className="flex gap-2 border-b border-white/5 pb-2">
+            <div
+              className={`flex gap-2 pb-2 border-b ${
+                isDark ? 'border-white/5' : 'border-slate-200'
+              }`}
+            >
               <button
-                className={`btn btn-xs ${userDossierTab === 'finances' ? 'btn-primary text-white' : 'btn-ghost text-slate-400'}`}
+                type="button"
+                className={`btn btn-xs rounded-lg cursor-pointer ${
+                  userDossierTab === 'finances'
+                    ? 'btn-primary text-white'
+                    : isDark
+                      ? 'btn-ghost text-slate-400'
+                      : 'btn-ghost text-slate-600'
+                }`}
                 onClick={() => setUserDossierTab('finances')}
               >
                 {t('userTabFinances')}
               </button>
               <button
-                className={`btn btn-xs ${userDossierTab === 'orders' ? 'btn-primary text-white' : 'btn-ghost text-slate-400'}`}
+                type="button"
+                className={`btn btn-xs rounded-lg cursor-pointer ${
+                  userDossierTab === 'orders'
+                    ? 'btn-primary text-white'
+                    : isDark
+                      ? 'btn-ghost text-slate-400'
+                      : 'btn-ghost text-slate-600'
+                }`}
                 onClick={() => setUserDossierTab('orders')}
               >
                 {t('userTabOrders')} ({userOrders.length})
               </button>
               <button
-                className={`btn btn-xs ${userDossierTab === 'receipts' ? 'btn-primary text-white' : 'btn-ghost text-slate-400'}`}
+                type="button"
+                className={`btn btn-xs rounded-lg cursor-pointer ${
+                  userDossierTab === 'receipts'
+                    ? 'btn-primary text-white'
+                    : isDark
+                      ? 'btn-ghost text-slate-400'
+                      : 'btn-ghost text-slate-600'
+                }`}
                 onClick={() => setUserDossierTab('receipts')}
               >
                 {t('userTabReceipts')} ({userReceipts.length})
@@ -1765,46 +2277,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             {/* Sub-tab 1: Finances Grid */}
             {userDossierTab === 'finances' && (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-white/5">
-                  <span className="text-[11px] text-slate-400 block">{t('userCurBalance')}</span>
-                  <div className="text-sm sm:text-base font-bold text-emerald-400 font-mono mt-1">
+                <div className={`p-3 rounded-xl border ${subCardClass}`}>
+                  <span className={`text-[11px] block ${textMuted}`}>{t('userCurBalance')}</span>
+                  <div
+                    className={`text-sm sm:text-base font-bold font-mono mt-1 ${
+                      isDark ? 'text-emerald-400' : 'text-emerald-600'
+                    }`}
+                  >
                     {formatMoney(selectedUserSummary.user.balance)} {t('currency')}
                   </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-white/5">
-                  <span className="text-[11px] text-slate-400 block">{t('userTotalDeposit')}</span>
-                  <div className="text-sm sm:text-base font-bold text-white font-mono mt-1">
+                <div className={`p-3 rounded-xl border ${subCardClass}`}>
+                  <span className={`text-[11px] block ${textMuted}`}>{t('userTotalDeposit')}</span>
+                  <div className={`text-sm sm:text-base font-bold font-mono mt-1 ${textPrimary}`}>
                     {formatMoney(selectedUserSummary.totalDeposit)} {t('currency')}
                   </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-white/5">
-                  <span className="text-[11px] text-slate-400 block">{t('userTotalSpend')}</span>
-                  <div className="text-sm sm:text-base font-bold text-white font-mono mt-1">
+                <div className={`p-3 rounded-xl border ${subCardClass}`}>
+                  <span className={`text-[11px] block ${textMuted}`}>{t('userTotalSpend')}</span>
+                  <div className={`text-sm sm:text-base font-bold font-mono mt-1 ${textPrimary}`}>
                     {formatMoney(selectedUserSummary.totalSpend)} {t('currency')}
                   </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-white/5">
-                  <span className="text-[11px] text-slate-400 block">{t('userActiveConfigs')}</span>
-                  <div className="text-sm sm:text-base font-bold text-indigo-400 font-mono mt-1">
+                <div className={`p-3 rounded-xl border ${subCardClass}`}>
+                  <span className={`text-[11px] block ${textMuted}`}>{t('userActiveConfigs')}</span>
+                  <div className="text-sm sm:text-base font-bold text-indigo-500 font-mono mt-1">
                     {selectedUserSummary.activeConfigsCount.toLocaleString(numLocale)}
                   </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-white/5">
-                  <span className="text-[11px] text-slate-400 block">
+                <div className={`p-3 rounded-xl border ${subCardClass}`}>
+                  <span className={`text-[11px] block ${textMuted}`}>
                     {t('userApprovedReceipts')}
                   </span>
-                  <div className="text-sm sm:text-base font-bold text-emerald-400 font-mono mt-1">
+                  <div
+                    className={`text-sm sm:text-base font-bold font-mono mt-1 ${
+                      isDark ? 'text-emerald-400' : 'text-emerald-600'
+                    }`}
+                  >
                     {selectedUserSummary.receiptsApprovedCount.toLocaleString(numLocale)}
                   </div>
                 </div>
 
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-white/5">
-                  <span className="text-[11px] text-slate-400 block">{t('userAuditEvents')}</span>
-                  <div className="text-sm sm:text-base font-bold text-slate-300 font-mono mt-1">
+                <div className={`p-3 rounded-xl border ${subCardClass}`}>
+                  <span className={`text-[11px] block ${textMuted}`}>{t('userAuditEvents')}</span>
+                  <div className={`text-sm sm:text-base font-bold font-mono mt-1 ${textSecondary}`}>
                     {selectedUserSummary.auditEventsCount.toLocaleString(numLocale)}
                   </div>
                 </div>
@@ -1815,24 +2335,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             {userDossierTab === 'orders' && (
               <div className="space-y-2">
                 {userOrders.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-4">{t('noOrders')}</p>
+                  <p className={`text-xs text-center py-4 ${textMuted}`}>{t('noOrders')}</p>
                 ) : (
                   userOrders.map((order) => (
                     <div
                       key={order.id}
-                      className="bg-slate-800/40 p-3 rounded-xl border border-white/5 flex items-center justify-between text-xs"
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs ${subCardClass}`}
                     >
                       <div>
-                        <div className="font-semibold text-white">
-                          {order.packageName || 'سرویس اشتراک'}
+                        <div className={`font-semibold ${textPrimary}`}>
+                          {order.packageName || (locale === 'fa' ? 'سرویس اشتراک' : 'Subscription')}
                         </div>
-                        <div className="text-[11px] text-slate-500 font-mono">ID: {order.id}</div>
+                        <div className={`text-[11px] font-mono ${textMuted}`}>ID: {order.id}</div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-mono font-bold text-emerald-400">
+                      <div className="text-right rtl:text-left">
+                        <div
+                          className={`font-mono font-bold ${
+                            isDark ? 'text-emerald-400' : 'text-emerald-600'
+                          }`}
+                        >
                           {formatMoney(order.amount)} {t('currency')}
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className={`text-[10px] ${textMuted}`}>
                           {new Date(order.createdAt).toLocaleDateString(numLocale)}
                         </div>
                       </div>
@@ -1846,32 +2370,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             {userDossierTab === 'receipts' && (
               <div className="space-y-2">
                 {userReceipts.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-4">{t('noReceipts')}</p>
+                  <p className={`text-xs text-center py-4 ${textMuted}`}>{t('noReceipts')}</p>
                 ) : (
                   userReceipts.map((rec) => (
                     <div
                       key={rec.id}
-                      className="bg-slate-800/40 p-3 rounded-xl border border-white/5 flex items-center justify-between text-xs"
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs ${subCardClass}`}
                     >
                       <div>
-                        <div className="font-semibold font-mono text-white">
+                        <div className={`font-semibold font-mono ${textPrimary}`}>
                           {formatMoney(rec.amount)} {t('currency')}
                         </div>
-                        <div className="text-[11px] text-slate-500 font-mono">ID: {rec.id}</div>
+                        <div className={`text-[11px] font-mono ${textMuted}`}>ID: {rec.id}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         <span
-                          className={`badge badge-xs text-[10px] ${
+                          className={`badge badge-xs text-[10px] font-medium ${
                             rec.status === 'approved'
-                              ? 'badge-success'
+                              ? 'badge-success text-white'
                               : rec.status === 'rejected'
-                                ? 'badge-error'
+                                ? 'badge-error text-white'
                                 : 'badge-warning'
                           }`}
                         >
                           {rec.status}
                         </span>
-                        <span className="text-[10px] text-slate-400">
+                        <span className={`text-[10px] ${textMuted}`}>
                           {new Date(rec.createdAt).toLocaleDateString(numLocale)}
                         </span>
                       </div>
@@ -1882,9 +2406,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             )}
 
             {/* Action Bar */}
-            <div className="modal-action flex justify-between items-center pt-2 border-t border-white/5">
+            <div
+              className={`modal-action flex justify-between items-center pt-2 border-t ${
+                isDark ? 'border-white/10' : 'border-slate-200'
+              }`}
+            >
               <button
-                className="btn btn-primary btn-sm gap-1.5 text-xs text-white"
+                type="button"
+                className="btn btn-primary btn-sm gap-1.5 text-xs text-white rounded-xl cursor-pointer"
                 onClick={() => {
                   setBalanceModalUser(selectedUserSummary.user);
                 }}
@@ -1894,7 +2423,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
               </button>
 
               <button
-                className="btn btn-ghost btn-sm text-xs border border-white/10 text-slate-300"
+                type="button"
+                className={`btn btn-ghost btn-sm text-xs border rounded-xl cursor-pointer ${
+                  isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+                }`}
                 onClick={() => setSelectedUserSummary(null)}
               >
                 {t('btnCloseReport')}
@@ -1902,25 +2434,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
             </div>
           </div>
           <div
-            className="modal-backdrop bg-black/70"
+            className="modal-backdrop bg-black/60 backdrop-blur-xs"
             onClick={() => setSelectedUserSummary(null)}
           />
         </div>
       )}
 
-      {/* MODAL 5: Balance Adjustment with Segmented Ops & Quick Amounts */}
+      {/* ===================== MODAL 5: BALANCE ADJUSTMENT ===================== */}
       {balanceModalUser && (
         <div className="modal modal-open">
-          <div className="modal-box max-w-md bg-slate-900 border border-white/10 p-5 space-y-4">
+          <div className={`modal-box max-w-md p-5 space-y-4 rounded-2xl border ${modalBoxClass}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <div
+                  className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${
+                    isDark
+                      ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
+                      : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                  }`}
+                >
                   <Wallet className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-base text-white m-0">{t('modalBalanceTitle')}</h3>
+                <h3 className={`font-bold text-base m-0 ${textPrimary}`}>
+                  {t('modalBalanceTitle')}
+                </h3>
               </div>
               <button
-                className="btn btn-ghost btn-circle btn-xs text-slate-400 hover:text-white"
+                type="button"
+                className={`btn btn-ghost btn-circle btn-xs cursor-pointer ${textMuted} hover:text-white`}
                 onClick={() => setBalanceModalUser(null)}
               >
                 <X className="w-4 h-4" />
@@ -1929,21 +2470,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
             <form onSubmit={handleAdjustBalance} className="space-y-4">
               {/* User Balance Info Card */}
-              <div className="bg-slate-800/60 p-3 rounded-xl border border-white/5 flex items-center justify-between text-xs">
-                <span className="text-slate-400">{t('balanceCurLabel')}</span>
-                <span className="font-bold text-white font-mono text-sm">
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-between text-xs ${subCardClass}`}
+              >
+                <span className={textSecondary}>{t('balanceCurLabel')}</span>
+                <span className={`font-bold font-mono text-sm ${textPrimary}`}>
                   {formatMoney(balanceModalUser.balance)} {t('currency')}
                 </span>
               </div>
 
               {/* Segmented Operation Selector */}
-              <div className="grid grid-cols-3 gap-1 bg-slate-800/40 p-1 rounded-xl border border-white/5 text-xs">
+              <div
+                className={`grid grid-cols-3 gap-1 p-1 rounded-xl border text-xs ${
+                  isDark ? 'bg-white/[0.03] border-white/10' : 'bg-slate-100 border-slate-200'
+                }`}
+              >
                 <button
                   type="button"
-                  className={`btn btn-xs h-8 border-none ${
+                  className={`btn btn-xs h-8 border-none rounded-lg cursor-pointer ${
                     balanceOperation === 'add'
-                      ? 'bg-emerald-600 text-white font-bold shadow'
-                      : 'btn-ghost text-slate-300 hover:bg-white/5'
+                      ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                      : isDark
+                        ? 'btn-ghost text-slate-300'
+                        : 'btn-ghost text-slate-700'
                   }`}
                   onClick={() => setBalanceOperation('add')}
                 >
@@ -1953,10 +2502,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
                 <button
                   type="button"
-                  className={`btn btn-xs h-8 border-none ${
+                  className={`btn btn-xs h-8 border-none rounded-lg cursor-pointer ${
                     balanceOperation === 'deduct'
-                      ? 'bg-rose-600 text-white font-bold shadow'
-                      : 'btn-ghost text-slate-300 hover:bg-white/5'
+                      ? 'bg-rose-600 text-white font-bold shadow-xs'
+                      : isDark
+                        ? 'btn-ghost text-slate-300'
+                        : 'btn-ghost text-slate-700'
                   }`}
                   onClick={() => setBalanceOperation('deduct')}
                 >
@@ -1966,10 +2517,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
                 <button
                   type="button"
-                  className={`btn btn-xs h-8 border-none ${
+                  className={`btn btn-xs h-8 border-none rounded-lg cursor-pointer ${
                     balanceOperation === 'set'
-                      ? 'bg-indigo-600 text-white font-bold shadow'
-                      : 'btn-ghost text-slate-300 hover:bg-white/5'
+                      ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                      : isDark
+                        ? 'btn-ghost text-slate-300'
+                        : 'btn-ghost text-slate-700'
                   }`}
                   onClick={() => setBalanceOperation('set')}
                 >
@@ -1980,14 +2533,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
               {/* Amount Input */}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-300 font-medium block">
+                <label className={`text-xs font-medium block ${textPrimary}`}>
                   {t('modalBalanceAmountLabel')}
                 </label>
                 <input
                   type="number"
                   min="0"
                   required
-                  className="input input-bordered w-full text-sm bg-slate-800/60 border-white/10 font-mono text-white"
+                  className={`input input-bordered w-full text-sm font-mono rounded-xl ${inputClass}`}
                   placeholder={t('modalBalanceAmountPlaceholder')}
                   value={balanceAmount}
                   onChange={(e) => setBalanceAmount(e.target.value)}
@@ -1999,7 +2552,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                     <button
                       key={quickAmt}
                       type="button"
-                      className="badge badge-ghost badge-sm py-1.5 px-2 text-[10px] font-mono cursor-pointer hover:bg-indigo-600 hover:text-white transition-all"
+                      className={`badge badge-sm py-1.5 px-2 text-[10px] font-mono cursor-pointer transition-all border ${
+                        isDark
+                          ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-indigo-600 hover:text-white'
+                          : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-indigo-600 hover:text-white'
+                      }`}
                       onClick={() => setBalanceAmount(String(quickAmt))}
                     >
                       +{(quickAmt / 1000).toLocaleString(numLocale)}k
@@ -2010,9 +2567,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
               {/* Calculated Balance Preview */}
               {balanceAmount && (
-                <div className="bg-indigo-500/10 border border-indigo-500/20 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                  <span className="text-indigo-300">{t('balancePreviewLabel')}</span>
-                  <span className="font-bold text-white font-mono text-sm">
+                <div
+                  className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                    isDark
+                      ? 'bg-indigo-500/10 border-indigo-500/20'
+                      : 'bg-indigo-50 border-indigo-200'
+                  }`}
+                >
+                  <span className={isDark ? 'text-indigo-300' : 'text-indigo-800'}>
+                    {t('balancePreviewLabel')}
+                  </span>
+                  <span className={`font-bold font-mono text-sm ${textPrimary}`}>
                     {formatMoney(previewNewBalance)} {t('currency')}
                   </span>
                 </div>
@@ -2020,13 +2585,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
               {/* Reason Input & Quick Chips */}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-300 font-medium block">
+                <label className={`text-xs font-medium block ${textPrimary}`}>
                   {t('modalBalanceReasonLabel')}
                 </label>
                 <input
                   type="text"
                   required
-                  className="input input-bordered w-full text-xs bg-slate-800/60 border-white/10 text-white"
+                  className={`input input-bordered w-full text-xs rounded-xl ${inputClass}`}
                   placeholder={t('modalBalanceReasonPlaceholder')}
                   value={balanceReason}
                   onChange={(e) => setBalanceReason(e.target.value)}
@@ -2041,7 +2606,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                     <button
                       key={quickReason}
                       type="button"
-                      className="badge badge-ghost badge-sm py-1.5 px-2 text-[10px] cursor-pointer hover:bg-white/10 transition-all text-slate-300"
+                      className={`badge badge-sm py-1.5 px-2 text-[10px] cursor-pointer transition-all border ${
+                        isDark
+                          ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/10'
+                          : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                      }`}
                       onClick={() => setBalanceReason(quickReason)}
                     >
                       {quickReason}
@@ -2054,7 +2623,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
               <div className="modal-action mt-4 flex gap-2">
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm flex-1 text-xs border border-white/10 text-slate-300"
+                  className={`btn btn-ghost btn-sm flex-1 text-xs border rounded-xl cursor-pointer ${
+                    isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+                  }`}
                   onClick={() => setBalanceModalUser(null)}
                 >
                   {t('cancel')}
@@ -2062,7 +2633,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
                 <button
                   type="submit"
-                  className="btn btn-primary btn-sm flex-1 text-xs text-white shadow-lg shadow-indigo-600/30"
+                  className="btn btn-primary btn-sm flex-1 text-xs text-white shadow-sm rounded-xl cursor-pointer"
                   disabled={processingBalance}
                 >
                   {processingBalance ? (
@@ -2077,7 +2648,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
               </div>
             </form>
           </div>
-          <div className="modal-backdrop bg-black/70" onClick={() => setBalanceModalUser(null)} />
+          <div
+            className="modal-backdrop bg-black/60 backdrop-blur-xs"
+            onClick={() => setBalanceModalUser(null)}
+          />
         </div>
       )}
     </div>

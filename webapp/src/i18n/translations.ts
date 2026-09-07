@@ -54,6 +54,7 @@ export interface Translations {
   adminTitle: string;
   adminWelcome: string;
   adminRole: string;
+  adminExit: string;
 
   // Tabs
   tabOverview: string;
@@ -293,6 +294,7 @@ export const translations: Record<SupportedLocale, Translations> = {
     adminTitle: 'پنل مدیریت RebeccaSellBot',
     adminWelcome: 'خوش آمدید، {name} (شناسه: {id}) · سطح دسترسی: مدیر سیستم',
     adminRole: 'مدیر سیستم',
+    adminExit: 'خروج از پنل',
 
     // Tabs
     tabOverview: 'داشبورد',
@@ -530,6 +532,7 @@ export const translations: Record<SupportedLocale, Translations> = {
     adminTitle: 'RebeccaSellBot Admin Dashboard',
     adminWelcome: 'Welcome, {name} (ID: {id}) · Role: System Admin',
     adminRole: 'System Admin',
+    adminExit: 'Exit Dashboard',
 
     // Tabs
     tabOverview: 'Overview',
