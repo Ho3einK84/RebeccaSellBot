@@ -38,8 +38,12 @@ export interface TelegramWebApp {
   expand: () => void;
   close: () => void;
   sendData: (data: string) => void;
-  showAlert: (message: string, callback?: () => void) => void;
-  showConfirm: (message: string, callback?: (confirmed: boolean) => void) => void;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
+  disableVerticalSwipes?: () => void;
+  enableVerticalSwipes?: () => void;
+  onEvent?: (eventType: string, eventHandler: () => void) => void;
+  offEvent?: (eventType: string, eventHandler: () => void) => void;
   HapticFeedback?: {
     impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
     notificationOccurred: (type: 'error' | 'success' | 'warning') => void;

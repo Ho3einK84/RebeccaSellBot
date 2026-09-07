@@ -46,6 +46,9 @@ export interface Translations {
   copiedId: string;
   premiumUserBadge: string;
   closeMiniAppHint: string;
+  themeToggle: string;
+  themeDark: string;
+  themeLight: string;
 
   // Admin Dashboard
   adminTitle: string;
@@ -282,6 +285,9 @@ export const translations: Record<SupportedLocale, Translations> = {
     copiedId: 'کپی شد',
     premiumUserBadge: 'پرمیوم',
     closeMiniAppHint: 'برای بستن، به پایین بکشید',
+    themeToggle: 'تغییر پوسته',
+    themeDark: 'حالت تاریک',
+    themeLight: 'حالت روشن',
 
     // Admin Dashboard
     adminTitle: 'پنل مدیریت RebeccaSellBot',
@@ -516,6 +522,9 @@ export const translations: Record<SupportedLocale, Translations> = {
     copiedId: 'Copied',
     premiumUserBadge: 'Premium',
     closeMiniAppHint: 'Swipe down to close',
+    themeToggle: 'Toggle Theme',
+    themeDark: 'Dark Mode',
+    themeLight: 'Light Mode',
 
     // Admin Dashboard
     adminTitle: 'RebeccaSellBot Admin Dashboard',

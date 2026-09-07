@@ -4,6 +4,7 @@ import { UserComingSoon } from './components/UserComingSoon.js';
 import { AdminDashboard } from './components/AdminDashboard.js';
 import type { TelegramWebAppUser } from './types/telegram.js';
 import { LanguageProvider } from './i18n/LanguageContext.js';
+import { ThemeProvider } from './theme/ThemeContext.js';
 import type { SupportedLocale } from './i18n/translations.js';
 import { Loader2, AlertTriangle, ShieldX } from 'lucide-react';
 
@@ -24,6 +25,9 @@ export const App: React.FC = () => {
     if (tg) {
       tg.ready();
       tg.expand();
+      if (tg.disableVerticalSwipes) {
+        tg.disableVerticalSwipes();
+      }
     }
 
     const initData = tg?.initData;
@@ -121,15 +125,17 @@ export const App: React.FC = () => {
   }
 
   return (
-    <LanguageProvider
-      initialLocale={authData.locale || 'fa'}
-      languageSelectionEnabled={authData.languageSelectionEnabled ?? true}
-    >
-      {authData.role === 'admin' ? (
-        <AdminDashboard user={authData.user} />
-      ) : (
-        <UserComingSoon user={authData.user} />
-      )}
-    </LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider
+        initialLocale={authData.locale || 'fa'}
+        languageSelectionEnabled={authData.languageSelectionEnabled ?? true}
+      >
+        {authData.role === 'admin' ? (
+          <AdminDashboard user={authData.user} />
+        ) : (
+          <UserComingSoon user={authData.user} />
+        )}
+      </LanguageProvider>
+    </ThemeProvider>
   );
 };

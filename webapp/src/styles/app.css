@@ -2,26 +2,66 @@
 @plugin 'daisyui';
 
 :root {
-  --bg-primary: #0b0f19;
-  --bg-secondary: #111827;
-  --bg-card: rgba(17, 24, 39, 0.75);
-  --bg-card-hover: rgba(31, 41, 55, 0.85);
+  --bg-primary: #090a0f;
+  --bg-secondary: #11131a;
+  --bg-card: rgba(255, 255, 255, 0.03);
+  --bg-card-hover: rgba(255, 255, 255, 0.06);
   --border-color: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(99, 102, 241, 0.6);
-  --text-primary: #f9fafb;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --accent-primary: #6366f1;
-  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --border-focus: rgba(255, 255, 255, 0.2);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #ffffff;
   --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
   --backdrop-blur: blur(14px);
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
 }
 
+[data-theme='light'],
+.light {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-focus: rgba(0, 0, 0, 0.2);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-primary: #0f172a;
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme='dark'],
+.dark {
+  --bg-primary: #090a0f;
+  --bg-secondary: #11131a;
+  --bg-card: rgba(255, 255, 255, 0.03);
+  --bg-card-hover: rgba(255, 255, 255, 0.06);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(255, 255, 255, 0.2);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #ffffff;
+  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+}
+
+html {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 body {
+  width: 100%;
+  min-height: 100%;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
   font-family:
     'Vazirmatn',
     -apple-system,
@@ -33,11 +73,19 @@ body {
     sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  min-height: 100vh;
-  min-height: 100dvh;
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+#root {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 * {
@@ -79,16 +127,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(150, 150, 150, 0.2);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(150, 150, 150, 0.35);
 }
 
 /* Telegram WebApp specific styling */
@@ -166,20 +214,21 @@ html[dir='ltr'] body {
 /* Subtle ambient glow orb */
 .ambient-glow {
   filter: blur(80px);
-  opacity: 0.3;
-  mix-blend-mode: screen;
+  opacity: 0.2;
 }
 
 /* ===== Coming Soon Page Styles ===== */
 
-/* Page-level: prevent body-scroll rubber banding on iOS */
 .cs-page {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-  touch-action: pan-y;
+  width: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Floating gradient orbs with hardware acceleration */
+/* Minimalist ambient orbs with hardware acceleration */
 .cs-orb {
   position: absolute;
   border-radius: 9999px;
@@ -189,31 +238,66 @@ html[dir='ltr'] body {
   backface-visibility: hidden;
 }
 
-.cs-orb-1 {
+/* Dark mode orbs: subtle white/zinc glow */
+.dark .cs-orb-1,
+:root:not([data-theme='light']) .cs-orb-1 {
   width: 280px;
   height: 280px;
   top: -80px;
   left: -60px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
-  animation: cs-drift-1 18s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 0%, transparent 70%);
+  animation: cs-drift-1 20s ease-in-out infinite;
 }
 
-.cs-orb-2 {
+.dark .cs-orb-2,
+:root:not([data-theme='light']) .cs-orb-2 {
   width: 240px;
   height: 240px;
   top: 35%;
   right: -80px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%);
-  animation: cs-drift-2 22s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
+  animation: cs-drift-2 24s ease-in-out infinite;
 }
 
-.cs-orb-3 {
+.dark .cs-orb-3,
+:root:not([data-theme='light']) .cs-orb-3 {
   width: 200px;
   height: 200px;
   bottom: 5%;
   left: -40px;
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.08) 0%, transparent 70%);
-  animation: cs-drift-3 20s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.025) 0%, transparent 70%);
+  animation: cs-drift-3 22s ease-in-out infinite;
+}
+
+/* Light mode orbs: soft subtle slate/silver glow */
+.light .cs-orb-1,
+[data-theme='light'] .cs-orb-1 {
+  width: 280px;
+  height: 280px;
+  top: -80px;
+  left: -60px;
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.03) 0%, transparent 70%);
+  animation: cs-drift-1 20s ease-in-out infinite;
+}
+
+.light .cs-orb-2,
+[data-theme='light'] .cs-orb-2 {
+  width: 240px;
+  height: 240px;
+  top: 35%;
+  right: -80px;
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.025) 0%, transparent 70%);
+  animation: cs-drift-2 24s ease-in-out infinite;
+}
+
+.light .cs-orb-3,
+[data-theme='light'] .cs-orb-3 {
+  width: 200px;
+  height: 200px;
+  bottom: 5%;
+  left: -40px;
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.02) 0%, transparent 70%);
+  animation: cs-drift-3 22s ease-in-out infinite;
 }
 
 @keyframes cs-drift-1 {
@@ -222,10 +306,10 @@ html[dir='ltr'] body {
     transform: translate(0, 0) scale(1);
   }
   33% {
-    transform: translate(30px, 20px) scale(1.05);
+    transform: translate(25px, 15px) scale(1.04);
   }
   66% {
-    transform: translate(-15px, 35px) scale(0.97);
+    transform: translate(-10px, 25px) scale(0.98);
   }
 }
 
@@ -235,10 +319,10 @@ html[dir='ltr'] body {
     transform: translate(0, 0) scale(1);
   }
   40% {
-    transform: translate(-25px, -30px) scale(1.08);
+    transform: translate(-20px, -20px) scale(1.06);
   }
   70% {
-    transform: translate(15px, 20px) scale(0.95);
+    transform: translate(12px, 15px) scale(0.96);
   }
 }
 
@@ -248,25 +332,32 @@ html[dir='ltr'] body {
     transform: translate(0, 0) scale(1);
   }
   50% {
-    transform: translate(20px, -25px) scale(1.03);
+    transform: translate(15px, -18px) scale(1.02);
   }
 }
 
-/* Subtle dot grid overlay */
-.cs-grid-overlay {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+/* Dot grid overlay adapted to dark/light */
+.dark .cs-grid-overlay,
+:root:not([data-theme='light']) .cs-grid-overlay {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.light .cs-grid-overlay,
+[data-theme='light'] .cs-grid-overlay {
+  background-image: radial-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 /* Avatar entrance animation */
 .cs-avatar-entrance {
-  animation: cs-avatar-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: cs-avatar-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes cs-avatar-in {
   0% {
     opacity: 0;
-    transform: scale(0.6) translateY(12px);
+    transform: scale(0.7) translateY(10px);
   }
   100% {
     opacity: 1;
@@ -282,40 +373,40 @@ html[dir='ltr'] body {
 @keyframes cs-breathe-pulse {
   0%,
   100% {
-    opacity: 0.3;
+    opacity: 0.25;
     transform: scale(1);
   }
   50% {
-    opacity: 0.5;
-    transform: scale(1.1);
+    opacity: 0.45;
+    transform: scale(1.08);
   }
 }
 
 /* Staggered fade-in for content sections */
 .cs-fade-in {
-  animation: cs-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: 0.15s;
+  animation: cs-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.1s;
 }
 
 .cs-fade-in-delay-1 {
-  animation: cs-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: 0.25s;
+  animation: cs-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.2s;
 }
 
 .cs-fade-in-delay-2 {
-  animation: cs-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: 0.4s;
+  animation: cs-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.3s;
 }
 
 .cs-fade-in-delay-3 {
-  animation: cs-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: 0.55s;
+  animation: cs-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.4s;
 }
 
 @keyframes cs-fade-up {
   0% {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(14px);
   }
   100% {
     opacity: 1;
