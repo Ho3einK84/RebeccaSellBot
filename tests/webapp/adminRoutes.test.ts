@@ -141,6 +141,8 @@ describe('WebApp Server & Admin Routes', () => {
         services: [{ serviceId: 1, name: 'V2Ray Service', isDefault: true }],
       },
     ]),
+    getPanelUsage: vi.fn(async () => ({ activeConfigsCount: 5 })),
+    getService: vi.fn(() => ({ checkHealth: vi.fn(async () => true) })),
   };
 
   const mockConfig = {
@@ -505,6 +507,44 @@ describe('WebApp Server & Admin Routes', () => {
       expect(response.statusCode).toBe(403);
       const body = response.json();
       expect(body.error).toContain('disabled');
+    });
+  });
+
+  describe('GET /api/admin/panels', () => {
+    it('returns enriched panels list with health and usage', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/panels',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const data = res.json();
+      expect(data.panels).toHaveLength(1);
+      expect(data.panels[0].id).toBe('panel_1');
+      expect(data.panels[0].activeConfigsCount).toBe(5);
+      expect(data.panels[0].healthy).toBe(true);
+      expect(typeof data.panels[0].latencyMs).toBe('number');
+    });
+  });
+
+  describe('POST /api/admin/panels/:id/test', () => {
+    it('tests panel connection successfully', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels/panel_1/test',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const data = res.json();
+      expect(data.success).toBe(true);
+      expect(data.healthy).toBe(true);
+      expect(typeof data.latencyMs).toBe('number');
     });
   });
 

@@ -5,6 +5,11 @@ import { buildScreen, isMessageNotModifiedError, promptInConversation } from '..
 import { escapeTelegramMarkdown } from '../../../rendering.js';
 import { requireAdmin } from '../shared.js';
 import { waitForSettingsInput } from './navigation.js';
+import {
+  normalizeDomainInput,
+  getServerPublicIp,
+  checkDomainDns,
+} from '../../../../domain/services/domainVerification.js';
 
 export async function adminWebAppSettingsConversation(
   conversation: MyConversation,
@@ -25,6 +30,8 @@ export async function adminWebAppSettingsConversation(
     const isRunning = activeCtx.services.isWebAppRunning
       ? activeCtx.services.isWebAppRunning()
       : Boolean(activeCtx.services.webAppUrl);
+
+    const serverIp = (await conversation.external(() => getServerPublicIp())) || '';
 
     const onBadge = t(activeCtx, 'admin_overview_active');
     const offBadge = t(activeCtx, 'admin_overview_inactive');
@@ -70,12 +77,27 @@ export async function adminWebAppSettingsConversation(
           ],
         },
         {
-          emoji: '📋',
+          emoji: '⚡',
           title: t(activeCtx, 'admin_webapp_guide_title'),
           fields: [
+            ...(serverIp
+              ? [
+                  {
+                    label: t(activeCtx, 'admin_webapp_server_ip_label'),
+                    value: `\`${serverIp}\``,
+                  },
+                ]
+              : []),
+            {
+              label: t(activeCtx, 'admin_webapp_reverse_proxy_label'),
+              value: t(activeCtx, 'admin_webapp_reverse_proxy_value'),
+            },
             {
               label: 'Reverse Proxy',
-              value: t(activeCtx, 'admin_webapp_guide_desc', { port }),
+              value: t(activeCtx, 'admin_webapp_guide_desc', {
+                port,
+                serverIp: serverIp || 'YOUR_SERVER_IP',
+              }),
             },
           ],
         },
@@ -139,128 +161,158 @@ export async function adminWebAppSettingsConversation(
       }
 
       if (!webAppUrl) {
-        const promptKeyboard = new InlineKeyboard().text(
-          t(activeCtx, 'menu_cancel'),
-          'webapp:prompt:cancel'
-        );
-        await promptInConversation(
+        const configuredCtx = await handleDomainConfigurationFlow(
           conversation,
           activeCtx,
-          t(activeCtx, 'admin_webapp_prompt_url', { port }),
-          {
-            parse_mode: 'Markdown',
-            reply_markup: promptKeyboard,
-          }
+          port,
+          serverIp
         );
-
-        const urlInput = await waitForSettingsInput(conversation, {
-          allowText: true,
-          callbackPrefixes: ['webapp:prompt:'],
-          retryKeyboard: promptKeyboard,
-        });
-
-        if (urlInput.type === 'cancel' || urlInput.type === 'back') break;
-        if (urlInput.type === 'callback' && urlInput.data === 'webapp:prompt:cancel') {
-          activeCtx = urlInput.ctx;
-          continue;
-        }
-
-        if (urlInput.type === 'text') {
-          activeCtx = urlInput.ctx;
-          const candidateUrl = urlInput.value.trim();
-          if (!candidateUrl.startsWith('https://')) {
-            await activeCtx.reply(t(activeCtx, 'admin_webapp_invalid_url'));
-            continue;
-          }
-          try {
-            new URL(candidateUrl);
-          } catch {
-            await activeCtx.reply(t(activeCtx, 'admin_webapp_invalid_url'));
-            continue;
-          }
-
-          let activationError: string | undefined;
-          await conversation.external(async (outsideCtx) => {
-            if (!outsideCtx.services?.enableWebApp) return;
-            const res = await outsideCtx.services.enableWebApp(candidateUrl);
-            if (!res.success) {
-              activationError = res.error;
-            }
-          });
-
-          if (activationError) {
-            await activeCtx.reply(`❌ ${escapeTelegramMarkdown(activationError)}`);
-          } else {
-            await activeCtx.reply(t(activeCtx, 'admin_webapp_enabled_success'));
-          }
+        if (configuredCtx) {
+          activeCtx = configuredCtx;
         }
         continue;
       }
 
+      let activationError: string | undefined;
       await conversation.external(async (outsideCtx) => {
         if (!outsideCtx.services?.enableWebApp) return;
-        await outsideCtx.services.enableWebApp(webAppUrl);
+        const res = await outsideCtx.services.enableWebApp(webAppUrl);
+        if (!res.success) {
+          activationError = res.error;
+        }
       });
+      if (activationError) {
+        await activeCtx.reply(`❌ ${escapeTelegramMarkdown(activationError)}`);
+      }
       continue;
     }
 
     if (input.data === 'webapp:edit:url') {
-      const promptKeyboard = new InlineKeyboard().text(
-        t(activeCtx, 'menu_cancel'),
-        'webapp:prompt:cancel'
-      );
-      await promptInConversation(
+      const configuredCtx = await handleDomainConfigurationFlow(
         conversation,
         activeCtx,
-        t(activeCtx, 'admin_webapp_prompt_url', { port }),
-        {
-          parse_mode: 'Markdown',
-          reply_markup: promptKeyboard,
-        }
+        port,
+        serverIp,
+        true
       );
-
-      const urlInput = await waitForSettingsInput(conversation, {
-        allowText: true,
-        callbackPrefixes: ['webapp:prompt:'],
-        retryKeyboard: promptKeyboard,
-      });
-
-      if (urlInput.type === 'cancel' || urlInput.type === 'back') break;
-      if (urlInput.type === 'callback' && urlInput.data === 'webapp:prompt:cancel') {
-        activeCtx = urlInput.ctx;
-        continue;
-      }
-
-      if (urlInput.type === 'text') {
-        activeCtx = urlInput.ctx;
-        const candidateUrl = urlInput.value.trim();
-        if (!candidateUrl.startsWith('https://')) {
-          await activeCtx.reply(t(activeCtx, 'admin_webapp_invalid_url'));
-          continue;
-        }
-        try {
-          new URL(candidateUrl);
-        } catch {
-          await activeCtx.reply(t(activeCtx, 'admin_webapp_invalid_url'));
-          continue;
-        }
-
-        let activationError: string | undefined;
-        await conversation.external(async (outsideCtx) => {
-          if (!outsideCtx.services?.enableWebApp) return;
-          const res = await outsideCtx.services.enableWebApp(candidateUrl);
-          if (!res.success) {
-            activationError = res.error;
-          }
-        });
-
-        if (activationError) {
-          await activeCtx.reply(`❌ ${escapeTelegramMarkdown(activationError)}`);
-        } else {
-          await activeCtx.reply(t(activeCtx, 'admin_webapp_updated_success'));
-        }
+      if (configuredCtx) {
+        activeCtx = configuredCtx;
       }
       continue;
     }
   }
+}
+
+async function handleDomainConfigurationFlow(
+  conversation: MyConversation,
+  initialCtx: ConversationContext,
+  port: number,
+  serverIp: string,
+  isEdit = false
+): Promise<ConversationContext | null> {
+  let activeCtx = initialCtx;
+
+  const promptKeyboard = new InlineKeyboard().text(
+    t(activeCtx, 'menu_cancel'),
+    'webapp:prompt:cancel'
+  );
+  await promptInConversation(
+    conversation,
+    activeCtx,
+    t(activeCtx, 'admin_webapp_prompt_url', { port, serverIp: serverIp || 'YOUR_SERVER_IP' }),
+    {
+      parse_mode: 'Markdown',
+      reply_markup: promptKeyboard,
+    }
+  );
+
+  const urlInput = await waitForSettingsInput(conversation, {
+    allowText: true,
+    callbackPrefixes: ['webapp:prompt:'],
+    retryKeyboard: promptKeyboard,
+  });
+
+  if (urlInput.type === 'cancel' || urlInput.type === 'back') return null;
+  if (urlInput.type === 'callback' && urlInput.data === 'webapp:prompt:cancel') {
+    return urlInput.ctx;
+  }
+
+  if (urlInput.type !== 'text') {
+    return null;
+  }
+
+  activeCtx = urlInput.ctx;
+  const rawInput = urlInput.value.trim();
+  const normalized = normalizeDomainInput(rawInput);
+
+  if (!normalized.valid) {
+    await activeCtx.reply(t(activeCtx, 'admin_webapp_invalid_url'));
+    return activeCtx;
+  }
+
+  // Pre-flight DNS check
+  const dnsResult = await conversation.external(() =>
+    checkDomainDns(normalized.hostname, serverIp)
+  );
+
+  if (dnsResult.resolved && !dnsResult.matchesServer && serverIp) {
+    const dnsWarningKeyboard = new InlineKeyboard()
+      .text(t(activeCtx, 'admin_webapp_dns_btn_proceed'), 'webapp:dns:proceed')
+      .row()
+      .text(t(activeCtx, 'admin_webapp_dns_btn_cancel'), 'webapp:dns:cancel');
+
+    await promptInConversation(
+      conversation,
+      activeCtx,
+      t(activeCtx, 'admin_webapp_dns_mismatch_warning', {
+        domain: normalized.hostname,
+        resolvedIp: dnsResult.ips.join(', ') || 'N/A',
+        serverIp,
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: dnsWarningKeyboard,
+      }
+    );
+
+    const dnsChoice = await waitForSettingsInput(conversation, {
+      callbackPrefixes: ['webapp:dns:'],
+      retryKeyboard: dnsWarningKeyboard,
+    });
+
+    if (dnsChoice.type === 'cancel' || dnsChoice.type === 'back') return null;
+    if (dnsChoice.type === 'callback') {
+      activeCtx = dnsChoice.ctx;
+      if (dnsChoice.data === 'webapp:dns:cancel') {
+        return activeCtx;
+      }
+    }
+  }
+
+  // Notify admin that verification probe & automated SSL activation is starting
+  await activeCtx.reply(t(activeCtx, 'admin_webapp_activating_probe'));
+
+  let activationRes:
+    { success: boolean; error?: string; sslActive?: boolean; normalizedUrl?: string } | undefined;
+
+  await conversation.external(async (outsideCtx) => {
+    if (!outsideCtx.services?.enableWebApp) return;
+    activationRes = await outsideCtx.services.enableWebApp(normalized.url);
+  });
+
+  if (!activationRes?.success) {
+    await activeCtx.reply(
+      `❌ ${escapeTelegramMarkdown(activationRes?.error || 'Activation failed')}`
+    );
+  } else if (isEdit) {
+    await activeCtx.reply(t(activeCtx, 'admin_webapp_updated_success', { url: normalized.url }));
+  } else if (activationRes.sslActive) {
+    await activeCtx.reply(t(activeCtx, 'admin_webapp_enabled_success', { url: normalized.url }));
+  } else {
+    await activeCtx.reply(
+      t(activeCtx, 'admin_webapp_enabled_pending_ssl', { url: normalized.url })
+    );
+  }
+
+  return activeCtx;
 }

@@ -5,6 +5,7 @@ import { AdminDashboard } from './components/AdminDashboard.js';
 import type { TelegramWebAppUser } from './types/telegram.js';
 import { LanguageProvider } from './i18n/LanguageContext.js';
 import type { SupportedLocale } from './i18n/translations.js';
+import { Loader2, AlertTriangle, ShieldX } from 'lucide-react';
 
 interface AuthResponse {
   role: 'admin' | 'user';
@@ -78,16 +79,10 @@ export const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="coming-soon-container">
-        <div className="glass-panel" style={{ padding: '32px 48px', textAlign: 'center' }}>
-          <div
-            style={{ fontSize: '36px', marginBottom: '16px', animation: 'spin 1s infinite linear' }}
-          >
-            ⏳
-          </div>
-          <p style={{ margin: 0, fontSize: '15px', color: '#94a3b8' }}>
-            در حال برقراری ارتباط امن با سرور...
-          </p>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="glass-panel p-8 max-w-sm w-full text-center flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
+          <p className="text-sm text-slate-300 font-medium">در حال برقراری ارتباط امن با سرور...</p>
         </div>
       </div>
     );
@@ -95,15 +90,21 @@ export const App: React.FC = () => {
 
   if (error || !authData) {
     return (
-      <div className="coming-soon-container">
-        <div className="glass-panel coming-soon-card">
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
-          <h2 style={{ margin: '0 0 12px 0', fontSize: '18px' }}>خطای احراز هویت</h2>
-          <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '24px' }}>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="glass-panel p-8 max-w-sm w-full text-center flex flex-col items-center gap-4">
+          <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20">
+            {error?.includes('ربات') ? (
+              <ShieldX className="w-7 h-7" />
+            ) : (
+              <AlertTriangle className="w-7 h-7" />
+            )}
+          </div>
+          <h2 className="text-lg font-bold text-white">خطای احراز هویت</h2>
+          <p className="text-sm text-slate-400 leading-relaxed">
             {error || 'امکان احراز هویت تلگرام وجود ندارد.'}
           </p>
           <button
-            className="btn-primary"
+            className="btn btn-primary w-full shadow-lg shadow-indigo-500/20"
             onClick={() => {
               if (window.Telegram?.WebApp?.close) {
                 window.Telegram.WebApp.close();

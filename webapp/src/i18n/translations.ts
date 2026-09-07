@@ -10,10 +10,17 @@ export interface Translations {
   networkError: string;
   refresh: string;
   cancel: string;
+  confirm: string;
   toman: string;
   currency: string;
   language: string;
   switchLang: string;
+  close: string;
+  copy: string;
+  copied: string;
+  all: string;
+  active: string;
+  inactive: string;
 
   // User Coming Soon
   greeting: string;
@@ -71,6 +78,17 @@ export interface Translations {
   receiptDate: string;
   receiptApprove: string;
   receiptReject: string;
+  receiptViewPhoto: string;
+  receiptNoPhoto: string;
+  receiptPhotoModalTitle: string;
+  receiptApproveConfirmTitle: string;
+  receiptApproveConfirmBody: string;
+  receiptApproveConfirmBtn: string;
+  reasonPresetUnclear: string;
+  reasonPresetNotReceived: string;
+  reasonPresetDuplicate: string;
+  reasonPresetMismatch: string;
+  reasonPresetOther: string;
 
   // Users
   usersTitle: string;
@@ -78,6 +96,10 @@ export interface Translations {
   usersSearchBtn: string;
   usersSearching: string;
   usersNotFound: string;
+  usersTotalCount: string;
+  paginationPrev: string;
+  paginationNext: string;
+  paginationPage: string;
   colId: string;
   colUsername: string;
   colName: string;
@@ -97,6 +119,20 @@ export interface Translations {
   userActiveConfigs: string;
   userApprovedReceipts: string;
   userAuditEvents: string;
+  userTabFinances: string;
+  userTabOrders: string;
+  userTabReceipts: string;
+  noOrders: string;
+  noReceipts: string;
+  orderPackage: string;
+  orderAmount: string;
+  orderDate: string;
+  orderStatus: string;
+  balanceCurLabel: string;
+  balancePreviewLabel: string;
+  quickReasonCard: string;
+  quickReasonCompensation: string;
+  quickReasonAdjustment: string;
 
   // Panels
   panelsFleetTitle: string;
@@ -109,6 +145,14 @@ export interface Translations {
   panelAddress: string;
   panelConnectedServices: string;
   panelDefaultService: string;
+  panelTestBtn: string;
+  panelTesting: string;
+  panelLatency: string;
+  panelOnline: string;
+  panelOffline: string;
+  panelConfigsCount: string;
+  panelFleetStatusOk: string;
+  panelFleetStatusWarning: string;
 
   // Coming Soon Modules
   modulesTitle: string;
@@ -161,6 +205,8 @@ export interface Translations {
   notifyBalanceSuccess: string;
   notifyBalanceFailed: string;
   notifyPanelsError: string;
+  notifyPanelTestSuccess: string;
+  notifyPanelTestFailed: string;
   notifyNetworkError: string;
   langChangeSuccess: string;
   langChangeFailed: string;
@@ -179,77 +225,100 @@ export const translations: Record<SupportedLocale, Translations> = {
     authFailed: 'امکان احراز هویت تلگرام وجود ندارد.',
     closeWindow: 'بستن پنجره',
     networkError: 'خطای ارتباط با سرور',
-    refresh: '🔄 به‌روزرسانی',
+    refresh: 'به‌روزرسانی',
     cancel: 'انصراف',
+    confirm: 'تأیید',
     toman: 'تومان',
     currency: 'تومان',
     language: 'زبان',
     switchLang: 'English',
+    close: 'بستن',
+    copy: 'کپی',
+    copied: 'کپی شد',
+    all: 'همه',
+    active: 'فعال',
+    inactive: 'غیرفعال',
 
     // User Coming Soon
     greeting: 'سلام، {name}!',
     telegramId: 'شناسه تلگرام:',
-    portalTitle: '🚀 پورتال کاربری به زودی فعال می‌شود',
+    portalTitle: 'پورتال کاربری به زودی فعال می‌شود',
     portalDesc:
       'امکانات خرید، مدیریت کانفیگ‌ها، کیف پول و پیگیری سفارشات از طریق مینی‌اپ در دست توسعه است. در حال حاضر می‌توانید کلیه خدمات را به راحتی از طریق ربات تلگرام انجام دهید.',
     backToBot: 'بازگشت به ربات تلگرام',
     guestUser: 'کاربر گرامی',
 
     // Admin Dashboard
-    adminTitle: '🛠️ پنل مدیریت RebeccaSellBot',
+    adminTitle: 'پنل مدیریت RebeccaSellBot',
     adminWelcome: 'خوش آمدید، {name} (شناسه: {id}) · سطح دسترسی: مدیر سیستم',
     adminRole: 'مدیر سیستم',
 
     // Tabs
-    tabOverview: '📊 آمار و وضعیت',
-    tabReceipts: '🧾 رسیدهای واریز',
-    tabUsers: '👥 مدیریت کاربران',
-    tabPanels: '🖥️ وضعیت پنل‌ها',
-    tabComingSoon: '🧩 ماژول‌های به زودی',
+    tabOverview: 'آمار و وضعیت',
+    tabReceipts: 'رسیدهای واریز',
+    tabUsers: 'مدیریت کاربران',
+    tabPanels: 'وضعیت پنل‌ها',
+    tabComingSoon: 'سایر ماژول‌ها',
 
     // Overview Stats
     statsLoading: 'در حال بارگذاری آمار...',
-    statPendingReceipts: '🧾 رسیدهای در انتظار',
+    statPendingReceipts: 'رسیدهای در انتظار',
     statPendingReceiptsSub: 'نیاز به بررسی مدیر',
-    statTotalUsers: '👥 کل کاربران',
+    statTotalUsers: 'کل کاربران',
     statTotalUsersSub: 'حساب ثبت‌شده در ربات',
-    statTotalSales: '💰 کل فروش سیستم',
+    statTotalSales: 'کل فروش سیستم',
     statTotalSalesSub: 'مجموع خرید کاربران',
-    statDailyRevenue: '📅 درآمد امروز',
+    statDailyRevenue: 'درآمد امروز',
     statDailyRevenueSub: 'از ساعت ۰۰:۰۰ امروز',
-    statWeeklyRevenue: '🗓️ درآمد این هفته',
+    statWeeklyRevenue: 'درآمد این هفته',
     statWeeklyRevenueSub: '۷ روز اخیر',
-    statMonthlyRevenue: '📆 درآمد این ماه',
+    statMonthlyRevenue: 'درآمد این ماه',
     statMonthlyRevenueSub: '۳۰ روز اخیر',
-    statActiveSubs: '🟢 سرویس‌های فعال',
+    statActiveSubs: 'سرویس‌های فعال',
     statActiveSubsSub: 'کانفیگ دارای اعتبار',
-    statInactiveSubs: '⚪️ سرویس‌های منقضی/غیرفعال',
+    statInactiveSubs: 'سرویس‌های منقضی/غیرفعال',
     statInactiveSubsSub: 'اتمام حجم یا تاریخ',
-    statReferralBonus: '🎁 پاداش‌های ارجاع',
+    statReferralBonus: 'پاداش‌های ارجاع',
     statReferralBonusSub: 'پرداخت شده به معرف‌ها',
-    statCashback: '💸 کش‌بک پرداختی',
+    statCashback: 'کش‌بک پرداختی',
     statCashbackSub: 'بازگشت نقدی خریدها',
-    panelHealthTitle: '🩺 سلامت پنل‌های ربکا',
-    panelHealthOk: '🟢 سالم',
-    panelHealthError: '⚠️ خطای پنل',
+    panelHealthTitle: 'سلامت پنل‌های ربکا',
+    panelHealthOk: 'سالم',
+    panelHealthError: 'خطای پنل',
     panelHealthSub: '{healthy} از {configured} پنل در دسترس',
 
     // Receipts
-    receiptsQueueTitle: '🧾 صف تایید رسیدهای کارت‌به‌کارت',
+    receiptsQueueTitle: 'صف تایید رسیدهای کارت‌به‌کارت',
     receiptsLoading: 'در حال دریافت رسیدها...',
-    receiptsEmpty: '📭 هیچ رسیدی در انتظار بررسی وجود ندارد.',
+    receiptsEmpty: 'هیچ رسیدی در انتظار بررسی وجود ندارد.',
     receiptAmount: 'مبلغ: {amount} تومان',
     receiptUser: 'شناسه کاربر: {id} · کد رسید: {recId}',
     receiptDate: 'تاریخ ثبت: {date}',
-    receiptApprove: '✅ تایید و شارژ',
-    receiptReject: '❌ رد رسید',
+    receiptApprove: 'تایید و شارژ',
+    receiptReject: 'رد رسید',
+    receiptViewPhoto: 'مشاهده تصویر رسید',
+    receiptNoPhoto: 'رسید فاقد فایل تصویر است',
+    receiptPhotoModalTitle: 'تصویر رسید پرداخت',
+    receiptApproveConfirmTitle: 'تأیید رسید پرداخت',
+    receiptApproveConfirmBody:
+      'آیا از تأیید این رسید به مبلغ {amount} مطمئن هستید؟ موجودی کاربر فوراً شارژ خواهد شد.',
+    receiptApproveConfirmBtn: 'بله، شارژ شود',
+    reasonPresetUnclear: 'رسید ناخوانا یا مخدوش است',
+    reasonPresetNotReceived: 'مبلغ به حساب واریز نشده است',
+    reasonPresetDuplicate: 'رسید تکراری است',
+    reasonPresetMismatch: 'مغایرت در مبلغ واریزی',
+    reasonPresetOther: 'سایر دلایل (یادداشت دستی)',
 
     // Users
-    usersTitle: '👥 جستجو و مدیریت کاربران',
-    usersSearchPlaceholder: 'جستجو با شناسه تلگرام، نام کاربری، نام، لینک یا نام کانفیگ...',
-    usersSearchBtn: '🔍 جستجو',
+    usersTitle: 'جستجو و مدیریت کاربران',
+    usersSearchPlaceholder: 'جستجو با شناسه تلگرام، نام کاربری یا نام...',
+    usersSearchBtn: 'جستجو',
     usersSearching: 'در حال جستجو...',
     usersNotFound: 'کاربری یافت نشد.',
+    usersTotalCount: 'مجموع {count} کاربر ثبت‌شده',
+    paginationPrev: 'قبلی',
+    paginationNext: 'بعدی',
+    paginationPage: 'صفحه {page} از {totalPages}',
     colId: 'شناسه',
     colUsername: 'نام کاربری',
     colName: 'نام',
@@ -257,88 +326,112 @@ export const translations: Record<SupportedLocale, Translations> = {
     colActiveSubs: 'سرویس فعال',
     colActions: 'عملیات',
     activeSubsCount: '{count} سرویس',
-    btnDetails: '📋 جزئیات',
-    btnChangeBalance: '💰 تغییر موجودی',
-    inspectLoading: 'در حال بارگذاری گزارش کامل کاربر...',
-    userDetailsTitle: 'گزارش کامل کاربر: {id} ({username})',
+    btnDetails: 'جزئیات',
+    btnChangeBalance: 'تغییر موجودی',
+    inspectLoading: 'در حال بارگذاری اطلاعات کامل کاربر...',
+    userDetailsTitle: 'پرونده کاربر: {id} ({username})',
     noUsername: 'بدون یوزرنیم',
-    btnCloseReport: 'بستن گزارش',
+    btnCloseReport: 'بستن پرونده',
     userCurBalance: 'موجودی فعلی',
     userTotalDeposit: 'کل واریزها',
     userTotalSpend: 'کل هزینه خرید',
     userActiveConfigs: 'سرویس‌های فعال',
-    userApprovedReceipts: 'کل رسیدهای تایید شده',
-    userAuditEvents: 'کل رویدادهای لاگ',
+    userApprovedReceipts: 'رسیدهای تایید شده',
+    userAuditEvents: 'رویدادهای لاگ',
+    userTabFinances: 'خلاصه مالی و سرویس‌ها',
+    userTabOrders: 'سفارش‌های اخیر',
+    userTabReceipts: 'رسیدهای پرداخت',
+    noOrders: 'هیچ سفارشی ثبت نشده است.',
+    noReceipts: 'هیچ رسیدی یافت نشد.',
+    orderPackage: 'پکیج:',
+    orderAmount: 'مبلغ:',
+    orderDate: 'تاریخ:',
+    orderStatus: 'وضعیت:',
+    balanceCurLabel: 'موجودی فعلی کاربر:',
+    balancePreviewLabel: 'موجودی نهایی پس از اعمال:',
+    quickReasonCard: 'واریز کارت به کارت',
+    quickReasonCompensation: 'جبران قطعی سرویس',
+    quickReasonAdjustment: 'اصلاح شارژ حساب',
 
     // Panels
-    panelsFleetTitle: '🖥️ ناوگان پنل‌های ربکا',
-    panelsLoading: 'در حال بارگذاری لیست پنل‌ها...',
+    panelsFleetTitle: 'وضعیت ناوگان پنل‌های ربکا',
+    panelsLoading: 'در حال دریافت اطلاعات پنل‌ها...',
     panelsEmpty: 'هیچ پنلی ثبت نشده است.',
-    panelDefault: '⭐ پیش‌فرض',
+    panelDefault: 'پیش‌فرض',
     panelActive: 'فعال',
     panelInactive: 'غیرفعال',
-    panelAuthMode: 'حالت احراز:',
+    panelAuthMode: 'حالت اتصال:',
     panelAddress: 'آدرس پنل:',
     panelConnectedServices: 'سرویس‌های متصل:',
-    panelDefaultService: '· پیش‌فرض',
+    panelDefaultService: 'پیش‌فرض',
+    panelTestBtn: 'تست اتصال',
+    panelTesting: 'در حال پینگ...',
+    panelLatency: '{ms} میلی‌ثانیه',
+    panelOnline: 'آنلاین و پاسخگو',
+    panelOffline: 'آفلاین / عدم پاسخگویی',
+    panelConfigsCount: '{count} کانفیگ فعال',
+    panelFleetStatusOk: 'تمام پنل‌های متصل در وضعیت آنلاین و سالم قرار دارند',
+    panelFleetStatusWarning: 'یک یا چند پنل با اختلال در اتصال یا قطعی مواجه هستند',
 
     // Coming Soon Modules
-    modulesTitle: '🧩 ماژول‌های مدیریتی (در دست آماده‌سازی وب)',
+    modulesTitle: 'ماژول‌های مدیریتی (در دست توسعه وب)',
     modulesDesc:
-      'این سرویس‌ها دارای سرویس‌های فعال دامنه در ربات تلگرام هستند و در فازهای بعدی به مینی‌اپ متصل خواهند شد:',
+      'این سرویس‌ها در هسته ربات تلگرام فعال هستند و در نسخه‌های آتی مستقیماً به پنل وب‌اپ افزوده خواهند شد:',
     tagComingSoon: 'به زودی',
     modBroadcast: 'ارسال همگانی',
-    modBroadcastSub: 'ارسال پیام به تمام کاربران (Broadcast)',
-    modPlans: 'مدیریت پلن‌ها و قیمت‌گذاری',
-    modPlansSub: 'تعریف و ویرایش تعرفه‌ها (Plans & Rates)',
+    modBroadcastSub: 'ارسال پیام و اعلان به تمام کاربران',
+    modPlans: 'مدیریت تعرفه‌ها',
+    modPlansSub: 'تعریف، قیمت‌گذاری و ویرایش پلن‌ها',
     modPromo: 'کدهای تخفیف',
-    modPromoSub: 'مدیریت کدهای تخفیف و پروموشن (Promo Codes)',
-    modGateways: 'تنظیمات درگاه و شماره کارت‌ها',
-    modGatewaysSub: 'مدیریت روش‌های پرداخت و کارت‌ها (Payment Gateways)',
-    modBackups: 'بک‌آپ‌گیری و لاگ سیستم',
-    modBackupsSub: 'پشتیبان‌گیری دیتابیس و رویدادها (Backups & Logs)',
-    modWheel: 'مدیریت گردونه شانس',
-    modWheelSub: 'تنظیمات جوایز و شانس‌ها (Lucky Wheel)',
-    modTrial: 'سرویس تست',
-    modTrialSub: 'مدیریت کانفیگ‌های تست رایگان (Trial Service)',
+    modPromoSub: 'ساخت و مدیریت کدهای تخفیف و پروموشن',
+    modGateways: 'تنظیمات درگاه و کارت',
+    modGatewaysSub: 'مدیریت شماره کارت‌ها و درگاه‌های پرداخت',
+    modBackups: 'پشتیبان‌گیری و امنیت',
+    modBackupsSub: 'بک‌آپ‌گیری دیتابیس و مدیریت فایل‌ها',
+    modWheel: 'گردونه شانس',
+    modWheelSub: 'تنظیمات جوایز، شانس‌ها و کش‌بک گردونه',
+    modTrial: 'سرویس تست رایگان',
+    modTrialSub: 'مدیریت حجم و مهلت کانفیگ‌های تست',
 
     // Modals
     modalRejectTitle: 'رد رسید واریز',
     modalRejectConfirm: 'آیا از رد رسید {id} متعلق به کاربر {userId} اطمینان دارید؟',
-    modalRejectReasonLabel: 'دلیل رد رسید (اختیاری):',
-    modalRejectReasonPlaceholder: 'مثلاً: تصویر ناخوانا یا واریز نشدن وجه',
+    modalRejectReasonLabel: 'دلیل رد رسید:',
+    modalRejectReasonPlaceholder: 'توضیحات تکمیلی برای کاربر...',
     modalRejectSubmit: 'تایید رد رسید',
     modalRejectSubmitting: 'در حال ثبت...',
 
-    modalBalanceTitle: 'تغییر موجودی کاربر',
+    modalBalanceTitle: 'تغییر موجودی کیف پول کاربر',
     modalBalanceUser: 'کاربر: {userId} · موجودی فعلی: {balance} تومان',
     modalBalanceOpLabel: 'نوع عملیات:',
-    modalBalanceOpAdd: '➕ افزایش موجودی (Add)',
-    modalBalanceOpDeduct: '➖ کاهش موجودی (Deduct)',
-    modalBalanceOpSet: '✏️ تنظیم دقیق موجودی (Set)',
+    modalBalanceOpAdd: 'افزایش موجودی (+)',
+    modalBalanceOpDeduct: 'کاهش موجودی (-)',
+    modalBalanceOpSet: 'تنظیم دقیق مقدار (=)',
     modalBalanceAmountLabel: 'مبلغ (تومان):',
-    modalBalanceAmountPlaceholder: 'مبلغ به تومان',
-    modalBalanceReasonLabel: 'دلیل تغییر (الزامی برای ثبت در لاگ حسابرسی):',
-    modalBalanceReasonPlaceholder: 'مثلاً: جبران خسارت قطعی، شارژ دستی تستی',
+    modalBalanceAmountPlaceholder: 'مبلغ به تومان وارد کنید',
+    modalBalanceReasonLabel: 'دلیل تغییر (الزامی برای لاگ سیستم):',
+    modalBalanceReasonPlaceholder: 'دلیل تغییر موجودی...',
     modalBalanceSubmit: 'ثبت تغییر موجودی',
     modalBalanceSubmitting: 'در حال اعمال...',
 
     // Notifications
-    notifyStatsError: 'خطا در بارگذاری آمار داشبورد',
-    notifyReceiptsError: 'خطا در دریافت رسیدها',
-    notifyReceiptApproved: 'رسید با موفقیت تایید شد و کیف پول کاربر شارژ گردید',
+    notifyStatsError: 'خطا در دریافت آمار سیستم',
+    notifyReceiptsError: 'خطا در دریافت لیست رسیدها',
+    notifyReceiptApproved: 'رسید با موفقیت تایید و حساب کاربر شارژ شد',
     notifyReceiptRejected: 'رسید با موفقیت رد شد',
     notifyReceiptActionFailed: 'عملیات روی رسید ناموفق بود',
-    notifyUsersError: 'خطا در جستجوی کاربران',
+    notifyUsersError: 'خطا در دریافت اطلاعات کاربران',
     notifyUserReportError: 'خطا در دریافت گزارش کاربر',
     notifyBalanceSuccess: 'موجودی کاربر با موفقیت تغییر کرد (موجودی جدید: {balance} تومان)',
     notifyBalanceFailed: 'تغییر موجودی ناموفق بود',
     notifyPanelsError: 'خطا در دریافت لیست پنل‌ها',
+    notifyPanelTestSuccess: 'ارتباط با پنل موفقیت‌آمیز بود (تاخیر: {ms}ms)',
+    notifyPanelTestFailed: 'خطا در برقراری ارتباط با پنل',
     notifyNetworkError: 'خطا در برقراری ارتباط با سرور',
     langChangeSuccess: 'زبان با موفقیت تغییر کرد',
     langChangeFailed: 'خطا در تغییر زبان',
-    betaBadge: 'آزمایشی (Beta)',
-    betaNotice: 'این سامانه در نسخه آزمایشی (Beta) قرار دارد و ویژگی‌های آن در حال تکمیل است.',
+    betaBadge: 'نسخه ۲.۰',
+    betaNotice: 'این پنل برای مدیریت بهینه، سریع و امن فروشگاه مجهز به daisyUI ۵ طراحی شده است.',
   },
   en: {
     // Common
@@ -348,77 +441,100 @@ export const translations: Record<SupportedLocale, Translations> = {
     authFailed: 'Unable to authenticate with Telegram.',
     closeWindow: 'Close Window',
     networkError: 'Network error connecting to server',
-    refresh: '🔄 Refresh',
+    refresh: 'Refresh',
     cancel: 'Cancel',
+    confirm: 'Confirm',
     toman: 'Toman',
     currency: 'Toman',
     language: 'Language',
     switchLang: 'فارسی',
+    close: 'Close',
+    copy: 'Copy',
+    copied: 'Copied',
+    all: 'All',
+    active: 'Active',
+    inactive: 'Inactive',
 
     // User Coming Soon
     greeting: 'Hello, {name}!',
     telegramId: 'Telegram ID:',
-    portalTitle: '🚀 User Portal Coming Soon',
+    portalTitle: 'User Portal Coming Soon',
     portalDesc:
       'Features for purchasing, subscription management, wallet top-up, and order tracking via Mini App are under active development. You can currently access all services via the Telegram bot.',
     backToBot: 'Back to Telegram Bot',
     guestUser: 'Dear User',
 
     // Admin Dashboard
-    adminTitle: '🛠️ RebeccaSellBot Admin Dashboard',
+    adminTitle: 'RebeccaSellBot Admin Dashboard',
     adminWelcome: 'Welcome, {name} (ID: {id}) · Role: System Admin',
     adminRole: 'System Admin',
 
     // Tabs
-    tabOverview: '📊 Stats & Overview',
-    tabReceipts: '🧾 Receipts',
-    tabUsers: '👥 Users',
-    tabPanels: '🖥️ Panels',
-    tabComingSoon: '🧩 Coming Soon',
+    tabOverview: 'Overview',
+    tabReceipts: 'Receipts',
+    tabUsers: 'Users',
+    tabPanels: 'Panels',
+    tabComingSoon: 'Modules',
 
     // Overview Stats
     statsLoading: 'Loading statistics...',
-    statPendingReceipts: '🧾 Pending Receipts',
+    statPendingReceipts: 'Pending Receipts',
     statPendingReceiptsSub: 'Needs admin review',
-    statTotalUsers: '👥 Total Users',
+    statTotalUsers: 'Total Users',
     statTotalUsersSub: 'Registered bot accounts',
-    statTotalSales: '💰 Total Sales',
+    statTotalSales: 'Total Sales',
     statTotalSalesSub: 'Cumulative user purchases',
-    statDailyRevenue: "📅 Today's Revenue",
+    statDailyRevenue: "Today's Revenue",
     statDailyRevenueSub: 'Since 00:00 today',
-    statWeeklyRevenue: '🗓️ Weekly Revenue',
+    statWeeklyRevenue: 'Weekly Revenue',
     statWeeklyRevenueSub: 'Past 7 days',
-    statMonthlyRevenue: '📆 Monthly Revenue',
+    statMonthlyRevenue: 'Monthly Revenue',
     statMonthlyRevenueSub: 'Past 30 days',
-    statActiveSubs: '🟢 Active Subscriptions',
+    statActiveSubs: 'Active Subscriptions',
     statActiveSubsSub: 'Active valid configs',
-    statInactiveSubs: '⚪️ Expired / Inactive',
+    statInactiveSubs: 'Expired / Inactive',
     statInactiveSubsSub: 'Quota or time expired',
-    statReferralBonus: '🎁 Referral Bonuses',
+    statReferralBonus: 'Referral Bonuses',
     statReferralBonusSub: 'Paid to referrers',
-    statCashback: '💸 Cashback Paid',
+    statCashback: 'Cashback Paid',
     statCashbackSub: 'Purchase cashback rewards',
-    panelHealthTitle: '🩺 Rebecca Panels Health',
-    panelHealthOk: '🟢 Healthy',
-    panelHealthError: '⚠️ Panel Error',
+    panelHealthTitle: 'Rebecca Panels Health',
+    panelHealthOk: 'Healthy',
+    panelHealthError: 'Panel Error',
     panelHealthSub: '{healthy} of {configured} panels available',
 
     // Receipts
-    receiptsQueueTitle: '🧾 Deposit Receipts Queue',
+    receiptsQueueTitle: 'Deposit Receipts Queue',
     receiptsLoading: 'Loading receipts...',
-    receiptsEmpty: '📭 No pending receipts to review.',
+    receiptsEmpty: 'No pending receipts to review.',
     receiptAmount: 'Amount: {amount} Toman',
     receiptUser: 'User ID: {id} · Receipt ID: {recId}',
     receiptDate: 'Date: {date}',
-    receiptApprove: '✅ Approve & Credit',
-    receiptReject: '❌ Reject Receipt',
+    receiptApprove: 'Approve & Credit',
+    receiptReject: 'Reject Receipt',
+    receiptViewPhoto: 'View Receipt Image',
+    receiptNoPhoto: 'No image file attached',
+    receiptPhotoModalTitle: 'Payment Receipt Image',
+    receiptApproveConfirmTitle: 'Approve Receipt',
+    receiptApproveConfirmBody:
+      'Are you sure you want to approve this receipt for {amount} Toman? The user wallet will be credited immediately.',
+    receiptApproveConfirmBtn: 'Yes, Credit Wallet',
+    reasonPresetUnclear: 'Receipt image is unreadable or blurry',
+    reasonPresetNotReceived: 'Payment not received in bank account',
+    reasonPresetDuplicate: 'Duplicate payment receipt',
+    reasonPresetMismatch: 'Amount mismatch with bank deposit',
+    reasonPresetOther: 'Other reason (manual note)',
 
     // Users
-    usersTitle: '👥 User Management & Search',
-    usersSearchPlaceholder: 'Search by Telegram ID, username, name, sub URL or config name...',
-    usersSearchBtn: '🔍 Search',
+    usersTitle: 'User Management & Search',
+    usersSearchPlaceholder: 'Search by Telegram ID, username, or name...',
+    usersSearchBtn: 'Search',
     usersSearching: 'Searching...',
     usersNotFound: 'No users found.',
+    usersTotalCount: 'Total {count} registered users',
+    paginationPrev: 'Previous',
+    paginationNext: 'Next',
+    paginationPage: 'Page {page} of {totalPages}',
     colId: 'ID',
     colUsername: 'Username',
     colName: 'Name',
@@ -426,8 +542,8 @@ export const translations: Record<SupportedLocale, Translations> = {
     colActiveSubs: 'Active Subs',
     colActions: 'Actions',
     activeSubsCount: '{count} Services',
-    btnDetails: '📋 Details',
-    btnChangeBalance: '💰 Adjust Balance',
+    btnDetails: 'Details',
+    btnChangeBalance: 'Adjust Balance',
     inspectLoading: 'Loading user report...',
     userDetailsTitle: 'User Report: {id} ({username})',
     noUsername: 'No username',
@@ -438,23 +554,45 @@ export const translations: Record<SupportedLocale, Translations> = {
     userActiveConfigs: 'Active Subscriptions',
     userApprovedReceipts: 'Approved Receipts',
     userAuditEvents: 'Audit Log Events',
+    userTabFinances: 'Finances & Subscriptions',
+    userTabOrders: 'Recent Orders',
+    userTabReceipts: 'Payment Receipts',
+    noOrders: 'No orders recorded yet.',
+    noReceipts: 'No receipts found.',
+    orderPackage: 'Package:',
+    orderAmount: 'Amount:',
+    orderDate: 'Date:',
+    orderStatus: 'Status:',
+    balanceCurLabel: 'Current Balance:',
+    balancePreviewLabel: 'New Balance after change:',
+    quickReasonCard: 'Card transfer deposit',
+    quickReasonCompensation: 'Service downtime compensation',
+    quickReasonAdjustment: 'Account balance adjustment',
 
     // Panels
-    panelsFleetTitle: '🖥️ Rebecca Panels Fleet',
+    panelsFleetTitle: 'Rebecca Panels Fleet Status',
     panelsLoading: 'Loading panels list...',
     panelsEmpty: 'No panels registered.',
-    panelDefault: '⭐ Default',
+    panelDefault: 'Default',
     panelActive: 'Active',
     panelInactive: 'Inactive',
     panelAuthMode: 'Auth Mode:',
     panelAddress: 'Panel URL:',
     panelConnectedServices: 'Connected Services:',
-    panelDefaultService: '· Default',
+    panelDefaultService: 'Default',
+    panelTestBtn: 'Test Connection',
+    panelTesting: 'Pinging...',
+    panelLatency: '{ms}ms',
+    panelOnline: 'Online & Responsive',
+    panelOffline: 'Offline / Unreachable',
+    panelConfigsCount: '{count} active configs',
+    panelFleetStatusOk: 'All connected panels are healthy and responsive',
+    panelFleetStatusWarning: 'One or more panels are experiencing connectivity issues',
 
     // Coming Soon Modules
-    modulesTitle: '🧩 Admin Modules (Web Portal in Progress)',
+    modulesTitle: 'Admin Modules (Web Portal in Progress)',
     modulesDesc:
-      'These domain services are active in the bot and will be integrated into the Mini App in upcoming phases:',
+      'These domain services are active in the bot core and will be integrated into the Mini App in upcoming updates:',
     tagComingSoon: 'Coming Soon',
     modBroadcast: 'Broadcast / Mass Messaging',
     modBroadcastSub: 'Send messages to all bot users',
@@ -474,21 +612,21 @@ export const translations: Record<SupportedLocale, Translations> = {
     // Modals
     modalRejectTitle: 'Reject Deposit Receipt',
     modalRejectConfirm: 'Are you sure you want to reject receipt {id} for user {userId}?',
-    modalRejectReasonLabel: 'Rejection reason (optional):',
-    modalRejectReasonPlaceholder: 'e.g. illegible screenshot or unverified transfer',
+    modalRejectReasonLabel: 'Rejection reason:',
+    modalRejectReasonPlaceholder: 'Additional explanation for the user...',
     modalRejectSubmit: 'Confirm Rejection',
     modalRejectSubmitting: 'Processing...',
 
-    modalBalanceTitle: 'Adjust User Balance',
+    modalBalanceTitle: 'Adjust User Wallet Balance',
     modalBalanceUser: 'User: {userId} · Current Balance: {balance} Toman',
     modalBalanceOpLabel: 'Operation Type:',
-    modalBalanceOpAdd: '➕ Add to Balance',
-    modalBalanceOpDeduct: '➖ Deduct from Balance',
-    modalBalanceOpSet: '✏️ Set Exact Balance',
+    modalBalanceOpAdd: 'Add to Balance (+)',
+    modalBalanceOpDeduct: 'Deduct from Balance (-)',
+    modalBalanceOpSet: 'Set Exact Balance (=)',
     modalBalanceAmountLabel: 'Amount (Toman):',
-    modalBalanceAmountPlaceholder: 'Amount in Toman',
+    modalBalanceAmountPlaceholder: 'Enter amount in Toman',
     modalBalanceReasonLabel: 'Reason (Required for audit log):',
-    modalBalanceReasonPlaceholder: 'e.g. compensation, manual adjustment',
+    modalBalanceReasonPlaceholder: 'Reason for balance change...',
     modalBalanceSubmit: 'Apply Balance Change',
     modalBalanceSubmitting: 'Applying...',
 
@@ -503,10 +641,13 @@ export const translations: Record<SupportedLocale, Translations> = {
     notifyBalanceSuccess: 'User balance updated successfully (New balance: {balance} Toman)',
     notifyBalanceFailed: 'Failed to update balance',
     notifyPanelsError: 'Failed to load panels list',
+    notifyPanelTestSuccess: 'Panel connection test successful (Latency: {ms}ms)',
+    notifyPanelTestFailed: 'Failed to reach panel',
     notifyNetworkError: 'Network error connecting to server',
     langChangeSuccess: 'Language updated successfully',
     langChangeFailed: 'Failed to update language',
-    betaBadge: 'Beta',
-    betaNotice: 'This platform is currently in Beta and features are actively being expanded.',
+    betaBadge: 'v2.0',
+    betaNotice:
+      'This dashboard is powered by daisyUI 5 for optimal speed, mobile UX, and security.',
   },
 };

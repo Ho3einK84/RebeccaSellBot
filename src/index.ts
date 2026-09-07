@@ -22,6 +22,10 @@ import { PaymentService } from './domain/services/PaymentService.js';
 import { BackupService } from './domain/services/BackupService.js';
 import { LuckyWheelService } from './domain/services/LuckyWheelService.js';
 import {
+  normalizeDomainInput,
+  verifyDomainSslAndReachability,
+} from './domain/services/domainVerification.js';
+import {
   initializeBot,
   setupBot,
   startBot,
@@ -144,29 +148,36 @@ async function main() {
 
   let currentWebAppUrl: string | undefined = initialWebAppUrl;
 
-  const enableWebApp = async (url: string): Promise<{ success: boolean; error?: string }> => {
-    const trimmed = url.trim();
-    if (!trimmed.startsWith('https://')) {
-      return { success: false, error: 'URL must start with https://' };
-    }
-    try {
-      new URL(trimmed);
-    } catch {
-      return { success: false, error: 'Invalid URL format' };
+  const enableWebApp = async (
+    inputUrl: string
+  ): Promise<{ success: boolean; error?: string; sslActive?: boolean; normalizedUrl?: string }> => {
+    const normalized = normalizeDomainInput(inputUrl);
+    if (!normalized.valid) {
+      return { success: false, error: normalized.error || 'Invalid domain or URL format' };
     }
 
     try {
       await translationService.updateSettings({
-        webapp_url: trimmed,
+        webapp_url: normalized.url,
         webapp_enabled: 'true',
       });
-      currentWebAppUrl = trimmed;
-      services.webAppUrl = trimmed;
+      currentWebAppUrl = normalized.url;
+      services.webAppUrl = normalized.url;
 
       if (!activeWebAppHandle) {
         activeWebAppHandle = await startWebAppServer(config, services);
       }
-      return { success: true };
+
+      // Automated reachability & TLS probe (triggers Caddy On-Demand TLS handshake)
+      let sslActive = false;
+      try {
+        const probeRes = await verifyDomainSslAndReachability(normalized.url, 6000);
+        sslActive = probeRes.ok;
+      } catch {
+        sslActive = false;
+      }
+
+      return { success: true, sslActive, normalizedUrl: normalized.url };
     } catch (err) {
       logger.error({ err }, 'Failed to dynamically enable WebApp');
       return {

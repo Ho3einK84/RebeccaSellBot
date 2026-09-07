@@ -110,7 +110,9 @@ export type BotServices = {
   /** Port on which the local WebApp Fastify server is listening. */
   webAppPort?: number;
   /** Dynamically activate the WebApp Fastify server with the specified public HTTPS URL. */
-  enableWebApp?: (url: string) => Promise<{ success: boolean; error?: string }>;
+  enableWebApp?: (
+    url: string
+  ) => Promise<{ success: boolean; error?: string; sslActive?: boolean; normalizedUrl?: string }>;
   /** Dynamically deactivate the WebApp and hide the launch buttons. */
   disableWebApp?: () => Promise<void>;
   /** Check whether the WebApp Fastify server is currently running. */

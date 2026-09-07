@@ -1,0 +1,21 @@
+# RebeccaSellBot Caddy Reverse Proxy Configuration
+# Enables zero-touch Automated Reverse Proxy and On-Demand TLS (SSL) for Mini App and Webhooks.
+
+{
+    # Authorize certificate issuance exclusively for domains approved by RebeccaSellBot
+    on_demand_tls {
+        ask http://main_bot:3002/api/caddy-check
+    }
+}
+
+# Catch-all HTTPS configuration for authorized Mini App domains
+https:// {
+    tls {
+        on_demand
+    }
+
+    # Forward all traffic to the internal Fastify Mini App server
+    reverse_proxy main_bot:3002
+
+    encode zstd gzip
+}

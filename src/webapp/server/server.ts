@@ -106,6 +106,7 @@ export async function createWebAppServer(
     walletService: services.walletService,
     userService: services.userService,
     panelRegistry: services.panelRegistry,
+    botToken: config.BOT_TOKEN,
   });
 
   // Static files & SPA fallback

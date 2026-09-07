@@ -1353,20 +1353,31 @@ export const FA_TEXTS: Record<string, string> = {
   admin_webapp_url_label: 'آدرس دامنه HTTPS',
   admin_webapp_port_label: 'پورت سرور داخلی',
   admin_webapp_delivery_label: 'حالت اجرای ربات',
-  admin_webapp_guide_title: '📋 راهنمای اتصال دامنه (Long Polling و Webhook)',
+  admin_webapp_server_ip_label: 'آی‌پی سرور (DNS)',
+  admin_webapp_reverse_proxy_label: 'سرور معکوس (Reverse Proxy)',
+  admin_webapp_reverse_proxy_value: '⚡ خودکار (Caddy On-Demand TLS)',
+  admin_webapp_guide_title: '⚡ اتصال خودکار دامنه (Reverse Proxy & SSL)',
   admin_webapp_guide_desc:
-    'برای فعال‌سازی خودکار مینی‌اپ، کافیست در وب‌سرور خود (Nginx یا Caddy) ترافیک یک دامنه یا ساب‌دامنه دارای SSL را به پورت {port} سرور هدایت (Reverse Proxy) کرده و آدرس HTTPS آن را ارسال کنید.',
+    'برای اتصال مینی‌اپ، نیازی به تنظیم دستی وب‌سرور (Nginx یا Caddy) نیست! کافیست رکورد A دامنه یا ساب‌دامنه خود را به IP سرور ({serverIp}) متصل کنید. سرور Caddy از طریق قابلیت On-Demand به‌صورت خودکار گواهی SSL را صادر کرده و ترافیک را به پورت {port} هدایت (Reverse Proxy) می‌کند.',
   admin_webapp_toggle_enable: '🟢 فعال‌سازی مینی‌اپ',
   admin_webapp_toggle_disable: '🔴 غیرفعال‌سازی مینی‌اپ',
   admin_webapp_edit_url: '✏️ تنظیم / تغییر آدرس دامنه',
   admin_webapp_prompt_url:
-    '🌐 لطفاً آدرس دامنه HTTPS مینی‌اپ خود را ارسال کنید:\n(مثال: `https://app.yourdomain.com`)\n\n⚠️ مینی‌اپ فعلاً در نسخه آزمایشی (Beta) است.\n💡 در حالت Long Polling، فقط کافیست دامنه با SSL را در Reverse Proxy به پورت {port} سرور هدایت کنید.',
+    '🌐 لطفاً نام دامنه یا ساب‌دامنه مینی‌اپ خود را ارسال کنید:\n(مثال: `app.yourdomain.com` یا `https://app.yourdomain.com`)\n\n📌 *آی‌پی سرور جهت ثبت رکورد A در DNS:*\n`{serverIp}`\n\n⚡ سرور معکوس (Reverse Proxy) و صدور گواهی امنیتی SSL به‌صورت کاملاً خودکار انجام خواهد شد.',
   admin_webapp_invalid_url:
-    '❌ آدرس ارسال‌شده نامعتبر است. آدرس باید یک URL معتبر باشد و با https:// شروع شود.',
+    '❌ دامنه یا آدرس نامعتبر است. لطفاً یک نام دامنه یا ساب‌دامنه معتبر وارد کنید (مثال: `app.example.com`).',
+  admin_webapp_dns_mismatch_warning:
+    '⚠️ *هشدار رکورد DNS دامنه*\n\nدامنه `{domain}` در حال حاضر به آی‌پی `{resolvedIp}` اشاره دارد، در حالی که آی‌پی این سرور `{serverIp}` است.\n\n💡 اگر به‌تازگی رکورد A را ثبت کرده‌اید، ممکن است چند دقیقه زمان ببرد تا در سطح اینترنت پخش شود. همچنین در صورت استفاده از کلودفلر، حالت پروکسی را موقتاً خاموش (DNS Only) بگذارید تا صدور خودکار SSL انجام شود.\n\nآیا مایل به فعال‌سازی با همین دامنه هستید؟',
+  admin_webapp_dns_btn_proceed: '✅ تأیید و ادامه فعال‌سازی',
+  admin_webapp_dns_btn_cancel: '❌ لغو و اصلاح دامنه',
+  admin_webapp_activating_probe: '⏳ در حال بررسی دامنه و صدور خودکار گواهی SSL...',
   admin_webapp_enabled_success:
-    '✅ مینی‌اپ با موفقیت فعال شد و سرور وب‌اپ اجرا گردید!\nدکمه‌های مینی‌اپ به منوی اصلی و منوی مدیریت اضافه شدند.',
+    '✅ *مینی‌اپ با موفقیت فعال شد!*\n\n🔒 گواهی امنیتی SSL به‌صورت خودکار صادر و تأیید گردید.\n🌐 آدرس مینی‌اپ: `{url}`\n\nدکمه‌های مینی‌اپ به منوی اصلی و منوی مدیریت اضافه شدند.',
+  admin_webapp_enabled_pending_ssl:
+    '✅ *تنظیمات دامنه با موفقیت ذخیره شد.*\n\n🌐 آدرس: `{url}`\n⏳ سرور داخلی فعال شد. به محض انتشار کامل DNS، گواهی SSL در اولین بازدید کاربر به‌صورت خودکار توسط Caddy صادر خواهد شد.',
   admin_webapp_disabled_success: '✅ مینی‌اپ غیرفعال شد و دکمه‌های ورود از منوها برداشته شدند.',
-  admin_webapp_updated_success: '✅ آدرس مینی‌اپ با موفقیت به‌روزرسانی شد.',
+  admin_webapp_updated_success:
+    '✅ *آدرس مینی‌اپ با موفقیت به‌روزرسانی شد.*\n\n🌐 آدرس جدید: `{url}`',
   admin_setting_webapp_enabled: 'فعال‌سازی مینی‌اپ (Beta)',
   admin_setting_webapp_url: 'آدرس دامنه مینی‌اپ (URL)',
 };

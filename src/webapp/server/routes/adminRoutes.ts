@@ -22,6 +22,7 @@ export function registerAdminRoutes(
     walletService: WalletService;
     userService: UserService;
     panelRegistry: RebeccaPanelRegistry;
+    botToken?: string;
   }
 ): void {
   app.register(async (adminScope) => {
@@ -218,7 +219,72 @@ export function registerAdminRoutes(
     // GET /api/admin/panels
     adminScope.get('/api/admin/panels', async (_request, reply) => {
       const panels = services.panelRegistry.listPanels();
-      return reply.code(200).send({ panels });
+      const enrichedPanels = await Promise.all(
+        panels.map(async (panel) => {
+          let activeConfigsCount = 0;
+          let healthy = panel.enabled;
+          let latencyMs: number | undefined;
+
+          try {
+            if (typeof services.panelRegistry.getPanelUsage === 'function') {
+              const countRes = await services.panelRegistry.getPanelUsage(panel.id);
+              activeConfigsCount = countRes.activeConfigsCount;
+            }
+          } catch {
+            // default to 0
+          }
+
+          try {
+            if (panel.enabled && typeof services.panelRegistry.getService === 'function') {
+              const service = services.panelRegistry.getService(panel.id);
+              const start = Date.now();
+              healthy = await service.checkHealth();
+              latencyMs = Date.now() - start;
+            }
+          } catch {
+            healthy = false;
+          }
+
+          return {
+            ...panel,
+            activeConfigsCount,
+            healthy,
+            latencyMs,
+          };
+        })
+      );
+
+      return reply.code(200).send({ panels: enrichedPanels });
+    });
+
+    // POST /api/admin/panels/:id/test
+    adminScope.post<{
+      Params: { id: string };
+    }>('/api/admin/panels/:id/test', async (request, reply) => {
+      const { id } = request.params;
+      try {
+        if (typeof services.panelRegistry.getService !== 'function') {
+          return reply
+            .code(400)
+            .send({ success: false, healthy: false, error: 'Registry service unavailable' });
+        }
+        const service = services.panelRegistry.getService(id);
+        const start = Date.now();
+        const healthy = await service.checkHealth();
+        const latencyMs = Date.now() - start;
+        return reply.code(200).send({
+          success: true,
+          healthy,
+          latencyMs,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Connection test failed';
+        return reply.code(200).send({
+          success: false,
+          healthy: false,
+          error: message,
+        });
+      }
     });
   });
 }

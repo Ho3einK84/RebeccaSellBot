@@ -1361,19 +1361,31 @@ export const EN_TEXTS: Record<string, string> = {
   admin_webapp_url_label: 'HTTPS Domain URL',
   admin_webapp_port_label: 'Internal Server Port',
   admin_webapp_delivery_label: 'Bot Delivery Mode',
-  admin_webapp_guide_title: '📋 Domain Setup Guide (Long Polling & Webhook)',
+  admin_webapp_server_ip_label: 'Server IP (DNS)',
+  admin_webapp_reverse_proxy_label: 'Reverse Proxy',
+  admin_webapp_reverse_proxy_value: '⚡ Automated (Caddy On-Demand TLS)',
+  admin_webapp_guide_title: '⚡ Automated Reverse Proxy & SSL Integration',
   admin_webapp_guide_desc:
-    'To automatically activate the Mini App, configure your reverse proxy (Nginx or Caddy) to forward HTTPS traffic to port {port}, then submit your HTTPS domain URL below.',
+    'No manual Nginx or Caddy reverse proxy configuration is required! Simply point your domain or subdomain DNS A-record to the server IP ({serverIp}). Caddy On-Demand TLS automatically provisions SSL certificates and reverse-proxies traffic to port {port}.',
   admin_webapp_toggle_enable: '🟢 Enable Mini App',
   admin_webapp_toggle_disable: '🔴 Disable Mini App',
   admin_webapp_edit_url: '✏️ Set / Change Domain URL',
   admin_webapp_prompt_url:
-    '🌐 Please send your Mini App HTTPS domain URL:\n(e.g., `https://app.yourdomain.com`)\n\n⚠️ Mini App is currently in Beta.\n💡 In Long Polling mode, simply proxy your SSL domain to port {port}.',
-  admin_webapp_invalid_url: '❌ Invalid URL. Must be a valid URL starting with https://.',
+    '🌐 Please send your Mini App domain or subdomain:\n(e.g., `app.yourdomain.com` or `https://app.yourdomain.com`)\n\n📌 *Server IP for your DNS A-record:*\n`{serverIp}`\n\n⚡ Reverse Proxy routing and SSL certificate issuance will be configured automatically.',
+  admin_webapp_invalid_url:
+    '❌ Invalid domain or URL. Please enter a valid domain or subdomain (e.g., `app.example.com`).',
+  admin_webapp_dns_mismatch_warning:
+    '⚠️ *DNS Record Mismatch Warning*\n\nDomain `{domain}` currently resolves to `{resolvedIp}`, while this server IP is `{serverIp}`.\n\n💡 If you just created the DNS A-record, propagation may take a few minutes. If using Cloudflare, please set the proxy status to DNS Only so automated SSL can be provisioned.\n\nDo you want to proceed with this domain anyway?',
+  admin_webapp_dns_btn_proceed: '✅ Confirm & Proceed',
+  admin_webapp_dns_btn_cancel: '❌ Cancel & Fix Domain',
+  admin_webapp_activating_probe: '⏳ Verifying domain and provisioning SSL certificate...',
   admin_webapp_enabled_success:
-    '✅ Mini App enabled successfully and web server started!\nLaunch buttons have been added to the main and admin menus.',
+    '✅ *Mini App enabled successfully!*\n\n🔒 SSL certificate automatically provisioned and verified.\n🌐 Mini App URL: `{url}`\n\nLaunch buttons have been added to the main and admin menus.',
+  admin_webapp_enabled_pending_ssl:
+    '✅ *Domain settings saved successfully.*\n\n🌐 URL: `{url}`\n⏳ Internal server is running. As soon as DNS propagates, SSL will be provisioned automatically by Caddy on the first user visit.',
   admin_webapp_disabled_success: '✅ Mini App disabled and launch buttons removed from menus.',
-  admin_webapp_updated_success: '✅ Mini App domain URL updated successfully.',
+  admin_webapp_updated_success:
+    '✅ *Mini App domain URL updated successfully.*\n\n🌐 New URL: `{url}`',
   admin_setting_webapp_enabled: 'Enable Mini App (Beta)',
   admin_setting_webapp_url: 'Mini App Domain URL',
 };
