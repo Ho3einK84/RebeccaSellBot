@@ -29,6 +29,23 @@ export interface Translations {
   portalDesc: string;
   backToBot: string;
   guestUser: string;
+  userPortalBadge: string;
+  inDevelopmentStatus: string;
+  serviceOnlineStatus: string;
+  currentServicesReadyTitle: string;
+  currentServicesReadyDesc: string;
+  upcomingFeaturesTitle: string;
+  featurePurchaseTitle: string;
+  featurePurchaseDesc: string;
+  featureTrafficTitle: string;
+  featureTrafficDesc: string;
+  featureConfigsTitle: string;
+  featureConfigsDesc: string;
+  featureWalletTitle: string;
+  featureWalletDesc: string;
+  copiedId: string;
+  premiumUserBadge: string;
+  closeMiniAppHint: string;
 
   // Admin Dashboard
   adminTitle: string;
@@ -242,11 +259,29 @@ export const translations: Record<SupportedLocale, Translations> = {
     // User Coming Soon
     greeting: 'سلام، {name}!',
     telegramId: 'شناسه تلگرام:',
-    portalTitle: 'پورتال کاربری به زودی فعال می‌شود',
+    portalTitle: 'پورتال هوشمند کاربری در راه است',
     portalDesc:
-      'امکانات خرید، مدیریت کانفیگ‌ها، کیف پول و پیگیری سفارشات از طریق مینی‌اپ در دست توسعه است. در حال حاضر می‌توانید کلیه خدمات را به راحتی از طریق ربات تلگرام انجام دهید.',
+      'امکانات پیشرفته خرید، مدیریت کانفیگ ها، پایش مصرف ترافیک و شارژ کیف پول از طریق مینی اپ در حال توسعه و نهایی سازی است.',
     backToBot: 'بازگشت به ربات تلگرام',
     guestUser: 'کاربر گرامی',
+    userPortalBadge: 'نسخه وب اپ کاربران',
+    inDevelopmentStatus: 'در دست نهایی سازی',
+    serviceOnlineStatus: 'سرویس ربات فعال است',
+    currentServicesReadyTitle: 'تمامی خدمات هم اکنون در ربات تلگرام فعال هستند',
+    currentServicesReadyDesc:
+      'شما می توانید کلیه خدمات خرید بسته ها، استعلام وضعیت اشتراک، افزایش موجودی کیف پول و ارتباط با پشتیبانی را بدون محدودیت از طریق دکمه های داخل ربات انجام دهید.',
+    upcomingFeaturesTitle: 'امکانات در حال آماده سازی پورتال',
+    featurePurchaseTitle: 'خرید و تمدید آنی',
+    featurePurchaseDesc: 'تهیه یا تمدید اشتراک با درگاه های پرداخت و کارت به کارت در چند ثانیه',
+    featureTrafficTitle: 'پایش آنلاین مصرف و حجم',
+    featureTrafficDesc: 'مشاهده لحظه ای حجم باقیمانده، روزهای فعال و وضعیت اتصال سرویس',
+    featureConfigsTitle: 'کانفیگ هوشمند و QR Code',
+    featureConfigsDesc: 'دریافت یک کلیک لینک های اتصال و اسکن سریع بارکد برای کلیه کلاینت ها',
+    featureWalletTitle: 'کیف پول و پاداش دعوت',
+    featureWalletDesc: 'افزایش موجودی حساب کاربری و دریافت پورسانت از معرفی دوستان',
+    copiedId: 'کپی شد!',
+    premiumUserBadge: 'کاربر پرمیوم',
+    closeMiniAppHint: 'یا با کشیدن به پایین، این پنجره را ببندید',
 
     // Admin Dashboard
     adminTitle: 'پنل مدیریت RebeccaSellBot',
@@ -458,11 +493,31 @@ export const translations: Record<SupportedLocale, Translations> = {
     // User Coming Soon
     greeting: 'Hello, {name}!',
     telegramId: 'Telegram ID:',
-    portalTitle: 'User Portal Coming Soon',
+    portalTitle: 'Smart User Portal Coming Soon',
     portalDesc:
-      'Features for purchasing, subscription management, wallet top-up, and order tracking via Mini App are under active development. You can currently access all services via the Telegram bot.',
+      'Advanced features for purchasing, config management, real-time traffic monitoring, and wallet top-ups via Mini App are under active development.',
     backToBot: 'Back to Telegram Bot',
     guestUser: 'Dear User',
+    userPortalBadge: 'User WebApp Portal',
+    inDevelopmentStatus: 'Under Finalization',
+    serviceOnlineStatus: 'Bot Service Online',
+    currentServicesReadyTitle: 'All Services Are Active in Telegram Bot',
+    currentServicesReadyDesc:
+      'You can easily purchase subscriptions, check remaining traffic, top up your wallet, and contact support anytime via the Telegram bot menu.',
+    upcomingFeaturesTitle: 'Upcoming Portal Features',
+    featurePurchaseTitle: 'Instant Purchase & Renewal',
+    featurePurchaseDesc:
+      'Fast checkout and subscription renewal with multiple payment methods in seconds',
+    featureTrafficTitle: 'Live Traffic & Usage',
+    featureTrafficDesc:
+      'Real-time monitoring of remaining bandwidth, active days, and service status',
+    featureConfigsTitle: 'Smart Configs & QR Code',
+    featureConfigsDesc: 'One-tap connection links and dedicated QR codes for all popular clients',
+    featureWalletTitle: 'Wallet & Referral Rewards',
+    featureWalletDesc: 'Instant balance top-up and affiliate commission rewards with invite links',
+    copiedId: 'Copied!',
+    premiumUserBadge: 'Telegram Premium',
+    closeMiniAppHint: 'Or swipe down to close this window',
 
     // Admin Dashboard
     adminTitle: 'RebeccaSellBot Admin Dashboard',
