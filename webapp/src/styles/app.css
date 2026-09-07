@@ -176,14 +176,17 @@ html[dir='ltr'] body {
 .cs-page {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
+  touch-action: pan-y;
 }
 
-/* Floating gradient orbs */
+/* Floating gradient orbs with hardware acceleration */
 .cs-orb {
   position: absolute;
   border-radius: 9999px;
   pointer-events: none;
   will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .cs-orb-1 {
