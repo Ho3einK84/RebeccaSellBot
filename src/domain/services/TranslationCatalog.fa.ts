@@ -247,6 +247,8 @@ export const FA_TEXTS: Record<string, string> = {
   purchase_target_unavailable: '⚠️ این بسته فعلاً در دسترس نیست. بستهٔ دیگری انتخاب کنید.',
 
   menu_buy_subscription: '🛒 خرید سرویس',
+  menu_webapp_launch: '🚀 ورود به مینی‌اپ',
+  admin_menu_webapp_launch: '📊 پنل مدیریت وب',
   menu_wallet: '👛 کیف پول',
   menu_my_subscriptions: '📱 سرویس‌های من',
   menu_free_trial: '🎁 سرویس تست',
@@ -1339,4 +1341,32 @@ export const FA_TEXTS: Record<string, string> = {
     'اعتبار زمانی اشتراک سرویس شما به پایان رسیده است. برای جلوگیری از قطعی، سرویس خود را تمدید کنید.',
   webhook_renew_button: '🔄 تمدید سرویس',
   webhook_service_label: 'سرویس',
+
+  // تنظیمات مینی‌اپ وب (Beta)
+  admin_menu_webapp_settings: '🌐 تنظیمات مینی‌اپ (بتا)',
+  admin_webapp_title: 'تنظیمات مینی‌اپ تلگرام (Beta)',
+  admin_webapp_subtitle: 'پیکربندی دامنه و فعال‌سازی خودکار سرور وب‌اپ',
+  admin_webapp_beta_notice_title: '⚠️ نسخه آزمایشی (Beta)',
+  admin_webapp_beta_notice:
+    'مینی‌اپ تلگرام در حال حاضر در نسخه آزمایشی (Beta) قرار دارد و امکانات آن هنوز به طور کامل تکمیل نشده است.',
+  admin_webapp_status_label: 'وضعیت وب‌اپ',
+  admin_webapp_url_label: 'آدرس دامنه HTTPS',
+  admin_webapp_port_label: 'پورت سرور داخلی',
+  admin_webapp_delivery_label: 'حالت اجرای ربات',
+  admin_webapp_guide_title: '📋 راهنمای اتصال دامنه (Long Polling و Webhook)',
+  admin_webapp_guide_desc:
+    'برای فعال‌سازی خودکار مینی‌اپ، کافیست در وب‌سرور خود (Nginx یا Caddy) ترافیک یک دامنه یا ساب‌دامنه دارای SSL را به پورت {port} سرور هدایت (Reverse Proxy) کرده و آدرس HTTPS آن را ارسال کنید.',
+  admin_webapp_toggle_enable: '🟢 فعال‌سازی مینی‌اپ',
+  admin_webapp_toggle_disable: '🔴 غیرفعال‌سازی مینی‌اپ',
+  admin_webapp_edit_url: '✏️ تنظیم / تغییر آدرس دامنه',
+  admin_webapp_prompt_url:
+    '🌐 لطفاً آدرس دامنه HTTPS مینی‌اپ خود را ارسال کنید:\n(مثال: `https://app.yourdomain.com`)\n\n⚠️ مینی‌اپ فعلاً در نسخه آزمایشی (Beta) است.\n💡 در حالت Long Polling، فقط کافیست دامنه با SSL را در Reverse Proxy به پورت {port} سرور هدایت کنید.',
+  admin_webapp_invalid_url:
+    '❌ آدرس ارسال‌شده نامعتبر است. آدرس باید یک URL معتبر باشد و با https:// شروع شود.',
+  admin_webapp_enabled_success:
+    '✅ مینی‌اپ با موفقیت فعال شد و سرور وب‌اپ اجرا گردید!\nدکمه‌های مینی‌اپ به منوی اصلی و منوی مدیریت اضافه شدند.',
+  admin_webapp_disabled_success: '✅ مینی‌اپ غیرفعال شد و دکمه‌های ورود از منوها برداشته شدند.',
+  admin_webapp_updated_success: '✅ آدرس مینی‌اپ با موفقیت به‌روزرسانی شد.',
+  admin_setting_webapp_enabled: 'فعال‌سازی مینی‌اپ (Beta)',
+  admin_setting_webapp_url: 'آدرس دامنه مینی‌اپ (URL)',
 };

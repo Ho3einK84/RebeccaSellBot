@@ -241,6 +241,13 @@ export const adminSystemMenu = new Menu<MenuContext>('admin-system-menu')
   )
   .row()
   .text(
+    (ctx) => t(ctx, 'admin_menu_webapp_settings'),
+    async (ctx) => {
+      await ctx.conversation.enter('adminWebAppSettingsConversation');
+    }
+  )
+  .row()
+  .text(
     (ctx) => t(ctx, 'admin_menu_admins'),
     async (ctx) => {
       await renderAdminRegistry(ctx);
@@ -264,6 +271,11 @@ export const adminSystemMenu = new Menu<MenuContext>('admin-system-menu')
 // ── Grouped Main Admin Menu ───────────────────────────────────────────────────
 
 export const adminMenu = new Menu<MenuContext>('admin-menu')
+  .dynamic((ctx, range) => {
+    if (ctx.services?.webAppUrl) {
+      range.webApp((c) => t(c, 'admin_menu_webapp_launch'), ctx.services.webAppUrl).row();
+    }
+  })
   .text(
     (ctx) => t(ctx, 'admin_menu_stats'),
     async (ctx) => {

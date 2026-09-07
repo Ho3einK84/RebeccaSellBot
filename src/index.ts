@@ -29,6 +29,8 @@ import {
   registerWebhook,
   type WebhookServerHandle,
 } from './telegram/bot.js';
+import type { BotServices } from './telegram/types.js';
+import { startWebAppServer, type WebAppServerHandle } from './webapp/server/server.js';
 import type http from 'node:http';
 import { RebeccaWebhookService } from './domain/services/RebeccaWebhookService.js';
 import {
@@ -50,6 +52,7 @@ import { jobRunner } from './jobs/workerRuntime.js';
 
 const WORKER_SHUTDOWN_TIMEOUT_MS = 30_000;
 let activeWebhookHandle: WebhookServerHandle | null = null;
+let activeWebAppHandle: WebAppServerHandle | null = null;
 
 function stopScheduledWorkers(): void {
   stopReconciliationCron();
@@ -134,7 +137,63 @@ async function main() {
     walletService.invalidateUserCache(telegramId)
   );
 
-  const services = {
+  const storedWebAppEnabled = translationService.getSettingBool('webapp_enabled', false);
+  const storedWebAppUrl = translationService.getSetting('webapp_url').trim();
+  const initialWebAppUrl =
+    config.WEBAPP_URL || (storedWebAppEnabled && storedWebAppUrl ? storedWebAppUrl : undefined);
+
+  let currentWebAppUrl: string | undefined = initialWebAppUrl;
+
+  const enableWebApp = async (url: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmed = url.trim();
+    if (!trimmed.startsWith('https://')) {
+      return { success: false, error: 'URL must start with https://' };
+    }
+    try {
+      new URL(trimmed);
+    } catch {
+      return { success: false, error: 'Invalid URL format' };
+    }
+
+    try {
+      await translationService.updateSettings({
+        webapp_url: trimmed,
+        webapp_enabled: 'true',
+      });
+      currentWebAppUrl = trimmed;
+      services.webAppUrl = trimmed;
+
+      if (!activeWebAppHandle) {
+        activeWebAppHandle = await startWebAppServer(config, services);
+      }
+      return { success: true };
+    } catch (err) {
+      logger.error({ err }, 'Failed to dynamically enable WebApp');
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to start WebApp server',
+      };
+    }
+  };
+
+  const disableWebApp = async (): Promise<void> => {
+    await translationService.updateSetting('webapp_enabled', 'false');
+    currentWebAppUrl = undefined;
+    services.webAppUrl = undefined;
+    if (activeWebAppHandle) {
+      const handle = activeWebAppHandle;
+      activeWebAppHandle = null;
+      await handle.close().catch((err) => {
+        logger.error({ err }, 'Error closing WebApp server on disable');
+      });
+    }
+  };
+
+  const isWebAppRunning = (): boolean => {
+    return activeWebAppHandle !== null;
+  };
+
+  const services: BotServices = {
     walletService,
     configService,
     pricingService,
@@ -155,6 +214,11 @@ async function main() {
     backupService,
     luckyWheelService,
     supportUrl: config.SUPPORT_URL,
+    webAppUrl: currentWebAppUrl,
+    webAppPort: config.WEBAPP_PORT,
+    enableWebApp,
+    disableWebApp,
+    isWebAppRunning,
     adminIds: adminService.adminIds,
     isAdmin: (telegramId: number) => adminService.isAdmin(telegramId),
   };
@@ -244,6 +308,14 @@ async function main() {
     let exitCode = 0;
     stopScheduledWorkers();
 
+    if (activeWebAppHandle) {
+      await activeWebAppHandle.close().catch((err) => {
+        exitCode = 1;
+        logger.error({ err }, 'Failed to close Web App server during shutdown');
+      });
+      activeWebAppHandle = null;
+    }
+
     if (webhookHandle) {
       await webhookHandle.close().catch((err) => {
         exitCode = 1;
@@ -275,6 +347,10 @@ async function main() {
 
   process.once('SIGINT', () => void shutdown('SIGINT'));
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
+
+  if (currentWebAppUrl) {
+    activeWebAppHandle = await startWebAppServer(config, services);
+  }
 
   if (config.BOT_DELIVERY_MODE === 'webhook') {
     webhookHandle = await startWebhookServer(bot, config, handleRebeccaWebhookRequest);
@@ -313,6 +389,11 @@ main().catch(async (err) => {
   markHealthFailed(err);
   logger.fatal({ err }, 'Fatal error on application startup or delivery lifecycle');
   stopScheduledWorkers();
+  if (activeWebAppHandle) {
+    await activeWebAppHandle.close().catch((closeErr) => {
+      logger.error({ err: closeErr }, 'Failed to close Web App server after fatal error');
+    });
+  }
   if (activeWebhookHandle) {
     await activeWebhookHandle.close().catch((closeErr) => {
       logger.error({ err: closeErr }, 'Failed to close webhook server after fatal error');

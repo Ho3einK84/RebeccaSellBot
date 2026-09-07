@@ -24,6 +24,7 @@ import {
   adminSearchUserConversation,
   adminEditSettingsConversation,
   adminBackupSettingsConversation,
+  adminWebAppSettingsConversation,
   adminManagePackagesConversation,
   adminCustomVolumeConversation,
   adminReferralSettingsConversation,
@@ -251,6 +252,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   bot.use(createConversation(adminSearchUserConversation, 'adminSearchUserConversation'));
   bot.use(createConversation(adminEditSettingsConversation, 'adminEditSettingsConversation'));
   bot.use(createConversation(adminBackupSettingsConversation, 'adminBackupSettingsConversation'));
+  bot.use(createConversation(adminWebAppSettingsConversation, 'adminWebAppSettingsConversation'));
   bot.use(createConversation(adminManagePackagesConversation, 'adminManagePackagesConversation'));
   bot.use(createConversation(adminCustomVolumeConversation, 'adminCustomVolumeConversation'));
   bot.use(

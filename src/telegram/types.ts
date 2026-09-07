@@ -105,6 +105,16 @@ export type BotServices = {
   luckyWheelService: LuckyWheelService;
   /** Optional Telegram-compatible support destination rendered as a URL button. */
   supportUrl?: string;
+  /** Optional public HTTPS URL for Telegram Mini App. */
+  webAppUrl?: string;
+  /** Port on which the local WebApp Fastify server is listening. */
+  webAppPort?: number;
+  /** Dynamically activate the WebApp Fastify server with the specified public HTTPS URL. */
+  enableWebApp?: (url: string) => Promise<{ success: boolean; error?: string }>;
+  /** Dynamically deactivate the WebApp and hide the launch buttons. */
+  disableWebApp?: () => Promise<void>;
+  /** Check whether the WebApp Fastify server is currently running. */
+  isWebAppRunning?: () => boolean;
   /** Telegram IDs authorized to use the administrative dashboard. */
   adminIds: number[];
   /** Sole authorization source for Telegram administrative operations. */

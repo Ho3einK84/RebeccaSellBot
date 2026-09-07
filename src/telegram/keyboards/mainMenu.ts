@@ -275,6 +275,11 @@ export function resolveSupportInfo(ctx: MenuContext): {
 // ── Main Menu ────────────────────────────────────────────────────────────────
 
 export const mainMenu = new Menu<MenuContext>('main-menu')
+  .dynamic((ctx, range) => {
+    if (ctx.services?.webAppUrl) {
+      range.webApp((c) => t(c, 'menu_webapp_launch'), ctx.services.webAppUrl).row();
+    }
+  })
   .text(
     (ctx) => t(ctx, 'menu_buy_subscription'),
     async (ctx) => {

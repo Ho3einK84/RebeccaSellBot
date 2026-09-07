@@ -77,6 +77,8 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   bot_enabled: 'true',
   language_selection_enabled: 'true',
   default_locale: 'fa',
+  webapp_enabled: 'false',
+  webapp_url: '',
 
   // Automated backup settings.
   backup_enabled: 'false',

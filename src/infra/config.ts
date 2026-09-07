@@ -153,6 +153,25 @@ const configSchema = z
         if (!trimmed) return '/api/rebecca-webhook';
         return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
       }),
+    WEBAPP_URL: z
+      .string()
+      .optional()
+      .transform((val) => val?.trim() || undefined)
+      .refine((val) => {
+        if (!val) return true;
+        if (!val.startsWith('https://')) return false;
+        try {
+          new URL(val);
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'WEBAPP_URL must be a valid HTTPS URL'),
+    WEBAPP_PORT: positiveIntegerSchema('WEBAPP_PORT', 3002).pipe(
+      z.number().max(65_535, 'WEBAPP_PORT is out of range')
+    ),
+    WEBAPP_HOST: optionalStringWithDefault('0.0.0.0'),
+    ADMIN_SESSION_SECRET: optionalSecretSchema,
   })
   .transform((val) => {
     const effectiveMode: 'polling' | 'webhook' =
@@ -226,6 +245,30 @@ const configSchema = z
           code: 'custom',
           path: ['WEBHOOK_PORT'],
           message: 'WEBHOOK_PORT must differ from HEALTH_CHECK_PORT',
+        });
+      }
+    }
+    if (value.WEBAPP_URL) {
+      if (!value.ADMIN_SESSION_SECRET || value.ADMIN_SESSION_SECRET.length < 32) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['ADMIN_SESSION_SECRET'],
+          message:
+            'ADMIN_SESSION_SECRET must contain at least 32 characters when WEBAPP_URL is configured',
+        });
+      }
+      if (value.WEBAPP_PORT === value.HEALTH_CHECK_PORT) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['WEBAPP_PORT'],
+          message: 'WEBAPP_PORT must differ from HEALTH_CHECK_PORT',
+        });
+      }
+      if (value.BOT_DELIVERY_MODE === 'webhook' && value.WEBAPP_PORT === value.WEBHOOK_PORT) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['WEBAPP_PORT'],
+          message: 'WEBAPP_PORT must differ from WEBHOOK_PORT',
         });
       }
     }

@@ -154,6 +154,11 @@ rsbot <name> logs -f           # Stream real-time structured logs
 | `WEBHOOK_PORT`          | Internal HTTP listening port for incoming Telegram updates.            | `3000`                               |
 | `WEBHOOK_PATH`          | Local URL path handled by the webhook server.                          | `/webhook` (or derived from URL)     |
 | `WEBHOOK_HOST_PORT`     | Host port bound in Docker Compose for reverse proxy forwarding.        | `3000`                               |
+| `WEBAPP_URL`            | Public HTTPS URL for Telegram Mini App (enables web app feature flag). | `https://app.example.com`            |
+| `WEBAPP_PORT`           | Internal HTTP port for Mini App Fastify server.                        | `3002`                               |
+| `WEBAPP_HOST`           | Internal listening host for Mini App Fastify server.                   | `0.0.0.0`                            |
+| `WEBAPP_HOST_PORT`      | Host port bound in Docker Compose for reverse proxy forwarding.        | `3002`                               |
+| `ADMIN_SESSION_SECRET`  | 32+ character secret for signing Mini App JWT cookies.                 | _Required when WEBAPP_URL is set_    |
 
 ---
 
@@ -184,7 +189,7 @@ WEBHOOK_PATH=/rsbot/webhook
 WEBHOOK_HOST_PORT=3000
 ```
 
-#### Reverse Proxy Configurations
+#### Reverse Proxy Configurations (Webhook)
 
 ##### Caddy (Recommended)
 
@@ -214,6 +219,53 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+---
+
+## Telegram Mini App (Optional Feature)
+
+RebeccaSellBot includes a modern, feature-flagged Telegram Mini App dashboard.
+
+> [!IMPORTANT]
+> **Opt-In Trade-Off**: Long-polling mode provides zero-setup bot operation with no open ports or domains. However, enabling the Mini App (`WEBAPP_URL`) introduces a domain + TLS + reverse-proxy requirement **even if `BOT_DELIVERY_MODE` remains `polling`**. This is because Telegram Mini Apps require an HTTPS origin to open in the Telegram client, which is independent of how bot updates are delivered.
+
+```env
+WEBAPP_URL=https://app.example.com
+WEBAPP_PORT=3002
+WEBAPP_HOST_PORT=3002
+ADMIN_SESSION_SECRET=a_random_secure_secret_with_at_least_32_characters_long
+```
+
+#### Reverse Proxy Configurations (Mini App)
+
+##### Caddy
+
+```caddy
+app.example.com {
+    reverse_proxy 127.0.0.1:3002
+}
+```
+
+##### Nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name app.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/app.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3002;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

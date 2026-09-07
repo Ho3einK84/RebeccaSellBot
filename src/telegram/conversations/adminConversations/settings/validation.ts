@@ -68,6 +68,15 @@ export function validateAdminSetting(key: SettingKey, rawValue: string): string 
       return /^\d{12,24}$/u.test(normalized) ? normalized : undefined;
     }
     case 'text':
+      if (key === 'webapp_url') {
+        if (!value.startsWith('https://')) return undefined;
+        try {
+          new URL(value);
+          return value;
+        } catch {
+          return undefined;
+        }
+      }
       return value.length >= definition.editor.minimumLength &&
         value.length <= definition.editor.maximumLength
         ? value
@@ -110,6 +119,9 @@ export function settingValidationMessage(ctx: ConversationContext, key: SettingK
     case 'naming_template':
       return t(ctx, 'admin_setting_naming_template_invalid');
     default:
+      if (key === 'webapp_url') {
+        return t(ctx, 'admin_webapp_invalid_url');
+      }
       return t(ctx, 'admin_setting_invalid');
   }
 }

@@ -75,4 +75,16 @@ describe('admin settings validation', () => {
       )
     ).toBe('[{"id":"starter","name":"Starter","gbAmount":10,"durationDays":30,"price":50000}]');
   });
+
+  it('validates webapp url and requires https', () => {
+    expect(validateAdminSetting('webapp_url', 'https://app.example.com')).toBe(
+      'https://app.example.com'
+    );
+    expect(validateAdminSetting('webapp_url', ' https://sub.domain.tld:8443 ')).toBe(
+      'https://sub.domain.tld:8443'
+    );
+    expect(validateAdminSetting('webapp_url', 'http://insecure.com')).toBeUndefined();
+    expect(validateAdminSetting('webapp_url', 'not-a-url')).toBeUndefined();
+    expect(validateAdminSetting('webapp_url', 'ftp://example.com')).toBeUndefined();
+  });
 });

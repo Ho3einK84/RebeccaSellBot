@@ -2,6 +2,8 @@ export const SETTING_KEYS = [
   'bot_enabled',
   'language_selection_enabled',
   'default_locale',
+  'webapp_enabled',
+  'webapp_url',
   'packages_json',
   'low_traffic_threshold_gb',
   'expiry_warning_days',
@@ -88,6 +90,18 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'system',
     labelKey: 'admin_setting_default_locale',
     editor: { type: 'locale' },
+  },
+  {
+    key: 'webapp_enabled',
+    group: 'system',
+    labelKey: 'admin_setting_webapp_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'webapp_url',
+    group: 'system',
+    labelKey: 'admin_setting_webapp_url',
+    editor: { type: 'text', minimumLength: 8, maximumLength: 200 },
   },
   {
     key: 'packages_json',

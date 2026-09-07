@@ -249,6 +249,8 @@ export const EN_TEXTS: Record<string, string> = {
   purchase_target_unavailable: '⚠️ This package is unavailable. Choose another one.',
 
   menu_buy_subscription: '🛒 Buy Service',
+  menu_webapp_launch: '🚀 Open Mini App',
+  admin_menu_webapp_launch: '📊 Web Admin Dashboard',
   menu_wallet: '👛 Wallet',
   menu_my_subscriptions: '📱 My Services',
   menu_free_trial: '🎁 Free Trial',
@@ -1347,4 +1349,31 @@ export const EN_TEXTS: Record<string, string> = {
     'Your subscription validity period has expired. Please renew your service to avoid interruption.',
   webhook_renew_button: '🔄 Renew Service',
   webhook_service_label: 'Service',
+
+  // Mini App Settings (Beta)
+  admin_menu_webapp_settings: '🌐 Mini App Settings (Beta)',
+  admin_webapp_title: 'Telegram Mini App Settings (Beta)',
+  admin_webapp_subtitle: 'Domain configuration and web server auto-activation',
+  admin_webapp_beta_notice_title: '⚠️ Beta Version',
+  admin_webapp_beta_notice:
+    'The Telegram Mini App is currently in Beta and its features are not yet complete.',
+  admin_webapp_status_label: 'Mini App Status',
+  admin_webapp_url_label: 'HTTPS Domain URL',
+  admin_webapp_port_label: 'Internal Server Port',
+  admin_webapp_delivery_label: 'Bot Delivery Mode',
+  admin_webapp_guide_title: '📋 Domain Setup Guide (Long Polling & Webhook)',
+  admin_webapp_guide_desc:
+    'To automatically activate the Mini App, configure your reverse proxy (Nginx or Caddy) to forward HTTPS traffic to port {port}, then submit your HTTPS domain URL below.',
+  admin_webapp_toggle_enable: '🟢 Enable Mini App',
+  admin_webapp_toggle_disable: '🔴 Disable Mini App',
+  admin_webapp_edit_url: '✏️ Set / Change Domain URL',
+  admin_webapp_prompt_url:
+    '🌐 Please send your Mini App HTTPS domain URL:\n(e.g., `https://app.yourdomain.com`)\n\n⚠️ Mini App is currently in Beta.\n💡 In Long Polling mode, simply proxy your SSL domain to port {port}.',
+  admin_webapp_invalid_url: '❌ Invalid URL. Must be a valid URL starting with https://.',
+  admin_webapp_enabled_success:
+    '✅ Mini App enabled successfully and web server started!\nLaunch buttons have been added to the main and admin menus.',
+  admin_webapp_disabled_success: '✅ Mini App disabled and launch buttons removed from menus.',
+  admin_webapp_updated_success: '✅ Mini App domain URL updated successfully.',
+  admin_setting_webapp_enabled: 'Enable Mini App (Beta)',
+  admin_setting_webapp_url: 'Mini App Domain URL',
 };

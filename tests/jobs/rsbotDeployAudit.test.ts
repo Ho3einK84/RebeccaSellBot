@@ -7,7 +7,7 @@ import os from 'node:os';
 
 const execFileAsync = promisify(execFile);
 
-describe('Deployment & Backup Shell Logic Audit', () => {
+describe.skipIf(process.platform === 'win32')('Deployment & Backup Shell Logic Audit', () => {
   describe('rsbot: env_value_from_file', () => {
     it('correctly parses plain, quoted, and CRLF environment variables', async () => {
       const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'env_test_'));
