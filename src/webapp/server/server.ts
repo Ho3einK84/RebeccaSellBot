@@ -54,6 +54,46 @@ export async function createWebAppServer(
     return reply.send({ status: 'ok', component: 'webapp' });
   });
 
+  // Caddy On-Demand TLS verification endpoint
+  // Caddy calls: GET /api/caddy-check?domain=...
+  // Returns HTTP 200 if the domain is authorized to obtain an SSL certificate, or 403 otherwise.
+  app.get('/api/caddy-check', async (req, reply) => {
+    const domainQuery = (req.query as { domain?: string })?.domain?.toLowerCase().trim();
+    if (!domainQuery) {
+      return reply.code(400).send({ error: 'Missing domain parameter' });
+    }
+
+    const configuredWebAppUrl =
+      services.translationService?.getSetting('webapp_url') || config.WEBAPP_URL;
+
+    let allowedHost: string | undefined;
+    if (configuredWebAppUrl) {
+      try {
+        allowedHost = new URL(configuredWebAppUrl).hostname.toLowerCase();
+      } catch {
+        // invalid URL format ignored
+      }
+    }
+
+    let webhookHost: string | undefined;
+    if (config.WEBHOOK_URL) {
+      try {
+        webhookHost = new URL(config.WEBHOOK_URL).hostname.toLowerCase();
+      } catch {
+        // invalid URL format ignored
+      }
+    }
+
+    if (
+      (allowedHost && domainQuery === allowedHost) ||
+      (webhookHost && domainQuery === webhookHost)
+    ) {
+      return reply.code(200).send({ allowed: true, domain: domainQuery });
+    }
+
+    return reply.code(403).send({ allowed: false, domain: domainQuery });
+  });
+
   // REST API Routes
   registerAuthRoutes(app, {
     botToken: config.BOT_TOKEN,

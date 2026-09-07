@@ -120,6 +120,7 @@ describe('WebApp Server & Admin Routes', () => {
 
   const mockTranslationService = {
     getDefaultLocale: vi.fn(() => 'fa' as const),
+    getSetting: vi.fn((_key: string) => undefined as string | undefined),
     getSettingBool: vi.fn((key: string, defaultValue = false) => {
       if (key === 'language_selection_enabled') return true;
       return defaultValue;
@@ -504,6 +505,44 @@ describe('WebApp Server & Admin Routes', () => {
       expect(response.statusCode).toBe(403);
       const body = response.json();
       expect(body.error).toContain('disabled');
+    });
+  });
+
+  describe('GET /api/caddy-check (Caddy on-demand TLS validation)', () => {
+    it('returns 400 when domain parameter is missing', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/caddy-check',
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 200 when domain matches configured webapp url', async () => {
+      mockTranslationService.getSetting.mockImplementationOnce((key: string) => {
+        if (key === 'webapp_url') return 'https://rs.netiva.ir';
+        return undefined;
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/caddy-check?domain=rs.netiva.ir',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ allowed: true, domain: 'rs.netiva.ir' });
+    });
+
+    it('returns 403 when domain is unauthorized', async () => {
+      mockTranslationService.getSetting.mockImplementationOnce((key: string) => {
+        if (key === 'webapp_url') return 'https://rs.netiva.ir';
+        return undefined;
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/caddy-check?domain=malicious.com',
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ allowed: false, domain: 'malicious.com' });
     });
   });
 });

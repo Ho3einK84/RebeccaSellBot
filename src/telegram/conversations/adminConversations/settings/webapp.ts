@@ -140,7 +140,7 @@ export async function adminWebAppSettingsConversation(
 
       if (!webAppUrl) {
         const promptKeyboard = new InlineKeyboard().text(
-          t(activeCtx, 'admin_action_cancel'),
+          t(activeCtx, 'menu_cancel'),
           'webapp:prompt:cancel'
         );
         await promptInConversation(
@@ -206,7 +206,7 @@ export async function adminWebAppSettingsConversation(
 
     if (input.data === 'webapp:edit:url') {
       const promptKeyboard = new InlineKeyboard().text(
-        t(activeCtx, 'admin_action_cancel'),
+        t(activeCtx, 'menu_cancel'),
         'webapp:prompt:cancel'
       );
       await promptInConversation(
