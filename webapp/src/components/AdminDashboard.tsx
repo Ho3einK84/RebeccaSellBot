@@ -435,11 +435,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
     const numAmount = parseInt(balanceAmount, 10);
     if (isNaN(numAmount) || numAmount < 0) {
-      notify(locale === 'fa' ? 'مبلغ نامعتبر است' : 'Invalid amount', 'error');
+      notify(t('invalidAmount'), 'error');
       return;
     }
     if (!balanceReason.trim()) {
-      notify(locale === 'fa' ? 'ثبت دلیل الزامی است' : 'Reason is required', 'error');
+      notify(t('reasonRequired'), 'error');
       return;
     }
 
@@ -616,7 +616,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
               </div>
 
               <div className="flex items-center gap-2 text-xs mt-1 flex-wrap">
-                <span className={textSecondary}>{locale === 'fa' ? 'خوش آمدید،' : 'Welcome,'}</span>
+                <span className={textSecondary}>{t('welcome')}</span>
                 <span className={`font-semibold ${textPrimary}`}>{adminDisplayName}</span>
                 <span className={textMuted}>·</span>
                 <button
@@ -1164,9 +1164,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                             }`}
                             onClick={() => {
                               setPhotoModalUrl(`/api/admin/receipts/${rec.id}/photo`);
-                              setPhotoModalTitle(
-                                locale === 'fa' ? `رسید ${rec.id}` : `Receipt ${rec.id}`
-                              );
+                              setPhotoModalTitle(`${t('receiptPhotoModalTitle')} #${rec.id}`);
                             }}
                           >
                             <ImageIcon className="w-3 h-3" />
@@ -1314,8 +1312,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className={`font-bold text-sm truncate ${textPrimary}`}>
-                            {[u.firstName, u.lastName].filter(Boolean).join(' ') ||
-                              (locale === 'fa' ? 'کاربر بدون نام' : 'Unnamed User')}
+                            {[u.firstName, u.lastName].filter(Boolean).join(' ') || t('guestUser')}
                           </div>
                           <div className="text-xs text-indigo-500 font-mono mt-0.5">
                             {u.username ? (
@@ -1393,7 +1390,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                                 : 'bg-slate-100 border-slate-200 text-slate-500'
                             }`}
                           >
-                            <span>{locale === 'fa' ? '۰ سرویس فعال' : '0 active'}</span>
+                            <span>{t('zeroActive')}</span>
                           </span>
                         )}
                       </div>
@@ -1628,9 +1625,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                         : t('panelFleetStatusWarning')}
                     </h3>
                     <p className={`text-xs m-0 mt-0.5 ${textSecondary}`}>
-                      {locale === 'fa'
-                        ? `${panels.filter((p) => p.healthy !== false).length} از ${panels.length} پنل فعال و پاسخگو`
-                        : `${panels.filter((p) => p.healthy !== false).length} of ${panels.length} panels active`}
+                      {t('panelsActiveCount', {
+                        healthy: panels.filter((p) => p.healthy !== false).length,
+                        total: panels.length,
+                      })}
                     </p>
                   </div>
                 </div>
@@ -2017,17 +2015,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
             <div className={`p-3 rounded-xl border text-xs space-y-1 font-mono ${subCardClass}`}>
               <div className="flex justify-between">
-                <span className={`font-sans ${textMuted}`}>
-                  {locale === 'fa' ? 'شناسه کاربر:' : 'User ID:'}
-                </span>
+                <span className={`font-sans ${textMuted}`}>{t('userCode')}</span>
                 <span dir="ltr" className={textPrimary}>
                   {receiptApproveTarget.telegramId}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className={`font-sans ${textMuted}`}>
-                  {locale === 'fa' ? 'کد رسید:' : 'Receipt ID:'}
-                </span>
+                <span className={`font-sans ${textMuted}`}>{t('receiptCode')}</span>
                 <span dir="ltr" className={textPrimary}>
                   {receiptApproveTarget.id}
                 </span>
@@ -2191,7 +2185,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                   <h3 className={`text-base font-bold m-0 ${textPrimary}`}>
                     {[selectedUserSummary.user.firstName, selectedUserSummary.user.lastName]
                       .filter(Boolean)
-                      .join(' ') || (locale === 'fa' ? 'کاربر سیستم' : 'System User')}
+                      .join(' ') || t('guestUser')}
                   </h3>
                   <div className={`flex items-center gap-2 text-xs mt-0.5 ${textSecondary}`}>
                     <span className="text-indigo-500 font-mono">
@@ -2344,7 +2338,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
                     >
                       <div>
                         <div className={`font-semibold ${textPrimary}`}>
-                          {order.packageName || (locale === 'fa' ? 'سرویس اشتراک' : 'Subscription')}
+                          {order.packageName || t('orderPackage')}
                         </div>
                         <div className={`text-[11px] font-mono ${textMuted}`}>ID: {order.id}</div>
                       </div>
