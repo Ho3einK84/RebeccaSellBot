@@ -254,11 +254,11 @@ export const translations: Record<SupportedLocale, Translations> = {
     adminRole: 'مدیر سیستم',
 
     // Tabs
-    tabOverview: 'آمار و وضعیت',
-    tabReceipts: 'رسیدهای واریز',
-    tabUsers: 'مدیریت کاربران',
-    tabPanels: 'وضعیت پنل‌ها',
-    tabComingSoon: 'سایر ماژول‌ها',
+    tabOverview: 'داشبورد',
+    tabReceipts: 'رسیدها',
+    tabUsers: 'کاربران',
+    tabPanels: 'پنل‌ها',
+    tabComingSoon: 'ماژول‌ها',
 
     // Overview Stats
     statsLoading: 'در حال بارگذاری آمار...',
@@ -430,7 +430,7 @@ export const translations: Record<SupportedLocale, Translations> = {
     notifyNetworkError: 'خطا در برقراری ارتباط با سرور',
     langChangeSuccess: 'زبان با موفقیت تغییر کرد',
     langChangeFailed: 'خطا در تغییر زبان',
-    betaBadge: 'نسخه ۲.۰',
+    betaBadge: 'Beta آزمایشی',
     betaNotice: 'این پنل برای مدیریت بهینه، سریع و امن فروشگاه مجهز به daisyUI ۵ طراحی شده است.',
   },
   en: {
@@ -646,7 +646,7 @@ export const translations: Record<SupportedLocale, Translations> = {
     notifyNetworkError: 'Network error connecting to server',
     langChangeSuccess: 'Language updated successfully',
     langChangeFailed: 'Failed to update language',
-    betaBadge: 'v2.0',
+    betaBadge: 'Beta / Preview',
     betaNotice:
       'This dashboard is powered by daisyUI 5 for optimal speed, mobile UX, and security.',
   },

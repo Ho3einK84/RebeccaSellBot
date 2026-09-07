@@ -58,15 +58,21 @@ export const UserComingSoon: React.FC<UserComingSoonProps> = ({ user }) => {
 
         <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1 rounded-full text-xs text-slate-300 mb-6">
           <span>{t('telegramId')}</span>
-          <code className="font-mono text-indigo-300">{user.id}</code>
-          {user.username && <span className="text-slate-400">(@{user.username})</span>}
+          <code dir="ltr" className="font-mono text-indigo-300">
+            {user.id}
+          </code>
+          {user.username && (
+            <span dir="ltr" className="text-slate-400 font-mono inline-block unicode-isolate">
+              (@{user.username})
+            </span>
+          )}
         </div>
 
         <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 mb-6 text-center w-full">
           <div className="flex items-center justify-center gap-2 text-indigo-400 font-semibold text-sm mb-2">
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span>{t('portalTitle')}</span>
-            <span className="badge badge-warning badge-sm text-[10px] py-0.5">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-300 shadow-sm">
               {t('betaBadge')}
             </span>
           </div>
