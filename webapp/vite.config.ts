@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   root: path.resolve(import.meta.dirname),
   base: '/',
+  resolve: {
+    alias: {
+      '@': path.resolve(import.meta.dirname, 'src'),
+    },
+  },
   build: {
     outDir: path.resolve(import.meta.dirname, '../dist/webapp'),
     emptyOutDir: true,
