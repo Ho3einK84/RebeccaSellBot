@@ -75,7 +75,7 @@ export const fa: TranslationSchema = {
     betaNotice: 'این پنل برای مدیریت بهینه، سریع و امن ربات مجهز به daisyUI ۵ طراحی شده است.',
     tabs: {
       overview: 'آمار کلی',
-      receipts: 'فیش‌های واریزی',
+      receipts: 'رسیدها',
       users: 'کاربران',
       panels: 'پنل‌ها',
       comingSoon: 'ماژول‌ها',

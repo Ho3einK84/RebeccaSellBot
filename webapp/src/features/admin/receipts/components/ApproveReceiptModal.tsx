@@ -79,7 +79,11 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
           </button>
           <button
             type="button"
-            className="flex-1 h-10 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 border border-emerald-400/30 shadow-xs active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className={`flex-1 h-10 px-4 rounded-xl font-semibold text-xs border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 ${
+              isDark
+                ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/30 text-emerald-300 shadow-xs'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-600 shadow-xs'
+            }`}
             disabled={loading}
             onClick={() => onConfirm(receipt)}
           >

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, CalendarDays, CalendarRange, CheckCircle2, XCircle } from 'lucide-react';
+import { Calendar, CalendarDays, CalendarRange, CheckCircle2, XCircle, Gift } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -18,13 +18,13 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
     <>
       {/* Daily Revenue */}
       <div
-        className={`rounded-2xl p-4 flex items-center justify-between border transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
+        className={`rounded-2xl p-4 sm:p-4.5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
       >
         <div className="space-y-1">
           <span className={`text-xs font-medium block ${textSecondary}`}>
             {t('admin.overview.dailyRevenue')}
           </span>
-          <div className={`text-lg font-bold font-mono tracking-tight ${textPrimary}`}>
+          <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${textPrimary}`}>
             {formatMoney(stats.dailyRevenue)}{' '}
             <span className={`text-xs font-normal ${textSecondary}`}>{t('common.currency')}</span>
           </div>
@@ -33,10 +33,10 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
           </span>
         </div>
         <div
-          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
             isDark
-              ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-              : 'bg-slate-100 border-slate-200/80 text-slate-700'
+              ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+              : 'bg-indigo-50 border-indigo-200 text-indigo-700'
           }`}
         >
           <Calendar className="w-4 h-4" />
@@ -45,13 +45,13 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
 
       {/* Weekly Revenue */}
       <div
-        className={`rounded-2xl p-4 flex items-center justify-between border transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
+        className={`rounded-2xl p-4 sm:p-4.5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
       >
         <div className="space-y-1">
           <span className={`text-xs font-medium block ${textSecondary}`}>
             {t('admin.overview.weeklyRevenue')}
           </span>
-          <div className={`text-lg font-bold font-mono tracking-tight ${textPrimary}`}>
+          <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${textPrimary}`}>
             {formatMoney(stats.weeklyRevenue)}{' '}
             <span className={`text-xs font-normal ${textSecondary}`}>{t('common.currency')}</span>
           </div>
@@ -60,10 +60,10 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
           </span>
         </div>
         <div
-          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
             isDark
-              ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-              : 'bg-slate-100 border-slate-200/80 text-slate-700'
+              ? 'bg-violet-500/10 border-violet-500/20 text-violet-400'
+              : 'bg-violet-50 border-violet-200 text-violet-700'
           }`}
         >
           <CalendarDays className="w-4 h-4" />
@@ -72,13 +72,13 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
 
       {/* Monthly Revenue */}
       <div
-        className={`rounded-2xl p-4 flex items-center justify-between border transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
+        className={`rounded-2xl p-4 sm:p-4.5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
       >
         <div className="space-y-1">
           <span className={`text-xs font-medium block ${textSecondary}`}>
             {t('admin.overview.monthlyRevenue')}
           </span>
-          <div className={`text-lg font-bold font-mono tracking-tight ${textPrimary}`}>
+          <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${textPrimary}`}>
             {formatMoney(stats.monthlyRevenue)}{' '}
             <span className={`text-xs font-normal ${textSecondary}`}>{t('common.currency')}</span>
           </div>
@@ -87,10 +87,10 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
           </span>
         </div>
         <div
-          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
             isDark
-              ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-              : 'bg-slate-100 border-slate-200/80 text-slate-700'
+              ? 'bg-sky-500/10 border-sky-500/20 text-sky-400'
+              : 'bg-sky-50 border-sky-200 text-sky-700'
           }`}
         >
           <CalendarRange className="w-4 h-4" />
@@ -99,14 +99,14 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
 
       {/* Active Subs */}
       <div
-        className={`rounded-2xl p-4 flex items-center justify-between border transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
+        className={`rounded-2xl p-4 sm:p-4.5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
       >
         <div className="space-y-1">
           <span className={`text-xs font-medium block ${textSecondary}`}>
             {t('admin.overview.activeSubs')}
           </span>
           <div
-            className={`text-lg font-bold font-mono tracking-tight ${
+            className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${
               isDark ? 'text-emerald-400' : 'text-emerald-600'
             }`}
           >
@@ -117,7 +117,7 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
           </span>
         </div>
         <div
-          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
             isDark
               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
               : 'bg-emerald-50 border-emerald-200 text-emerald-700'
@@ -129,13 +129,13 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
 
       {/* Inactive Subs */}
       <div
-        className={`rounded-2xl p-4 flex items-center justify-between border transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
+        className={`rounded-2xl p-4 sm:p-4.5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
       >
         <div className="space-y-1">
           <span className={`text-xs font-medium block ${textSecondary}`}>
             {t('admin.overview.inactiveSubs')}
           </span>
-          <div className={`text-lg font-bold font-mono tracking-tight ${textSecondary}`}>
+          <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${textSecondary}`}>
             {formatNumber(stats.inactiveSubscriptions)}
           </div>
           <span className={`text-[11px] block ${textMuted}`}>
@@ -143,13 +143,40 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
           </span>
         </div>
         <div
-          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-colors ${
+          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
             isDark
               ? 'bg-white/[0.04] border-white/10 text-zinc-400'
               : 'bg-slate-100 border-slate-200/80 text-slate-500'
           }`}
         >
           <XCircle className="w-4 h-4" />
+        </div>
+      </div>
+
+      {/* Referral Bonuses */}
+      <div
+        className={`rounded-2xl p-4 sm:p-4.5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
+      >
+        <div className="space-y-1">
+          <span className={`text-xs font-medium block ${textSecondary}`}>
+            {t('admin.overview.referralBonus')}
+          </span>
+          <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${textPrimary}`}>
+            {formatMoney(stats.totalReferralBonus)}{' '}
+            <span className={`text-xs font-normal ${textSecondary}`}>{t('common.currency')}</span>
+          </div>
+          <span className={`text-[11px] block ${textMuted}`}>
+            {t('admin.overview.referralBonusSub')}
+          </span>
+        </div>
+        <div
+          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
+            isDark
+              ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              : 'bg-amber-50 border-amber-200 text-amber-700'
+          }`}
+        >
+          <Gift className="w-4 h-4" />
         </div>
       </div>
     </>

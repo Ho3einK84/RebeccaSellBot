@@ -120,7 +120,11 @@ export const UserTable: React.FC<UserTableProps> = ({
                     </button>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-medium text-white bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 border border-indigo-400/30 shadow-xs active:scale-95 transition-all cursor-pointer"
+                      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
+                        isDark
+                          ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/25 text-indigo-300 shadow-xs'
+                          : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200/80 text-indigo-700 shadow-xs'
+                      }`}
                       onClick={() => onOpenBalanceModal(u)}
                     >
                       <Wallet className="w-3.5 h-3.5" />

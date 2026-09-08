@@ -30,7 +30,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({ panel, onTest, isTesting }
           : 'error';
 
   return (
-    <Card className="p-4 sm:p-5 space-y-4 transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20">
+    <Card className="p-4 sm:p-5 space-y-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 group">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-2.5 flex-wrap">
           <div className="flex items-center gap-2">

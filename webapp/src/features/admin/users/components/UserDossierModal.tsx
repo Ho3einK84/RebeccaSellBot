@@ -297,7 +297,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
         >
           <button
             type="button"
-            className="h-10 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 border border-indigo-400/30 shadow-xs active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1.5"
+            className={`h-9 px-4 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 ${
+              isDark
+                ? 'bg-indigo-500 hover:bg-indigo-400 text-white border-indigo-500 shadow-xs'
+                : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-900 shadow-xs'
+            }`}
             onClick={() => {
               onOpenBalanceModal(user);
             }}
@@ -308,10 +312,10 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
           <button
             type="button"
-            className={`h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-95 cursor-pointer flex items-center justify-center ${
+            className={`h-9 px-4 rounded-xl text-xs font-medium border transition-all active:scale-95 cursor-pointer flex items-center justify-center ${
               isDark
                 ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
             }`}
             onClick={onClose}
           >

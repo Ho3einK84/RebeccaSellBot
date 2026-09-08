@@ -25,15 +25,23 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-        <div className="flex items-center gap-2">
-          <Users className="w-5 h-5 text-indigo-500" />
-          <h2 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>
+      <div className="flex flex-row justify-between items-center gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+              isDark
+                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-xs'
+                : 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+          </div>
+          <h2 className={`text-base font-bold m-0 tracking-tight truncate ${textPrimary}`}>
             {t('admin.users.title')}
           </h2>
         </div>
         <span
-          className={`text-xs px-2.5 py-1 rounded-full border font-mono font-medium ${
+          className={`text-xs px-2.5 py-0.5 rounded-full border font-mono font-medium shrink-0 ${
             isDark
               ? 'bg-white/[0.04] border-white/10 text-zinc-300'
               : 'bg-slate-100 border-slate-200 text-slate-700'
@@ -69,7 +77,11 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
         </div>
         <button
           type="button"
-          className="h-10 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 border border-indigo-400/30 shadow-xs active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1.5 shrink-0"
+          className={`h-10 px-3.5 sm:px-4 rounded-xl font-medium text-xs border transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 shrink-0 ${
+            isDark
+              ? 'bg-white/[0.06] hover:bg-white/[0.1] border-white/10 text-zinc-200 shadow-xs'
+              : 'bg-slate-900 hover:bg-slate-800 text-white border-transparent shadow-xs'
+          }`}
           onClick={() => onSearch()}
         >
           <Search className="w-3.5 h-3.5" />

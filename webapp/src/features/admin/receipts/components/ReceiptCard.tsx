@@ -29,7 +29,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
   const { isDark, textSecondary, textMuted } = useThemeTokens();
 
   return (
-    <Card className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20">
+    <Card className="p-3.5 sm:p-4.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 group">
       <div className="space-y-2 flex-1 min-w-0">
         <div className="flex items-center gap-2.5 flex-wrap">
           <span
@@ -45,7 +45,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
           {receipt.photoFileId && (
             <button
               type="button"
-              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-xl border transition-all active:scale-95 cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-xl border transition-all active:scale-95 cursor-pointer ${
                 isDark
                   ? 'bg-indigo-500/10 border-indigo-500/25 hover:bg-indigo-500/20 text-indigo-300'
                   : 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700'
@@ -87,7 +87,11 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
       <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 self-stretch sm:self-center pt-2 sm:pt-0 border-t sm:border-0 border-slate-200/50 dark:border-white/5">
         <button
           type="button"
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 border border-emerald-400/30 shadow-xs active:scale-95 transition-all cursor-pointer flex-1 sm:flex-none disabled:opacity-50"
+          className={`inline-flex items-center justify-center gap-1.5 h-8.5 px-3.5 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer flex-1 sm:flex-none disabled:opacity-50 ${
+            isDark
+              ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/25 text-emerald-300 shadow-xs'
+              : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200/80 text-emerald-700 shadow-xs'
+          }`}
           disabled={disabled}
           onClick={() => onApprove(receipt)}
         >
@@ -97,7 +101,11 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
 
         <button
           type="button"
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl font-medium text-xs text-rose-700 dark:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-200/80 dark:border-rose-500/20 active:scale-95 transition-all cursor-pointer flex-1 sm:flex-none disabled:opacity-50"
+          className={`inline-flex items-center justify-center gap-1.5 h-8.5 px-3.5 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer flex-1 sm:flex-none disabled:opacity-50 ${
+            isDark
+              ? 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/25 text-rose-300 shadow-xs'
+              : 'bg-rose-50 hover:bg-rose-100 border-rose-200/80 text-rose-700 shadow-xs'
+          }`}
           disabled={disabled}
           onClick={() => onReject(receipt)}
         >

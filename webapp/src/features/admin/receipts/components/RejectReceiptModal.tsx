@@ -121,7 +121,11 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
           </button>
           <button
             type="button"
-            className="flex-1 h-10 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 border border-rose-400/30 shadow-xs active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className={`flex-1 h-10 px-4 rounded-xl font-semibold text-xs border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 ${
+              isDark
+                ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-500/30 text-rose-300 shadow-xs'
+                : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-600 shadow-xs'
+            }`}
             disabled={loading}
             onClick={() => onConfirm(receipt, reason)}
           >

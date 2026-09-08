@@ -25,7 +25,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   onClearInspectedUser,
 }) => {
   const { t } = useLanguage();
-  const { isDark, textSecondary, textPrimary } = useThemeTokens();
+  const { textSecondary, textPrimary } = useThemeTokens();
   const { copy, isCopied } = useCopy();
 
   const {

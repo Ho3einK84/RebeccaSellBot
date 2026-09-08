@@ -19,7 +19,7 @@ interface ReceiptsTabProps {
 export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotify }) => {
   const { t } = useLanguage();
   const { receipts, isLoading, isProcessingAction, actionMutation } = useAdminReceipts();
-  const { isDark, textPrimary, textSecondary } = useThemeTokens();
+  const { isDark, textPrimary } = useThemeTokens();
 
   // Modals state
   const [photoTarget, setPhotoTarget] = useState<TopupReceipt | null>(null);
@@ -51,9 +51,17 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <Receipt className="w-5 h-5 text-indigo-500" />
-          <h2 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+              isDark
+                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-xs'
+                : 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+          </div>
+          <h2 className={`text-base font-bold m-0 tracking-tight truncate ${textPrimary}`}>
             {t('admin.receipts.queueTitle')}
           </h2>
         </div>

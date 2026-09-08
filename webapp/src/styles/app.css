@@ -28,9 +28,9 @@
   --border-focus: rgba(0, 0, 0, 0.2);
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-muted: #64748b;
   --accent-primary: #0f172a;
-  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 8px 24px -4px rgba(0, 0, 0, 0.04);
 }
 
 [data-theme='dark'],

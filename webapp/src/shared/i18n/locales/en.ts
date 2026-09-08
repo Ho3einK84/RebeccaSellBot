@@ -75,7 +75,7 @@ export const en: TranslationSchema = {
     betaNotice: 'This dashboard is powered by daisyUI 5 for optimal speed and mobile UX.',
     tabs: {
       overview: 'Overview',
-      receipts: 'Deposit Receipts',
+      receipts: 'Receipts',
       users: 'Users',
       panels: 'Panels',
       comingSoon: 'Modules',

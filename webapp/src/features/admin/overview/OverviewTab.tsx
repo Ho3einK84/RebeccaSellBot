@@ -31,7 +31,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {/* Pending Receipts */}
         <div
-          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer border transition-all duration-200 active:scale-[0.99] ${cardClass} hover:border-amber-500/40`}
+          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer border transition-all duration-200 active:scale-[0.99] group hover:-translate-y-0.5 hover:border-amber-500/40 ${cardClass}`}
           onClick={() => onSwitchTab('receipts')}
         >
           <div className="space-y-1">
@@ -40,7 +40,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
             >
               {t('admin.overview.pendingReceipts')}
             </span>
-            <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-amber-500">
+            <div className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-amber-500 dark:text-amber-400">
               {formatNumber(stats.pendingReceipts)}
             </div>
             <span className={`text-[11px] block ${textMuted}`}>
@@ -48,7 +48,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
             </span>
           </div>
           <div
-            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
+            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
               isDark
                 ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
                 : 'bg-amber-50 border-amber-200 text-amber-700'
@@ -60,7 +60,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
 
         {/* Total Users */}
         <div
-          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer border transition-all duration-200 active:scale-[0.99] ${cardClass} hover:border-indigo-500/40`}
+          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer border transition-all duration-200 active:scale-[0.99] group hover:-translate-y-0.5 hover:border-indigo-500/40 ${cardClass}`}
           onClick={() => onSwitchTab('users')}
         >
           <div className="space-y-1">
@@ -70,7 +70,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
               {t('admin.overview.totalUsers')}
             </span>
             <div
-              className={`text-2xl sm:text-3xl font-bold font-mono tracking-tight ${textPrimary}`}
+              className={`text-2xl sm:text-3xl font-extrabold font-mono tracking-tight ${textPrimary}`}
             >
               {formatNumber(stats.totalUsers)}
             </div>
@@ -79,7 +79,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
             </span>
           </div>
           <div
-            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
+            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
               isDark
                 ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
                 : 'bg-indigo-50 border-indigo-200 text-indigo-700'
@@ -91,7 +91,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
 
         {/* Total Sales */}
         <div
-          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between border ${cardClass}`}
+          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-emerald-500/40 ${cardClass}`}
         >
           <div className="space-y-1">
             <span
@@ -100,7 +100,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
               {t('admin.overview.totalSales')}
             </span>
             <div
-              className={`text-2xl sm:text-3xl font-bold font-mono tracking-tight ${
+              className={`text-2xl sm:text-3xl font-extrabold font-mono tracking-tight ${
                 isDark ? 'text-emerald-400' : 'text-emerald-600'
               }`}
             >
@@ -112,7 +112,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
             </span>
           </div>
           <div
-            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
+            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
               isDark
                 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                 : 'bg-emerald-50 border-emerald-200 text-emerald-700'
