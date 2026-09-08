@@ -10,6 +10,7 @@ import { Card } from '@/shared/components/ui/Card.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { UserProfile, BalanceOperation } from '@/shared/types/admin.js';
 
@@ -25,6 +26,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   onClearInspectedUser,
 }) => {
   const { t } = useLanguage();
+  const { formatMoney } = useFormatters();
   const { textSecondary, textPrimary } = useThemeTokens();
   const { copy, isCopied } = useCopy();
 
@@ -70,7 +72,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         telegramId: balanceModalUser.telegramId,
         payload: data,
       });
-      onNotify(t('admin.notifications.balanceSuccess', { balance: res.balance }), 'success');
+      onNotify(
+        t('admin.notifications.balanceSuccess', { balance: formatMoney(res.balance) }),
+        'success'
+      );
       setBalanceModalUser(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('admin.notifications.balanceFailed');

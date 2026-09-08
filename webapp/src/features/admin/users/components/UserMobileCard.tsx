@@ -26,7 +26,7 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
   inspecting = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, sanitizeDisplayName } = useFormatters();
+  const { formatMoney, formatNumber, sanitizeDisplayName } = useFormatters();
   const { isDark, subCardClass, textPrimary, textMuted } = useThemeTokens();
 
   const { displayName } = sanitizeDisplayName(user.firstName, user.lastName, t('user.guestUser'));
@@ -98,7 +98,9 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
         <div>
           {user.activeSubscriptionCount > 0 ? (
             <Badge variant="success" dot pulse className="text-[10px]">
-              {t('admin.users.activeSubsCount', { count: user.activeSubscriptionCount })}
+              {t('admin.users.activeSubsCount', {
+                count: formatNumber(user.activeSubscriptionCount),
+              })}
             </Badge>
           ) : (
             <Badge variant="neutral" className="text-[10px]">

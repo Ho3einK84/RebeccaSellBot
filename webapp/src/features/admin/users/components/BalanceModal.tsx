@@ -182,14 +182,23 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
             />
 
             {/* Quick Amount Chips in Equal Columns */}
-            <div className="grid grid-cols-5 gap-1.5 pt-0.5">
+            <div className="grid grid-cols-5 gap-1 sm:gap-1.5 pt-0.5">
               {quickAmounts.map((quickAmt) => {
                 const isSelected = numAmount === quickAmt;
+                const label =
+                  quickAmt >= 1000000
+                    ? t('admin.users.quickAmountM', {
+                        amount: formatNumber(quickAmt / 1000000),
+                      })
+                    : t('admin.users.quickAmountK', {
+                        amount: formatNumber(quickAmt / 1000),
+                      });
+
                 return (
                   <button
                     key={quickAmt}
                     type="button"
-                    className={`h-8 rounded-lg text-xs font-mono transition-all active:scale-95 cursor-pointer border flex items-center justify-center ${
+                    className={`h-8 px-1 rounded-lg text-[11px] sm:text-xs font-medium transition-all active:scale-95 cursor-pointer border flex items-center justify-center select-none ${
                       isSelected
                         ? isDark
                           ? 'bg-indigo-500/25 border-indigo-500/40 text-indigo-300 font-bold shadow-xs'
@@ -200,7 +209,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
                     }`}
                     onClick={() => setAmountStr(String(quickAmt))}
                   >
-                    +{formatNumber(quickAmt / 1000)}k
+                    {label}
                   </button>
                 );
               })}
@@ -242,14 +251,14 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
               onChange={(e) => setReason(e.target.value)}
             />
 
-            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
               {quickReasons.map((quickReason) => {
                 const isSelected = reason === quickReason;
                 return (
                   <button
                     key={quickReason}
                     type="button"
-                    className={`h-8 px-1.5 rounded-lg text-xs transition-all active:scale-95 cursor-pointer border truncate text-center ${
+                    className={`h-8 px-2.5 rounded-lg text-xs transition-all active:scale-95 cursor-pointer border select-none ${
                       isSelected
                         ? isDark
                           ? 'bg-indigo-500/25 border-indigo-500/40 text-indigo-300 font-semibold shadow-xs'

@@ -41,7 +41,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
           </h2>
         </div>
         <span
-          className={`text-xs px-2.5 py-0.5 rounded-full border font-mono font-medium shrink-0 ${
+          className={`text-xs px-2.5 py-0.5 rounded-full border font-medium shrink-0 ${
             isDark
               ? 'bg-white/[0.04] border-white/10 text-zinc-300'
               : 'bg-slate-100 border-slate-200 text-slate-700'

@@ -23,7 +23,7 @@ export const UserTable: React.FC<UserTableProps> = ({
   inspectingId,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney } = useFormatters();
+  const { formatMoney, formatNumber } = useFormatters();
   const { isDark, textMuted, textPrimary } = useThemeTokens();
 
   return (
@@ -91,7 +91,9 @@ export const UserTable: React.FC<UserTableProps> = ({
                 <td className="py-3 px-4">
                   {u.activeSubscriptionCount > 0 ? (
                     <Badge variant="success" dot pulse className="text-[10px]">
-                      {t('admin.users.activeSubsCount', { count: u.activeSubscriptionCount })}
+                      {t('admin.users.activeSubsCount', {
+                        count: formatNumber(u.activeSubscriptionCount),
+                      })}
                     </Badge>
                   ) : (
                     <Badge variant="neutral" className="text-[10px]">

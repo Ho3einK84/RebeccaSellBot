@@ -5,6 +5,7 @@ import { PanelCard } from './components/PanelCard.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 
 interface PanelsTabProps {
@@ -13,6 +14,7 @@ interface PanelsTabProps {
 
 export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
   const { t } = useLanguage();
+  const { formatNumber } = useFormatters();
   const { panels, isLoading, refetch, testPanel, testingPanelId } = useAdminPanels();
   const { isDark, textPrimary, textSecondary } = useThemeTokens();
 
@@ -20,7 +22,12 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     try {
       const res = await testPanel(panelId);
       if (res.success && res.healthy) {
-        onNotify(t('admin.notifications.panelTestSuccess', { ms: res.latencyMs ?? 0 }), 'success');
+        onNotify(
+          t('admin.notifications.panelTestSuccess', {
+            ms: formatNumber(res.latencyMs ?? 0),
+          }),
+          'success'
+        );
       } else {
         onNotify(res.error || t('admin.notifications.panelTestFailed'), 'error');
       }
@@ -97,8 +104,8 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
               </div>
               <p className={`text-xs m-0 mt-0.5 ${textSecondary}`}>
                 {t('common.panelsActiveCount', {
-                  healthy: healthyCount,
-                  total: panels.length,
+                  healthy: formatNumber(healthyCount),
+                  total: formatNumber(panels.length),
                 })}
               </p>
             </div>

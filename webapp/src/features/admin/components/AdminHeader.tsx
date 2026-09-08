@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldCheck, RotateCw, Globe, Check, Copy, Sun, Moon, LogOut } from 'lucide-react';
+import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -97,7 +98,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onRefresh, onClo
                 const next = locale === 'fa' ? 'en' : 'fa';
                 const ok = await setLocale(next);
                 if (ok) {
-                  onNotify(t('admin.notifications.langChangeSuccess'), 'success');
+                  onNotify(t('admin.notifications.langChangeSuccess', undefined, next), 'success');
                 }
               }}
               title={t('common.language')}
@@ -143,11 +144,21 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onRefresh, onClo
 
       {/* Bottom Tier: User Profile & Identity Subline */}
       <div className="flex items-center justify-between gap-2 pt-2.5 text-xs flex-wrap">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className={`text-xs ${textSecondary}`}>{t('common.welcome')}</span>
-          <span className={`font-semibold text-xs truncate ${textPrimary}`}>
-            {adminDisplayName}
-          </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <Avatar
+            name={adminDisplayName}
+            username={user.username}
+            photoUrl={user.photo_url}
+            size="xs"
+            circle
+            className="shrink-0 ring-1 ring-slate-200 dark:ring-white/10"
+          />
+          <div className="flex items-baseline gap-1 min-w-0">
+            <span className={`text-xs shrink-0 ${textSecondary}`}>{t('common.welcome')}</span>
+            <span className={`font-semibold text-xs truncate ${textPrimary}`}>
+              {adminDisplayName}
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 ms-auto">

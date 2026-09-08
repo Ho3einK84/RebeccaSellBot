@@ -1,6 +1,7 @@
 import React from 'react';
-import { Activity } from 'lucide-react';
+import { Activity, ArrowRight } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { PanelHealth } from '@/shared/types/admin.js';
 
@@ -10,7 +11,8 @@ interface HealthBannerProps {
 }
 
 export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitchToPanels }) => {
-  const { t, isRtl } = useLanguage();
+  const { t } = useLanguage();
+  const { formatNumber } = useFormatters();
   const { cardClass, isDark, textPrimary, textMuted } = useThemeTokens();
 
   if (!panelHealth) return null;
@@ -62,22 +64,21 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
           </div>
           <span className={`text-[11px] block ${textMuted}`}>
             {t('admin.overview.panelHealthSub', {
-              healthy: panelHealth.healthy,
-              configured: panelHealth.configured,
+              healthy: formatNumber(panelHealth.healthy),
+              configured: formatNumber(panelHealth.configured),
             })}
           </span>
         </div>
       </div>
       <div
-        className={`text-xs font-medium px-2.5 py-1 rounded-xl border transition-colors ${
+        className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-xl border transition-colors ${
           isDark
             ? 'bg-white/[0.03] border-white/10 text-zinc-400 group-hover:border-white/20 group-hover:text-zinc-200'
             : 'bg-slate-100 border-slate-200/80 text-slate-600 group-hover:border-slate-300 group-hover:text-slate-900'
         }`}
       >
-        <span>
-          {t('admin.tabs.panels')} {isRtl ? '←' : '→'}
-        </span>
+        <span>{t('admin.tabs.panels')}</span>
+        <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180 text-inherit shrink-0" />
       </div>
     </div>
   );

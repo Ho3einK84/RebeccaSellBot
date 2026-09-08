@@ -9,6 +9,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { Card } from '@/shared/components/ui/Card.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface ReceiptsTabProps {
@@ -18,6 +19,7 @@ interface ReceiptsTabProps {
 
 export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotify }) => {
   const { t } = useLanguage();
+  const { formatNumber } = useFormatters();
   const { receipts, isLoading, isProcessingAction, actionMutation } = useAdminReceipts();
   const { isDark, textPrimary } = useThemeTokens();
 
@@ -76,7 +78,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
                 : 'bg-slate-100 border-slate-200 text-slate-700'
           }`}
         >
-          {receipts.length} {t('common.all')}
+          {formatNumber(receipts.length)} {t('common.all')}
         </span>
       </div>
 

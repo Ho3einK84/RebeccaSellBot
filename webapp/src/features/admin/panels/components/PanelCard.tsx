@@ -61,7 +61,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({ panel, onTest, isTesting }
 
           {panel.latencyMs !== undefined && (
             <Badge variant={latencyVariant} className="text-[10px] font-mono">
-              {t('admin.panels.latency', { ms: panel.latencyMs })}
+              {t('admin.panels.latency', { ms: formatNumber(panel.latencyMs) })}
             </Badge>
           )}
         </div>
@@ -129,7 +129,8 @@ export const PanelCard: React.FC<PanelCardProps> = ({ panel, onTest, isTesting }
                     : 'bg-slate-100 border-slate-200/80 text-slate-700'
                 }`}
               >
-                <span className="font-sans font-medium">{s.name}</span> (ID: {s.serviceId}){' '}
+                <span className="font-sans font-medium">{s.name}</span> (
+                {t('admin.panels.serviceIdLabel')}: <span dir="ltr">{s.serviceId}</span>){' '}
                 {s.isDefault ? `· ${t('admin.panels.defaultService')}` : ''}
               </span>
             ))}

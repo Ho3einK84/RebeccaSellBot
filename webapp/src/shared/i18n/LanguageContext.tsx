@@ -24,7 +24,11 @@ export interface LanguageContextType {
   locale: SupportedLocale;
   isRtl: boolean;
   languageSelectionEnabled: boolean;
-  t: (key: NestedTranslationKey, params?: Record<string, string | number>) => string;
+  t: (
+    key: NestedTranslationKey,
+    params?: Record<string, string | number>,
+    targetLocale?: SupportedLocale
+  ) => string;
   setLocale: (newLocale: SupportedLocale) => Promise<boolean>;
 }
 
@@ -57,8 +61,13 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
     document.documentElement.lang = locale;
   }, [locale, isRtl]);
 
-  const t = (key: NestedTranslationKey, params?: Record<string, string | number>): string => {
-    const currentDict = locales[locale] || locales.fa;
+  const t = (
+    key: NestedTranslationKey,
+    params?: Record<string, string | number>,
+    targetLocale?: SupportedLocale
+  ): string => {
+    const activeLocale = targetLocale ?? locale;
+    const currentDict = locales[activeLocale] || locales.fa;
     let text = getNestedValue(currentDict, key) ?? getNestedValue(locales.fa, key) ?? key;
 
     if (params) {

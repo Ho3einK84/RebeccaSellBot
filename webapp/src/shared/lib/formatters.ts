@@ -1,12 +1,24 @@
+export function toPersianDigits(value: string | number): string {
+  const str = String(value);
+  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  return str.replace(/[0-9]/g, (d) => persianDigits[Number(d)] ?? d);
+}
+
 export function formatMoney(amount: number, locale: string = 'fa'): string {
-  const numLocale = locale === 'fa' ? 'fa-IR' : 'en-US';
-  const formatted = Math.round(amount).toLocaleString(numLocale);
-  return formatted.replace(/['’]/g, '٬');
+  const rounded = Math.round(amount);
+  if (locale === 'fa') {
+    const formatted = rounded.toLocaleString('en-US');
+    return toPersianDigits(formatted.replace(/,/g, '٬'));
+  }
+  return rounded.toLocaleString('en-US');
 }
 
 export function formatNumber(num: number, locale: string = 'fa'): string {
-  const numLocale = locale === 'fa' ? 'fa-IR' : 'en-US';
-  return num.toLocaleString(numLocale);
+  if (locale === 'fa') {
+    const formatted = Math.round(num).toLocaleString('en-US');
+    return toPersianDigits(formatted.replace(/,/g, '٬'));
+  }
+  return num.toLocaleString('en-US');
 }
 
 export function getAvatarChar(name?: string | null, username?: string | null): string {

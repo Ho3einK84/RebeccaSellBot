@@ -13,37 +13,37 @@ export const ModulesTab: React.FC = () => {
       icon: Radio,
       title: t('admin.modules.broadcast'),
       desc: t('admin.modules.broadcastSub'),
-      category: 'Broadcast',
+      category: t('admin.modules.categoryBroadcast'),
     },
     {
       icon: Package,
       title: t('admin.modules.plans'),
       desc: t('admin.modules.plansSub'),
-      category: 'Billing',
+      category: t('admin.modules.categoryBilling'),
     },
     {
       icon: Ticket,
       title: t('admin.modules.promo'),
       desc: t('admin.modules.promoSub'),
-      category: 'Growth',
+      category: t('admin.modules.categoryGrowth'),
     },
     {
       icon: CreditCard,
       title: t('admin.modules.gateways'),
       desc: t('admin.modules.gatewaysSub'),
-      category: 'Payments',
+      category: t('admin.modules.categoryPayments'),
     },
     {
       icon: HardDrive,
       title: t('admin.modules.backups'),
       desc: t('admin.modules.backupsSub'),
-      category: 'Database',
+      category: t('admin.modules.categoryDatabase'),
     },
     {
       icon: Sparkles,
       title: t('admin.modules.wheel'),
       desc: t('admin.modules.wheelSub'),
-      category: 'Gamification',
+      category: t('admin.modules.categoryGamification'),
     },
   ];
 
@@ -124,7 +124,7 @@ export const ModulesTab: React.FC = () => {
                 >
                   {mod.category}
                 </span>
-                <span className={`text-[10px] ${textMuted}`}>Core Planned</span>
+                <span className={`text-[10px] ${textMuted}`}>{t('admin.modules.corePlanned')}</span>
               </div>
             </Card>
           );

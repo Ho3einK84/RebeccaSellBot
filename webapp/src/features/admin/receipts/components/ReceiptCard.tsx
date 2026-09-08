@@ -40,7 +40,11 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             {formatMoney(receipt.amount)} {t('common.currency')}
           </span>
           <Badge variant="warning" dot pulse className="text-[10px]">
-            {receipt.status}
+            {receipt.status === 'approved'
+              ? t('common.statusApproved')
+              : receipt.status === 'rejected'
+                ? t('common.statusRejected')
+                : t('common.statusPending')}
           </Badge>
           {receipt.photoFileId && (
             <button
@@ -74,7 +78,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
           </button>
           <span className={textMuted}>·</span>
           <span className={`font-mono text-xs ${textSecondary}`}>
-            ID: <span dir="ltr">{receipt.id}</span>
+            {t('common.idLabel')} <span dir="ltr">{receipt.id}</span>
           </span>
         </div>
 

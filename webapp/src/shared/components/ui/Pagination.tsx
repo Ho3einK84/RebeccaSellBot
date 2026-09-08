@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useTheme } from '@/shared/theme/ThemeContext.js';
 
 interface PaginationProps {
@@ -17,6 +18,7 @@ export const Pagination: React.FC<PaginationProps> = ({
   disabled = false,
 }) => {
   const { t, isRtl } = useLanguage();
+  const { formatNumber } = useFormatters();
   const { isDark } = useTheme();
 
   if (totalPages <= 1) return null;
@@ -49,13 +51,16 @@ export const Pagination: React.FC<PaginationProps> = ({
       </button>
 
       <span
-        className={`text-xs font-medium px-2.5 py-1 rounded-lg border font-mono ${
+        className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
           isDark
             ? 'bg-white/[0.03] border-white/10 text-zinc-400'
             : 'bg-slate-100 border-slate-200/80 text-slate-600'
         }`}
       >
-        {t('admin.users.paginationPage', { page, totalPages })}
+        {t('admin.users.paginationPage', {
+          page: formatNumber(page),
+          totalPages: formatNumber(totalPages),
+        })}
       </span>
 
       <button

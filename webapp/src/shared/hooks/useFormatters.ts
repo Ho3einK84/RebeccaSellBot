@@ -6,10 +6,13 @@ import {
   formatIsoDate as formatIsoDateUtil,
   getAvatarChar as getAvatarCharUtil,
   sanitizeDisplayName as sanitizeDisplayNameUtil,
+  toPersianDigits as toPersianDigitsUtil,
 } from '@/shared/lib/formatters.js';
 
 export function useFormatters() {
   const { locale } = useLanguage();
+
+  const toPersianDigits = useCallback((value: string | number) => toPersianDigitsUtil(value), []);
 
   const formatMoney = useCallback((amount: number) => formatMoneyUtil(amount, locale), [locale]);
 
@@ -37,5 +40,6 @@ export function useFormatters() {
     formatIsoDate,
     getAvatarChar,
     sanitizeDisplayName,
+    toPersianDigits,
   };
 }

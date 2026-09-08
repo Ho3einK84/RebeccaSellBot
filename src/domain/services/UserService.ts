@@ -314,7 +314,7 @@ export class UserService {
     }
 
     // 8. Partial match on username, firstName, lastName, or full display name
-    if (candidateIds.length < limit && query.length >= 2) {
+    if (candidateIds.length < limit && query.length >= 1) {
       const pattern = `%${query.toLowerCase()}%`;
       const fuzzyUsers = await db
         .select({ telegramId: users.telegramId })
@@ -691,6 +691,8 @@ function isUuid(value: string): boolean {
 export function cleanUserSearchQuery(rawQuery: string): string {
   if (!rawQuery) return '';
   let cleaned = rawQuery.trim();
+  // Strip leading # (e.g. #123456789 from UI copy buttons or hashtags)
+  cleaned = cleaned.replace(/^[#＃]+/u, '');
   // Normalize Persian (۰-۹) and Arabic (٠-٩) digits to ASCII (0-9)
   cleaned = cleaned
     .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))

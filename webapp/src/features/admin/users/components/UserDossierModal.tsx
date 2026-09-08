@@ -119,7 +119,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
             }`}
             onClick={() => setActiveTab('orders')}
           >
-            {t('admin.users.tabOrders')} ({orders.length})
+            {t('admin.users.tabOrders')} ({formatNumber(orders.length)})
           </button>
           <button
             type="button"
@@ -134,7 +134,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
             }`}
             onClick={() => setActiveTab('receipts')}
           >
-            {t('admin.users.tabReceipts')} ({receipts.length})
+            {t('admin.users.tabReceipts')} ({formatNumber(receipts.length)})
           </button>
         </div>
 
@@ -226,7 +226,9 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                     <div className={`font-semibold text-xs sm:text-sm ${textPrimary}`}>
                       {order.packageName || t('admin.users.orderPackage')}
                     </div>
-                    <div className={`text-[11px] font-mono ${textMuted}`}>ID: {order.id}</div>
+                    <div className={`text-[11px] font-mono ${textMuted}`}>
+                      {t('common.idLabel')} <span dir="ltr">{order.id}</span>
+                    </div>
                   </div>
                   <div className="text-right rtl:text-left space-y-0.5">
                     <div
@@ -263,7 +265,9 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                     <div className={`font-bold font-mono text-xs sm:text-sm ${textPrimary}`}>
                       {formatMoney(rec.amount)} {t('common.currency')}
                     </div>
-                    <div className={`text-[11px] font-mono ${textMuted}`}>ID: {rec.id}</div>
+                    <div className={`text-[11px] font-mono ${textMuted}`}>
+                      {t('common.idLabel')} <span dir="ltr">{rec.id}</span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge
@@ -277,7 +281,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                       dot
                       className="text-[10px]"
                     >
-                      {rec.status}
+                      {rec.status === 'approved'
+                        ? t('common.statusApproved')
+                        : rec.status === 'rejected'
+                          ? t('common.statusRejected')
+                          : t('common.statusPending')}
                     </Badge>
                     <span className={`text-[10px] ${textMuted}`}>
                       {formatIsoDate(rec.createdAt)}

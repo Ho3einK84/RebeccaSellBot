@@ -37,6 +37,11 @@ export interface TranslationSchema {
     themeToggle: string;
     themeDark: string;
     themeLight: string;
+    id: string;
+    idLabel: string;
+    statusApproved: string;
+    statusRejected: string;
+    statusPending: string;
   };
   auth: {
     connecting: string;
@@ -177,6 +182,8 @@ export interface TranslationSchema {
       quickReasonCard: string;
       quickReasonCompensation: string;
       quickReasonAdjustment: string;
+      quickAmountK: string;
+      quickAmountM: string;
     };
     panels: {
       fleetTitle: string;
@@ -189,6 +196,7 @@ export interface TranslationSchema {
       address: string;
       connectedServices: string;
       defaultService: string;
+      serviceIdLabel: string;
       testBtn: string;
       testing: string;
       latency: string;
@@ -216,6 +224,13 @@ export interface TranslationSchema {
       wheelSub: string;
       trial: string;
       trialSub: string;
+      categoryBroadcast: string;
+      categoryBilling: string;
+      categoryGrowth: string;
+      categoryPayments: string;
+      categoryDatabase: string;
+      categoryGamification: string;
+      corePlanned: string;
     };
     modals: {
       rejectTitle: string;

@@ -160,6 +160,9 @@ describe('UserService administrative profile lookup', () => {
     expect(cleanUserSearchQuery('tg://resolve?domain=botfather')).toBe('botfather');
     expect(cleanUserSearchQuery('۱۲۳۴۵۶۷۸۹')).toBe('123456789');
     expect(cleanUserSearchQuery('٠١٢٣٤٥٦٧٨٩')).toBe('0123456789');
+    expect(cleanUserSearchQuery('#123456789')).toBe('123456789');
+    expect(cleanUserSearchQuery('＃123456789')).toBe('123456789');
+    expect(cleanUserSearchQuery('#۱۲۳۴۵۶۷۸۹')).toBe('123456789');
     expect(cleanUserSearchQuery('')).toBe('');
   });
 });
