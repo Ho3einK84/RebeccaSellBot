@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { RotateCw } from 'lucide-react';
 import { useAdminUsers } from './hooks/useAdminUsers.js';
 import { UserSearchBar } from './components/UserSearchBar.js';
 import { UserMobileCard } from './components/UserMobileCard.js';
@@ -8,6 +7,7 @@ import { UserDossierModal } from './components/UserDossierModal.js';
 import { BalanceModal } from './components/BalanceModal.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
 import { Card } from '@/shared/components/ui/Card.js';
+import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -25,7 +25,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   onClearInspectedUser,
 }) => {
   const { t } = useLanguage();
-  const { textSecondary } = useThemeTokens();
+  const { isDark, textSecondary, textPrimary } = useThemeTokens();
   const { copy, isCopied } = useCopy();
 
   const {
@@ -88,15 +88,13 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         totalCount={totalCount}
       />
 
-      {isLoading && (
-        <div className={`flex items-center justify-center p-8 gap-3 ${textSecondary}`}>
-          <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
-          <span className="text-sm">{t('admin.users.searching')}</span>
-        </div>
-      )}
+      {isLoading && <SkeletonList count={4} />}
 
       {!isLoading && users.length === 0 && (
-        <Card className="p-8 text-center text-sm">{t('admin.users.notFound')}</Card>
+        <Card className="p-10 text-center flex flex-col items-center justify-center gap-2">
+          <p className={`text-sm font-semibold m-0 ${textPrimary}`}>{t('admin.users.notFound')}</p>
+          <p className={`text-xs m-0 ${textSecondary}`}>{t('admin.users.searchPlaceholder')}</p>
+        </Card>
       )}
 
       {/* Mobile Card List (< md) */}

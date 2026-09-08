@@ -5,6 +5,7 @@ import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import type { UserDossierResponse } from '@/shared/types/api.js';
 import type { UserProfile } from '@/shared/types/admin.js';
 
@@ -35,34 +36,44 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   return (
     <Modal isOpen={Boolean(dossier)} onClose={onClose} maxWidth="2xl">
       <div className="space-y-4 max-h-[80dvh] overflow-y-auto">
-        {/* Header */}
+        {/* Executive Profile Header */}
         <div
-          className={`flex items-center justify-between pb-3 border-b ${
-            isDark ? 'border-white/10' : 'border-slate-200'
+          className={`flex items-start justify-between pb-4 border-b ${
+            isDark ? 'border-white/[0.08]' : 'border-slate-200/80'
           }`}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5 min-w-0">
             <Avatar name={user.firstName} username={user.username} size="lg" />
-            <div>
-              <h3 className={`text-base font-bold m-0 ${textPrimary}`}>{displayName}</h3>
-              <div className={`flex items-center gap-2 text-xs mt-0.5 ${textSecondary}`}>
+            <div className="min-w-0">
+              <h3
+                className={`text-base sm:text-lg font-bold m-0 tracking-tight truncate ${textPrimary}`}
+              >
+                {displayName}
+              </h3>
+              <div className="flex items-center gap-2 text-xs mt-1 flex-wrap">
                 <span className="text-indigo-500 font-mono">
                   {user.username ? (
-                    <span dir="ltr" className="inline-block unicode-isolate">
+                    <span dir="ltr" className="inline-block unicode-isolate font-medium">
                       @{user.username}
                     </span>
                   ) : (
-                    t('admin.users.noUsername')
+                    <span className={textMuted}>{t('admin.users.noUsername')}</span>
                   )}
                 </span>
-                <span>·</span>
+                <span className={textMuted}>·</span>
                 <button
                   type="button"
-                  className="font-mono hover:text-indigo-400 flex items-center gap-1 cursor-pointer"
+                  className={`inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer ${
+                    isDark
+                      ? 'bg-white/[0.04] border-white/10 hover:border-white/20 text-zinc-300'
+                      : 'bg-slate-100 border-slate-200/80 hover:border-slate-300 text-slate-700'
+                  }`}
                   onClick={() => onCopyId(String(user.telegramId), 'dossier-id')}
+                  title={t('common.copy')}
                 >
+                  <span className="text-[10px] opacity-60">#</span>
                   <span dir="ltr">{user.telegramId}</span>
-                  <Copy className="w-3 h-3" />
+                  <Copy className="w-2.5 h-2.5 opacity-50" />
                 </button>
               </div>
             </div>
@@ -70,25 +81,26 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
           <button
             type="button"
-            className="btn btn-ghost btn-circle btn-xs cursor-pointer text-slate-400 hover:text-white"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer shrink-0"
             onClick={onClose}
+            aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Dossier Tabs */}
-        <div
-          className={`flex gap-2 pb-2 border-b ${isDark ? 'border-white/5' : 'border-slate-200'}`}
-        >
+        {/* Segmented Dossier Tabs */}
+        <div className="p-1 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1">
           <button
             type="button"
-            className={`btn btn-xs rounded-lg cursor-pointer ${
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer text-center ${
               activeTab === 'finances'
-                ? 'btn-primary text-white'
+                ? isDark
+                  ? 'bg-white/10 text-white font-semibold shadow-xs'
+                  : 'bg-white text-slate-950 font-semibold shadow-xs'
                 : isDark
-                  ? 'btn-ghost text-slate-400'
-                  : 'btn-ghost text-slate-600'
+                  ? 'text-zinc-400 hover:text-zinc-200'
+                  : 'text-slate-600 hover:text-slate-900'
             }`}
             onClick={() => setActiveTab('finances')}
           >
@@ -96,12 +108,14 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           </button>
           <button
             type="button"
-            className={`btn btn-xs rounded-lg cursor-pointer ${
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer text-center ${
               activeTab === 'orders'
-                ? 'btn-primary text-white'
+                ? isDark
+                  ? 'bg-white/10 text-white font-semibold shadow-xs'
+                  : 'bg-white text-slate-950 font-semibold shadow-xs'
                 : isDark
-                  ? 'btn-ghost text-slate-400'
-                  : 'btn-ghost text-slate-600'
+                  ? 'text-zinc-400 hover:text-zinc-200'
+                  : 'text-slate-600 hover:text-slate-900'
             }`}
             onClick={() => setActiveTab('orders')}
           >
@@ -109,12 +123,14 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           </button>
           <button
             type="button"
-            className={`btn btn-xs rounded-lg cursor-pointer ${
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer text-center ${
               activeTab === 'receipts'
-                ? 'btn-primary text-white'
+                ? isDark
+                  ? 'bg-white/10 text-white font-semibold shadow-xs'
+                  : 'bg-white text-slate-950 font-semibold shadow-xs'
                 : isDark
-                  ? 'btn-ghost text-slate-400'
-                  : 'btn-ghost text-slate-600'
+                  ? 'text-zinc-400 hover:text-zinc-200'
+                  : 'text-slate-600 hover:text-slate-900'
             }`}
             onClick={() => setActiveTab('receipts')}
           >
@@ -125,12 +141,12 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
         {/* Sub-tab 1: Finances Grid */}
         {activeTab === 'finances' && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            <div className={`p-3 rounded-xl border ${subCardClass}`}>
-              <span className={`text-[11px] block ${textMuted}`}>
+            <div className={`p-3.5 rounded-xl border ${subCardClass}`}>
+              <span className={`text-[11px] font-medium block ${textMuted}`}>
                 {t('admin.users.userCurBalance')}
               </span>
               <div
-                className={`text-sm sm:text-base font-bold font-mono mt-1 ${
+                className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${
                   isDark ? 'text-emerald-400' : 'text-emerald-600'
                 }`}
               >
@@ -138,39 +154,43 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${subCardClass}`}>
-              <span className={`text-[11px] block ${textMuted}`}>
+            <div className={`p-3.5 rounded-xl border ${subCardClass}`}>
+              <span className={`text-[11px] font-medium block ${textMuted}`}>
                 {t('admin.users.userTotalDeposit')}
               </span>
-              <div className={`text-sm sm:text-base font-bold font-mono mt-1 ${textPrimary}`}>
+              <div
+                className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${textPrimary}`}
+              >
                 {formatMoney(summary.totalDeposit)} {t('common.currency')}
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${subCardClass}`}>
-              <span className={`text-[11px] block ${textMuted}`}>
+            <div className={`p-3.5 rounded-xl border ${subCardClass}`}>
+              <span className={`text-[11px] font-medium block ${textMuted}`}>
                 {t('admin.users.userTotalSpend')}
               </span>
-              <div className={`text-sm sm:text-base font-bold font-mono mt-1 ${textPrimary}`}>
+              <div
+                className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${textPrimary}`}
+              >
                 {formatMoney(summary.totalSpend)} {t('common.currency')}
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${subCardClass}`}>
-              <span className={`text-[11px] block ${textMuted}`}>
+            <div className={`p-3.5 rounded-xl border ${subCardClass}`}>
+              <span className={`text-[11px] font-medium block ${textMuted}`}>
                 {t('admin.users.userActiveConfigs')}
               </span>
-              <div className="text-sm sm:text-base font-bold text-indigo-500 font-mono mt-1">
+              <div className="text-base sm:text-lg font-bold text-indigo-500 font-mono tracking-tight mt-1">
                 {formatNumber(summary.activeConfigsCount)}
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${subCardClass}`}>
-              <span className={`text-[11px] block ${textMuted}`}>
+            <div className={`p-3.5 rounded-xl border ${subCardClass}`}>
+              <span className={`text-[11px] font-medium block ${textMuted}`}>
                 {t('admin.users.userApprovedReceipts')}
               </span>
               <div
-                className={`text-sm sm:text-base font-bold font-mono mt-1 ${
+                className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${
                   isDark ? 'text-emerald-400' : 'text-emerald-600'
                 }`}
               >
@@ -178,11 +198,13 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${subCardClass}`}>
-              <span className={`text-[11px] block ${textMuted}`}>
+            <div className={`p-3.5 rounded-xl border ${subCardClass}`}>
+              <span className={`text-[11px] font-medium block ${textMuted}`}>
                 {t('admin.users.userAuditEvents')}
               </span>
-              <div className={`text-sm sm:text-base font-bold font-mono mt-1 ${textSecondary}`}>
+              <div
+                className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${textSecondary}`}
+              >
                 {formatNumber(summary.auditEventsCount)}
               </div>
             </div>
@@ -193,22 +215,22 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
         {activeTab === 'orders' && (
           <div className="space-y-2">
             {orders.length === 0 ? (
-              <p className={`text-xs text-center py-4 ${textMuted}`}>{t('admin.users.noOrders')}</p>
+              <p className={`text-xs text-center py-8 ${textMuted}`}>{t('admin.users.noOrders')}</p>
             ) : (
               orders.map((order) => (
                 <div
                   key={order.id}
-                  className={`p-3 rounded-xl border flex items-center justify-between text-xs ${subCardClass}`}
+                  className={`p-3 sm:p-3.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${subCardClass}`}
                 >
-                  <div>
-                    <div className={`font-semibold ${textPrimary}`}>
+                  <div className="space-y-0.5">
+                    <div className={`font-semibold text-xs sm:text-sm ${textPrimary}`}>
                       {order.packageName || t('admin.users.orderPackage')}
                     </div>
                     <div className={`text-[11px] font-mono ${textMuted}`}>ID: {order.id}</div>
                   </div>
-                  <div className="text-right rtl:text-left">
+                  <div className="text-right rtl:text-left space-y-0.5">
                     <div
-                      className={`font-mono font-bold ${
+                      className={`font-mono font-bold text-xs sm:text-sm ${
                         isDark ? 'text-emerald-400' : 'text-emerald-600'
                       }`}
                     >
@@ -228,33 +250,35 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
         {activeTab === 'receipts' && (
           <div className="space-y-2">
             {receipts.length === 0 ? (
-              <p className={`text-xs text-center py-4 ${textMuted}`}>
+              <p className={`text-xs text-center py-8 ${textMuted}`}>
                 {t('admin.users.noReceipts')}
               </p>
             ) : (
               receipts.map((rec) => (
                 <div
                   key={rec.id}
-                  className={`p-3 rounded-xl border flex items-center justify-between text-xs ${subCardClass}`}
+                  className={`p-3 sm:p-3.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${subCardClass}`}
                 >
-                  <div>
-                    <div className={`font-semibold font-mono ${textPrimary}`}>
+                  <div className="space-y-0.5">
+                    <div className={`font-bold font-mono text-xs sm:text-sm ${textPrimary}`}>
                       {formatMoney(rec.amount)} {t('common.currency')}
                     </div>
                     <div className={`text-[11px] font-mono ${textMuted}`}>ID: {rec.id}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`badge badge-xs text-[10px] font-medium ${
+                    <Badge
+                      variant={
                         rec.status === 'approved'
-                          ? 'badge-success text-white'
+                          ? 'success'
                           : rec.status === 'rejected'
-                            ? 'badge-error text-white'
-                            : 'badge-warning'
-                      }`}
+                            ? 'error'
+                            : 'warning'
+                      }
+                      dot
+                      className="text-[10px]"
                     >
                       {rec.status}
-                    </span>
+                    </Badge>
                     <span className={`text-[10px] ${textMuted}`}>
                       {formatIsoDate(rec.createdAt)}
                     </span>
@@ -267,13 +291,13 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
         {/* Action Bar */}
         <div
-          className={`modal-action flex justify-between items-center pt-2 border-t ${
-            isDark ? 'border-white/10' : 'border-slate-200'
+          className={`modal-action flex justify-between items-center pt-3 border-t ${
+            isDark ? 'border-white/[0.08]' : 'border-slate-200/80'
           }`}
         >
           <button
             type="button"
-            className="btn btn-primary btn-sm gap-1.5 text-xs text-white rounded-xl cursor-pointer"
+            className="h-10 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 border border-indigo-400/30 shadow-xs active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1.5"
             onClick={() => {
               onOpenBalanceModal(user);
             }}
@@ -284,8 +308,10 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
           <button
             type="button"
-            className={`btn btn-ghost btn-sm text-xs border rounded-xl cursor-pointer ${
-              isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+            className={`h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-95 cursor-pointer flex items-center justify-center ${
+              isDark
+                ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
             }`}
             onClick={onClose}
           >

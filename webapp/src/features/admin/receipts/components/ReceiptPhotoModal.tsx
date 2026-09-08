@@ -30,14 +30,14 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       maxWidth="lg"
     >
       <div
-        className={`rounded-xl overflow-hidden border flex items-center justify-center min-h-[260px] max-h-[70vh] ${
-          isDark ? 'bg-black/50 border-white/10' : 'bg-slate-100 border-slate-200'
+        className={`rounded-2xl overflow-hidden border flex items-center justify-center min-h-[260px] max-h-[70vh] p-2 ${
+          isDark ? 'bg-black/60 border-white/10' : 'bg-slate-100/80 border-slate-200'
         }`}
       >
         <img
           src={photoUrl}
           alt="Receipt proof"
-          className="max-h-[65vh] w-auto object-contain mx-auto"
+          className="max-h-[65vh] w-auto object-contain mx-auto rounded-xl shadow-md"
           onError={(e) => {
             (e.target as HTMLElement).style.display = 'none';
             onErrorNotify?.();
@@ -47,8 +47,10 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       <div className="modal-action mt-4">
         <button
           type="button"
-          className={`btn btn-ghost btn-sm text-xs border rounded-xl cursor-pointer ${
-            isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+          className={`w-full h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center ${
+            isDark
+              ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
+              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
           }`}
           onClick={onClose}
         >

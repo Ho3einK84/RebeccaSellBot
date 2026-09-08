@@ -69,43 +69,50 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
         </p>
 
         {/* Presets Chips */}
-        <div className="space-y-1.5">
-          <label className={`text-xs font-medium block ${textPrimary}`}>
+        <div className="space-y-2">
+          <label className={`text-xs font-semibold block ${textPrimary}`}>
             {t('admin.modals.rejectReasonLabel')}
           </label>
           <div className="flex flex-wrap gap-1.5">
-            {presets.map((preset) => (
-              <button
-                key={preset.key}
-                type="button"
-                className={`badge badge-sm py-2 px-2.5 text-[11px] cursor-pointer transition-all border ${
-                  selectedPreset === preset.key
-                    ? 'badge-error text-white font-medium'
-                    : isDark
-                      ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/10'
-                      : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-                }`}
-                onClick={() => handleSelectPreset(preset.key, preset.label)}
-              >
-                {preset.label}
-              </button>
-            ))}
+            {presets.map((preset) => {
+              const isSelected = selectedPreset === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  className={`px-3 py-1.5 rounded-xl text-xs transition-all active:scale-95 cursor-pointer border ${
+                    isSelected
+                      ? isDark
+                        ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 font-semibold shadow-xs'
+                        : 'bg-rose-50 border-rose-300 text-rose-800 font-semibold shadow-xs'
+                      : isDark
+                        ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
+                        : 'bg-slate-100 border-slate-200/80 text-slate-700 hover:bg-slate-200'
+                  }`}
+                  onClick={() => handleSelectPreset(preset.key, preset.label)}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <textarea
-          className={`textarea textarea-bordered w-full text-xs rounded-xl ${inputClass}`}
+          className={`w-full p-3 text-xs sm:text-sm rounded-xl border outline-none resize-none transition-all ${inputClass}`}
           rows={2}
           placeholder={t('admin.modals.rejectReasonPlaceholder')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
 
-        <div className="modal-action mt-4 flex gap-2">
+        <div className="modal-action mt-5 flex gap-2.5">
           <button
             type="button"
-            className={`btn btn-ghost btn-sm flex-1 text-xs border rounded-xl cursor-pointer ${
-              isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+            className={`flex-1 h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center ${
+              isDark
+                ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
             }`}
             onClick={handleClose}
             disabled={loading}
@@ -114,7 +121,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
           </button>
           <button
             type="button"
-            className="btn btn-error btn-sm flex-1 text-xs text-white shadow-sm rounded-xl cursor-pointer"
+            className="flex-1 h-10 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 border border-rose-400/30 shadow-xs active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
             disabled={loading}
             onClick={() => onConfirm(receipt, reason)}
           >

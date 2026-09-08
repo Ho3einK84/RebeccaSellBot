@@ -3,6 +3,7 @@ import { Server, RotateCw, Activity } from 'lucide-react';
 import { useAdminPanels } from './hooks/useAdminPanels.js';
 import { PanelCard } from './components/PanelCard.js';
 import { Card } from '@/shared/components/ui/Card.js';
+import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 
@@ -36,16 +37,16 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <Server className="w-5 h-5 text-indigo-500" />
-          <h2 className={`text-base font-bold m-0 ${textPrimary}`}>
+          <h2 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>
             {t('admin.panels.fleetTitle')}
           </h2>
         </div>
         <button
           type="button"
-          className={`btn btn-ghost btn-xs text-xs gap-1 border rounded-lg cursor-pointer ${
+          className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
             isDark
-              ? 'border-white/10 text-slate-300 hover:bg-white/10'
-              : 'border-slate-200 text-slate-700 hover:bg-slate-100'
+              ? 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] text-slate-300'
+              : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-xs'
           }`}
           onClick={() => refetch()}
         >
@@ -54,36 +55,38 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
         </button>
       </div>
 
-      {isLoading && (
-        <div className={`flex items-center justify-center p-8 gap-3 ${textSecondary}`}>
-          <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
-          <span className="text-sm">{t('admin.panels.loading')}</span>
-        </div>
-      )}
+      {isLoading && <SkeletonList count={2} />}
 
       {/* Fleet Status Summary Card */}
       {!isLoading && panels.length > 0 && (
         <Card className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${
+              className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 transition-colors ${
                 allHealthy
                   ? isDark
-                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
                     : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   : isDark
-                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/25'
                     : 'bg-rose-50 text-rose-700 border-rose-200'
               }`}
             >
               <Activity className="w-5 h-5" />
             </div>
             <div>
-              <h3 className={`text-sm font-bold m-0 ${textPrimary}`}>
-                {allHealthy
-                  ? t('admin.panels.fleetStatusOk')
-                  : t('admin.panels.fleetStatusWarning')}
-              </h3>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    allHealthy ? 'bg-emerald-500 status-pulse' : 'bg-rose-500'
+                  }`}
+                />
+                <h3 className={`text-sm font-bold m-0 tracking-tight ${textPrimary}`}>
+                  {allHealthy
+                    ? t('admin.panels.fleetStatusOk')
+                    : t('admin.panels.fleetStatusWarning')}
+                </h3>
+              </div>
               <p className={`text-xs m-0 mt-0.5 ${textSecondary}`}>
                 {t('common.panelsActiveCount', {
                   healthy: healthyCount,

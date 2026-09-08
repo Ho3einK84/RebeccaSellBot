@@ -6,12 +6,14 @@ export type BadgeVariant = 'neutral' | 'success' | 'warning' | 'error' | 'primar
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
   dot?: boolean;
+  pulse?: boolean;
 }
 
 export const Badge: React.FC<BadgeProps> = ({
   children,
   variant = 'neutral',
   dot = false,
+  pulse = false,
   className = '',
   ...props
 }) => {
@@ -49,10 +51,14 @@ export const Badge: React.FC<BadgeProps> = ({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${variantClasses[variant]} ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium tracking-tight border select-none ${variantClasses[variant]} ${className}`}
       {...props}
     >
-      {dot && <span className={`w-1.5 h-1.5 rounded-full ${dotColor[variant]}`} />}
+      {dot && (
+        <span
+          className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor[variant]} ${pulse ? 'status-pulse' : ''}`}
+        />
+      )}
       {children}
     </span>
   );

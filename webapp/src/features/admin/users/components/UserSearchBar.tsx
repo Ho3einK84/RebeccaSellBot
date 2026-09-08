@@ -21,16 +21,24 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
-  const { inputClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { isDark, inputClass, textPrimary, textMuted } = useThemeTokens();
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
         <div className="flex items-center gap-2">
           <Users className="w-5 h-5 text-indigo-500" />
-          <h2 className={`text-base font-bold m-0 ${textPrimary}`}>{t('admin.users.title')}</h2>
+          <h2 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>
+            {t('admin.users.title')}
+          </h2>
         </div>
-        <span className={`text-xs ${textSecondary}`}>
+        <span
+          className={`text-xs px-2.5 py-1 rounded-full border font-mono font-medium ${
+            isDark
+              ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+              : 'bg-slate-100 border-slate-200 text-slate-700'
+          }`}
+        >
           {t('admin.users.totalCount', { count: formatNumber(totalCount) })}
         </span>
       </div>
@@ -40,7 +48,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
           <Search className={`w-4 h-4 absolute start-3.5 top-3 pointer-events-none ${textMuted}`} />
           <input
             type="text"
-            className={`input input-bordered w-full text-xs sm:text-sm ps-10 pe-10 rounded-xl ${inputClass}`}
+            className={`w-full h-10 ps-10 pe-10 text-xs sm:text-sm rounded-xl border outline-none transition-all ${inputClass}`}
             placeholder={t('admin.users.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -51,8 +59,9 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
           {searchQuery && (
             <button
               type="button"
-              className={`absolute end-3 top-3 p-0.5 hover:text-white cursor-pointer ${textMuted}`}
+              className={`absolute end-2.5 top-2 p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer ${textMuted}`}
               onClick={onClear}
+              aria-label="Clear search"
             >
               <X className="w-4 h-4" />
             </button>
@@ -60,7 +69,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
         </div>
         <button
           type="button"
-          className="btn btn-primary btn-sm h-10 px-4 text-xs gap-1.5 text-white shadow-sm rounded-xl shrink-0 cursor-pointer"
+          className="h-10 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 border border-indigo-400/30 shadow-xs active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1.5 shrink-0"
           onClick={() => onSearch()}
         >
           <Search className="w-3.5 h-3.5" />

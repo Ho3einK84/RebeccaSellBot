@@ -4,6 +4,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Card } from '@/shared/components/ui/Card.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import type { PanelSummary } from '@/shared/types/admin.js';
 
 interface PanelCardProps {
@@ -19,52 +20,58 @@ export const PanelCard: React.FC<PanelCardProps> = ({ panel, onTest, isTesting }
 
   const isHealthy = panel.healthy !== false;
 
+  const latencyVariant =
+    panel.latencyMs === undefined
+      ? 'neutral'
+      : panel.latencyMs < 200
+        ? 'success'
+        : panel.latencyMs < 500
+          ? 'warning'
+          : 'error';
+
   return (
-    <Card className="p-4 sm:p-5 space-y-4 transition-all hover:border-indigo-500/40">
+    <Card className="p-4 sm:p-5 space-y-4 transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <div className="flex items-center gap-2">
             <span
-              className={`w-3 h-3 rounded-full shrink-0 ${
+              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                 isHealthy ? 'bg-emerald-500 status-pulse' : 'bg-rose-500'
               }`}
             />
-            <h3 className={`text-base font-bold m-0 ${textPrimary}`}>{panel.name}</h3>
+            <h3 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>
+              {panel.name}
+            </h3>
           </div>
 
           {panel.isDefault && (
-            <span className="badge badge-warning badge-sm text-[10px] font-medium">
+            <Badge variant="warning" className="text-[10px]">
               {t('admin.panels.default')}
-            </span>
+            </Badge>
           )}
 
-          <span
-            className={`badge badge-sm text-[10px] font-medium ${
-              isHealthy ? 'badge-success text-white' : 'badge-error text-white'
-            }`}
+          <Badge
+            variant={isHealthy ? 'success' : 'error'}
+            dot
+            pulse={isHealthy}
+            className="text-[10px]"
           >
             {isHealthy ? t('admin.panels.online') : t('admin.panels.offline')}
-          </span>
+          </Badge>
 
           {panel.latencyMs !== undefined && (
-            <span
-              className={`badge badge-sm text-[10px] font-mono border ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 text-indigo-300'
-                  : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-              }`}
-            >
+            <Badge variant={latencyVariant} className="text-[10px] font-mono">
               {t('admin.panels.latency', { ms: panel.latencyMs })}
-            </span>
+            </Badge>
           )}
         </div>
 
         <button
           type="button"
-          className={`btn btn-ghost btn-sm text-xs gap-1.5 border rounded-xl cursor-pointer ${
+          className={`inline-flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
             isDark
-              ? 'border-white/10 hover:bg-white/10 text-slate-300'
-              : 'border-slate-200 hover:bg-slate-100 text-slate-700 shadow-2xs'
+              ? 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] text-slate-300'
+              : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-xs'
           }`}
           disabled={isTesting}
           onClick={() => onTest(panel.id)}
@@ -76,14 +83,20 @@ export const PanelCard: React.FC<PanelCardProps> = ({ panel, onTest, isTesting }
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
         {panel.baseUrl && (
-          <div className={`p-2.5 rounded-xl border space-y-1 ${subCardClass}`}>
-            <span className={`block ${textMuted}`}>{t('admin.panels.address')}</span>
-            <code className="break-all font-mono text-[11px] text-indigo-500">{panel.baseUrl}</code>
+          <div className={`p-3 rounded-xl border space-y-1 ${subCardClass}`}>
+            <span className={`block text-[11px] font-medium ${textMuted}`}>
+              {t('admin.panels.address')}
+            </span>
+            <code className="break-all font-mono text-[11px] text-indigo-500 block">
+              {panel.baseUrl}
+            </code>
           </div>
         )}
 
-        <div className={`p-2.5 rounded-xl border space-y-1 ${subCardClass}`}>
-          <span className={`block ${textMuted}`}>{t('admin.panels.authMode')}</span>
+        <div className={`p-3 rounded-xl border space-y-1 ${subCardClass}`}>
+          <span className={`block text-[11px] font-medium ${textMuted}`}>
+            {t('admin.panels.authMode')}
+          </span>
           <div className="flex items-center gap-1.5 font-mono">
             <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
             <span className={textPrimary}>{panel.credentialMode}</span>
@@ -113,10 +126,10 @@ export const PanelCard: React.FC<PanelCardProps> = ({ panel, onTest, isTesting }
                 className={`text-xs py-1 px-2.5 rounded-lg border font-mono ${
                   isDark
                     ? 'bg-white/[0.03] border-white/10 text-zinc-300'
-                    : 'bg-slate-100 border-slate-200 text-slate-700'
+                    : 'bg-slate-100 border-slate-200/80 text-slate-700'
                 }`}
               >
-                <span className="font-sans">{s.name}</span> (ID: {s.serviceId}){' '}
+                <span className="font-sans font-medium">{s.name}</span> (ID: {s.serviceId}){' '}
                 {s.isDefault ? `· ${t('admin.panels.defaultService')}` : ''}
               </span>
             ))}

@@ -4,6 +4,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Card } from '@/shared/components/ui/Card.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface ReceiptCardProps {
@@ -28,48 +29,51 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
   const { isDark, textSecondary, textMuted } = useThemeTokens();
 
   return (
-    <Card className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all hover:border-indigo-500/40">
-      <div className="space-y-1.5 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
+    <Card className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-200 hover:border-slate-300 dark:hover:border-white/20">
+      <div className="space-y-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <span
-            className={`text-base font-bold font-mono ${
+            className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${
               isDark ? 'text-emerald-400' : 'text-emerald-600'
             }`}
           >
             {formatMoney(receipt.amount)} {t('common.currency')}
           </span>
-          <span className="badge badge-warning badge-sm text-[10px] font-medium">
+          <Badge variant="warning" dot pulse className="text-[10px]">
             {receipt.status}
-          </span>
+          </Badge>
           {receipt.photoFileId && (
             <button
               type="button"
-              className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full border transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-xl border transition-all active:scale-95 cursor-pointer ${
                 isDark
-                  ? 'bg-indigo-500/10 border-indigo-500/20 hover:bg-indigo-500/20 text-indigo-300'
+                  ? 'bg-indigo-500/10 border-indigo-500/25 hover:bg-indigo-500/20 text-indigo-300'
                   : 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700'
               }`}
               onClick={() => onViewPhoto(receipt)}
             >
-              <ImageIcon className="w-3 h-3" />
+              <ImageIcon className="w-3.5 h-3.5" />
               <span>{t('admin.receipts.viewPhoto')}</span>
             </button>
           )}
         </div>
 
         <div className="flex items-center gap-2 text-xs flex-wrap">
-          <span className="flex items-center gap-1">
-            <User className={`w-3.5 h-3.5 ${textMuted}`} />
-            <button
-              type="button"
-              className="underline font-mono text-indigo-500 hover:text-indigo-400 cursor-pointer"
-              onClick={() => onInspectUser(receipt.telegramId)}
-            >
-              <span dir="ltr">{receipt.telegramId}</span>
-            </button>
-          </span>
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border font-mono text-xs transition-all active:scale-95 cursor-pointer ${
+              isDark
+                ? 'bg-white/[0.04] border-white/10 hover:border-indigo-400/40 text-indigo-400 hover:bg-white/[0.08]'
+                : 'bg-indigo-50/60 border-indigo-200/80 hover:border-indigo-300 text-indigo-700 hover:bg-indigo-50'
+            }`}
+            onClick={() => onInspectUser(receipt.telegramId)}
+            title={t('admin.users.btnDetails')}
+          >
+            <User className="w-3 h-3 opacity-70" />
+            <span dir="ltr">{receipt.telegramId}</span>
+          </button>
           <span className={textMuted}>·</span>
-          <span className={`font-mono text-[11px] ${textSecondary}`}>
+          <span className={`font-mono text-xs ${textSecondary}`}>
             ID: <span dir="ltr">{receipt.id}</span>
           </span>
         </div>
@@ -80,10 +84,10 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 w-full sm:w-auto self-end">
+      <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 self-stretch sm:self-center pt-2 sm:pt-0 border-t sm:border-0 border-slate-200/50 dark:border-white/5">
         <button
           type="button"
-          className="btn btn-success btn-sm flex-1 sm:flex-none gap-1 text-xs text-white shadow-sm cursor-pointer"
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 border border-emerald-400/30 shadow-xs active:scale-95 transition-all cursor-pointer flex-1 sm:flex-none disabled:opacity-50"
           disabled={disabled}
           onClick={() => onApprove(receipt)}
         >
@@ -93,7 +97,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
 
         <button
           type="button"
-          className="btn btn-error btn-sm flex-1 sm:flex-none gap-1 text-xs text-white shadow-sm cursor-pointer"
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl font-medium text-xs text-rose-700 dark:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-200/80 dark:border-rose-500/20 active:scale-95 transition-all cursor-pointer flex-1 sm:flex-none disabled:opacity-50"
           disabled={disabled}
           onClick={() => onReject(receipt)}
         >

@@ -64,11 +64,13 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
           </div>
         </div>
 
-        <div className="modal-action mt-4 flex gap-2">
+        <div className="modal-action mt-5 flex gap-2.5">
           <button
             type="button"
-            className={`btn btn-ghost btn-sm flex-1 text-xs border rounded-xl cursor-pointer ${
-              isDark ? 'border-white/10 text-slate-300' : 'border-slate-200 text-slate-700'
+            className={`flex-1 h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center ${
+              isDark
+                ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
             }`}
             onClick={onClose}
             disabled={loading}
@@ -77,7 +79,7 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
           </button>
           <button
             type="button"
-            className="btn btn-success btn-sm flex-1 text-xs text-white shadow-sm rounded-xl cursor-pointer"
+            className="flex-1 h-10 px-4 rounded-xl font-medium text-xs text-white bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 border border-emerald-400/30 shadow-xs active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
             disabled={loading}
             onClick={() => onConfirm(receipt)}
           >

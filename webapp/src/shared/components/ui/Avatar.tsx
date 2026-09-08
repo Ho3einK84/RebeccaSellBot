@@ -27,12 +27,20 @@ export const Avatar: React.FC<AvatarProps> = ({
     xl: 'w-16 h-16 text-xl font-bold',
   }[size];
 
+  const radiusClasses = {
+    xs: 'rounded-lg',
+    sm: 'rounded-xl',
+    md: 'rounded-xl',
+    lg: 'rounded-2xl',
+    xl: 'rounded-2xl',
+  }[size];
+
   if (photoUrl) {
     return (
       <img
         src={photoUrl}
         alt={name || username || 'User'}
-        className={`rounded-full object-cover shrink-0 border border-slate-200 dark:border-white/10 ${sizeClasses} ${className}`}
+        className={`${radiusClasses} object-cover shrink-0 border border-slate-200/80 dark:border-white/10 shadow-xs ${sizeClasses} ${className}`}
         onError={(e) => {
           // Hide broken image
           (e.target as HTMLElement).style.display = 'none';
@@ -45,10 +53,10 @@ export const Avatar: React.FC<AvatarProps> = ({
 
   return (
     <div
-      className={`rounded-2xl flex items-center justify-center shrink-0 border select-none transition-colors ${sizeClasses} ${
+      className={`${radiusClasses} flex items-center justify-center shrink-0 border select-none transition-colors shadow-xs ${sizeClasses} ${
         isDark
-          ? 'bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 border-indigo-500/30 text-indigo-300'
-          : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+          ? 'bg-gradient-to-tr from-indigo-500/15 via-violet-500/15 to-purple-500/15 border-indigo-500/25 text-indigo-300'
+          : 'bg-gradient-to-tr from-indigo-50 to-violet-50 border-indigo-200 text-indigo-700'
       } ${className}`}
     >
       <span>{char}</span>

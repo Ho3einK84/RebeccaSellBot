@@ -1,11 +1,12 @@
 import React from 'react';
-import { Clock, Users, TrendingUp, RotateCw } from 'lucide-react';
+import { Clock, Users, TrendingUp } from 'lucide-react';
 import { useAdminStats } from './hooks/useAdminStats.js';
 import { HealthBanner } from './components/HealthBanner.js';
 import { RevenueGrid } from './components/RevenueGrid.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { SkeletonStatsGrid } from '@/shared/components/ui/Skeleton.js';
 import type { TabType } from '@/shared/types/admin.js';
 
 interface OverviewTabProps {
@@ -19,29 +20,27 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
   const { cardClass, isDark, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (isLoading && !stats) {
-    return (
-      <div className={`flex items-center justify-center p-8 gap-3 ${textSecondary}`}>
-        <RotateCw className="w-5 h-5 animate-spin text-indigo-500" />
-        <span className="text-sm">{t('admin.overview.statsLoading')}</span>
-      </div>
-    );
+    return <SkeletonStatsGrid count={6} />;
   }
 
   if (!stats) return null;
 
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
+      {/* Primary KPI Hero Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {/* Pending Receipts */}
         <div
-          className={`rounded-2xl p-4 flex items-center justify-between cursor-pointer border transition-all active:scale-[0.99] ${cardClass} hover:border-amber-500/50`}
+          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer border transition-all duration-200 active:scale-[0.99] ${cardClass} hover:border-amber-500/40`}
           onClick={() => onSwitchTab('receipts')}
         >
           <div className="space-y-1">
-            <span className={`text-xs block ${textSecondary}`}>
+            <span
+              className={`text-xs font-semibold uppercase tracking-wider block ${textSecondary}`}
+            >
               {t('admin.overview.pendingReceipts')}
             </span>
-            <div className="text-xl font-bold font-mono text-amber-500">
+            <div className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-amber-500">
               {formatNumber(stats.pendingReceipts)}
             </div>
             <span className={`text-[11px] block ${textMuted}`}>
@@ -49,7 +48,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
             </span>
           </div>
           <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
               isDark
                 ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
                 : 'bg-amber-50 border-amber-200 text-amber-700'
@@ -61,14 +60,18 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
 
         {/* Total Users */}
         <div
-          className={`rounded-2xl p-4 flex items-center justify-between cursor-pointer border transition-all active:scale-[0.99] ${cardClass} hover:border-indigo-500/50`}
+          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer border transition-all duration-200 active:scale-[0.99] ${cardClass} hover:border-indigo-500/40`}
           onClick={() => onSwitchTab('users')}
         >
           <div className="space-y-1">
-            <span className={`text-xs block ${textSecondary}`}>
+            <span
+              className={`text-xs font-semibold uppercase tracking-wider block ${textSecondary}`}
+            >
               {t('admin.overview.totalUsers')}
             </span>
-            <div className={`text-xl font-bold font-mono ${textPrimary}`}>
+            <div
+              className={`text-2xl sm:text-3xl font-bold font-mono tracking-tight ${textPrimary}`}
+            >
               {formatNumber(stats.totalUsers)}
             </div>
             <span className={`text-[11px] block ${textMuted}`}>
@@ -76,7 +79,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
             </span>
           </div>
           <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
               isDark
                 ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
                 : 'bg-indigo-50 border-indigo-200 text-indigo-700'
@@ -87,13 +90,17 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
         </div>
 
         {/* Total Sales */}
-        <div className={`rounded-2xl p-4 flex items-center justify-between border ${cardClass}`}>
+        <div
+          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between border ${cardClass}`}
+        >
           <div className="space-y-1">
-            <span className={`text-xs block ${textSecondary}`}>
+            <span
+              className={`text-xs font-semibold uppercase tracking-wider block ${textSecondary}`}
+            >
               {t('admin.overview.totalSales')}
             </span>
             <div
-              className={`text-xl font-bold font-mono ${
+              className={`text-2xl sm:text-3xl font-bold font-mono tracking-tight ${
                 isDark ? 'text-emerald-400' : 'text-emerald-600'
               }`}
             >
@@ -105,7 +112,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
             </span>
           </div>
           <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
               isDark
                 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                 : 'bg-emerald-50 border-emerald-200 text-emerald-700'
@@ -114,12 +121,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
             <TrendingUp className="w-5 h-5" />
           </div>
         </div>
+      </div>
 
-        {/* Revenue & Subscription KPI Grid */}
+      {/* Panels Health Summary */}
+      <HealthBanner panelHealth={panelHealth} onSwitchToPanels={() => onSwitchTab('panels')} />
+
+      {/* Revenue & Subscription Breakdown Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <RevenueGrid stats={stats} />
-
-        {/* Panels Health Summary */}
-        <HealthBanner panelHealth={panelHealth} onSwitchToPanels={() => onSwitchTab('panels')} />
       </div>
     </div>
   );

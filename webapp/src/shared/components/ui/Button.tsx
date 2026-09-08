@@ -25,25 +25,25 @@ export const Button: React.FC<ButtonProps> = ({
   const { triggerHaptic } = useHaptic();
 
   const sizeClasses = {
-    xs: 'btn-xs text-[11px] px-2.5 h-7',
-    sm: 'btn-sm text-xs px-3.5 h-8',
-    md: 'btn-md text-sm px-4 h-10',
-    lg: 'btn-lg text-base px-5 h-12',
+    xs: 'btn-xs text-[11px] px-2.5 h-7 rounded-lg',
+    sm: 'btn-sm text-xs px-3.5 h-8 rounded-xl',
+    md: 'btn-md text-sm px-4 h-10 rounded-xl',
+    lg: 'btn-lg text-base px-5 h-12 rounded-2xl',
   }[size];
 
   const variantClasses: Record<ButtonVariant, string> = {
     primary:
-      'bg-indigo-600 hover:bg-indigo-700 text-white border-transparent shadow-md shadow-indigo-600/20 active:scale-95',
+      'bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-white border-indigo-400/20 shadow-[0_1px_2px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.15)] active:scale-[0.98]',
     secondary:
-      'bg-white/[0.04] dark:bg-white/[0.06] hover:bg-white/[0.08] dark:hover:bg-white/10 text-slate-700 dark:text-zinc-200 border-slate-200 dark:border-white/10 active:scale-95',
+      'bg-white dark:bg-white/[0.05] hover:bg-slate-50 dark:hover:bg-white/[0.08] text-slate-700 dark:text-zinc-200 border-slate-200 dark:border-white/10 shadow-[0_1px_2px_rgba(0,0,0,0.03)] active:scale-[0.98]',
     outline:
-      'border-slate-300 dark:border-white/15 bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-800 dark:text-zinc-200 active:scale-95',
+      'border-slate-300 dark:border-white/15 bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-800 dark:text-zinc-200 active:scale-[0.98]',
     ghost:
-      'bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-zinc-400 border-transparent active:scale-95',
+      'bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-zinc-400 border-transparent active:scale-[0.98]',
     danger:
-      'bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/20 active:scale-95',
+      'bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-200/80 dark:border-rose-500/20 active:scale-[0.98]',
     success:
-      'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/20 active:scale-95',
+      'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-500/20 active:scale-[0.98]',
   };
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -54,7 +54,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
-      className={`btn font-medium rounded-xl inline-flex items-center justify-center gap-2 cursor-pointer transition-all ${sizeClasses} ${variantClasses[variant]} ${className}`}
+      className={`btn font-medium inline-flex items-center justify-center gap-1.5 cursor-pointer transition-all duration-150 select-none ${sizeClasses} ${variantClasses[variant]} ${className}`}
       disabled={disabled || loading}
       onClick={handleClick}
       {...props}

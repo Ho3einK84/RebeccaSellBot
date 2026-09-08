@@ -49,20 +49,23 @@ export const Modal: React.FC<ModalProps> = ({
   }[maxWidth];
 
   return (
-    <div className="modal modal-open z-50">
+    <div className="modal modal-open z-50 items-center justify-center p-3 sm:p-4">
       <div
-        className={`modal-box ${maxWidthClass} w-full p-4 sm:p-5 rounded-2xl border ${modalBoxClass} relative animate-in fade-in zoom-in-95 duration-150`}
+        className={`modal-box ${maxWidthClass} w-full p-5 sm:p-6 rounded-2xl sm:rounded-3xl border ${modalBoxClass} relative animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh]`}
       >
         {(title || icon) && (
-          <div className="flex items-center justify-between mb-3.5 pb-2 border-b border-slate-200/50 dark:border-white/5">
-            <h3 className={`font-bold text-sm sm:text-base flex items-center gap-2 ${textPrimary}`}>
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/60 dark:border-white/[0.08]">
+            <h3
+              className={`font-bold text-sm sm:text-base flex items-center gap-2.5 ${textPrimary}`}
+            >
               {icon}
-              <span>{title}</span>
+              <span className="tracking-tight">{title}</span>
             </h3>
             <button
               type="button"
-              className="btn btn-ghost btn-xs btn-circle text-slate-400 hover:text-slate-200 cursor-pointer"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
               onClick={onClose}
+              aria-label="Close modal"
             >
               <X className="w-4 h-4" />
             </button>
@@ -71,7 +74,10 @@ export const Modal: React.FC<ModalProps> = ({
         {children}
       </div>
       {closeOnBackdrop && (
-        <div className="modal-backdrop bg-black/60 backdrop-blur-xs" onClick={onClose} />
+        <div
+          className="modal-backdrop bg-black/65 backdrop-blur-sm transition-opacity"
+          onClick={onClose}
+        />
       )}
     </div>
   );

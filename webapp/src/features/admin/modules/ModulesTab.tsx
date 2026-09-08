@@ -1,5 +1,7 @@
 import React from 'react';
 import { Radio, Package, Ticket, CreditCard, HardDrive, Sparkles } from 'lucide-react';
+import { Card } from '@/shared/components/ui/Card.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 
@@ -42,26 +44,29 @@ export const ModulesTab: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
-      <div>
-        <h2 className={`text-base font-bold m-0 ${textPrimary}`}>{t('admin.modules.title')}</h2>
-        <p className={`text-xs m-0 mt-1 ${textSecondary}`}>{t('admin.modules.desc')}</p>
+      <div className="space-y-0.5">
+        <h2 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>
+          {t('admin.modules.title')}
+        </h2>
+        <p className={`text-xs m-0 ${textSecondary}`}>{t('admin.modules.desc')}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {modules.map((mod, i) => {
           const Icon = mod.icon;
           return (
-            <div
+            <Card
               key={i}
-              className={`rounded-2xl p-4 space-y-2 border-dashed border transition-all relative overflow-hidden ${
-                isDark ? 'bg-white/[0.02] border-white/15' : 'bg-white border-slate-300 shadow-2xs'
-              }`}
+              className={`p-4 sm:p-5 space-y-3 relative overflow-hidden transition-all duration-200 hover:border-indigo-400/50 dark:hover:border-indigo-500/40 group`}
             >
-              <span className="badge badge-warning badge-sm text-[10px] absolute top-3 left-3 rtl:left-auto rtl:right-3 font-medium">
+              <Badge
+                variant="neutral"
+                className="text-[10px] absolute top-3.5 end-3.5 font-mono font-medium"
+              >
                 {t('admin.modules.tagComingSoon')}
-              </span>
+              </Badge>
               <div
-                className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+                className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 ${
                   isDark
                     ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
                     : 'bg-indigo-50 border-indigo-200 text-indigo-700'
@@ -69,9 +74,13 @@ export const ModulesTab: React.FC = () => {
               >
                 <Icon className="w-5 h-5" />
               </div>
-              <h3 className={`text-sm font-bold m-0 ${textPrimary}`}>{mod.title}</h3>
-              <p className={`text-xs m-0 ${textSecondary}`}>{mod.desc}</p>
-            </div>
+              <div className="space-y-1">
+                <h3 className={`text-sm font-bold m-0 tracking-tight ${textPrimary}`}>
+                  {mod.title}
+                </h3>
+                <p className={`text-xs m-0 leading-relaxed ${textSecondary}`}>{mod.desc}</p>
+              </div>
+            </Card>
           );
         })}
       </div>
