@@ -42,13 +42,13 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
       .catch(() => {
         if (!cancelled) setBotUsername(null);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // t.me deep link when we have the username; otherwise open Telegram app generically
-  const openInTelegramUrl = botUsername
-    ? `https://t.me/${botUsername}`
-    : 'tg://';
+  const openInTelegramUrl = botUsername ? `https://t.me/${botUsername}` : 'tg://';
 
   return (
     <div
