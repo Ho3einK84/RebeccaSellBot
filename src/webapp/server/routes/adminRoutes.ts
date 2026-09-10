@@ -82,21 +82,23 @@ export function registerAdminRoutes(
           return reply.code(200).send({ success: true, result });
         }
 
+        if (!reason?.trim()) {
+          return reply.code(400).send({ error: 'A rejection reason is required' });
+        }
+
         const result = await services.walletService.rejectTopup(id, adminId);
         if (!result) {
           return reply.code(404).send({ error: 'Receipt not found or already processed' });
         }
 
-        if (reason?.trim()) {
-          await services.userService.recordAdminAction({
-            actorTelegramId: adminId,
-            action: 'topup_receipt_rejected_with_reason',
-            entityType: 'topup_receipt',
-            entityId: id,
-            targetTelegramId: result.telegramId,
-            metadata: { reason: reason.trim() },
-          });
-        }
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'topup_receipt_rejected_with_reason',
+          entityType: 'topup_receipt',
+          entityId: id,
+          targetTelegramId: result.telegramId,
+          metadata: { reason: reason.trim() },
+        });
 
         return reply.code(200).send({ success: true });
       }
@@ -186,6 +188,7 @@ export function registerAdminRoutes(
         const adminId = request.userSession!.telegramId;
 
         try {
+          const previousBalance = await services.walletService.getBalance(telegramId);
           const newBalance = await services.walletService.adjustBalanceAdmin({
             telegramId,
             operation,
@@ -203,8 +206,9 @@ export function registerAdminRoutes(
             metadata: {
               operation,
               amount,
-              reason: reason.trim(),
+              previousBalance,
               newBalance,
+              reason: reason.trim(),
             },
           });
 

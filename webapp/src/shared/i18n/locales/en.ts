@@ -43,6 +43,7 @@ export const en: TranslationSchema = {
     authFailed: 'Unable to authenticate with Telegram.',
     closeWindow: 'Close Window',
     authErrorTitle: 'Authentication Error',
+    openInTelegram: 'Open in Telegram',
   },
   user: {
     greeting: 'Hello, {name}!',

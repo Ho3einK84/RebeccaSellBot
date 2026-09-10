@@ -1,13 +1,15 @@
 import React from 'react';
-import { AlertTriangle, ShieldX } from 'lucide-react';
+import { ShieldX, AlertTriangle, ExternalLink, X } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 
 interface AuthErrorScreenProps {
   error: string | null;
 }
 
 export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
-  const { t } = useLanguage();
+  const { t, isRtl } = useLanguage();
+  const { isDark, textPrimary, textSecondary } = useThemeTokens();
 
   const handleClose = () => {
     if (window.Telegram?.WebApp?.close) {
@@ -25,21 +27,84 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
         ? t('auth.authFailed')
         : error || t('auth.authFailed');
 
+  // Derive bot username from the Telegram WebApp context or use fallback
+  const botUsername = window.Telegram?.WebApp?.initDataUnsafe?.user?.username;
+  // Deep link to bot — uses t.me universal link
+  const openInTelegramUrl = `https://t.me/${botUsername || 'RebeccaSellBot'}`;
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="glass-panel p-8 max-w-sm w-full text-center flex flex-col items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20">
-          {isTelegramOnly ? <ShieldX className="w-7 h-7" /> : <AlertTriangle className="w-7 h-7" />}
-        </div>
-        <h2 className="text-lg font-bold text-white">{t('auth.authErrorTitle')}</h2>
-        <p className="text-sm text-slate-400 leading-relaxed">{message}</p>
-        <button
-          type="button"
-          className="btn btn-primary w-full shadow-lg shadow-indigo-500/20 cursor-pointer"
-          onClick={handleClose}
+    <div
+      className="fixed inset-0 w-screen"
+      style={{ height: '100dvh' }}
+      dir={isRtl ? 'rtl' : 'ltr'}
+    >
+      <div className="flex items-center justify-center w-full h-full p-4">
+        <div
+          className={`p-6 sm:p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border shadow-lg ${
+            isDark
+              ? 'bg-[#10121a]/90 border-white/[0.08] shadow-black/40 backdrop-blur-xl'
+              : 'bg-white border-slate-200 shadow-slate-200/60'
+          }`}
         >
-          {t('auth.closeWindow')}
-        </button>
+          {/* Brand Logo / Shield Icon */}
+          <div
+            className={`w-16 h-16 rounded-2xl flex items-center justify-center border ${
+              isTelegramOnly
+                ? isDark
+                  ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                  : 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                : isDark
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  : 'bg-amber-50 border-amber-200 text-amber-600'
+            }`}
+          >
+            {isTelegramOnly ? (
+              <ShieldX className="w-8 h-8" />
+            ) : (
+              <AlertTriangle className="w-8 h-8" />
+            )}
+          </div>
+
+          {/* Heading */}
+          <h2 className={`text-lg font-bold tracking-tight ${textPrimary}`}>
+            {t('auth.authErrorTitle')}
+          </h2>
+
+          {/* Message */}
+          <p className={`text-sm leading-relaxed ${textSecondary}`}>{message}</p>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col gap-2.5 w-full mt-1">
+            {/* Primary: Open in Telegram */}
+            <a
+              href={openInTelegramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`h-11 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 no-underline ${
+                isDark
+                  ? 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-500/20'
+                  : 'bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10'
+              }`}
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>{t('auth.openInTelegram')}</span>
+            </a>
+
+            {/* Secondary: Close Window */}
+            <button
+              type="button"
+              className={`h-11 rounded-xl font-medium text-sm transition-all active:scale-[0.98] cursor-pointer border flex items-center justify-center gap-2 ${
+                isDark
+                  ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
+              }`}
+              onClick={handleClose}
+            >
+              <X className="w-4 h-4" />
+              <span>{t('auth.closeWindow')}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

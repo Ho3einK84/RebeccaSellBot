@@ -49,6 +49,7 @@ describe('WebApp Server & Admin Routes', () => {
       return null;
     }),
     adjustBalanceAdmin: vi.fn(async () => 150_000),
+    getBalance: vi.fn(async () => 50_000),
   };
 
   const mockUserService = {
@@ -293,6 +294,18 @@ describe('WebApp Server & Admin Routes', () => {
       expect(response.statusCode).toBe(200);
       expect(mockWalletService.rejectTopup).toHaveBeenCalledWith('rec_1001', 12345);
       expect(mockUserService.recordAdminAction).toHaveBeenCalled();
+    });
+
+    it('POST /api/admin/receipts/:id/action rejects without reason returns 400', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/receipts/rec_1001/action',
+        cookies: { session: getAdminToken() },
+        payload: { action: 'reject' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toContain('reason');
     });
 
     it('GET /api/admin/users lists users and supports search', async () => {

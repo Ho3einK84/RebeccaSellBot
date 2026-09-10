@@ -43,6 +43,7 @@ export const fa: TranslationSchema = {
     authFailed: 'امکان احراز هویت تلگرام وجود ندارد.',
     closeWindow: 'بستن پنجره',
     authErrorTitle: 'خطای احراز هویت',
+    openInTelegram: 'باز کردن در تلگرام',
   },
   user: {
     greeting: 'سلام، {name}!',

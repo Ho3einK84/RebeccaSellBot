@@ -315,7 +315,11 @@ export class WalletService {
           : params.operation === 'deduct'
             ? user.balance - params.amount
             : params.amount;
-      if (!Number.isSafeInteger(targetBalance) || targetBalance < user.reservedBalance) {
+      if (
+        !Number.isSafeInteger(targetBalance) ||
+        targetBalance < 0 ||
+        targetBalance < user.reservedBalance
+      ) {
         throw new Error('ADMIN_BALANCE_BELOW_RESERVED');
       }
 

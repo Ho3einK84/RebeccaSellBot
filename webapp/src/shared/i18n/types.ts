@@ -49,6 +49,7 @@ export interface TranslationSchema {
     authFailed: string;
     closeWindow: string;
     authErrorTitle: string;
+    openInTelegram: string;
   };
   user: {
     greeting: string;

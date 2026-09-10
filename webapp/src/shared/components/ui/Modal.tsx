@@ -1,4 +1,5 @@
 import React, { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
@@ -27,6 +28,16 @@ export const Modal: React.FC<ModalProps> = ({
   // Telegram back button integration: closes modal when user taps Back
   useTelegramBackButton(onClose, isOpen);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
+
   // Keyboard Escape listener
   useEffect(() => {
     if (!isOpen) return;
@@ -48,10 +59,23 @@ export const Modal: React.FC<ModalProps> = ({
     '4xl': 'max-w-4xl',
   }[maxWidth];
 
-  return (
-    <div className="modal modal-open z-50 items-center justify-center p-3 sm:p-4">
+  const modal = (
+    <div
+      className="fixed inset-0 w-screen z-[9999] flex items-center justify-center p-3 sm:p-4"
+      style={{ height: '100dvh' }}
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Backdrop — covers full viewport regardless of ancestor transforms */}
       <div
-        className={`modal-box ${maxWidthClass} w-full p-5 sm:p-6 rounded-2xl sm:rounded-3xl border ${modalBoxClass} relative animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh]`}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={closeOnBackdrop ? onClose : undefined}
+        aria-hidden="true"
+      />
+
+      {/* Modal content */}
+      <div
+        className={`${maxWidthClass} w-full p-5 sm:p-6 rounded-2xl sm:rounded-3xl border ${modalBoxClass} relative animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto z-10`}
       >
         {(title || icon) && (
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/60 dark:border-white/[0.08]">
@@ -73,12 +97,10 @@ export const Modal: React.FC<ModalProps> = ({
         )}
         {children}
       </div>
-      {closeOnBackdrop && (
-        <div
-          className="modal-backdrop bg-black/65 backdrop-blur-sm transition-opacity"
-          onClick={onClose}
-        />
-      )}
     </div>
   );
+
+  // Portal to document.body to escape any ancestor transform/filter/perspective
+  // that would break position:fixed
+  return createPortal(modal, document.body);
 };
