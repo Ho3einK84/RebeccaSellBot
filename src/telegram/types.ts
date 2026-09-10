@@ -103,6 +103,8 @@ export type BotServices = {
   broadcastService: BroadcastService;
   backupService: BackupService;
   luckyWheelService: LuckyWheelService;
+  /** Telegram bot username (e.g. "RebeccaSellBot") from bot.botInfo, for deep links. */
+  botUsername?: string;
   /** Optional Telegram-compatible support destination rendered as a URL button. */
   supportUrl?: string;
   /** Optional public HTTPS URL for Telegram Mini App. */

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ShieldX, AlertTriangle, ExternalLink, X } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -27,10 +27,28 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
         ? t('auth.authFailed')
         : error || t('auth.authFailed');
 
-  // Derive bot username from the Telegram WebApp context or use fallback
-  const botUsername = window.Telegram?.WebApp?.initDataUnsafe?.user?.username;
-  // Deep link to bot — uses t.me universal link
-  const openInTelegramUrl = `https://t.me/${botUsername || 'RebeccaSellBot'}`;
+  const [botUsername, setBotUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/auth/bot-info')
+      .then((res) => {
+        if (!res.ok) throw new Error('bot-info unavailable');
+        return res.json();
+      })
+      .then((data: { username: string }) => {
+        if (!cancelled) setBotUsername(data.username);
+      })
+      .catch(() => {
+        if (!cancelled) setBotUsername(null);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // t.me deep link when we have the username; otherwise open Telegram app generically
+  const openInTelegramUrl = botUsername
+    ? `https://t.me/${botUsername}`
+    : 'tg://';
 
   return (
     <div

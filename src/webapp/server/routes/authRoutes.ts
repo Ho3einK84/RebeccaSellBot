@@ -17,11 +17,21 @@ export function registerAuthRoutes(
   app: FastifyInstance,
   options: {
     botToken: string;
+    botUsername?: string;
     adminService: AdminService;
     userService: UserService;
     translationService: TranslationService;
   }
 ): void {
+  // Expose the bot username for the non-Telegram guard screen CTA.
+  // Outside Telegram there is no initDataUnsafe, so the WebApp cannot derive
+  // the bot username from the Telegram context — the backend is the source of truth.
+  app.get('/api/auth/bot-info', async (_req, reply) => {
+    return reply.send({
+      username: options.botUsername,
+    });
+  });
+
   app.post<{ Body: ValidateRequestBody }>(
     '/api/auth/telegram-validate',
     {

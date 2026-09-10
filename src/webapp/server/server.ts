@@ -97,6 +97,7 @@ export async function createWebAppServer(
   // REST API Routes
   registerAuthRoutes(app, {
     botToken: config.BOT_TOKEN,
+    botUsername: services.botUsername,
     adminService: services.adminService,
     userService: services.userService,
     translationService: services.translationService,
