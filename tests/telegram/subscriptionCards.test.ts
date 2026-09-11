@@ -488,7 +488,10 @@ describe('subscription card actions', () => {
           }),
         },
         pricingService: { getPackages: vi.fn(() => [pkg]) },
-        walletService: { getBalance: vi.fn().mockResolvedValue(99_999) },
+        walletService: {
+          getBalance: vi.fn().mockResolvedValue(99_999),
+          getAvailableBalance: vi.fn().mockResolvedValue(99_999),
+        },
         purchaseCheckoutService: { create },
       },
     };

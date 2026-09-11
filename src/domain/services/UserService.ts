@@ -154,12 +154,12 @@ export class UserService {
 
     // 5. Fuzzy match on username, firstName, or lastName
     if (!user && query.length >= 2) {
-      const pattern = `%${query.toLowerCase()}%`;
+      const pattern = `%${escapeLikePattern(query.toLowerCase())}%`;
       [user] = await db
         .select()
         .from(users)
         .where(
-          sql`LOWER(${users.username}) LIKE ${pattern} OR LOWER(${users.firstName}) LIKE ${pattern} OR LOWER(${users.lastName}) LIKE ${pattern}`
+          sql`LOWER(${users.username}) LIKE ${pattern} ESCAPE '\\' OR LOWER(${users.firstName}) LIKE ${pattern} ESCAPE '\\' OR LOWER(${users.lastName}) LIKE ${pattern} ESCAPE '\\'`
         )
         .limit(1);
     }
@@ -222,6 +222,7 @@ export class UserService {
     const db = getDb();
     const query = cleanUserSearchQuery(rawQuery);
     if (!query) return [];
+    limit = Math.max(1, Math.min(Math.trunc(limit) || 8, 50));
 
     const parsedTelegramId = /^\d+$/.test(query) ? Number(query) : Number.NaN;
     const telegramId =
@@ -315,12 +316,12 @@ export class UserService {
 
     // 8. Partial match on username, firstName, lastName, or full display name
     if (candidateIds.length < limit && query.length >= 1) {
-      const pattern = `%${query.toLowerCase()}%`;
+      const pattern = `%${escapeLikePattern(query.toLowerCase())}%`;
       const fuzzyUsers = await db
         .select({ telegramId: users.telegramId })
         .from(users)
         .where(
-          sql`LOWER(${users.username}) LIKE ${pattern} OR LOWER(${users.firstName}) LIKE ${pattern} OR LOWER(${users.lastName}) LIKE ${pattern} OR LOWER(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, ''))) LIKE ${pattern}`
+          sql`LOWER(${users.username}) LIKE ${pattern} ESCAPE '\\' OR LOWER(${users.firstName}) LIKE ${pattern} ESCAPE '\\' OR LOWER(${users.lastName}) LIKE ${pattern} ESCAPE '\\' OR LOWER(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, ''))) LIKE ${pattern} ESCAPE '\\'`
         )
         .limit(limit);
       for (const fu of fuzzyUsers) addCandidate(fu.telegramId);
@@ -328,12 +329,12 @@ export class UserService {
 
     // 9. Partial match on config username or sub URL if space remains
     if (candidateIds.length < limit && query.length >= 3) {
-      const pattern = `%${query.toLowerCase()}%`;
+      const pattern = `%${escapeLikePattern(query.toLowerCase())}%`;
       const partialConfigs = await db
         .select({ telegramId: userConfigs.telegramId })
         .from(userConfigs)
         .where(
-          sql`LOWER(${userConfigs.configUsername}) LIKE ${pattern} OR LOWER(${userConfigs.subUrl}) LIKE ${pattern}`
+          sql`LOWER(${userConfigs.configUsername}) LIKE ${pattern} ESCAPE '\\' OR LOWER(${userConfigs.subUrl}) LIKE ${pattern} ESCAPE '\\'`
         )
         .limit(limit);
       for (const pc of partialConfigs) addCandidate(pc.telegramId);
@@ -663,17 +664,20 @@ export class UserService {
     totalPages: number;
   }> {
     const db = getDb();
-    const safePage = Math.max(1, page);
-    const offset = (safePage - 1) * limit;
+    // Clamp pagination: unvalidated limits caused Drizzle errors on
+    // negative values and full-table scans on huge values.
+    const safeLimit = Math.max(1, Math.min(Math.trunc(limit) || 6, 50));
+    const safePage = Math.max(1, Math.trunc(page) || 1);
+    const offset = (safePage - 1) * safeLimit;
 
     const [[totalRow], items] = await Promise.all([
       db.select({ count: count() }).from(users),
-      db.select().from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset),
+      db.select().from(users).orderBy(desc(users.createdAt)).limit(safeLimit).offset(offset),
     ]);
 
     const total = totalRow?.count ?? 0;
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    if (safePage > totalPages) return this.listUsers(totalPages, limit);
+    const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+    if (safePage > totalPages) return this.listUsers(totalPages, safeLimit);
 
     return {
       users: items,
@@ -686,6 +690,10 @@ export class UserService {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/gu, '\\$&');
 }
 
 export function cleanUserSearchQuery(rawQuery: string): string {

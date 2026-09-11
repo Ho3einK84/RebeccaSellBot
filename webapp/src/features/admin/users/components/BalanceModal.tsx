@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Wallet, X, Check, RotateCw, Plus, Minus, Settings2 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -27,7 +27,19 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
   const [amountStr, setAmountStr] = useState<string>('');
   const [reason, setReason] = useState<string>('');
 
-  const numAmount = parseInt(amountStr, 10) || 0;
+  // Reset form whenever a different user is opened: the parent closes via
+  // setBalanceModalUser(null) which bypasses handleClose.
+  useEffect(() => {
+    setOperation('add');
+    setAmountStr('');
+    setReason('');
+  }, [user?.telegramId]);
+
+  // Strict integer parsing: parseInt("1.9") → 1 silently truncates, and
+  // "" → 0 would submit a useless zero adjustment. Require a positive
+  // safe integer.
+  const numAmount = Number(amountStr);
+  const isValidAmount = Number.isSafeInteger(numAmount) && numAmount > 0;
 
   const previewNewBalance = useMemo(() => {
     if (!user) return 0;
@@ -41,7 +53,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (numAmount < 0 || !reason.trim()) return;
+    if (!isValidAmount || !reason.trim()) return;
     onSubmit({ operation, amount: numAmount, reason: reason.trim() });
   };
 
@@ -217,7 +229,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
           </div>
 
           {/* Calculated Balance Preview Card */}
-          {amountStr && (
+          {isValidAmount && (
             <div
               className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-colors ${
                 isDark
@@ -298,7 +310,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
                   ? 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-xs'
                   : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
               }`}
-              disabled={loading}
+              disabled={loading || !isValidAmount || !reason.trim()}
             >
               {loading ? (
                 <RotateCw className="w-3.5 h-3.5 animate-spin" />

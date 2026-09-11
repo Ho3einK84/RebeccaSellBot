@@ -12,6 +12,19 @@ declare module 'fastify' {
 }
 
 export async function adminGuard(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await adminGuardWithCheck(request, reply);
+}
+
+/**
+ * Admin guard with live registry re-validation.
+ * The JWT `role` is only a hint: a removed admin keeps a valid signature for
+ * up to 12h, so the current registry must be consulted on every request.
+ */
+export async function adminGuardWithCheck(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  isAdmin?: (telegramId: number) => boolean
+): Promise<void> {
   try {
     let token: string | undefined = request.cookies?.session;
 
@@ -29,6 +42,11 @@ export async function adminGuard(request: FastifyRequest, reply: FastifyReply): 
 
     const decoded = (await request.server.jwt.verify(token)) as WebAppSession;
     if (!decoded || !Number.isSafeInteger(decoded.telegramId) || decoded.role !== 'admin') {
+      await reply.code(403).send({ error: 'Forbidden' });
+      return;
+    }
+
+    if (isAdmin && !isAdmin(decoded.telegramId)) {
       await reply.code(403).send({ error: 'Forbidden' });
       return;
     }

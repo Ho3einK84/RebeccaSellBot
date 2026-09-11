@@ -32,7 +32,10 @@ export async function createWebAppServer(
     crypto.createHmac('sha256', config.BOT_TOKEN).update('WebAppSessionSecret').digest('hex');
 
   await app.register(fastifyCors, {
-    origin: true,
+    // Reflecting an arbitrary Origin with credentials (origin: true) lets
+    // any site make credentialed calls. Restrict to the configured frontend
+    // origins when known; same-origin production serving needs no CORS.
+    origin: resolveCorsAllowlist(config),
     credentials: true,
   });
 
@@ -101,6 +104,9 @@ export async function createWebAppServer(
     adminService: services.adminService,
     userService: services.userService,
     translationService: services.translationService,
+    // `secure: true` cookies are rejected by browsers over plain HTTP, which
+    // broke session login on local dev. Only require Secure in production.
+    secureCookies: config.NODE_ENV === 'production',
   });
 
   registerAdminRoutes(app, {
@@ -108,6 +114,7 @@ export async function createWebAppServer(
     userService: services.userService,
     panelRegistry: services.panelRegistry,
     botToken: config.BOT_TOKEN,
+    adminService: services.adminService,
   });
 
   // Static files & SPA fallback
@@ -171,4 +178,22 @@ export async function startWebAppServer(
   };
 
   return { server, close };
+}
+
+/**
+ * Build a CORS allowlist from the configured public origins.
+ * Returns `true` (legacy reflect behavior) only when no public origin is
+ * configured, preserving backward compatibility for custom setups.
+ */
+function resolveCorsAllowlist(config: Config): string[] | true {
+  const origins = new Set<string>();
+  for (const raw of [config.WEBAPP_URL, config.WEBHOOK_URL]) {
+    if (!raw) continue;
+    try {
+      origins.add(new URL(raw).origin);
+    } catch {
+      // ignore unparseable URLs; validation lives in config schema
+    }
+  }
+  return origins.size > 0 ? [...origins] : true;
 }

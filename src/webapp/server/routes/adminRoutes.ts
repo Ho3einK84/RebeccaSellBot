@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { adminGuard } from '../middleware/adminGuard.js';
+import { adminGuardWithCheck } from '../middleware/adminGuard.js';
 import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { RebeccaPanelRegistry } from '../../../domain/services/RebeccaPanelRegistry.js';
+import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { AdminBalanceOperation } from '../../../domain/services/WalletContracts.js';
+import { getTelegramFileUrl } from '../../../infra/telegramFiles.js';
 
 interface ReceiptActionBody {
   action: 'approve' | 'reject';
@@ -23,10 +25,19 @@ export function registerAdminRoutes(
     userService: UserService;
     panelRegistry: RebeccaPanelRegistry;
     botToken?: string;
+    adminService?: Pick<AdminService, 'isAdmin'>;
   }
 ): void {
   app.register(async (adminScope) => {
-    adminScope.addHook('preHandler', adminGuard);
+    // Re-validate the admin registry on every request: a JWT signed before
+    // an admin was removed must stop working immediately, not after 12h.
+    adminScope.addHook('preHandler', (request, reply) =>
+      adminGuardWithCheck(
+        request,
+        reply,
+        services.adminService ? (id) => services.adminService!.isAdmin(id) : undefined
+      )
+    );
 
     // GET /api/admin/stats
     adminScope.get('/api/admin/stats', async (_request, reply) => {
@@ -45,10 +56,31 @@ export function registerAdminRoutes(
     adminScope.get<{
       Querystring: { page?: string; limit?: string };
     }>('/api/admin/receipts', async (request, reply) => {
-      const page = Number(request.query.page) || 1;
-      const limit = Number(request.query.limit) || 10;
+      const page = clampPositiveInt(request.query.page, 1, 1_000_000);
+      const limit = clampPositiveInt(request.query.limit, 10, 50);
       const result = await services.walletService.listPendingTopupsPage(page, limit);
       return reply.code(200).send(result);
+    });
+
+    // GET /api/admin/receipts/:id/photo — redirect to the Telegram-hosted
+    // receipt image so the <img> tag constructed by the frontend resolves
+    // instead of hitting the generic 404 handler.
+    adminScope.get<{
+      Params: { id: string };
+    }>('/api/admin/receipts/:id/photo', async (request, reply) => {
+      const { id } = request.params;
+      const receipt = await services.walletService.getPendingTopup(id);
+      if (!receipt) {
+        return reply.code(404).send({ error: 'Receipt not found' });
+      }
+      if (!services.botToken) {
+        return reply.code(404).send({ error: 'Receipt photo unavailable' });
+      }
+      const resolved = await getTelegramFileUrl(services.botToken, receipt.photoFileId);
+      if (!resolved.ok) {
+        return reply.code(502).send({ error: resolved.error });
+      }
+      return reply.redirect(resolved.url);
     });
 
     // POST /api/admin/receipts/:id/action
@@ -75,11 +107,18 @@ export function registerAdminRoutes(
         const adminId = request.userSession!.telegramId;
 
         if (action === 'approve') {
-          const result = await services.walletService.approveTopup(id, adminId);
-          if (!result) {
-            return reply.code(404).send({ error: 'Receipt not found or already processed' });
+          try {
+            const result = await services.walletService.approveTopup(id, adminId);
+            if (!result) {
+              return reply.code(404).send({ error: 'Receipt not found or already processed' });
+            }
+            return reply.code(200).send({ success: true, result });
+          } catch (err: unknown) {
+            if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
+              return reply.code(404).send({ error: 'Receipt owner not found' });
+            }
+            throw err;
           }
-          return reply.code(200).send({ success: true, result });
         }
 
         if (!reason?.trim()) {
@@ -111,7 +150,8 @@ export function registerAdminRoutes(
       const { search, page, limit } = request.query;
 
       if (search?.trim()) {
-        const users = await services.userService.searchProfiles(search.trim(), Number(limit) || 10);
+        const limit = clampPositiveInt(request.query.limit, 10, 50);
+        const users = await services.userService.searchProfiles(search.trim(), limit);
         return reply.code(200).send({
           users,
           total: users.length,
@@ -120,8 +160,8 @@ export function registerAdminRoutes(
         });
       }
 
-      const parsedPage = Number(page) || 1;
-      const parsedLimit = Number(limit) || 10;
+      const parsedPage = clampPositiveInt(page, 1, 1_000_000);
+      const parsedLimit = clampPositiveInt(limit, 10, 50);
       const result = await services.userService.listUsers(parsedPage, parsedLimit);
       return reply.code(200).send(result);
     });
@@ -291,4 +331,14 @@ export function registerAdminRoutes(
       }
     });
   });
+}
+
+/**
+ * Clamp a raw querystring integer into [1, max]. Rejects NaN, negatives,
+ * and huge values that previously caused Drizzle errors / full scans.
+ */
+function clampPositiveInt(raw: string | undefined, fallback: number, max: number): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(Math.trunc(parsed) || fallback, max));
 }

@@ -86,7 +86,7 @@ export class ReferralService {
     const cashbackPercent = asPercent(this.translationService.getSettingNum('cashback_percent', 0));
     const safeAmount = asPositiveSafeInteger(purchaseAmount);
     const cashbackAmount =
-      cashbackPercent > 0 && safeAmount > 0 ? Math.floor((safeAmount / 100) * cashbackPercent) : 0;
+      cashbackPercent > 0 && safeAmount > 0 ? percentOf(safeAmount, cashbackPercent) : 0;
 
     return {
       cashbackPercent,
@@ -189,7 +189,7 @@ export class ReferralService {
           const purchaseAmount = asPositiveSafeInteger(amount);
           cashbackAmount =
             cashbackPercent > 0 && purchaseAmount > 0
-              ? Math.floor((purchaseAmount / 100) * cashbackPercent)
+              ? percentOf(purchaseAmount, cashbackPercent)
               : 0;
         }
       }
@@ -341,6 +341,16 @@ function asPositiveSafeInteger(value: number): number {
 function asPercent(value: number): number {
   if (!Number.isSafeInteger(value) || value < 0 || value > 100) return 0;
   return value;
+}
+
+/**
+ * Integer-exact `amount * percent / 100` without float division or
+ * `amount * percent` overflow: split into quotient + remainder parts.
+ */
+function percentOf(amount: number, percent: number): number {
+  const quotient = Math.floor(amount / 100);
+  const remainder = amount % 100;
+  return quotient * percent + Math.floor((remainder * percent) / 100);
 }
 
 function isUniqueViolation(err: unknown): boolean {

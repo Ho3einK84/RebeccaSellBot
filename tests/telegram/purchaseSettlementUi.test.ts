@@ -54,6 +54,7 @@ function services(overrides: {
     },
     walletService: {
       getBalance: vi.fn().mockResolvedValue(100_000),
+      getAvailableBalance: vi.fn().mockResolvedValue(100_000),
       executePurchaseSaga: overrides.executePurchaseSaga,
     },
     configService: { generateConfigName: vi.fn().mockResolvedValue('customer_42') },

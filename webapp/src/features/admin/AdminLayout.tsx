@@ -11,6 +11,7 @@ import { AdminBottomNav } from './components/AdminBottomNav.js';
 import { useAdminReceipts } from './receipts/hooks/useAdminReceipts.js';
 import { useAdminStats } from './overview/hooks/useAdminStats.js';
 import { useAdminPanels } from './panels/hooks/useAdminPanels.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { AmbientBackground } from '@/shared/components/layout/AmbientBackground.js';
 import { Toast } from '@/shared/components/ui/Toast.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
@@ -40,6 +41,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
   const { receipts, refetch: refetchReceipts } = useAdminReceipts();
   const { refetch: refetchStats } = useAdminStats();
   const { refetch: refetchPanels } = useAdminPanels();
+  const queryClient = useQueryClient();
 
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -74,6 +76,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
     if (activeTab === 'overview') refetchStats();
     if (activeTab === 'receipts') refetchReceipts();
     if (activeTab === 'panels') refetchPanels();
+    if (activeTab === 'users') void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
   };
 
   const tabsConfig = [

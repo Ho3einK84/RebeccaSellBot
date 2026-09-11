@@ -48,6 +48,11 @@ describe('WebApp Server & Admin Routes', () => {
       if (id === 'rec_1001') return { telegramId: 55555 };
       return null;
     }),
+    getPendingTopup: vi.fn(async (id: string) => {
+      if (id === 'rec_1001')
+        return { id: 'rec_1001', telegramId: 55555, photoFileId: 'file_abc', status: 'pending' };
+      return undefined;
+    }),
     adjustBalanceAdmin: vi.fn(async () => 150_000),
     getBalance: vi.fn(async () => 50_000),
   };
@@ -380,6 +385,27 @@ describe('WebApp Server & Admin Routes', () => {
       const data = response.json();
       expect(data.panels.length).toBe(1);
       expect(data.panels[0].name).toBe('Main Germany Panel');
+    });
+
+    it('GET /api/admin/receipts/:id/photo returns 404 for unknown receipt', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/admin/receipts/rec_missing/photo',
+        cookies: { session: getAdminToken() },
+      });
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('rejects a signed JWT when the admin was removed from the registry', async () => {
+      mockAdminService.isAdmin.mockReturnValueOnce(false);
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/admin/stats',
+        cookies: { session: getAdminToken() },
+      });
+
+      expect(response.statusCode).toBe(403);
     });
   });
 

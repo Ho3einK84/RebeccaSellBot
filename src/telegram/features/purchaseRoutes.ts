@@ -39,7 +39,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       return;
     }
 
-    if ((await services.walletService.getBalance(telegramId)) < checkout.quotedAmount) {
+    if ((await services.walletService.getAvailableBalance(telegramId)) < checkout.quotedAmount) {
       await recordCheckoutFailed(services.purchaseCheckoutService, checkout.id);
       await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
       await renderScreen(

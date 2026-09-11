@@ -21,6 +21,7 @@ export function registerAuthRoutes(
     adminService: AdminService;
     userService: UserService;
     translationService: TranslationService;
+    secureCookies?: boolean;
   }
 ): void {
   // Expose the bot username for the non-Telegram guard screen CTA.
@@ -68,7 +69,7 @@ export function registerAuthRoutes(
       reply.setCookie('session', token, {
         path: '/',
         httpOnly: true,
-        secure: true,
+        secure: options.secureCookies ?? process.env.NODE_ENV === 'production',
         sameSite: 'strict',
         maxAge: 12 * 3600,
       });

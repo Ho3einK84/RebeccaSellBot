@@ -1,6 +1,10 @@
 @import 'tailwindcss';
 @plugin 'daisyui';
 
+/* Tailwind v4 derives `dark:` from prefers-color-scheme by default, which
+   ignores the app's .dark/.light toggle. Bind it to the toggle instead. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --bg-primary: #090a0f;
   --bg-secondary: #11131a;

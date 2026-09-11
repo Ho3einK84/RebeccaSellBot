@@ -54,7 +54,11 @@ const apiClientImportAllowlist = new Set([
   // it never performs HTTP itself.
   'src/domain/services/RebeccaPanelRegistry.ts',
 ]);
-const fetchAllowlist = new Set(['src/infra/RebeccaApiClient.ts', 'src/infra/networkProbe.ts']);
+const fetchAllowlist = new Set([
+  'src/infra/RebeccaApiClient.ts',
+  'src/infra/networkProbe.ts',
+  'src/infra/telegramFiles.ts',
+]);
 
 async function listTypeScriptFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

@@ -310,7 +310,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         return;
       }
       const price = pendingPromo.quote?.finalAmount ?? pkg.price;
-      if ((await ctx.services!.walletService.getBalance(targetTelegramId)) < price) {
+      if ((await ctx.services!.walletService.getAvailableBalance(targetTelegramId)) < price) {
         await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
         await renderSubscriptionScreen(
           ctx,

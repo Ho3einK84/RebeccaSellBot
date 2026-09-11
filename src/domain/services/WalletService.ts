@@ -242,6 +242,23 @@ export class WalletService {
     return res.length > 0 ? res[0]!.balance : 0;
   }
 
+  /**
+   * Spendable balance excluding funds reserved by in-flight purchase intents.
+   * Purchase gates must use this (not {@link getBalance}) so a user with
+   * reserved funds fails fast instead of burning a 15-minute checkout that
+   * the saga later rejects with INSUFFICIENT_BALANCE.
+   */
+  async getAvailableBalance(telegramId: number): Promise<number> {
+    const db = getDb();
+    const res = await db
+      .select({ balance: users.balance, reservedBalance: users.reservedBalance })
+      .from(users)
+      .where(eq(users.telegramId, telegramId))
+      .limit(1);
+    if (res.length === 0) return 0;
+    return res[0]!.balance - res[0]!.reservedBalance;
+  }
+
   /** Backward-compatible set operation used by older admin entry points. */
   async setBalanceAdmin(
     telegramId: number,
@@ -387,12 +404,20 @@ export class WalletService {
         .where(eq(users.telegramId, rec.telegramId))
         .returning();
 
+      const updatedUser = updatedUsers[0];
+      if (!updatedUser) {
+        // Owner row vanished between receipt submission and approval.
+        // Throw to roll back the receipt status change so it stays pending
+        // for investigation instead of crediting nobody.
+        throw new Error('USER_NOT_FOUND');
+      }
+
       const txId = `tx_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
       await tx.insert(walletTransactions).values({
         id: txId,
         telegramId: rec.telegramId,
         amount: rec.amount,
-        balanceAfter: updatedUsers[0]!.balance,
+        balanceAfter: updatedUser.balance,
         type: 'topup',
         referenceId: receiptId,
         description: `Top-up receipt approved by admin ${adminId}`,
@@ -512,8 +537,8 @@ export class WalletService {
     page: number;
     totalPages: number;
   }> {
-    const safePage = Math.max(1, Math.trunc(page));
-    const safePageSize = Math.max(1, Math.min(Math.trunc(pageSize), 10));
+    const safePage = Math.max(1, Math.trunc(page) || 1);
+    const safePageSize = Math.max(1, Math.min(Math.trunc(pageSize) || 10, 50));
     const db = getDb();
     const [[totalRow], items] = await Promise.all([
       db.select({ value: count() }).from(topupReceipts).where(eq(topupReceipts.status, 'pending')),

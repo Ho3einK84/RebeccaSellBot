@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { XCircle, X, RotateCw } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -22,6 +22,13 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
   const { isDark, inputClass, textPrimary, textSecondary } = useThemeTokens();
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [reason, setReason] = useState<string>('');
+
+  // Reset state whenever a different receipt is opened: the parent closes
+  // the modal via setRejectTarget(null) which bypasses handleClose.
+  useEffect(() => {
+    setSelectedPreset('');
+    setReason('');
+  }, [receipt?.id]);
 
   if (!receipt) return null;
 
@@ -126,8 +133,8 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
                 ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-500/30 text-rose-300 shadow-xs'
                 : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-600 shadow-xs'
             }`}
-            disabled={loading}
-            onClick={() => onConfirm(receipt, reason)}
+            disabled={loading || !reason.trim()}
+            onClick={() => onConfirm(receipt, reason.trim())}
           >
             {loading ? (
               <RotateCw className="w-3.5 h-3.5 animate-spin" />

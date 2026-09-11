@@ -35,6 +35,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
         }`}
       >
         <img
+          key={photoUrl}
           src={photoUrl}
           alt="Receipt proof"
           className="max-h-[65vh] w-auto object-contain mx-auto rounded-xl shadow-md"

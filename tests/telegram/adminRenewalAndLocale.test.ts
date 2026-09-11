@@ -47,6 +47,7 @@ describe('Admin renewal and wallet charging', () => {
       },
       walletService: {
         getBalance,
+        getAvailableBalance: getBalance,
         executePurchaseSaga,
       },
       purchaseCheckoutService: {

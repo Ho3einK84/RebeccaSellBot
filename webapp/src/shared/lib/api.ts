@@ -30,6 +30,10 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 
   const response = await fetch(url, {
     ...options,
+    // Same-origin is the production topology (Fastify serves /api + static),
+    // but the default must be explicit so the session cookie is also sent
+    // through the vite dev proxy and any same-site deployment.
+    credentials: options.credentials ?? 'same-origin',
     headers,
   });
 
@@ -86,11 +90,13 @@ export const api = {
     params: { page?: number; limit?: number; search?: string } = {}
   ): Promise<UsersResponse> => {
     const search = params.search?.trim();
-    if (search) {
-      return request<UsersResponse>(`/api/admin/users?search=${encodeURIComponent(search)}`);
-    }
     const page = params.page ?? 1;
     const limit = params.limit ?? 12;
+    if (search) {
+      return request<UsersResponse>(
+        `/api/admin/users?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`
+      );
+    }
     return request<UsersResponse>(`/api/admin/users?page=${page}&limit=${limit}`);
   },
 

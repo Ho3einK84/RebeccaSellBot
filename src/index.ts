@@ -275,7 +275,9 @@ async function main() {
     const targetPath =
       (config.REBECCA_WEBHOOK_PATH || '/api/rebecca-webhook').replace(/\/+$/, '') || '/';
 
-    if (pathname !== targetPath && !pathname.endsWith(targetPath)) {
+    // Exact match only: a suffix match would let `/evil/api/rebecca-webhook`
+    // reach the event processor (user DMs + reconciliation scan = spam/DoS).
+    if (pathname !== targetPath) {
       return false;
     }
 

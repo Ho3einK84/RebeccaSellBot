@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Copy, Wallet } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -26,6 +26,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   const { formatMoney, formatNumber, formatIsoDate, sanitizeDisplayName } = useFormatters();
   const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
   const [activeTab, setActiveTab] = useState<'finances' | 'orders' | 'receipts'>('finances');
+
+  // Reset to the first tab whenever a different user dossier is opened.
+  useEffect(() => {
+    setActiveTab('finances');
+  }, [dossier?.summary?.user?.telegramId]);
 
   if (!dossier) return null;
 

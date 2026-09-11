@@ -131,18 +131,12 @@ export function createWebhookHandler(
         return;
       }
 
-      if (
-        rebeccaWebhookHandler &&
-        (pathname === cleanRebeccaPath || pathname.endsWith(cleanRebeccaPath))
-      ) {
+      if (rebeccaWebhookHandler && (pathname === cleanRebeccaPath || pathname === rebeccaPath)) {
         const handled = await rebeccaWebhookHandler(req, res);
         if (handled) return;
       }
 
-      const matchesTarget =
-        pathname === cleanTargetPath ||
-        pathname === targetPath ||
-        (cleanTargetPath !== '/' && pathname.endsWith(cleanTargetPath));
+      const matchesTarget = pathname === cleanTargetPath || pathname === targetPath;
 
       if (!matchesTarget) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });

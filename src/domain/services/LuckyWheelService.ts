@@ -87,12 +87,34 @@ export class LuckyWheelService {
    */
   async getStatus(telegramId: number): Promise<LuckyWheelStatus> {
     const enabled = this.translationService.getSetting('lucky_wheel_enabled', 'true') === 'true';
-    const minPrize = this.translationService.getSettingNum('lucky_wheel_min_amount', 1_000);
-    const maxPrize = this.translationService.getSettingNum('lucky_wheel_max_amount', 50_000);
+    const minPrize = clampLuckySetting(
+      this.translationService.getSettingNum('lucky_wheel_min_amount', 1_000),
+      0,
+      MAX_LUCKY_AMOUNT,
+      1_000
+    );
+    const maxPrize = clampLuckySetting(
+      this.translationService.getSettingNum('lucky_wheel_max_amount', 50_000),
+      0,
+      MAX_LUCKY_AMOUNT,
+      50_000
+    );
     const baseLuck = this.translationService.getSettingNum('lucky_wheel_base_luck_percent', 50);
     const decayPercent = this.translationService.getSettingNum('lucky_wheel_decay_percent', 10);
-    const cooldownHours = this.translationService.getSettingNum('lucky_wheel_cooldown_hours', 24);
-    const maxSpins = this.translationService.getSettingNum('lucky_wheel_max_spins', 5);
+    const cooldownHours = clampLuckySetting(
+      this.translationService.getSettingNum('lucky_wheel_cooldown_hours', 24),
+      0,
+      24 * 30,
+      24
+    );
+    const maxSpins = Math.trunc(
+      clampLuckySetting(
+        this.translationService.getSettingNum('lucky_wheel_max_spins', 5),
+        1,
+        10_000,
+        5
+      )
+    );
 
     if (!enabled) {
       return {
@@ -224,12 +246,34 @@ export class LuckyWheelService {
         throw new Error('USER_BANNED');
       }
 
-      const minPrize = this.translationService.getSettingNum('lucky_wheel_min_amount', 1_000);
-      const maxPrize = this.translationService.getSettingNum('lucky_wheel_max_amount', 50_000);
+      const minPrize = clampLuckySetting(
+        this.translationService.getSettingNum('lucky_wheel_min_amount', 1_000),
+        0,
+        MAX_LUCKY_AMOUNT,
+        1_000
+      );
+      const maxPrize = clampLuckySetting(
+        this.translationService.getSettingNum('lucky_wheel_max_amount', 50_000),
+        0,
+        MAX_LUCKY_AMOUNT,
+        50_000
+      );
       const baseLuck = this.translationService.getSettingNum('lucky_wheel_base_luck_percent', 50);
       const decayPercent = this.translationService.getSettingNum('lucky_wheel_decay_percent', 10);
-      const cooldownHours = this.translationService.getSettingNum('lucky_wheel_cooldown_hours', 24);
-      const maxSpins = this.translationService.getSettingNum('lucky_wheel_max_spins', 5);
+      const cooldownHours = clampLuckySetting(
+        this.translationService.getSettingNum('lucky_wheel_cooldown_hours', 24),
+        0,
+        24 * 30,
+        24
+      );
+      const maxSpins = Math.trunc(
+        clampLuckySetting(
+          this.translationService.getSettingNum('lucky_wheel_max_spins', 5),
+          1,
+          10_000,
+          5
+        )
+      );
 
       const [countRes] = await tx
         .select({ count: sql<number>`count(*)` })
@@ -299,7 +343,6 @@ export class LuckyWheelService {
 
       const nextCooldownMs = cooldownHours * 3600 * 1000;
       const nextSpinAt = new Date(now.getTime() + nextCooldownMs);
-
       logger.info(
         { telegramId, spinId, amount, effectiveLuckPercent, spinNumber },
         'Lucky wheel spin completed'
@@ -316,4 +359,17 @@ export class LuckyWheelService {
       };
     });
   }
+}
+
+const MAX_LUCKY_AMOUNT = 9007199254740991;
+
+/**
+ * Clamp an admin-configured numeric setting into a safe range.
+ * Falls back to `fallback` when the stored value is NaN/non-finite so a
+ * misconfigured (negative/NaN/fractional) setting cannot produce negative
+ * prizes, fractional spin caps, or DB constraint violations mid-spin.
+ */
+function clampLuckySetting(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, value));
 }

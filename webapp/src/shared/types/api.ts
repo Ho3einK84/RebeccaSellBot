@@ -27,6 +27,9 @@ export interface StatsResponse {
 
 export interface ReceiptsResponse {
   items: TopupReceipt[];
+  total?: number;
+  page?: number;
+  totalPages?: number;
 }
 
 export interface ReceiptActionPayload {

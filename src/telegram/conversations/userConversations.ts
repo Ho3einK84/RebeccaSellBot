@@ -192,7 +192,7 @@ async function executePurchaseFlow(
   }
   const displayedCost = pendingPromo.quote?.finalAmount ?? totalCost;
 
-  const balance = await ctx.services.walletService.getBalance(telegramId);
+  const balance = await ctx.services.walletService.getAvailableBalance(telegramId);
   if (balance < displayedCost) {
     await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'));
     return;
@@ -561,7 +561,7 @@ export async function renewConfigConversation(
   }
   const displayedCost = pendingPromo.quote?.finalAmount ?? totalCost;
 
-  const balance = await ctx.services.walletService.getBalance(targetTelegramId);
+  const balance = await ctx.services.walletService.getAvailableBalance(targetTelegramId);
   if (balance < displayedCost) {
     await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'));
     return;
