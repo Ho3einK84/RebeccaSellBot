@@ -12,6 +12,7 @@ import {
   PendingTopupReceiptError,
   type AdminBalanceOperation,
 } from '../../../domain/services/WalletService.js';
+import { sendBalanceAdjustmentNotification } from '../../features/admin/adminNotifications.js';
 import {
   acceptConversationOwner,
   buildEmptyState,
@@ -752,43 +753,11 @@ async function applyAdminBalanceOperation(
       }),
       { parse_mode: 'Markdown' }
     );
-    try {
-      const locale =
-        (await ctx.services.userService.getLocale(telegramId)) ??
-        ctx.services.translationService.resolveLocale();
-      await ctx.api.sendMessage(
+    if (ctx.services) {
+      await sendBalanceAdjustmentNotification(ctx.api, ctx.services, {
         telegramId,
-        buildScreen({
-          emoji: '💳',
-          title: tForLocale(ctx.services.translationService, locale, 'wallet_dashboard_title'),
-          subtitle: tForLocale(
-            ctx.services.translationService,
-            locale,
-            'balance_adjusted_notification',
-            {
-              balance: localizedNumberForLocale(updated, locale),
-            }
-          ),
-          primary: {
-            emoji: '💰',
-            label: tForLocale(ctx.services.translationService, locale, 'wallet_available_balance'),
-            value: `${localizedNumberForLocale(updated, locale)} ${tForLocale(
-              ctx.services.translationService,
-              locale,
-              'currency_toman'
-            )}`,
-          },
-        }),
-        {
-          parse_mode: 'Markdown',
-          reply_markup: new InlineKeyboard().text(
-            tForLocale(ctx.services.translationService, locale, 'menu_wallet'),
-            'nav:wallet'
-          ),
-        }
-      );
-    } catch (notifyErr) {
-      logger.warn({ notifyErr, telegramId }, 'Could not notify user about admin wallet adjustment');
+        newBalance: updated,
+      });
     }
   } catch (err) {
     await replyInAdminConversation(

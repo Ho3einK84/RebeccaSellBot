@@ -116,6 +116,8 @@ export async function createWebAppServer(
     panelRegistry: services.panelRegistry,
     botToken: config.BOT_TOKEN,
     adminService: services.adminService,
+    botApi: services.botApi,
+    translationService: services.translationService,
   });
 
   // Static files & SPA fallback

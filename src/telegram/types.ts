@@ -3,7 +3,7 @@
  *
  * All keyboard and conversation files import from here — no local re-definitions.
  */
-import type { Context, SessionFlavor } from 'grammy';
+import type { Context, SessionFlavor, Api } from 'grammy';
 import type { Conversation, ConversationFlavor } from '@grammyjs/conversations';
 import type { MenuFlavor } from '@grammyjs/menu';
 import type { WalletService } from '../domain/services/WalletService.js';
@@ -123,6 +123,8 @@ export type BotServices = {
   adminIds: number[];
   /** Sole authorization source for Telegram administrative operations. */
   isAdmin: (telegramId: number) => boolean;
+  /** Telegram bot API instance used to deliver notifications. */
+  botApi?: Api;
 };
 
 /** Properties installed on both normal and conversation-created contexts. */

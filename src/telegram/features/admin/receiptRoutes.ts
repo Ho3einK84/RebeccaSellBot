@@ -1,16 +1,12 @@
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
-import {
-  localizedDate,
-  localizedNumber,
-  localizedNumberForLocale,
-  resolveServiceLocale,
-  t,
-  tForLocale,
-} from '../../locale.js';
+import { localizedDate, localizedNumber, t } from '../../locale.js';
 import { buildEmptyState, buildScreen, buildStatusBadge, renderScreen } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
-import { logger } from '../../../infra/logger.js';
+import {
+  sendReceiptApprovalNotification,
+  sendReceiptRejectionNotification,
+} from './adminNotifications.js';
 
 const RECEIPT_PAGE_SIZE = 4;
 const RECEIPT_ID_CAPTURE = '([a-zA-Z0-9_-]+)';
@@ -539,66 +535,18 @@ async function notifyReceiptResult(
   reason?: ReceiptRejectReason
 ): Promise<void> {
   if (!ctx.services) return;
-  try {
-    const locale =
-      (await ctx.services.userService.getLocale(telegramId)) ??
-      resolveServiceLocale(ctx.services.translationService);
-    const reasonDetailKey = reason ? `receipt_result_rejected_reason_${reason}` : undefined;
-    const reasonDetail = reasonDetailKey
-      ? tForLocale(ctx.services.translationService, locale, reasonDetailKey)
-      : undefined;
-
-    await ctx.api.sendMessage(
+  if (approved && amount !== undefined) {
+    await sendReceiptApprovalNotification(ctx.api, ctx.services, {
       telegramId,
-      buildScreen({
-        emoji: approved ? '✅' : '⚠️',
-        title: tForLocale(
-          ctx.services.translationService,
-          locale,
-          approved ? 'receipt_result_approved_title' : 'receipt_result_rejected_title'
-        ),
-        subtitle: tForLocale(
-          ctx.services.translationService,
-          locale,
-          approved ? 'receipt_result_approved_subtitle' : 'receipt_result_rejected_subtitle'
-        ),
-        ...(approved && amount !== undefined
-          ? {
-              primary: {
-                emoji: '💰',
-                label: tForLocale(
-                  ctx.services.translationService,
-                  locale,
-                  'receipt_result_amount_label'
-                ),
-                value: `${localizedNumberForLocale(amount, locale)} ${tForLocale(ctx.services.translationService, locale, 'currency_toman')}`,
-              },
-            }
-          : !approved && reasonDetail
-            ? {
-                primary: {
-                  emoji: '⚠️',
-                  label: tForLocale(
-                    ctx.services.translationService,
-                    locale,
-                    'receipt_result_rejected_reason_label'
-                  ),
-                  value: reasonDetail,
-                },
-              }
-            : {}),
-        footer: tForLocale(ctx.services.translationService, locale, 'receipt_result_next_hint'),
-      }),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(
-          tForLocale(ctx.services.translationService, locale, 'menu_wallet'),
-          'nav:wallet'
-        ),
-      }
-    );
-  } catch (err) {
-    logger.warn({ err, telegramId, receiptId }, 'Failed to deliver receipt result to user');
+      amount,
+      receiptId,
+    });
+  } else {
+    await sendReceiptRejectionNotification(ctx.api, ctx.services, {
+      telegramId,
+      receiptId,
+      reason,
+    });
   }
 }
 

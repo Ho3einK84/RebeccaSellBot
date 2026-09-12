@@ -1,12 +1,19 @@
 import type { FastifyInstance } from 'fastify';
+import type { Api } from 'grammy';
 import { adminGuardWithCheck } from '../middleware/adminGuard.js';
 import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
 import type { RebeccaPanelRegistry } from '../../../domain/services/RebeccaPanelRegistry.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
+import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import type { AdminBalanceOperation } from '../../../domain/services/WalletContracts.js';
 import { getTelegramFileUrl } from '../../../infra/telegramFiles.js';
+import {
+  sendReceiptApprovalNotification,
+  sendReceiptRejectionNotification,
+  sendBalanceAdjustmentNotification,
+} from '../../../telegram/features/admin/adminNotifications.js';
 
 interface ReceiptActionBody {
   action: 'approve' | 'reject';
@@ -28,6 +35,8 @@ export function registerAdminRoutes(
     panelRegistry: RebeccaPanelRegistry;
     botToken?: string;
     adminService?: Pick<AdminService, 'isAdmin'>;
+    botApi?: Api;
+    translationService?: TranslationService;
   }
 ): void {
   app.register(async (adminScope) => {
@@ -114,6 +123,22 @@ export function registerAdminRoutes(
             if (!result) {
               return reply.code(404).send({ error: 'Receipt not found or already processed' });
             }
+
+            if (services.botApi && services.translationService) {
+              await sendReceiptApprovalNotification(
+                services.botApi,
+                {
+                  userService: services.userService,
+                  translationService: services.translationService,
+                },
+                {
+                  telegramId: result.telegramId,
+                  amount: result.amount,
+                  receiptId: id,
+                }
+              );
+            }
+
             return reply.code(200).send({ success: true, result });
           } catch (err: unknown) {
             if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
@@ -140,6 +165,21 @@ export function registerAdminRoutes(
           targetTelegramId: result.telegramId,
           metadata: { reason: reason.trim() },
         });
+
+        if (services.botApi && services.translationService) {
+          await sendReceiptRejectionNotification(
+            services.botApi,
+            {
+              userService: services.userService,
+              translationService: services.translationService,
+            },
+            {
+              telegramId: result.telegramId,
+              receiptId: id,
+              reason: reason.trim(),
+            }
+          );
+        }
 
         return reply.code(200).send({ success: true });
       }
@@ -485,6 +525,20 @@ export function registerAdminRoutes(
               reason: reason.trim(),
             },
           });
+
+          if (services.botApi && services.translationService) {
+            await sendBalanceAdjustmentNotification(
+              services.botApi,
+              {
+                userService: services.userService,
+                translationService: services.translationService,
+              },
+              {
+                telegramId,
+                newBalance,
+              }
+            );
+          }
 
           return reply.code(200).send({ success: true, balance: newBalance });
         } catch (err: unknown) {

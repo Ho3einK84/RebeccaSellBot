@@ -238,9 +238,9 @@ async function main() {
   const bot = setupBot(config, services);
   await initializeBot(bot);
 
-  // Expose the resolved bot username to the WebApp so the non-Telegram guard
-  // screen can build a correct t.me deep link (there is no initDataUnsafe outside Telegram).
+  // Expose the resolved bot username and bot API to services for WebApp notifications
   services.botUsername = bot.botInfo.username;
+  services.botApi = bot.api;
 
   startNotifierCron(panelRegistry, translationService, bot.api);
   startReconciliationCron(panelRegistry, {
