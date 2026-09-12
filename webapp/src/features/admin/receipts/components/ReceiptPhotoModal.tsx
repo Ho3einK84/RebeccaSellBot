@@ -25,7 +25,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const { copied, copy } = useCopy();
+  const { copy, isCopied } = useCopy();
 
   if (!photoUrl) return null;
 
@@ -85,15 +85,15 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
           {receiptId && (
             <button
               type="button"
-              onClick={() => copy(receiptId)}
+              onClick={() => copy(receiptId, `receipt-photo-${receiptId}`)}
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] font-mono transition-all cursor-pointer ${
                 isDark
                   ? 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] text-zinc-300'
                   : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
               }`}
-              title={copied ? t('common.copied') : t('common.copy')}
+              title={isCopied(`receipt-photo-${receiptId}`) ? t('common.copied') : t('common.copy')}
             >
-              {copied ? (
+              {isCopied(`receipt-photo-${receiptId}`) ? (
                 <Check className="w-3 h-3 text-emerald-400" />
               ) : (
                 <Copy className="w-3 h-3 opacity-60" />

@@ -9,8 +9,6 @@ import {
   Clock,
   XCircle,
   Layers,
-  ChevronLeft,
-  ChevronRight,
   CheckSquare,
   Square,
 } from 'lucide-react';
@@ -22,6 +20,7 @@ import { RejectReceiptModal } from './components/RejectReceiptModal.js';
 import { ReceiptDetailModal } from './components/ReceiptDetailModal.js';
 import { BatchApproveModal } from './components/BatchApproveModal.js';
 import { ReceiptSettingsModal } from './components/ReceiptSettingsModal.js';
+import { Pagination } from '@/shared/components/ui/Pagination.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
@@ -39,7 +38,8 @@ type ReceiptStatusFilter = 'pending' | 'approved' | 'rejected' | 'all';
 export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotify }) => {
   const { t } = useLanguage();
   const { formatNumber, formatMoney } = useFormatters();
-  const { isDark, textPrimary, textSecondary, textMuted, subCardClass } = useThemeTokens();
+  const { isDark, textPrimary, textSecondary, textMuted, subCardClass, inputClass } =
+    useThemeTokens();
 
   // Filters & Pagination State
   const [status, setStatus] = useState<ReceiptStatusFilter>('pending');
@@ -173,37 +173,28 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
+      {/* Top Header */}
+      <div className="flex flex-row justify-between items-center gap-2 mb-1">
         <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
               isDark
                 ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-xs'
                 : 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
             }`}
           >
-            <Receipt className="w-4.5 h-4.5" />
+            <Receipt className="w-4 h-4" />
           </div>
-          <div className="min-w-0">
-            <h2
-              className={`text-base sm:text-lg font-bold m-0 tracking-tight truncate ${textPrimary}`}
-            >
-              {t('admin.receipts.queueTitle')}
-            </h2>
-            <p className={`text-xs m-0 ${textMuted}`}>
-              {status === 'pending'
-                ? `${formatNumber(pendingCount)} ${t('admin.receipts.tabPending')}`
-                : `${formatNumber(total)} ${t('common.all')}`}
-            </p>
-          </div>
+          <h2 className={`text-base font-bold m-0 tracking-tight truncate ${textPrimary}`}>
+            {t('admin.receipts.queueTitle')}
+          </h2>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-center">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Telegram Settings Button */}
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
               isDark
                 ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-300'
                 : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
@@ -212,13 +203,50 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
             title={t('admin.receipts.settingsBtn')}
           >
             <Bell className="w-3.5 h-3.5 text-indigo-400" />
-            <span>{t('admin.receipts.settingsBtn')}</span>
+            <span className="hidden sm:inline">{t('admin.receipts.settingsBtn')}</span>
           </button>
+
+          {/* Count Badge */}
+          <span
+            className={`text-xs px-2.5 py-0.5 rounded-full border font-medium shrink-0 ${
+              isDark
+                ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+                : 'bg-slate-100 border-slate-200 text-slate-700'
+            }`}
+          >
+            {status === 'pending'
+              ? `${formatNumber(pendingCount)} ${t('admin.receipts.tabPending')}`
+              : `${formatNumber(total)} ${t('common.all')}`}
+          </span>
         </div>
       </div>
 
       {/* Filter Tabs & Search Row */}
       <div className="space-y-2.5">
+        {/* Search Input Bar */}
+        <div className="relative">
+          <Search
+            className={`w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3.5 pointer-events-none ${textMuted}`}
+          />
+          <input
+            type="text"
+            className={`w-full h-10 ps-10 pe-9 rounded-xl border text-xs sm:text-sm outline-none transition-all ${inputClass}`}
+            placeholder={t('admin.receipts.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button
+              type="button"
+              className={`absolute top-1/2 -translate-y-1/2 end-3 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer`}
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
         {/* Status Tabs */}
         <div className="p-1 rounded-2xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1 overflow-x-auto scrollbar-none">
           <button
@@ -313,33 +341,6 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
             <Layers className="w-3.5 h-3.5" />
             <span>{t('admin.receipts.tabAll')}</span>
           </button>
-        </div>
-
-        {/* Search Input Bar */}
-        <div className="relative">
-          <Search
-            className={`w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3.5 pointer-events-none ${textMuted}`}
-          />
-          <input
-            type="text"
-            className={`w-full h-10 ps-10 pe-9 rounded-xl border text-xs transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 text-white placeholder:text-zinc-500 focus:bg-white/[0.06]'
-                : 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white shadow-xs'
-            }`}
-            placeholder={t('admin.receipts.searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {search && (
-            <button
-              type="button"
-              className={`absolute top-1/2 -translate-y-1/2 end-3 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer`}
-              onClick={() => setSearch('')}
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
 
@@ -477,42 +478,12 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
       {/* Pagination Controls */}
       {!isLoading && totalPages > 1 && (
-        <div className="flex items-center justify-between px-1 py-2 text-xs">
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border font-medium transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
-            }`}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180" />
-            <span>{t('admin.users.paginationPrev')}</span>
-          </button>
-
-          <span className={`font-mono font-semibold ${textSecondary}`}>
-            {t('admin.users.paginationPage', {
-              page: String(page),
-              totalPages: String(totalPages),
-            })}
-          </span>
-
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border font-medium transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
-            }`}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            <span>{t('admin.users.paginationNext')}</span>
-            <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-180" />
-          </button>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          disabled={isProcessingAction}
+        />
       )}
 
       {/* Modals */}

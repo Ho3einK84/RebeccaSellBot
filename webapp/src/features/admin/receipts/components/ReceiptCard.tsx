@@ -3,16 +3,20 @@ import {
   Check,
   X,
   Clock,
-  User,
   Image as ImageIcon,
   Info,
   ShieldCheck,
   AlertCircle,
+  Wallet,
+  Copy,
+  Eye,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { useCopy } from '@/shared/hooks/useCopy.js';
 import { Card } from '@/shared/components/ui/Card.js';
+import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
@@ -40,21 +44,23 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
   disabled = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatIsoDate } = useFormatters();
-  const { isDark, textSecondary, textMuted } = useThemeTokens();
+  const { formatMoney, formatIsoDate, sanitizeDisplayName } = useFormatters();
+  const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { copy, isCopied } = useCopy();
 
   const isPending = receipt.status === 'pending';
   const isApproved = receipt.status === 'approved';
   const isRejected = receipt.status === 'rejected';
 
-  const userDisplayName =
-    [receipt.user?.firstName, receipt.user?.lastName].filter(Boolean).join(' ') ||
-    receipt.user?.username ||
-    `ID: ${receipt.telegramId}`;
+  const { displayName } = sanitizeDisplayName(
+    receipt.user?.firstName,
+    receipt.user?.lastName,
+    receipt.user?.username || `ID: ${receipt.telegramId}`
+  );
 
   return (
     <Card
-      className={`p-3.5 sm:p-4.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-200 hover:-translate-y-0.5 group ${
+      className={`p-3.5 sm:p-4 space-y-3 transition-all duration-200 hover:-translate-y-0.5 group ${
         isSelected
           ? isDark
             ? 'border-indigo-500/80 bg-indigo-500/[0.04]'
@@ -62,192 +68,310 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
           : 'hover:border-slate-300 dark:hover:border-white/20'
       }`}
     >
-      <div className="flex items-start gap-3 flex-1 min-w-0">
-        {/* Selection Checkbox (for batch operations) */}
-        {isPending && onToggleSelect && (
-          <div className="pt-1 shrink-0">
+      {/* User Info Header */}
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {/* Selection Checkbox (for batch operations in pending mode) */}
+          {isPending && onToggleSelect && (
             <input
               type="checkbox"
-              className="checkbox checkbox-primary checkbox-sm rounded-md cursor-pointer"
+              className="checkbox checkbox-primary checkbox-sm rounded-md cursor-pointer shrink-0"
               checked={isSelected}
               onChange={() => onToggleSelect(receipt)}
             />
+          )}
+
+          <div
+            className="cursor-pointer shrink-0"
+            onClick={() => onInspectUser(receipt.telegramId)}
+            title={t('admin.users.btnDetails')}
+          >
+            <Avatar
+              name={receipt.user?.firstName || displayName}
+              username={receipt.user?.username}
+              size="md"
+            />
           </div>
-        )}
 
-        <div className="space-y-2 flex-1 min-w-0">
-          {/* Top Row: Amount & Status */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span
-              className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${
-                isApproved
-                  ? isDark
-                    ? 'text-emerald-300'
-                    : 'text-emerald-700'
-                  : isRejected
-                    ? isDark
-                      ? 'text-rose-300'
-                      : 'text-rose-700'
-                    : isDark
-                      ? 'text-emerald-400'
-                      : 'text-emerald-600'
-              }`}
-            >
-              {formatMoney(receipt.amount)} {t('common.currency')}
-            </span>
-
-            <Badge
-              variant={isApproved ? 'success' : isRejected ? 'error' : 'warning'}
-              dot
-              pulse={isPending}
-              className="text-[10px]"
-            >
-              {isApproved
-                ? t('common.statusApproved')
-                : isRejected
-                  ? t('common.statusRejected')
-                  : t('common.statusPending')}
-            </Badge>
-
-            {receipt.photoFileId && onViewPhoto && (
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
               <button
                 type="button"
-                className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-xl border transition-all active:scale-95 cursor-pointer ${
+                className={`font-bold text-sm tracking-tight truncate text-start hover:underline cursor-pointer ${textPrimary}`}
+                onClick={() => onInspectUser(receipt.telegramId)}
+                title={t('admin.users.btnDetails')}
+              >
+                {displayName}
+              </button>
+            </div>
+            <div className="text-xs font-mono mt-0.5">
+              {receipt.user?.username ? (
+                <span
+                  dir="ltr"
+                  className="inline-block unicode-isolate font-medium text-indigo-600 dark:text-indigo-400"
+                >
+                  @{receipt.user.username}
+                </span>
+              ) : (
+                <span className={`font-sans ${textMuted}`}>{t('admin.users.noUsername')}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Telegram ID Chip */}
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-lg border transition-all active:scale-95 shrink-0 cursor-pointer ${
+            isDark
+              ? 'bg-white/[0.04] border-white/10 hover:border-white/20 text-zinc-300'
+              : 'bg-slate-50 border-slate-200/80 hover:border-slate-300 text-slate-700 shadow-xs'
+          }`}
+          onClick={() => copy(String(receipt.telegramId), `receipt-user-${receipt.telegramId}`)}
+          title={t('common.copy')}
+        >
+          <span className="text-[10px] opacity-50">#</span>
+          <span dir="ltr">{receipt.telegramId}</span>
+          {isCopied(`receipt-user-${receipt.telegramId}`) ? (
+            <span className="text-[10px] text-emerald-500 font-sans font-medium">
+              {t('common.copied')}
+            </span>
+          ) : (
+            <Copy className={`w-2.5 h-2.5 ${textMuted}`} />
+          )}
+        </button>
+      </div>
+
+      {/* Financial & Status Metrics */}
+      <div
+        className={`flex items-center justify-between py-2 px-3 rounded-xl border text-xs ${subCardClass}`}
+      >
+        <div className="flex items-center gap-1.5">
+          <Wallet
+            className={`w-3.5 h-3.5 ${
+              isApproved
+                ? isDark
+                  ? 'text-emerald-400'
+                  : 'text-emerald-600'
+                : isRejected
+                  ? isDark
+                    ? 'text-rose-400'
+                    : 'text-rose-600'
+                  : isDark
+                    ? 'text-emerald-400'
+                    : 'text-emerald-600'
+            }`}
+          />
+          <span
+            className={`font-bold text-sm font-mono ${
+              isApproved
+                ? isDark
+                  ? 'text-emerald-400'
+                  : 'text-emerald-600'
+                : isRejected
+                  ? isDark
+                    ? 'text-rose-400'
+                    : 'text-rose-600'
+                  : isDark
+                    ? 'text-emerald-400'
+                    : 'text-emerald-600'
+            }`}
+          >
+            {formatMoney(receipt.amount)}
+          </span>
+          <span className={`text-[11px] ${textMuted}`}>{t('common.currency')}</span>
+        </div>
+
+        <div>
+          <Badge
+            variant={isApproved ? 'success' : isRejected ? 'error' : 'warning'}
+            dot
+            pulse={isPending}
+            className="text-[10px]"
+          >
+            {isApproved
+              ? t('common.statusApproved')
+              : isRejected
+                ? t('common.statusRejected')
+                : t('common.statusPending')}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Metadata Row: ID, Time, Review Status */}
+      <div
+        className={`flex items-center justify-between gap-2 text-[11px] px-0.5 flex-wrap ${textMuted}`}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <span>{t('common.idLabel')}</span>
+            <span dir="ltr" className="font-mono text-slate-400 dark:text-zinc-400">
+              #{receipt.id.slice(-6)}
+            </span>
+          </div>
+
+          <span className="opacity-40">·</span>
+
+          <div className="flex items-center gap-1">
+            <Clock className="w-3 h-3 opacity-70" />
+            <span>{formatIsoDate(receipt.createdAt)}</span>
+          </div>
+        </div>
+
+        {receipt.user?.balance !== undefined && (
+          <div className="flex items-center gap-1 ms-auto">
+            <span>{t('admin.receipts.userBalance')}:</span>
+            <span className={`font-mono font-medium ${textSecondary}`}>
+              {formatMoney(receipt.user.balance)} {t('common.currency')}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {receipt.reviewedBy && (
+        <div className="flex items-center gap-1 text-[11px] px-0.5 text-indigo-400/90 font-sans">
+          <ShieldCheck className="w-3 h-3 text-emerald-400" />
+          <span>
+            {t('admin.receipts.reviewedBy')}: {receipt.reviewedBy}
+          </span>
+        </div>
+      )}
+
+      {isRejected && receipt.rejectReason && (
+        <div className="flex items-center gap-1 text-[11px] px-0.5 text-rose-400 font-sans">
+          <AlertCircle className="w-3 h-3" />
+          <span>
+            {t('admin.receipts.rejectionReason')}: {receipt.rejectReason}
+          </span>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      {isPending ? (
+        <div className="space-y-2 pt-0.5">
+          {/* Inspection row: Details & Photo proof */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-medium transition-all active:scale-[0.98] cursor-pointer ${
+                isDark
+                  ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-zinc-200'
+                  : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
+              }`}
+              onClick={() => onViewDetails?.(receipt)}
+            >
+              <Info className={`w-3.5 h-3.5 ${textMuted}`} />
+              <span>{t('admin.receipts.details')}</span>
+            </button>
+
+            {receipt.photoFileId && onViewPhoto ? (
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer ${
                   isDark
-                    ? 'bg-indigo-500/10 border-indigo-500/25 hover:bg-indigo-500/20 text-indigo-300'
-                    : 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700'
+                    ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/25 text-indigo-300 shadow-xs'
+                    : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200/80 text-indigo-700 shadow-xs'
                 }`}
                 onClick={() => onViewPhoto(receipt)}
               >
                 <ImageIcon className="w-3.5 h-3.5" />
                 <span>{t('admin.receipts.viewPhoto')}</span>
               </button>
+            ) : (
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-medium transition-all active:scale-[0.98] cursor-pointer ${
+                  isDark
+                    ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-zinc-300'
+                    : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-700 shadow-xs'
+                }`}
+                onClick={() => onInspectUser(receipt.telegramId)}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>{t('admin.users.btnDetails')}</span>
+              </button>
             )}
           </div>
 
-          {/* User & Customer Info Row */}
-          <div className="flex items-center gap-2 text-xs flex-wrap">
-            <button
-              type="button"
-              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border font-mono text-xs transition-all active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 hover:border-indigo-400/40 text-indigo-400 hover:bg-white/[0.08]'
-                  : 'bg-indigo-50/60 border-indigo-200/80 hover:border-indigo-300 text-indigo-700 hover:bg-indigo-50'
-              }`}
-              onClick={() => onInspectUser(receipt.telegramId)}
-              title={t('admin.users.btnDetails')}
-            >
-              <User className="w-3 h-3 opacity-70" />
-              <span className="font-sans font-medium">{userDisplayName}</span>
-              <span dir="ltr" className="opacity-75">
-                ({receipt.telegramId})
-              </span>
-            </button>
-
-            {receipt.user?.balance !== undefined && (
-              <>
-                <span className={textMuted}>·</span>
-                <span className={`text-[11px] font-mono ${textSecondary}`}>
-                  {t('admin.receipts.userBalance')}: {formatMoney(receipt.user.balance)}{' '}
-                  {t('common.currency')}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Metadata Row: ID, Time, Review Status */}
-          <div className={`flex items-center gap-3 text-[11px] flex-wrap ${textMuted}`}>
-            <div className="flex items-center gap-1">
-              <span>{t('common.idLabel')}:</span>
-              <span dir="ltr" className="font-mono text-slate-300 dark:text-zinc-400">
-                #{receipt.id.slice(-6)}
-              </span>
-            </div>
-
-            <span className="opacity-50">·</span>
-
-            <div className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              <span>{formatIsoDate(receipt.createdAt)}</span>
-            </div>
-
-            {receipt.reviewedBy && (
-              <>
-                <span className="opacity-50">·</span>
-                <div className="flex items-center gap-1 text-indigo-400/90 font-sans">
-                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                  <span>
-                    {t('admin.receipts.reviewedBy')}: {receipt.reviewedBy}
-                  </span>
-                </div>
-              </>
+          {/* Decision row: Reject & Approve */}
+          <div className="grid grid-cols-2 gap-2">
+            {onReject && (
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/25 text-rose-300 shadow-xs'
+                    : 'bg-rose-50 hover:bg-rose-100 border-rose-200/80 text-rose-700 shadow-xs'
+                }`}
+                disabled={disabled}
+                onClick={() => onReject(receipt)}
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>{t('admin.receipts.reject')}</span>
+              </button>
             )}
 
-            {isRejected && receipt.rejectReason && (
-              <>
-                <span className="opacity-50">·</span>
-                <div className="flex items-center gap-1 text-rose-400 font-sans">
-                  <AlertCircle className="w-3 h-3" />
-                  <span>
-                    {t('admin.receipts.rejectionReason')}: {receipt.rejectReason}
-                  </span>
-                </div>
-              </>
+            {onApprove && (
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 ${
+                  isDark
+                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/25 text-emerald-300 shadow-xs'
+                    : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200/80 text-emerald-700 shadow-xs'
+                }`}
+                disabled={disabled}
+                onClick={() => onApprove(receipt)}
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{t('admin.receipts.approve')}</span>
+              </button>
             )}
           </div>
         </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 self-stretch sm:self-center pt-2 sm:pt-0 border-t sm:border-0 border-slate-200/50 dark:border-white/5">
-        {onViewDetails && (
+      ) : (
+        <div className="grid grid-cols-2 gap-2 pt-0.5">
           <button
             type="button"
-            className={`inline-flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl font-medium text-xs border transition-all active:scale-95 cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-medium transition-all active:scale-[0.98] cursor-pointer ${
               isDark
-                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-300'
-                : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700 shadow-xs'
+                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-zinc-200'
+                : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
             }`}
-            onClick={() => onViewDetails(receipt)}
-            title={t('admin.receipts.details')}
+            onClick={() => onViewDetails?.(receipt)}
           >
-            <Info className="w-3.5 h-3.5" />
+            <Info className={`w-3.5 h-3.5 ${textMuted}`} />
             <span>{t('admin.receipts.details')}</span>
           </button>
-        )}
 
-        {isPending && onApprove && (
-          <button
-            type="button"
-            className={`inline-flex items-center justify-center gap-1.5 h-8.5 px-3.5 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer flex-1 sm:flex-none disabled:opacity-50 ${
-              isDark
-                ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/25 text-emerald-300 shadow-xs'
-                : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200/80 text-emerald-700 shadow-xs'
-            }`}
-            disabled={disabled}
-            onClick={() => onApprove(receipt)}
-          >
-            <Check className="w-3.5 h-3.5" />
-            <span>{t('admin.receipts.approve')}</span>
-          </button>
-        )}
-
-        {isPending && onReject && (
-          <button
-            type="button"
-            className={`inline-flex items-center justify-center gap-1.5 h-8.5 px-3.5 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer flex-1 sm:flex-none disabled:opacity-50 ${
-              isDark
-                ? 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/25 text-rose-300 shadow-xs'
-                : 'bg-rose-50 hover:bg-rose-100 border-rose-200/80 text-rose-700 shadow-xs'
-            }`}
-            disabled={disabled}
-            onClick={() => onReject(receipt)}
-          >
-            <X className="w-3.5 h-3.5" />
-            <span>{t('admin.receipts.reject')}</span>
-          </button>
-        )}
-      </div>
+          {receipt.photoFileId && onViewPhoto ? (
+            <button
+              type="button"
+              className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer ${
+                isDark
+                  ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/25 text-indigo-300 shadow-xs'
+                  : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200/80 text-indigo-700 shadow-xs'
+              }`}
+              onClick={() => onViewPhoto(receipt)}
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>{t('admin.receipts.viewPhoto')}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer ${
+                isDark
+                  ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/25 text-indigo-300 shadow-xs'
+                  : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200/80 text-indigo-700 shadow-xs'
+              }`}
+              onClick={() => onInspectUser(receipt.telegramId)}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>{t('admin.users.btnDetails')}</span>
+            </button>
+          )}
+        </div>
+      )}
     </Card>
   );
 };
