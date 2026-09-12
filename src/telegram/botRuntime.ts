@@ -1,6 +1,6 @@
 /** Middleware, session and conversation composition for the Telegram bot. */
 
-import { session, type Bot } from 'grammy';
+import { InlineKeyboard, session, type Bot } from 'grammy';
 import { conversations, createConversation } from '@grammyjs/conversations';
 import { apiThrottler } from '@grammyjs/transformer-throttler';
 import { PostgresSessionAdapter } from '../infra/sessionAdapter.js';
@@ -43,7 +43,11 @@ import { registerAdminAlertHook } from '../domain/services/RebeccaService.js';
 import { logger } from '../infra/logger.js';
 import { resolveServiceLocale, t, tForLocale } from './locale.js';
 import { buildScreen, cleanChatUiMiddleware, uiMessageTrackingTransformer } from './ui.js';
-import { escapeTelegramMarkdown, safeFormattingTransformer } from './rendering.js';
+import {
+  escapeTelegramMarkdown,
+  safeFormattingTransformer,
+  sanitizeTelegramInlineCode,
+} from './rendering.js';
 
 export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices): void {
   // getOrCreateUser already reads the full user row on the normal private-chat
@@ -64,6 +68,12 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
         const locale =
           (await services.userService.getLocale(adminId)) ??
           resolveServiceLocale(services.translationService);
+        const keyboard = new InlineKeyboard()
+          .text(
+            tForLocale(services.translationService, locale, 'admin_panel_manage_button'),
+            'admin:panels:open'
+          )
+          .text(tForLocale(services.translationService, locale, 'menu_close'), 'ui:dismiss');
         await bot.api.sendMessage(
           adminId,
           buildAdminPanelOutageScreen(
@@ -75,6 +85,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
           ),
           {
             parse_mode: 'Markdown',
+            reply_markup: keyboard,
           }
         );
       } catch (err) {
@@ -318,13 +329,19 @@ export function conversationContextMiddleware(services: BotServices) {
   };
 }
 
-function buildAdminPanelOutageScreen(
+export function buildAdminPanelOutageScreen(
   services: BotServices,
   locale: 'fa' | 'en',
   panel: string,
   endpoint: string,
   attempts: number
 ): string {
+  const attemptsValue = `${attempts.toLocaleString(locale === 'fa' ? 'fa-IR' : 'en-US')} ${tForLocale(
+    services.translationService,
+    locale,
+    'admin_panel_outage_attempts_unit'
+  )}`;
+
   return buildScreen({
     emoji: '🚨',
     title: tForLocale(services.translationService, locale, 'admin_panel_outage_title'),
@@ -340,20 +357,23 @@ function buildAdminPanelOutageScreen(
         title: tForLocale(services.translationService, locale, 'admin_panel_connection_section'),
         fields: [
           {
+            emoji: '🖥️',
             label: tForLocale(services.translationService, locale, 'admin_panel_name_label'),
             value: escapeTelegramMarkdown(panel),
           },
           {
+            emoji: '🌐',
             label: tForLocale(services.translationService, locale, 'admin_panel_endpoint_label'),
-            value: escapeTelegramMarkdown(endpoint),
+            value: `\`${sanitizeTelegramInlineCode(endpoint)}\``,
           },
           {
+            emoji: '🔁',
             label: tForLocale(
               services.translationService,
               locale,
               'admin_panel_outage_attempts_label'
             ),
-            value: attempts.toLocaleString(locale === 'fa' ? 'fa-IR' : 'en-US'),
+            value: attemptsValue,
           },
         ],
       },

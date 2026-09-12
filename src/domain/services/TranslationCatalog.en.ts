@@ -1013,7 +1013,10 @@ export const EN_TEXTS: Record<string, string> = {
   admin_panel_outage_title: 'Panel Connection Outage',
   admin_panel_outage_subtitle: 'Communication with a panel has failed.',
   admin_panel_outage_attempts_label: 'Failed connection attempts',
-  admin_panel_outage_hint: '💡 Check the panel server status and origin reachability.',
+  admin_panel_outage_attempts_unit: 'attempts',
+  admin_panel_outage_hint:
+    '💡 *Recommended actions:*\n• Check server status and panel network connectivity\n• Verify panel host, port reachability, and firewall rules\n• Inspect Rebecca / Xray daemon status and service logs',
+  admin_panel_manage_button: '🖥️ Manage Panels',
 
   renewal_notification_title: 'Service Needs Renewal',
   renewal_notification_subtitle: 'Renew it to avoid interruption.',

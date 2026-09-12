@@ -140,12 +140,15 @@ export function cleanChatUiMiddleware(): Middleware<MenuContext> {
     // screen or as a conversation prompt. Previously only uiMessageIds were
     // preserved, so admin text-editor (and other conversation) buttons deleted
     // their own message before the next prompt could be sent, leaving a blank chat.
-    const callbackIsScreen =
-      callbackMessageId !== undefined && previousUiIds.includes(callbackMessageId);
+    const callbackIsArtifact =
+      callbackMessageId !== undefined && artifactIdsBefore.has(callbackMessageId);
     const callbackIsPrompt =
       callbackMessageId !== undefined && promptIds.includes(callbackMessageId);
-    const preservedIds =
-      callbackMessageId && (callbackIsScreen || callbackIsPrompt) ? [callbackMessageId] : [];
+    const callbackIsScreen =
+      callbackMessageId !== undefined &&
+      !callbackIsArtifact &&
+      (previousUiIds.includes(callbackMessageId) || !callbackIsPrompt);
+    const preservedIds = callbackMessageId && !callbackIsArtifact ? [callbackMessageId] : [];
     const failedScreenDeletes: number[] = [];
     const failedPromptDeletes: number[] = [];
 
@@ -376,7 +379,9 @@ export function cancelKeyboard(ctx: ConversationContext): InlineKeyboard {
   return new InlineKeyboard().text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 }
 
-type ReplyOptions = Parameters<ConversationContext['reply']>[1];
+type ReplyOptions = Parameters<ConversationContext['reply']>[1] & {
+  preferEdit?: boolean;
+};
 
 /** Send a conversation response and include it in message tracking under a given role. */
 export async function replyInConversationWithRole(
@@ -386,9 +391,57 @@ export async function replyInConversationWithRole(
   role: UiMessageRole = 'prompt',
   options: ReplyOptions = {}
 ) {
+  const { preferEdit = true, ...apiOptions } = options;
+  const callbackMessageId = ctx.callbackQuery?.message?.message_id;
+
+  if (
+    preferEdit &&
+    typeof ctx.editMessageText === 'function' &&
+    callbackMessageId !== undefined &&
+    role !== 'artifact'
+  ) {
+    const isArtifact = await conversation.external((outsideCtx) =>
+      isArtifactMessage(outsideCtx.session, callbackMessageId)
+    );
+    if (!isArtifact) {
+      try {
+        const replyMarkup = apiOptions.reply_markup ?? backKeyboard(ctx);
+        const edited = await ctx.editMessageText(text, {
+          ...apiOptions,
+          reply_markup: replyMarkup as InlineKeyboard,
+        });
+        const messageId =
+          typeof edited === 'object' && edited && 'message_id' in edited
+            ? edited.message_id
+            : callbackMessageId;
+        await conversation.external((outsideCtx) => {
+          rememberUiMessage(outsideCtx.session, messageId, role);
+        });
+        type ReplyResult = Awaited<ReturnType<ConversationContext['reply']>>;
+        return (
+          typeof edited === 'object' && edited && 'message_id' in edited
+            ? edited
+            : ctx.callbackQuery!.message!
+        ) as ReplyResult;
+      } catch (error) {
+        if (isMessageNotModifiedError(error)) {
+          await conversation.external((outsideCtx) => {
+            rememberUiMessage(outsideCtx.session, callbackMessageId, role);
+          });
+          type ReplyResult = Awaited<ReturnType<ConversationContext['reply']>>;
+          return ctx.callbackQuery!.message! as ReplyResult;
+        }
+        if (!isMessageEditUnavailableError(error)) throw error;
+        await conversation.external((outsideCtx) => {
+          forgetUiMessage(outsideCtx.session, callbackMessageId);
+        });
+      }
+    }
+  }
+
   const message = await ctx.reply(text, {
-    ...options,
-    reply_markup: options.reply_markup ?? (role === 'artifact' ? undefined : backKeyboard(ctx)),
+    ...apiOptions,
+    reply_markup: apiOptions.reply_markup ?? (role === 'artifact' ? undefined : backKeyboard(ctx)),
   });
   await conversation.external((outsideCtx) => {
     rememberUiMessage(outsideCtx.session, message.message_id, role);

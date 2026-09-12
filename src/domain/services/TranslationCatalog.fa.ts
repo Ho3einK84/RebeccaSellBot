@@ -1009,7 +1009,10 @@ export const FA_TEXTS: Record<string, string> = {
   admin_panel_outage_title: 'اختلال در اتصال پنل',
   admin_panel_outage_subtitle: 'ارتباط با یکی از پنل‌ها با خطا مواجه شد.',
   admin_panel_outage_attempts_label: 'تلاش‌های ناموفق',
-  admin_panel_outage_hint: '💡 وضعیت سرور و اتصال اینترنت پنل را بررسی کنید.',
+  admin_panel_outage_attempts_unit: 'مرتبه',
+  admin_panel_outage_hint:
+    '💡 *اقدامات پیشنهادی:*\n• بررسی روشن بودن سرور و اتصال اینترنت پنل\n• بررسی دسترسی‌پذیری آدرس، پورت و فایروال سرور\n• بررسی فعال بودن سرویس پنل و لاگ‌های خطا',
+  admin_panel_manage_button: '🖥️ مدیریت پنل‌ها',
 
   renewal_notification_title: 'سرویس نیاز به تمدید دارد',
   renewal_notification_subtitle: 'برای جلوگیری از قطع سرویس، آن را تمدید کنید.',
