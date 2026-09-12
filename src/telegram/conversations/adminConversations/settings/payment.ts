@@ -128,7 +128,7 @@ export async function adminPaymentSettingsConversation(
         `${t(ctx, 'admin_setting_receipt_notify_admins')}: ${
           isAllAdmins
             ? t(ctx, 'admin_receipt_notify_admins_all')
-            : `${receiptNotifyAdminsRaw.split(',').filter(Boolean).length} ادمین`
+            : `${localizedNumber(receiptNotifyAdminsRaw.split(',').filter(Boolean).length, ctx)} ${t(ctx, 'admin_receipt_notify_admins_select')}`
         }`,
         'pay:admins:receipt'
       )
@@ -341,8 +341,7 @@ async function manageReceiptAdmins(
           }
           newIds = Array.from(selectedIds);
         }
-        const nextVal =
-          newIds.length === 0 || newIds.length === adminIds.length ? '' : newIds.join(',');
+        const nextVal = newIds.length === 0 ? '' : newIds.join(',');
         await conversation.external(async (outsideCtx) => {
           if (!outsideCtx.services) return;
           await outsideCtx.services.translationService.updateSetting(

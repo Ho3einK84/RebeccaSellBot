@@ -1,6 +1,12 @@
 @import 'tailwindcss';
 @plugin 'daisyui';
 
+@theme {
+  --font-sans:
+    'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 /* Tailwind v4 derives `dark:` from prefers-color-scheme by default, which
    ignores the app's .dark/.light toggle. Bind it to the toggle instead. */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -94,6 +100,13 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 /* Glassmorphic Panel */

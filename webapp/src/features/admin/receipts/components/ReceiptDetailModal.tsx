@@ -56,7 +56,14 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
     <Modal
       isOpen={Boolean(receipt)}
       onClose={onClose}
-      title={`${t('admin.receipts.detailModalTitle')} #${receipt.id}`}
+      title={
+        <div className="flex items-center gap-2 flex-wrap">
+          <span>{t('admin.receipts.detailModalTitle')}</span>
+          <span dir="ltr" className="font-mono text-xs text-indigo-400 font-normal">
+            #{receipt.id.slice(-8)}
+          </span>
+        </div>
+      }
       icon={<Receipt className="w-5 h-5 text-indigo-500" />}
       maxWidth="md"
     >
@@ -165,32 +172,34 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
         </div>
 
         {/* Receipt Audit & Metadata */}
-        <div className={`p-3.5 rounded-xl border space-y-2 text-xs font-mono ${subCardClass}`}>
+        <div className={`p-3.5 rounded-xl border space-y-2 text-xs ${subCardClass}`}>
           <div className="flex justify-between items-center text-[11px]">
-            <span className={`font-sans flex items-center gap-1.5 ${textMuted}`}>
+            <span className={`flex items-center gap-1.5 ${textMuted}`}>
               <FileText className="w-3.5 h-3.5" />
               <span>{t('common.receiptCode')}</span>
             </span>
-            <span dir="ltr" className={textPrimary}>
+            <span dir="ltr" className={`font-mono ${textPrimary}`}>
               {receipt.id}
             </span>
           </div>
 
           <div className="flex justify-between items-center text-[11px]">
-            <span className={`font-sans flex items-center gap-1.5 ${textMuted}`}>
+            <span className={`flex items-center gap-1.5 ${textMuted}`}>
               <Clock className="w-3.5 h-3.5" />
-              <span>{t('admin.receipts.date')}</span>
+              <span>{t('admin.receipts.createdAtLabel')}</span>
             </span>
-            <span className={textSecondary}>{formatIsoDate(receipt.createdAt)}</span>
+            <span dir="ltr" className={`font-mono ${textSecondary}`}>
+              {formatIsoDate(receipt.createdAt)}
+            </span>
           </div>
 
           {receipt.reviewedBy && (
             <div className="flex justify-between items-center text-[11px]">
-              <span className={`font-sans flex items-center gap-1.5 ${textMuted}`}>
+              <span className={`flex items-center gap-1.5 ${textMuted}`}>
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 <span>{t('admin.receipts.reviewedBy')}</span>
               </span>
-              <span dir="ltr" className={textPrimary}>
+              <span dir="ltr" className={`font-mono ${textPrimary}`}>
                 {receipt.reviewedBy}
               </span>
             </div>
@@ -198,11 +207,13 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
 
           {receipt.updatedAt && !isPending && (
             <div className="flex justify-between items-center text-[11px]">
-              <span className={`font-sans flex items-center gap-1.5 ${textMuted}`}>
+              <span className={`flex items-center gap-1.5 ${textMuted}`}>
                 <Clock className="w-3.5 h-3.5" />
                 <span>{t('admin.receipts.reviewedAt')}</span>
               </span>
-              <span className={textSecondary}>{formatIsoDate(receipt.updatedAt)}</span>
+              <span dir="ltr" className={`font-mono ${textSecondary}`}>
+                {formatIsoDate(receipt.updatedAt)}
+              </span>
             </div>
           )}
 

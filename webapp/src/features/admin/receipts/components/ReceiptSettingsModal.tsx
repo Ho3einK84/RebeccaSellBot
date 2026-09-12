@@ -129,7 +129,9 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                   onClick={() => setMode('full')}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold">{t('admin.receipt_notify_mode_full')}</span>
+                    <span className="text-xs font-bold">
+                      {t('admin.receipts.settingsModeFullTitle')}
+                    </span>
                     {mode === 'full' && <Check className="w-3.5 h-3.5" />}
                   </div>
                   <span className="text-[10px] opacity-80">
@@ -152,7 +154,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold">
-                      {t('admin.receipt_notify_mode_simple')}
+                      {t('admin.receipts.settingsModeSimpleTitle')}
                     </span>
                     {mode === 'simple' && <Check className="w-3.5 h-3.5" />}
                   </div>
@@ -172,7 +174,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                 </span>
                 <button
                   type="button"
-                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                     isAllAdmins
                       ? isDark
                         ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
@@ -186,14 +188,15 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                     setSelectedAdmins([]);
                   }}
                 >
-                  {t('admin.receipts.settingsAdminsAll')}
+                  {isAllAdmins && <Check className="w-3 h-3" />}
+                  <span>{t('admin.receipts.settingsAdminsAll')}</span>
                 </button>
               </div>
 
               {/* Admin checklist */}
               <div className="space-y-1.5 pt-1">
                 {allAdmins.map((adminId) => {
-                  const isChecked = isAllAdmins || selectedAdmins.includes(adminId);
+                  const isChecked = !isAllAdmins && selectedAdmins.includes(adminId);
                   return (
                     <div
                       key={adminId}
