@@ -7,6 +7,8 @@ import {
   showPromoRedemptions,
 } from '../../src/telegram/promoAdminUi.js';
 import { getEffectivePackagePrice } from '../../src/telegram/keyboards/mainMenu.js';
+import { validateTelegramMarkdown } from '../../src/telegram/rendering.js';
+import { TranslationService } from '../../src/domain/services/TranslationService.js';
 import type { MenuContext } from '../../src/telegram/types.js';
 
 const promo = {
@@ -157,6 +159,27 @@ describe('inline promo admin UX', () => {
     expect(reply).toHaveBeenCalled();
     const callArgs = reply.mock.calls[0]!;
     expect(callArgs[0]).toContain('admin_promo_redemptions_title');
+  });
+
+  it('produces valid Telegram Markdown when rendering redemptions with real translations', async () => {
+    const { ctx, reply } = context();
+    ctx.services!.translationService = new TranslationService();
+
+    await showPromoRedemptions(ctx, promo.id, 1);
+
+    const callArgs = reply.mock.calls[0]!;
+    const validation = validateTelegramMarkdown(callArgs[0] as string);
+    expect(validation.valid).toBe(true);
+  });
+
+  it('produces valid Telegram Markdown for promo detail view with real translations', async () => {
+    const { ctx } = context();
+    ctx.services!.translationService = new TranslationService();
+
+    const detail = await promoDetailView(ctx, promo.id);
+    expect(detail).toBeDefined();
+    const validation = validateTelegramMarkdown(detail!.text);
+    expect(validation.valid).toBe(true);
   });
 
   it('calculates effective package price with min purchase and max cap', () => {

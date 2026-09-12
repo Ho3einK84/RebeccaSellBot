@@ -3,7 +3,7 @@ import type { MenuContext } from './types.js';
 import { callbackData } from './callbackData.js';
 import { localizedDate, localizedNumber, t } from './locale.js';
 import { buildEmptyState, buildScreen, buildStatusBadge, renderScreen } from './ui.js';
-import { escapeTelegramMarkdown } from './rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from './rendering.js';
 
 const PROMO_PAGE_SIZE = 8;
 
@@ -89,7 +89,7 @@ export async function promoDetailView(
   const text = buildScreen({
     emoji: '🎟️',
     title: t(ctx, 'admin_promo_detail_title'),
-    subtitle: `\`${promo.code}\``,
+    subtitle: `\`${sanitizeTelegramInlineCode(promo.code)}\``,
     primary: {
       emoji: promo.active ? '🟢' : '⚪️',
       label: t(ctx, 'admin_promo_status_label'),
@@ -243,7 +243,7 @@ export async function showPromoRedemptions(
   const text = buildScreen({
     emoji: '👥',
     title: t(ctx, 'admin_promo_redemptions_title'),
-    subtitle: `\`${promo.code}\``,
+    subtitle: `\`${sanitizeTelegramInlineCode(promo.code)}\``,
     primary: {
       emoji: '🧾',
       label: t(ctx, 'admin_promo_uses_label'),
@@ -255,6 +255,7 @@ export async function showPromoRedemptions(
         : r.firstName
           ? `${r.firstName} (${r.telegramId})`
           : String(r.telegramId);
+      const statusInfo = promoRedemptionStatus(ctx, r.status);
       return {
         emoji: '👤',
         title: `${localizedNumber((result.page - 1) * 5 + index + 1, ctx)}. ${escapeTelegramMarkdown(userDisplay)}`,
@@ -265,9 +266,9 @@ export async function showPromoRedemptions(
             value: localizedDate(r.redeemedAt, ctx),
           },
           {
-            emoji: r.status === 'completed' ? '🟢' : '⏳',
+            emoji: statusInfo.emoji,
             label: t(ctx, 'admin_promo_status_label'),
-            value: r.status === 'completed' ? t(ctx, 'status_completed') : t(ctx, 'status_pending'),
+            value: statusInfo.label,
           },
           ...(r.purchaseAmount !== null && r.purchaseAmount !== undefined
             ? [
@@ -329,5 +330,16 @@ function promoTypeLabel(ctx: MenuContext, type: string): string {
       return t(ctx, 'admin_promo_type_gb');
     default:
       return type;
+  }
+}
+
+function promoRedemptionStatus(ctx: MenuContext, status: string): { emoji: string; label: string } {
+  switch (status) {
+    case 'completed':
+      return { emoji: '🟢', label: t(ctx, 'admin_promo_status_completed') };
+    case 'pending':
+      return { emoji: '⏳', label: t(ctx, 'admin_promo_status_pending') };
+    default:
+      return { emoji: '⚪️', label: escapeTelegramMarkdown(status) };
   }
 }

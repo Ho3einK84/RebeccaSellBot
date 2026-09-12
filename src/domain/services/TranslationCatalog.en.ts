@@ -458,6 +458,8 @@ export const EN_TEXTS: Record<string, string> = {
   admin_promo_invalid_max_discount: '⚠️ Invalid max discount cap. Enter a valid number or 0.',
   admin_promo_redemptions_button: '👥 Redemptions',
   admin_promo_redemptions_title: 'Promo Code Redemptions',
+  admin_promo_status_completed: 'Completed',
+  admin_promo_status_pending: 'Pending',
   admin_promo_no_redemptions: '📭 No user has redeemed this code yet.',
   admin_promo_redeemed_at_label: 'Redeemed At',
   admin_promo_back_to_detail: '‹ Back to Promo',

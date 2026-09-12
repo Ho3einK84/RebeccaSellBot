@@ -455,6 +455,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_promo_invalid_max_discount: '⚠️ سقف تخفیف نامعتبر است. یک عدد معتبر یا 0 وارد کنید.',
   admin_promo_redemptions_button: '👥 استفاده‌کنندگان',
   admin_promo_redemptions_title: 'استفاده‌کنندگان کد تخفیف',
+  admin_promo_status_completed: 'تکمیل‌شده',
+  admin_promo_status_pending: 'در انتظار',
   admin_promo_no_redemptions: '📭 تاکنون هیچ کاربری از این کد استفاده نکرده است.',
   admin_promo_redeemed_at_label: 'تاریخ استفاده',
   admin_promo_back_to_detail: '‹ بازگشت به کد',
