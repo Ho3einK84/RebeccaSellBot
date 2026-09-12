@@ -236,6 +236,16 @@ export interface TranslationSchema {
       statusDisabled: string;
       statusLimited: string;
       statusExpired: string;
+      banSuccess: string;
+      unbanSuccess: string;
+      banFailed: string;
+      actionSuccess: string;
+      actionFailed: string;
+      resetUsageSuccess: string;
+      revokeSuccess: string;
+      toggleSuccessActive: string;
+      toggleSuccessDisabled: string;
+      syncSuccess: string;
     };
     panels: {
       fleetTitle: string;

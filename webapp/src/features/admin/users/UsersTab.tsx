@@ -93,13 +93,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   };
 
   const handleBanUser = async (telegramId: number, isBanned: boolean, reason?: string) => {
-    try {
-      await banUserMutation.mutateAsync({ telegramId, isBanned, reason });
-      onNotify(t('admin.users.banSuccess'), 'success');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('admin.users.banFailed');
-      onNotify(msg, 'error');
-    }
+    await banUserMutation.mutateAsync({ telegramId, isBanned, reason });
   };
 
   const handleToggleConfig = async (
@@ -107,16 +101,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     configUsername: string,
     panelId?: string
   ) => {
-    try {
-      const res = await toggleConfigMutation.mutateAsync({ telegramId, configUsername, panelId });
-      onNotify(
-        res.status === 'enabled' ? t('admin.users.statusActive') : t('admin.users.statusDisabled'),
-        'success'
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
-      onNotify(msg, 'error');
-    }
+    await toggleConfigMutation.mutateAsync({ telegramId, configUsername, panelId });
   };
 
   const handleResetConfigUsage = async (
@@ -124,13 +109,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     configUsername: string,
     panelId?: string
   ) => {
-    try {
-      await resetUsageMutation.mutateAsync({ telegramId, configUsername, panelId });
-      onNotify(t('admin.users.actionSuccess'), 'success');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
-      onNotify(msg, 'error');
-    }
+    await resetUsageMutation.mutateAsync({ telegramId, configUsername, panelId });
   };
 
   const handleRevokeConfigSubUrl = async (
@@ -138,23 +117,11 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     configUsername: string,
     panelId?: string
   ) => {
-    try {
-      await revokeSubUrlMutation.mutateAsync({ telegramId, configUsername, panelId });
-      onNotify(t('admin.users.actionSuccess'), 'success');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
-      onNotify(msg, 'error');
-    }
+    await revokeSubUrlMutation.mutateAsync({ telegramId, configUsername, panelId });
   };
 
   const handleSyncConfig = async (telegramId: number, configUsername: string, panelId?: string) => {
-    try {
-      await syncConfigMutation.mutateAsync({ telegramId, configUsername, panelId });
-      onNotify(t('admin.users.actionSuccess'), 'success');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
-      onNotify(msg, 'error');
-    }
+    await syncConfigMutation.mutateAsync({ telegramId, configUsername, panelId });
   };
 
   return (
@@ -225,6 +192,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         onOpenBalanceModal={setBalanceModalUser}
         onCopyId={copy}
         isCopied={isCopied}
+        onNotify={onNotify}
         onBanUser={handleBanUser}
         onToggleConfig={handleToggleConfig}
         onResetConfigUsage={handleResetConfigUsage}

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNull, ne, or, sql } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { getDb } from '../../infra/db.js';
 import {
@@ -457,7 +457,10 @@ export class UserService {
           and(
             eq(userConfigs.telegramId, telegramId),
             eq(userConfigs.panelStatus, 'active'),
-            sql`${userConfigs.panelExpire} IS NULL OR ${userConfigs.panelExpire} > EXTRACT(EPOCH FROM NOW())`
+            or(
+              isNull(userConfigs.panelExpire),
+              gt(userConfigs.panelExpire, sql<number>`EXTRACT(EPOCH FROM NOW())`)
+            )
           )
         ),
       db

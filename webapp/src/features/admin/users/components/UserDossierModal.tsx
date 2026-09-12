@@ -20,6 +20,7 @@ import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { Toast } from '@/shared/components/ui/Toast.js';
 import { UserConfigQrModal } from './UserConfigQrModal.js';
 import { UserConfirmModal } from './UserConfirmModal.js';
 import type { UserDossierResponse } from '@/shared/types/api.js';
@@ -31,6 +32,7 @@ interface UserDossierModalProps {
   onOpenBalanceModal: (user: UserProfile) => void;
   onCopyId: (id: string, key: string) => void;
   isCopied?: (key: string) => boolean;
+  onNotify?: (message: string, type?: 'success' | 'error') => void;
   onBanUser?: (telegramId: number, isBanned: boolean, reason?: string) => Promise<void>;
   onToggleConfig?: (telegramId: number, configUsername: string, panelId?: string) => Promise<void>;
   onResetConfigUsage?: (
@@ -52,6 +54,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   onOpenBalanceModal,
   onCopyId,
   isCopied = () => false,
+  onNotify,
   onBanUser,
   onToggleConfig,
   onResetConfigUsage,
@@ -75,6 +78,18 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   } | null>(null);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [modalAlert, setModalAlert] = useState<{
+    message: string;
+    type: 'success' | 'error';
+  } | null>(null);
+
+  const showModalFeedback = (message: string, type: 'success' | 'error' = 'success') => {
+    setModalAlert({ message, type });
+    onNotify?.(message, type);
+    setTimeout(() => {
+      setModalAlert((curr) => (curr?.message === message ? null : curr));
+    }, 4500);
+  };
 
   // Reset to first tab whenever a different user dossier is opened
   useEffect(() => {
@@ -82,6 +97,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     setQrModalConfig(null);
     setConfirmModal(null);
     setActionLoading(null);
+    setModalAlert(null);
   }, [dossier?.summary?.user?.telegramId]);
 
   if (!dossier) return null;
@@ -98,13 +114,20 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     try {
       if (type === 'ban' && onBanUser) {
         await onBanUser(user.telegramId, true, reason);
+        showModalFeedback(t('admin.users.banSuccess'), 'success');
       } else if (type === 'unban' && onBanUser) {
         await onBanUser(user.telegramId, false, reason);
+        showModalFeedback(t('admin.users.unbanSuccess'), 'success');
       } else if (type === 'reset-usage' && config && onResetConfigUsage) {
         await onResetConfigUsage(user.telegramId, config.configUsername, config.panelId);
+        showModalFeedback(t('admin.users.resetUsageSuccess'), 'success');
       } else if (type === 'revoke' && config && onRevokeConfigSubUrl) {
         await onRevokeConfigSubUrl(user.telegramId, config.configUsername, config.panelId);
+        showModalFeedback(t('admin.users.revokeSuccess'), 'success');
       }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
+      showModalFeedback(msg, 'error');
     } finally {
       setActionLoading(null);
       setConfirmModal(null);
@@ -116,6 +139,16 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     setActionLoading(`toggle-${cfg.id}`);
     try {
       await onToggleConfig(user.telegramId, cfg.configUsername, cfg.panelId);
+      const isCurrentlyActive = cfg.panelStatus === 'active';
+      showModalFeedback(
+        isCurrentlyActive
+          ? t('admin.users.toggleSuccessDisabled')
+          : t('admin.users.toggleSuccessActive'),
+        'success'
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
+      showModalFeedback(msg, 'error');
     } finally {
       setActionLoading(null);
     }
@@ -126,6 +159,10 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     setActionLoading(`sync-${cfg.id}`);
     try {
       await onSyncConfig(user.telegramId, cfg.configUsername, cfg.panelId);
+      showModalFeedback(t('admin.users.syncSuccess'), 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
+      showModalFeedback(msg, 'error');
     } finally {
       setActionLoading(null);
     }
@@ -135,6 +172,17 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     <>
       <Modal isOpen={Boolean(dossier)} onClose={onClose} maxWidth="2xl">
         <div className="space-y-4 max-h-[82dvh] overflow-y-auto">
+          {/* Action Feedback Banner */}
+          {modalAlert && (
+            <div className="animate-in fade-in slide-in-from-top-1 duration-150">
+              <Toast
+                message={modalAlert.message}
+                type={modalAlert.type}
+                onDismiss={() => setModalAlert(null)}
+              />
+            </div>
+          )}
+
           {/* Executive Profile Header */}
           <div
             className={`flex items-start justify-between pb-4 border-b ${

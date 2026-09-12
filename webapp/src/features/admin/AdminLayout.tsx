@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { LayoutDashboard, Receipt, Users, Server, Layers } from 'lucide-react';
 import { OverviewTab } from './overview/OverviewTab.js';
 import { ReceiptsTab } from './receipts/ReceiptsTab.js';
@@ -109,16 +110,21 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
           onNotify={notify}
         />
 
-        {/* Global Toast Notification */}
-        {notification && (
-          <div className="mb-4">
-            <Toast
-              message={notification.message}
-              type={notification.type}
-              onDismiss={() => setNotification(null)}
-            />
-          </div>
-        )}
+        {/* Global Floating Toast Notification (Portaled above all modals) */}
+        {notification &&
+          createPortal(
+            <aside
+              aria-live="polite"
+              className="fixed top-4 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[100000] pointer-events-auto"
+            >
+              <Toast
+                message={notification.message}
+                type={notification.type}
+                onDismiss={() => setNotification(null)}
+              />
+            </aside>,
+            document.body
+          )}
 
         {/* Desktop Navigation Tabs (Hidden on mobile) */}
         <AdminDesktopNav tabs={tabsConfig} activeTab={activeTab} onSelectTab={switchTab} />
