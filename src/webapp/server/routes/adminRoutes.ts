@@ -4,10 +4,15 @@ import { adminGuardWithCheck } from '../middleware/adminGuard.js';
 import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
-import type { RebeccaPanelRegistry } from '../../../domain/services/RebeccaPanelRegistry.js';
+import type { PricingService } from '../../../domain/services/PricingService.js';
+import {
+  type RebeccaPanelRegistry,
+  RebeccaPanelInUseError,
+} from '../../../domain/services/RebeccaPanelRegistry.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import type { AdminBalanceOperation } from '../../../domain/services/WalletContracts.js';
+import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
 import { getTelegramFileUrl } from '../../../infra/telegramFiles.js';
 import {
   sendReceiptApprovalNotification,
@@ -32,6 +37,7 @@ export function registerAdminRoutes(
     walletService: WalletService;
     userService: UserService;
     configService?: ConfigService;
+    pricingService?: PricingService;
     panelRegistry: RebeccaPanelRegistry;
     botToken?: string;
     adminService?: Pick<AdminService, 'isAdmin'>;
@@ -551,6 +557,8 @@ export function registerAdminRoutes(
     // GET /api/admin/panels
     adminScope.get('/api/admin/panels', async (_request, reply) => {
       const panels = services.panelRegistry.listPanels();
+      const customTarget = services.pricingService?.getCustomVolumeTarget();
+
       const enrichedPanels = await Promise.all(
         panels.map(async (panel) => {
           let activeConfigsCount = 0;
@@ -567,18 +575,36 @@ export function registerAdminRoutes(
           }
 
           try {
-            if (panel.enabled && typeof services.panelRegistry.getService === 'function') {
+            if (panel.enabled && typeof services.panelRegistry.testConnection === 'function') {
+              const testRes = await services.panelRegistry.testConnection(panel.id);
+              healthy = testRes.ok;
+              latencyMs = testRes.latencyMs;
+            } else if (panel.enabled && typeof services.panelRegistry.getService === 'function') {
               const service = services.panelRegistry.getService(panel.id);
               const start = Date.now();
               healthy = await service.checkHealth();
               latencyMs = Date.now() - start;
+            } else if (!panel.enabled) {
+              healthy = false;
             }
           } catch {
             healthy = false;
           }
 
+          const packagesCount = services.pricingService
+            ? services.pricingService.getPackages(panel.id, undefined, true).length
+            : 0;
+
+          const servicesWithCustom = panel.services.map((s) => ({
+            ...s,
+            isCustomTarget:
+              customTarget?.panelId === panel.id && customTarget?.serviceId === s.serviceId,
+          }));
+
           return {
             ...panel,
+            services: servicesWithCustom,
+            packagesCount,
             activeConfigsCount,
             healthy,
             latencyMs,
@@ -586,7 +612,218 @@ export function registerAdminRoutes(
         })
       );
 
-      return reply.code(200).send({ panels: enrichedPanels });
+      const totalPanels = enrichedPanels.length;
+      const enabledPanels = enrichedPanels.filter((p) => p.enabled);
+      const healthyPanels = enrichedPanels.filter((p) => p.enabled && p.healthy).length;
+      const disabledPanels = enrichedPanels.filter((p) => !p.enabled).length;
+      const unhealthyPanels = enrichedPanels.filter((p) => p.enabled && !p.healthy).length;
+      const totalActiveConfigs = enrichedPanels.reduce(
+        (acc, p) => acc + (p.activeConfigsCount ?? 0),
+        0
+      );
+      const totalServices = enrichedPanels.reduce((acc, p) => acc + p.services.length, 0);
+      const allHealthy = totalPanels > 0 && enabledPanels.length > 0 && unhealthyPanels === 0;
+
+      return reply.code(200).send({
+        panels: enrichedPanels,
+        fleetSummary: {
+          totalPanels,
+          healthyPanels,
+          disabledPanels,
+          unhealthyPanels,
+          totalActiveConfigs,
+          totalServices,
+          allHealthy,
+        },
+      });
+    });
+
+    // POST /api/admin/panels
+    adminScope.post<{
+      Body: {
+        name: string;
+        baseUrl: string;
+        apiKey?: string;
+        serviceId?: number;
+        serviceName?: string;
+      };
+    }>('/api/admin/panels', async (request, reply) => {
+      const { name, baseUrl, apiKey, serviceId, serviceName } = request.body || {};
+      if (!name || typeof name !== 'string' || !name.trim() || name.trim().length > 80) {
+        return reply.code(400).send({ error: 'Panel name must be between 1 and 80 characters' });
+      }
+      if (!baseUrl || typeof baseUrl !== 'string') {
+        return reply.code(400).send({ error: 'Panel URL is required' });
+      }
+      let validatedUrl: string;
+      try {
+        validatedUrl = validateRebeccaBaseUrl(baseUrl);
+      } catch (err: unknown) {
+        return reply
+          .code(400)
+          .send({ error: err instanceof Error ? err.message : 'Invalid panel URL' });
+      }
+      const parsedServiceId = serviceId ? Number(serviceId) : 1;
+      if (
+        !Number.isSafeInteger(parsedServiceId) ||
+        parsedServiceId <= 0 ||
+        parsedServiceId > 2_147_483_647
+      ) {
+        return reply.code(400).send({ error: 'Invalid service ID' });
+      }
+
+      const adminId = request.userSession!.telegramId;
+      try {
+        const newPanel = await services.panelRegistry.createPanel({
+          name: name.trim(),
+          baseUrl: validatedUrl,
+          apiKey: apiKey?.trim() || undefined,
+          serviceId: parsedServiceId,
+          serviceName: serviceName?.trim() || 'سرویس اصلی',
+        });
+
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_create_panel',
+          entityType: 'rebecca_panel',
+          entityId: newPanel.id,
+          metadata: { name: newPanel.name, baseUrl: newPanel.baseUrl },
+        });
+
+        return reply.code(201).send({ success: true, panel: newPanel });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to create panel';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // PATCH /api/admin/panels/:id
+    adminScope.patch<{
+      Params: { id: string };
+      Body: {
+        name?: string;
+        baseUrl?: string;
+        apiKey?: string;
+      };
+    }>('/api/admin/panels/:id', async (request, reply) => {
+      const { id } = request.params;
+      const { name, baseUrl, apiKey } = request.body || {};
+      const changes: { name?: string; baseUrl?: string; apiKey?: string } = {};
+
+      if (name !== undefined) {
+        if (typeof name !== 'string' || !name.trim() || name.trim().length > 80) {
+          return reply.code(400).send({ error: 'Panel name must be between 1 and 80 characters' });
+        }
+        changes.name = name.trim();
+      }
+
+      if (baseUrl !== undefined) {
+        if (typeof baseUrl !== 'string') {
+          return reply.code(400).send({ error: 'Invalid panel URL' });
+        }
+        try {
+          changes.baseUrl = validateRebeccaBaseUrl(baseUrl);
+        } catch (err: unknown) {
+          return reply
+            .code(400)
+            .send({ error: err instanceof Error ? err.message : 'Invalid panel URL' });
+        }
+      }
+
+      if (apiKey !== undefined) {
+        changes.apiKey = typeof apiKey === 'string' ? apiKey.trim() : undefined;
+      }
+
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.updatePanel(id, changes);
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_update_panel',
+          entityType: 'rebecca_panel',
+          entityId: id,
+          metadata: changes,
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to update panel';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // POST /api/admin/panels/:id/toggle
+    adminScope.post<{
+      Params: { id: string };
+      Body: { enabled: boolean };
+    }>('/api/admin/panels/:id/toggle', async (request, reply) => {
+      const { id } = request.params;
+      const { enabled } = request.body || {};
+      if (typeof enabled !== 'boolean') {
+        return reply.code(400).send({ error: 'Field "enabled" must be a boolean' });
+      }
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.setPanelEnabled(id, enabled);
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_toggle_panel',
+          entityType: 'rebecca_panel',
+          entityId: id,
+          metadata: { enabled },
+        });
+        return reply.code(200).send({ success: true, enabled });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to toggle panel status';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // POST /api/admin/panels/:id/default
+    adminScope.post<{
+      Params: { id: string };
+    }>('/api/admin/panels/:id/default', async (request, reply) => {
+      const { id } = request.params;
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.setDefaultPanel(id);
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_set_default_panel',
+          entityType: 'rebecca_panel',
+          entityId: id,
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to set default panel';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // DELETE /api/admin/panels/:id
+    adminScope.delete<{
+      Params: { id: string };
+    }>('/api/admin/panels/:id', async (request, reply) => {
+      const { id } = request.params;
+      if (services.panelRegistry.listPanels().length <= 1) {
+        return reply.code(400).send({ error: 'Cannot delete the only configured panel' });
+      }
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.deletePanel(id);
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_delete_panel',
+          entityType: 'rebecca_panel',
+          entityId: id,
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        if (err instanceof RebeccaPanelInUseError) {
+          return reply.code(400).send({ error: 'Panel is currently in use or is default panel' });
+        }
+        const message = err instanceof Error ? err.message : 'Failed to delete panel';
+        return reply.code(400).send({ error: message });
+      }
     });
 
     // POST /api/admin/panels/:id/test
@@ -595,20 +832,28 @@ export function registerAdminRoutes(
     }>('/api/admin/panels/:id/test', async (request, reply) => {
       const { id } = request.params;
       try {
-        if (typeof services.panelRegistry.getService !== 'function') {
-          return reply
-            .code(400)
-            .send({ success: false, healthy: false, error: 'Registry service unavailable' });
+        if (typeof services.panelRegistry.testConnection === 'function') {
+          const testRes = await services.panelRegistry.testConnection(id);
+          return reply.code(200).send({
+            success: true,
+            healthy: testRes.ok,
+            latencyMs: testRes.latencyMs,
+          });
         }
-        const service = services.panelRegistry.getService(id);
-        const start = Date.now();
-        const healthy = await service.checkHealth();
-        const latencyMs = Date.now() - start;
-        return reply.code(200).send({
-          success: true,
-          healthy,
-          latencyMs,
-        });
+        if (typeof services.panelRegistry.getService === 'function') {
+          const service = services.panelRegistry.getService(id);
+          const start = Date.now();
+          const healthy = await service.checkHealth();
+          const latencyMs = Date.now() - start;
+          return reply.code(200).send({
+            success: true,
+            healthy,
+            latencyMs,
+          });
+        }
+        return reply
+          .code(400)
+          .send({ success: false, healthy: false, error: 'Registry service unavailable' });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Connection test failed';
         return reply.code(200).send({
@@ -616,6 +861,164 @@ export function registerAdminRoutes(
           healthy: false,
           error: message,
         });
+      }
+    });
+
+    // POST /api/admin/panels/test-all
+    adminScope.post('/api/admin/panels/test-all', async (_request, reply) => {
+      const panels = services.panelRegistry.listPanels();
+      const results: Record<string, { healthy: boolean; latencyMs?: number; error?: string }> = {};
+
+      await Promise.all(
+        panels.map(async (panel) => {
+          if (!panel.enabled) {
+            results[panel.id] = { healthy: false, error: 'Panel is disabled' };
+            return;
+          }
+          try {
+            if (typeof services.panelRegistry.testConnection === 'function') {
+              const testRes = await services.panelRegistry.testConnection(panel.id);
+              results[panel.id] = { healthy: testRes.ok, latencyMs: testRes.latencyMs };
+            } else if (typeof services.panelRegistry.getService === 'function') {
+              const service = services.panelRegistry.getService(panel.id);
+              const start = Date.now();
+              const healthy = await service.checkHealth();
+              results[panel.id] = { healthy, latencyMs: Date.now() - start };
+            } else {
+              results[panel.id] = { healthy: false, error: 'Test service unavailable' };
+            }
+          } catch (err: unknown) {
+            results[panel.id] = {
+              healthy: false,
+              error: err instanceof Error ? err.message : 'Connection test failed',
+            };
+          }
+        })
+      );
+
+      return reply.code(200).send({ success: true, results });
+    });
+
+    // POST /api/admin/panels/:id/services
+    adminScope.post<{
+      Params: { id: string };
+      Body: { serviceId: number; name: string };
+    }>('/api/admin/panels/:id/services', async (request, reply) => {
+      const { id } = request.params;
+      const { serviceId, name } = request.body || {};
+      const parsedServiceId = Number(serviceId);
+      if (
+        !Number.isSafeInteger(parsedServiceId) ||
+        parsedServiceId <= 0 ||
+        parsedServiceId > 2_147_483_647
+      ) {
+        return reply.code(400).send({ error: 'Service ID must be a positive integer' });
+      }
+      if (!name || typeof name !== 'string' || !name.trim() || name.trim().length > 80) {
+        return reply.code(400).send({ error: 'Service name must be between 1 and 80 characters' });
+      }
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.addService(id, parsedServiceId, name.trim());
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_add_panel_service',
+          entityType: 'rebecca_panel_service',
+          entityId: `${id}:${parsedServiceId}`,
+          metadata: { serviceId: parsedServiceId, name: name.trim() },
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to add service';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // POST /api/admin/panels/:id/services/:serviceId/default
+    adminScope.post<{
+      Params: { id: string; serviceId: string };
+    }>('/api/admin/panels/:id/services/:serviceId/default', async (request, reply) => {
+      const { id, serviceId } = request.params;
+      const parsedServiceId = Number(serviceId);
+      if (!Number.isSafeInteger(parsedServiceId) || parsedServiceId <= 0) {
+        return reply.code(400).send({ error: 'Invalid service ID' });
+      }
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.setDefaultService(id, parsedServiceId);
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_set_default_panel_service',
+          entityType: 'rebecca_panel_service',
+          entityId: `${id}:${parsedServiceId}`,
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to set default service';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // POST /api/admin/panels/:id/services/:serviceId/custom-target
+    adminScope.post<{
+      Params: { id: string; serviceId: string };
+    }>('/api/admin/panels/:id/services/:serviceId/custom-target', async (request, reply) => {
+      const { id, serviceId } = request.params;
+      const parsedServiceId = Number(serviceId);
+      if (!Number.isSafeInteger(parsedServiceId) || parsedServiceId <= 0) {
+        return reply.code(400).send({ error: 'Invalid service ID' });
+      }
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.resolveTarget(id, parsedServiceId);
+        if (services.translationService) {
+          await services.translationService.updateSettings({
+            custom_volume_target_json: JSON.stringify({
+              panelId: id,
+              serviceId: parsedServiceId,
+            }),
+            custom_volume_panel_id: '',
+            custom_volume_service_id: '',
+          });
+        }
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_set_custom_volume_target_service',
+          entityType: 'rebecca_panel_service',
+          entityId: `${id}:${parsedServiceId}`,
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to set custom volume target';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // DELETE /api/admin/panels/:id/services/:serviceId
+    adminScope.delete<{
+      Params: { id: string; serviceId: string };
+    }>('/api/admin/panels/:id/services/:serviceId', async (request, reply) => {
+      const { id, serviceId } = request.params;
+      const parsedServiceId = Number(serviceId);
+      if (!Number.isSafeInteger(parsedServiceId) || parsedServiceId <= 0) {
+        return reply.code(400).send({ error: 'Invalid service ID' });
+      }
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.deleteService(id, parsedServiceId);
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_delete_panel_service',
+          entityType: 'rebecca_panel_service',
+          entityId: `${id}:${parsedServiceId}`,
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        if (err instanceof RebeccaPanelInUseError) {
+          return reply.code(400).send({ error: 'Service is in use or is default service' });
+        }
+        const message = err instanceof Error ? err.message : 'Failed to delete service';
+        return reply.code(400).send({ error: message });
       }
     });
   });

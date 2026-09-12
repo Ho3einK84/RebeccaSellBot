@@ -138,11 +138,26 @@ describe('WebApp Server & Admin Routes', () => {
       if (key === 'language_selection_enabled') return true;
       return defaultValue;
     }),
+    updateSettings: vi.fn(async () => {}),
+  };
+
+  const mockPricingService = {
+    getPackages: vi.fn(() => [{ id: 'pkg_1' }]),
+    getCustomVolumeTarget: vi.fn(() => ({ panelId: 'panel_1', serviceId: 1 })),
   };
 
   const mockPanelRegistry = {
     healthSummary: vi.fn(async () => ({ configured: 2, healthy: 2 })),
-    getPanel: vi.fn((id: string) => ({ id, name: id === 'panel_1' ? 'Main Germany Panel' : id })),
+    getPanel: vi.fn((id: string) => ({
+      id,
+      name: id === 'panel_1' ? 'Main Germany Panel' : 'Secondary Panel',
+      baseUrl: 'https://panel.example.com',
+      enabled: true,
+      isDefault: id === 'panel_1',
+      credentialConfigured: true,
+      credentialMode: 'api_key' as const,
+      services: [{ serviceId: 1, name: 'V2Ray Service', isDefault: true }],
+    })),
     listPanels: vi.fn(() => [
       {
         id: 'panel_1',
@@ -154,9 +169,52 @@ describe('WebApp Server & Admin Routes', () => {
         credentialMode: 'api_key' as const,
         services: [{ serviceId: 1, name: 'V2Ray Service', isDefault: true }],
       },
+      {
+        id: 'panel_2',
+        name: 'Secondary Panel',
+        baseUrl: 'https://panel2.example.com',
+        enabled: true,
+        isDefault: false,
+        credentialConfigured: true,
+        credentialMode: 'api_key' as const,
+        services: [{ serviceId: 1, name: 'Primary Service', isDefault: true }],
+      },
     ]),
     getPanelUsage: vi.fn(async () => ({ activeConfigsCount: 5 })),
     getService: vi.fn(() => ({ checkHealth: vi.fn(async () => true) })),
+    testConnection: vi.fn(async () => ({ ok: true, latencyMs: 25 })),
+    createPanel: vi.fn(
+      async (input: {
+        name: string;
+        baseUrl: string;
+        apiKey?: string;
+        serviceId?: number;
+        serviceName?: string;
+      }) => ({
+        id: 'panel_new',
+        name: input.name,
+        baseUrl: input.baseUrl,
+        enabled: true,
+        isDefault: false,
+        credentialConfigured: Boolean(input.apiKey),
+        credentialMode: input.apiKey ? ('api_key' as const) : ('none' as const),
+        services: [
+          {
+            serviceId: input.serviceId || 1,
+            name: input.serviceName || 'Default',
+            isDefault: true,
+          },
+        ],
+      })
+    ),
+    updatePanel: vi.fn(async () => {}),
+    setPanelEnabled: vi.fn(async () => {}),
+    setDefaultPanel: vi.fn(async () => {}),
+    deletePanel: vi.fn(async () => {}),
+    addService: vi.fn(async () => {}),
+    setDefaultService: vi.fn(async () => {}),
+    deleteService: vi.fn(async () => {}),
+    resolveTarget: vi.fn(async () => ({ panelId: 'panel_1', serviceId: 1 })),
   };
 
   const mockConfigService = {
@@ -220,6 +278,7 @@ describe('WebApp Server & Admin Routes', () => {
     walletService: mockWalletService,
     userService: mockUserService,
     configService: mockConfigService,
+    pricingService: mockPricingService,
     translationService: mockTranslationService,
     panelRegistry: mockPanelRegistry,
   } as unknown as BotServices;
@@ -514,7 +573,7 @@ describe('WebApp Server & Admin Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const data = response.json();
-      expect(data.panels.length).toBe(1);
+      expect(data.panels.length).toBe(2);
       expect(data.panels[0].name).toBe('Main Germany Panel');
     });
 
@@ -681,7 +740,7 @@ describe('WebApp Server & Admin Routes', () => {
   });
 
   describe('GET /api/admin/panels', () => {
-    it('returns enriched panels list with health and usage', async () => {
+    it('returns enriched panels list with fleetSummary, health and usage', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/admin/panels',
@@ -692,11 +751,136 @@ describe('WebApp Server & Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       const data = res.json();
-      expect(data.panels).toHaveLength(1);
+      expect(data.panels).toHaveLength(2);
       expect(data.panels[0].id).toBe('panel_1');
       expect(data.panels[0].activeConfigsCount).toBe(5);
       expect(data.panels[0].healthy).toBe(true);
-      expect(typeof data.panels[0].latencyMs).toBe('number');
+      expect(data.panels[0].packagesCount).toBe(1);
+      expect(data.panels[0].services[0].isCustomTarget).toBe(true);
+      expect(data.fleetSummary).toEqual(
+        expect.objectContaining({
+          totalPanels: 2,
+          healthyPanels: 2,
+          disabledPanels: 0,
+          unhealthyPanels: 0,
+          totalActiveConfigs: 10,
+          allHealthy: true,
+        })
+      );
+    });
+  });
+
+  describe('POST /api/admin/panels', () => {
+    it('creates a new panel successfully', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+        payload: {
+          name: 'New Node Panel',
+          baseUrl: 'https://new-panel.example.com',
+          apiKey: 'api-secret-token',
+          serviceId: 2,
+          serviceName: 'V2Ray Service',
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const data = res.json();
+      expect(data.success).toBe(true);
+      expect(data.panel.name).toBe('New Node Panel');
+      expect(mockPanelRegistry.createPanel).toHaveBeenCalled();
+    });
+
+    it('rejects panel with invalid URL', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+        payload: {
+          name: 'Invalid URL Panel',
+          baseUrl: 'ftp://not-allowed.com',
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBeDefined();
+    });
+  });
+
+  describe('PATCH /api/admin/panels/:id', () => {
+    it('updates panel details successfully', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/admin/panels/panel_1',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+        payload: {
+          name: 'Updated Panel Name',
+          baseUrl: 'https://updated-panel.example.com',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(mockPanelRegistry.updatePanel).toHaveBeenCalledWith('panel_1', {
+        name: 'Updated Panel Name',
+        baseUrl: 'https://updated-panel.example.com',
+      });
+    });
+  });
+
+  describe('POST /api/admin/panels/:id/toggle', () => {
+    it('toggles panel enabled state', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels/panel_2/toggle',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+        payload: { enabled: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true, enabled: false });
+      expect(mockPanelRegistry.setPanelEnabled).toHaveBeenCalledWith('panel_2', false);
+    });
+  });
+
+  describe('POST /api/admin/panels/:id/default', () => {
+    it('sets default panel', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels/panel_2/default',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(mockPanelRegistry.setDefaultPanel).toHaveBeenCalledWith('panel_2');
+    });
+  });
+
+  describe('DELETE /api/admin/panels/:id', () => {
+    it('deletes panel when allowed', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/admin/panels/panel_2',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(mockPanelRegistry.deletePanel).toHaveBeenCalledWith('panel_2');
     });
   });
 
@@ -715,6 +899,92 @@ describe('WebApp Server & Admin Routes', () => {
       expect(data.success).toBe(true);
       expect(data.healthy).toBe(true);
       expect(typeof data.latencyMs).toBe('number');
+    });
+  });
+
+  describe('POST /api/admin/panels/test-all', () => {
+    it('tests all panels in fleet', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels/test-all',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const data = res.json();
+      expect(data.success).toBe(true);
+      expect(data.results.panel_1.healthy).toBe(true);
+      expect(data.results.panel_2.healthy).toBe(true);
+    });
+  });
+
+  describe('POST /api/admin/panels/:id/services', () => {
+    it('adds a new service to panel', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels/panel_1/services',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+        payload: {
+          serviceId: 3,
+          name: 'Trojan Service',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(mockPanelRegistry.addService).toHaveBeenCalledWith('panel_1', 3, 'Trojan Service');
+    });
+  });
+
+  describe('POST /api/admin/panels/:id/services/:serviceId/default', () => {
+    it('sets default service for panel', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels/panel_1/services/2/default',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(mockPanelRegistry.setDefaultService).toHaveBeenCalledWith('panel_1', 2);
+    });
+  });
+
+  describe('POST /api/admin/panels/:id/services/:serviceId/custom-target', () => {
+    it('sets custom volume target service', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels/panel_1/services/1/custom-target',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(mockPanelRegistry.resolveTarget).toHaveBeenCalledWith('panel_1', 1);
+    });
+  });
+
+  describe('DELETE /api/admin/panels/:id/services/:serviceId', () => {
+    it('deletes panel service', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/admin/panels/panel_1/services/2',
+        headers: {
+          authorization: `Bearer ${getAdminToken()}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(mockPanelRegistry.deleteService).toHaveBeenCalledWith('panel_1', 2);
     });
   });
 

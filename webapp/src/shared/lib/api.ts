@@ -9,6 +9,12 @@ import type {
   AdjustBalanceResponse,
   PanelsResponse,
   TestPanelResponse,
+  CreatePanelPayload,
+  CreatePanelResponse,
+  UpdatePanelPayload,
+  TogglePanelResponse,
+  AddPanelServicePayload,
+  TestAllPanelsResponse,
   SupportedLocale,
   ApiErrorResponse,
   BanUserPayload,
@@ -182,8 +188,74 @@ export const api = {
 
   getAdminPanels: (): Promise<PanelsResponse> => request<PanelsResponse>('/api/admin/panels'),
 
+  createAdminPanel: (payload: CreatePanelPayload): Promise<CreatePanelResponse> =>
+    request<CreatePanelResponse>('/api/admin/panels', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateAdminPanel: (panelId: string, payload: UpdatePanelPayload): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/api/admin/panels/${panelId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  toggleAdminPanel: (panelId: string, enabled: boolean): Promise<TogglePanelResponse> =>
+    request<TogglePanelResponse>(`/api/admin/panels/${panelId}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+
+  setDefaultAdminPanel: (panelId: string): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/api/admin/panels/${panelId}/default`, {
+      method: 'POST',
+    }),
+
+  deleteAdminPanel: (panelId: string): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/api/admin/panels/${panelId}`, {
+      method: 'DELETE',
+    }),
+
   testAdminPanel: (panelId: string): Promise<TestPanelResponse> =>
     request<TestPanelResponse>(`/api/admin/panels/${panelId}/test`, {
       method: 'POST',
+    }),
+
+  testAllAdminPanels: (): Promise<TestAllPanelsResponse> =>
+    request<TestAllPanelsResponse>('/api/admin/panels/test-all', {
+      method: 'POST',
+    }),
+
+  addAdminPanelService: (
+    panelId: string,
+    payload: AddPanelServicePayload
+  ): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/api/admin/panels/${panelId}/services`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  setDefaultAdminPanelService: (
+    panelId: string,
+    serviceId: number
+  ): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/api/admin/panels/${panelId}/services/${serviceId}/default`, {
+      method: 'POST',
+    }),
+
+  setCustomTargetAdminPanelService: (
+    panelId: string,
+    serviceId: number
+  ): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(
+      `/api/admin/panels/${panelId}/services/${serviceId}/custom-target`,
+      {
+        method: 'POST',
+      }
+    ),
+
+  deleteAdminPanelService: (panelId: string, serviceId: number): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/api/admin/panels/${panelId}/services/${serviceId}`, {
+      method: 'DELETE',
     }),
 };

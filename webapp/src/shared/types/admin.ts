@@ -107,6 +107,7 @@ export interface PanelServiceSummary {
   serviceId: number;
   name: string;
   isDefault: boolean;
+  isCustomTarget?: boolean;
 }
 
 export interface PanelSummary {
@@ -118,9 +119,20 @@ export interface PanelSummary {
   credentialConfigured: boolean;
   credentialMode: 'api_key' | 'password' | 'none';
   services: PanelServiceSummary[];
+  packagesCount?: number;
   activeConfigsCount?: number;
   healthy?: boolean;
   latencyMs?: number;
+}
+
+export interface FleetSummary {
+  totalPanels: number;
+  healthyPanels: number;
+  disabledPanels: number;
+  unhealthyPanels: number;
+  totalActiveConfigs: number;
+  totalServices: number;
+  allHealthy: boolean;
 }
 
 export type BalanceOperation = 'add' | 'deduct' | 'set';

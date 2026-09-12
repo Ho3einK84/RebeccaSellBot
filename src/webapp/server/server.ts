@@ -241,6 +241,7 @@ export async function createWebAppServer(
     walletService: services.walletService,
     userService: services.userService,
     configService: services.configService,
+    pricingService: services.pricingService,
     panelRegistry: services.panelRegistry,
     botToken: config.BOT_TOKEN,
     adminService: services.adminService,

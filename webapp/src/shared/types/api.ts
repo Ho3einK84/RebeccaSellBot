@@ -10,6 +10,7 @@ import type {
   UserConfigItem,
   UserTransactionItem,
   PanelSummary,
+  FleetSummary,
   BalanceOperation,
 } from './admin.js';
 
@@ -86,6 +87,41 @@ export interface AdjustBalanceResponse {
 
 export interface PanelsResponse {
   panels: PanelSummary[];
+  fleetSummary?: FleetSummary;
+}
+
+export interface CreatePanelPayload {
+  name: string;
+  baseUrl: string;
+  apiKey?: string;
+  serviceId?: number;
+  serviceName?: string;
+}
+
+export interface CreatePanelResponse {
+  success: boolean;
+  panel: PanelSummary;
+}
+
+export interface UpdatePanelPayload {
+  name?: string;
+  baseUrl?: string;
+  apiKey?: string;
+}
+
+export interface TogglePanelResponse {
+  success: boolean;
+  enabled: boolean;
+}
+
+export interface AddPanelServicePayload {
+  serviceId: number;
+  name: string;
+}
+
+export interface TestAllPanelsResponse {
+  success: boolean;
+  results: Record<string, { healthy: boolean; latencyMs?: number; error?: string }>;
 }
 
 export interface TestPanelResponse {
