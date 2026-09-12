@@ -7,6 +7,8 @@ import type {
   UserReportSummary,
   UserOrder,
   UserReceiptItem,
+  UserConfigItem,
+  UserTransactionItem,
   PanelSummary,
   BalanceOperation,
 } from './admin.js';
@@ -48,6 +50,28 @@ export interface UserDossierResponse {
   summary: UserReportSummary;
   orders: UserOrder[];
   receipts: UserReceiptItem[];
+  configs: UserConfigItem[];
+  transactions: UserTransactionItem[];
+}
+
+export interface BanUserPayload {
+  isBanned: boolean;
+  reason?: string;
+}
+
+export interface BanUserResponse {
+  success: boolean;
+  isBanned: boolean;
+}
+
+export interface ToggleConfigResponse {
+  success: boolean;
+  status: 'enabled' | 'disabled';
+}
+
+export interface RevokeSubUrlResponse {
+  success: boolean;
+  subUrl?: string;
 }
 
 export interface AdjustBalancePayload {

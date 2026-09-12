@@ -11,7 +11,12 @@ import type {
   TestPanelResponse,
   SupportedLocale,
   ApiErrorResponse,
+  BanUserPayload,
+  BanUserResponse,
+  ToggleConfigResponse,
+  RevokeSubUrlResponse,
 } from '@/shared/types/api.js';
+import type { UserFilterType, UserSortType } from '@/shared/types/admin.js';
 
 class ApiClientError extends Error {
   status: number;
@@ -87,17 +92,22 @@ export const api = {
     }),
 
   getAdminUsers: (
-    params: { page?: number; limit?: number; search?: string } = {}
+    params: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      filter?: UserFilterType;
+      sort?: UserSortType;
+    } = {}
   ): Promise<UsersResponse> => {
-    const search = params.search?.trim();
-    const page = params.page ?? 1;
-    const limit = params.limit ?? 12;
-    if (search) {
-      return request<UsersResponse>(
-        `/api/admin/users?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`
-      );
-    }
-    return request<UsersResponse>(`/api/admin/users?page=${page}&limit=${limit}`);
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set('page', String(params.page));
+    if (params.limit) searchParams.set('limit', String(params.limit));
+    if (params.search?.trim()) searchParams.set('search', params.search.trim());
+    if (params.filter && params.filter !== 'all') searchParams.set('filter', params.filter);
+    if (params.sort && params.sort !== 'newest') searchParams.set('sort', params.sort);
+    const qs = searchParams.toString();
+    return request<UsersResponse>(`/api/admin/users${qs ? `?${qs}` : ''}`);
   },
 
   getAdminUserDossier: (telegramId: number): Promise<UserDossierResponse> =>
@@ -111,6 +121,64 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  banUser: (telegramId: number, payload: BanUserPayload): Promise<BanUserResponse> =>
+    request<BanUserResponse>(`/api/admin/users/${telegramId}/ban`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  toggleUserConfig: (
+    telegramId: number,
+    configUsername: string,
+    panelId?: string
+  ): Promise<ToggleConfigResponse> =>
+    request<ToggleConfigResponse>(
+      `/api/admin/users/${telegramId}/configs/${encodeURIComponent(configUsername)}/toggle`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ panelId }),
+      }
+    ),
+
+  resetUserConfigUsage: (
+    telegramId: number,
+    configUsername: string,
+    panelId?: string
+  ): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(
+      `/api/admin/users/${telegramId}/configs/${encodeURIComponent(configUsername)}/reset-usage`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ panelId }),
+      }
+    ),
+
+  revokeUserConfigSubUrl: (
+    telegramId: number,
+    configUsername: string,
+    panelId?: string
+  ): Promise<RevokeSubUrlResponse> =>
+    request<RevokeSubUrlResponse>(
+      `/api/admin/users/${telegramId}/configs/${encodeURIComponent(configUsername)}/revoke`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ panelId }),
+      }
+    ),
+
+  syncUserConfig: (
+    telegramId: number,
+    configUsername: string,
+    panelId?: string
+  ): Promise<{ success: boolean; detail?: unknown }> =>
+    request<{ success: boolean; detail?: unknown }>(
+      `/api/admin/users/${telegramId}/configs/${encodeURIComponent(configUsername)}/sync`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ panelId }),
+      }
+    ),
 
   getAdminPanels: (): Promise<PanelsResponse> => request<PanelsResponse>('/api/admin/panels'),
 

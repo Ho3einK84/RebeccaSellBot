@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { adminGuardWithCheck } from '../middleware/adminGuard.js';
 import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
+import type { ConfigService } from '../../../domain/services/ConfigService.js';
 import type { RebeccaPanelRegistry } from '../../../domain/services/RebeccaPanelRegistry.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { AdminBalanceOperation } from '../../../domain/services/WalletContracts.js';
@@ -23,6 +24,7 @@ export function registerAdminRoutes(
   services: {
     walletService: WalletService;
     userService: UserService;
+    configService?: ConfigService;
     panelRegistry: RebeccaPanelRegistry;
     botToken?: string;
     adminService?: Pick<AdminService, 'isAdmin'>;
@@ -145,13 +147,33 @@ export function registerAdminRoutes(
 
     // GET /api/admin/users
     adminScope.get<{
-      Querystring: { search?: string; page?: string; limit?: string };
+      Querystring: {
+        search?: string;
+        page?: string;
+        limit?: string;
+        filter?: 'all' | 'active_subs' | 'has_balance' | 'banned';
+        sort?: 'newest' | 'balance_desc' | 'subs_desc' | 'spend_desc';
+      };
     }>('/api/admin/users', async (request, reply) => {
-      const { search, page, limit } = request.query;
+      const { search, page, limit, filter, sort } = request.query;
 
       if (search?.trim()) {
         const limit = clampPositiveInt(request.query.limit, 10, 50);
-        const users = await services.userService.searchProfiles(search.trim(), limit);
+        let users = await services.userService.searchProfiles(search.trim(), limit);
+        if (filter === 'active_subs') {
+          users = users.filter((u) => u.activeSubscriptionCount > 0);
+        } else if (filter === 'has_balance') {
+          users = users.filter((u) => u.balance > 0);
+        } else if (filter === 'banned') {
+          users = users.filter((u) => u.isBanned);
+        }
+        if (sort === 'balance_desc') {
+          users.sort((a, b) => b.balance - a.balance);
+        } else if (sort === 'subs_desc') {
+          users.sort((a, b) => b.activeSubscriptionCount - a.activeSubscriptionCount);
+        } else if (sort === 'spend_desc') {
+          users.sort((a, b) => b.totalSpend - a.totalSpend);
+        }
         return reply.code(200).send({
           users,
           total: users.length,
@@ -162,7 +184,10 @@ export function registerAdminRoutes(
 
       const parsedPage = clampPositiveInt(page, 1, 1_000_000);
       const parsedLimit = clampPositiveInt(limit, 10, 50);
-      const result = await services.userService.listUsers(parsedPage, parsedLimit);
+      const result = await services.userService.listUsers(parsedPage, parsedLimit, {
+        filter,
+        sort,
+      });
       return reply.code(200).send(result);
     });
 
@@ -180,16 +205,225 @@ export function registerAdminRoutes(
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const [ordersRes, receiptsRes] = await Promise.all([
+      const [ordersRes, receiptsRes, rawConfigs, txRes] = await Promise.all([
         services.userService.listOrdersForUser(telegramId, 1, 10),
         services.userService.listReceiptsForUser(telegramId, 1, 10),
+        services.configService
+          ? services.configService.listConfigsForOwner(telegramId).catch(() => [])
+          : Promise.resolve([]),
+        services.userService
+          .listTransactionsForUser(telegramId, 1, 15)
+          .catch(() => ({ transactions: [] })),
       ]);
+
+      const configs = rawConfigs.map((cfg) => {
+        const panel = services.panelRegistry.getPanel(cfg.panelId);
+        return {
+          id: cfg.id,
+          panelId: cfg.panelId,
+          panelName: panel?.name || cfg.panelId,
+          serviceId: cfg.serviceId,
+          configUsername: cfg.configUsername,
+          subUrl: cfg.subUrl,
+          panelStatus: cfg.panelStatus,
+          panelDataLimit: cfg.panelDataLimit,
+          panelUsedTraffic: cfg.panelUsedTraffic,
+          panelExpire: cfg.panelExpire,
+          autoRenewEnabled: cfg.autoRenewEnabled,
+          isClaimed: cfg.isClaimed,
+          createdAt: cfg.createdAt,
+        };
+      });
 
       return reply.code(200).send({
         summary,
         orders: ordersRes.orders,
         receipts: receiptsRes.receipts,
+        configs,
+        transactions: txRes.transactions,
       });
+    });
+
+    // POST /api/admin/users/:id/ban
+    adminScope.post<{
+      Params: { id: string };
+      Body: { isBanned: boolean; reason?: string };
+    }>(
+      '/api/admin/users/:id/ban',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            required: ['isBanned'],
+            properties: {
+              isBanned: { type: 'boolean' },
+              reason: { type: 'string' },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const telegramId = Number(request.params.id);
+        if (!Number.isSafeInteger(telegramId) || telegramId <= 0) {
+          return reply.code(400).send({ error: 'Invalid user ID' });
+        }
+
+        const { isBanned, reason } = request.body;
+        const adminId = request.userSession!.telegramId;
+
+        const updated = await services.userService.setBanned(telegramId, isBanned, adminId);
+        if (!updated) {
+          return reply.code(404).send({ error: 'User not found' });
+        }
+
+        if (reason?.trim()) {
+          await services.userService.recordAdminAction({
+            actorTelegramId: adminId,
+            action: isBanned ? 'admin_ban_user_with_reason' : 'admin_unban_user_with_reason',
+            entityType: 'telegram_user',
+            entityId: String(telegramId),
+            targetTelegramId: telegramId,
+            metadata: { reason: reason.trim() },
+          });
+        }
+
+        return reply.code(200).send({ success: true, isBanned });
+      }
+    );
+
+    // POST /api/admin/users/:id/configs/:configUsername/toggle
+    adminScope.post<{
+      Params: { id: string; configUsername: string };
+      Body: { panelId?: string };
+    }>('/api/admin/users/:id/configs/:configUsername/toggle', async (request, reply) => {
+      const telegramId = Number(request.params.id);
+      const { configUsername } = request.params;
+      const { panelId } = request.body || {};
+      if (!services.configService) {
+        return reply.code(501).send({ error: 'Config service not configured' });
+      }
+
+      const isOwner = await services.configService.isOwnedBy(telegramId, configUsername, panelId);
+      if (!isOwner) {
+        return reply.code(404).send({ error: 'Config not found or not owned by user' });
+      }
+
+      try {
+        const status = await services.configService.toggleConfig(configUsername, panelId);
+        const adminId = request.userSession!.telegramId;
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_toggle_user_config',
+          entityType: 'user_config',
+          entityId: configUsername,
+          targetTelegramId: telegramId,
+          metadata: { status, panelId },
+        });
+        return reply.code(200).send({ success: true, status });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to toggle config';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // POST /api/admin/users/:id/configs/:configUsername/reset-usage
+    adminScope.post<{
+      Params: { id: string; configUsername: string };
+      Body: { panelId?: string };
+    }>('/api/admin/users/:id/configs/:configUsername/reset-usage', async (request, reply) => {
+      const telegramId = Number(request.params.id);
+      const { configUsername } = request.params;
+      const { panelId } = request.body || {};
+      if (!services.configService) {
+        return reply.code(501).send({ error: 'Config service not configured' });
+      }
+
+      const isOwner = await services.configService.isOwnedBy(telegramId, configUsername, panelId);
+      if (!isOwner) {
+        return reply.code(404).send({ error: 'Config not found or not owned by user' });
+      }
+
+      try {
+        await services.configService.resetUsage(configUsername, panelId);
+        const adminId = request.userSession!.telegramId;
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_reset_user_config_usage',
+          entityType: 'user_config',
+          entityId: configUsername,
+          targetTelegramId: telegramId,
+          metadata: { panelId },
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to reset usage';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // POST /api/admin/users/:id/configs/:configUsername/revoke
+    adminScope.post<{
+      Params: { id: string; configUsername: string };
+      Body: { panelId?: string };
+    }>('/api/admin/users/:id/configs/:configUsername/revoke', async (request, reply) => {
+      const telegramId = Number(request.params.id);
+      const { configUsername } = request.params;
+      const { panelId } = request.body || {};
+      if (!services.configService) {
+        return reply.code(501).send({ error: 'Config service not configured' });
+      }
+
+      const isOwner = await services.configService.isOwnedBy(telegramId, configUsername, panelId);
+      if (!isOwner) {
+        return reply.code(404).send({ error: 'Config not found or not owned by user' });
+      }
+
+      try {
+        const newSubUrl = await services.configService.revokeSubscription(configUsername, panelId);
+        const adminId = request.userSession!.telegramId;
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_revoke_user_config_sub_url',
+          entityType: 'user_config',
+          entityId: configUsername,
+          targetTelegramId: telegramId,
+          metadata: { panelId, newSubUrl },
+        });
+        return reply.code(200).send({ success: true, subUrl: newSubUrl });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to revoke subscription';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // POST /api/admin/users/:id/configs/:configUsername/sync
+    adminScope.post<{
+      Params: { id: string; configUsername: string };
+      Body: { panelId?: string };
+    }>('/api/admin/users/:id/configs/:configUsername/sync', async (request, reply) => {
+      const telegramId = Number(request.params.id);
+      const { configUsername } = request.params;
+      const { panelId } = request.body || {};
+      if (!services.configService) {
+        return reply.code(501).send({ error: 'Config service not configured' });
+      }
+
+      const config = await services.configService.getOwnedConfigByUsername(
+        telegramId,
+        configUsername,
+        panelId
+      );
+      if (!config) {
+        return reply.code(404).send({ error: 'Config not found or not owned by user' });
+      }
+
+      try {
+        const detail = await services.configService.getRemoteConfigDetail(config);
+        return reply.code(200).send({ success: true, detail });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to sync config with panel';
+        return reply.code(400).send({ error: message });
+      }
     });
 
     // POST /api/admin/users/:id/balance

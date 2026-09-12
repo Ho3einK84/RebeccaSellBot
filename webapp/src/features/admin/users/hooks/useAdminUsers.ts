@@ -4,6 +4,7 @@ import { api } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import type { AdjustBalancePayload, UserDossierResponse } from '@/shared/types/api.js';
+import type { UserFilterType, UserSortType } from '@/shared/types/admin.js';
 
 export function useAdminUsers() {
   const queryClient = useQueryClient();
@@ -12,11 +13,13 @@ export function useAdminUsers() {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
+  const [filter, setFilter] = useState<UserFilterType>('all');
+  const [sort, setSort] = useState<UserSortType>('newest');
   const [inspectingId, setInspectingId] = useState<number | null>(null);
 
   const usersQuery = useQuery({
-    queryKey: queryKeys.users(page, activeSearch),
-    queryFn: () => api.getAdminUsers({ page, limit: 12, search: activeSearch }),
+    queryKey: queryKeys.users(page, activeSearch, filter, sort),
+    queryFn: () => api.getAdminUsers({ page, limit: 12, search: activeSearch, filter, sort }),
   });
 
   const dossierQuery = useQuery({
@@ -40,6 +43,113 @@ export function useAdminUsers() {
     },
   });
 
+  const banUserMutation = useMutation({
+    mutationFn: ({
+      telegramId,
+      isBanned,
+      reason,
+    }: {
+      telegramId: number;
+      isBanned: boolean;
+      reason?: string;
+    }) => api.banUser(telegramId, { isBanned, reason }),
+    onSuccess: (_data, variables) => {
+      triggerHaptic('success');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.userDossier(variables.telegramId),
+      });
+    },
+    onError: () => {
+      triggerHaptic('error');
+    },
+  });
+
+  const toggleConfigMutation = useMutation({
+    mutationFn: ({
+      telegramId,
+      configUsername,
+      panelId,
+    }: {
+      telegramId: number;
+      configUsername: string;
+      panelId?: string;
+    }) => api.toggleUserConfig(telegramId, configUsername, panelId),
+    onSuccess: (_data, variables) => {
+      triggerHaptic('success');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.userDossier(variables.telegramId),
+      });
+    },
+    onError: () => {
+      triggerHaptic('error');
+    },
+  });
+
+  const resetUsageMutation = useMutation({
+    mutationFn: ({
+      telegramId,
+      configUsername,
+      panelId,
+    }: {
+      telegramId: number;
+      configUsername: string;
+      panelId?: string;
+    }) => api.resetUserConfigUsage(telegramId, configUsername, panelId),
+    onSuccess: (_data, variables) => {
+      triggerHaptic('success');
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.userDossier(variables.telegramId),
+      });
+    },
+    onError: () => {
+      triggerHaptic('error');
+    },
+  });
+
+  const revokeSubUrlMutation = useMutation({
+    mutationFn: ({
+      telegramId,
+      configUsername,
+      panelId,
+    }: {
+      telegramId: number;
+      configUsername: string;
+      panelId?: string;
+    }) => api.revokeUserConfigSubUrl(telegramId, configUsername, panelId),
+    onSuccess: (_data, variables) => {
+      triggerHaptic('success');
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.userDossier(variables.telegramId),
+      });
+    },
+    onError: () => {
+      triggerHaptic('error');
+    },
+  });
+
+  const syncConfigMutation = useMutation({
+    mutationFn: ({
+      telegramId,
+      configUsername,
+      panelId,
+    }: {
+      telegramId: number;
+      configUsername: string;
+      panelId?: string;
+    }) => api.syncUserConfig(telegramId, configUsername, panelId),
+    onSuccess: (_data, variables) => {
+      triggerHaptic('success');
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.userDossier(variables.telegramId),
+      });
+    },
+    onError: () => {
+      triggerHaptic('error');
+    },
+  });
+
   const handleSearch = useCallback(
     (query?: string) => {
       const q = query !== undefined ? query : searchQuery;
@@ -52,6 +162,16 @@ export function useAdminUsers() {
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
     setActiveSearch('');
+    setPage(1);
+  }, []);
+
+  const handleFilterChange = useCallback((newFilter: UserFilterType) => {
+    setFilter(newFilter);
+    setPage(1);
+  }, []);
+
+  const handleSortChange = useCallback((newSort: UserSortType) => {
+    setSort(newSort);
     setPage(1);
   }, []);
 
@@ -78,6 +198,10 @@ export function useAdminUsers() {
     setPage,
     searchQuery,
     setSearchQuery,
+    filter,
+    setFilter: handleFilterChange,
+    sort,
+    setSort: handleSortChange,
     handleSearch,
     handleClearSearch,
     inspectingId,
@@ -87,5 +211,15 @@ export function useAdminUsers() {
     isInspecting: dossierQuery.isLoading || dossierQuery.isFetching,
     adjustBalanceMutation,
     isAdjustingBalance: adjustBalanceMutation.isPending,
+    banUserMutation,
+    isBanningUser: banUserMutation.isPending,
+    toggleConfigMutation,
+    isTogglingConfig: toggleConfigMutation.isPending,
+    resetUsageMutation,
+    isResettingUsage: resetUsageMutation.isPending,
+    revokeSubUrlMutation,
+    isRevokingSubUrl: revokeSubUrlMutation.isPending,
+    syncConfigMutation,
+    isSyncingConfig: syncConfigMutation.isPending,
   };
 }

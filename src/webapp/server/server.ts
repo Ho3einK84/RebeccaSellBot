@@ -112,6 +112,7 @@ export async function createWebAppServer(
   registerAdminRoutes(app, {
     walletService: services.walletService,
     userService: services.userService,
+    configService: services.configService,
     panelRegistry: services.panelRegistry,
     botToken: config.BOT_TOKEN,
     adminService: services.adminService,

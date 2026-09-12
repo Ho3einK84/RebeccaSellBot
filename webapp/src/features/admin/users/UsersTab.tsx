@@ -40,6 +40,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     setPage,
     searchQuery,
     setSearchQuery,
+    filter,
+    setFilter,
+    sort,
+    setSort,
     handleSearch,
     handleClearSearch,
     inspectingId,
@@ -49,6 +53,11 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     isInspecting,
     adjustBalanceMutation,
     isAdjustingBalance,
+    banUserMutation,
+    toggleConfigMutation,
+    resetUsageMutation,
+    revokeSubUrlMutation,
+    syncConfigMutation,
   } = useAdminUsers();
 
   // If parent passed an external inspected user ID (e.g. from receipts tab), inspect it
@@ -83,6 +92,71 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     }
   };
 
+  const handleBanUser = async (telegramId: number, isBanned: boolean, reason?: string) => {
+    try {
+      await banUserMutation.mutateAsync({ telegramId, isBanned, reason });
+      onNotify(t('admin.users.banSuccess'), 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.banFailed');
+      onNotify(msg, 'error');
+    }
+  };
+
+  const handleToggleConfig = async (
+    telegramId: number,
+    configUsername: string,
+    panelId?: string
+  ) => {
+    try {
+      const res = await toggleConfigMutation.mutateAsync({ telegramId, configUsername, panelId });
+      onNotify(
+        res.status === 'enabled' ? t('admin.users.statusActive') : t('admin.users.statusDisabled'),
+        'success'
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
+      onNotify(msg, 'error');
+    }
+  };
+
+  const handleResetConfigUsage = async (
+    telegramId: number,
+    configUsername: string,
+    panelId?: string
+  ) => {
+    try {
+      await resetUsageMutation.mutateAsync({ telegramId, configUsername, panelId });
+      onNotify(t('admin.users.actionSuccess'), 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
+      onNotify(msg, 'error');
+    }
+  };
+
+  const handleRevokeConfigSubUrl = async (
+    telegramId: number,
+    configUsername: string,
+    panelId?: string
+  ) => {
+    try {
+      await revokeSubUrlMutation.mutateAsync({ telegramId, configUsername, panelId });
+      onNotify(t('admin.users.actionSuccess'), 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
+      onNotify(msg, 'error');
+    }
+  };
+
+  const handleSyncConfig = async (telegramId: number, configUsername: string, panelId?: string) => {
+    try {
+      await syncConfigMutation.mutateAsync({ telegramId, configUsername, panelId });
+      onNotify(t('admin.users.actionSuccess'), 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.actionFailed');
+      onNotify(msg, 'error');
+    }
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       <UserSearchBar
@@ -91,6 +165,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         onSearch={handleSearch}
         onClear={handleClearSearch}
         totalCount={totalCount}
+        filter={filter}
+        onFilterChange={setFilter}
+        sort={sort}
+        onSortChange={setSort}
       />
 
       {isLoading && <SkeletonList count={4} />}
@@ -146,6 +224,12 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         onClose={closeDossier}
         onOpenBalanceModal={setBalanceModalUser}
         onCopyId={copy}
+        isCopied={isCopied}
+        onBanUser={handleBanUser}
+        onToggleConfig={handleToggleConfig}
+        onResetConfigUsage={handleResetConfigUsage}
+        onRevokeConfigSubUrl={handleRevokeConfigSubUrl}
+        onSyncConfig={handleSyncConfig}
       />
 
       {/* Balance Adjustment Modal */}

@@ -4,6 +4,7 @@ import {
   formatMoney as formatMoneyUtil,
   formatNumber as formatNumberUtil,
   formatIsoDate as formatIsoDateUtil,
+  formatBytes as formatBytesUtil,
   getAvatarChar as getAvatarCharUtil,
   sanitizeDisplayName as sanitizeDisplayNameUtil,
   toPersianDigits as toPersianDigitsUtil,
@@ -23,6 +24,11 @@ export function useFormatters() {
     [locale]
   );
 
+  const formatBytes = useCallback(
+    (bytes?: number | null) => formatBytesUtil(bytes, locale),
+    [locale]
+  );
+
   const getAvatarChar = useCallback(
     (name?: string | null, username?: string | null) => getAvatarCharUtil(name, username),
     []
@@ -38,6 +44,7 @@ export function useFormatters() {
     formatMoney,
     formatNumber,
     formatIsoDate,
+    formatBytes,
     getAvatarChar,
     sanitizeDisplayName,
     toPersianDigits,

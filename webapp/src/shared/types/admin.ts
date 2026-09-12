@@ -36,8 +36,38 @@ export interface UserProfile {
   balance: number;
   totalSpend: number;
   activeSubscriptionCount: number;
+  isBanned?: boolean;
   createdAt: string;
 }
+
+export interface UserConfigItem {
+  id: string;
+  panelId: string;
+  panelName?: string;
+  serviceId: number;
+  configUsername: string;
+  subUrl: string | null;
+  panelStatus: string | null;
+  panelDataLimit: number | null;
+  panelUsedTraffic: number | null;
+  panelExpire: number | null;
+  autoRenewEnabled: boolean;
+  isClaimed: boolean;
+  createdAt: string;
+}
+
+export interface UserTransactionItem {
+  id: string;
+  amount: number;
+  balanceAfter: number;
+  type: string;
+  description: string;
+  referenceId?: string | null;
+  createdAt: string;
+}
+
+export type UserFilterType = 'all' | 'active_subs' | 'has_balance' | 'banned';
+export type UserSortType = 'newest' | 'balance_desc' | 'subs_desc' | 'spend_desc';
 
 export interface UserReportSummary {
   user: UserProfile;

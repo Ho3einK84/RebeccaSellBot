@@ -38,8 +38,15 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <Avatar name={user.firstName} username={user.username} size="md" />
           <div className="min-w-0 flex-1">
-            <div className={`font-bold text-sm tracking-tight truncate ${textPrimary}`}>
-              {displayName}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className={`font-bold text-sm tracking-tight truncate ${textPrimary}`}>
+                {displayName}
+              </span>
+              {user.isBanned && (
+                <Badge variant="error" className="text-[10px] shrink-0">
+                  {t('admin.users.bannedBadge')}
+                </Badge>
+              )}
             </div>
             <div className="text-xs font-mono mt-0.5">
               {user.username ? (

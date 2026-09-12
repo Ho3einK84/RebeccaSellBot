@@ -91,3 +91,16 @@ export function formatIsoDate(isoString?: string | null, locale: string = 'fa'):
     return isoString;
   }
 }
+
+export function formatBytes(bytes?: number | null, locale: string = 'fa'): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return '-';
+  if (bytes === 0) return locale === 'fa' ? '۰ بایت' : '0 B';
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) {
+    const formatted = gb.toFixed(1).replace(/\.0$/, '');
+    return locale === 'fa' ? `${toPersianDigits(formatted)} گیگابایت` : `${formatted} GB`;
+  }
+  const mb = bytes / (1024 * 1024);
+  const formatted = mb.toFixed(0);
+  return locale === 'fa' ? `${toPersianDigits(formatted)} مگابایت` : `${formatted} MB`;
+}

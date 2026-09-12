@@ -119,6 +119,13 @@ describe('WebApp Server & Admin Routes', () => {
     }),
     listOrdersForUser: vi.fn(async () => ({ orders: [], total: 0, totalPages: 1, page: 1 })),
     listReceiptsForUser: vi.fn(async () => ({ receipts: [], total: 0, totalPages: 1, page: 1 })),
+    listTransactionsForUser: vi.fn(async () => ({
+      transactions: [],
+      total: 0,
+      totalPages: 1,
+      page: 1,
+    })),
+    setBanned: vi.fn(async () => true),
     recordAdminAction: vi.fn(async () => {}),
     getLocale: vi.fn(async (telegramId: number) => (telegramId === 55555 ? 'en' : undefined)),
     updateLocale: vi.fn(async () => {}),
@@ -135,6 +142,7 @@ describe('WebApp Server & Admin Routes', () => {
 
   const mockPanelRegistry = {
     healthSummary: vi.fn(async () => ({ configured: 2, healthy: 2 })),
+    getPanel: vi.fn((id: string) => ({ id, name: id === 'panel_1' ? 'Main Germany Panel' : id })),
     listPanels: vi.fn(() => [
       {
         id: 'panel_1',
@@ -149,6 +157,41 @@ describe('WebApp Server & Admin Routes', () => {
     ]),
     getPanelUsage: vi.fn(async () => ({ activeConfigsCount: 5 })),
     getService: vi.fn(() => ({ checkHealth: vi.fn(async () => true) })),
+  };
+
+  const mockConfigService = {
+    listConfigsForOwner: vi.fn(async () => [
+      {
+        id: 'uc_101',
+        panelId: 'panel_1',
+        serviceId: 1,
+        configUsername: 'cfg_test',
+        subUrl: 'https://sub.example.com/token',
+        panelStatus: 'active',
+        panelDataLimit: 50 * 1024 * 1024 * 1024,
+        panelUsedTraffic: 10 * 1024 * 1024 * 1024,
+        panelExpire: Math.floor(Date.now() / 1000) + 86400 * 30,
+        autoRenewEnabled: false,
+        isClaimed: true,
+        createdAt: new Date(),
+      },
+    ]),
+    isOwnedBy: vi.fn(async () => true),
+    toggleConfig: vi.fn(async () => 'disabled'),
+    resetUsage: vi.fn(async () => {}),
+    revokeSubscription: vi.fn(async () => 'https://sub.example.com/new-token'),
+    getOwnedConfigByUsername: vi.fn(async () => ({
+      id: 'uc_101',
+      panelId: 'panel_1',
+      configUsername: 'cfg_test',
+    })),
+    getRemoteConfigDetail: vi.fn(async () => ({
+      username: 'cfg_test',
+      status: 'active',
+      data_limit: 50 * 1024 * 1024 * 1024,
+      used_traffic: 10 * 1024 * 1024 * 1024,
+      expire: Math.floor(Date.now() / 1000) + 86400 * 30,
+    })),
   };
 
   const mockConfig = {
@@ -176,6 +219,7 @@ describe('WebApp Server & Admin Routes', () => {
     adminService: mockAdminService,
     walletService: mockWalletService,
     userService: mockUserService,
+    configService: mockConfigService,
     translationService: mockTranslationService,
     panelRegistry: mockPanelRegistry,
   } as unknown as BotServices;
@@ -372,6 +416,93 @@ describe('WebApp Server & Admin Routes', () => {
         description: 'Compensation bonus',
       });
       expect(mockUserService.recordAdminAction).toHaveBeenCalled();
+    });
+
+    it('GET /api/admin/users/:id returns configs and transactions', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/admin/users/55555',
+        cookies: { session: getAdminToken() },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(Array.isArray(data.configs)).toBe(true);
+      expect(data.configs.length).toBe(1);
+      expect(data.configs[0].configUsername).toBe('cfg_test');
+      expect(data.configs[0].panelName).toBe('Main Germany Panel');
+      expect(Array.isArray(data.transactions)).toBe(true);
+    });
+
+    it('POST /api/admin/users/:id/ban sets banned state and records audit', async () => {
+      const banRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users/55555/ban',
+        cookies: { session: getAdminToken() },
+        payload: { isBanned: true, reason: 'Abuse detected' },
+      });
+
+      expect(banRes.statusCode).toBe(200);
+      expect(banRes.json()).toEqual({ success: true, isBanned: true });
+      expect(mockUserService.setBanned).toHaveBeenCalledWith(55555, true, 12345);
+      expect(mockUserService.recordAdminAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'admin_ban_user_with_reason',
+          targetTelegramId: 55555,
+        })
+      );
+    });
+
+    it('POST /api/admin/users/:id/configs/:configUsername/toggle toggles config state', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users/55555/configs/cfg_test/toggle',
+        cookies: { session: getAdminToken() },
+        payload: { panelId: 'panel_1' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true, status: 'disabled' });
+      expect(mockConfigService.toggleConfig).toHaveBeenCalledWith('cfg_test', 'panel_1');
+    });
+
+    it('POST /api/admin/users/:id/configs/:configUsername/reset-usage resets traffic', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users/55555/configs/cfg_test/reset-usage',
+        cookies: { session: getAdminToken() },
+        payload: { panelId: 'panel_1' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true });
+      expect(mockConfigService.resetUsage).toHaveBeenCalledWith('cfg_test', 'panel_1');
+    });
+
+    it('POST /api/admin/users/:id/configs/:configUsername/revoke rotates sub url', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users/55555/configs/cfg_test/revoke',
+        cookies: { session: getAdminToken() },
+        payload: { panelId: 'panel_1' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ success: true, subUrl: 'https://sub.example.com/new-token' });
+      expect(mockConfigService.revokeSubscription).toHaveBeenCalledWith('cfg_test', 'panel_1');
+    });
+
+    it('POST /api/admin/users/:id/configs/:configUsername/sync gets live detail', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users/55555/configs/cfg_test/sync',
+        cookies: { session: getAdminToken() },
+        payload: { panelId: 'panel_1' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+      expect(res.json().detail.username).toBe('cfg_test');
     });
 
     it('GET /api/admin/panels returns panel registry list', async () => {

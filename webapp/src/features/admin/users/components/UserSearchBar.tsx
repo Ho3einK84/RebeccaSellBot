@@ -1,8 +1,9 @@
 import React from 'react';
-import { Search, X, Users } from 'lucide-react';
+import { Search, X, Users, Filter, ArrowUpDown } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import type { UserFilterType, UserSortType } from '@/shared/types/admin.js';
 
 interface UserSearchBarProps {
   searchQuery: string;
@@ -10,6 +11,10 @@ interface UserSearchBarProps {
   onSearch: (value?: string) => void;
   onClear: () => void;
   totalCount: number;
+  filter?: UserFilterType;
+  onFilterChange?: (filter: UserFilterType) => void;
+  sort?: UserSortType;
+  onSortChange?: (sort: UserSortType) => void;
 }
 
 export const UserSearchBar: React.FC<UserSearchBarProps> = ({
@@ -18,13 +23,32 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
   onSearch,
   onClear,
   totalCount,
+  filter = 'all',
+  onFilterChange,
+  sort = 'newest',
+  onSortChange,
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
   const { isDark, inputClass, textPrimary, textMuted } = useThemeTokens();
 
+  const filterOptions: Array<{ id: UserFilterType; label: string }> = [
+    { id: 'all', label: t('admin.users.filterAll') },
+    { id: 'active_subs', label: t('admin.users.filterActiveSubs') },
+    { id: 'has_balance', label: t('admin.users.filterHasBalance') },
+    { id: 'banned', label: t('admin.users.filterBanned') },
+  ];
+
+  const sortOptions: Array<{ id: UserSortType; label: string }> = [
+    { id: 'newest', label: t('admin.users.sortNewest') },
+    { id: 'balance_desc', label: t('admin.users.sortBalanceDesc') },
+    { id: 'subs_desc', label: t('admin.users.sortSubsDesc') },
+    { id: 'spend_desc', label: t('admin.users.sortSpendDesc') },
+  ];
+
   return (
     <div className="space-y-3">
+      {/* Top Header */}
       <div className="flex flex-row justify-between items-center gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div
@@ -51,6 +75,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
         </span>
       </div>
 
+      {/* Search Input and Button */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className={`w-4 h-4 absolute start-3.5 top-3 pointer-events-none ${textMuted}`} />
@@ -87,6 +112,55 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
           <Search className="w-3.5 h-3.5" />
           <span>{t('admin.users.searchBtn')}</span>
         </button>
+      </div>
+
+      {/* Filters and Sort Row */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-0.5">
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          <Filter className={`w-3.5 h-3.5 shrink-0 me-0.5 ${textMuted}`} />
+          {filterOptions.map((opt) => {
+            const isSelected = filter === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => onFilterChange?.(opt.id)}
+                className={`h-7 px-2.5 rounded-lg text-xs font-medium shrink-0 transition-all select-none cursor-pointer border ${
+                  isSelected
+                    ? isDark
+                      ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 font-semibold shadow-xs'
+                      : 'bg-indigo-50 border-indigo-300 text-indigo-700 font-semibold shadow-xs'
+                    : isDark
+                      ? 'bg-white/[0.03] border-white/[0.06] text-zinc-400 hover:text-zinc-200'
+                      : 'bg-slate-100/70 border-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sort Selector */}
+        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+          <ArrowUpDown className={`w-3.5 h-3.5 ${textMuted}`} />
+          <select
+            value={sort}
+            onChange={(e) => onSortChange?.(e.target.value as UserSortType)}
+            className={`h-7 px-2 text-xs font-medium rounded-lg border outline-none transition-colors cursor-pointer ${
+              isDark
+                ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+                : 'bg-white border-slate-200 text-slate-700 shadow-xs'
+            }`}
+          >
+            {sortOptions.map((s) => (
+              <option key={s.id} value={s.id} className={isDark ? 'bg-zinc-900 text-white' : ''}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );

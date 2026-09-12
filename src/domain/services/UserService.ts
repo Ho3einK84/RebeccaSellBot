@@ -654,9 +654,41 @@ export class UserService {
     return recipients.map((user) => user.telegramId);
   }
 
+  async listTransactionsForUser(
+    telegramId: number,
+    page = 1,
+    pageSize = 15
+  ): Promise<{
+    transactions: Array<typeof walletTransactions.$inferSelect>;
+    total: number;
+    totalPages: number;
+    page: number;
+  }> {
+    const db = getDb();
+    const [countRes] = await db
+      .select({ count: count() })
+      .from(walletTransactions)
+      .where(eq(walletTransactions.telegramId, telegramId));
+    const total = Number(countRes?.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const rows = await db
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.telegramId, telegramId))
+      .orderBy(desc(walletTransactions.createdAt))
+      .limit(pageSize)
+      .offset((safePage - 1) * pageSize);
+    return { transactions: rows, total, totalPages, page: safePage };
+  }
+
   async listUsers(
     page = 1,
-    limit = 6
+    limit = 6,
+    options?: {
+      filter?: 'all' | 'active_subs' | 'has_balance' | 'banned';
+      sort?: 'newest' | 'balance_desc' | 'subs_desc' | 'spend_desc';
+    }
   ): Promise<{
     users: Array<typeof users.$inferSelect>;
     total: number;
@@ -670,14 +702,36 @@ export class UserService {
     const safePage = Math.max(1, Math.trunc(page) || 1);
     const offset = (safePage - 1) * safeLimit;
 
+    let whereClause = undefined;
+    if (options?.filter === 'active_subs') {
+      whereClause = sql`${users.activeSubscriptionCount} > 0`;
+    } else if (options?.filter === 'has_balance') {
+      whereClause = sql`${users.balance} > 0`;
+    } else if (options?.filter === 'banned') {
+      whereClause = eq(users.isBanned, true);
+    }
+
+    let orderClause = desc(users.createdAt);
+    if (options?.sort === 'balance_desc') {
+      orderClause = desc(users.balance);
+    } else if (options?.sort === 'subs_desc') {
+      orderClause = desc(users.activeSubscriptionCount);
+    } else if (options?.sort === 'spend_desc') {
+      orderClause = desc(users.totalSpend);
+    }
+
+    const countQuery = db.select({ count: count() }).from(users);
+    const itemsQuery = db.select().from(users).orderBy(orderClause).limit(safeLimit).offset(offset);
+
     const [[totalRow], items] = await Promise.all([
-      db.select({ count: count() }).from(users),
-      db.select().from(users).orderBy(desc(users.createdAt)).limit(safeLimit).offset(offset),
+      whereClause ? countQuery.where(whereClause) : countQuery,
+      whereClause ? itemsQuery.where(whereClause) : itemsQuery,
     ]);
 
     const total = totalRow?.count ?? 0;
     const totalPages = Math.max(1, Math.ceil(total / safeLimit));
-    if (safePage > totalPages) return this.listUsers(totalPages, safeLimit);
+    if (safePage > totalPages && totalPages > 0)
+      return this.listUsers(totalPages, safeLimit, options);
 
     return {
       users: items,
