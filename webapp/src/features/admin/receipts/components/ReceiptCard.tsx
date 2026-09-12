@@ -45,7 +45,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatIsoDate, sanitizeDisplayName } = useFormatters();
-  const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { isDark, subCardClass, textPrimary, textMuted } = useThemeTokens();
   const { copy, isCopied } = useCopy();
 
   const isPending = receipt.status === 'pending';
@@ -217,15 +217,6 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             <span>{formatIsoDate(receipt.createdAt)}</span>
           </div>
         </div>
-
-        {receipt.user?.balance !== undefined && (
-          <div className="flex items-center gap-1 ms-auto">
-            <span>{t('admin.receipts.userBalance')}:</span>
-            <span className={`font-mono font-medium ${textSecondary}`}>
-              {formatMoney(receipt.user.balance)} {t('common.currency')}
-            </span>
-          </div>
-        )}
       </div>
 
       {receipt.reviewedBy && (
