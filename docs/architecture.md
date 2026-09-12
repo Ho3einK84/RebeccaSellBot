@@ -8,14 +8,20 @@ RebeccaSellBot is an enterprise-grade, multi-panel Telegram commerce and subscri
 
 ```mermaid
 flowchart TD
-    subgraph Telegram["Telegram Cloud"]
-        User["📱 Telegram User"]
-        Admin["🛡️ Administrator"]
+    subgraph Clients["Client Access Layer"]
+        User["📱 Telegram User (Chat)"]
+        Admin["🛡️ Administrator (Chat)"]
+        WebAppUser["🌐 Mini App Client (Webview)"]
     end
 
-    subgraph RSBot["RebeccaSellBot Subsystem"]
-        subgraph Delivery["Delivery Layer (grammY)"]
-            BotRuntime["botRuntime.ts\n(Long Polling & Webhook)"]
+    subgraph Ingress["Ingress & Delivery"]
+        Caddy["Caddy Reverse Proxy\n(On-Demand TLS via /api/caddy-check)"]
+        BotRuntime["botRuntime.ts\n(Long Polling or Webhook)"]
+        FastifyServer["Fastify 5 Server\n(Mini App & Mesh Ingress)"]
+    end
+
+    subgraph RSBot["RebeccaSellBot Core Subsystem"]
+        subgraph TelegramSubsystem["Telegram Delivery Layer"]
             UIEngine["UI Engine & Screen Manager\n(AsyncLocalStorage)"]
             Router["Feature Routes & Conversations"]
         end
@@ -23,19 +29,21 @@ flowchart TD
         subgraph Domain["Domain Layer (Business Logic & Sagas)"]
             PurchaseSaga["WalletPurchaseSaga\n(3-Phase Commit)"]
             WalletSvc["WalletService\n(Minor-Unit Integers)"]
-            ConfigSvc["ConfigService & Reconciliation"]
-            PanelRegistry["RebeccaPanelRegistry\n(AES-256-GCM)"]
+            ConfigSvc["ConfigService & Counters"]
+            PanelRegistry["RebeccaPanelRegistry\n(AES-256-GCM Vault)"]
             GrowthEngine["Growth: LuckyWheel / Promo / Referral"]
             AdminSvc["AdminService & Broadcasts"]
+            MeshRegistry["DomainRegistryService\n(Multi-Instance Mesh)"]
         end
 
-        subgraph Workers["Background Workers (Cron)"]
+        subgraph Workers["Background Workers (Cron & Queues)"]
             WorkerRuntime["workerRuntime.ts"]
-            Reconciler["Config Reconciler"]
-            Notifier["Expiry & Quota Alerts"]
-            AutoRenew["Auto Renewal"]
-            BackupJob["Automated Backup"]
-            BroadcastJob["Throttled Broadcasts"]
+            Reconciler["Reconciler (Every 1m)"]
+            Notifier["Notifier (Hourly: 00)"]
+            AutoRenew["Auto Renewal (Hourly: 20)"]
+            TrialCleanup["Trial Cleanup (Daily 03:30)"]
+            BackupJob["Automated Backup (Every 10m)"]
+            BroadcastJob["Throttled Broadcast Worker (5s loop)"]
         end
 
         subgraph Infra["Infrastructure Layer"]
@@ -51,10 +59,12 @@ flowchart TD
         PN["Panel N (HTTPS REST)"]
     end
 
-    User <-->|TLS Polling / Webhook| BotRuntime
-    Admin <-->|TLS Polling / Webhook| BotRuntime
-    BotRuntime --> UIEngine --> Router
-    Router --> Domain
+    User <-->|Telegram MTProto| BotRuntime
+    Admin <-->|Telegram MTProto| BotRuntime
+    WebAppUser <-->|HTTPS| Caddy
+    Caddy --> FastifyServer
+    BotRuntime --> UIEngine --> Router --> Domain
+    FastifyServer --> Domain
     WorkerRuntime --> Workers --> Domain
     Domain --> Infra
     ApiClient <-->|Encrypted REST API| Panels
@@ -157,22 +167,87 @@ RebeccaSellBot can manage single or multiple independent Rebecca panels across d
 
 ---
 
-## 4. Telegram Delivery Layer & UI Engine
+## 4. Telegram Mini App & Multi-Instance Mesh Architecture
 
-Detailed delivery layer specifications are documented in [docs/telegram-architecture.md](telegram-architecture.md).
+RebeccaSellBot includes a modern Fastify 5 server and React 19 Telegram Mini App dashboard.
 
 ```text
-Incoming Update
-       │
-       ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 1. API Transformers (Throttler, Safe Formatting, Message Track) │
-│ 2. Security Middleware (Private Chat Gate, Admin Firewall, Ban) │
-│ 3. UI Cleaner Middleware (Clean previous screens, keep artifacts)│
-│ 4. Conversations Container (20+ Interactive Step Handlers)      │
-│ 5. Feature Handlers (Shop, Wallet, Subs, Admin Backoffice)      │
-└─────────────────────────────────────────────────────────────────┘
+               Public HTTPS Traffic (*.yourdomain.com)
+                                 │
+                                 ▼
+                    ┌────────────────────────┐
+                    │      Caddy Ingress     │
+                    │   (On-Demand TLS Ask)  │
+                    └───────────┬────────────┘
+                                │ ask http://main_bot:3002/api/caddy-check
+                                ▼
+                    ┌────────────────────────┐
+                    │   main_bot (Port 3002) │
+                    │  Shared Mesh Registry  │
+                    └───────────┬────────────┘
+                                │
+         ┌──────────────────────┼──────────────────────┐
+         ▼                      ▼                      ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│ Instance "main"  │  │ Instance "vip"   │  │ Instance "shop3" │
+│ Local Fastify    │  │ Proxy over mesh  │  │ Proxy over mesh  │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
+
+### Fastify WebApp Backend (`src/webapp/server/`)
+
+1. **Authentication & Security:**
+   - **Telegram Client Auth:** Validates the cryptographic HMAC-SHA256 signature of Telegram's `initData` against the `BOT_TOKEN`.
+   - **Admin Session:** Issues HTTP-only, secure JWT cookies signed with `ADMIN_SESSION_SECRET` (or a bot-token-derived fallback).
+   - **Rate Limiting & CORS:** Enforces 100 requests/minute per IP and restricts CORS origins to authorized frontend origins.
+
+2. **On-Demand TLS Verification (`/api/caddy-check`):**
+   - Responds to Caddy's `ask` endpoint (`GET /api/caddy-check?domain=<host>`).
+   - Dynamically authorizes SSL certificate issuance for any domain registered to this instance or peer instances in the shared registry.
+
+3. **Multi-Instance Mesh Dispatcher (`DomainRegistryService`):**
+   - Each instance records its public domain, target URL, and host port in a shared Docker volume (`rsbot_registry`, `/app/data/registry/`).
+   - When Caddy routes wildcard traffic to the primary container (`main_bot`), Fastify checks the incoming `Host` header.
+   - If the request targets a peer instance, it transparently streams the HTTP request to the peer over the internal `rsbot_mesh` Docker network, guarding against loops via `x-rsbot-proxy-hops`.
+
+### React 19 Frontend (`webapp/src/`)
+
+- Built with **React 19**, **Tailwind CSS v4**, **DaisyUI v5**, and **TanStack React Query**.
+- **User Portal:** Real-time quota gauges, expiry counters, QR codes, sub links, and balance history.
+- **Admin Dashboard:** Overview metrics, user CRM, receipt verification, panel fleet status, and service modules.
+
+---
+
+## 5. Background Workers & Job Scheduler
+
+Background automation is orchestrated by `src/jobs/workerRuntime.ts` using cron schedules and persistent locking:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        workerRuntime.ts                                │
+└───────┬──────────────┬──────────────┬──────────────┬─────────────┬─────┘
+        │              │              │              │             │
+        ▼              ▼              ▼              ▼             ▼
+  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐  ┌──────────┐
+  │Reconciler│   │ Notifier │   │Auto-Renew│   │TrialPurge│  │Broadcast │
+  │(Every 1m)│   │ (Hourly) │   │ (Min 20) │   │  (03:30) │  │ (5s loop)│
+  └──────────┘   └──────────┘   └──────────┘   └──────────┘  └──────────┘
+```
+
+| Worker             | Schedule       | Purpose                                                                                                                    |
+| :----------------- | :------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| **`reconciler`**   | Every 1 minute | Settles pending purchase intents (>5m old), synchronizes subscription statuses, and scans orphaned configs (15m interval). |
+| **`notifier`**     | `0 * * * *`    | Hourly sweep detecting low traffic (<1 GB) or near expiry (<3 days) with durable 24h deduplication.                        |
+| **`autoRenewal`**  | `20 * * * *`   | Evaluates active subscriptions with auto-renewal enabled; executes wallet-backed purchase sagas.                           |
+| **`trialCleanup`** | `30 3 * * *`   | Daily sweep (03:30 UTC) permanently purging expired trial accounts past their 3-day grace period.                          |
+| **`backup`**       | `*/10 * * * *` | Every 10 minutes checks if the configured database backup interval has elapsed and dispatches snapshots.                   |
+| **`broadcast`**    | 5-second loop  | Claims batches of 15 recipients (concurrency 3), honors Telegram rate limits, and supports live cancel.                    |
+
+---
+
+## 6. Telegram Delivery Layer & UI Engine
+
+Detailed delivery layer specifications are documented in [docs/telegram-architecture.md](telegram-architecture.md).
 
 ### Message Role State Machine
 
@@ -183,124 +258,17 @@ Incoming Update
 | **`artifact`**     | High-value outputs (VPN subscription links, QR codes, receipts, transaction info). | **Protected & Permanent:** Never overwritten or deleted during menu navigation.               |
 | **`notification`** | Automated alerts (low quota warnings, renewal confirmations).                      | Durable messages tracked independently from interactive screens.                              |
 
-### Resilient Callback Routing (`callbackData.ts`)
+### Inbound Rebecca Panel Webhooks (`RebeccaWebhookService.ts`)
 
-- Strictly validates the **64-byte Telegram Bot API payload limit** on construction.
-- Compact encoded identifiers (e.g. `buy:confirm:<checkoutId>`, `config:view:<id>`, `set:edit:<key>`).
-- Catch-all fallback handler acknowledges stale or expired callback buttons to eliminate infinite client spinners.
-
-### Zero-Secret Replay Principle
-
-`@grammyjs/conversations` records message steps into database sessions to support replay. To prevent unencrypted secrets from leaking into session stores, sensitive administrator inputs (e.g. Rebecca panel API keys) are routed through dedicated one-shot handlers (`bot.on('message:text')`), encrypted immediately with `CredentialCipher`, and deleted from Telegram chat history.
-
-### Dual-Mode Delivery (Long Polling & Webhook)
-
-RebeccaSellBot supports two mutually exclusive delivery modes configured via environment variables:
-
-1. **Long Polling (`BOT_DELIVERY_MODE=polling`, default):**
-   - Starts via `bot.start()`.
-   - Clears any existing Telegram webhook via `bot.api.deleteWebhook({ drop_pending_updates: false })` before polling to prevent 409 conflict errors.
-   - Ideal for standard installations, servers without domain names, or zero-maintenance deployments.
-
-2. **Webhook (`BOT_DELIVERY_MODE=webhook`):**
-   - Starts an internal HTTP server that listens on `WEBHOOK_PORT` (default: 3000) and `WEBHOOK_HOST` (default: `0.0.0.0`).
-   - Delegates incoming updates to grammY's `webhookCallback(bot, 'http', { secretToken })`.
-   - Enforces the `X-Telegram-Bot-Api-Secret-Token` header, immediately rejecting unauthorized probes with HTTP 401.
-   - Automatically answers internal health probes (`/health`, `/healthz`, `/ready`, `/readyz`) with HTTP 200.
-   - Dispatches `bot.api.setWebhook()` once the HTTP server is bound.
-   - Gracefully closes connections on `SIGINT`/`SIGTERM` with socket drain timeouts.
-
-#### Reverse Proxy Integration
-
-When running in Webhook mode, terminate SSL and forward traffic via **Caddy** or **Nginx**:
-
-**Caddyfile:**
-
-```caddy
-# Standalone domain
-bot.example.com {
-    reverse_proxy 127.0.0.1:3000
-}
-
-# Subpath on existing domain
-example.com {
-    handle /rsbot/* {
-        reverse_proxy 127.0.0.1:3000
-    }
-}
-```
-
-**Nginx:**
-
-```nginx
-location /rsbot/ {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
-
-#### Unified HTTP Server & Reverse Proxy Integration
-
-RebeccaSellBot features dynamic port and server unification for production reverse-proxy environments:
-
-- **Dynamic Port Sensing (`PORT`):** When deployed in environments where a dynamic port is injected via `PORT` (or when `WEBHOOK_PORT` matches `HEALTH_CHECK_PORT`), RebeccaSellBot automatically unifies both health checks and webhooks onto that single listening port.
-- **Unified Multiplexed Server:** Runs a single HTTP server on that port, routing:
-  - Internal health & readiness probes (`/health`, `/healthz`, `/ready`, `/readyz`)
-  - Inbound Telegram bot updates (`/webhook` or custom subpaths)
-  - Inbound Rebecca Panel webhook events (`REBECCA_WEBHOOK_PATH`, default `/api/rebecca-webhook`)
-
-#### Inbound Rebecca Panel Webhooks (`RebeccaWebhookService.ts`)
-
-In addition to outbound REST calls to Rebecca panels, RebeccaSellBot receives real-time webhook push events from Rebecca panels:
-
-```text
-Rebecca Panel (Outbound Webhook)
-              │
-              │ POST /api/webhook/rebecca
-              │ Header: x-webhook-secret
-              ▼
-┌──────────────────────────────────────────────┐
-│ RebeccaWebhookService (Timing-Safe Auth)     │
-└──────────────────────┬───────────────────────┘
-                       │
-         ┌─────────────┴─────────────┐
-         ▼                           ▼
-┌───────────────────┐       ┌───────────────────┐
-│ DB State Update   │       │ User Telegram UI  │
-│ - status: limited │       │ - Push Alert Msg  │
-│ - status: expired │       │ - Direct Renew Btn│
-│ - trigger auto-ren│       │   (sub:detail:id) │
-└───────────────────┘       └───────────────────┘
-```
+In addition to outbound REST calls to Rebecca panels, RebeccaSellBot receives real-time webhook push events:
 
 - **Authentication:** Validated via constant-time comparison (`crypto.timingSafeEqual`) on the `x-webhook-secret` header against `REBECCA_WEBHOOK_SECRET`.
-- **Supported Events:**
-  - `user_limited`: Triggered when a VPN configuration consumes 100% of its data traffic allowance. Updates local configuration status, attempts auto-renewal if enabled, and sends an urgent Persian/English notification to the user with a 1-tap renewal button.
-  - `user_expired`: Triggered when subscription validity time lapses. Updates status, triggers auto-renewal if configured, and alerts the user.
-  - `user_disabled` / `user_enabled`: Keeps configuration status synchronized in real time without waiting for the reconciler worker.
-  - `user_deleted`: Marks configuration revoked/deleted in local records.
-- **Resilience:** Unrecognized events or configurations not tracked by the bot respond with HTTP 200 `{ ok: true, ignored: true }` to prevent remote webhook retry storms.
+- **Supported Events:** `user_limited`, `user_expired`, `user_disabled`, `user_enabled`, `user_deleted`.
+- **User Alerts:** Pushes instant notifications with a 1-tap renewal button (`sub:detail:<id>`) directly into the user's chat.
 
 ---
 
-## 5. Gamification & Growth Engine
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                     Growth & Loyalty Subsystem                  │
-├───────────────────┬─────────────────────────┬───────────────────┤
-│    Lucky Wheel    │     Referral Engine     │   Promo Codes     │
-│  (LuckyWheelSvc)  │      (ReferralSvc)      │    (PromoSvc)     │
-├───────────────────┼─────────────────────────┼───────────────────┤
-│ • Daily spins     │ • Multi-tier commission │ • Fixed discount  │
-│ • Weighted odds   │ • Purchase cashback %   │ • Percentage off  │
-│ • Custom rewards  │ • Direct wallet credit  │ • Usage caps & TTL│
-└───────────────────┴─────────────────────────┴───────────────────┘
-```
+## 7. Gamification & Growth Engine
 
 - **Lucky Wheel (`LuckyWheelService.ts`):** Configurable lottery wheel with weighted prize tables, daily free spin cooldowns, win caps, and instant wallet balance deposits.
 - **Referral & Cashback (`ReferralService.ts`):** Tracks inviter-invitee trees, automatically awarding percentage or fixed cashback on successful purchases.
@@ -308,46 +276,20 @@ Rebecca Panel (Outbound Webhook)
 
 ---
 
-## 6. Background Workers & Job Scheduler
-
-Background automation is orchestrated by `src/jobs/workerRuntime.ts` using cron schedules:
-
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        workerRuntime.ts                                │
-└───────┬──────────────┬──────────────┬──────────────┬─────────────┬─────┘
-        │              │              │              │             │
-        ▼              ▼              ▼              ▼             ▼
-  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐  ┌──────────┐
-  │Reconciler│   │ Notifier │   │Auto-Renew│   │  Backup  │  │Broadcast │
-  └──────────┘   └──────────┘   └──────────┘   └──────────┘  └──────────┘
-```
-
-| Worker             | Schedule       | Purpose                                                                                           |
-| :----------------- | :------------- | :------------------------------------------------------------------------------------------------ |
-| **`reconciler`**   | `*/10 * * * *` | Synchronizes active configuration states with remote Rebecca panels; marks deleted/expired items. |
-| **`notifier`**     | `*/15 * * * *` | Scans approaching expiries (<3 days) and quota limits (<1 GB), dispatching user notifications.    |
-| **`autoRenewal`**  | `0 */1 * * *`  | Evaluates subscriptions with auto-renewal enabled; executes wallet-backed purchase sagas.         |
-| **`trialCleanup`** | `0 */6 * * *`  | Revokes and purges expired trial configurations from external panels.                             |
-| **`backup`**       | Scheduled      | Generates full `.tar.gz` database and environment snapshots; sends alert to administrators.       |
-| **`broadcast`**    | Event Queue    | Delivers bulk announcements with rate throttling, cancellation support, and live progress bars.   |
-
----
-
-## 7. Database Architecture & Schema Integrity
+## 8. Database Architecture & Schema Integrity
 
 Data persistence is managed via **PostgreSQL 16** with **Drizzle ORM** (`src/infra/schema.ts`):
 
 ```text
 ┌──────────────┐       1:N       ┌─────────────────────┐       1:N       ┌─────────────────────┐
-│    users     │ ─────────────── │    configurations   │ ─────────────── │   config_history    │
+│    users     │ ─────────────── │    user_configs     │ ─────────────── │   config_history    │
 └──────┬───────┘                 └──────────┬──────────┘                 └─────────────────────┘
        │ 1:N                                │ N:1
        ├─────────────────┐                  ▼
        │                 │         ┌─────────────────────┐
        ▼                 ▼         │   rebecca_panels    │
 ┌──────────────┐  ┌──────────────┐ └─────────────────────┘
-│ transactions │  │ topup_receipt│
+│ wallet_trans │  │ topup_receipt│
 └──────────────┘  └──────────────┘
 ```
 
@@ -359,23 +301,7 @@ Data persistence is managed via **PostgreSQL 16** with **Drizzle ORM** (`src/inf
 
 ---
 
-## 8. Deployment & Instance Management (`rsbot`)
+## 9. Deployment & Multi-Instance Operations
 
-RebeccaSellBot provides multi-instance isolation on a single host via the global CLI `/usr/local/bin/rsbot`:
-
-```text
-Server Host (Ubuntu 24.04 LTS)
- ├── /opt/RebeccaSellBot/main/   (Instance: main   -> db: rsbot_main_db)
- ├── /opt/RebeccaSellBot/vip/    (Instance: vip    -> db: rsbot_vip_db)
- └── /usr/local/bin/rsbot        (Unified multi-instance CLI)
-```
-
-### Full-Bundle Backup & Atomic Disaster Recovery
-
-- **Backup (`rsbot <instance> backup`):** Generates an unprivileged `0600` `.tar.gz` containing the PostgreSQL custom dump, instance `.env`, `docker-compose.yml`, and build metadata.
-- **Transactional Restore (`rsbot <instance> restore <bundle>`):**
-  1. Validates bundle checksums, schema compatibility, and manifest permissions.
-  2. Generates an automated pre-restore rollback snapshot (`pre_restore_*.tar.gz`).
-  3. Executes database restoration in a single transaction.
-  4. Runs pending Drizzle migrations.
-  5. Verifies container health before finalizing `.env` swap; rolls back automatically if health probes fail.
+For deployment instructions, reverse proxy configurations, and CLI reference, see [docs/deployment.md](deployment.md).
+For environment variable reference, see [docs/configuration.md](configuration.md).

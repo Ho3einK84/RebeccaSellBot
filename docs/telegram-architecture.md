@@ -1,6 +1,6 @@
 # Telegram Delivery Layer & UI Architecture
 
-This document provides a comprehensive architectural specification for the Telegram subsystem in **RebeccaSellBot**. For the complete end-to-end system architecture (including financial sagas, database schema, and background jobs), see [docs/architecture.md](architecture.md).
+This document provides a comprehensive architectural specification for the Telegram subsystem in **RebeccaSellBot**. For the complete end-to-end system architecture (including financial sagas, database schema, and background jobs), see [docs/architecture.md](architecture.md). For deployment and reverse proxy configurations, see [docs/deployment.md](deployment.md).
 
 RebeccaSellBot treats Telegram strictly as an **ephemeral delivery and interaction layer**. Telegram handlers, conversations, and keyboards never query the database directly or dispatch direct HTTP requests to Rebecca panels. All business operations are mediated through typed domain services and saga orchestrators.
 
@@ -26,6 +26,7 @@ RebeccaSellBot treats Telegram strictly as an **ephemeral delivery and interacti
 │                                                                        │
 │   WalletService   ConfigService   PricingService   RebeccaService      │
 │   TrialService    RefundService   BroadcastService PromoService        │
+│   LuckyWheelSvc   PaymentService  BackupService    UserService         │
 └───────────────────┬────────────────────────────────┬───────────────────┘
                     │                                │
                     ▼                                ▼
@@ -96,7 +97,7 @@ Every message sent by the bot is classified into one of four distinct roles:
 | :----------------- | :-------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
 | **`screen`**       | Interactive menu or view.                                                         | Replaced in-place via `renderUiScreen` (using `editMessageText`), or deleted when transitioning to a new screen. |
 | **`prompt`**       | Ephemeral conversational request (e.g. "Enter amount").                           | Automatically deleted once the conversation finishes or cancels.                                                 |
-| **`artifact`**     | High-value output (e.g. VPN subscription link, QR code image, trial credentials). | **Durable:** Protected against deletion or mutation by screen navigation.                                        |
+| **`artifact`**     | High-value output (e.g. VPN subscription link, QR code image, trial credentials). | **Durable:** Protected against deletion or mutation by screen navigation (`rememberArtifactMessage`).            |
 | **`notification`** | Automated alerts (low-traffic warning, expiry reminder, auto-renewal report).     | Durable, tracked separately from interactive screens.                                                            |
 
 ### Message Tracking with AsyncLocalStorage
@@ -116,6 +117,7 @@ export async function renderUiScreen(
 1. **In-Place Editing:** If invoked from a callback query on an editable `screen` message (and not an `artifact`), `editMessageText` is used.
 2. **Idempotent Handling:** If the screen content has not changed, Telegram's `message is not modified` error is caught and safely treated as a successful no-op.
 3. **Fallback to New Message:** If the message is missing, unmodifiable, or a photo/media message, it sends a fresh tracked screen message and marks the old one for cleanup.
+4. **Single-Tap Popover Dismissal (`ui:dismiss`):** Allows temporary QR code popovers or informational overlays to dismiss with one tap without deleting the underlying subscription card.
 
 ---
 
@@ -140,6 +142,7 @@ export function buildScreen(definition: {
 - **Primary Block:** High-contrast focus state (e.g. remaining quota, wallet balance).
 - **Section Cards:** Formatted key-value pairs formatted with bullet indicators.
 - **RTL Normalization:** Passes text through `ensurePersianLineDirection()` to prevent punctuation flipping on mixed Persian/English lines.
+- **Digit Normalization:** `normalizeInputDigits()` automatically converts Persian (`۱۲۳`) and Arabic (`١٢٣`) digits to ASCII standard digits before numerical validation.
 
 ### Safe Markdown Formatting & Entity Protection
 
@@ -148,7 +151,7 @@ Telegram Legacy Markdown (`Markdown`) requires strict escaping of untrusted para
 - `escapeTelegramMarkdown(value)`: Escapes special characters (`_`, `*`, `[`, `` ` ``, `\`) for user input, usernames, and dynamic values.
 - `sanitizeTelegramInlineCode(value)`: Strips stray backticks inside code spans to prevent broken formatting.
 - `validateTelegramMarkdown(text)`: Validates balanced delimiters before saving admin-customized templates in database settings.
-- `safeFormattingTransformer()`: A resilient API transformer that intercepts Telegram `can't parse entities` errors and retries the dispatch as plain text, ensuring the user is never left with an unrendered screen.
+- `safeFormattingTransformer()`: An API transformer that intercepts Telegram `can't parse entities` errors and retries the dispatch as plain text, ensuring the user is never left with an unrendered screen.
 
 ---
 
@@ -198,7 +201,7 @@ src/telegram/conversations/
 │
 └── adminConversations/
     ├── settings/                       (Modular Admin Settings Center)
-    │   ├── catalog.ts                  (23+ Typed setting definitions & groups)
+    │   ├── catalog.ts                  (Typed setting definitions & groups)
     │   ├── validation.ts               (Type guards, bounds checking, regexes)
     │   ├── presentation.ts             (Settings screen & item formatters)
     │   ├── navigation.ts               (Settings hierarchy & breadcrumbs)
@@ -208,6 +211,9 @@ src/telegram/conversations/
     │   ├── payment.ts                  (Card number, holder, and transfer rules)
     │   ├── referral.ts                 (Referral bonus & cashback percentages)
     │   ├── backup.ts                   (Automated backup intervals & delivery)
+    │   ├── naming.ts                   (Dynamic username prefixes & config templates)
+    │   ├── trial.ts                    (Trial duration, traffic limit, panel assignment)
+    │   ├── webapp.ts                   (Telegram Mini App interactive toggle & URL)
     │   └── conversation.ts             (Settings conversation orchestrator)
     ├── texts.ts                        (Customizable bot messages & localization overrides)
     ├── wallet.ts                       (Manual balance adjustments & audit logs)
@@ -233,14 +239,15 @@ To prevent this:
 
 ## 7. Bilingual Localization Pipeline (`locale.ts`)
 
-RebeccaSellBot supports full internationalization in **Persian (fa)** and **English (en)**:
+RebeccaSellBot supports complete internationalization in **Persian (fa)** and **English (en)**:
 
 1. **Auto-Detection & Persistence:** Newly observed Telegram users have their client language code detected and saved. If the user explicitly selects a language from `/lang`, `localeManual` is set to `true`, preventing automatic client overrides.
 2. **Context Resolution (`resolveContextLocale`):** Middlewares and background jobs resolve the effective locale from user records, conversation contexts, or the global default setting.
 3. **Template Translation (`t` and `tm`):**
    - `t(ctx, 'key', params)`: Translates a catalog key with automatic parameter substitution and Markdown escaping.
    - `tm(ctx, 'template_key', params)`: Injects localized dynamic values into administrator-editable long-form templates.
-4. **Number & Date Formatting:**
+4. **Strict Catalog Parity:** Every translation key in `TranslationCatalog.fa.ts` must have an identical counterpart in `TranslationCatalog.en.ts`. This invariant is verified by the unit test suite.
+5. **Number & Date Formatting:**
    - `localizedNumber(num, ctx)`: Formats numbers with Persian numerals in `fa` and standard digits in `en`.
    - `localizedDate(timestamp, ctx)`: Renders dates using the appropriate calendar representation.
 
@@ -252,50 +259,3 @@ RebeccaSellBot supports full internationalization in **Persian (fa)** and **Engl
 - **WeakMap Ban Status Cache:** Prevents duplicate database queries for banned users during rapid update batches.
 - **Purchase Checkouts Guard:** Checkouts snapshot packages and prices with expiration timestamps (`PurchaseCheckoutService`), preventing Time-of-Check to Time-of-Use (TOCTOU) exploits if an admin changes package prices while a user is on the checkout screen.
 - **Private Chat Gate:** Financial and management features are strictly blocked in group chats to protect sensitive user subscriptions and balance details.
-
----
-
-## 9. Webhook Ingress & Reverse Proxy Architecture
-
-When `BOT_DELIVERY_MODE=webhook` is configured:
-
-1. **HTTP Server & Security Header Enforcement:**
-   - A dedicated Node.js HTTP server listens on `WEBHOOK_PORT` (default: 3000) and `WEBHOOK_HOST` (default: `0.0.0.0`).
-   - Routes updates through `webhookCallback(bot, 'http', { secretToken })`.
-   - Every webhook POST is authenticated against the `X-Telegram-Bot-Api-Secret-Token` header. Unauthenticated or malformed requests receive an immediate `401 Unauthorized`.
-   - Health probes (`/health`, `/healthz`, `/ready`, `/readyz`) return `200 OK` with `{ "status": "ok", "mode": "webhook" }`.
-
-2. **Automated Telegram Webhook Synchronization:**
-   - On startup, `registerWebhook()` registers `WEBHOOK_URL` with Telegram using `bot.api.setWebhook()`.
-   - When restarting in polling mode, `startBot()` invokes `clearWebhook()` via `bot.api.deleteWebhook()` before initiating polling, avoiding Telegram 409 conflict errors.
-
-3. **Reverse Proxy Configurations:**
-
-**Caddy (Recommended):**
-
-```caddy
-bot.example.com {
-    reverse_proxy 127.0.0.1:3000
-}
-```
-
-**Nginx:**
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name bot.example.com;
-
-    ssl_certificate /etc/letsencrypt/live/bot.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bot.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```

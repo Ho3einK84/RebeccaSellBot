@@ -23,7 +23,16 @@
 > [!IMPORTANT]
 > **Zero Database Touch:** RebeccaSellBot communicates with Rebecca panels exclusively via their official HTTPS REST APIs. It never reads from or writes to the Rebecca database directly.
 
-Detailed system architecture and Telegram delivery layer specifications are documented in [docs/architecture.md](docs/architecture.md) and [docs/telegram-architecture.md](docs/telegram-architecture.md).
+---
+
+## Documentation
+
+| Document                                                    | Description                                                                           |
+| :---------------------------------------------------------- | :------------------------------------------------------------------------------------ |
+| 🏛️ **[System Architecture](docs/architecture.md)**          | End-to-end subsystem overview, 3-phase financial saga, and background workers.        |
+| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Screen manager, conversation containers, design system, and error resilience.         |
+| 🚀 **[Deployment & Operations](docs/deployment.md)**        | Installation options, Caddy/Nginx reverse proxy, mesh routing, and disaster recovery. |
+| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete guide to environment variables (`.env`) and in-bot `/admin` settings.        |
 
 ---
 
@@ -61,11 +70,11 @@ Telegram Customer
  └──────────────┘
 ```
 
-- **Integer Arithmetic:** All currency calculations use signed 64-bit integers in minor units (no floating-point rounding errors).
+- **Integer Minor-Unit Math:** All currency calculations use signed 64-bit integers in minor units (no floating-point rounding errors).
 - **3-Phase Purchase Saga:** Balances are reserved prior to external API dispatch and committed only upon verified creation.
 - **Idempotent Rewards:** Referral bonuses, cashback, and promo usages are bound to unique transaction references.
-- **Encrypted Credentials:** Panel API keys and admin passwords are encrypted at rest using AES-256-GCM.
-- **Dual-Mode Delivery:** Supports zero-maintenance outbound Long Polling by default, alongside high-throughput Webhook delivery with `X-Telegram-Bot-Api-Secret-Token` authentication for reverse-proxied setups.
+- **Encrypted Credentials:** Panel API keys and passwords are encrypted at rest using AES-256-GCM.
+- **Dual-Mode Delivery:** Outbound Long Polling by default, alongside Webhook delivery with secret token verification.
 
 ---
 
@@ -81,25 +90,16 @@ cd RebeccaSellBot
 ./install.sh
 ```
 
-The installer verifies prerequisites, installs Docker if needed, configures your instance, applies database migrations, and boots the service. Panel connections can be added afterward from `/admin` → **Rebecca panels**.
+The installer verifies prerequisites, installs Docker if needed, configures your instance, applies database migrations, and boots the service. Panel connections can be added immediately from `/admin` → **Rebecca panels**.
 
 ### Option B: Unattended 1-Command Deployment
 
 ```bash
-# 1. Create a restricted environment file (/root/rsbot.env, chmod 0600)
-cat << 'EOF' > /root/rsbot.env
-BOT_TOKEN=123456789:AAExampleTelegramBotTokenHere
-ADMIN_IDS=123456789
-DB_USER=rsbot_bot1
-DB_PASSWORD=ChooseAStrong16CharPassword
-DB_NAME=rsbot_bot1
-DEFAULT_LOCALE=fa
-EOF
-
-# 2. Run automated installation
 curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
   | sudo bash -s -- --instance bot1 --env-file /root/rsbot.env --non-interactive --yes
 ```
+
+See [docs/deployment.md](docs/deployment.md#option-b-unattended-automated-installation) for `.env` templates and non-interactive parameters.
 
 ### Option C: Server-to-Server Migration (`--from-backup`)
 
@@ -120,162 +120,49 @@ rsbot main backup
 The global CLI utility `/usr/local/bin/rsbot` simplifies multi-instance management:
 
 ```bash
-rsbot list                     # List all installed instances
+rsbot list                     # List all installed instances and port mappings
 rsbot <name> status            # Inspect service health and container status
 rsbot <name> logs -f           # Stream real-time structured logs
 ```
 
-| Command                       | Description                                                                       |
-| :---------------------------- | :-------------------------------------------------------------------------------- |
-| `rsbot <name> up`             | Build images, apply SQL migrations, and start containers.                         |
-| `rsbot <name> down`           | Gracefully stop containers while retaining all data volumes.                      |
-| `rsbot <name> restart`        | Perform a zero-downtime service restart.                                          |
-| `rsbot <name> update`         | Pull latest Git commits, migrate schema, rebuild, and relaunch.                   |
-| `rsbot <name> backup`         | Create a compressed full backup: PostgreSQL + `.env` + Compose metadata (`0600`). |
-| `rsbot <name> restore <file>` | Validate and transactionally restore a full backup with automatic rollback.       |
-| `rsbot <name> uninstall`      | Safely tear down containers and delete the designated instance data.              |
+| Command                       | Description                                                               |
+| :---------------------------- | :------------------------------------------------------------------------ |
+| `rsbot <name> up`             | Build images, apply SQL migrations, and start containers.                 |
+| `rsbot <name> down`           | Gracefully stop containers while retaining all data volumes.              |
+| `rsbot <name> restart`        | Perform a zero-downtime service restart.                                  |
+| `rsbot <name> update`         | Pull latest Git commits, migrate schema, rebuild, and relaunch.           |
+| `rsbot <name> backup`         | Create a compressed full backup: PostgreSQL + `.env` + metadata (`0600`). |
+| `rsbot <name> restore <file>` | Validate and transactionally restore a backup with automatic rollback.    |
+
+> For the complete command reference (including `verify`, `backups`, `prune-backups`, and `uninstall`), see [docs/deployment.md](docs/deployment.md#3-instance-lifecycle-management-rsbot).
 
 ---
 
-## Environment Variables
+## Core Configuration
 
-| Variable                | Description                                                            | Default / Example                    |
-| :---------------------- | :--------------------------------------------------------------------- | :----------------------------------- |
-| `BOT_TOKEN`             | Telegram Bot API token obtained from `@BotFather`.                     | _Required_                           |
-| `ADMIN_IDS`             | Comma-separated initial Telegram user IDs for admin bootstrap.         | `123456789`                          |
-| `DATABASE_URL`          | PostgreSQL connection string.                                          | `postgres://user:pass@db:5432/rsbot` |
-| `PANEL_CREDENTIALS_KEY` | 32+ character key used to encrypt panel credentials at rest.           | Generated by installer               |
-| `DEFAULT_LOCALE`        | Default language for newly registered users (`fa` or `en`).            | `fa`                                 |
-| `SUPPORT_URL`           | Optional Telegram support username/link (e.g. `https://t.me/support`). | First `ADMIN_ID`                     |
-| `HEALTH_CHECK_PORT`     | Internal HTTP port used by Docker for container health probes.         | `3001`                               |
-| `BOT_DELIVERY_MODE`     | Telegram delivery mode: `polling` (default) or `webhook`.              | `polling`                            |
-| `WEBHOOK_URL`           | Public HTTPS URL registered with Telegram (required in webhook mode).  | `https://example.com/rsbot/webhook`  |
-| `WEBHOOK_SECRET_TOKEN`  | Secret token verifying `X-Telegram-Bot-Api-Secret-Token` header.       | 32+ character alphanumeric string    |
-| `WEBHOOK_PORT`          | Internal HTTP listening port for incoming Telegram updates.            | `3000`                               |
-| `WEBHOOK_PATH`          | Local URL path handled by the webhook server.                          | `/webhook` (or derived from URL)     |
-| `WEBHOOK_HOST_PORT`     | Host port bound in Docker Compose for reverse proxy forwarding.        | `3000`                               |
-| `WEBAPP_URL`            | Public HTTPS URL for Telegram Mini App (enables web app feature flag). | `https://app.example.com`            |
-| `WEBAPP_PORT`           | Internal HTTP port for Mini App Fastify server.                        | `3002`                               |
-| `WEBAPP_HOST`           | Internal listening host for Mini App Fastify server.                   | `0.0.0.0`                            |
-| `WEBAPP_HOST_PORT`      | Host port bound in Docker Compose for reverse proxy forwarding.        | `3002`                               |
-| `ADMIN_SESSION_SECRET`  | 32+ character secret for signing Mini App JWT cookies.                 | _Required when WEBAPP_URL is set_    |
+The most essential environment variables configured in `.env`:
+
+| Variable                | Description                                                     | Default / Example                    |
+| :---------------------- | :-------------------------------------------------------------- | :----------------------------------- |
+| `BOT_TOKEN`             | Telegram Bot API token obtained from `@BotFather`.              | _Required_                           |
+| `ADMIN_IDS`             | Comma-separated initial Telegram user IDs for admin bootstrap.  | `123456789`                          |
+| `DATABASE_URL`          | PostgreSQL connection string.                                   | `postgres://user:pass@db:5432/rsbot` |
+| `PANEL_CREDENTIALS_KEY` | 32+ character key used to encrypt panel credentials at rest.    | Generated by installer               |
+| `DEFAULT_LOCALE`        | Default language for newly registered users (`fa` or `en`).     | `fa`                                 |
+| `BOT_DELIVERY_MODE`     | Telegram delivery mode: `polling` (default) or `webhook`.       | `polling`                            |
+| `WEBAPP_URL`            | Public HTTPS URL for Telegram Mini App (optional feature flag). | `https://app.example.com`            |
+
+> For all advanced options (custom ports, webhook tokens, database pools, PaaS single-port multiplexing, and in-bot settings), see [docs/configuration.md](docs/configuration.md).
 
 ---
 
-## Dual-Mode Delivery: Long Polling & Webhook
+## Delivery Modes & Telegram Mini App
 
-RebeccaSellBot can operate in two distinct modes without touching code:
+- **Long Polling Mode (Default):** Zero domain, zero open ports, and zero firewall adjustments required. Automatically clears stale webhooks on startup to prevent 409 conflicts.
+- **Webhook Mode:** Designed for reverse-proxied production environments behind Caddy or Nginx with `X-Telegram-Bot-Api-Secret-Token` verification.
+- **Telegram Mini App (Fastify + React 19):** An optional, feature-flagged web dashboard for customers and admins. In multi-instance deployments, Caddy utilizes zero-touch On-Demand TLS (`/api/caddy-check`) and internal mesh dispatching.
 
-### 1. Long Polling Mode (Default)
-
-Requires no domain name, no open ports, and zero firewall changes:
-
-```env
-BOT_DELIVERY_MODE=polling
-```
-
-When switching back from Webhook to Long Polling, RebeccaSellBot automatically invokes `bot.api.deleteWebhook()` on startup to clear previous webhook registrations and prevent 409 conflict errors.
-
-### 2. Webhook Mode
-
-Designed for production environments behind reverse proxies (Caddy, Nginx):
-
-```env
-BOT_DELIVERY_MODE=webhook
-WEBHOOK_URL=https://bot.example.com/rsbot/webhook
-WEBHOOK_SECRET_TOKEN=random_secret_token_at_least_32_characters_123
-WEBHOOK_PORT=3000
-WEBHOOK_PATH=/rsbot/webhook
-WEBHOOK_HOST_PORT=3000
-```
-
-#### Reverse Proxy Configurations (Webhook)
-
-##### Caddy (Recommended)
-
-```caddy
-# Standalone domain
-bot.example.com {
-    reverse_proxy 127.0.0.1:3000
-}
-
-# Or as a subpath on an existing site:
-example.com {
-    handle /rsbot/* {
-        reverse_proxy 127.0.0.1:3000
-    }
-}
-```
-
-##### Nginx
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name bot.example.com;
-
-    ssl_certificate /etc/letsencrypt/live/bot.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bot.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
----
-
-## Telegram Mini App (Optional Feature)
-
-RebeccaSellBot includes a modern, feature-flagged Telegram Mini App dashboard.
-
-> [!IMPORTANT]
-> **Opt-In Trade-Off**: Long-polling mode provides zero-setup bot operation with no open ports or domains. However, enabling the Mini App (`WEBAPP_URL`) introduces a domain + TLS + reverse-proxy requirement **even if `BOT_DELIVERY_MODE` remains `polling`**. This is because Telegram Mini Apps require an HTTPS origin to open in the Telegram client, which is independent of how bot updates are delivered.
-
-```env
-WEBAPP_URL=https://app.example.com
-WEBAPP_PORT=3002
-WEBAPP_HOST_PORT=3002
-ADMIN_SESSION_SECRET=a_random_secure_secret_with_at_least_32_characters_long
-```
-
-> **Multi-Instance Note:** When running multiple bot instances on a single server, assign each instance a unique `WEBAPP_HOST_PORT` (e.g., 3002 for `main`, 3003 for `shop2`) and `WEBHOOK_HOST_PORT`. Reverse proxy each dedicated subdomain to its respective host port. See [`deploy/caddy/Caddyfile.multi-instance.example`](deploy/caddy/Caddyfile.multi-instance.example).
-
-#### Reverse Proxy Configurations (Mini App)
-
-##### Caddy
-
-```caddy
-app.example.com {
-    reverse_proxy 127.0.0.1:3002
-}
-```
-
-##### Nginx
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name app.example.com;
-
-    ssl_certificate /etc/letsencrypt/live/app.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3002;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+> For complete reverse proxy configurations (Caddy, Nginx) and multi-instance mesh guides, see [docs/deployment.md](docs/deployment.md#4-delivery-modes--reverse-proxy-integration).
 
 ---
 
@@ -294,7 +181,7 @@ npm run db:migrate
 # Start with live reloading
 npm run dev
 
-# Run quality verification pipeline
+# Run full quality verification pipeline
 npm run verify
 ```
 
@@ -305,7 +192,7 @@ The `verify` script runs:
 - `npm run lint` — ESLint static analysis.
 - `npm run format:check` — Prettier code style validation.
 - `npm test` — Comprehensive Vitest test suite.
-- `npm run build` — Production TypeScript bundle compilation.
+- `npm run build` — Production TypeScript bundle and WebApp build.
 
 ---
 
@@ -313,7 +200,7 @@ The `verify` script runs:
 
 - [x] **HTTPS Enforcement:** Rebecca panels must expose valid TLS endpoints; insecure connections are rejected.
 - [x] **Secret Redaction:** Logs automatically redact authorization tokens, card details, and sensitive receipts.
-- [x] **Outbound-Only Polling:** No exposed inbound webhook ports; resilient against direct network scans.
+- [x] **Outbound-Only Polling:** No exposed inbound webhook ports required; resilient against direct network scans.
 - [x] **Non-Root Execution:** Node.js processes run under an unprivileged `node` user in production Docker containers.
 - [x] **Audit Trail:** Balance alterations, card approval actions, and admin overrides are immutably logged.
 
