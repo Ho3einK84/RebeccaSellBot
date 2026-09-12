@@ -131,6 +131,169 @@ export async function adminSearchPromoConversation(
   );
 }
 
+export async function adminBulkPromoConversation(
+  conversation: MyConversation,
+  ctx: ConversationContext
+) {
+  if (!(await requireAdmin(conversation, ctx)) || !ctx.services) return;
+  const prefix = await promptPromoBulkPrefix(conversation, ctx);
+  if (prefix === undefined) return;
+  const count = await promptPromoBulkCount(conversation, ctx);
+  if (count === undefined) return;
+  const type = await promptPromoType(conversation, ctx);
+  if (!type) return;
+  const value = await promptPromoPositiveNumber(
+    conversation,
+    ctx,
+    t(ctx, 'admin_promo_value_prompt'),
+    t(ctx, 'admin_invalid_promo_value'),
+    type === 'discount_percent' ? 100 : undefined
+  );
+  if (value === undefined) return;
+  const maxUses = await promptPromoPositiveNumber(
+    conversation,
+    ctx,
+    t(ctx, 'admin_promo_max_uses_prompt'),
+    t(ctx, 'admin_invalid_promo_max_uses')
+  );
+  if (maxUses === undefined) return;
+  const maxUsesPerUser = await promptPromoPositiveNumber(
+    conversation,
+    ctx,
+    t(ctx, 'admin_promo_per_user_prompt'),
+    t(ctx, 'admin_invalid_promo_per_user'),
+    maxUses
+  );
+  if (maxUsesPerUser === undefined) return;
+  const minPurchaseAmount = await promptPromoNonNegativeNumber(conversation, ctx);
+  if (minPurchaseAmount === undefined) return;
+
+  let maxDiscountAmount: number | null | undefined = null;
+  if (type === 'discount_percent') {
+    maxDiscountAmount = await promptPromoMaxDiscountAmount(conversation, ctx);
+    if (maxDiscountAmount === undefined) return;
+  }
+  const firstPurchaseOnly = await promptPromoFirstPurchaseOnly(conversation, ctx, false);
+  if (firstPurchaseOnly === undefined) return;
+  const expiresAt = await promptPromoExpiry(conversation, ctx);
+  if (expiresAt === undefined) return;
+
+  const confirmKeyboard = new InlineKeyboard()
+    .text(t(ctx, 'admin_promo_save_confirm_button'), 'promo-bulk-save:confirm')
+    .row()
+    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildScreen({
+      emoji: '⚡',
+      title: t(ctx, 'admin_promo_bulk_title'),
+      primary: {
+        emoji: '🔢',
+        label: t(ctx, 'admin_promo_total_label'),
+        value: localizedNumber(count, ctx),
+      },
+      sections: [
+        {
+          emoji: '⚙️',
+          title: t(ctx, 'admin_promo_configuration_section'),
+          fields: [
+            { label: t(ctx, 'admin_promo_type_label'), value: promoTypeLabel(ctx, type) },
+            { label: t(ctx, 'admin_promo_value_label'), value: localizedNumber(value, ctx) },
+            ...(type === 'discount_percent'
+              ? [
+                  {
+                    label: t(ctx, 'admin_promo_max_discount_label'),
+                    value: maxDiscountAmount
+                      ? `${localizedNumber(maxDiscountAmount, ctx)} ${t(ctx, 'currency_toman')}`
+                      : t(ctx, 'admin_promo_no_cap'),
+                  },
+                ]
+              : []),
+            {
+              label: t(ctx, 'admin_promo_first_purchase_label'),
+              value: firstPurchaseOnly
+                ? t(ctx, 'admin_promo_first_purchase_yes')
+                : t(ctx, 'admin_promo_first_purchase_no'),
+            },
+            {
+              label: t(ctx, 'admin_promo_min_purchase_label'),
+              value: `${localizedNumber(minPurchaseAmount, ctx)} ${t(ctx, 'currency_toman')}`,
+            },
+            {
+              label: t(ctx, 'admin_promo_expiry_label'),
+              value: expiresAt
+                ? localizedDate(expiresAt, ctx)
+                : t(ctx, 'admin_promo_never_expires'),
+            },
+          ],
+        },
+      ],
+      footer: t(ctx, 'admin_promo_save_consequence'),
+    }),
+    { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
+  );
+
+  const confirmation = await waitForAdminCallbackInput(conversation, ['promo-bulk-save:confirm']);
+  if (!confirmation) return;
+
+  try {
+    const codes = await ctx.services.promoService.createBulkPromoCodes({
+      count,
+      prefix: prefix || undefined,
+      type,
+      value,
+      maxUses,
+      maxUsesPerUser,
+      minPurchaseAmount,
+      maxDiscountAmount,
+      firstPurchaseOnly,
+      expiresAt,
+    });
+
+    const codeList = codes.map((c) => `\`${c}\``).join('\n');
+    await replyInAdminConversation(
+      conversation,
+      ctx,
+      buildScreen({
+        emoji: '✅',
+        title: t(ctx, 'admin_promo_bulk_title'),
+        subtitle: t(ctx, 'admin_promo_bulk_success', { count: localizedNumber(codes.length, ctx) }),
+        sections: [
+          {
+            emoji: '📋',
+            title: t(ctx, 'admin_promo_bulk_copy_hint'),
+            fields: [
+              {
+                emoji: '🎟️',
+                label: t(ctx, 'admin_promo_total_label'),
+                value: localizedNumber(codes.length, ctx),
+              },
+            ],
+          },
+        ],
+        footer: codeList,
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(
+          t(ctx, 'admin_promo_back_to_list'),
+          callbackData('promo', 'list')
+        ),
+      }
+    );
+  } catch (err) {
+    logger.warn({ err }, 'Promo bulk creation failed');
+    await replyInAdminConversation(
+      conversation,
+      ctx,
+      buildEmptyState('⚠️', t(ctx, 'admin_promo_bulk_title'), t(ctx, 'admin_promo_create_failed')),
+      { parse_mode: 'Markdown' }
+    );
+  }
+}
+
 type ExistingPromo = Awaited<
   ReturnType<NonNullable<ConversationContext['services']>['promoService']['getPromoCodeById']>
 >;
@@ -169,6 +332,24 @@ async function runPromoEditor(
   if (maxUsesPerUser === undefined) return;
   const minPurchaseAmount = await promptPromoNonNegativeNumber(conversation, ctx);
   if (minPurchaseAmount === undefined) return;
+
+  let maxDiscountAmount: number | null | undefined = null;
+  if (type === 'discount_percent') {
+    maxDiscountAmount = await promptPromoMaxDiscountAmount(
+      conversation,
+      ctx,
+      existing?.maxDiscountAmount
+    );
+    if (maxDiscountAmount === undefined) return;
+  }
+
+  const firstPurchaseOnly = await promptPromoFirstPurchaseOnly(
+    conversation,
+    ctx,
+    existing?.firstPurchaseOnly ?? false
+  );
+  if (firstPurchaseOnly === undefined) return;
+
   const expiresAt = await promptPromoExpiry(conversation, ctx);
   if (expiresAt === undefined) return;
   const active = await promptPromoActive(conversation, ctx, existing?.active ?? true);
@@ -201,6 +382,22 @@ async function runPromoEditor(
           fields: [
             { label: t(ctx, 'admin_promo_type_label'), value: promoTypeLabel(ctx, type) },
             { label: t(ctx, 'admin_promo_value_label'), value: localizedNumber(value, ctx) },
+            ...(type === 'discount_percent'
+              ? [
+                  {
+                    label: t(ctx, 'admin_promo_max_discount_label'),
+                    value: maxDiscountAmount
+                      ? `${localizedNumber(maxDiscountAmount, ctx)} ${t(ctx, 'currency_toman')}`
+                      : t(ctx, 'admin_promo_no_cap'),
+                  },
+                ]
+              : []),
+            {
+              label: t(ctx, 'admin_promo_first_purchase_label'),
+              value: firstPurchaseOnly
+                ? t(ctx, 'admin_promo_first_purchase_yes')
+                : t(ctx, 'admin_promo_first_purchase_no'),
+            },
             {
               label: t(ctx, 'admin_promo_min_purchase_label'),
               value: `${localizedNumber(minPurchaseAmount, ctx)} ${t(ctx, 'currency_toman')}`,
@@ -243,6 +440,8 @@ async function runPromoEditor(
       maxUses,
       maxUsesPerUser,
       minPurchaseAmount,
+      maxDiscountAmount,
+      firstPurchaseOnly,
       expiresAt,
     });
     const saved = await ctx.services.promoService.getPromoCode(code);
@@ -306,7 +505,11 @@ async function promptPromoCode(
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
-    const code = input.trim().toUpperCase();
+    const code = input
+      .trim()
+      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+      .toUpperCase();
     if (/^[A-Z0-9_-]{3,128}$/u.test(code)) return code;
     await replyInAdminConversation(
       conversation,
@@ -392,8 +595,13 @@ async function promptPromoNonNegativeNumber(
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
-    if (/^\d+$/u.test(input.trim())) {
-      const value = Number(input.trim());
+    const normalized = input
+      .trim()
+      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+      .replace(/[,_،٬\s]/gu, '');
+    if (/^\d+$/u.test(normalized)) {
+      const value = Number(normalized);
       if (Number.isSafeInteger(value) && value >= 0) return value;
     }
     await replyInAdminConversation(
@@ -403,6 +611,140 @@ async function promptPromoNonNegativeNumber(
         '⚠️',
         t(ctx, 'admin_promo_detail_title'),
         t(ctx, 'admin_invalid_promo_min_purchase')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+  }
+}
+
+async function promptPromoMaxDiscountAmount(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  _current?: number | null
+): Promise<number | null | undefined> {
+  for (;;) {
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPromptScreen(
+        '🛑',
+        t(ctx, 'admin_promo_detail_title'),
+        t(ctx, 'admin_promo_max_discount_prompt')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    const input = await waitForAdminTextInput(conversation);
+    if (input === undefined) return undefined;
+    const normalized = input
+      .trim()
+      .toLowerCase()
+      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+      .replace(/[,_،٬\s]/gu, '');
+    if (['0', 'none', 'بدون', 'no'].includes(normalized)) return null;
+    if (/^\d+$/u.test(normalized)) {
+      const value = Number(normalized);
+      if (Number.isSafeInteger(value) && value >= 0) return value === 0 ? null : value;
+    }
+    await replyInAdminConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_promo_detail_title'),
+        t(ctx, 'admin_promo_invalid_max_discount')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+  }
+}
+
+async function promptPromoFirstPurchaseOnly(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  _current = false
+): Promise<boolean | undefined> {
+  const keyboard = new InlineKeyboard()
+    .text(t(ctx, 'admin_promo_first_purchase_yes'), 'promo-first-purchase:true')
+    .text(t(ctx, 'admin_promo_first_purchase_no'), 'promo-first-purchase:false')
+    .row()
+    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '✨',
+      t(ctx, 'admin_promo_detail_title'),
+      t(ctx, 'admin_promo_first_purchase_prompt')
+    ),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
+  const data = await waitForAdminCallbackInput(conversation, ['promo-first-purchase:']);
+  return data === 'promo-first-purchase:true'
+    ? true
+    : data === 'promo-first-purchase:false'
+      ? false
+      : undefined;
+}
+
+async function promptPromoBulkPrefix(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<string | undefined> {
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildPromptScreen(
+      '🏷️',
+      t(ctx, 'admin_promo_bulk_title'),
+      t(ctx, 'admin_promo_bulk_prefix_prompt')
+    ),
+    { parse_mode: 'Markdown' }
+  );
+  const input = await waitForAdminTextInput(conversation);
+  if (input === undefined) return undefined;
+  const trimmed = input
+    .trim()
+    .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+    .toUpperCase();
+  if (['0', 'none', 'بدون', 'no'].includes(trimmed.toLowerCase())) return '';
+  return trimmed.replace(/[^A-Z0-9_-]/gu, '').slice(0, 16);
+}
+
+async function promptPromoBulkCount(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<number | undefined> {
+  for (;;) {
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPromptScreen(
+        '🔢',
+        t(ctx, 'admin_promo_bulk_title'),
+        t(ctx, 'admin_promo_bulk_count_prompt')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    const input = await waitForAdminTextInput(conversation);
+    if (input === undefined) return undefined;
+    const normalized = input
+      .trim()
+      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+      .replace(/[,_،٬\s]/gu, '');
+    if (/^\d+$/u.test(normalized)) {
+      const value = Number(normalized);
+      if (Number.isSafeInteger(value) && value >= 1 && value <= 50) return value;
+    }
+    await replyInAdminConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_promo_bulk_title'),
+        t(ctx, 'admin_promo_bulk_invalid_count')
       ),
       { parse_mode: 'Markdown' }
     );
@@ -426,7 +768,11 @@ async function promptPromoExpiry(
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
-    const value = input.trim().toLowerCase();
+    const value = input
+      .trim()
+      .toLowerCase()
+      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660));
     if (['0', 'never', 'none', 'بدون'].includes(value)) return null;
     if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
       const date = new Date(`${value}T23:59:59.999Z`);

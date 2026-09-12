@@ -1,7 +1,12 @@
 import type { Bot } from 'grammy';
 import { describe, expect, it, vi } from 'vitest';
 import { registerPromoAdminRoutes } from '../../src/telegram/features/admin/promoRoutes.js';
-import { promoDetailView, showPromoCenter } from '../../src/telegram/promoAdminUi.js';
+import {
+  promoDetailView,
+  showPromoCenter,
+  showPromoRedemptions,
+} from '../../src/telegram/promoAdminUi.js';
+import { getEffectivePackagePrice } from '../../src/telegram/keyboards/mainMenu.js';
 import type { MenuContext } from '../../src/telegram/types.js';
 
 const promo = {
@@ -13,6 +18,8 @@ const promo = {
   maxUsesPerUser: 1,
   currentUses: 4,
   minPurchaseAmount: 50_000,
+  maxDiscountAmount: 30_000,
+  firstPurchaseOnly: false,
   expiresAt: null,
   active: true,
   createdAt: new Date(),
@@ -34,6 +41,26 @@ function context(): { ctx: MenuContext; reply: ReturnType<typeof vi.fn> } {
         }),
         getPromoCode: vi.fn().mockResolvedValue(promo),
         getPromoCodeById: vi.fn().mockResolvedValue(promo),
+        listRedemptions: vi.fn().mockResolvedValue({
+          items: [
+            {
+              id: 'cr_1',
+              code: 'SUMMER_2026',
+              telegramId: 12345,
+              username: 'testuser',
+              firstName: 'Test',
+              status: 'completed',
+              redeemedAt: new Date(),
+              purchaseIntentId: 'pi_1',
+              purchaseAmount: 80_000,
+              purchaseType: 'new_config',
+            },
+          ],
+          total: 1,
+          page: 1,
+          totalPages: 1,
+          code: 'SUMMER_2026',
+        }),
       },
       translationService: {
         get: vi.fn((key: string, _locale: string, params?: Record<string, string | number>) =>
@@ -119,5 +146,47 @@ describe('inline promo admin UX', () => {
 
     expect(setPromoActiveById).toHaveBeenCalledTimes(2);
     expect(answerCallbackQuery).toHaveBeenLastCalledWith({ text: 'button_refreshed' });
+  });
+
+  it('renders promo redemptions list with pagination', async () => {
+    const { ctx, reply } = context();
+
+    await showPromoRedemptions(ctx, promo.id, 1);
+
+    expect(ctx.services?.promoService.listRedemptions).toHaveBeenCalledWith(promo.id, 1, 5);
+    expect(reply).toHaveBeenCalled();
+    const callArgs = reply.mock.calls[0]!;
+    expect(callArgs[0]).toContain('admin_promo_redemptions_title');
+  });
+
+  it('calculates effective package price with min purchase and max cap', () => {
+    const pkg = { id: 'pkg_1', price: 100_000, gbAmount: 10 };
+
+    // When min purchase is 150_000, promo is not applied
+    expect(
+      getEffectivePackagePrice(pkg, {
+        type: 'discount_percent',
+        value: 20,
+        minPurchaseAmount: 150_000,
+      })
+    ).toBe(100_000);
+
+    // When percent discount has max cap of 15,000 (20% of 100,000 = 20,000, capped to 15,000)
+    expect(
+      getEffectivePackagePrice(pkg, {
+        type: 'discount_percent',
+        value: 20,
+        minPurchaseAmount: 50_000,
+        maxDiscountAmount: 15_000,
+      })
+    ).toBe(85_000);
+
+    // Fixed discount
+    expect(
+      getEffectivePackagePrice(pkg, {
+        type: 'discount_fixed',
+        value: 30_000,
+      })
+    ).toBe(70_000);
   });
 });

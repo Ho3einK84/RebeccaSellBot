@@ -949,6 +949,8 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
       code: res.code,
       type: res.codeType,
       value: res.value ?? 0,
+      minPurchaseAmount: res.minPurchaseAmount,
+      maxDiscountAmount: res.maxDiscountAmount,
       selectedAt,
     };
     await conversation.external((outsideCtx) => {

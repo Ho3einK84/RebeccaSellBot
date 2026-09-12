@@ -4,7 +4,13 @@ import type { NodePgTransaction } from 'drizzle-orm/node-postgres';
 import crypto from 'crypto';
 import { getDb } from '../../infra/db.js';
 import type * as schema from '../../infra/schema.js';
-import { codeRedemptions, promoCodes, users, walletTransactions } from '../../infra/schema.js';
+import {
+  codeRedemptions,
+  promoCodes,
+  purchaseIntents,
+  users,
+  walletTransactions,
+} from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
 
 const PROMO_TYPES = ['discount_percent', 'discount_fixed', 'gift_credit', 'gift_gb'] as const;
@@ -22,6 +28,8 @@ export interface RedeemResult {
   code?: string;
   codeType?: PromoType;
   value?: number;
+  minPurchaseAmount?: number;
+  maxDiscountAmount?: number | null;
 }
 
 /** A non-authoritative display quote. The saga must reserve the code again. */
@@ -31,6 +39,20 @@ export interface PromoQuote {
   value: number;
   finalAmount: number;
   finalGbAmount: number;
+  discountAmount?: number;
+}
+
+export interface PromoRedemptionItem {
+  id: string;
+  code: string;
+  telegramId: number;
+  username: string | null;
+  firstName: string | null;
+  status: string;
+  redeemedAt: Date;
+  purchaseIntentId: string | null;
+  purchaseAmount: number | null;
+  purchaseType: string | null;
 }
 
 /** Result of an atomic, transaction-bound purchase promo reservation. */
@@ -112,6 +134,8 @@ export class PromoService {
     maxUses?: number;
     maxUsesPerUser?: number;
     minPurchaseAmount?: number;
+    maxDiscountAmount?: number | null;
+    firstPurchaseOnly?: boolean;
     expiresAt?: Date | null;
   }): Promise<void> {
     const db = getDb();
@@ -120,6 +144,11 @@ export class PromoService {
     const maxUses = clampInteger(params.maxUses ?? 1, 1, MAX_DATABASE_INTEGER);
     const maxUsesPerUser = clampInteger(params.maxUsesPerUser ?? 1, 1, MAX_DATABASE_INTEGER);
     const minPurchaseAmount = validateMinimumPurchaseAmount(params.minPurchaseAmount ?? 0);
+    const maxDiscountAmount =
+      params.maxDiscountAmount !== undefined && params.maxDiscountAmount !== null
+        ? validateMaxDiscountAmount(params.maxDiscountAmount)
+        : null;
+    const firstPurchaseOnly = Boolean(params.firstPurchaseOnly);
 
     if (params.expiresAt && Number.isNaN(params.expiresAt.getTime())) {
       throw new Error('PROMO_EXPIRY_INVALID');
@@ -151,6 +180,8 @@ export class PromoService {
         maxUsesPerUser,
         currentUses: 0,
         minPurchaseAmount,
+        maxDiscountAmount,
+        firstPurchaseOnly,
         expiresAt: params.expiresAt ?? null,
         active: true,
       })
@@ -162,12 +193,182 @@ export class PromoService {
           maxUses,
           maxUsesPerUser,
           minPurchaseAmount,
+          maxDiscountAmount,
+          firstPurchaseOnly,
           expiresAt: params.expiresAt ?? null,
           active: true,
         },
       });
 
-    logger.info({ code: cleanCode, type: params.type, value }, 'Promo code created or updated');
+    logger.info(
+      { code: cleanCode, type: params.type, value, maxDiscountAmount, firstPurchaseOnly },
+      'Promo code created or updated'
+    );
+  }
+
+  async createBulkPromoCodes(params: {
+    count: number;
+    prefix?: string;
+    type: PromoType;
+    value: number;
+    maxUses?: number;
+    maxUsesPerUser?: number;
+    minPurchaseAmount?: number;
+    maxDiscountAmount?: number | null;
+    firstPurchaseOnly?: boolean;
+    expiresAt?: Date | null;
+  }): Promise<string[]> {
+    const cleanCount = clampInteger(params.count, 1, 50);
+    const rawPrefix = params.prefix?.trim() ?? '';
+    const cleanPrefix = rawPrefix
+      ? rawPrefix
+          .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+          .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+          .toUpperCase()
+          .replace(/[^A-Z0-9_-]/gu, '')
+      : '';
+    const prefix = cleanPrefix ? `${cleanPrefix}-` : '';
+
+    const db = getDb();
+    const generatedCodes: string[] = [];
+    const value = validatePromoValue(params.type, params.value);
+    const maxUses = clampInteger(params.maxUses ?? 1, 1, MAX_DATABASE_INTEGER);
+    const maxUsesPerUser = clampInteger(params.maxUsesPerUser ?? 1, 1, MAX_DATABASE_INTEGER);
+    const minPurchaseAmount = validateMinimumPurchaseAmount(params.minPurchaseAmount ?? 0);
+    const maxDiscountAmount =
+      params.maxDiscountAmount !== undefined && params.maxDiscountAmount !== null
+        ? validateMaxDiscountAmount(params.maxDiscountAmount)
+        : null;
+    const firstPurchaseOnly = Boolean(params.firstPurchaseOnly);
+
+    if (params.expiresAt && Number.isNaN(params.expiresAt.getTime())) {
+      throw new Error('PROMO_EXPIRY_INVALID');
+    }
+
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < cleanCount; i++) {
+        let candidate = '';
+        for (let attempt = 0; attempt < 10; attempt++) {
+          candidate = `${prefix}${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+          const [exists] = await tx
+            .select({ code: promoCodes.code })
+            .from(promoCodes)
+            .where(eq(promoCodes.code, candidate))
+            .limit(1);
+          if (!exists && !generatedCodes.includes(candidate)) {
+            break;
+          }
+        }
+        if (!candidate) {
+          throw new Error('PROMO_BULK_GENERATION_COLLISION');
+        }
+        generatedCodes.push(candidate);
+      }
+
+      for (const code of generatedCodes) {
+        await tx.insert(promoCodes).values({
+          code,
+          type: params.type,
+          value,
+          maxUses,
+          maxUsesPerUser,
+          currentUses: 0,
+          minPurchaseAmount,
+          maxDiscountAmount,
+          firstPurchaseOnly,
+          expiresAt: params.expiresAt ?? null,
+          active: true,
+        });
+      }
+    });
+
+    logger.info(
+      { count: generatedCodes.length, prefix, type: params.type },
+      'Bulk promo codes generated'
+    );
+    return generatedCodes;
+  }
+
+  async listRedemptions(
+    codeOrId: string,
+    page = 1,
+    pageSize = 5
+  ): Promise<{
+    items: PromoRedemptionItem[];
+    total: number;
+    page: number;
+    totalPages: number;
+    code: string;
+  }> {
+    const db = getDb();
+    const safePage = clampInteger(page, 1, MAX_DATABASE_INTEGER);
+    const safePageSize = clampInteger(pageSize, 1, 20);
+
+    let targetCode: string;
+    if (
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(codeOrId)
+    ) {
+      const [promo] = await db
+        .select({ code: promoCodes.code })
+        .from(promoCodes)
+        .where(eq(promoCodes.id, codeOrId.toLowerCase()))
+        .limit(1);
+      if (!promo) {
+        return { items: [], total: 0, page: 1, totalPages: 1, code: codeOrId };
+      }
+      targetCode = promo.code;
+    } else {
+      targetCode = normalizeCode(codeOrId);
+    }
+
+    const condition = eq(codeRedemptions.code, targetCode);
+
+    const [[totalRow], rows] = await Promise.all([
+      db.select({ value: count() }).from(codeRedemptions).where(condition),
+      db
+        .select({
+          id: codeRedemptions.id,
+          code: codeRedemptions.code,
+          telegramId: codeRedemptions.telegramId,
+          status: codeRedemptions.status,
+          redeemedAt: codeRedemptions.redeemedAt,
+          purchaseIntentId: codeRedemptions.purchaseIntentId,
+          username: users.username,
+          firstName: users.firstName,
+          purchaseAmount: purchaseIntents.amount,
+          purchaseType: purchaseIntents.type,
+        })
+        .from(codeRedemptions)
+        .leftJoin(users, eq(codeRedemptions.telegramId, users.telegramId))
+        .leftJoin(purchaseIntents, eq(codeRedemptions.purchaseIntentId, purchaseIntents.id))
+        .where(condition)
+        .orderBy(desc(codeRedemptions.redeemedAt))
+        .limit(safePageSize)
+        .offset((safePage - 1) * safePageSize),
+    ]);
+
+    const total = Number(totalRow?.value ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const resolvedPage = Math.min(safePage, totalPages);
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        code: r.code,
+        telegramId: r.telegramId,
+        username: r.username,
+        firstName: r.firstName,
+        status: r.status,
+        redeemedAt: r.redeemedAt,
+        purchaseIntentId: r.purchaseIntentId,
+        purchaseAmount: r.purchaseAmount,
+        purchaseType: r.purchaseType,
+      })),
+      total,
+      page: resolvedPage,
+      totalPages,
+      code: targetCode,
+    };
   }
 
   /** Activate or deactivate an existing code without changing its audit trail. */
@@ -224,10 +425,20 @@ export class PromoService {
     code: string;
     type: PromoType;
     value: number;
+    minPurchaseAmount: number;
+    maxDiscountAmount?: number | null;
+    firstPurchaseOnly: boolean;
   }> {
     const code = normalizeCode(rawCode);
     const promo = await this.getSelectablePromo(getDb(), telegramId, code);
-    return { code, type: promo.type, value: promo.value };
+    return {
+      code,
+      type: promo.type,
+      value: promo.value,
+      minPurchaseAmount: promo.minPurchaseAmount,
+      maxDiscountAmount: promo.maxDiscountAmount,
+      firstPurchaseOnly: promo.firstPurchaseOnly,
+    };
   }
 
   /**
@@ -247,7 +458,14 @@ export class PromoService {
       throw new PromoValidationError('promo_not_purchase_code');
     }
     assertMinimumPurchaseAmount(baseAmount, promo.minPurchaseAmount);
-    return applyPurchasePromo(code, promo.type, promo.value, baseAmount, baseGbAmount);
+    return applyPurchasePromo(
+      code,
+      promo.type,
+      promo.value,
+      baseAmount,
+      baseGbAmount,
+      promo.maxDiscountAmount
+    );
   }
 
   /**
@@ -255,7 +473,14 @@ export class PromoService {
    * credit; all other codes are merely selected for the user's next purchase.
    */
   async redeemCode(telegramId: number, rawCode: string): Promise<RedeemResult> {
-    let selection: { code: string; type: PromoType; value: number };
+    let selection: {
+      code: string;
+      type: PromoType;
+      value: number;
+      minPurchaseAmount: number;
+      maxDiscountAmount?: number | null;
+      firstPurchaseOnly: boolean;
+    };
     try {
       selection = await this.validateForSelection(telegramId, rawCode);
     } catch (err) {
@@ -273,6 +498,8 @@ export class PromoService {
         code: selection.code,
         codeType: selection.type,
         value: selection.value,
+        minPurchaseAmount: selection.minPurchaseAmount,
+        maxDiscountAmount: selection.maxDiscountAmount,
       };
     }
 
@@ -284,6 +511,8 @@ export class PromoService {
         code: selection.code,
         codeType: selection.type,
         value: selection.value,
+        minPurchaseAmount: selection.minPurchaseAmount,
+        maxDiscountAmount: selection.maxDiscountAmount,
       };
     } catch (err) {
       if (err instanceof PromoValidationError) {
@@ -334,6 +563,7 @@ export class PromoService {
         value: promoCodes.value,
         maxUsesPerUser: promoCodes.maxUsesPerUser,
         minPurchaseAmount: promoCodes.minPurchaseAmount,
+        maxDiscountAmount: promoCodes.maxDiscountAmount,
       });
     if (!consumed) {
       throw await this.getUnavailablePromoError(tx, code);
@@ -357,7 +587,14 @@ export class PromoService {
     });
 
     return {
-      ...applyPurchasePromo(code, type, consumed.value, baseAmount, baseGbAmount),
+      ...applyPurchasePromo(
+        code,
+        type,
+        consumed.value,
+        baseAmount,
+        baseGbAmount,
+        consumed.maxDiscountAmount
+      ),
       intentId: params.intentId,
     };
   }
@@ -479,7 +716,13 @@ export class PromoService {
     db: Pick<DbTransaction, 'select'> | ReturnType<typeof getDb>,
     telegramId: number,
     code: string
-  ): Promise<{ type: PromoType; value: number; minPurchaseAmount: number }> {
+  ): Promise<{
+    type: PromoType;
+    value: number;
+    minPurchaseAmount: number;
+    maxDiscountAmount?: number | null;
+    firstPurchaseOnly: boolean;
+  }> {
     const [promo] = await db
       .select({
         type: promoCodes.type,
@@ -490,6 +733,8 @@ export class PromoService {
         maxUses: promoCodes.maxUses,
         maxUsesPerUser: promoCodes.maxUsesPerUser,
         minPurchaseAmount: promoCodes.minPurchaseAmount,
+        maxDiscountAmount: promoCodes.maxDiscountAmount,
+        firstPurchaseOnly: promoCodes.firstPurchaseOnly,
       })
       .from(promoCodes)
       .where(eq(promoCodes.code, code))
@@ -501,6 +746,19 @@ export class PromoService {
     }
     if (promo.currentUses >= promo.maxUses) {
       throw new PromoValidationError('promo_max_uses_reached');
+    }
+
+    if (promo.firstPurchaseOnly) {
+      const [completedPurchases] = await db
+        .select({ value: count() })
+        .from(purchaseIntents)
+        .where(
+          and(eq(purchaseIntents.telegramId, telegramId), eq(purchaseIntents.status, 'completed'))
+        )
+        .limit(1);
+      if (Number(completedPurchases?.value ?? 0) > 0) {
+        throw new PromoValidationError('promo_first_purchase_only');
+      }
     }
 
     const [redemptionCount] = await db
@@ -518,6 +776,8 @@ export class PromoService {
       type,
       value: safePromoValue(type, promo.value),
       minPurchaseAmount: validateMinimumPurchaseAmount(promo.minPurchaseAmount ?? 0),
+      maxDiscountAmount: promo.maxDiscountAmount ?? null,
+      firstPurchaseOnly: Boolean(promo.firstPurchaseOnly),
     };
   }
 
@@ -561,7 +821,11 @@ export class PromoService {
 }
 
 function normalizeCode(rawCode: string): string {
-  const code = rawCode.trim().toUpperCase();
+  const code = rawCode
+    .trim()
+    .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+    .toUpperCase();
   if (!code || code.length > 128 || !/^[A-Z0-9_-]+$/.test(code)) {
     throw new PromoValidationError('promo_invalid');
   }
@@ -616,6 +880,13 @@ function validateMinimumPurchaseAmount(value: number): number {
   return value;
 }
 
+function validateMaxDiscountAmount(value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > Number.MAX_SAFE_INTEGER) {
+    throw new Error('PROMO_MAX_DISCOUNT_AMOUNT_INVALID');
+  }
+  return value;
+}
+
 function normalizeMaxUsesPerUser(value: number | undefined): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 1;
 }
@@ -651,35 +922,52 @@ function applyPurchasePromo(
   type: PurchasePromoType,
   value: number,
   baseAmount: number,
-  baseGbAmount: number
+  baseGbAmount: number,
+  maxDiscountAmount?: number | null
 ): PromoQuote {
   const validBaseAmount = validateBaseAmount(baseAmount);
   const validBaseGbAmount = validateBaseGbAmount(baseGbAmount);
   const validValue = safePromoValue(type, value);
 
   switch (type) {
-    case 'discount_percent':
+    case 'discount_percent': {
+      let discount = Math.floor((validBaseAmount * validValue) / 100);
+      if (maxDiscountAmount !== undefined && maxDiscountAmount !== null && maxDiscountAmount > 0) {
+        discount = Math.min(discount, maxDiscountAmount);
+      }
       return {
         code,
         type,
         value: validValue,
-        finalAmount: Math.floor((validBaseAmount * (100 - validValue)) / 100),
+        finalAmount: Math.max(0, validBaseAmount - discount),
         finalGbAmount: validBaseGbAmount,
+        discountAmount: discount,
       };
-    case 'discount_fixed':
+    }
+    case 'discount_fixed': {
+      const discount = Math.min(validBaseAmount, validValue);
       return {
         code,
         type,
         value: validValue,
         finalAmount: Math.max(0, validBaseAmount - validValue),
         finalGbAmount: validBaseGbAmount,
+        discountAmount: discount,
       };
+    }
     case 'gift_gb': {
       const finalGbAmount = validBaseGbAmount + validValue;
       if (!Number.isSafeInteger(finalGbAmount) || finalGbAmount > MAX_DATABASE_INTEGER) {
         throw new PromoValidationError('promo_invalid');
       }
-      return { code, type, value: validValue, finalAmount: validBaseAmount, finalGbAmount };
+      return {
+        code,
+        type,
+        value: validValue,
+        finalAmount: validBaseAmount,
+        finalGbAmount,
+        discountAmount: 0,
+      };
     }
   }
 }

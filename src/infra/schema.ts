@@ -713,6 +713,8 @@ export const promoCodes = pgTable(
     maxUsesPerUser: integer('max_uses_per_user').notNull().default(1),
     currentUses: integer('current_uses').notNull().default(0),
     minPurchaseAmount: bigint('min_purchase_amount', { mode: 'number' }).notNull().default(0),
+    maxDiscountAmount: bigint('max_discount_amount', { mode: 'number' }),
+    firstPurchaseOnly: boolean('first_purchase_only').notNull().default(false),
     expiresAt: timestamp('expires_at'),
     active: boolean('active').notNull().default(true),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -736,6 +738,10 @@ export const promoCodes = pgTable(
     check(
       'promo_codes_min_purchase_safe',
       sql`${table.minPurchaseAmount} BETWEEN 0 AND 9007199254740991`
+    ),
+    check(
+      'promo_codes_max_discount_safe',
+      sql`${table.maxDiscountAmount} IS NULL OR (${table.maxDiscountAmount} > 0 AND ${table.maxDiscountAmount} <= 9007199254740991)`
     ),
   ]
 );

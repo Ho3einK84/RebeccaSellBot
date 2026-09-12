@@ -37,6 +37,8 @@ export interface SessionData {
     code: string;
     type: PurchasePromoType;
     value: number;
+    minPurchaseAmount?: number;
+    maxDiscountAmount?: number | null;
     selectedAt: number;
   };
   /** Screen that launched promo entry so the flow returns to the same context. */

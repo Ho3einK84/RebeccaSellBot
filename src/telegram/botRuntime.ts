@@ -18,6 +18,7 @@ import {
   topupConversation,
   adminSetBalanceConversation,
   adminCreatePromoConversation,
+  adminBulkPromoConversation,
   adminEditPromoConversation,
   adminSearchPromoConversation,
   adminBroadcastConversation,
@@ -257,6 +258,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   bot.use(createConversation(topupConversation, 'topupConversation'));
   bot.use(createConversation(adminSetBalanceConversation, 'adminSetBalanceConversation'));
   bot.use(createConversation(adminCreatePromoConversation, 'adminCreatePromoConversation'));
+  bot.use(createConversation(adminBulkPromoConversation, 'adminBulkPromoConversation'));
   bot.use(createConversation(adminEditPromoConversation, 'adminEditPromoConversation'));
   bot.use(createConversation(adminSearchPromoConversation, 'adminSearchPromoConversation'));
   bot.use(createConversation(adminBroadcastConversation, 'adminBroadcastConversation'));

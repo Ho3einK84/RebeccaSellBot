@@ -237,6 +237,15 @@ function buildPurchaseCheckoutScreen(
                   label: t(ctx, 'shop_promo_section'),
                   value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
                 },
+                ...(pkg.price > amount
+                  ? [
+                      {
+                        emoji: '🏷️',
+                        label: t(ctx, 'checkout_discount_label'),
+                        value: `${localizedNumber(pkg.price - amount, ctx)} ${t(ctx, 'currency_toman')}`,
+                      },
+                    ]
+                  : []),
               ],
             },
           ]
@@ -514,11 +523,27 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
 
 export function getEffectivePackagePrice(
   pkg: { price: number; gbAmount: number },
-  pendingPromo?: { type: string; value: number }
+  pendingPromo?: {
+    type: string;
+    value: number;
+    minPurchaseAmount?: number;
+    maxDiscountAmount?: number | null;
+  }
 ): number {
   if (!pendingPromo) return pkg.price;
+  if (pendingPromo.minPurchaseAmount && pkg.price < pendingPromo.minPurchaseAmount) {
+    return pkg.price;
+  }
   if (pendingPromo.type === 'discount_percent') {
-    return Math.max(0, Math.round(pkg.price * (1 - pendingPromo.value / 100)));
+    let discount = Math.floor((pkg.price * pendingPromo.value) / 100);
+    if (
+      pendingPromo.maxDiscountAmount !== undefined &&
+      pendingPromo.maxDiscountAmount !== null &&
+      pendingPromo.maxDiscountAmount > 0
+    ) {
+      discount = Math.min(discount, pendingPromo.maxDiscountAmount);
+    }
+    return Math.max(0, pkg.price - discount);
   }
   if (pendingPromo.type === 'discount_fixed') {
     return Math.max(0, pkg.price - pendingPromo.value);
@@ -696,6 +721,22 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           )
           .row();
       }
+    }
+
+    if (ctx.session.pendingPromo) {
+      range
+        .text(
+          (c) => `${t(c, 'shop_clear_promo_button')} (${c.session.pendingPromo?.code})`,
+          async (c) => {
+            delete c.session.pendingPromo;
+            await c.answerCallbackQuery({ text: t(c, 'promo_no_longer_usable') });
+            await renderScreen(c, await renderShopMenuText(c), {
+              parse_mode: 'Markdown',
+              reply_markup: shopMenu,
+            });
+          }
+        )
+        .row();
     }
   })
   .row()

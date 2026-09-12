@@ -8,6 +8,7 @@ import {
   promoDetailView,
   renderPromoScreen,
   showPromoCenter,
+  showPromoRedemptions,
 } from '../../promoAdminUi.js';
 
 const UUID_CAPTURE = '([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})';
@@ -42,9 +43,19 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
     await ctx.conversation.enter('adminCreatePromoConversation');
   });
 
+  bot.callbackQuery('promo:bulk', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminBulkPromoConversation');
+  });
+
   bot.callbackQuery('promo:search', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminSearchPromoConversation');
+  });
+
+  bot.callbackQuery(new RegExp(`^promo:redemptions:${UUID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await showPromoRedemptions(ctx, ctx.match[1]!, Number(ctx.match[2]) || 1);
   });
 
   bot.callbackQuery(new RegExp(`^promo:open:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
