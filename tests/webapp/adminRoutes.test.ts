@@ -53,6 +53,44 @@ describe('WebApp Server & Admin Routes', () => {
         return { id: 'rec_1001', telegramId: 55555, photoFileId: 'file_abc', status: 'pending' };
       return undefined;
     }),
+    getTopupById: vi.fn(async (id: string) => {
+      if (id === 'rec_1001')
+        return { id: 'rec_1001', telegramId: 55555, photoFileId: 'file_abc', status: 'pending' };
+      if (id === 'rec_approved')
+        return {
+          id: 'rec_approved',
+          telegramId: 55555,
+          photoFileId: 'file_approved',
+          status: 'approved',
+        };
+      return undefined;
+    }),
+    listTopupsPage: vi.fn(async (options?: any) => ({
+      items: [
+        {
+          id: 'rec_1001',
+          telegramId: 55555,
+          amount: 100_000,
+          status: options?.status === 'all' ? 'pending' : (options?.status ?? 'pending'),
+          createdAt: new Date().toISOString(),
+          user: {
+            telegramId: 55555,
+            username: 'testuser',
+            firstName: 'User',
+            lastName: null,
+            balance: 50_000,
+          },
+        },
+      ],
+      total: 1,
+      page: options?.page ?? 1,
+      totalPages: 1,
+      pendingCount: 1,
+    })),
+    batchApproveTopups: vi.fn(async (ids: string[], _adminId: number) => ({
+      succeeded: ids,
+      failed: [],
+    })),
     adjustBalanceAdmin: vi.fn(async () => 150_000),
     getBalance: vi.fn(async () => 50_000),
   };
@@ -131,12 +169,22 @@ describe('WebApp Server & Admin Routes', () => {
     updateLocale: vi.fn(async () => {}),
   };
 
+  const mockConfigStore: Record<string, string> = {
+    receipt_notify_enabled: 'true',
+    receipt_notify_mode: 'full',
+    receipt_notify_admins: '',
+  };
+
   const mockTranslationService = {
     getDefaultLocale: vi.fn(() => 'fa' as const),
-    getSetting: vi.fn((_key: string) => undefined as string | undefined),
+    getSetting: vi.fn((key: string, defaultValue?: string) => mockConfigStore[key] ?? defaultValue),
     getSettingBool: vi.fn((key: string, defaultValue = false) => {
+      if (key in mockConfigStore) return mockConfigStore[key] === 'true';
       if (key === 'language_selection_enabled') return true;
       return defaultValue;
+    }),
+    updateSetting: vi.fn(async (key: string, value: string) => {
+      mockConfigStore[key] = value;
     }),
     updateSettings: vi.fn(async () => {}),
   };
@@ -273,11 +321,19 @@ describe('WebApp Server & Admin Routes', () => {
     ADMIN_SESSION_SECRET: 'test_session_secret_at_least_32_characters_long!!',
   } as unknown as Config;
 
+  const mockConfigurationService = {
+    get: vi.fn(async (key: string) => mockConfigStore[key] ?? null),
+    set: vi.fn(async (key: string, value: string) => {
+      mockConfigStore[key] = value;
+    }),
+  };
+
   const mockServices = {
     adminService: mockAdminService,
     walletService: mockWalletService,
     userService: mockUserService,
     configService: mockConfigService,
+    configurationService: mockConfigurationService,
     pricingService: mockPricingService,
     translationService: mockTranslationService,
     panelRegistry: mockPanelRegistry,
@@ -308,6 +364,12 @@ describe('WebApp Server & Admin Routes', () => {
         url: '/api/admin/receipts/rec_1/action',
         payload: { action: 'approve' },
       },
+      {
+        method: 'POST' as const,
+        url: '/api/admin/receipts/batch-action',
+        payload: { action: 'approve', ids: ['rec_1'] },
+      },
+      { method: 'GET' as const, url: '/api/admin/receipts/settings' },
       { method: 'GET' as const, url: '/api/admin/users' },
       { method: 'GET' as const, url: '/api/admin/users/55555' },
       {
@@ -400,7 +462,11 @@ describe('WebApp Server & Admin Routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockWalletService.rejectTopup).toHaveBeenCalledWith('rec_1001', 12345);
+      expect(mockWalletService.rejectTopup).toHaveBeenCalledWith(
+        'rec_1001',
+        12345,
+        'Unreadable receipt screenshot'
+      );
       expect(mockUserService.recordAdminAction).toHaveBeenCalled();
     });
 
@@ -414,6 +480,78 @@ describe('WebApp Server & Admin Routes', () => {
 
       expect(response.statusCode).toBe(400);
       expect(response.json().error).toContain('reason');
+    });
+
+    it('POST /api/admin/receipts/batch-action approves receipts in bulk', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/receipts/batch-action',
+        cookies: { session: getAdminToken() },
+        payload: { action: 'approve', ids: ['rec_1001'] },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.success).toBe(true);
+      expect(data.approvedCount).toBe(1);
+      expect(mockWalletService.approveTopup).toHaveBeenCalledWith('rec_1001', 12345);
+    });
+
+    it('POST /api/admin/receipts/batch-action rejects empty ids array with 400', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/admin/receipts/batch-action',
+        cookies: { session: getAdminToken() },
+        payload: { action: 'approve', ids: [] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toContain('receipt IDs');
+    });
+
+    it('GET /api/admin/receipts/settings returns notification settings', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/admin/receipts/settings',
+        cookies: { session: getAdminToken() },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data).toHaveProperty('enabled');
+      expect(data).toHaveProperty('mode');
+      expect(data).toHaveProperty('admins');
+      expect(data).toHaveProperty('allAdmins');
+      expect(data.allAdmins).toContain(12345);
+    });
+
+    it('PUT /api/admin/receipts/settings updates notification configuration', async () => {
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/admin/receipts/settings',
+        cookies: { session: getAdminToken() },
+        payload: {
+          enabled: false,
+          mode: 'simple',
+          admins: [12345],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const data = response.json();
+      expect(data.success).toBe(true);
+      expect(mockTranslationService.updateSetting).toHaveBeenCalledWith(
+        'receipt_notify_enabled',
+        'false'
+      );
+      expect(mockTranslationService.updateSetting).toHaveBeenCalledWith(
+        'receipt_notify_mode',
+        'simple'
+      );
+      expect(mockTranslationService.updateSetting).toHaveBeenCalledWith(
+        'receipt_notify_admins',
+        '12345'
+      );
     });
 
     it('GET /api/admin/users lists users and supports search', async () => {

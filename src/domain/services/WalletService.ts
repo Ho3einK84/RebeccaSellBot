@@ -19,7 +19,8 @@
  *        backed by `wallet_transactions.reference_id` UNIQUE constraint to guarantee idempotency.
  */
 
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { logger } from '../../infra/logger.js';
 import { getDb } from '../../infra/db.js';
 import {
   users,
@@ -496,7 +497,11 @@ export class WalletService {
     return receiptId;
   }
 
-  async rejectTopup(receiptId: string, adminId: number): Promise<{ telegramId: number } | null> {
+  async rejectTopup(
+    receiptId: string,
+    adminId: number,
+    reason?: string
+  ): Promise<{ telegramId: number } | null> {
     const db = getDb();
     return db.transaction(async (tx) => {
       const [rejected] = await tx
@@ -509,10 +514,11 @@ export class WalletService {
       await tx.insert(auditLogs).values({
         id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
         actorTelegramId: adminId,
-        action: 'topup_receipt_rejected',
+        action: reason ? 'topup_receipt_rejected_with_reason' : 'topup_receipt_rejected',
         entityType: 'topup_receipt',
         entityId: rejected.id,
         targetTelegramId: rejected.telegramId,
+        metadata: reason ? JSON.stringify({ reason }) : null,
       });
       return { telegramId: rejected.telegramId };
     });
@@ -563,6 +569,186 @@ export class WalletService {
       .where(and(eq(topupReceipts.id, receiptId), eq(topupReceipts.status, 'pending')))
       .limit(1);
     return receipt;
+  }
+
+  async getTopupById(receiptId: string) {
+    const [receipt] = await getDb()
+      .select()
+      .from(topupReceipts)
+      .where(eq(topupReceipts.id, receiptId))
+      .limit(1);
+    return receipt;
+  }
+
+  async listTopupsPage(
+    options: {
+      page?: number;
+      pageSize?: number;
+      status?: 'pending' | 'approved' | 'rejected' | 'all';
+      search?: string;
+    } = {}
+  ): Promise<{
+    items: Array<{
+      id: string;
+      telegramId: number;
+      amount: number;
+      photoFileId: string;
+      mediaType: string;
+      status: string;
+      reviewedBy: number | null;
+      createdAt: Date;
+      updatedAt: Date;
+      user: {
+        username: string | null;
+        firstName: string | null;
+        lastName: string | null;
+        balance: number;
+      } | null;
+      rejectReason?: string | null;
+    }>;
+    total: number;
+    page: number;
+    totalPages: number;
+    pendingCount: number;
+  }> {
+    const safePage = Math.max(1, Math.trunc(options.page ?? 1) || 1);
+    const safePageSize = Math.max(1, Math.min(Math.trunc(options.pageSize ?? 10) || 10, 50));
+    const status = options.status ?? 'pending';
+    const search = options.search?.trim();
+
+    const db = getDb();
+    const whereConditions: SQL[] = [];
+
+    if (status && status !== 'all') {
+      whereConditions.push(eq(topupReceipts.status, status));
+    }
+
+    if (search) {
+      const isNum = /^\d+$/.test(search);
+      if (isNum) {
+        whereConditions.push(
+          or(
+            eq(topupReceipts.telegramId, Number(search)),
+            sql`${topupReceipts.id} ILIKE ${`%${search}%`}`
+          )!
+        );
+      } else {
+        const cleanUser = search.replace(/^@/, '');
+        whereConditions.push(
+          or(
+            sql`${topupReceipts.id} ILIKE ${`%${search}%`}`,
+            sql`${users.username} ILIKE ${`%${cleanUser}%`}`,
+            sql`${users.firstName} ILIKE ${`%${search}%`}`
+          )!
+        );
+      }
+    }
+
+    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+    const [[totalRow], [pendingRow], rawRows] = await Promise.all([
+      db
+        .select({ value: count() })
+        .from(topupReceipts)
+        .leftJoin(users, eq(topupReceipts.telegramId, users.telegramId))
+        .where(whereClause),
+      db.select({ value: count() }).from(topupReceipts).where(eq(topupReceipts.status, 'pending')),
+      db
+        .select({
+          id: topupReceipts.id,
+          telegramId: topupReceipts.telegramId,
+          amount: topupReceipts.amount,
+          photoFileId: topupReceipts.photoFileId,
+          mediaType: topupReceipts.mediaType,
+          status: topupReceipts.status,
+          reviewedBy: topupReceipts.reviewedBy,
+          createdAt: topupReceipts.createdAt,
+          updatedAt: topupReceipts.updatedAt,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          userBalance: users.balance,
+        })
+        .from(topupReceipts)
+        .leftJoin(users, eq(topupReceipts.telegramId, users.telegramId))
+        .where(whereClause)
+        .orderBy(desc(topupReceipts.createdAt))
+        .limit(safePageSize)
+        .offset((safePage - 1) * safePageSize),
+    ]);
+
+    const total = Number(totalRow?.value ?? 0);
+    const pendingCount = Number(pendingRow?.value ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+
+    const rejectedIds = rawRows.filter((r) => r.status === 'rejected').map((r) => r.id);
+    const rejectReasons = new Map<string, string>();
+    if (rejectedIds.length > 0) {
+      const logs = await db
+        .select({ entityId: auditLogs.entityId, metadata: auditLogs.metadata })
+        .from(auditLogs)
+        .where(
+          and(eq(auditLogs.entityType, 'topup_receipt'), inArray(auditLogs.entityId, rejectedIds))
+        );
+      for (const log of logs) {
+        if (log.entityId && log.metadata) {
+          try {
+            const parsed =
+              typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata;
+            if (parsed && typeof parsed === 'object' && parsed.reason) {
+              rejectReasons.set(log.entityId, String(parsed.reason));
+            }
+          } catch {
+            // ignore malformed audit metadata
+          }
+        }
+      }
+    }
+
+    const items = rawRows.map((r) => ({
+      id: r.id,
+      telegramId: r.telegramId,
+      amount: r.amount,
+      photoFileId: r.photoFileId,
+      mediaType: r.mediaType,
+      status: r.status,
+      reviewedBy: r.reviewedBy,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      user:
+        r.firstName !== null || r.username !== null || r.userBalance !== null
+          ? {
+              username: r.username,
+              firstName: r.firstName,
+              lastName: r.lastName,
+              balance: r.userBalance ?? 0,
+            }
+          : null,
+      rejectReason: rejectReasons.get(r.id) ?? null,
+    }));
+
+    return { items, total, page: safePage, totalPages, pendingCount };
+  }
+
+  async batchApproveTopups(
+    receiptIds: string[],
+    adminId: number
+  ): Promise<{
+    approvedCount: number;
+    results: Array<{ id: string; telegramId: number; amount: number }>;
+  }> {
+    const results: Array<{ id: string; telegramId: number; amount: number }> = [];
+    for (const id of receiptIds) {
+      try {
+        const res = await this.approveTopup(id, adminId);
+        if (res) {
+          results.push({ id, telegramId: res.telegramId, amount: res.amount });
+        }
+      } catch (err) {
+        logger.error({ err, receiptId: id }, 'Failed to approve receipt in batch');
+      }
+    }
+    return { approvedCount: results.length, results };
   }
 
   async getDashboardStats(): Promise<DashboardStats> {

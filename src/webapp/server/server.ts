@@ -245,6 +245,7 @@ export async function createWebAppServer(
     panelRegistry: services.panelRegistry,
     botToken: config.BOT_TOKEN,
     adminService: services.adminService,
+    adminIds: services.adminIds,
     botApi: services.botApi,
     translationService: services.translationService,
   });

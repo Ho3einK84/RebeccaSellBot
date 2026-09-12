@@ -24,8 +24,24 @@ export interface TopupReceipt {
   amount: number;
   status: string;
   createdAt: string;
+  updatedAt?: string;
   photoFileId?: string;
   mediaType?: string;
+  reviewedBy?: number | null;
+  rejectReason?: string | null;
+  user?: {
+    username?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    balance?: number;
+  } | null;
+}
+
+export interface ReceiptSettings {
+  enabled: boolean;
+  mode: 'full' | 'simple';
+  admins: number[];
+  allAdmins: number[];
 }
 
 export interface UserProfile {
@@ -101,6 +117,8 @@ export interface UserReceiptItem {
   amount: number;
   status: string;
   createdAt: string;
+  photoFileId?: string | null;
+  reviewedBy?: number | null;
 }
 
 export interface PanelServiceSummary {

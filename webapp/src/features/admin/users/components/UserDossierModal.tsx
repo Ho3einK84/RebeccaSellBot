@@ -13,6 +13,7 @@ import {
   Check,
   ArrowUpRight,
   ArrowDownLeft,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -22,6 +23,7 @@ import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { UserConfigQrModal } from './UserConfigQrModal.js';
 import { UserConfirmModal } from './UserConfirmModal.js';
+import { ReceiptPhotoModal } from '@/features/admin/receipts/components/ReceiptPhotoModal.js';
 import type { UserDossierResponse } from '@/shared/types/api.js';
 import type { UserProfile, UserConfigItem } from '@/shared/types/admin.js';
 
@@ -77,6 +79,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   } | null>(null);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [photoReceiptId, setPhotoReceiptId] = useState<string | null>(null);
 
   const notifyAction = (message: string, type: 'success' | 'error' = 'success') => {
     onNotify?.(message, type);
@@ -88,6 +91,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     setQrModalConfig(null);
     setConfirmModal(null);
     setActionLoading(null);
+    setPhotoReceiptId(null);
   }, [dossier?.summary?.user?.telegramId]);
 
   if (!dossier) return null;
@@ -752,6 +756,21 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {rec.photoFileId && (
+                        <button
+                          type="button"
+                          className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer ${
+                            isDark
+                              ? 'bg-indigo-500/10 border-indigo-500/25 hover:bg-indigo-500/20 text-indigo-300'
+                              : 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700'
+                          }`}
+                          onClick={() => setPhotoReceiptId(rec.id)}
+                          title={t('admin.receipts.viewPhoto')}
+                        >
+                          <ImageIcon className="w-3 h-3" />
+                          <span className="hidden sm:inline">{t('admin.receipts.viewPhoto')}</span>
+                        </button>
+                      )}
                       <Badge
                         variant={
                           rec.status === 'approved'
@@ -895,6 +914,13 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           reasonPlaceholder={t('admin.users.banReasonPlaceholder')}
         />
       )}
+
+      <ReceiptPhotoModal
+        photoUrl={photoReceiptId ? `/api/admin/receipts/${photoReceiptId}/photo` : null}
+        receiptId={photoReceiptId}
+        onClose={() => setPhotoReceiptId(null)}
+        onErrorNotify={() => onNotify?.(t('admin.receipts.noPhoto'), 'error')}
+      />
     </>
   );
 };

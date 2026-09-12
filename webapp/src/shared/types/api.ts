@@ -30,14 +30,20 @@ export interface StatsResponse {
 
 export interface ReceiptsResponse {
   items: TopupReceipt[];
-  total?: number;
-  page?: number;
-  totalPages?: number;
+  total: number;
+  page: number;
+  totalPages: number;
+  pendingCount?: number;
 }
 
 export interface ReceiptActionPayload {
   action: 'approve' | 'reject';
   reason?: string;
+}
+
+export interface BatchReceiptActionPayload {
+  ids: string[];
+  action: 'approve';
 }
 
 export interface UsersResponse {

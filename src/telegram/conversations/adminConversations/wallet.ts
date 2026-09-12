@@ -13,6 +13,7 @@ import {
   type AdminBalanceOperation,
 } from '../../../domain/services/WalletService.js';
 import { sendBalanceAdjustmentNotification } from '../../features/admin/adminNotifications.js';
+import { formatReceiptShortId } from '../../features/admin/receiptRoutes.js';
 import {
   acceptConversationOwner,
   buildEmptyState,
@@ -350,12 +351,55 @@ async function notifyAdminsOfReceipt(
   mediaType: 'photo' | 'document' = 'photo'
 ): Promise<void> {
   if (!ctx.services) return;
+
+  const ts = ctx.services.translationService;
+  const notifyEnabled =
+    typeof ts.getSettingBool === 'function'
+      ? ts.getSettingBool('receipt_notify_enabled', true)
+      : true;
+  if (!notifyEnabled) {
+    logger.info({ receiptId }, 'Admin receipt notification skipped (disabled in settings)');
+    return;
+  }
+
+  const notifyAdminsSetting =
+    typeof ts.getSetting === 'function' ? ts.getSetting('receipt_notify_admins', '').trim() : '';
+  let targetAdminIds = ctx.services.adminIds;
+  if (notifyAdminsSetting && notifyAdminsSetting !== 'all') {
+    const configuredIds = notifyAdminsSetting
+      .split(',')
+      .map((id) => Number(id.trim()))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+    if (configuredIds.length > 0) {
+      targetAdminIds = configuredIds;
+    }
+  }
+
+  const notifyMode =
+    typeof ts.getSetting === 'function'
+      ? (ts.getSetting('receipt_notify_mode', 'full') as 'full' | 'simple')
+      : 'full';
   const createdAt = new Date();
-  for (const adminId of ctx.services.adminIds) {
+  const shortId = formatReceiptShortId(receiptId);
+
+  for (const adminId of targetAdminIds) {
     try {
-      const adminLocale =
-        (await ctx.services.userService.getLocale(adminId)) ??
-        ctx.services.translationService.resolveLocale();
+      const adminLocale = (await ctx.services.userService.getLocale(adminId)) ?? ts.resolveLocale();
+
+      if (notifyMode === 'simple') {
+        const briefTitle = tForLocale(ts, adminLocale, 'admin_receipt_notify_simple_brief');
+        const simpleText = tForLocale(ts, adminLocale, 'admin_receipt_notify_simple_message', {
+          amount: localizedNumberForLocale(amount, adminLocale),
+          currency: tForLocale(ts, adminLocale, 'currency_toman'),
+          telegram_id: String(telegramId),
+          short_id: shortId,
+        });
+        await ctx.api.sendMessage(adminId, simpleText || `🔔 *${briefTitle}*`, {
+          parse_mode: 'Markdown',
+        });
+        continue;
+      }
+
       const caption = buildScreen({
         emoji: '🧾',
         title: tForLocale(

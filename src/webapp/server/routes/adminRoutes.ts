@@ -40,7 +40,8 @@ export function registerAdminRoutes(
     pricingService?: PricingService;
     panelRegistry: RebeccaPanelRegistry;
     botToken?: string;
-    adminService?: Pick<AdminService, 'isAdmin'>;
+    adminService?: Pick<AdminService, 'isAdmin'> & { adminIds?: number[] };
+    adminIds?: number[];
     botApi?: Api;
     translationService?: TranslationService;
   }
@@ -71,13 +72,159 @@ export function registerAdminRoutes(
 
     // GET /api/admin/receipts
     adminScope.get<{
-      Querystring: { page?: string; limit?: string };
+      Querystring: {
+        page?: string;
+        limit?: string;
+        status?: 'pending' | 'approved' | 'rejected' | 'all';
+        search?: string;
+      };
     }>('/api/admin/receipts', async (request, reply) => {
       const page = clampPositiveInt(request.query.page, 1, 1_000_000);
       const limit = clampPositiveInt(request.query.limit, 10, 50);
+      const status = request.query.status ?? 'pending';
+      const search = request.query.search;
+      if (typeof services.walletService.listTopupsPage === 'function') {
+        const result = await services.walletService.listTopupsPage({
+          page,
+          pageSize: limit,
+          status,
+          search,
+        });
+        return reply.code(200).send(result);
+      }
       const result = await services.walletService.listPendingTopupsPage(page, limit);
       return reply.code(200).send(result);
     });
+
+    // GET /api/admin/receipts/settings
+    adminScope.get('/api/admin/receipts/settings', async (_request, reply) => {
+      const ts = services.translationService;
+      const enabled = ts ? ts.getSettingBool('receipt_notify_enabled', true) : true;
+      const mode = ts
+        ? (ts.getSetting('receipt_notify_mode', 'full') as 'full' | 'simple')
+        : 'full';
+      const adminsRaw = ts ? ts.getSetting('receipt_notify_admins', '').trim() : '';
+      const selectedAdmins =
+        !adminsRaw || adminsRaw === 'all'
+          ? []
+          : adminsRaw
+              .split(',')
+              .map((s) => Number(s.trim()))
+              .filter((n) => Number.isSafeInteger(n) && n > 0);
+
+      const allAdmins = services.adminService?.adminIds ?? services.adminIds ?? [];
+
+      return reply.code(200).send({
+        enabled,
+        mode,
+        admins: selectedAdmins,
+        allAdmins,
+      });
+    });
+
+    // PUT /api/admin/receipts/settings
+    adminScope.put<{
+      Body: {
+        enabled?: boolean;
+        mode?: 'full' | 'simple';
+        admins?: number[];
+      };
+    }>(
+      '/api/admin/receipts/settings',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              enabled: { type: 'boolean' },
+              mode: { type: 'string', enum: ['full', 'simple'] },
+              admins: { type: 'array', items: { type: 'number' } },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { enabled, mode, admins } = request.body;
+        const ts = services.translationService;
+        if (!ts) {
+          return reply.code(500).send({ error: 'Translation service unavailable' });
+        }
+
+        if (typeof enabled === 'boolean') {
+          await ts.updateSetting('receipt_notify_enabled', String(enabled));
+        }
+
+        if (mode === 'full' || mode === 'simple') {
+          await ts.updateSetting('receipt_notify_mode', mode);
+        }
+
+        if (Array.isArray(admins)) {
+          const validIds = admins.filter((id) => Number.isSafeInteger(id) && id > 0);
+          const val = validIds.length === 0 ? '' : validIds.join(',');
+          await ts.updateSetting('receipt_notify_admins', val);
+        }
+
+        return reply.code(200).send({ success: true });
+      }
+    );
+
+    // POST /api/admin/receipts/batch-action
+    adminScope.post<{
+      Body: { ids: string[]; action: 'approve' };
+    }>(
+      '/api/admin/receipts/batch-action',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            required: ['ids', 'action'],
+            properties: {
+              ids: { type: 'array', items: { type: 'string' } },
+              action: { type: 'string', enum: ['approve'] },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { ids, action } = request.body;
+        const adminId = request.userSession!.telegramId;
+        if (!ids || ids.length === 0) {
+          return reply.code(400).send({ error: 'No receipt IDs provided' });
+        }
+
+        if (action === 'approve') {
+          let approvedCount = 0;
+          for (const receiptId of ids) {
+            try {
+              const result = await services.walletService.approveTopup(receiptId, adminId);
+              if (!result) continue;
+              approvedCount += 1;
+
+              if (services.botApi && services.translationService) {
+                await sendReceiptApprovalNotification(
+                  services.botApi,
+                  {
+                    userService: services.userService,
+                    translationService: services.translationService,
+                  },
+                  {
+                    telegramId: result.telegramId,
+                    amount: result.amount,
+                    receiptId,
+                  }
+                );
+              }
+            } catch (err) {
+              request.log.error({ err, receiptId }, 'Batch receipt approval error');
+            }
+          }
+
+          return reply.code(200).send({ success: true, approvedCount });
+        }
+
+        return reply.code(400).send({ error: 'Unsupported batch action' });
+      }
+    );
 
     // GET /api/admin/receipts/:id/photo — redirect to the Telegram-hosted
     // receipt image so the <img> tag constructed by the frontend resolves
@@ -86,7 +233,10 @@ export function registerAdminRoutes(
       Params: { id: string };
     }>('/api/admin/receipts/:id/photo', async (request, reply) => {
       const { id } = request.params;
-      const receipt = await services.walletService.getPendingTopup(id);
+      const receipt =
+        typeof services.walletService.getTopupById === 'function'
+          ? await services.walletService.getTopupById(id)
+          : await services.walletService.getPendingTopup(id);
       if (!receipt) {
         return reply.code(404).send({ error: 'Receipt not found' });
       }
@@ -158,7 +308,7 @@ export function registerAdminRoutes(
           return reply.code(400).send({ error: 'A rejection reason is required' });
         }
 
-        const result = await services.walletService.rejectTopup(id, adminId);
+        const result = await services.walletService.rejectTopup(id, adminId, reason.trim());
         if (!result) {
           return reply.code(404).send({ error: 'Receipt not found or already processed' });
         }

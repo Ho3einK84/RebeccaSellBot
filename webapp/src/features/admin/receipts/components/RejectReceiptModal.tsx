@@ -36,13 +36,21 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
     { key: 'unclear', label: t('admin.receipts.reasons.unclear') },
     { key: 'not_received', label: t('admin.receipts.reasons.notReceived') },
     { key: 'duplicate', label: t('admin.receipts.reasons.duplicate') },
-    { key: 'mismatch', label: t('admin.receipts.reasons.mismatch') },
+    { key: 'amount_mismatch', label: t('admin.receipts.reasons.mismatch') },
     { key: 'other', label: t('admin.receipts.reasons.other') },
   ];
 
-  const handleSelectPreset = (presetKey: string, presetLabel: string) => {
+  const handleSelectPreset = (presetKey: string) => {
     setSelectedPreset(presetKey);
-    setReason(presetLabel);
+    if (presetKey !== 'other') {
+      setReason('');
+    }
+  };
+
+  const handleConfirm = () => {
+    const finalReason = reason.trim() || selectedPreset;
+    if (!finalReason) return;
+    onConfirm(receipt, finalReason);
   };
 
   const handleClose = () => {
@@ -96,7 +104,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
                         ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
                         : 'bg-slate-100 border-slate-200/80 text-slate-700 hover:bg-slate-200'
                   }`}
-                  onClick={() => handleSelectPreset(preset.key, preset.label)}
+                  onClick={() => handleSelectPreset(preset.key)}
                 >
                   {preset.label}
                 </button>
@@ -133,8 +141,8 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
                 ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-500/30 text-rose-300 shadow-xs'
                 : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-600 shadow-xs'
             }`}
-            disabled={loading || !reason.trim()}
-            onClick={() => onConfirm(receipt, reason.trim())}
+            disabled={loading || (!selectedPreset && !reason.trim())}
+            onClick={handleConfirm}
           >
             {loading ? (
               <RotateCw className="w-3.5 h-3.5 animate-spin" />

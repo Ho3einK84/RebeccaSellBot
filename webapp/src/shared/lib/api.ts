@@ -21,8 +21,9 @@ import type {
   BanUserResponse,
   ToggleConfigResponse,
   RevokeSubUrlResponse,
+  BatchReceiptActionPayload,
 } from '@/shared/types/api.js';
-import type { UserFilterType, UserSortType } from '@/shared/types/admin.js';
+import type { UserFilterType, UserSortType, ReceiptSettings } from '@/shared/types/admin.js';
 
 class ApiClientError extends Error {
   status: number;
@@ -85,8 +86,22 @@ export const api = {
 
   getAdminStats: (): Promise<StatsResponse> => request<StatsResponse>('/api/admin/stats'),
 
-  getAdminReceipts: (limit = 30): Promise<ReceiptsResponse> =>
-    request<ReceiptsResponse>(`/api/admin/receipts?limit=${limit}`),
+  getAdminReceipts: (
+    params: {
+      page?: number;
+      limit?: number;
+      status?: 'pending' | 'approved' | 'rejected' | 'all';
+      search?: string;
+    } = {}
+  ): Promise<ReceiptsResponse> => {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set('page', String(params.page));
+    if (params.limit) searchParams.set('limit', String(params.limit));
+    if (params.status) searchParams.set('status', params.status);
+    if (params.search) searchParams.set('search', params.search);
+    const qs = searchParams.toString();
+    return request<ReceiptsResponse>(`/api/admin/receipts${qs ? `?${qs}` : ''}`);
+  },
 
   performReceiptAction: (
     receiptId: string,
@@ -94,6 +109,27 @@ export const api = {
   ): Promise<{ success: boolean }> =>
     request<{ success: boolean }>(`/api/admin/receipts/${receiptId}/action`, {
       method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  performBatchReceiptAction: (
+    payload: BatchReceiptActionPayload
+  ): Promise<{ success: boolean; approvedCount: number }> =>
+    request<{ success: boolean; approvedCount: number }>('/api/admin/receipts/batch-action', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getReceiptSettings: (): Promise<ReceiptSettings> =>
+    request<ReceiptSettings>('/api/admin/receipts/settings'),
+
+  updateReceiptSettings: (payload: {
+    enabled?: boolean;
+    mode?: 'full' | 'simple';
+    admins?: number[];
+  }): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>('/api/admin/receipts/settings', {
+      method: 'PUT',
       body: JSON.stringify(payload),
     }),
 
