@@ -35,6 +35,13 @@ export async function adminGuardWithCheck(
       }
     }
 
+    if (!token && typeof request.query === 'object' && request.query && 'token' in request.query) {
+      const queryToken = (request.query as { token?: unknown }).token;
+      if (typeof queryToken === 'string' && queryToken) {
+        token = queryToken;
+      }
+    }
+
     if (!token) {
       await reply.code(403).send({ error: 'Forbidden' });
       return;
@@ -65,6 +72,13 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply): P
       const parts = request.headers.authorization.split(' ');
       if (parts.length === 2 && parts[0]?.toLowerCase() === 'bearer') {
         token = parts[1];
+      }
+    }
+
+    if (!token && typeof request.query === 'object' && request.query && 'token' in request.query) {
+      const queryToken = (request.query as { token?: unknown }).token;
+      if (typeof queryToken === 'string' && queryToken) {
+        token = queryToken;
       }
     }
 

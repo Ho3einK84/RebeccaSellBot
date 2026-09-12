@@ -137,6 +137,10 @@ export const fa: TranslationSchema = {
       openInNewTab: 'باز کردن تصویر در تب جدید',
       zoomIn: 'بزرگ‌نمایی',
       zoomOut: 'کوچک‌نمایی',
+      zoomReset: 'اندازه اصلی',
+      zoomHint: 'برای بزرگ‌نمایی روی تصویر بزنید',
+      zoomHintActive: 'برای بازگشت به اندازه عادی روی تصویر بزنید',
+      downloadReceipt: 'دانلود رسید',
       approveConfirmTitle: 'تأیید فیش واریزی',
       approveConfirmBody:
         'آیا از تأیید این فیش به مبلغ {amount} مطمئن هستید؟ مبلغ بلافاصله به کیف پول مشتری واریز می‌شود.',

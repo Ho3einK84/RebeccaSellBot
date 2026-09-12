@@ -13,7 +13,7 @@ import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import type { AdminBalanceOperation } from '../../../domain/services/WalletContracts.js';
 import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
-import { getTelegramFileUrl } from '../../../infra/telegramFiles.js';
+import { getTelegramFileUrl, downloadTelegramFile } from '../../../infra/telegramFiles.js';
 import {
   sendReceiptApprovalNotification,
   sendReceiptRejectionNotification,
@@ -231,6 +231,7 @@ export function registerAdminRoutes(
     // instead of hitting the generic 404 handler.
     adminScope.get<{
       Params: { id: string };
+      Querystring: { download?: string };
     }>('/api/admin/receipts/:id/photo', async (request, reply) => {
       const { id } = request.params;
       const receipt =
@@ -243,10 +244,22 @@ export function registerAdminRoutes(
       if (!services.botToken) {
         return reply.code(404).send({ error: 'Receipt photo unavailable' });
       }
+      if (request.query?.download) {
+        const downloaded = await downloadTelegramFile(services.botToken, receipt.photoFileId);
+        if (!downloaded.ok) {
+          return reply.code(502).send({ error: downloaded.error });
+        }
+        return reply
+          .header('Content-Type', downloaded.contentType)
+          .header('Content-Disposition', `attachment; filename="receipt-${id}.jpg"`)
+          .send(downloaded.buffer);
+      }
+
       const resolved = await getTelegramFileUrl(services.botToken, receipt.photoFileId);
       if (!resolved.ok) {
         return reply.code(502).send({ error: resolved.error });
       }
+
       return reply.redirect(resolved.url);
     });
 

@@ -137,6 +137,10 @@ export const en: TranslationSchema = {
       openInNewTab: 'Open Image in New Tab',
       zoomIn: 'Zoom In',
       zoomOut: 'Zoom Out',
+      zoomReset: 'Reset Zoom',
+      zoomHint: 'Tap image to zoom in',
+      zoomHintActive: 'Tap image to reset zoom',
+      downloadReceipt: 'Download Receipt',
       approveConfirmTitle: 'Approve Payment Receipt',
       approveConfirmBody:
         'Are you sure you want to approve this receipt for {amount} Toman? Customer wallet will be credited immediately.',

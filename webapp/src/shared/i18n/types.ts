@@ -149,6 +149,10 @@ export interface TranslationSchema {
       openInNewTab: string;
       zoomIn: string;
       zoomOut: string;
+      zoomReset: string;
+      zoomHint: string;
+      zoomHintActive: string;
+      downloadReceipt: string;
       batchSelectAll: string;
       batchDeselectAll: string;
       batchSelectedCount: string;
