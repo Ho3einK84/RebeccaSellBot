@@ -26,7 +26,7 @@ export async function adminWebAppSettingsConversation(
     const enabled =
       ts.getSettingBool('webapp_enabled', false) && Boolean(activeCtx.services.webAppUrl);
     const webAppUrl = activeCtx.services.webAppUrl || ts.getSetting('webapp_url', '').trim();
-    const port = activeCtx.services.webAppPort ?? 3002;
+    const port = activeCtx.services.webAppHostPort ?? activeCtx.services.webAppPort ?? 3002;
     const isRunning = activeCtx.services.isWebAppRunning
       ? activeCtx.services.isWebAppRunning()
       : Boolean(activeCtx.services.webAppUrl);
@@ -58,7 +58,7 @@ export async function adminWebAppSettingsConversation(
             },
             {
               label: t(activeCtx, 'admin_webapp_port_label'),
-              value: `\`${port}\` (Fastify HTTP)`,
+              value: `\`${port}\` (Reverse Proxy Port)`,
             },
             {
               label: t(activeCtx, 'admin_webapp_delivery_label'),

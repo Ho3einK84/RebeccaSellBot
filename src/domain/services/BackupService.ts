@@ -444,6 +444,14 @@ export class BackupService {
       `DEFAULT_LOCALE=${process.env.DEFAULT_LOCALE ?? 'fa'}`,
       `SUPPORT_URL=${process.env.SUPPORT_URL ?? ''}`,
       `HEALTH_CHECK_PORT=${process.env.HEALTH_CHECK_PORT ?? '3001'}`,
+      `BOT_DELIVERY_MODE=${process.env.BOT_DELIVERY_MODE ?? 'polling'}`,
+      `WEBHOOK_URL=${process.env.WEBHOOK_URL ?? ''}`,
+      `WEBHOOK_SECRET_TOKEN=${process.env.WEBHOOK_SECRET_TOKEN ?? ''}`,
+      `WEBHOOK_PORT=${process.env.WEBHOOK_PORT ?? '3000'}`,
+      `WEBHOOK_HOST_PORT=${process.env.WEBHOOK_HOST_PORT ?? process.env.WEBHOOK_PORT ?? '3000'}`,
+      `WEBAPP_URL=${process.env.WEBAPP_URL ?? ''}`,
+      `WEBAPP_PORT=${process.env.WEBAPP_PORT ?? '3002'}`,
+      `WEBAPP_HOST_PORT=${process.env.WEBAPP_HOST_PORT ?? process.env.WEBAPP_PORT ?? '3002'}`,
     ];
 
     return lines.join('\n') + '\n';
@@ -492,6 +500,19 @@ export class BackupService {
       SUPPORT_URL: \${SUPPORT_URL-}
       INSTANCE_NAME: \${INSTANCE_NAME:-main}
       HEALTH_CHECK_PORT: 3001
+      BOT_DELIVERY_MODE: \${BOT_DELIVERY_MODE:-polling}
+      WEBHOOK_URL: \${WEBHOOK_URL-}
+      WEBHOOK_SECRET_TOKEN: \${WEBHOOK_SECRET_TOKEN-}
+      WEBHOOK_PORT: \${WEBHOOK_PORT:-3000}
+      WEBHOOK_HOST_PORT: \${WEBHOOK_HOST_PORT:-3000}
+      WEBAPP_URL: \${WEBAPP_URL-}
+      WEBAPP_PORT: \${WEBAPP_PORT:-3002}
+      WEBAPP_HOST_PORT: \${WEBAPP_HOST_PORT:-3002}
+    ports:
+      - '\${WEBHOOK_BIND_HOST:-127.0.0.1}:\${WEBHOOK_HOST_PORT:-3000}:\${WEBHOOK_PORT:-3000}'
+      - '\${WEBAPP_BIND_HOST:-127.0.0.1}:\${WEBAPP_HOST_PORT:-3002}:\${WEBAPP_PORT:-3002}'
+    volumes:
+      - registry:/app/data/registry
     depends_on:
       db:
         condition: service_healthy
@@ -500,10 +521,14 @@ export class BackupService {
         gw_priority: 0
       outbound:
         gw_priority: 1
+      mesh:
+        gw_priority: 0
 
 volumes:
   pgdata:
     name: \${INSTANCE_NAME:-rsbot}_pgdata
+  registry:
+    name: rsbot_registry
 
 networks:
   database:
@@ -511,6 +536,8 @@ networks:
     internal: true
   outbound:
     name: \${INSTANCE_NAME:-rsbot}_outbound
+  mesh:
+    name: rsbot_mesh
 `;
   }
 

@@ -244,6 +244,8 @@ WEBAPP_HOST_PORT=3002
 ADMIN_SESSION_SECRET=a_random_secure_secret_with_at_least_32_characters_long
 ```
 
+> **Multi-Instance Note:** When running multiple bot instances on a single server, assign each instance a unique `WEBAPP_HOST_PORT` (e.g., 3002 for `main`, 3003 for `shop2`) and `WEBHOOK_HOST_PORT`. Reverse proxy each dedicated subdomain to its respective host port. See [`deploy/caddy/Caddyfile.multi-instance.example`](deploy/caddy/Caddyfile.multi-instance.example).
+
 #### Reverse Proxy Configurations (Mini App)
 
 ##### Caddy

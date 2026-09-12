@@ -379,4 +379,110 @@ describe.skipIf(process.platform === 'win32')('Deployment & Backup Shell Logic A
       expect(stdout).toContain('TARGET_NONEXISTENT=REJECTED');
     });
   });
+
+  describe('install.sh: WebApp configuration & port auto-resolution', () => {
+    it('correctly loads and preserves WebApp and Webhook host port keys in load_config_file', async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'webapp_cfg_'));
+      const configPath = path.join(tempDir, 'deployment.conf');
+      await fs.writeFile(
+        configPath,
+        [
+          'BOT_TOKEN = "123456:ABC-DEF"',
+          'ADMIN_IDS = 12345',
+          'DB_USER = rsbot_shop2',
+          'DB_PASSWORD = supersecretpassword123',
+          'DB_NAME = rsbot_shop2',
+          'WEBAPP_URL = "https://shop2.example.com"',
+          'WEBAPP_PORT = 3002',
+          'WEBAPP_HOST_PORT = 3003',
+          'WEBAPP_BIND_HOST = 127.0.0.1',
+          'WEBHOOK_HOST_PORT = 3004',
+          'ADMIN_SESSION_SECRET = my_secret_session_key_32_chars_long',
+        ].join('\n')
+      );
+
+      const installPath = path.resolve('install.sh');
+      const testScript = `
+        die() { echo "ERROR: $*" >&2; exit 1; }
+        source <(awk '/^load_config_file\\(\\)/,/^}/' "${installPath}")
+        load_config_file "${configPath}"
+        echo "WEBAPP_URL=$WEBAPP_URL"
+        echo "WEBAPP_PORT=$WEBAPP_PORT"
+        echo "WEBAPP_HOST_PORT=$WEBAPP_HOST_PORT"
+        echo "WEBAPP_BIND_HOST=$WEBAPP_BIND_HOST"
+        echo "WEBHOOK_HOST_PORT=$WEBHOOK_HOST_PORT"
+        echo "ADMIN_SESSION_SECRET=$ADMIN_SESSION_SECRET"
+      `;
+
+      const { stdout } = await execFileAsync('bash', ['-c', testScript]);
+      await fs.rm(tempDir, { recursive: true, force: true });
+
+      expect(stdout).toContain('WEBAPP_URL=https://shop2.example.com');
+      expect(stdout).toContain('WEBAPP_PORT=3002');
+      expect(stdout).toContain('WEBAPP_HOST_PORT=3003');
+      expect(stdout).toContain('WEBAPP_BIND_HOST=127.0.0.1');
+      expect(stdout).toContain('WEBHOOK_HOST_PORT=3004');
+      expect(stdout).toContain('ADMIN_SESSION_SECRET=my_secret_session_key_32_chars_long');
+    });
+
+    it('find_next_safe_port increments until finding an unused port', async () => {
+      const installPath = path.resolve('install.sh');
+      const testScript = `
+        die() { echo "ERROR: $*" >&2; exit 1; }
+        is_port_in_use() { return 1; }
+        source <(awk '/^find_next_safe_port\\(\\)/,/^}/' "${installPath}")
+
+        used=(3002 3003)
+        res=$(find_next_safe_port 3002 1 "\${used[@]}")
+        echo "SAFE_PORT=$res"
+      `;
+
+      const { stdout } = await execFileAsync('bash', ['-c', testScript]);
+      expect(stdout).toContain('SAFE_PORT=3004');
+    });
+  });
+
+  describe('rsbot: multi-instance collision detection', () => {
+    it('detects collision when two instances share WEBAPP_HOST_PORT', async () => {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'multi_inst_test_'));
+      const mainDir = path.join(tempDir, 'main');
+      const shopDir = path.join(tempDir, 'shop2');
+      await fs.mkdir(mainDir, { recursive: true });
+      await fs.mkdir(shopDir, { recursive: true });
+
+      await fs.writeFile(path.join(mainDir, '.env'), 'INSTANCE_NAME=main\nWEBAPP_HOST_PORT=3002\n');
+      await fs.writeFile(
+        path.join(shopDir, '.env'),
+        'INSTANCE_NAME=shop2\nWEBAPP_HOST_PORT=3002\n'
+      );
+
+      const rsbotPath = path.resolve('scripts/rsbot');
+      const testScript = `
+        BASE_PATH="${tempDir}"
+        INSTANCE="shop2"
+        ENV_FILE="${path.join(shopDir, '.env')}"
+        source <(awk '/^env_value_from_file\\(\\)/,/^}/' "${rsbotPath}")
+
+        errors=0
+        my_webapp_port="$(env_value_from_file "$ENV_FILE" WEBAPP_HOST_PORT)"
+
+        for other_dir in "$BASE_PATH"/*; do
+          other_name="$(basename "$other_dir")"
+          [[ "$other_name" != "$INSTANCE" ]] || continue
+          other_webapp_port="$(env_value_from_file "$other_dir/.env" WEBAPP_HOST_PORT)"
+          if [[ "$my_webapp_port" == "$other_webapp_port" ]]; then
+            echo "COLLISION_DETECTED with $other_name on port $my_webapp_port"
+            ((errors++))
+          fi
+        done
+        echo "ERRORS=$errors"
+      `;
+
+      const { stdout } = await execFileAsync('bash', ['-c', testScript]);
+      await fs.rm(tempDir, { recursive: true, force: true });
+
+      expect(stdout).toContain('COLLISION_DETECTED with main on port 3002');
+      expect(stdout).toContain('ERRORS=1');
+    });
+  });
 });

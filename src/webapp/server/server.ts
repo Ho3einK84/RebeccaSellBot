@@ -1,5 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import http from 'node:http';
 import crypto from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -9,6 +10,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyCors from '@fastify/cors';
 import type { Config } from '../../infra/config.js';
 import type { BotServices } from '../../telegram/types.js';
+import { DomainRegistryService } from '../../domain/services/DomainRegistryService.js';
 import { logger } from '../../infra/logger.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
 import { registerAdminRoutes } from './routes/adminRoutes.js';
@@ -52,6 +54,122 @@ export async function createWebAppServer(
     timeWindow: '1 minute',
   });
 
+  const domainRegistry =
+    services.domainRegistryService ?? new DomainRegistryService(config.REGISTRY_DIR);
+
+  // Multi-instance mesh reverse proxy dispatcher
+  // When Caddy's catch-all reverse proxies traffic to this primary container,
+  // transparently stream and dispatch requests intended for peer instances.
+  app.addHook('onRequest', async (req, reply) => {
+    // Caddy TLS verification endpoint is always handled locally
+    if (req.raw.url?.startsWith('/api/caddy-check')) {
+      return;
+    }
+
+    const hostHeader = req.headers.host;
+    if (!hostHeader) return;
+    const incomingHost = hostHeader.split(':')[0].trim().toLowerCase();
+
+    // Check if the request is destined for this local instance
+    const localWebAppUrl =
+      services.translationService?.getSetting('webapp_url') || config.WEBAPP_URL;
+    let localDomain: string | undefined;
+    if (localWebAppUrl) {
+      try {
+        localDomain = new URL(localWebAppUrl).hostname.toLowerCase();
+      } catch {
+        // ignore invalid URL format
+      }
+    }
+
+    let localWebhookDomain: string | undefined;
+    if (config.WEBHOOK_URL) {
+      try {
+        localWebhookDomain = new URL(config.WEBHOOK_URL).hostname.toLowerCase();
+      } catch {
+        // ignore invalid URL format
+      }
+    }
+
+    const isLocal =
+      incomingHost === 'localhost' ||
+      incomingHost === '127.0.0.1' ||
+      incomingHost === '0.0.0.0' ||
+      (localDomain && incomingHost === localDomain) ||
+      (localWebhookDomain && incomingHost === localWebhookDomain);
+
+    if (isLocal) {
+      return;
+    }
+
+    // Check if the domain belongs to a peer instance in the shared registry
+    const peerRecord = domainRegistry.findByDomain(incomingHost);
+    if (!peerRecord) {
+      return;
+    }
+
+    // Never proxy to ourselves
+    if (peerRecord.instance === config.INSTANCE_NAME) {
+      return;
+    }
+
+    // Guard against circular proxy loops
+    const currentHops = Number(req.headers['x-rsbot-proxy-hops'] || 0);
+    if (currentHops >= 3) {
+      return reply.code(508).send({ error: 'Loop detected across instance reverse proxies' });
+    }
+
+    reply.hijack();
+
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(peerRecord.target);
+    } catch {
+      reply.raw.writeHead(502, { 'content-type': 'application/json' });
+      reply.raw.end(JSON.stringify({ error: `Invalid peer target URL: ${peerRecord.target}` }));
+      return;
+    }
+
+    const proxyReq = http.request(
+      {
+        hostname: targetUrl.hostname,
+        port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+        path: req.raw.url,
+        method: req.raw.method,
+        headers: {
+          ...req.raw.headers,
+          host: hostHeader,
+          'x-forwarded-host': hostHeader,
+          'x-forwarded-for': req.ip || req.raw.socket.remoteAddress || '',
+          'x-forwarded-proto': 'https',
+          'x-rsbot-proxy-hops': String(currentHops + 1),
+        },
+      },
+      (proxyRes) => {
+        reply.raw.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
+        proxyRes.pipe(reply.raw);
+      }
+    );
+
+    proxyReq.on('error', (err) => {
+      logger.warn(
+        { err: err.message, target: peerRecord.target, host: incomingHost },
+        'Multi-instance mesh proxy request failed'
+      );
+      if (!reply.raw.headersSent) {
+        reply.raw.writeHead(502, { 'content-type': 'application/json' });
+        reply.raw.end(
+          JSON.stringify({
+            error: `Target instance '${peerRecord.instance}' is temporarily unreachable`,
+            details: err.message,
+          })
+        );
+      }
+    });
+
+    req.raw.pipe(proxyReq);
+  });
+
   // Health check endpoint on webapp port
   app.get('/api/health', async (_req, reply) => {
     return reply.send({ status: 'ok', component: 'webapp' });
@@ -92,6 +210,16 @@ export async function createWebAppServer(
       (webhookHost && domainQuery === webhookHost)
     ) {
       return reply.code(200).send({ allowed: true, domain: domainQuery });
+    }
+
+    // Check shared multi-instance registry for peer bot domains
+    const registeredPeer = domainRegistry.findByDomain(domainQuery);
+    if (registeredPeer) {
+      return reply.code(200).send({
+        allowed: true,
+        domain: domainQuery,
+        instance: registeredPeer.instance,
+      });
     }
 
     return reply.code(403).send({ allowed: false, domain: domainQuery });

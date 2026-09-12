@@ -135,6 +135,10 @@ const configSchema = z
       'WEBHOOK_PORT',
       process.env.PORT ? Number(process.env.PORT) : 3000
     ).pipe(z.number().max(65_535, 'WEBHOOK_PORT is out of range')),
+    WEBHOOK_HOST_PORT: positiveIntegerSchema(
+      'WEBHOOK_HOST_PORT',
+      process.env.WEBHOOK_PORT ? Number(process.env.WEBHOOK_PORT) : 3000
+    ).pipe(z.number().max(65_535, 'WEBHOOK_HOST_PORT is out of range')),
     WEBHOOK_PATH: z
       .string()
       .optional()
@@ -170,8 +174,28 @@ const configSchema = z
     WEBAPP_PORT: positiveIntegerSchema('WEBAPP_PORT', 3002).pipe(
       z.number().max(65_535, 'WEBAPP_PORT is out of range')
     ),
+    WEBAPP_HOST_PORT: positiveIntegerSchema(
+      'WEBAPP_HOST_PORT',
+      process.env.WEBAPP_PORT ? Number(process.env.WEBAPP_PORT) : 3002
+    ).pipe(z.number().max(65_535, 'WEBAPP_HOST_PORT is out of range')),
     WEBAPP_HOST: optionalStringWithDefault('0.0.0.0'),
     ADMIN_SESSION_SECRET: optionalSecretSchema,
+    REGISTRY_DIR: optionalStringWithDefault(
+      process.env.REGISTRY_DIR?.trim() || '/app/data/registry'
+    ),
+    WEBAPP_TARGET_URL: z
+      .string()
+      .optional()
+      .transform((val) => val?.trim() || undefined)
+      .refine((val) => {
+        if (!val) return true;
+        try {
+          const u = new URL(val);
+          return u.protocol === 'http:' || u.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      }, 'WEBAPP_TARGET_URL must be a valid HTTP/HTTPS URL'),
   })
   .transform((val) => {
     const effectiveMode: 'polling' | 'webhook' =

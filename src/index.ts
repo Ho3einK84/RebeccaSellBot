@@ -21,6 +21,7 @@ import { PackageCategoryService } from './domain/services/PackageCategoryService
 import { PaymentService } from './domain/services/PaymentService.js';
 import { BackupService } from './domain/services/BackupService.js';
 import { LuckyWheelService } from './domain/services/LuckyWheelService.js';
+import { DomainRegistryService } from './domain/services/DomainRegistryService.js';
 import {
   normalizeDomainInput,
   verifyDomainSslAndReachability,
@@ -141,12 +142,31 @@ async function main() {
     walletService.invalidateUserCache(telegramId)
   );
 
+  const domainRegistryService = new DomainRegistryService(config.REGISTRY_DIR);
+
   const storedWebAppEnabled = translationService.getSettingBool('webapp_enabled', false);
   const storedWebAppUrl = translationService.getSetting('webapp_url').trim();
   const initialWebAppUrl =
     config.WEBAPP_URL || (storedWebAppEnabled && storedWebAppUrl ? storedWebAppUrl : undefined);
 
   let currentWebAppUrl: string | undefined = initialWebAppUrl;
+
+  // On startup, register this instance's WebApp domain in the shared multi-instance mesh registry
+  if (currentWebAppUrl && storedWebAppEnabled) {
+    try {
+      const parsed = new URL(currentWebAppUrl);
+      domainRegistryService.register({
+        instance: config.INSTANCE_NAME,
+        domain: parsed.hostname,
+        url: currentWebAppUrl,
+        target:
+          config.WEBAPP_TARGET_URL || `http://${config.INSTANCE_NAME}_bot:${config.WEBAPP_PORT}`,
+        hostPort: config.WEBAPP_HOST_PORT,
+      });
+    } catch {
+      // ignore invalid URL format on boot
+    }
+  }
 
   const enableWebApp = async (
     inputUrl: string
@@ -164,6 +184,16 @@ async function main() {
       currentWebAppUrl = normalized.url;
       services.webAppUrl = normalized.url;
 
+      // Register with the shared multi-instance mesh registry
+      domainRegistryService.register({
+        instance: config.INSTANCE_NAME,
+        domain: normalized.hostname,
+        url: normalized.url,
+        target:
+          config.WEBAPP_TARGET_URL || `http://${config.INSTANCE_NAME}_bot:${config.WEBAPP_PORT}`,
+        hostPort: config.WEBAPP_HOST_PORT,
+      });
+
       if (!activeWebAppHandle) {
         activeWebAppHandle = await startWebAppServer(config, services);
       }
@@ -171,7 +201,7 @@ async function main() {
       // Automated reachability & TLS probe (triggers Caddy On-Demand TLS handshake)
       let sslActive = false;
       try {
-        const probeRes = await verifyDomainSslAndReachability(normalized.url, 6000);
+        const probeRes = await verifyDomainSslAndReachability(normalized.url, 10000);
         sslActive = probeRes.ok;
       } catch {
         sslActive = false;
@@ -188,6 +218,7 @@ async function main() {
   };
 
   const disableWebApp = async (): Promise<void> => {
+    domainRegistryService.unregister(config.INSTANCE_NAME);
     await translationService.updateSetting('webapp_enabled', 'false');
     currentWebAppUrl = undefined;
     services.webAppUrl = undefined;
@@ -226,7 +257,9 @@ async function main() {
     luckyWheelService,
     supportUrl: config.SUPPORT_URL,
     webAppUrl: currentWebAppUrl,
-    webAppPort: config.WEBAPP_PORT,
+    webAppPort: config.WEBAPP_HOST_PORT ?? config.WEBAPP_PORT,
+    webAppHostPort: config.WEBAPP_HOST_PORT,
+    domainRegistryService,
     enableWebApp,
     disableWebApp,
     isWebAppRunning,

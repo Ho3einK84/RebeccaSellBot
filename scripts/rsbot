@@ -65,10 +65,14 @@ if [[ "${1:-}" == "list" ]]; then
     found=true
     state="$("${DOCKER[@]}" compose --env-file "$instance_dir/.env" -p "$instance_name" \
       -f "$instance_dir/docker-compose.yml" ps --status running --quiet 2>/dev/null | wc -l | tr -d ' ')"
+    w_port="$(env_value_from_file "$instance_dir/.env" WEBAPP_HOST_PORT 2>/dev/null || env_value_from_file "$instance_dir/.env" WEBAPP_PORT 2>/dev/null || printf '3002')"
+    h_port="$(env_value_from_file "$instance_dir/.env" WEBHOOK_HOST_PORT 2>/dev/null || env_value_from_file "$instance_dir/.env" WEBHOOK_PORT 2>/dev/null || printf '3000')"
+    mode="$(env_value_from_file "$instance_dir/.env" BOT_DELIVERY_MODE 2>/dev/null || printf 'polling')"
+    url="$(env_value_from_file "$instance_dir/.env" WEBAPP_URL 2>/dev/null || true)"
     if [[ "$state" -gt 0 ]]; then
-      printf '  %s (running) — %s\n' "$instance_name" "$instance_dir"
+      printf '  ● %s (running) — webapp:%s webhook:%s [%s]%s — %s\n' "$instance_name" "$w_port" "$h_port" "$mode" "${url:+ ($url)}" "$instance_dir"
     else
-      printf '  %s (stopped) — %s\n' "$instance_name" "$instance_dir"
+      printf '  ○ %s (stopped) — webapp:%s webhook:%s [%s]%s — %s\n' "$instance_name" "$w_port" "$h_port" "$mode" "${url:+ ($url)}" "$instance_dir"
     fi
   done
   [[ "$found" == true ]] || printf '  No instances found.\n'
@@ -119,7 +123,16 @@ show_failure_diagnostics() {
   dc logs --tail=200 bot db >&2 || true
 }
 
+ensure_mesh_resources() {
+  "${DOCKER[@]}" network inspect rsbot_mesh >/dev/null 2>&1 || "${DOCKER[@]}" network create rsbot_mesh >/dev/null 2>&1 || true
+  "${DOCKER[@]}" volume inspect rsbot_registry >/dev/null 2>&1 || "${DOCKER[@]}" volume create rsbot_registry >/dev/null 2>&1 || true
+  if "${DOCKER[@]}" ps -q -f name=nodexia-caddy-1 >/dev/null 2>&1; then
+    "${DOCKER[@]}" network connect rsbot_mesh nodexia-caddy-1 >/dev/null 2>&1 || true
+  fi
+}
+
 wait_for_stack() {
+  ensure_mesh_resources
   if ! dc up -d --wait "$@"; then
     show_failure_diagnostics
     return 1
@@ -414,7 +427,7 @@ verify_instance() {
   printf "Verifying RebeccaSellBot instance '%s'...\n\n" "$INSTANCE"
 
   # 1. Directory and file permissions
-  printf "[1/5] Checking configuration and directory permissions...\n"
+  printf "[1/6] Checking configuration and directory permissions...\n"
   if [[ -d "$INSTANCE_DIR" ]]; then
     printf "  ✔ Instance directory exists: %s\n" "$INSTANCE_DIR"
   else
@@ -444,7 +457,7 @@ verify_instance() {
   fi
 
   # 2. Compose file validation
-  printf "\n[2/5] Checking Docker Compose configuration...\n"
+  printf "\n[2/6] Checking Docker Compose configuration...\n"
   if dc config --quiet 2>/dev/null; then
     printf "  ✔ Compose configuration syntax is valid\n"
   else
@@ -453,7 +466,7 @@ verify_instance() {
   fi
 
   # 3. Container statuses
-  printf "\n[3/5] Checking container statuses...\n"
+  printf "\n[3/6] Checking container statuses...\n"
   local db_status bot_status
   db_status="$(dc ps --format '{{.Status}}' db 2>/dev/null || true)"
   bot_status="$(dc ps --format '{{.Status}}' bot 2>/dev/null || true)"
@@ -473,7 +486,7 @@ verify_instance() {
   fi
 
   # 4. Database connectivity
-  printf "\n[4/5] Testing PostgreSQL connectivity...\n"
+  printf "\n[4/6] Testing PostgreSQL connectivity...\n"
   local db_user db_name
   db_user="$(env_value_from_file "$ENV_FILE" DB_USER 2>/dev/null || true)"
   db_name="$(env_value_from_file "$ENV_FILE" DB_NAME 2>/dev/null || true)"
@@ -493,7 +506,7 @@ verify_instance() {
   fi
 
   # 5. Readyz endpoint probe
-  printf "\n[5/5] Probing internal health endpoint (/readyz)...\n"
+  printf "\n[5/6] Probing internal health endpoint (/readyz)...\n"
   local health_code
   health_code="$(dc exec -T bot node -e "fetch('http://127.0.0.1:3001/readyz').then(r=>console.log(r.status)).catch(()=>console.log('err'))" 2>/dev/null || printf 'err')"
   if [[ "$health_code" == "200" ]]; then
@@ -501,6 +514,54 @@ verify_instance() {
   else
     printf "  ! Bot health endpoint responded: %s (bot may be initializing or stopped)\n" "$health_code"
     ((warnings++))
+  fi
+
+  # 6. Multi-instance isolation and port collision audit
+  printf "\n[6/6] Checking multi-instance port and container isolation...\n"
+  local my_webapp_port my_webhook_port collision_found=false
+  my_webapp_port="$(env_value_from_file "$ENV_FILE" WEBAPP_HOST_PORT 2>/dev/null || env_value_from_file "$ENV_FILE" WEBAPP_PORT 2>/dev/null || printf '3002')"
+  my_webhook_port="$(env_value_from_file "$ENV_FILE" WEBHOOK_HOST_PORT 2>/dev/null || env_value_from_file "$ENV_FILE" WEBHOOK_PORT 2>/dev/null || printf '3000')"
+
+  shopt -s nullglob
+  local other_instances=("$BASE_PATH"/*)
+  shopt -u nullglob
+  local other_count=0
+  for other_dir in "${other_instances[@]}"; do
+    [[ -d "$other_dir" && -f "$other_dir/.env" ]] || continue
+    local other_name
+    other_name="$(basename "$other_dir")"
+    [[ "$other_name" != "$INSTANCE" ]] || continue
+    ((other_count++))
+
+    local other_webapp_port other_webhook_port
+    other_webapp_port="$(env_value_from_file "$other_dir/.env" WEBAPP_HOST_PORT 2>/dev/null || env_value_from_file "$other_dir/.env" WEBAPP_PORT 2>/dev/null || printf '3002')"
+    other_webhook_port="$(env_value_from_file "$other_dir/.env" WEBHOOK_HOST_PORT 2>/dev/null || env_value_from_file "$other_dir/.env" WEBHOOK_PORT 2>/dev/null || printf '3000')"
+
+    if [[ "$my_webapp_port" == "$other_webapp_port" ]]; then
+      printf "  ✘ Port collision with instance '%s': WEBAPP_HOST_PORT=%s is already in use\n" "$other_name" "$my_webapp_port" >&2
+      ((errors++))
+      collision_found=true
+    fi
+    if [[ "$my_webhook_port" == "$other_webhook_port" ]]; then
+      printf "  ✘ Port collision with instance '%s': WEBHOOK_HOST_PORT=%s is already in use\n" "$other_name" "$my_webhook_port" >&2
+      ((errors++))
+      collision_found=true
+    fi
+  done
+
+  if [[ "$collision_found" == false ]]; then
+    if (( other_count > 0 )); then
+      printf "  ✔ Multi-instance isolation verified (%s other instance(s) inspected, no port collisions)\n" "$other_count"
+    else
+      printf "  ✔ No other instances detected on server (single instance mode)\n"
+    fi
+  fi
+
+  if "${DOCKER[@]}" network inspect rsbot_mesh >/dev/null 2>&1; then
+    printf "  ✔ Shared mesh network 'rsbot_mesh' is active\n"
+  fi
+  if "${DOCKER[@]}" volume inspect rsbot_registry >/dev/null 2>&1; then
+    printf "  ✔ Shared domain registry volume 'rsbot_registry' is active\n"
   fi
 
   printf "\nVerification Result: %s error(s), %s warning(s).\n\n" "$errors" "$warnings"
@@ -513,6 +574,7 @@ verify_instance() {
 case "$COMMAND" in
   up)
     printf "Starting '%s'...\n" "$INSTANCE"
+    ensure_mesh_resources
     if ! dc up -d --build --wait; then
       show_failure_diagnostics
       exit 1

@@ -27,6 +27,7 @@ import type { PackageCategoryService } from '../domain/services/PackageCategoryS
 import type { PaymentService } from '../domain/services/PaymentService.js';
 import type { BackupService } from '../domain/services/BackupService.js';
 import type { LuckyWheelService } from '../domain/services/LuckyWheelService.js';
+import type { DomainRegistryService } from '../domain/services/DomainRegistryService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
@@ -111,6 +112,10 @@ export type BotServices = {
   webAppUrl?: string;
   /** Port on which the local WebApp Fastify server is listening. */
   webAppPort?: number;
+  /** Published host port mapped to the WebApp Fastify server for external reverse proxy routing. */
+  webAppHostPort?: number;
+  /** Shared multi-instance domain registry service for mesh routing. */
+  domainRegistryService?: DomainRegistryService;
   /** Dynamically activate the WebApp Fastify server with the specified public HTTPS URL. */
   enableWebApp?: (
     url: string

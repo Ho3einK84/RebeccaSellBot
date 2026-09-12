@@ -69,6 +69,11 @@ Options:
   --webhook-secret <token>   Webhook secret token (auto-generated if omitted)
   --webhook-port <port>      Internal container webhook port (default: 3000)
   --webhook-host-port <port> Host published port for reverse proxy (default: 3000)
+  --webapp-url <url>         Public Telegram Mini App HTTPS URL
+  --webapp-port <port>       Internal container WebApp Fastify port (default: 3002)
+  --webapp-host-port <port>  Host published port for WebApp reverse proxy (auto-assigned if omitted)
+  --webapp-bind-host <ip>    Host published bind address for WebApp (default: 127.0.0.1)
+  --admin-session-secret <s> Secret key for WebApp admin authentication
   --non-interactive          Never prompt; fail if required values are absent
   --yes                      Replace an existing instance .env automatically
   -h, --help                 Show this help
@@ -132,6 +137,26 @@ while [[ $# -gt 0 ]]; do
       WEBHOOK_HOST_PORT="$(option_value "$1" "${2:-}")"
       shift 2
       ;;
+    --webapp-url)
+      WEBAPP_URL="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --webapp-port)
+      WEBAPP_PORT="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --webapp-host-port)
+      WEBAPP_HOST_PORT="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --webapp-bind-host)
+      WEBAPP_BIND_HOST="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --admin-session-secret)
+      ADMIN_SESSION_SECRET="$(option_value "$1" "${2:-}")"
+      shift 2
+      ;;
     --non-interactive)
       NON_INTERACTIVE=true
       shift
@@ -174,6 +199,42 @@ validate_webhook_url() {
 }
 validate_webhook_secret_token() { [[ "$1" =~ ^[A-Za-z0-9_-]{1,256}$ ]]; }
 validate_port() { [[ "$1" =~ ^[1-9][0-9]{0,4}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
+
+is_port_in_use() {
+  local p="$1"
+  (exec 6<>/dev/tcp/127.0.0.1/"$p") 2>/dev/null && { exec 6>&- ; return 0; }
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlpn 2>/dev/null | grep -qE "(:|\])${p}[[:space:]]" && return 0
+  fi
+  return 1
+}
+
+find_next_safe_port() {
+  local candidate="$1"
+  local step="${2:-1}"
+  shift 2 || true
+  local used=("$@")
+
+  while :; do
+    local conflict=false
+    for u in "${used[@]}"; do
+      if [[ -n "$u" && "$candidate" -eq "$u" ]]; then
+        conflict=true
+        break
+      fi
+    done
+
+    if [[ "$conflict" == false ]] && ! is_port_in_use "$candidate"; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+
+    candidate=$(( candidate + step ))
+    if (( candidate > 65535 )); then
+      die "Unable to find an available host port starting from $1."
+    fi
+  done
+}
 
 env_value_from_file() {
   local file="$1" key="$2" raw_value value cr=$'\r' sq="'"
@@ -325,7 +386,7 @@ load_config_file() {
     fi
 
     case "$key" in
-      BOT_TOKEN|ADMIN_IDS|PANEL_CREDENTIALS_KEY|REBECCA_API_URL|REBECCA_API_KEY|REBECCA_ADMIN_USERNAME|REBECCA_ADMIN_PASSWORD|REBECCA_SERVICE_ID|DB_USER|DB_PASSWORD|DB_NAME|DEFAULT_LOCALE|SUPPORT_URL|GITHUB_PAT|RSBOT_ACCESS_METHOD|RSBOT_REPOSITORY_URL|RSBOT_SSH_KEY_PATH|BOT_DELIVERY_MODE|WEBHOOK_URL|WEBHOOK_SECRET_TOKEN|WEBHOOK_PORT|WEBHOOK_PATH|WEBHOOK_HOST|WEBHOOK_HOST_PORT|WEBHOOK_BIND_HOST|PORT|REBECCA_WEBHOOK_SECRET|REBECCA_WEBHOOK_PATH)
+      BOT_TOKEN|ADMIN_IDS|PANEL_CREDENTIALS_KEY|REBECCA_API_URL|REBECCA_API_KEY|REBECCA_ADMIN_USERNAME|REBECCA_ADMIN_PASSWORD|REBECCA_SERVICE_ID|DB_USER|DB_PASSWORD|DB_NAME|DEFAULT_LOCALE|SUPPORT_URL|GITHUB_PAT|RSBOT_ACCESS_METHOD|RSBOT_REPOSITORY_URL|RSBOT_SSH_KEY_PATH|BOT_DELIVERY_MODE|WEBHOOK_URL|WEBHOOK_SECRET_TOKEN|WEBHOOK_PORT|WEBHOOK_PATH|WEBHOOK_HOST|WEBHOOK_HOST_PORT|WEBHOOK_BIND_HOST|PORT|REBECCA_WEBHOOK_SECRET|REBECCA_WEBHOOK_PATH|WEBAPP_URL|WEBAPP_PORT|WEBAPP_HOST|WEBAPP_HOST_PORT|WEBAPP_BIND_HOST|ADMIN_SESSION_SECRET)
         printf -v "$key" '%s' "$value"
         export "$key"
         ;;
@@ -351,7 +412,7 @@ if [[ -n "$BACKUP_INPUT" ]]; then
   MANIFEST_INSTANCE="$(sed -n 's/^instance=//p' "$BACKUP_WORKSPACE/manifest.txt" | head -n 1)"
 
   if [[ -f "$BACKUP_WORKSPACE/.env" ]]; then
-    for k in BOT_TOKEN ADMIN_IDS PANEL_CREDENTIALS_KEY DB_USER DB_PASSWORD DB_NAME REBECCA_API_URL REBECCA_API_KEY REBECCA_ADMIN_USERNAME REBECCA_ADMIN_PASSWORD REBECCA_SERVICE_ID DEFAULT_LOCALE SUPPORT_URL BOT_DELIVERY_MODE WEBHOOK_URL WEBHOOK_SECRET_TOKEN WEBHOOK_PORT WEBHOOK_PATH WEBHOOK_HOST WEBHOOK_HOST_PORT WEBHOOK_BIND_HOST PORT REBECCA_WEBHOOK_SECRET REBECCA_WEBHOOK_PATH; do
+    for k in BOT_TOKEN ADMIN_IDS PANEL_CREDENTIALS_KEY DB_USER DB_PASSWORD DB_NAME REBECCA_API_URL REBECCA_API_KEY REBECCA_ADMIN_USERNAME REBECCA_ADMIN_PASSWORD REBECCA_SERVICE_ID DEFAULT_LOCALE SUPPORT_URL BOT_DELIVERY_MODE WEBHOOK_URL WEBHOOK_SECRET_TOKEN WEBHOOK_PORT WEBHOOK_PATH WEBHOOK_HOST WEBHOOK_HOST_PORT WEBHOOK_BIND_HOST PORT REBECCA_WEBHOOK_SECRET REBECCA_WEBHOOK_PATH WEBAPP_URL WEBAPP_PORT WEBAPP_HOST WEBAPP_HOST_PORT WEBAPP_BIND_HOST ADMIN_SESSION_SECRET; do
       val="$(env_value_from_file "$BACKUP_WORKSPACE/.env" "$k" 2>/dev/null || true)"
       if [[ -n "$val" && -z "${!k:-}" ]]; then
         printf -v "$k" '%s' "$val"
@@ -683,6 +744,26 @@ configure_environment() {
   fi
   WEBHOOK_SECRET_TOKEN="${WEBHOOK_SECRET_TOKEN:-}"
 
+  # Multi-instance host port discovery and collision avoidance
+  local used_host_ports=()
+  if [[ -d "$INSTALL_ROOT" ]]; then
+    shopt -s nullglob
+    local env_candidates=("$INSTALL_ROOT"/*/.env)
+    shopt -u nullglob
+    for ef in "${env_candidates[@]}"; do
+      local inst_dir_name
+      inst_dir_name="$(basename "$(dirname "$ef")")"
+      [[ "$inst_dir_name" != "$INSTANCE_NAME" ]] || continue
+      for k in WEBHOOK_HOST_PORT WEBAPP_HOST_PORT WEBHOOK_PORT WEBAPP_PORT PORT; do
+        local val
+        val="$(env_value_from_file "$ef" "$k" 2>/dev/null || true)"
+        if [[ -n "$val" && "$val" =~ ^[1-9][0-9]*$ ]]; then
+          used_host_ports+=("$val")
+        fi
+      done
+    done
+  fi
+
   if [[ -z "${WEBHOOK_PORT:-}" && -f "$ENV_FILE" ]]; then
     WEBHOOK_PORT="$(sed -n 's/^WEBHOOK_PORT=//p' "$ENV_FILE" | head -n 1)"
   fi
@@ -701,7 +782,51 @@ configure_environment() {
   if [[ -z "${WEBHOOK_HOST_PORT:-}" && -f "$ENV_FILE" ]]; then
     WEBHOOK_HOST_PORT="$(sed -n 's/^WEBHOOK_HOST_PORT=//p' "$ENV_FILE" | head -n 1)"
   fi
-  WEBHOOK_HOST_PORT="${WEBHOOK_HOST_PORT:-$WEBHOOK_PORT}"
+  if [[ -z "${WEBHOOK_HOST_PORT:-}" ]]; then
+    if [[ "$INSTANCE_NAME" == "main" && ! " ${used_host_ports[*]} " =~ " 3000 " ]] && ! is_port_in_use 3000; then
+      WEBHOOK_HOST_PORT="3000"
+    else
+      WEBHOOK_HOST_PORT="$(find_next_safe_port 3000 2 "${used_host_ports[@]}")"
+    fi
+  fi
+
+  # WebApp configuration with multi-instance host port assignment
+  if [[ -z "${WEBAPP_PORT:-}" && -f "$ENV_FILE" ]]; then
+    WEBAPP_PORT="$(sed -n 's/^WEBAPP_PORT=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBAPP_PORT="${WEBAPP_PORT:-3002}"
+
+  if [[ -z "${WEBAPP_BIND_HOST:-}" && -f "$ENV_FILE" ]]; then
+    WEBAPP_BIND_HOST="$(sed -n 's/^WEBAPP_BIND_HOST=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBAPP_BIND_HOST="${WEBAPP_BIND_HOST:-127.0.0.1}"
+
+  if [[ -z "${WEBAPP_HOST:-}" && -f "$ENV_FILE" ]]; then
+    WEBAPP_HOST="$(sed -n 's/^WEBAPP_HOST=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBAPP_HOST="${WEBAPP_HOST:-0.0.0.0}"
+
+  if [[ -z "${WEBAPP_HOST_PORT:-}" && -f "$ENV_FILE" ]]; then
+    WEBAPP_HOST_PORT="$(sed -n 's/^WEBAPP_HOST_PORT=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  if [[ -z "${WEBAPP_HOST_PORT:-}" ]]; then
+    local webapp_port_excludes=("${used_host_ports[@]}" "$WEBHOOK_HOST_PORT")
+    if [[ "$INSTANCE_NAME" == "main" && ! " ${webapp_port_excludes[*]} " =~ " 3002 " ]] && ! is_port_in_use 3002; then
+      WEBAPP_HOST_PORT="3002"
+    else
+      WEBAPP_HOST_PORT="$(find_next_safe_port 3002 1 "${webapp_port_excludes[@]}")"
+    fi
+  fi
+
+  if [[ -z "${WEBAPP_URL:-}" && -f "$ENV_FILE" ]]; then
+    WEBAPP_URL="$(sed -n 's/^WEBAPP_URL=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  WEBAPP_URL="${WEBAPP_URL:-}"
+
+  if [[ -z "${ADMIN_SESSION_SECRET:-}" && -f "$ENV_FILE" ]]; then
+    ADMIN_SESSION_SECRET="$(sed -n 's/^ADMIN_SESSION_SECRET=//p' "$ENV_FILE" | head -n 1)"
+  fi
+  ADMIN_SESSION_SECRET="${ADMIN_SESSION_SECRET:-}"
 
   if [[ "$NON_INTERACTIVE" == false ]]; then
     local default_mode_idx="1"
@@ -735,7 +860,7 @@ configure_environment() {
       WEBHOOK_PORT="$(prompt_default "Internal webhook listening port" "${WEBHOOK_PORT:-3000}")"
       validate_port "$WEBHOOK_PORT" || die "Invalid webhook port."
 
-      WEBHOOK_HOST_PORT="$(prompt_default "Host published port for Caddy/Nginx reverse proxy" "${WEBHOOK_HOST_PORT:-$WEBHOOK_PORT}")"
+      WEBHOOK_HOST_PORT="$(prompt_default "Host published port for Caddy/Nginx reverse proxy" "${WEBHOOK_HOST_PORT}")"
       validate_port "$WEBHOOK_HOST_PORT" || die "Invalid host port."
 
       local auto_path="/webhook"
@@ -745,6 +870,17 @@ configure_environment() {
       WEBHOOK_PATH="$(prompt_default "Webhook path" "${WEBHOOK_PATH:-$auto_path}")"
       [[ "$WEBHOOK_PATH" == /* ]] || WEBHOOK_PATH="/$WEBHOOK_PATH"
     fi
+
+    section "Telegram Mini App (WebApp) Configuration"
+    info "Telegram Mini App provides an in-app storefront and web administration dashboard."
+    WEBAPP_HOST_PORT="$(prompt_default "Host published port for WebApp reverse proxy" "${WEBAPP_HOST_PORT}")"
+    validate_port "$WEBAPP_HOST_PORT" || die "Invalid WebApp host port."
+
+    local prompt_webapp_url="${WEBAPP_URL:-}"
+    WEBAPP_URL="$(prompt_default "Public WebApp HTTPS URL (optional, e.g. https://shop.example.com)" "$prompt_webapp_url")"
+    if [[ -n "$WEBAPP_URL" ]]; then
+      validate_https_url "$WEBAPP_URL" || die "WEBAPP_URL must be a valid HTTPS URL."
+    fi
   else
     if [[ "$BOT_DELIVERY_MODE" == "webhook" ]]; then
       [[ -n "$WEBHOOK_URL" ]] || die "WEBHOOK_URL is required when BOT_DELIVERY_MODE=webhook in non-interactive mode."
@@ -753,7 +889,6 @@ configure_environment() {
       validate_webhook_secret_token "$WEBHOOK_SECRET_TOKEN" || die "Invalid secret token."
       WEBHOOK_PORT="${WEBHOOK_PORT:-3000}"
       validate_port "$WEBHOOK_PORT" || die "Invalid webhook port."
-      WEBHOOK_HOST_PORT="${WEBHOOK_HOST_PORT:-$WEBHOOK_PORT}"
       validate_port "$WEBHOOK_HOST_PORT" || die "Invalid host port."
       if [[ -z "${WEBHOOK_PATH:-}" ]]; then
         if [[ "$WEBHOOK_URL" =~ ^https://[^/]+(/.*)$ ]]; then
@@ -763,6 +898,10 @@ configure_environment() {
         fi
       fi
       [[ "$WEBHOOK_PATH" == /* ]] || WEBHOOK_PATH="/$WEBHOOK_PATH"
+    fi
+    validate_port "$WEBAPP_HOST_PORT" || die "Invalid WebApp host port: $WEBAPP_HOST_PORT"
+    if [[ -n "$WEBAPP_URL" ]]; then
+      validate_https_url "$WEBAPP_URL" || die "WEBAPP_URL must be a valid HTTPS URL."
     fi
   fi
 
@@ -791,6 +930,12 @@ configure_environment() {
     printf 'WEBHOOK_PATH=%s\n' "$WEBHOOK_PATH"
     printf 'WEBHOOK_BIND_HOST=%s\n' "$WEBHOOK_BIND_HOST"
     printf 'WEBHOOK_HOST_PORT=%s\n' "$WEBHOOK_HOST_PORT"
+    printf 'WEBAPP_URL=%s\n' "$WEBAPP_URL"
+    printf 'WEBAPP_PORT=%s\n' "$WEBAPP_PORT"
+    printf 'WEBAPP_HOST=%s\n' "$WEBAPP_HOST"
+    printf 'WEBAPP_BIND_HOST=%s\n' "$WEBAPP_BIND_HOST"
+    printf 'WEBAPP_HOST_PORT=%s\n' "$WEBAPP_HOST_PORT"
+    [[ -n "${ADMIN_SESSION_SECRET:-}" ]] && printf 'ADMIN_SESSION_SECRET=%s\n' "$ADMIN_SESSION_SECRET"
     [[ -n "${PORT:-}" ]] && printf 'PORT=%s\n' "$PORT"
     [[ -n "${REBECCA_WEBHOOK_SECRET:-}" ]] && printf 'REBECCA_WEBHOOK_SECRET=%s\n' "$REBECCA_WEBHOOK_SECRET"
     [[ -n "${REBECCA_WEBHOOK_PATH:-}" ]] && printf 'REBECCA_WEBHOOK_PATH=%s\n' "$REBECCA_WEBHOOK_PATH"
@@ -897,6 +1042,13 @@ step "4/5" "Installing rsbot management CLI"
 success "rsbot is available at /usr/local/bin/rsbot"
 
 step "5/5" "Building services and starting database stack"
+info "Ensuring shared multi-instance mesh network and registry volume..."
+"${DOCKER[@]}" network inspect rsbot_mesh >/dev/null 2>&1 || "${DOCKER[@]}" network create rsbot_mesh >/dev/null 2>&1 || true
+"${DOCKER[@]}" volume inspect rsbot_registry >/dev/null 2>&1 || "${DOCKER[@]}" volume create rsbot_registry >/dev/null 2>&1 || true
+if "${DOCKER[@]}" ps -q -f name=nodexia-caddy-1 >/dev/null 2>&1; then
+  "${DOCKER[@]}" network connect rsbot_mesh nodexia-caddy-1 >/dev/null 2>&1 || true
+fi
+
 info "Building the bot image..."
 dc build bot
 info "Starting PostgreSQL and waiting for readiness..."
@@ -935,9 +1087,13 @@ printf '\n%s┌─────────────────────�
 printf '%s│%s  %sDeployment successful%s                                      %s│%s\n' \
   "$GREEN" "$RESET" "$BOLD" "$RESET" "$GREEN" "$RESET"
 printf '%s└────────────────────────────────────────────────────────────┘%s\n' "$GREEN" "$RESET"
-printf '\n%sInstance:%s  %s\n' "$DIM" "$RESET" "$INSTANCE_NAME"
-printf '%sVerify:%s    rsbot %s verify\n' "$DIM" "$RESET" "$INSTANCE_NAME"
-printf '%sStatus:%s    rsbot %s status\n' "$DIM" "$RESET" "$INSTANCE_NAME"
-printf '%sLogs:%s      rsbot %s logs -f\n' "$DIM" "$RESET" "$INSTANCE_NAME"
-printf '%sBackup:%s    rsbot %s backup\n\n' "$DIM" "$RESET" "$INSTANCE_NAME"
-printf '%sNext:%s      Open /admin → Rebecca panels in Telegram to configure panel API keys.\n\n' "$DIM" "$RESET"
+printf '\n%sInstance:%s     %s\n' "$DIM" "$RESET" "$INSTANCE_NAME"
+printf '%sWebApp Port:%s  %s (reverse proxy: 127.0.0.1:%s)\n' "$DIM" "$RESET" "$WEBAPP_HOST_PORT" "$WEBAPP_HOST_PORT"
+if [[ "$BOT_DELIVERY_MODE" == "webhook" ]]; then
+  printf '%sWebhook Port:%s %s (reverse proxy: 127.0.0.1:%s)\n' "$DIM" "$RESET" "$WEBHOOK_HOST_PORT" "$WEBHOOK_HOST_PORT"
+fi
+printf '%sVerify:%s       rsbot %s verify\n' "$DIM" "$RESET" "$INSTANCE_NAME"
+printf '%sStatus:%s       rsbot %s status\n' "$DIM" "$RESET" "$INSTANCE_NAME"
+printf '%sLogs:%s         rsbot %s logs -f\n' "$DIM" "$RESET" "$INSTANCE_NAME"
+printf '%sBackup:%s       rsbot %s backup\n\n' "$DIM" "$RESET" "$INSTANCE_NAME"
+printf '%sNext:%s         Open /admin → Rebecca panels in Telegram to configure panel API keys.\n\n' "$DIM" "$RESET"

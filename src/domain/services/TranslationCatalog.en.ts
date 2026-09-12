@@ -1369,7 +1369,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_webapp_reverse_proxy_value: '⚡ Automated (Caddy On-Demand TLS)',
   admin_webapp_guide_title: '⚡ Automated Reverse Proxy & SSL Integration',
   admin_webapp_guide_desc:
-    'No manual Nginx or Caddy reverse proxy configuration is required! Simply point your domain or subdomain DNS A-record to the server IP ({serverIp}). Caddy On-Demand TLS automatically provisions SSL certificates and reverse-proxies traffic to port {port}.',
+    'To connect the Mini App, simply point your domain or subdomain DNS A-record to the server IP ({serverIp}). The multi-instance mesh dispatcher and Caddy automatically provision SSL certificates and route traffic to this instance with zero manual reverse proxy configuration.',
   admin_webapp_toggle_enable: '🟢 Enable Mini App',
   admin_webapp_toggle_disable: '🔴 Disable Mini App',
   admin_webapp_edit_url: '✏️ Set / Change Domain URL',

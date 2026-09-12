@@ -1,5 +1,12 @@
 # RebeccaSellBot Caddy Reverse Proxy Configuration
 # Enables zero-touch Automated Reverse Proxy and On-Demand TLS (SSL) for Mini App and Webhooks.
+#
+# Multi-Instance Mesh Architecture:
+# When multiple bot instances run on this server (e.g. main, shop2, shop3), each instance
+# registers its public domain in the shared registry. The primary ingress container (main_bot)
+# approves On-Demand TLS certificates via /api/caddy-check and automatically proxies traffic
+# to the corresponding instance over the internal rsbot_mesh network.
+# Zero manual Caddyfile changes or service reloads are required when adding new instances.
 
 {
     # Authorize certificate issuance exclusively for domains approved by RebeccaSellBot
@@ -14,8 +21,9 @@ https:// {
         on_demand
     }
 
-    # Forward all traffic to the internal Fastify Mini App server
+    # Forward all traffic to the primary Fastify Mini App mesh dispatcher
     reverse_proxy main_bot:3002
 
     encode zstd gzip
 }
+

@@ -1,0 +1,35 @@
+# RebeccaSellBot Multi-Instance Manual Caddy Configuration (Alternative / Static Mode)
+#
+# NOTE: In RebeccaSellBot v0.2+, manual Caddyfile editing is NOT required!
+# The standard deploy/caddy/Caddyfile uses an internal mesh dispatcher and On-Demand TLS
+# to automatically route domains for all instances (main, shop2, shop3) with zero manual edits.
+#
+# Use this static configuration file ONLY if you prefer fixed, hardcoded domain blocks
+# with direct host port reverse proxying instead of automated mesh discovery.
+
+# Instance 1: Primary Bot (main)
+# Published host port: 3002 (WEBAPP_HOST_PORT=3002)
+shop1.yourdomain.com {
+    reverse_proxy 127.0.0.1:3002
+    encode zstd gzip
+}
+
+# Instance 2: Secondary Bot (shop2)
+# Published host port: 3003 (WEBAPP_HOST_PORT=3003)
+shop2.yourdomain.com {
+    reverse_proxy 127.0.0.1:3003
+    encode zstd gzip
+}
+
+# Instance 3: Third Bot (shop3)
+# Published host port: 3004 (WEBAPP_HOST_PORT=3004)
+shop3.yourdomain.com {
+    reverse_proxy 127.0.0.1:3004
+    encode zstd gzip
+}
+
+# If any instance runs in Webhook mode instead of polling, forward its webhook path as well:
+# webhook.yourdomain.com {
+#     reverse_proxy /webhook 127.0.0.1:3000
+#     encode zstd gzip
+# }

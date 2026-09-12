@@ -1361,7 +1361,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_webapp_reverse_proxy_value: '⚡ خودکار (Caddy On-Demand TLS)',
   admin_webapp_guide_title: '⚡ اتصال خودکار دامنه (Reverse Proxy & SSL)',
   admin_webapp_guide_desc:
-    'برای اتصال مینی‌اپ، نیازی به تنظیم دستی وب‌سرور (Nginx یا Caddy) نیست! کافیست رکورد A دامنه یا ساب‌دامنه خود را به IP سرور ({serverIp}) متصل کنید. سرور Caddy از طریق قابلیت On-Demand به‌صورت خودکار گواهی SSL را صادر کرده و ترافیک را به پورت {port} هدایت (Reverse Proxy) می‌کند.',
+    'برای اتصال مینی‌اپ، کافیست رکورد A دامنه یا ساب‌دامنه خود را به IP سرور ({serverIp}) متصل کنید. سیستم مش چنداینستنس و سرور Caddy به‌صورت کاملاً خودکار و بدون نیاز به تنظیمات دستی، گواهی SSL را صادر کرده و ترافیک را به این اینستنس هدایت (Reverse Proxy) می‌کنند.',
   admin_webapp_toggle_enable: '🟢 فعال‌سازی مینی‌اپ',
   admin_webapp_toggle_disable: '🔴 غیرفعال‌سازی مینی‌اپ',
   admin_webapp_edit_url: '✏️ تنظیم / تغییر آدرس دامنه',

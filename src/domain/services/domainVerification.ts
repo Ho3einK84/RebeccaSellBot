@@ -118,7 +118,12 @@ export async function checkDomainDns(
  */
 export async function verifyDomainSslAndReachability(
   url: string,
-  timeoutMs = 8000
+  timeoutMs = 10000
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
-  return probeDomainHealth(url, timeoutMs);
+  const firstProbe = await probeDomainHealth(url, Math.min(5000, timeoutMs));
+  if (firstProbe.ok) return firstProbe;
+
+  // Wait briefly for ACME TLS certificate issuance to complete, then retry
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  return probeDomainHealth(url, Math.max(5000, timeoutMs - 5000));
 }

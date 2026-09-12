@@ -48,13 +48,17 @@ services:
       WEBHOOK_PORT: ${WEBHOOK_PORT:-3000}
       WEBHOOK_PATH: ${WEBHOOK_PATH-}
       WEBHOOK_HOST: ${WEBHOOK_HOST:-0.0.0.0}
+      WEBHOOK_HOST_PORT: ${WEBHOOK_HOST_PORT:-3000}
       WEBAPP_URL: ${WEBAPP_URL-}
       WEBAPP_PORT: ${WEBAPP_PORT:-3002}
       WEBAPP_HOST: ${WEBAPP_HOST:-0.0.0.0}
+      WEBAPP_HOST_PORT: ${WEBAPP_HOST_PORT:-3002}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET-}
     ports:
       - '${WEBHOOK_BIND_HOST:-127.0.0.1}:${WEBHOOK_HOST_PORT:-3000}:${WEBHOOK_PORT:-3000}'
       - '${WEBAPP_BIND_HOST:-127.0.0.1}:${WEBAPP_HOST_PORT:-3002}:${WEBAPP_PORT:-3002}'
+    volumes:
+      - registry:/app/data/registry
     depends_on:
       db:
         condition: service_healthy
@@ -66,10 +70,14 @@ services:
       # (the internal database network), which blocks Telegram/Rebecca traffic.
       outbound:
         gw_priority: 1
+      mesh:
+        gw_priority: 0
 
 volumes:
   pgdata:
     name: ${INSTANCE_NAME:-rsbot}_pgdata
+  registry:
+    name: rsbot_registry
 
 networks:
   # PostgreSQL is attached only to this private network. The bot joins it for
@@ -80,3 +88,7 @@ networks:
     internal: true
   outbound:
     name: ${INSTANCE_NAME:-rsbot}_outbound
+  # Shared mesh network across all bot instances on this host, allowing zero-touch
+  # reverse proxy routing between the primary ingress container and peer bots.
+  mesh:
+    name: rsbot_mesh
