@@ -54,12 +54,12 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
         : 'bg-indigo-600 hover:bg-indigo-700 text-white';
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} maxWidth="sm">
+    <Modal isOpen={isOpen} onClose={handleClose} maxWidth="sm" closeOnBackdrop={!loading}>
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-start gap-3">
           <div
-            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
               variant === 'danger'
                 ? 'bg-rose-500/15 border-rose-500/25 text-rose-500'
                 : variant === 'warning'
@@ -79,7 +79,7 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
         {showReasonInput && (
           <div className="space-y-1.5 pt-1">
             <label className={`text-[11px] font-medium block ${textSecondary}`}>
-              {t('admin.modals.balanceReasonLabel')}
+              {t('admin.users.banReasonLabel')}
             </label>
             <input
               type="text"

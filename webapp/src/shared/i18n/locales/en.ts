@@ -243,6 +243,7 @@ export const en: TranslationSchema = {
       banConfirmDesc:
         'Banning this user will revoke bot access and service purchase capabilities. Are you sure?',
       unbanConfirmDesc: 'Are you sure you want to restore bot access for this user?',
+      banReasonLabel: 'Reason for ban:',
       banReasonPlaceholder: 'Reason for ban (optional)...',
       filterAll: 'All Users',
       filterActiveSubs: 'Active Services',
@@ -409,6 +410,7 @@ export const en: TranslationSchema = {
       categoryPayments: 'Payments',
       categoryDatabase: 'Database',
       categoryGamification: 'Gamification',
+      categoryTrial: 'Trial',
       corePlanned: 'Core Planned',
     },
     modals: {

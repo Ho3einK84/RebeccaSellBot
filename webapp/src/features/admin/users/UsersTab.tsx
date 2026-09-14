@@ -125,7 +125,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   };
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-200">
+    <div className="space-y-4">
       <UserSearchBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

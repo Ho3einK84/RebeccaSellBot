@@ -156,6 +156,18 @@ textarea {
   background: rgba(150, 150, 150, 0.35);
 }
 
+/* Hide scrollbar utility */
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Telegram WebApp specific styling */
 html[dir='rtl'] body {
   direction: rtl;
@@ -431,6 +443,73 @@ html[dir='ltr'] body {
   }
 }
 
+/* ===== Admin & Shared UI Action-Oriented Animations ===== */
+
+.animate-modal-backdrop {
+  animation: ui-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-modal-in {
+  animation: ui-modal-zoom-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes ui-modal-zoom-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-toast-in {
+  animation: ui-toast-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes ui-toast-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-tab-in {
+  animation: ui-tab-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes ui-tab-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: ui-fade-in 0.18s ease-out both;
+}
+
+@keyframes ui-fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 /* Reduce motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
   .cs-orb,
@@ -440,7 +519,12 @@ html[dir='ltr'] body {
   .cs-fade-in-delay-1,
   .cs-fade-in-delay-2,
   .cs-fade-in-delay-3,
-  .animate-wave {
+  .animate-wave,
+  .animate-modal-backdrop,
+  .animate-modal-in,
+  .animate-toast-in,
+  .animate-tab-in,
+  .animate-fade-in {
     animation: none !important;
   }
 }

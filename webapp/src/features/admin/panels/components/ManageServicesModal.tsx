@@ -109,10 +109,10 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
         {/* Services List */}
         <div className="space-y-2 text-start">
           <span className={`block text-xs font-semibold ${textPrimary}`}>
-            {t('admin.panels.connectedServices')} ({panel.services.length})
+            {t('admin.panels.connectedServices')} <span dir="ltr">({panel.services.length})</span>
           </span>
 
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-60 overflow-y-auto pe-1">
             {panel.services.map((service) => (
               <div
                 key={service.serviceId}

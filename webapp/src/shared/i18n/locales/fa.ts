@@ -243,6 +243,7 @@ export const fa: TranslationSchema = {
       banConfirmDesc:
         'با مسدود کردن این کاربر، دسترسی او به ربات و امکان شارژ یا خرید سرویس قطع خواهد شد. آیا مطمئن هستید؟',
       unbanConfirmDesc: 'آیا می‌خواهید دسترسی این کاربر به ربات مجدداً فعال شود؟',
+      banReasonLabel: 'علت مسدودسازی:',
       banReasonPlaceholder: 'علت مسدودسازی (اختیاری)...',
       filterAll: 'همه کاربران',
       filterActiveSubs: 'دارای سرویس فعال',
@@ -409,6 +410,7 @@ export const fa: TranslationSchema = {
       categoryPayments: 'پرداخت',
       categoryDatabase: 'پایگاه داده',
       categoryGamification: 'سرگرمی',
+      categoryTrial: 'سرویس تست',
       corePlanned: 'برنامه‌ریزی هسته',
     },
     modals: {

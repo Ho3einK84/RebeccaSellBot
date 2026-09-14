@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   XCircle,
   Wallet,
+  Image as ImageIcon,
   ExternalLink,
   ShieldCheck,
   AlertCircle,
@@ -241,7 +242,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
             }`}
             onClick={() => onViewPhoto(receipt)}
           >
-            <Wallet className="w-4 h-4" />
+            <ImageIcon className="w-4 h-4" />
             <span>{t('admin.receipts.viewPhoto')}</span>
           </button>
         )}

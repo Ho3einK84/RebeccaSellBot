@@ -52,10 +52,21 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
   const isApproved = receipt.status === 'approved';
   const isRejected = receipt.status === 'rejected';
 
+  const badgeVariant = isApproved
+    ? ('success' as const)
+    : isRejected
+      ? ('error' as const)
+      : ('warning' as const);
+  const statusLabel = isApproved
+    ? t('common.statusApproved')
+    : isRejected
+      ? t('common.statusRejected')
+      : t('common.statusPending');
+
   const { displayName } = sanitizeDisplayName(
     receipt.user?.firstName,
     receipt.user?.lastName,
-    receipt.user?.username || `ID: ${receipt.telegramId}`
+    receipt.user?.username || `${t('common.idLabel')} ${receipt.telegramId}`
   );
 
   return (
@@ -158,8 +169,8 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
                     ? 'text-rose-400'
                     : 'text-rose-600'
                   : isDark
-                    ? 'text-emerald-400'
-                    : 'text-emerald-600'
+                    ? 'text-amber-400'
+                    : 'text-amber-600'
             }`}
           />
           <span
@@ -173,8 +184,8 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
                     ? 'text-rose-400'
                     : 'text-rose-600'
                   : isDark
-                    ? 'text-emerald-400'
-                    : 'text-emerald-600'
+                    ? 'text-amber-400'
+                    : 'text-amber-600'
             }`}
           >
             {formatMoney(receipt.amount)}
@@ -183,47 +194,41 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
         </div>
 
         <div>
-          <Badge
-            variant={isApproved ? 'success' : isRejected ? 'error' : 'warning'}
-            dot
-            pulse={isPending}
-            className="text-[10px]"
-          >
-            {isApproved
-              ? t('common.statusApproved')
-              : isRejected
-                ? t('common.statusRejected')
-                : t('common.statusPending')}
+          <Badge variant={badgeVariant} dot pulse={isPending} className="text-[10px]">
+            {statusLabel}
           </Badge>
         </div>
       </div>
 
-      {/* Metadata Row: ID, Time, Review Status */}
+      {/* Meta Footer */}
       <div
-        className={`flex items-center justify-between gap-2 text-[11px] px-0.5 flex-wrap ${textMuted}`}
+        className={`pt-2 border-t border-slate-100 dark:border-white/[0.04] text-[11px] ${textMuted} flex flex-col gap-1.5`}
       >
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1">
-            <span>{t('common.idLabel')}</span>
-            <span dir="ltr" className="font-mono text-slate-400 dark:text-zinc-400">
-              #{receipt.id.slice(-6)}
+            <span className="font-mono text-[10px] opacity-70">#</span>
+            <span dir="ltr" className="font-mono font-medium">
+              {receipt.id.slice(0, 8)}
             </span>
           </div>
 
           <span className="opacity-40">·</span>
 
           <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3 opacity-70" />
-            <span>{formatIsoDate(receipt.createdAt)}</span>
+            <Clock className="w-3 h-3 opacity-70 shrink-0" />
+            <span dir="ltr">{formatIsoDate(receipt.createdAt)}</span>
           </div>
         </div>
       </div>
 
       {receipt.reviewedBy && (
         <div className="flex items-center gap-1 text-[11px] px-0.5 text-indigo-400/90 font-sans">
-          <ShieldCheck className="w-3 h-3 text-emerald-400" />
+          <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
           <span>
-            {t('admin.receipts.reviewedBy')}: {receipt.reviewedBy}
+            {t('admin.receipts.reviewedBy')}:{' '}
+            <span dir="ltr" className="font-mono">
+              #{receipt.reviewedBy}
+            </span>
           </span>
         </div>
       )}

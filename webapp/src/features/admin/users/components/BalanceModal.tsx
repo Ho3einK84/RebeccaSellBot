@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Wallet, X, Check, RotateCw, Plus, Minus, Settings2 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
+import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import type { UserProfile, BalanceOperation } from '@/shared/types/admin.js';
@@ -72,7 +73,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
   ];
 
   return (
-    <Modal isOpen={Boolean(user)} onClose={handleClose} maxWidth="md">
+    <Modal isOpen={Boolean(user)} onClose={handleClose} maxWidth="md" closeOnBackdrop={!loading}>
       <div className="space-y-4">
         {/* Modal Header with User Context */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-white/[0.06]">
@@ -90,9 +91,11 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
               <h3 className={`font-bold text-sm sm:text-base m-0 tracking-tight ${textPrimary}`}>
                 {t('admin.modals.balanceTitle')}
               </h3>
-              <div className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 truncate mt-0.5">
-                {[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}
-                {user.username ? ` (@${user.username})` : ''} · #{user.telegramId}
+              <div className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <span>{[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}</span>
+                {user.username && <span dir="ltr">(@{user.username})</span>}
+                <span className="opacity-40">·</span>
+                <span dir="ltr">#{user.telegramId}</span>
               </div>
             </div>
           </div>
@@ -184,13 +187,17 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
               {t('admin.modals.balanceAmountLabel')}
             </label>
             <input
-              type="number"
-              min="0"
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
               required
               className={`w-full h-10 px-3.5 text-sm font-mono rounded-xl border outline-none transition-all ${inputClass}`}
               placeholder={t('admin.modals.balanceAmountPlaceholder')}
               value={amountStr}
-              onChange={(e) => setAmountStr(e.target.value)}
+              onChange={(e) => {
+                const normalized = normalizeInputDigits(e.target.value).replace(/[^0-9]/g, '');
+                setAmountStr(normalized);
+              }}
             />
 
             {/* Quick Amount Chips in Equal Columns */}

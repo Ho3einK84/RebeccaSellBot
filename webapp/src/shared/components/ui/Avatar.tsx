@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getAvatarChar } from '@/shared/lib/formatters.js';
 import { useTheme } from '@/shared/theme/ThemeContext.js';
 
@@ -20,6 +20,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   className = '',
 }) => {
   const { isDark } = useTheme();
+  const [hasError, setHasError] = useState(false);
 
   const sizeClasses = {
     xs: 'w-7 h-7 text-xs',
@@ -39,16 +40,13 @@ export const Avatar: React.FC<AvatarProps> = ({
         xl: 'rounded-2xl',
       }[size];
 
-  if (photoUrl) {
+  if (photoUrl && !hasError) {
     return (
       <img
         src={photoUrl}
         alt={name || username || 'User'}
         className={`${radiusClass} object-cover shrink-0 border border-slate-200/80 dark:border-white/10 shadow-xs ${sizeClasses} ${className}`}
-        onError={(e) => {
-          // Hide broken image
-          (e.target as HTMLElement).style.display = 'none';
-        }}
+        onError={() => setHasError(true)}
       />
     );
   }

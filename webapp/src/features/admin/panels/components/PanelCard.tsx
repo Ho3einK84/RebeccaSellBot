@@ -72,20 +72,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
       {/* Top Header: Name, Status Badges, Test & Edit Buttons */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                !isEnabled
-                  ? 'bg-slate-400'
-                  : isHealthy
-                    ? 'bg-emerald-500 status-pulse'
-                    : 'bg-rose-500'
-              }`}
-            />
-            <h3 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>
-              {panel.name}
-            </h3>
-          </div>
+          <h3 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>{panel.name}</h3>
 
           {panel.isDefault && (
             <Badge variant="warning" className="text-[10px]">
@@ -167,7 +154,10 @@ export const PanelCard: React.FC<PanelCardProps> = ({
               </button>
             )}
           </div>
-          <code className="break-all font-mono text-[11px] text-indigo-500 block">
+          <code
+            dir="ltr"
+            className="break-all font-mono text-[11px] text-indigo-500 block text-start"
+          >
             {panel.baseUrl || '—'}
           </code>
         </div>
@@ -178,8 +168,10 @@ export const PanelCard: React.FC<PanelCardProps> = ({
             {t('admin.panels.authMode')}
           </span>
           <div className="flex items-center gap-1.5 font-mono">
-            <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
-            <span className={textPrimary}>{panel.credentialMode}</span>
+            <KeyRound className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span dir="ltr" className={textPrimary}>
+              {panel.credentialMode}
+            </span>
           </div>
         </div>
       </div>
@@ -257,7 +249,9 @@ export const PanelCard: React.FC<PanelCardProps> = ({
                 }`}
               >
                 <span className="font-sans font-medium">{s.name}</span>
-                <span className="text-[10px] text-slate-400 font-mono">({s.serviceId})</span>
+                <span dir="ltr" className="text-[10px] text-slate-400 font-mono">
+                  ({s.serviceId})
+                </span>
                 {s.isDefault && (
                   <span
                     className="inline-flex items-center text-[10px] text-amber-500 font-sans"

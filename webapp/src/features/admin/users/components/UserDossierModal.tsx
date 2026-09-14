@@ -471,7 +471,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         <div className="space-y-1">
                           <div className="flex justify-between items-center text-[11px]">
                             <span className={textMuted}>{t('admin.users.configTraffic')}</span>
-                            <span className="font-mono font-semibold">
+                            <span className="font-mono font-semibold" dir="ltr">
                               {formatBytes(usedTraffic)} /{' '}
                               {dataLimit > 0
                                 ? formatBytes(dataLimit)
@@ -658,22 +658,25 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           }`}
                         >
                           {isCredit ? (
-                            <ArrowDownLeft className="w-3.5 h-3.5" />
+                            <ArrowDownLeft className="w-3.5 h-3.5 rtl:-scale-x-100" />
                           ) : (
-                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            <ArrowUpRight className="w-3.5 h-3.5 rtl:-scale-x-100" />
                           )}
                         </div>
                         <div className="space-y-0.5 min-w-0">
                           <div className={`font-semibold text-xs truncate ${textPrimary}`}>
                             {tx.description}
                           </div>
-                          <div className={`text-[10px] font-mono ${textMuted}`}>
+                          <div
+                            dir="ltr"
+                            className={`text-[10px] font-mono ${textMuted} text-start`}
+                          >
                             {formatIsoDate(tx.createdAt)}
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-right rtl:text-left space-y-0.5 shrink-0">
+                      <div className="text-end space-y-0.5 shrink-0">
                         <div
                           className={`font-mono font-bold text-xs sm:text-sm ${
                             isCredit
@@ -681,11 +684,17 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                               : 'text-rose-500 dark:text-rose-400'
                           }`}
                         >
-                          {isCredit ? '+' : ''}
-                          {formatMoney(tx.amount)} {t('common.currency')}
+                          <span dir="ltr">
+                            {isCredit ? '+' : ''}
+                            {formatMoney(tx.amount)}
+                          </span>{' '}
+                          <span className="font-sans font-normal text-xs">
+                            {t('common.currency')}
+                          </span>
                         </div>
                         <div className={`text-[10px] font-mono ${textMuted}`}>
-                          {t('admin.users.txBalanceAfter')}: {formatMoney(tx.balanceAfter)}
+                          {t('admin.users.txBalanceAfter')}:{' '}
+                          <span dir="ltr">{formatMoney(tx.balanceAfter)}</span>
                         </div>
                       </div>
                     </div>
@@ -716,15 +725,18 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         {t('common.idLabel')} <span dir="ltr">{order.id}</span>
                       </div>
                     </div>
-                    <div className="text-right rtl:text-left space-y-0.5">
+                    <div className="text-end space-y-0.5">
                       <div
                         className={`font-mono font-bold text-xs sm:text-sm ${
                           isDark ? 'text-emerald-400' : 'text-emerald-600'
                         }`}
                       >
-                        {formatMoney(order.amount)} {t('common.currency')}
+                        <span dir="ltr">{formatMoney(order.amount)}</span>{' '}
+                        <span className="font-sans font-normal text-xs">
+                          {t('common.currency')}
+                        </span>
                       </div>
-                      <div className={`text-[10px] ${textMuted}`}>
+                      <div dir="ltr" className={`text-[10px] ${textMuted}`}>
                         {formatIsoDate(order.createdAt)}
                       </div>
                     </div>
@@ -788,7 +800,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             ? t('common.statusRejected')
                             : t('common.statusPending')}
                       </Badge>
-                      <span className={`text-[10px] ${textMuted}`}>
+                      <span dir="ltr" className={`text-[10px] ${textMuted}`}>
                         {formatIsoDate(rec.createdAt)}
                       </span>
                     </div>

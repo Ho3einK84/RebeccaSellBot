@@ -17,22 +17,14 @@ export const Pagination: React.FC<PaginationProps> = ({
   onPageChange,
   disabled = false,
 }) => {
-  const { t, isRtl } = useLanguage();
+  const { t } = useLanguage();
   const { formatNumber } = useFormatters();
   const { isDark } = useTheme();
 
   if (totalPages <= 1) return null;
 
-  const prevIcon = isRtl ? (
-    <ChevronRight className="w-3.5 h-3.5" />
-  ) : (
-    <ChevronLeft className="w-3.5 h-3.5" />
-  );
-  const nextIcon = isRtl ? (
-    <ChevronLeft className="w-3.5 h-3.5" />
-  ) : (
-    <ChevronRight className="w-3.5 h-3.5" />
-  );
+  const prevIcon = <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-180 shrink-0" />;
+  const nextIcon = <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180 shrink-0" />;
 
   return (
     <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-slate-200/60 dark:border-white/[0.06]">

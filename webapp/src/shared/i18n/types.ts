@@ -243,6 +243,7 @@ export interface TranslationSchema {
       unbanConfirmTitle: string;
       banConfirmDesc: string;
       unbanConfirmDesc: string;
+      banReasonLabel: string;
       banReasonPlaceholder: string;
       filterAll: string;
       filterActiveSubs: string;
@@ -406,6 +407,7 @@ export interface TranslationSchema {
       categoryPayments: string;
       categoryDatabase: string;
       categoryGamification: string;
+      categoryTrial: string;
       corePlanned: string;
     };
     modals: {

@@ -42,6 +42,7 @@ export const DeletePanelModal: React.FC<DeletePanelModalProps> = ({
       title={t('admin.panels.deleteModalTitle')}
       icon={<AlertTriangle className="w-5 h-5 text-rose-500" />}
       maxWidth="sm"
+      closeOnBackdrop={!loading}
     >
       <div className="space-y-4 text-start">
         <p className={`text-sm ${textPrimary}`}>

@@ -265,7 +265,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
   }, [panels, filter]);
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-200">
+    <div className="space-y-4">
       {/* Top Header & Fleet Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-2.5 min-w-0">

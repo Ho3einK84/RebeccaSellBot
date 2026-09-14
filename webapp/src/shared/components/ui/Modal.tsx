@@ -4,6 +4,19 @@ import { X } from 'lucide-react';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 
+// Global stack for escape key handling across stacked modals
+const escapeHandlers: (() => void)[] = [];
+let openModalsCount = 0;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && escapeHandlers.length > 0) {
+      const topHandler = escapeHandlers[escapeHandlers.length - 1];
+      topHandler?.();
+    }
+  });
+}
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -28,24 +41,29 @@ export const Modal: React.FC<ModalProps> = ({
   // Telegram back button integration: closes modal when user taps Back
   useTelegramBackButton(onClose, isOpen);
 
-  // Lock body scroll when modal is open
+  // Robust body scroll lock ref-counted across all open modals
   useEffect(() => {
     if (!isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    openModalsCount++;
+    if (openModalsCount === 1) {
+      document.body.style.overflow = 'hidden';
+    }
     return () => {
-      document.body.style.overflow = prev;
+      openModalsCount = Math.max(0, openModalsCount - 1);
+      if (openModalsCount === 0) {
+        document.body.style.overflow = '';
+      }
     };
   }, [isOpen]);
 
-  // Keyboard Escape listener
+  // Keyboard Escape listener using LIFO stack (only top modal closes)
   useEffect(() => {
     if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    escapeHandlers.push(onClose);
+    return () => {
+      const idx = escapeHandlers.lastIndexOf(onClose);
+      if (idx !== -1) escapeHandlers.splice(idx, 1);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -68,14 +86,14 @@ export const Modal: React.FC<ModalProps> = ({
     >
       {/* Backdrop — covers full viewport regardless of ancestor transforms */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-modal-backdrop"
         onClick={closeOnBackdrop ? onClose : undefined}
         aria-hidden="true"
       />
 
       {/* Modal content */}
       <div
-        className={`${maxWidthClass} w-full p-5 sm:p-6 rounded-2xl sm:rounded-3xl border ${modalBoxClass} relative animate-in fade-in zoom-in-95 duration-200 max-h-[90dvh] overflow-y-auto z-10`}
+        className={`${maxWidthClass} w-full p-5 sm:p-6 rounded-2xl sm:rounded-3xl border ${modalBoxClass} relative animate-modal-in max-h-[90dvh] overflow-y-auto z-10`}
       >
         {(title || icon) && (
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/60 dark:border-white/[0.08]">

@@ -26,7 +26,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
   if (!stats) return null;
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-200">
+    <div className="space-y-4">
       {/* Primary KPI Hero Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {/* Pending Receipts */}

@@ -30,23 +30,16 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
   const totalAmount = receipts.reduce((sum, r) => sum + r.amount, 0);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="md">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t('admin.receipts.batchApproveTitle')}
+      icon={<CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+      maxWidth="md"
+      closeOnBackdrop={!loading}
+    >
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
-              isDark
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                : 'bg-emerald-50 border-emerald-200 text-emerald-600'
-            }`}
-          >
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <h3 className={`font-bold text-base m-0 ${textPrimary}`}>
-            {t('admin.receipts.batchApproveTitle')}
-          </h3>
-        </div>
-
+        {/* Warning Banner */}
         <div
           className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs ${
             isDark
@@ -73,8 +66,12 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
               className="flex items-center justify-between p-2 rounded-lg bg-black/5 dark:bg-white/[0.03] font-mono text-[11px]"
             >
               <div className="flex items-center gap-2">
-                <span className={`font-sans ${textMuted}`}>#{rec.id.slice(-6)}</span>
-                <span className={textSecondary}>ID: {rec.telegramId}</span>
+                <span dir="ltr" className={`font-mono ${textMuted}`}>
+                  #{rec.id.slice(-6)}
+                </span>
+                <span dir="ltr" className={`font-mono ${textSecondary}`}>
+                  {t('common.idLabel')} {rec.telegramId}
+                </span>
               </div>
               <span className={`font-bold ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>
                 {formatMoney(rec.amount)} {t('common.currency')}

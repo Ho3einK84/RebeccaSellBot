@@ -71,7 +71,10 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
               <h3 className={`font-bold text-sm m-0 ${textPrimary}`}>
                 {t('admin.users.qrModalTitle')}
               </h3>
-              <span className={`text-[11px] font-mono block truncate max-w-[200px] ${textMuted}`}>
+              <span
+                dir="ltr"
+                className={`text-[11px] font-mono block truncate max-w-[200px] text-start ${textMuted}`}
+              >
                 {config.configUsername}
               </span>
             </div>

@@ -115,7 +115,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
           createPortal(
             <aside
               aria-live="polite"
-              className="fixed top-4 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[100000] pointer-events-auto"
+              className="fixed top-4 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[100000] pointer-events-auto"
             >
               <Toast
                 message={notification.message}
@@ -129,20 +129,22 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
         {/* Desktop Navigation Tabs (Hidden on mobile) */}
         <AdminDesktopNav tabs={tabsConfig} activeTab={activeTab} onSelectTab={switchTab} />
 
-        {/* Tab Routing */}
-        {activeTab === 'overview' && <OverviewTab onSwitchTab={switchTab} />}
-        {activeTab === 'receipts' && (
-          <ReceiptsTab onInspectUser={handleInspectUserFromReceipts} onNotify={notify} />
-        )}
-        {activeTab === 'users' && (
-          <UsersTab
-            onNotify={notify}
-            inspectedUserId={inspectingUserId}
-            onClearInspectedUser={() => setInspectingUserId(null)}
-          />
-        )}
-        {activeTab === 'panels' && <PanelsTab onNotify={notify} />}
-        {activeTab === 'coming-soon' && <ModulesTab />}
+        {/* Tab Routing with GPU-cheap Entrance Transition */}
+        <div key={activeTab} className="animate-tab-in flex-1 flex flex-col">
+          {activeTab === 'overview' && <OverviewTab onSwitchTab={switchTab} />}
+          {activeTab === 'receipts' && (
+            <ReceiptsTab onInspectUser={handleInspectUserFromReceipts} onNotify={notify} />
+          )}
+          {activeTab === 'users' && (
+            <UsersTab
+              onNotify={notify}
+              inspectedUserId={inspectingUserId}
+              onClearInspectedUser={() => setInspectingUserId(null)}
+            />
+          )}
+          {activeTab === 'panels' && <PanelsTab onNotify={notify} />}
+          {activeTab === 'coming-soon' && <ModulesTab />}
+        </div>
       </main>
 
       {/* Mobile Bottom Navigation Bar (< md) */}

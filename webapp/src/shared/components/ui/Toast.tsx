@@ -37,7 +37,7 @@ export const Toast: React.FC<ToastProps> = ({
 
   return (
     <div
-      className={`p-3 sm:p-3.5 rounded-2xl text-xs sm:text-sm font-medium flex items-center justify-between gap-3 border backdrop-blur-md shadow-lg transition-all animate-in fade-in slide-in-from-top-2 duration-200 ${variantStyles} ${className}`}
+      className={`p-3 sm:p-3.5 rounded-2xl text-xs sm:text-sm font-medium flex items-center justify-between gap-3 border backdrop-blur-md shadow-lg transition-all animate-toast-in ${variantStyles} ${className}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>

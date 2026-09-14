@@ -172,7 +172,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
   };
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-200">
+    <div className="space-y-4">
       {/* Top Header */}
       <div className="flex flex-row justify-between items-center gap-2 mb-1">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -247,11 +247,11 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           )}
         </div>
 
-        {/* Status Tabs */}
-        <div className="p-1 rounded-2xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1 overflow-x-auto scrollbar-none">
+        {/* Status Tabs - Horizontally scrollable on small screens with no icon shrink */}
+        <div className="p-1 rounded-2xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1.5 overflow-x-auto scrollbar-none overscroll-x-contain touch-pan-x">
           <button
             type="button"
-            className={`flex-1 min-w-[75px] py-1.5 px-3 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
               status === 'pending'
                 ? isDark
                   ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 shadow-xs'
@@ -265,11 +265,11 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
               setPage(1);
             }}
           >
-            <Clock className="w-3.5 h-3.5" />
+            <Clock className="w-3.5 h-3.5 shrink-0" />
             <span>{t('admin.receipts.tabPending')}</span>
             {pendingCount > 0 && (
               <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold shrink-0 ${
                   status === 'pending'
                     ? 'bg-amber-500 text-white'
                     : isDark
@@ -284,7 +284,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
           <button
             type="button"
-            className={`flex-1 min-w-[75px] py-1.5 px-3 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
               status === 'approved'
                 ? isDark
                   ? 'bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 shadow-xs'
@@ -298,13 +298,13 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
               setPage(1);
             }}
           >
-            <CheckCircle2 className="w-3.5 h-3.5" />
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
             <span>{t('admin.receipts.tabApproved')}</span>
           </button>
 
           <button
             type="button"
-            className={`flex-1 min-w-[75px] py-1.5 px-3 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
               status === 'rejected'
                 ? isDark
                   ? 'bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30 shadow-xs'
@@ -318,13 +318,13 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
               setPage(1);
             }}
           >
-            <XCircle className="w-3.5 h-3.5" />
+            <XCircle className="w-3.5 h-3.5 shrink-0" />
             <span>{t('admin.receipts.tabRejected')}</span>
           </button>
 
           <button
             type="button"
-            className={`flex-1 min-w-[75px] py-1.5 px-3 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
               status === 'all'
                 ? isDark
                   ? 'bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 shadow-xs'
@@ -338,7 +338,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
               setPage(1);
             }}
           >
-            <Layers className="w-3.5 h-3.5" />
+            <Layers className="w-3.5 h-3.5 shrink-0" />
             <span>{t('admin.receipts.tabAll')}</span>
           </button>
         </div>
@@ -520,6 +520,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           setRejectTarget(r);
         }}
         onViewPhoto={(r) => {
+          setDetailTarget(null);
           setPhotoTarget(r);
         }}
         onInspectUser={(uid) => {

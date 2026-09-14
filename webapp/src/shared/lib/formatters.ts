@@ -4,6 +4,16 @@ export function toPersianDigits(value: string | number): string {
   return str.replace(/[0-9]/g, (d) => persianDigits[Number(d)] ?? d);
 }
 
+export function normalizeInputDigits(input: string): string {
+  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  let res = input;
+  for (let i = 0; i < 10; i++) {
+    res = res.replaceAll(persianDigits[i]!, String(i)).replaceAll(arabicDigits[i]!, String(i));
+  }
+  return res;
+}
+
 export function formatMoney(amount: number, locale: string = 'fa'): string {
   const rounded = Math.round(amount);
   if (locale === 'fa') {

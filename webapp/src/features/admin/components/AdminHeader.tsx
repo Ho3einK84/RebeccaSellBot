@@ -137,7 +137,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onRefresh, onClo
             title={t('admin.exit')}
             aria-label={t('admin.exit')}
           >
-            <LogOut className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
+            <LogOut className="w-3.5 h-3.5 rtl:-scale-x-100" />
           </button>
         </div>
       </div>
