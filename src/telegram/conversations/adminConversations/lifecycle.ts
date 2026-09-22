@@ -11,7 +11,7 @@ import {
   waitForAdminTextInput,
 } from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
-import { sanitizeTelegramInlineCode } from '../../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 export async function adminAddAdminConversation(
   conversation: MyConversation,
@@ -68,7 +68,7 @@ export async function adminAddAdminConversation(
   });
 
   const valueDisplay = resolvedUsername
-    ? `@${resolvedUsername} (\`${telegramId}\`)`
+    ? `@${escapeTelegramMarkdown(resolvedUsername)} (\`${telegramId}\`)`
     : `\`${telegramId}\``;
 
   await replyInAdminConversation(
@@ -169,7 +169,7 @@ export async function adminAssignOrphanConversation(
               },
             ],
             footer: t(ctx, 'admin_orphan_assigned', {
-              username: result.configUsername,
+              username: escapeTelegramMarkdown(result.configUsername),
               telegram_id: target.telegramId,
             }),
           })

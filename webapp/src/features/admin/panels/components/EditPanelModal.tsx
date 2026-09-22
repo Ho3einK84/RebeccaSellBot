@@ -29,6 +29,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [clearApiKey, setClearApiKey] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
       setName(panel.name);
       setBaseUrl(panel.baseUrl || '');
       setApiKey('');
+      setClearApiKey(false);
       setValidationError(null);
     }
   }, [panel]);
@@ -66,7 +68,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
       await onSubmit({
         name: trimmedName,
         baseUrl: trimmedUrl,
-        apiKey: apiKey.trim() || undefined,
+        apiKey: clearApiKey ? null : apiKey.trim() || undefined,
       });
       onClose();
     } catch (err: unknown) {
@@ -122,14 +124,32 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
           <Input
             type="password"
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(e) => {
+              setApiKey(e.target.value);
+              if (clearApiKey) setClearApiKey(false);
+            }}
             placeholder={t('admin.panels.apiKeyEditPlaceholder')}
             dir="ltr"
-            disabled={loading}
+            disabled={loading || clearApiKey}
           />
           <span className={`block text-[11px] ${textSecondary}`}>
             {t('admin.panels.apiKeyEditHelp')}
           </span>
+          <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={clearApiKey}
+              onChange={(e) => {
+                setClearApiKey(e.target.checked);
+                if (e.target.checked) setApiKey('');
+              }}
+              disabled={loading}
+              className="rounded border-slate-300 dark:border-white/20 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span className={`text-xs ${textSecondary}`}>
+              {t('admin.panels.clearApiKeyOption')}
+            </span>
+          </label>
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200/60 dark:border-white/[0.08]">

@@ -70,6 +70,8 @@ export function useAdminReceipts(options: number | UseAdminReceiptsOptions = 20)
     pendingCount: query.data?.pendingCount ?? query.data?.items?.length ?? 0,
     isLoading: query.isLoading,
     isRefetching: query.isRefetching,
+    isError: query.isError,
+    error: query.error,
     refetch: query.refetch,
     actionMutation,
     batchActionMutation,

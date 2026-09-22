@@ -9,6 +9,7 @@ import {
   Layers,
   AlertCircle,
   CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { useAdminPanels } from './hooks/useAdminPanels.js';
 import { PanelCard } from './components/PanelCard.js';
@@ -42,9 +43,13 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     panels,
     fleetSummary,
     isLoading,
+    isError,
+    error,
     refetch,
     testPanel,
     testingPanelId,
+    togglingPanelId,
+    settingDefaultPanelId,
     isTestingAll,
     testAllPanels,
     createPanel,
@@ -323,8 +328,30 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
 
       {isLoading && <SkeletonList count={2} />}
 
+      {/* Error State */}
+      {isError && panels.length === 0 && (
+        <Card className="p-8 text-center flex flex-col items-center justify-center gap-3 border-rose-500/20">
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center">
+            <XCircle className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className={`text-base font-bold m-0 ${textPrimary}`}>{t('common.error')}</h3>
+            <p className={`text-xs m-0 ${textSecondary}`}>
+              {error instanceof Error ? error.message : t('common.networkError')}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-xs"
+            onClick={() => refetch()}
+          >
+            <span>{t('common.refresh')}</span>
+          </button>
+        </Card>
+      )}
+
       {/* Fleet Status Summary & KPIs */}
-      {!isLoading && panels.length > 0 && (
+      {!isLoading && !isError && panels.length > 0 && (
         <Card className="p-4 sm:p-5 space-y-4">
           {/* Main Health Status Strip */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -480,7 +507,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
       )}
 
       {/* Empty State */}
-      {!isLoading && panels.length === 0 && (
+      {!isLoading && !isError && panels.length === 0 && (
         <Card className="p-8 text-center space-y-3">
           <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 flex items-center justify-center">
             <Server className="w-6 h-6" />
@@ -501,6 +528,29 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
         </Card>
       )}
 
+      {/* Filtered Empty State */}
+      {!isLoading && !isError && panels.length > 0 && filteredPanels.length === 0 && (
+        <Card className="p-8 text-center space-y-3">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 flex items-center justify-center">
+            <Server className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className={`text-base font-bold m-0 ${textPrimary}`}>
+              {t('admin.panels.emptyFiltered')}
+            </h3>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setFilter('all')}
+            className="mx-auto"
+          >
+            <span>{t('admin.panels.filterAll')}</span>
+          </Button>
+        </Card>
+      )}
+
       {/* Panels List */}
       {!isLoading && filteredPanels.length > 0 && (
         <div className="grid grid-cols-1 gap-4">
@@ -515,8 +565,8 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
               onSetDefault={handleSetDefault}
               onDelete={(target) => setDeletingPanel(target)}
               isTesting={testingPanelId === p.id}
-              isToggling={isToggling}
-              isSettingDefault={isSettingDefault}
+              isToggling={togglingPanelId === p.id}
+              isSettingDefault={settingDefaultPanelId === p.id}
             />
           ))}
         </div>

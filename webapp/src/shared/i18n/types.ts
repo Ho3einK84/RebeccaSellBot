@@ -303,6 +303,8 @@ export interface TranslationSchema {
       loading: string;
       empty: string;
       emptyHint: string;
+      emptyFiltered: string;
+      clearApiKeyOption: string;
       default: string;
       active: string;
       inactive: string;

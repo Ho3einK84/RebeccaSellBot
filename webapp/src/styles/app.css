@@ -30,6 +30,7 @@
 
 [data-theme='light'],
 .light {
+  color-scheme: light;
   --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
@@ -45,6 +46,7 @@
 
 [data-theme='dark'],
 .dark {
+  color-scheme: dark;
   --bg-primary: #090a0f;
   --bg-secondary: #11131a;
   --bg-card: rgba(255, 255, 255, 0.03);

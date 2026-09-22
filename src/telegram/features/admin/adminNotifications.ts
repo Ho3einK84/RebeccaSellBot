@@ -3,6 +3,7 @@ import type { UserService } from '../../../domain/services/UserService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import { logger } from '../../../infra/logger.js';
 import { buildScreen } from '../../designSystem.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 import { tForLocale, localizedNumberForLocale, resolveServiceLocale } from '../../locale.js';
 
 export interface AdminNotificationServices {
@@ -106,7 +107,7 @@ export async function sendReceiptRejectionNotification(
                   locale,
                   'receipt_result_rejected_reason_label'
                 ),
-                value: reasonDetail,
+                value: reason ? reasonDetail : escapeTelegramMarkdown(reasonDetail),
               },
             }
           : {}),

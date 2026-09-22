@@ -17,7 +17,7 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
 
   if (!panelHealth) return null;
 
-  const isHealthOk = panelHealth.healthy === panelHealth.configured;
+  const isHealthOk = panelHealth.configured > 0 && panelHealth.healthy === panelHealth.configured;
 
   return (
     <div

@@ -1,7 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { logger } from '../../../infra/logger.js';
-import { localizedDate, localizedNumber, t } from '../../locale.js';
+import { localizedDate, localizedNumber, normalizeInputDigits, t } from '../../locale.js';
 import type { PromoType } from '../../../domain/services/PromoService.js';
 import { callbackData } from '../../callbackData.js';
 import {
@@ -595,11 +595,7 @@ async function promptPromoNonNegativeNumber(
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
-    const normalized = input
-      .trim()
-      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
-      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
-      .replace(/[,_،٬\s]/gu, '');
+    const normalized = normalizeInputDigits(input);
     if (/^\d+$/u.test(normalized)) {
       const value = Number(normalized);
       if (Number.isSafeInteger(value) && value >= 0) return value;
@@ -635,13 +631,9 @@ async function promptPromoMaxDiscountAmount(
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
-    const normalized = input
-      .trim()
-      .toLowerCase()
-      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
-      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
-      .replace(/[,_،٬\s]/gu, '');
-    if (['0', 'none', 'بدون', 'no'].includes(normalized)) return null;
+    const raw = input.trim().toLowerCase();
+    const normalized = normalizeInputDigits(raw);
+    if (['0', 'none', 'بدون', 'no'].includes(raw)) return null;
     if (/^\d+$/u.test(normalized)) {
       const value = Number(normalized);
       if (Number.isSafeInteger(value) && value >= 0) return value === 0 ? null : value;
@@ -729,11 +721,7 @@ async function promptPromoBulkCount(
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
-    const normalized = input
-      .trim()
-      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
-      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
-      .replace(/[,_،٬\s]/gu, '');
+    const normalized = normalizeInputDigits(input);
     if (/^\d+$/u.test(normalized)) {
       const value = Number(normalized);
       if (Number.isSafeInteger(value) && value >= 1 && value <= 50) return value;
@@ -768,12 +756,9 @@ async function promptPromoExpiry(
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
-    const value = input
-      .trim()
-      .toLowerCase()
-      .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
-      .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660));
-    if (['0', 'never', 'none', 'بدون'].includes(value)) return null;
+    const raw = input.trim().toLowerCase();
+    const value = normalizeInputDigits(raw);
+    if (['0', 'never', 'none', 'بدون'].includes(raw)) return null;
     if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
       const date = new Date(`${value}T23:59:59.999Z`);
       if (!Number.isNaN(date.getTime()) && date.getTime() > Date.now()) return date;

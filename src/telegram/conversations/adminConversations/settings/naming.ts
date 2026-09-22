@@ -150,12 +150,9 @@ async function chooseNamingMode(
     '🏷️',
     t(ctx, 'admin_setting_naming_mode'),
     tm(ctx, 'admin_setting_naming_mode_prompt', {
-      current: t(
-        ctx,
-        `admin_setting_naming_mode_val_${current}` in (ctx.services?.translationService || {})
-          ? `admin_setting_naming_mode_val_${current}`
-          : (current ?? 'custom')
-      ),
+      current: current
+        ? t(ctx, `admin_setting_naming_mode_val_${current}`)
+        : t(ctx, 'admin_setting_naming_mode_val_custom'),
     }),
     t(ctx, 'admin_naming_dashboard_subtitle')
   );

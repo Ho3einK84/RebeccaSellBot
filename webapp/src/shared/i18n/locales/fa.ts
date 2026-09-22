@@ -305,6 +305,8 @@ export const fa: TranslationSchema = {
       loading: 'در حال دریافت اطلاعات پنل‌ها...',
       empty: 'هیچ پنلی ثبت نشده است.',
       emptyHint: 'برای شروع، نخستین پنل ربکا را به ربات متصل کنید.',
+      emptyFiltered: 'هیچ پنلی با این فیلتر یافت نشد.',
+      clearApiKeyOption: 'حذف کلید API فعلی (تنظیم روی بدون کلید / احراز هویت با IP)',
       default: 'پیش‌فرض',
       active: 'فعال',
       inactive: 'غیرفعال',

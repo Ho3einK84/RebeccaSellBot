@@ -298,7 +298,9 @@ export function isAdminCallbackData(data: string): boolean {
     data.startsWith('a:p:') ||
     data.startsWith('receipt:') ||
     data.startsWith('receipt-') ||
+    data.startsWith('rcpt:') ||
     data.startsWith('promo:') ||
+    data.startsWith('promo-') ||
     data.startsWith('set-') ||
     data.startsWith('pkg-') ||
     data.startsWith('cat:') ||
@@ -307,7 +309,17 @@ export function isAdminCallbackData(data: string): boolean {
     data.startsWith('pay:') ||
     data.startsWith('pp:') ||
     data.startsWith('text-') ||
-    data.startsWith('text:')
+    data.startsWith('text:') ||
+    data.startsWith('wheel_cfg:') ||
+    data.startsWith('backup:') ||
+    data.startsWith('webapp:') ||
+    data.startsWith('naming:') ||
+    data.startsWith('trial:') ||
+    data.startsWith('target:') ||
+    data.startsWith('balance-op:') ||
+    data.startsWith('balance-confirm') ||
+    data.startsWith('broadcast:') ||
+    data.startsWith('direct-confirm')
   );
 }
 

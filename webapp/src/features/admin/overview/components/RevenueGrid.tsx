@@ -1,5 +1,13 @@
 import React from 'react';
-import { Calendar, CalendarDays, CalendarRange, CheckCircle2, XCircle, Gift } from 'lucide-react';
+import {
+  Calendar,
+  CalendarDays,
+  CalendarRange,
+  CheckCircle2,
+  XCircle,
+  Gift,
+  Coins,
+} from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -177,6 +185,33 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
           }`}
         >
           <Gift className="w-4 h-4" />
+        </div>
+      </div>
+
+      {/* Total Cashback */}
+      <div
+        className={`rounded-2xl p-4 sm:p-4.5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 ${cardClass}`}
+      >
+        <div className="space-y-1">
+          <span className={`text-xs font-medium block ${textSecondary}`}>
+            {t('admin.overview.cashback')}
+          </span>
+          <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight ${textPrimary}`}>
+            {formatMoney(stats.totalCashback)}{' '}
+            <span className={`text-xs font-normal ${textSecondary}`}>{t('common.currency')}</span>
+          </div>
+          <span className={`text-[11px] block ${textMuted}`}>
+            {t('admin.overview.cashbackSub')}
+          </span>
+        </div>
+        <div
+          className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
+            isDark
+              ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}
+        >
+          <Coins className="w-4 h-4" />
         </div>
       </div>
     </>

@@ -866,12 +866,12 @@ export function registerAdminRoutes(
       Body: {
         name?: string;
         baseUrl?: string;
-        apiKey?: string;
+        apiKey?: string | null;
       };
     }>('/api/admin/panels/:id', async (request, reply) => {
       const { id } = request.params;
       const { name, baseUrl, apiKey } = request.body || {};
-      const changes: { name?: string; baseUrl?: string; apiKey?: string } = {};
+      const changes: { name?: string; baseUrl?: string; apiKey?: string | null } = {};
 
       if (name !== undefined) {
         if (typeof name !== 'string' || !name.trim() || name.trim().length > 80) {
@@ -894,7 +894,8 @@ export function registerAdminRoutes(
       }
 
       if (apiKey !== undefined) {
-        changes.apiKey = typeof apiKey === 'string' ? apiKey.trim() : undefined;
+        changes.apiKey =
+          typeof apiKey === 'string' ? apiKey.trim() || null : apiKey === null ? null : undefined;
       }
 
       const adminId = request.userSession!.telegramId;

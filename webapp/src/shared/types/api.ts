@@ -112,7 +112,7 @@ export interface CreatePanelResponse {
 export interface UpdatePanelPayload {
   name?: string;
   baseUrl?: string;
-  apiKey?: string;
+  apiKey?: string | null;
 }
 
 export interface TogglePanelResponse {

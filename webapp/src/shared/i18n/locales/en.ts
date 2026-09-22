@@ -303,8 +303,10 @@ export const en: TranslationSchema = {
     panels: {
       fleetTitle: 'Rebecca Panels Fleet Status',
       loading: 'Loading panels...',
-      empty: 'No panels registered.',
-      emptyHint: 'Connect your first Rebecca panel to get started.',
+      empty: 'No panels configured.',
+      emptyHint: 'To get started, connect your first Rebecca Panel to the bot.',
+      emptyFiltered: 'No panels found with this filter.',
+      clearApiKeyOption: 'Clear current API key (set to no auth / IP whitelist)',
       default: 'Default',
       active: 'Active',
       inactive: 'Inactive',

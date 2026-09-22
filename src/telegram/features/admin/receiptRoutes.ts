@@ -92,7 +92,7 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
   bot.callbackQuery(
     /^(?:receipt:reject_confirm|rcpt:rej):([a-zA-Z0-9_-]+):(\d+):([a-z_]+)$/u,
     async (ctx) => {
-      if (!ctx.services) return;
+      if (!ctx.services || !ctx.services.isAdmin(ctx.from.id)) return;
       const receiptId = ctx.match[1]!;
       const page = Number(ctx.match[2]) || 1;
       const reason = ctx.match[3]! as ReceiptRejectReason;
@@ -373,7 +373,7 @@ function buildReceiptQueueScreen(ctx: MenuContext, result: ReceiptPage): string 
     primary: {
       emoji: '⏳',
       label: t(ctx, 'admin_receipt_queue_pending_label'),
-      value: `${buildStatusBadge(ctx, 'pending')} · ${localizedNumber(result.total, ctx)} فیش`,
+      value: `${buildStatusBadge(ctx, 'pending')} · ${localizedNumber(result.total, ctx)}`,
     },
     sections: [
       {
@@ -384,7 +384,7 @@ function buildReceiptQueueScreen(ctx: MenuContext, result: ReceiptPage): string 
           return {
             emoji: '💳',
             label: `${localizedNumber(receipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
-            value: `کاربر: \`${receipt.telegramId}\` (شناسه: \`${shortId}\`)`,
+            value: `${t(ctx, 'admin_receipt_user_label')}: \`${receipt.telegramId}\` (${t(ctx, 'admin_receipt_id_label')}: \`${shortId}\`)`,
           };
         }),
       },
@@ -507,8 +507,9 @@ async function renderReceiptResult(
         : {}),
     }),
     new InlineKeyboard()
-      .text(t(ctx, 'menu_close'), 'ui:dismiss')
-      .text(t(ctx, 'menu_back'), `receipt:page:${page}`)
+      .text(t(ctx, 'admin_receipt_queue_title'), `receipt:page:${page}`)
+      .row()
+      .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin')
   );
 }
 
@@ -521,8 +522,9 @@ async function renderReceiptAlreadyReviewed(ctx: MenuContext, page: number): Pro
       t(ctx, 'receipt_already_reviewed')
     ),
     new InlineKeyboard()
-      .text(t(ctx, 'menu_close'), 'ui:dismiss')
-      .text(t(ctx, 'menu_back'), `receipt:page:${page}`)
+      .text(t(ctx, 'admin_receipt_queue_title'), `receipt:page:${page}`)
+      .row()
+      .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin')
   );
 }
 

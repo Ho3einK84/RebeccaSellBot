@@ -95,7 +95,8 @@ export async function adminCustomVolumeConversation(
       retryKeyboard: keyboard,
     });
 
-    if (input.type === 'cancel' || input.type === 'back') break;
+    if (input.type === 'cancel') return;
+    if (input.type === 'back') break;
     if (input.type !== 'callback') continue;
     activeCtx = input.ctx;
 

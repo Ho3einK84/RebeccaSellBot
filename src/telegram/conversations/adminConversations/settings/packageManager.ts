@@ -5,7 +5,7 @@ import {
   parsePackageOptionsJson,
 } from '../../../../domain/services/PricingService.js';
 import type { ConversationContext, MyConversation } from '../../../types.js';
-import { localizedNumber, t, tm } from '../../../locale.js';
+import { localizedNumber, normalizeInputDigits, t, tm } from '../../../locale.js';
 import { callbackData } from '../../../callbackData.js';
 import { escapeTelegramMarkdown } from '../../../rendering.js';
 import {
@@ -35,7 +35,8 @@ export async function adminManagePackagesConversation(
   ctx: ConversationContext
 ): Promise<void> {
   if (!(await requireAdmin(conversation, ctx))) return;
-  await managePackages(conversation, ctx);
+  const outcome = await managePackages(conversation, ctx);
+  if (outcome === 'cancel') return;
   await conversation.external(async (outsideCtx) => {
     await renderSalesMenu(outsideCtx);
   });
@@ -635,10 +636,7 @@ async function askPackageInteger(
     });
     if (input.type === 'cancel') return { type: 'cancel' };
     if (input.type !== 'text') return { type: 'back' };
-    const normalized = input.value
-      .replace(/[۰-۹]/gu, (digit) => String(digit.charCodeAt(0) - 0x06f0))
-      .replace(/[٠-٩]/gu, (digit) => String(digit.charCodeAt(0) - 0x0660))
-      .replace(/[,_،٬\s]/gu, '');
+    const normalized = normalizeInputDigits(input.value);
     const value = /^\d+$/u.test(normalized) ? Number(normalized) : Number.NaN;
     if (Number.isSafeInteger(value) && value >= minimum && value <= maximum) {
       return { type: 'value', value };

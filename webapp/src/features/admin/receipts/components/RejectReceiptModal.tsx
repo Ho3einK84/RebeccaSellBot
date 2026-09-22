@@ -48,7 +48,9 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
   };
 
   const handleConfirm = () => {
-    const finalReason = reason.trim() || selectedPreset;
+    const presetObj = presets.find((p) => p.key === selectedPreset);
+    const finalReason =
+      reason.trim() || (selectedPreset && selectedPreset !== 'other' ? presetObj?.label : '') || '';
     if (!finalReason) return;
     onConfirm(receipt, finalReason);
   };
@@ -141,7 +143,11 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
                 ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-500/30 text-rose-300 shadow-xs'
                 : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-600 shadow-xs'
             }`}
-            disabled={loading || (!selectedPreset && !reason.trim())}
+            disabled={
+              loading ||
+              (!selectedPreset && !reason.trim()) ||
+              (selectedPreset === 'other' && !reason.trim())
+            }
             onClick={handleConfirm}
           >
             {loading ? (

@@ -36,11 +36,12 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
     setReason('');
   }, [user?.telegramId]);
 
-  // Strict integer parsing: parseInt("1.9") → 1 silently truncates, and
-  // "" → 0 would submit a useless zero adjustment. Require a positive
-  // safe integer.
+  // Strict integer parsing: require safe integer, allowing 0 only when operation is 'set'.
   const numAmount = Number(amountStr);
-  const isValidAmount = Number.isSafeInteger(numAmount) && numAmount > 0;
+  const isValidAmount =
+    amountStr.trim() !== '' &&
+    Number.isSafeInteger(numAmount) &&
+    (operation === 'set' ? numAmount >= 0 : numAmount > 0);
 
   const previewNewBalance = useMemo(() => {
     if (!user) return 0;

@@ -47,7 +47,7 @@ export const Toast: React.FC<ToastProps> = ({
             <AlertTriangle className="w-4 h-4 shrink-0" />
           )}
         </div>
-        <span className="truncate">{message}</span>
+        <span className="break-words text-xs leading-tight">{message}</span>
       </div>
       {onDismiss && (
         <button

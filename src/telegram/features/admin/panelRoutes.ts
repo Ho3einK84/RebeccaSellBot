@@ -611,7 +611,7 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
       const panelId = ctx.match[2]!;
       const serviceId = Number(ctx.match[3]);
       if (action === 'delete') {
-        await promptPanelServiceDeletion(ctx, panelId, serviceId, false);
+        await promptPanelServiceDeletion(ctx, panelId, serviceId, true);
         return;
       }
       await updatePanelService(ctx, action, panelId, serviceId);
@@ -624,7 +624,7 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     }
   );
   bot.callbackQuery(new RegExp(`^admin:panel:delete:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
-    await promptPanelDeletion(ctx, ctx.match[1]!, false);
+    await promptPanelDeletion(ctx, ctx.match[1]!, true);
   });
   bot.callbackQuery(
     new RegExp(`^admin:panel:delete_confirm:${PANEL_ID_CAPTURE}$`, 'u'),
@@ -837,9 +837,7 @@ async function promptPanelServiceDeletion(
     await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_not_found'), show_alert: true });
     return;
   }
-  const confirm = compactCallbacks
-    ? panelCallback('ss', 'xc', panelId, serviceId)
-    : `admin:panel:service:delete_confirm:${panelId}:${serviceId}`;
+  const confirm = panelCallback('ss', 'xc', panelId, serviceId);
   const cancel = compactCallbacks
     ? panelCallback('sd', panelId, serviceId)
     : `admin:panel:view:${panelId}`;
@@ -899,9 +897,7 @@ async function promptPanelDeletion(
     await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_last_delete'), show_alert: true });
     return;
   }
-  const confirm = compactCallbacks
-    ? panelCallback('xc', panelId)
-    : `admin:panel:delete_confirm:${panelId}`;
+  const confirm = panelCallback('xc', panelId);
   const cancel = compactCallbacks ? panelCallback('v', panelId) : `admin:panel:view:${panelId}`;
   await ctx.answerCallbackQuery();
   await renderPanelScreen(

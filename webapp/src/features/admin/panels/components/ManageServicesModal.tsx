@@ -35,6 +35,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
 
   const [newServiceId, setNewServiceId] = useState('');
   const [newServiceName, setNewServiceName] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!panel) return null;
@@ -174,18 +175,44 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
                     </Button>
                   )}
 
-                  {!service.isDefault && panel.services.length > 1 && (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="danger"
-                      onClick={() => handleDelete(service.serviceId)}
-                      disabled={loading}
-                      title={t('common.delete')}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  )}
+                  {!service.isDefault &&
+                    panel.services.length > 1 &&
+                    (confirmDeleteId === service.serviceId ? (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="danger"
+                          onClick={() => {
+                            setConfirmDeleteId(null);
+                            handleDelete(service.serviceId);
+                          }}
+                          disabled={loading}
+                        >
+                          <span>{t('common.confirm')}</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="secondary"
+                          onClick={() => setConfirmDeleteId(null)}
+                          disabled={loading}
+                        >
+                          <span>{t('common.cancel')}</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="danger"
+                        onClick={() => setConfirmDeleteId(service.serviceId)}
+                        disabled={loading}
+                        title={t('common.delete')}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    ))}
                 </div>
               </div>
             ))}

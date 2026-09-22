@@ -15,12 +15,35 @@ interface OverviewTabProps {
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
   const { t } = useLanguage();
-  const { stats, panelHealth, isLoading } = useAdminStats();
+  const { stats, panelHealth, isLoading, error, refetch } = useAdminStats();
   const { formatMoney, formatNumber } = useFormatters();
   const { cardClass, isDark, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (isLoading && !stats) {
     return <SkeletonStatsGrid count={6} />;
+  }
+
+  if (error && !stats) {
+    return (
+      <div className="p-8 text-center flex flex-col items-center justify-center gap-3 rounded-2xl border bg-white/5 dark:bg-white/[0.02] border-rose-500/20">
+        <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center">
+          <Clock className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <h3 className={`text-base font-bold m-0 ${textPrimary}`}>{t('common.error')}</h3>
+          <p className={`text-xs m-0 ${textSecondary}`}>
+            {error instanceof Error ? error.message : t('common.networkError')}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-xs"
+          onClick={() => refetch()}
+        >
+          <span>{t('common.refresh')}</span>
+        </button>
+      </div>
+    );
   }
 
   if (!stats) return null;

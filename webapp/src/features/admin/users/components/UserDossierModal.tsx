@@ -442,24 +442,21 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          {cfg.panelStatus === 'active' && !isExpired && (
-                            <Badge variant="success" dot pulse className="text-[10px]">
-                              {t('admin.users.statusActive')}
+                          {isExpired ? (
+                            <Badge variant="neutral" className="text-[10px]">
+                              {t('admin.users.statusExpired')}
                             </Badge>
-                          )}
-                          {cfg.panelStatus === 'disabled' && (
+                          ) : cfg.panelStatus === 'disabled' ? (
                             <Badge variant="error" className="text-[10px]">
                               {t('admin.users.statusDisabled')}
                             </Badge>
-                          )}
-                          {cfg.panelStatus === 'limited' && (
+                          ) : cfg.panelStatus === 'limited' ? (
                             <Badge variant="warning" className="text-[10px]">
                               {t('admin.users.statusLimited')}
                             </Badge>
-                          )}
-                          {isExpired && (
-                            <Badge variant="neutral" className="text-[10px]">
-                              {t('admin.users.statusExpired')}
+                          ) : (
+                            <Badge variant="success" dot pulse className="text-[10px]">
+                              {t('admin.users.statusActive')}
                             </Badge>
                           )}
                         </div>
@@ -667,11 +664,8 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           <div className={`font-semibold text-xs truncate ${textPrimary}`}>
                             {tx.description}
                           </div>
-                          <div
-                            dir="ltr"
-                            className={`text-[10px] font-mono ${textMuted} text-start`}
-                          >
-                            {formatIsoDate(tx.createdAt)}
+                          <div className={`text-[10px] font-mono ${textMuted}`}>
+                            <span dir="ltr">{formatIsoDate(tx.createdAt)}</span>
                           </div>
                         </div>
                       </div>

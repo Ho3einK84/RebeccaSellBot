@@ -112,7 +112,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onRefresh, onClo
           {/* Refresh Action */}
           <button
             type="button"
-            className={`inline-flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 h-8 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
+            className={`inline-flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
               isDark
                 ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
                 : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700 shadow-xs'

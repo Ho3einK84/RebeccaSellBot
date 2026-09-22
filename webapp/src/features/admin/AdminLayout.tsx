@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { LayoutDashboard, Receipt, Users, Server, Layers } from 'lucide-react';
 import { OverviewTab } from './overview/OverviewTab.js';
@@ -39,15 +39,28 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
   const [inspectingUserId, setInspectingUserId] = useState<number | null>(null);
 
   // Queries for badge count and refresh handling
-  const { receipts, refetch: refetchReceipts } = useAdminReceipts();
+  const { pendingCount, refetch: refetchReceipts } = useAdminReceipts();
   const { refetch: refetchStats } = useAdminStats();
   const { refetch: refetchPanels } = useAdminPanels();
   const queryClient = useQueryClient();
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
     setNotification({ message, type });
     triggerHaptic(type === 'success' ? 'success' : 'error');
-    setTimeout(() => setNotification(null), 4000);
+    toastTimerRef.current = setTimeout(() => {
+      setNotification(null);
+      toastTimerRef.current = null;
+    }, 4000);
   };
 
   const handleClose = () => {
@@ -86,7 +99,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
       id: 'receipts' as const,
       label: t('admin.tabs.receipts'),
       icon: Receipt,
-      count: receipts.length,
+      count: pendingCount,
     },
     { id: 'users' as const, label: t('admin.tabs.users'), icon: Users },
     { id: 'panels' as const, label: t('admin.tabs.panels'), icon: Server },

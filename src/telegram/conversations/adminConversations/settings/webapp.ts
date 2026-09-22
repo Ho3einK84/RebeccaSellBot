@@ -1,7 +1,12 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { t } from '../../../locale.js';
-import { buildScreen, isMessageNotModifiedError, promptInConversation } from '../../../ui.js';
+import {
+  buildScreen,
+  isMessageNotModifiedError,
+  promptInConversation,
+  replyInAdminConversation,
+} from '../../../ui.js';
 import { escapeTelegramMarkdown } from '../../../rendering.js';
 import { requireAdmin } from '../shared.js';
 import { waitForSettingsInput } from './navigation.js';
@@ -156,7 +161,12 @@ export async function adminWebAppSettingsConversation(
           if (!outsideCtx.services) return;
           await outsideCtx.services.disableWebApp?.();
         });
-        await activeCtx.reply(t(activeCtx, 'admin_webapp_disabled_success'));
+        await replyInAdminConversation(
+          conversation,
+          activeCtx,
+          t(activeCtx, 'admin_webapp_disabled_success'),
+          { reply_markup: undefined }
+        );
         continue;
       }
 
@@ -182,7 +192,12 @@ export async function adminWebAppSettingsConversation(
         }
       });
       if (activationError) {
-        await activeCtx.reply(`❌ ${escapeTelegramMarkdown(activationError)}`);
+        await replyInAdminConversation(
+          conversation,
+          activeCtx,
+          `❌ ${escapeTelegramMarkdown(activationError)}`,
+          { parse_mode: 'Markdown', reply_markup: undefined }
+        );
       }
       continue;
     }
@@ -246,7 +261,12 @@ async function handleDomainConfigurationFlow(
   const normalized = normalizeDomainInput(rawInput);
 
   if (!normalized.valid) {
-    await activeCtx.reply(t(activeCtx, 'admin_webapp_invalid_url'));
+    await replyInAdminConversation(
+      conversation,
+      activeCtx,
+      t(activeCtx, 'admin_webapp_invalid_url'),
+      { reply_markup: undefined }
+    );
     return activeCtx;
   }
 
@@ -290,7 +310,12 @@ async function handleDomainConfigurationFlow(
   }
 
   // Notify admin that verification probe & automated SSL activation is starting
-  await activeCtx.reply(t(activeCtx, 'admin_webapp_activating_probe'));
+  await replyInAdminConversation(
+    conversation,
+    activeCtx,
+    t(activeCtx, 'admin_webapp_activating_probe'),
+    { reply_markup: undefined }
+  );
 
   let activationRes:
     { success: boolean; error?: string; sslActive?: boolean; normalizedUrl?: string } | undefined;
@@ -301,16 +326,32 @@ async function handleDomainConfigurationFlow(
   });
 
   if (!activationRes?.success) {
-    await activeCtx.reply(
-      `❌ ${escapeTelegramMarkdown(activationRes?.error || 'Activation failed')}`
+    await replyInAdminConversation(
+      conversation,
+      activeCtx,
+      `❌ ${escapeTelegramMarkdown(activationRes?.error || 'Activation failed')}`,
+      { parse_mode: 'Markdown', reply_markup: undefined }
     );
   } else if (isEdit) {
-    await activeCtx.reply(t(activeCtx, 'admin_webapp_updated_success', { url: normalized.url }));
+    await replyInAdminConversation(
+      conversation,
+      activeCtx,
+      t(activeCtx, 'admin_webapp_updated_success', { url: normalized.url }),
+      { reply_markup: undefined }
+    );
   } else if (activationRes.sslActive) {
-    await activeCtx.reply(t(activeCtx, 'admin_webapp_enabled_success', { url: normalized.url }));
+    await replyInAdminConversation(
+      conversation,
+      activeCtx,
+      t(activeCtx, 'admin_webapp_enabled_success', { url: normalized.url }),
+      { reply_markup: undefined }
+    );
   } else {
-    await activeCtx.reply(
-      t(activeCtx, 'admin_webapp_enabled_pending_ssl', { url: normalized.url })
+    await replyInAdminConversation(
+      conversation,
+      activeCtx,
+      t(activeCtx, 'admin_webapp_enabled_pending_ssl', { url: normalized.url }),
+      { reply_markup: undefined }
     );
   }
 
