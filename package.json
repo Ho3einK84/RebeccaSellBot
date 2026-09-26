@@ -56,7 +56,7 @@
     "@grammyjs/conversations": "2.1.1",
     "@grammyjs/menu": "1.5.0",
     "@grammyjs/transformer-throttler": "1.2.1",
-    "dotenv": "17.4.2",
+    "dotenv": "18.0.3",
     "drizzle-orm": "0.45.2",
     "fastify": "5.12.4",
     "grammy": "1.46.0",
