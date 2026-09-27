@@ -12,7 +12,7 @@ interface UserHeroCardProps {
 }
 
 export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCopied }) => {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const { sanitizeDisplayName } = useFormatters();
   const { isDark } = useThemeTokens();
 
@@ -84,7 +84,7 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
             isDark ? 'text-white' : 'text-slate-900'
           }`}
         >
-          <span>{locale === 'fa' ? 'سلام،' : 'Hello,'}</span>
+          <span>{t('user.greeting')}</span>
           <bdi
             className={
               isDark

@@ -24,6 +24,12 @@ import type {
   BatchReceiptActionPayload,
 } from '@/shared/types/api.js';
 import type { UserFilterType, UserSortType, ReceiptSettings } from '@/shared/types/admin.js';
+import type {
+  UserProfileResponse,
+  UserConfigsResponse,
+  UserPackagesResponse,
+  UserTransactionsResponse,
+} from '@/shared/types/userPortal.js';
 
 class ApiClientError extends Error {
   status: number;
@@ -294,4 +300,17 @@ export const api = {
     request<{ success: boolean }>(`/api/admin/panels/${panelId}/services/${serviceId}`, {
       method: 'DELETE',
     }),
+
+  // User Portal API
+  getUserProfile: (): Promise<UserProfileResponse> =>
+    request<UserProfileResponse>('/api/user/profile'),
+
+  getUserConfigs: (): Promise<UserConfigsResponse> =>
+    request<UserConfigsResponse>('/api/user/configs'),
+
+  getUserPackages: (): Promise<UserPackagesResponse> =>
+    request<UserPackagesResponse>('/api/user/packages'),
+
+  getUserTransactions: (page = 1, limit = 10): Promise<UserTransactionsResponse> =>
+    request<UserTransactionsResponse>(`/api/user/transactions?page=${page}&limit=${limit}`),
 };

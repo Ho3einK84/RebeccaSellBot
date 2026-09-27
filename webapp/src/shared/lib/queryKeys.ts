@@ -8,4 +8,10 @@ export const queryKeys = {
     ['admin', 'users', { page, search, filter, sort }] as const,
   userDossier: (telegramId: number) => ['admin', 'userDossier', telegramId] as const,
   panels: ['admin', 'panels'] as const,
+  user: {
+    profile: ['user', 'profile'] as const,
+    configs: ['user', 'configs'] as const,
+    packages: ['user', 'packages'] as const,
+    transactions: (page?: number) => ['user', 'transactions', page] as const,
+  },
 };

@@ -15,7 +15,7 @@ interface AdminHeaderProps {
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onRefresh, onClose, onNotify }) => {
-  const { t, locale, isRtl, languageSelectionEnabled, setLocale } = useLanguage();
+  const { t, locale, languageSelectionEnabled, setLocale } = useLanguage();
   const { isDark, toggleTheme, cardClass, textPrimary, textSecondary } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
   const { copy, isCopied } = useCopy();

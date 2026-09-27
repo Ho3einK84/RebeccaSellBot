@@ -42,6 +42,7 @@ export function useFormatters() {
 
   return {
     formatMoney,
+    formatToman: formatMoney,
     formatNumber,
     formatIsoDate,
     formatBytes,

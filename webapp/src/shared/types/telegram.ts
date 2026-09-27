@@ -38,6 +38,8 @@ export interface TelegramWebApp {
   expand: () => void;
   close: () => void;
   sendData: (data: string) => void;
+  openTelegramLink?: (url: string) => void;
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
   disableVerticalSwipes?: () => void;

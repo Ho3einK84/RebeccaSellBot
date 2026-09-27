@@ -14,6 +14,7 @@ import { DomainRegistryService } from '../../domain/services/DomainRegistryServi
 import { logger } from '../../infra/logger.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
 import { registerAdminRoutes } from './routes/adminRoutes.js';
+import { registerUserRoutes } from './routes/userRoutes.js';
 
 export interface WebAppServerHandle {
   server: FastifyInstance;
@@ -248,6 +249,15 @@ export async function createWebAppServer(
     adminIds: services.adminIds,
     botApi: services.botApi,
     translationService: services.translationService,
+  });
+
+  registerUserRoutes(app, {
+    userService: services.userService,
+    walletService: services.walletService,
+    configService: services.configService,
+    pricingService: services.pricingService,
+    translationService: services.translationService,
+    botUsername: services.botUsername,
   });
 
   // Static files & SPA fallback

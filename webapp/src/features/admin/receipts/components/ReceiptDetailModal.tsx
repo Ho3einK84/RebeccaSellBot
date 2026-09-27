@@ -5,7 +5,6 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Wallet,
   Image as ImageIcon,
   ExternalLink,
   ShieldCheck,
