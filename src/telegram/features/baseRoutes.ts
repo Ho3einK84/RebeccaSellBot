@@ -29,7 +29,11 @@ import {
 
 export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   // Menus (register submenus before registering the tree)
-  mainMenu.register(adminMenu);
+  try {
+    mainMenu.register(adminMenu);
+  } catch {
+    // Already registered in the menu tree
+  }
   bot.use(mainMenu);
 
   // /start — with referral detection
@@ -73,6 +77,11 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
 
     if (payload === 'topup' || payload === 'receipt') {
       await ctx.conversation.enter('topupConversation');
+      return;
+    }
+
+    if (payload === 'custom' || payload?.startsWith('custom_')) {
+      await ctx.conversation.enter('customAmountConversation');
       return;
     }
 

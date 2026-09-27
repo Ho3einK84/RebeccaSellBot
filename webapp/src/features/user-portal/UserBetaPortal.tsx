@@ -25,9 +25,16 @@ import type { UserTabType, UserPackageItem } from '@/shared/types/userPortal.js'
 interface UserBetaPortalProps {
   user: TelegramWebAppUser;
   onExitBeta: () => void;
+  isAdminPreview?: boolean;
+  onSwitchToAdmin?: () => void;
 }
 
-export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta }) => {
+export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
+  user,
+  onExitBeta,
+  isAdminPreview = false,
+  onSwitchToAdmin,
+}) => {
   const { triggerHaptic } = useHaptic();
 
   const [activeTab, setActiveTab] = useState<UserTabType>('dashboard');
@@ -135,7 +142,11 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
       setActiveTab('dashboard');
     } else {
       triggerHaptic('medium');
-      onExitBeta();
+      if (isAdminPreview && onSwitchToAdmin) {
+        onSwitchToAdmin();
+      } else {
+        onExitBeta();
+      }
     }
   };
 
@@ -143,6 +154,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
 
   const profile = profileData?.user ?? null;
   const settings = profileData?.settings ?? null;
+  const pendingReceipt = profileData?.pendingReceipt ?? null;
   const configs = configsData?.configs ?? [];
   const packages = packagesData?.packages ?? [];
   const transactions = transactionsData?.transactions ?? [];
@@ -156,6 +168,8 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
           user={user}
           onRefresh={handleRefresh}
           onExitBeta={onExitBeta}
+          isAdminPreview={isAdminPreview}
+          onSwitchToAdmin={onSwitchToAdmin}
           balance={activeTab === 'dashboard' ? undefined : profile?.availableBalance}
           currency={settings?.currency}
           isRefreshing={isRefreshing}
@@ -204,6 +218,8 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
             <ShopTab
               packages={packages}
               currency={settings?.currency}
+              customVolumeSettings={settings?.customVolume}
+              botUsername={settings?.botUsername}
               onSelectPackage={(pkg) => setCheckoutModal({ isOpen: true, pkg })}
             />
           )}
@@ -213,6 +229,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
               profile={profile}
               settings={settings}
               transactions={transactions}
+              pendingReceipt={pendingReceipt}
               onNotify={(msg) => notify(msg, 'success')}
             />
           )}
@@ -232,6 +249,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
         activeTab={activeTab}
         onSelectTab={(tab) => switchTab(tab)}
         configsCount={configs.length}
+        hasPendingReceipt={Boolean(pendingReceipt)}
       />
 
       {/* QR Code Modal */}

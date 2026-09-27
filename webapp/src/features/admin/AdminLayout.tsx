@@ -24,9 +24,10 @@ import type { TabType } from '@/shared/types/admin.js';
 
 interface AdminLayoutProps {
   user: TelegramWebAppUser;
+  onSwitchToUserPortal?: () => void;
 }
 
-export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
+export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPortal }) => {
   const { t } = useLanguage();
   const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
@@ -121,6 +122,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user }) => {
           onRefresh={handleRefresh}
           onClose={handleClose}
           onNotify={notify}
+          onSwitchToUserPortal={onSwitchToUserPortal}
         />
 
         {/* Global Floating Toast Notification (Portaled above all modals) */}

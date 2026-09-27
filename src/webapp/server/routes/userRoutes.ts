@@ -5,6 +5,7 @@ import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
 import type { PricingService } from '../../../domain/services/PricingService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
+import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js';
 
 function clampPositiveInt(val: string | number | undefined, fallback: number, max = 1000): number {
   if (val === undefined || val === null || val === '') return fallback;
@@ -54,6 +55,39 @@ export function registerUserRoutes(
 
       const availableBalance = Math.max(0, profile.balance - profile.reservedBalance);
 
+      const pendingReceiptRow = await options.walletService.getPendingReceiptForUser?.(telegramId);
+      const pendingReceipt = pendingReceiptRow
+        ? {
+            id: pendingReceiptRow.id,
+            amount: pendingReceiptRow.amount,
+            status: pendingReceiptRow.status,
+            createdAt:
+              pendingReceiptRow.createdAt instanceof Date
+                ? pendingReceiptRow.createdAt.toISOString()
+                : String(pendingReceiptRow.createdAt),
+          }
+        : null;
+
+      const cvEnabled = options.translationService
+        ? customVolumeEnabled(options.translationService)
+        : true;
+      const pricePerGb =
+        typeof options.translationService?.getSettingNum === 'function'
+          ? options.translationService.getSettingNum('price_per_gb', 5000)
+          : 5000;
+      const pricePerDay =
+        typeof options.translationService?.getSettingNum === 'function'
+          ? options.translationService.getSettingNum('price_per_day', 0)
+          : 0;
+      const topupMinAmount =
+        typeof options.translationService?.getSettingNum === 'function'
+          ? options.translationService.getSettingNum('topup_min_amount', 10_000)
+          : 10_000;
+      const topupMaxAmount =
+        typeof options.translationService?.getSettingNum === 'function'
+          ? options.translationService.getSettingNum('topup_max_amount', 10_000_000)
+          : 10_000_000;
+
       return reply.code(200).send({
         user: {
           id: profile.id,
@@ -81,7 +115,18 @@ export function registerUserRoutes(
           supportUsername,
           supportEnabled,
           botUsername: options.botUsername || '',
+          topupMinAmount,
+          topupMaxAmount,
+          customVolume: {
+            enabled: cvEnabled,
+            pricePerGb,
+            pricePerDay,
+            defaultDays: 30,
+            minGb: 5,
+            maxGb: 500,
+          },
         },
+        pendingReceipt,
       });
     });
 
@@ -166,6 +211,53 @@ export function registerUserRoutes(
         total: result.total,
         totalPages: result.totalPages,
         page: result.page,
+      });
+    });
+
+    // GET /api/user/quote
+    userScope.get<{
+      Querystring: {
+        gb?: string;
+        days?: string;
+      };
+    }>('/api/user/quote', async (request, reply) => {
+      const telegramId = request.userSession?.telegramId;
+      if (!telegramId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+
+      const gb = clampPositiveInt(request.query.gb, 10, 10_000);
+      const days = clampPositiveInt(request.query.days, 30, 365);
+
+      if (options.pricingService) {
+        try {
+          const quote = options.pricingService.getCustomPriceQuote(gb, days);
+          return reply.code(200).send({
+            gbAmount: gb,
+            durationDays: days,
+            totalPrice: quote.totalPrice,
+            pricePerGb: quote.pricePerGb,
+            pricePerDay: quote.pricePerDay,
+          });
+        } catch {
+          // fallback to linear calculation
+        }
+      }
+
+      const pricePerGb =
+        typeof options.translationService?.getSettingNum === 'function'
+          ? options.translationService.getSettingNum('price_per_gb', 5000)
+          : 5000;
+      const pricePerDay =
+        typeof options.translationService?.getSettingNum === 'function'
+          ? options.translationService.getSettingNum('price_per_day', 0)
+          : 0;
+      return reply.code(200).send({
+        gbAmount: gb,
+        durationDays: days,
+        totalPrice: gb * pricePerGb + days * pricePerDay,
+        pricePerGb,
+        pricePerDay,
       });
     });
   });

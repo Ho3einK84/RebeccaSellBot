@@ -9,12 +9,14 @@ interface BetaBottomNavProps {
   activeTab: UserTabType;
   onSelectTab: (tab: UserTabType) => void;
   configsCount?: number;
+  hasPendingReceipt?: boolean;
 }
 
 export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
   activeTab,
   onSelectTab,
   configsCount = 0,
+  hasPendingReceipt = false,
 }) => {
   const { t } = useLanguage();
   const { isDark } = useThemeTokens();
@@ -26,10 +28,15 @@ export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
       id: 'services' as const,
       label: t('user.tabs.services'),
       icon: Wifi,
-      badge: configsCount > 0 ? configsCount : undefined,
+      count: configsCount > 0 ? configsCount : undefined,
     },
     { id: 'shop' as const, label: t('user.tabs.shop'), icon: ShoppingBag },
-    { id: 'wallet' as const, label: t('user.tabs.wallet'), icon: Wallet },
+    {
+      id: 'wallet' as const,
+      label: t('user.tabs.wallet'),
+      icon: Wallet,
+      hasDot: hasPendingReceipt,
+    },
     { id: 'referral' as const, label: t('user.tabs.referral'), icon: Users },
   ];
 
@@ -40,48 +47,68 @@ export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
 
   return (
     <nav
-      className={`fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl transition-colors pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] ${
+      aria-label="User Navigation"
+      className={`fixed bottom-0 inset-x-0 z-40 backdrop-blur-2xl border-t px-2 pt-1 pb-[max(env(safe-area-inset-bottom,0px),0.4rem)] transition-colors duration-200 ${
         isDark
-          ? 'bg-[#090a0f]/90 border-white/[0.08]'
-          : 'bg-white/95 border-slate-200/90 shadow-lg shadow-slate-200/50'
+          ? 'bg-[#0a0c12]/92 border-white/[0.08] shadow-[0_-8px_32px_rgba(0,0,0,0.65)]'
+          : 'bg-white/94 border-slate-200/90 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]'
       }`}
     >
-      <div className="w-full max-w-lg mx-auto flex items-center justify-around px-2 pt-1.5 pb-0.5">
+      <div className="grid grid-cols-5 gap-1 max-w-md mx-auto items-center">
         {navItems.map((item) => {
-          const Icon = item.icon;
           const isActive = activeTab === item.id;
+          const Icon = item.icon;
 
           return (
             <button
               key={item.id}
               type="button"
               onClick={() => handleSelect(item.id)}
-              className={`flex-1 py-1 px-1 flex flex-col items-center justify-center gap-1 relative transition-all active:scale-95 cursor-pointer rounded-xl ${
-                isActive
-                  ? isDark
-                    ? 'text-indigo-400 font-bold'
-                    : 'text-indigo-600 font-bold'
-                  : isDark
-                    ? 'text-zinc-500 hover:text-zinc-300'
-                    : 'text-slate-400 hover:text-slate-700'
-              }`}
+              className="flex flex-col items-center justify-center py-1 rounded-xl transition-all duration-150 relative select-none cursor-pointer active:scale-95 group"
             >
-              <div className="relative flex items-center justify-center">
-                <Icon
-                  className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform ${isActive ? 'scale-110' : ''}`}
-                />
-                {item.badge !== undefined && (
-                  <span className="absolute -top-1 -end-2 min-w-[15px] h-[15px] px-1 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center">
-                    {item.badge}
+              <div
+                className={`w-11 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative ${
+                  isActive
+                    ? isDark
+                      ? 'bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/35 shadow-[0_0_14px_rgba(99,102,241,0.25)]'
+                      : 'bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200/80 shadow-xs'
+                    : isDark
+                      ? 'text-zinc-400 group-hover:text-zinc-200'
+                      : 'text-slate-500 group-hover:text-slate-800'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {item.count !== undefined && item.count > 0 && (
+                  <span className="absolute -top-1 -end-1 min-w-[16px] h-4 px-1 rounded-full bg-indigo-600 text-white font-bold text-[9px] flex items-center justify-center shadow-xs font-mono ring-2 ring-white dark:ring-[#0a0c12]">
+                    {item.count}
                   </span>
                 )}
+                {item.hasDot && (
+                  <span className="absolute -top-0.5 -end-0.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-white dark:ring-[#0a0c12] animate-pulse" />
+                )}
               </div>
-              <span className="text-[10px] leading-tight tracking-tight select-none">
+              <span
+                className={`text-[10px] leading-tight mt-1 truncate max-w-full text-center tracking-tight transition-colors ${
+                  isActive
+                    ? isDark
+                      ? 'text-indigo-300 font-bold'
+                      : 'text-indigo-600 font-bold'
+                    : isDark
+                      ? 'text-zinc-400 font-medium'
+                      : 'text-slate-500 font-medium'
+                }`}
+              >
                 {item.label}
               </span>
-              {isActive && (
-                <span className="w-1.5 h-1 rounded-full bg-indigo-500 absolute bottom-0.5" />
-              )}
+              <span
+                className={`w-1 h-1 rounded-full mt-0.5 transition-all duration-200 ${
+                  isActive
+                    ? isDark
+                      ? 'bg-indigo-400 scale-100 opacity-100'
+                      : 'bg-indigo-600 scale-100 opacity-100'
+                    : 'bg-transparent scale-0 opacity-0'
+                }`}
+              />
             </button>
           );
         })}

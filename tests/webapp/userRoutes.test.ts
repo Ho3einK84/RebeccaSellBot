@@ -207,6 +207,10 @@ describe('WebApp User Routes (/api/user/*)', () => {
     expect(body.settings.cardHolder).toBe('حسین کمالی');
     expect(body.settings.supportUsername).toBe('RebeccaSupport');
     expect(body.settings.botUsername).toBe('RebeccaSellBot');
+    expect(body.settings.customVolume).toBeDefined();
+    expect(body.settings.customVolume.enabled).toBe(true);
+    expect(body.settings.customVolume.pricePerGb).toBe(5000);
+    expect(body.pendingReceipt).toBeNull();
   });
 
   it('returns user configs on GET /api/user/configs', async () => {
@@ -259,5 +263,47 @@ describe('WebApp User Routes (/api/user/*)', () => {
     expect(body.transactions[0].type).toBe('topup');
     expect(body.total).toBe(1);
     expect(body.page).toBe(1);
+  });
+
+  it('calculates custom volume pricing quote on GET /api/user/quote', async () => {
+    const token = getUserToken(55555);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/user/quote?gb=50&days=30',
+      cookies: { session: token },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.gbAmount).toBe(50);
+    expect(body.durationDays).toBe(30);
+    expect(body.totalPrice).toBe(250_000); // 50 GB * 5000 = 250,000
+    expect(body.pricePerGb).toBe(5000);
+  });
+
+  it('returns pending receipt details when user has a pending deposit', async () => {
+    (mockWalletService as Record<string, unknown>).getPendingReceiptForUser = vi.fn(
+      async (telegramId: number) => ({
+        id: 'rec_test_123',
+        telegramId,
+        amount: 200_000,
+        status: 'pending',
+        createdAt: new Date('2026-03-01T15:30:00Z'),
+      })
+    );
+
+    const token = getUserToken(55555);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/user/profile',
+      cookies: { session: token },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.pendingReceipt).toBeDefined();
+    expect(body.pendingReceipt.id).toBe('rec_test_123');
+    expect(body.pendingReceipt.amount).toBe(200_000);
+    expect(body.pendingReceipt.status).toBe('pending');
   });
 });

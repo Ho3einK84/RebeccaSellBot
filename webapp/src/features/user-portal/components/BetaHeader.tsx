@@ -8,6 +8,7 @@ import {
   ArrowRight,
   FlaskConical,
   User,
+  ShieldCheck,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -19,6 +20,8 @@ interface BetaHeaderProps {
   user: TelegramWebAppUser;
   onRefresh: () => void;
   onExitBeta: () => void;
+  isAdminPreview?: boolean;
+  onSwitchToAdmin?: () => void;
   balance?: number;
   currency?: string;
   isRefreshing?: boolean;
@@ -28,6 +31,8 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
   user,
   onRefresh,
   onExitBeta,
+  isAdminPreview = false,
+  onSwitchToAdmin,
   balance,
   currency,
   isRefreshing = false,
@@ -56,7 +61,11 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
 
   const handleExit = () => {
     triggerHaptic('medium');
-    onExitBeta();
+    if (isAdminPreview && onSwitchToAdmin) {
+      onSwitchToAdmin();
+    } else {
+      onExitBeta();
+    }
   };
 
   const BackIcon = isRtl ? ArrowRight : ArrowLeft;
@@ -65,26 +74,34 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
     <header className="w-full flex flex-col gap-2.5 mb-4 relative z-10">
       {/* Top action row */}
       <div className="w-full flex items-center justify-between">
-        {/* Return to Coming Soon button */}
+        {/* Return button: To Admin Panel if in admin preview, otherwise back to overview */}
         <button
           type="button"
           onClick={handleExit}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
-            isDark
-              ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
-              : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-2xs'
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
+            isAdminPreview
+              ? isDark
+                ? 'bg-indigo-600/15 border-indigo-500/30 hover:bg-indigo-600/25 text-indigo-300'
+                : 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700 shadow-2xs'
+              : isDark
+                ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
+                : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-2xs'
           }`}
-          title={t('user.backToComingSoon')}
+          title={isAdminPreview ? t('user.backToAdmin') : t('user.backToComingSoon')}
         >
-          <BackIcon className="w-3.5 h-3.5" />
-          <span>{t('user.backToComingSoon')}</span>
+          {isAdminPreview ? (
+            <ShieldCheck className="w-3.5 h-3.5" />
+          ) : (
+            <BackIcon className="w-3.5 h-3.5" />
+          )}
+          <span>{isAdminPreview ? t('user.backToAdmin') : t('user.backToComingSoon')}</span>
         </button>
 
-        {/* Right utility buttons: Refresh, Theme, Language */}
+        {/* Right utility buttons: Refresh, Theme, Language (harmonized with Admin rounded-xl) */}
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className={`inline-flex items-center justify-center w-8 h-8 rounded-full border transition-all active:scale-95 cursor-pointer ${
+            className={`inline-flex items-center justify-center w-8 h-8 rounded-xl border transition-all active:scale-95 cursor-pointer ${
               isDark
                 ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-slate-300'
                 : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-xs'
@@ -99,7 +116,7 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
 
           <button
             type="button"
-            className={`inline-flex items-center justify-center w-8 h-8 rounded-full border transition-all active:scale-95 cursor-pointer ${
+            className={`inline-flex items-center justify-center w-8 h-8 rounded-xl border transition-all active:scale-95 cursor-pointer ${
               isDark
                 ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-slate-300'
                 : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-xs'
@@ -117,7 +134,7 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
           {languageSelectionEnabled && (
             <button
               type="button"
-              className={`inline-flex items-center gap-1 px-2.5 h-8 rounded-full border text-[11px] font-medium transition-all active:scale-95 cursor-pointer ${
+              className={`inline-flex items-center gap-1 px-2.5 h-8 rounded-xl border text-[11px] font-medium transition-all active:scale-95 cursor-pointer ${
                 isDark
                   ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-slate-300'
                   : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-xs'
@@ -165,6 +182,12 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
                 <FlaskConical className="w-2.5 h-2.5 shrink-0" />
                 <span>{t('user.betaBadge')}</span>
               </span>
+              {isAdminPreview && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 shrink-0">
+                  <ShieldCheck className="w-2.5 h-2.5 shrink-0" />
+                  <span>{t('user.adminPreviewBadge')}</span>
+                </span>
+              )}
             </div>
             <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
               {t('common.idLabel')} {user.id}

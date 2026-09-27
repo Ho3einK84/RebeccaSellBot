@@ -1,5 +1,15 @@
 import React from 'react';
-import { ShieldCheck, RotateCw, Globe, Check, Copy, Sun, Moon, LogOut } from 'lucide-react';
+import {
+  ShieldCheck,
+  RotateCw,
+  Globe,
+  Check,
+  Copy,
+  Sun,
+  Moon,
+  LogOut,
+  FlaskConical,
+} from 'lucide-react';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -12,9 +22,16 @@ interface AdminHeaderProps {
   onRefresh: () => void;
   onClose: () => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
+  onSwitchToUserPortal?: () => void;
 }
 
-export const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onRefresh, onClose, onNotify }) => {
+export const AdminHeader: React.FC<AdminHeaderProps> = ({
+  user,
+  onRefresh,
+  onClose,
+  onNotify,
+  onSwitchToUserPortal,
+}) => {
   const { t, locale, languageSelectionEnabled, setLocale } = useLanguage();
   const { isDark, toggleTheme, cardClass, textPrimary, textSecondary } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
@@ -124,6 +141,27 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ user, onRefresh, onClo
             <RotateCw className="w-3.5 h-3.5" />
             <span className="hidden sm:inline ms-1.5">{t('common.refresh')}</span>
           </button>
+
+          {/* Switch to User Portal (Beta Preview) */}
+          {onSwitchToUserPortal && (
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1.5 px-2.5 h-8 rounded-xl border text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
+                isDark
+                  ? 'bg-purple-500/10 border-purple-500/25 hover:bg-purple-500/20 text-purple-300'
+                  : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700 shadow-xs'
+              }`}
+              onClick={() => {
+                triggerHaptic('medium');
+                onSwitchToUserPortal();
+              }}
+              title={t('admin.enterUserBeta')}
+              aria-label={t('admin.enterUserBeta')}
+            >
+              <FlaskConical className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" />
+              <span className="hidden xs:inline sm:inline">{t('admin.enterUserBeta')}</span>
+            </button>
+          )}
 
           {/* Exit Mini App */}
           <button

@@ -20,6 +20,30 @@ export interface UserPortalProfile {
   createdAt: string;
 }
 
+export interface CustomVolumeSettings {
+  enabled: boolean;
+  pricePerGb: number;
+  pricePerDay: number;
+  defaultDays: number;
+  minGb: number;
+  maxGb: number;
+}
+
+export interface PendingReceiptInfo {
+  id: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface CustomVolumeQuoteResponse {
+  gbAmount: number;
+  durationDays: number;
+  totalPrice: number;
+  pricePerGb: number;
+  pricePerDay: number;
+}
+
 export interface UserPortalSettings {
   currency: string;
   cardNumber: string;
@@ -27,11 +51,15 @@ export interface UserPortalSettings {
   supportUsername: string;
   supportEnabled: boolean;
   botUsername: string;
+  topupMinAmount?: number;
+  topupMaxAmount?: number;
+  customVolume?: CustomVolumeSettings;
 }
 
 export interface UserProfileResponse {
   user: UserPortalProfile;
   settings: UserPortalSettings;
+  pendingReceipt?: PendingReceiptInfo | null;
 }
 
 export interface UserConfigRecord {

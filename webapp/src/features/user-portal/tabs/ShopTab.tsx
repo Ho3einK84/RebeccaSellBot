@@ -1,32 +1,81 @@
-import React from 'react';
-import { ShoppingBag, Zap, Check, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShoppingBag, Zap, Sparkles, Sliders, Plus, Minus, Send, ShieldCheck } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
-import type { UserPackageItem } from '@/shared/types/userPortal.js';
+import type { UserPackageItem, CustomVolumeSettings } from '@/shared/types/userPortal.js';
 
 interface ShopTabProps {
   packages: UserPackageItem[];
   currency?: string;
+  customVolumeSettings?: CustomVolumeSettings;
+  botUsername?: string;
   onSelectPackage: (pkg: UserPackageItem) => void;
 }
+
+const PRESET_GB_OPTIONS = [10, 20, 30, 50, 100, 200];
 
 export const ShopTab: React.FC<ShopTabProps> = ({
   packages,
   currency: propCurrency,
+  customVolumeSettings,
+  botUsername,
   onSelectPackage,
 }) => {
   const { t } = useLanguage();
-  const { isDark } = useThemeTokens();
+  const { isDark, cardClass } = useThemeTokens();
   const { formatToman } = useFormatters();
   const { triggerHaptic } = useHaptic();
 
   const currency = propCurrency || t('common.currency');
 
+  const isCustomEnabled = customVolumeSettings?.enabled !== false;
+  const minGb = customVolumeSettings?.minGb ?? 5;
+  const maxGb = customVolumeSettings?.maxGb ?? 300;
+  const pricePerGb = customVolumeSettings?.pricePerGb ?? 5000;
+  const pricePerDay = customVolumeSettings?.pricePerDay ?? 0;
+  const defaultDays = customVolumeSettings?.defaultDays ?? 30;
+
+  const [customGb, setCustomGb] = useState<number>(30);
+  const [customDays] = useState<number>(defaultDays);
+
+  const customPrice = Math.max(0, customGb * pricePerGb + customDays * pricePerDay);
+
   const handleSelect = (pkg: UserPackageItem) => {
     triggerHaptic('selection');
     onSelectPackage(pkg);
+  };
+
+  const handleCustomGbChange = (val: number) => {
+    const clamped = Math.min(Math.max(val, minGb), maxGb);
+    setCustomGb(clamped);
+  };
+
+  const handleOrderCustom = () => {
+    triggerHaptic('medium');
+    const customPkg: UserPackageItem = {
+      id: `custom_${customGb}gb_${customDays}d`,
+      name: `${t('user.shop.customVolumeBadge')} (${customGb} GB)`,
+      gbAmount: customGb,
+      durationDays: customDays,
+      price: customPrice,
+    };
+    onSelectPackage(customPkg);
+  };
+
+  const handleOpenBotCustom = () => {
+    triggerHaptic('medium');
+    const cleanBot = botUsername?.replace(/^@/, '');
+    if (cleanBot) {
+      const url = `https://t.me/${cleanBot}?start=custom_${customGb}gb_${customDays}d`;
+      if (window.Telegram?.WebApp?.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(url);
+        setTimeout(() => window.Telegram?.WebApp?.close?.(), 300);
+        return;
+      }
+    }
+    handleOrderCustom();
   };
 
   return (
@@ -44,10 +93,192 @@ export const ShopTab: React.FC<ShopTabProps> = ({
         <p className="text-xs text-slate-500 dark:text-zinc-400 m-0">{t('user.shop.desc')}</p>
       </div>
 
-      {/* Packages Grid */}
+      {/* Custom Volume Calculator Section */}
+      {isCustomEnabled && (
+        <section
+          className={`rounded-2xl p-4 sm:p-5 border transition-all text-start relative overflow-hidden ${
+            isDark
+              ? 'bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-zinc-900/70 border-indigo-500/30 shadow-lg shadow-indigo-950/25'
+              : 'bg-gradient-to-br from-indigo-50/90 via-white to-purple-50/70 border-indigo-200 shadow-sm'
+          }`}
+        >
+          {/* Header pill & badge */}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                  isDark
+                    ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300'
+                    : 'bg-indigo-100 border-indigo-200 text-indigo-600'
+                }`}
+              >
+                <Sliders className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <h3
+                  className={`text-xs sm:text-sm font-bold truncate ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  {t('user.shop.customVolumeTitle')}
+                </h3>
+                <span className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                  {t('user.shop.customVolumeSubtitle')}
+                </span>
+              </div>
+            </div>
+
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-500 dark:text-indigo-300 border border-indigo-500/25 shrink-0">
+              <Sparkles className="w-2.5 h-2.5" />
+              <span>{t('user.shop.customVolumeBadge')}</span>
+            </span>
+          </div>
+
+          {/* Quick preset chips */}
+          <div className="flex items-center gap-1.5 flex-wrap my-3">
+            {PRESET_GB_OPTIONS.map((val) => {
+              const isSelected = customGb === val;
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    handleCustomGbChange(val);
+                  }}
+                  className={`py-1 px-2.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                      : isDark
+                        ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
+                        : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-2xs'
+                  }`}
+                >
+                  {val} GB
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Interactive GB Slider & Stepper */}
+          <div
+            className={`p-3.5 rounded-xl border flex flex-col gap-3 my-3 ${
+              isDark ? 'bg-black/25 border-white/[0.06]' : 'bg-slate-50/80 border-slate-200/80'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-600 dark:text-zinc-400 font-medium">
+                {t('user.shop.customVolumeGbLabel')}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={customGb <= minGb}
+                  onClick={() => {
+                    triggerHaptic('light');
+                    handleCustomGbChange(customGb - 5);
+                  }}
+                  className="w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                  aria-label="Decrease GB"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+
+                <div className="flex items-baseline gap-1 font-mono font-bold text-base sm:text-lg text-indigo-500 dark:text-indigo-400 min-w-[70px] justify-center">
+                  <span>{customGb}</span>
+                  <span className="text-xs font-normal text-slate-400">GB</span>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={customGb >= maxGb}
+                  onClick={() => {
+                    triggerHaptic('light');
+                    handleCustomGbChange(customGb + 5);
+                  }}
+                  className="w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                  aria-label="Increase GB"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Range Slider */}
+            <input
+              type="range"
+              min={minGb}
+              max={maxGb}
+              step={5}
+              value={customGb}
+              onChange={(e) => handleCustomGbChange(Number(e.target.value))}
+              className="range range-indigo range-xs w-full accent-indigo-500 cursor-pointer"
+            />
+
+            <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+              <span>{minGb} GB</span>
+              <span>{t('user.shop.daysUnit').replace('{days}', String(customDays))}</span>
+              <span>{maxGb} GB</span>
+            </div>
+          </div>
+
+          {/* Pricing summary & Action Buttons */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-200/60 dark:border-white/[0.08]">
+            <div className="flex flex-col">
+              <div className="flex items-baseline gap-1.5">
+                <span
+                  className={`text-lg sm:text-xl font-mono font-extrabold ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  {formatToman(customPrice)}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-zinc-400">{currency}</span>
+              </div>
+              <span className="text-[10px] text-slate-400">
+                {t('user.shop.customVolumePricePerGb').replace(
+                  '{price}',
+                  `${formatToman(pricePerGb)} ${currency}`
+                )}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {botUsername && (
+                <button
+                  type="button"
+                  onClick={handleOpenBotCustom}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                    isDark
+                      ? 'bg-white/[0.05] border-white/10 hover:bg-white/10 text-zinc-300'
+                      : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
+                  }`}
+                  title={t('user.shop.customVolumeOrderBotButton')}
+                >
+                  <Send className="w-3.5 h-3.5 rtl:rotate-180" />
+                  <span className="hidden xs:inline">
+                    {t('user.shop.customVolumeOrderBotButton')}
+                  </span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleOrderCustom}
+                className="flex-1 sm:flex-initial py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white"
+              >
+                <Zap className="w-4 h-4" />
+                <span>{t('user.shop.customVolumeOrderButton')}</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Pre-configured Packages Grid */}
       {packages.length === 0 ? (
         <div
-          className={`p-6 rounded-3xl border text-center my-4 ${
+          className={`p-6 rounded-2xl border text-center my-4 ${
             isDark
               ? 'bg-white/[0.02] border-white/[0.07] text-zinc-400'
               : 'bg-slate-50 border-slate-200 text-slate-500'
@@ -63,14 +294,14 @@ export const ShopTab: React.FC<ShopTabProps> = ({
             return (
               <div
                 key={pkg.id}
-                className={`relative rounded-3xl p-4 sm:p-5 border transition-all flex flex-col justify-between gap-4 text-start ${
+                className={`relative rounded-2xl p-4 sm:p-5 border transition-all flex flex-col justify-between gap-4 text-start ${
                   isFeatured
                     ? isDark
                       ? 'bg-gradient-to-b from-indigo-950/40 via-purple-950/20 to-zinc-900/60 border-indigo-500/40 shadow-lg shadow-indigo-950/30'
                       : 'bg-gradient-to-b from-indigo-50/70 via-white to-purple-50/40 border-indigo-300 shadow-sm'
                     : isDark
-                      ? 'bg-white/[0.025] border-white/[0.08] hover:border-white/[0.15]'
-                      : 'bg-white border-slate-200/90 shadow-2xs hover:border-slate-300'
+                      ? `${cardClass} hover:border-white/[0.15]`
+                      : `${cardClass} hover:border-slate-300`
                 }`}
               >
                 {/* Popular / Best value badge for featured item */}
@@ -109,11 +340,11 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                   {/* Feature bullet points */}
                   <div className="flex flex-col gap-1 mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
                     <div className="flex items-center gap-1.5">
-                      <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       <span>{t('user.shop.fastConnectionFeature')}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       <span>{t('user.shop.allPlatformsFeature')}</span>
                     </div>
                   </div>

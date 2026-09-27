@@ -313,4 +313,54 @@ describe('/start language on first visit', () => {
       })
     );
   });
+
+  it('routes /start custom and /start receipt payloads to their respective conversations', async () => {
+    let startHandler: ((ctx: unknown) => Promise<void>) | undefined;
+    const bot = {
+      command: vi.fn((cmd: string, handler: (ctx: unknown) => Promise<void>) => {
+        if (cmd === 'start') startHandler = handler;
+      }),
+      use: vi.fn(),
+      callbackQuery: vi.fn(),
+      hears: vi.fn(),
+      on: vi.fn(),
+    } as unknown as Bot<MenuContext>;
+
+    const enterConversation = vi.fn().mockResolvedValue(undefined);
+    const services = {
+      userService: { exists: vi.fn(async () => true) },
+      walletService: {
+        getOrCreateUser: vi.fn(async () => ({ locale: 'fa' })),
+      },
+      translationService: {
+        getDefaultLocale: vi.fn(() => 'fa'),
+        getSetting: vi.fn(() => ''),
+        getSettingBool: vi.fn(() => false),
+      },
+      maintenanceService: { isMaintenanceMode: vi.fn(() => false) },
+      authService: { isAdmin: vi.fn(() => false) },
+    } as unknown as BotServices;
+
+    registerBaseRoutes(bot, services);
+
+    // Test /start custom
+    const ctxCustom = {
+      from: { id: 12345, first_name: 'CustomUser' },
+      match: 'custom',
+      services,
+      conversation: { enter: enterConversation },
+    };
+    await startHandler!(ctxCustom);
+    expect(enterConversation).toHaveBeenCalledWith('customAmountConversation');
+
+    // Test /start receipt
+    const ctxReceipt = {
+      from: { id: 12345, first_name: 'ReceiptUser' },
+      match: 'receipt',
+      services,
+      conversation: { enter: enterConversation },
+    };
+    await startHandler!(ctxReceipt);
+    expect(enterConversation).toHaveBeenCalledWith('topupConversation');
+  });
 });

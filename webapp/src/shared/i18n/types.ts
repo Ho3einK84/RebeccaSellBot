@@ -88,6 +88,8 @@ export interface TranslationSchema {
     betaNotice: string;
     betaPreviewActive: string;
     backToComingSoon: string;
+    backToAdmin: string;
+    adminPreviewBadge: string;
     tabs: {
       dashboard: string;
       services: string;
@@ -142,6 +144,14 @@ export interface TranslationSchema {
       fastConnectionFeature: string;
       allPlatformsFeature: string;
       featuredBadge: string;
+      customVolumeTitle: string;
+      customVolumeSubtitle: string;
+      customVolumeBadge: string;
+      customVolumeGbLabel: string;
+      customVolumeDaysLabel: string;
+      customVolumePricePerGb: string;
+      customVolumeOrderButton: string;
+      customVolumeOrderBotButton: string;
     };
     wallet: {
       title: string;
@@ -164,6 +174,21 @@ export interface TranslationSchema {
       totalLabel: string;
       reservedLabel: string;
       balanceAfterLabel: string;
+      pendingReceiptTitle: string;
+      pendingReceiptSubtitle: string;
+      pendingReceiptTrackingId: string;
+      pendingReceiptAmountLabel: string;
+      pendingReceiptStatusLabel: string;
+      topupMinMaxHint: string;
+      quickAmounts: string;
+      step1Title: string;
+      step1Desc: string;
+      step2Title: string;
+      step2Desc: string;
+      step3Title: string;
+      step3Desc: string;
+      sendReceiptDirect: string;
+      openBotTopup: string;
     };
     referral: {
       title: string;
@@ -186,6 +211,7 @@ export interface TranslationSchema {
     exit: string;
     betaBadge: string;
     betaNotice: string;
+    enterUserBeta: string;
     tabs: {
       overview: string;
       receipts: string;
