@@ -53,6 +53,7 @@ export const en: TranslationSchema = {
   },
   user: {
     greeting: 'Hello, {name}!',
+    greetingPrefix: 'Hello,',
     telegramId: 'ID:',
     portalTitle: 'User Mini App is not available yet and will be ready soon...',
     portalDesc:
@@ -80,17 +81,17 @@ export const en: TranslationSchema = {
     enterBetaMode: 'Enter Experimental Mode',
     enterBetaModeDesc:
       'Explore dashboard, manage active services, test plan checkout, inspect wallet, and view referral rewards in the early preview',
-    betaBadge: 'Experimental Preview (Beta)',
+    betaBadge: 'Beta',
     betaNotice:
       'This section is running in experimental preview mode with select capabilities and will continue to expand.',
     betaPreviewActive: 'Preview Active',
     backToComingSoon: 'Back to Overview',
     tabs: {
       dashboard: 'Dashboard',
-      services: 'Services',
-      shop: 'Shop',
+      services: 'My Services',
+      shop: 'Buy Service',
       wallet: 'Wallet',
-      referral: 'Referral',
+      referral: 'Referrals',
     },
     dashboard: {
       walletBalance: 'Wallet Balance',
@@ -98,9 +99,9 @@ export const en: TranslationSchema = {
       activeServices: 'Active Services',
       totalTraffic: 'Total Bandwidth Used',
       quickTopup: 'Top Up',
-      buyService: 'New Plan',
-      myConfigs: 'My Configs',
-      inviteEarn: 'Invite Friends',
+      buyService: 'Buy Service',
+      myConfigs: 'My Services',
+      inviteEarn: 'Referrals & Earn',
       recentActivity: 'Recent Transactions',
       noRecentActivity: 'No transactions recorded yet.',
       supportHelp: 'Live Support',
@@ -126,7 +127,7 @@ export const en: TranslationSchema = {
       statusExpired: 'Expired',
     },
     shop: {
-      title: 'Available Plans',
+      title: 'Buy Service',
       desc: 'Choose the best plan for high speed, low latency, and stable connection.',
       selectPlan: 'Order Plan',
       trafficUnit: '{gb} GB',
@@ -143,14 +144,14 @@ export const en: TranslationSchema = {
     wallet: {
       title: 'Wallet & Top Up',
       currentBalance: 'Wallet Balance',
-      cardTopupTitle: 'Bank Card Transfer',
+      cardTopupTitle: 'Card to Card',
       cardTopupDesc:
         'Transfer the amount to the card below and submit the payment slip inside the Telegram bot.',
       cardNumber: 'Card Number',
       cardHolder: 'Account Holder',
       copyCard: 'Copy Card',
       cardCopied: 'Card number copied!',
-      sendReceiptNotice: 'After transfer, send the receipt receipt in the Telegram bot.',
+      sendReceiptNotice: 'Send Payment Receipt in Bot',
       txHistory: 'Transaction History',
       txEmpty: 'No transactions recorded yet.',
       typeTopup: 'Deposit',
@@ -164,7 +165,7 @@ export const en: TranslationSchema = {
       balanceAfterLabel: 'After: {amount}',
     },
     referral: {
-      title: 'Invite Friends & Earn Rewards',
+      title: 'Referrals & Rewards',
       desc: 'Share your personal referral link and receive wallet cash bonuses on every friend purchase.',
       yourCode: 'Your Referral Code',
       yourLink: 'Personal Invite Link',
@@ -173,8 +174,8 @@ export const en: TranslationSchema = {
       shareTelegram: 'Share on Telegram',
       shareMessage:
         '🌟 Fast, secure and reliable connection with our bot. Join with my personal invite link:',
-      statsInvited: 'Users Invited',
-      statsEarned: 'Total Earnings',
+      statsInvited: 'Referred Users',
+      statsEarned: 'Total Referral Earnings',
       ruleDesc:
         'Bonuses are automatically and instantly credited to your wallet upon qualifying purchases.',
     },

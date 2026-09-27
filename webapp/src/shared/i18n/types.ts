@@ -59,6 +59,7 @@ export interface TranslationSchema {
   };
   user: {
     greeting: string;
+    greetingPrefix: string;
     telegramId: string;
     portalTitle: string;
     portalDesc: string;

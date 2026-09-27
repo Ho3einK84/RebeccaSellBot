@@ -40,13 +40,13 @@ export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
 
   return (
     <nav
-      className={`fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl transition-colors pb-[env(safe-area-inset-bottom,0px)] ${
+      className={`fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl transition-colors pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] ${
         isDark
           ? 'bg-[#090a0f]/90 border-white/[0.08]'
           : 'bg-white/95 border-slate-200/90 shadow-lg shadow-slate-200/50'
       }`}
     >
-      <div className="w-full max-w-lg mx-auto flex items-center justify-around px-2 py-1.5">
+      <div className="w-full max-w-lg mx-auto flex items-center justify-around px-2 pt-1.5 pb-0.5">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;

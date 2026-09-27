@@ -84,7 +84,7 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
             isDark ? 'text-white' : 'text-slate-900'
           }`}
         >
-          <span>{t('user.greeting')}</span>
+          <span>{t('user.greetingPrefix')}</span>
           <bdi
             className={
               isDark

@@ -139,7 +139,7 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
             : 'bg-gradient-to-r from-indigo-50/80 via-white to-purple-50/70 border-indigo-100 shadow-xs'
         }`}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
           {/* Small avatar */}
           <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shrink-0 border border-indigo-400/30 bg-indigo-500/10">
             {user.photo_url ? (
@@ -154,15 +154,15 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
           </div>
 
           {/* Name & Beta Tag */}
-          <div className="flex flex-col min-w-0 text-start">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col min-w-0 flex-1 text-start">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span
                 className={`text-xs sm:text-sm font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}
               >
                 {displayName}
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/15 text-indigo-500 dark:text-indigo-300 border border-indigo-500/25">
-                <FlaskConical className="w-2.5 h-2.5" />
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-indigo-500/15 text-indigo-500 dark:text-indigo-300 border border-indigo-500/25 shrink-0">
+                <FlaskConical className="w-2.5 h-2.5 shrink-0" />
                 <span>{t('user.betaBadge')}</span>
               </span>
             </div>
@@ -174,11 +174,11 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
 
         {/* Quick balance badge */}
         {balance !== undefined && (
-          <div className="flex flex-col items-end shrink-0">
+          <div className="flex flex-col items-end shrink-0 ps-1">
             <span className="text-[10px] text-slate-500 dark:text-zinc-400">
               {t('user.dashboard.walletBalance')}
             </span>
-            <span className="font-mono font-bold text-xs sm:text-sm text-indigo-600 dark:text-indigo-300">
+            <span className="font-mono font-bold text-xs sm:text-sm text-indigo-600 dark:text-indigo-300 whitespace-nowrap">
               {formatToman(balance)} {displayCurrency}
             </span>
           </div>

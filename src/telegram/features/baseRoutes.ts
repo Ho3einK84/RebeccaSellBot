@@ -71,6 +71,27 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       }
     }
 
+    if (payload === 'topup' || payload === 'receipt') {
+      await ctx.conversation.enter('topupConversation');
+      return;
+    }
+
+    if (payload === 'wallet') {
+      ctx.menu.nav('wallet-menu');
+      await renderScreen(ctx, await renderWalletDashboard(ctx), {
+        parse_mode: 'Markdown',
+      });
+      return;
+    }
+
+    if (payload === 'shop') {
+      ctx.menu.nav('shop-menu');
+      await renderScreen(ctx, await renderShopMenuText(ctx), {
+        parse_mode: 'Markdown',
+      });
+      return;
+    }
+
     const dashboardText = await renderHomeDashboard(ctx);
     await renderScreen(ctx, dashboardText, {
       parse_mode: 'Markdown',

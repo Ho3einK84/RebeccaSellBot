@@ -11,11 +11,14 @@ import {
   ChevronRight,
   ShieldCheck,
   Activity,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
+import { useCopy } from '@/shared/hooks/useCopy.js';
 import type {
   UserPortalProfile,
   UserPortalSettings,
@@ -43,10 +46,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
   const { formatToman } = useFormatters();
+  const { copy, isCopied } = useCopy();
 
   const currency = settings?.currency || t('common.currency');
   const availableBalance = profile?.availableBalance ?? 0;
   const activeConfigs = configs.filter((c) => c.panelStatus === 'active');
+
+  const formatShortRefCode = (code?: string | null) => {
+    if (!code) return '—';
+    if (code.length <= 14) return code;
+    return `${code.slice(0, 8)}...${code.slice(-4)}`;
+  };
+
+  const handleCopyReferral = () => {
+    if (!profile?.referralCode) return;
+    triggerHaptic('light');
+    copy(profile.referralCode, 'dashboard-ref-code');
+  };
 
   const handleAction = (tab: UserTabType) => {
     triggerHaptic('light');
@@ -57,7 +73,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     triggerHaptic('medium');
     const supportUser = settings?.supportUsername || '';
     if (supportUser) {
-      const url = `https://t.me/${supportUser}`;
+      const cleanUsername = supportUser.replace(/^@/, '');
+      const url = `https://t.me/${cleanUsername}`;
       if (window.Telegram?.WebApp?.openTelegramLink) {
         window.Telegram.WebApp.openTelegramLink(url);
       } else {
@@ -105,20 +122,45 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
 
           {/* Card Bottom: Referral Code & Topup CTA */}
-          <div className="flex items-center justify-between pt-2 border-t border-white/15">
-            <div className="flex flex-col text-start">
-              <span className="text-[10px] text-white/60">{t('user.referral.yourCode')}</span>
-              <span className="text-xs font-mono font-bold tracking-wider text-white">
-                {profile?.referralCode || '—'}
-              </span>
+          <div className="flex items-center justify-between gap-3 pt-2.5 mt-2 border-t border-white/15">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="flex flex-col min-w-0 text-start">
+                <span className="text-[10px] text-white/70 leading-tight mb-0.5">
+                  {t('user.referral.yourCode')}
+                </span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    dir="ltr"
+                    className="text-xs font-mono font-bold tracking-tight text-white/95 truncate"
+                    title={profile?.referralCode || ''}
+                  >
+                    {formatShortRefCode(profile?.referralCode)}
+                  </span>
+                  {profile?.referralCode && (
+                    <button
+                      type="button"
+                      onClick={handleCopyReferral}
+                      className="p-1 rounded-lg bg-white/15 hover:bg-white/25 active:scale-90 transition-all text-white shrink-0 cursor-pointer"
+                      title={t('common.copy')}
+                      aria-label={t('common.copy')}
+                    >
+                      {isCopied('dashboard-ref-code') ? (
+                        <Check className="w-3 h-3 text-emerald-300" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-white/90" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={() => handleAction('wallet')}
-              className="px-3.5 py-1.5 rounded-xl bg-white text-slate-950 hover:bg-slate-100 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-md cursor-pointer"
+              className="shrink-0 px-3.5 py-1.5 rounded-xl bg-white text-slate-950 hover:bg-slate-100 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-md cursor-pointer whitespace-nowrap"
             >
-              <Wallet className="w-3.5 h-3.5 text-indigo-700" />
+              <Wallet className="w-3.5 h-3.5 text-indigo-700 shrink-0" />
               <span>{t('user.dashboard.quickTopup')}</span>
             </button>
           </div>

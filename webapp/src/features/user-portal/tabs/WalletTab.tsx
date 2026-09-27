@@ -59,6 +59,18 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
   const handleOpenBotForReceipt = () => {
     triggerHaptic('medium');
+    const botUser = settings?.botUsername || '';
+    if (botUser) {
+      const cleanBot = botUser.replace(/^@/, '');
+      const url = `https://t.me/${cleanBot}?start=receipt`;
+      if (window.Telegram?.WebApp?.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(url);
+        setTimeout(() => {
+          window.Telegram?.WebApp?.close?.();
+        }, 300);
+        return;
+      }
+    }
     if (window.Telegram?.WebApp?.close) {
       window.Telegram.WebApp.close();
     } else {

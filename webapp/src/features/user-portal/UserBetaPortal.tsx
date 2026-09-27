@@ -31,6 +31,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
   const { triggerHaptic } = useHaptic();
 
   const [activeTab, setActiveTab] = useState<UserTabType>('dashboard');
+  const [tabHistory, setTabHistory] = useState<UserTabType[]>(['dashboard']);
   const [notification, setNotification] = useState<{
     message: string;
     type: 'success' | 'error';
@@ -104,10 +105,33 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
   const isRefreshing =
     isRefetchingProfile || isRefetchingConfigs || isRefetchingPackages || isRefetchingTransactions;
 
-  // Back button handling: if on a sub-tab, go back to dashboard; if on dashboard, exit beta mode
+  const switchTab = (tab: UserTabType) => {
+    if (tab === activeTab) return;
+    triggerHaptic('selection');
+    if (tab === 'dashboard') {
+      setTabHistory(['dashboard']);
+    } else {
+      setTabHistory((prev) => {
+        if (prev.length >= 2 && prev[prev.length - 2] === tab) {
+          return prev.slice(0, -1);
+        }
+        return [...prev, tab];
+      });
+    }
+    setActiveTab(tab);
+  };
+
+  // Back button handling: pop tab history, or go to dashboard, or exit beta mode
   const handleBack = () => {
-    if (activeTab !== 'dashboard') {
+    if (tabHistory.length > 1) {
       triggerHaptic('selection');
+      const nextHistory = tabHistory.slice(0, -1);
+      const prevTab = nextHistory[nextHistory.length - 1] ?? 'dashboard';
+      setTabHistory(nextHistory);
+      setActiveTab(prevTab);
+    } else if (activeTab !== 'dashboard') {
+      triggerHaptic('selection');
+      setTabHistory(['dashboard']);
       setActiveTab('dashboard');
     } else {
       triggerHaptic('medium');
@@ -127,12 +151,12 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
     <div className="w-full min-h-screen min-h-[100dvh] flex flex-col items-center justify-start safe-top relative">
       <AmbientBackground />
 
-      <main className="w-full max-w-lg mx-auto flex flex-col px-4 pt-3 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] relative z-10 flex-1">
+      <main className="w-full max-w-lg mx-auto flex flex-col px-4 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] relative z-10 flex-1">
         <BetaHeader
           user={user}
           onRefresh={handleRefresh}
           onExitBeta={onExitBeta}
-          balance={profile?.availableBalance}
+          balance={activeTab === 'dashboard' ? undefined : profile?.availableBalance}
           currency={settings?.currency}
           isRefreshing={isRefreshing}
         />
@@ -161,7 +185,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
               settings={settings}
               configs={configs}
               transactions={transactions}
-              onSwitchTab={(tab) => setActiveTab(tab)}
+              onSwitchTab={(tab) => switchTab(tab)}
             />
           )}
 
@@ -171,7 +195,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
               onOpenQr={(subUrl, configUsername) =>
                 setQrModal({ isOpen: true, subUrl, configUsername })
               }
-              onGoToShop={() => setActiveTab('shop')}
+              onGoToShop={() => switchTab('shop')}
               onNotify={(msg) => notify(msg, 'success')}
             />
           )}
@@ -206,7 +230,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
       {/* Sticky Bottom Navigation Bar */}
       <BetaBottomNav
         activeTab={activeTab}
-        onSelectTab={(tab) => setActiveTab(tab)}
+        onSelectTab={(tab) => switchTab(tab)}
         configsCount={configs.length}
       />
 
@@ -225,7 +249,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({ user, onExitBeta
         pkg={checkoutModal.pkg}
         availableBalance={profile?.availableBalance ?? 0}
         currency={settings?.currency}
-        onGoToWallet={() => setActiveTab('wallet')}
+        onGoToWallet={() => switchTab('wallet')}
         onSuccess={(msg) => notify(msg, 'success')}
       />
     </div>
