@@ -25,6 +25,7 @@ interface ModalProps {
   children: ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl';
   closeOnBackdrop?: boolean;
+  hideCloseButton?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -35,6 +36,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth = 'lg',
   closeOnBackdrop = true,
+  hideCloseButton = false,
 }) => {
   const { modalBoxClass, textPrimary } = useThemeTokens();
 
@@ -103,14 +105,16 @@ export const Modal: React.FC<ModalProps> = ({
               {icon}
               <span className="tracking-tight">{title}</span>
             </h3>
-            <button
-              type="button"
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
-              onClick={onClose}
-              aria-label="Close modal"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            {!hideCloseButton && (
+              <button
+                type="button"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                onClick={onClose}
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )}
         {children}

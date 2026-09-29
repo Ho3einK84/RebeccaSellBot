@@ -190,7 +190,7 @@ validate_service_id() {
   [[ "$1" =~ ^[1-9][0-9]*$ ]] || return 1
   ((${#1} < 10)) || [[ ${#1} -eq 10 && "$1" < "2147483648" ]]
 }
-validate_panel_credentials_key() { [[ "$1" =~ ^[A-Za-z0-9._~+=/-]{32,512}$ ]]; }
+validate_panel_credentials_key() { [[ "$1" =~ ^[A-Za-z0-9._~+=/:-]{32,512}$ ]]; }
 validate_webhook_url() {
   local port
   [[ "$1" =~ ^https://[A-Za-z0-9][A-Za-z0-9.-]*(:([0-9]{1,5}))?(/.*)?$ ]] || return 1

@@ -3,6 +3,7 @@ import {
   toPersianDigits,
   formatMoney,
   formatNumber,
+  formatBytes,
 } from '../../webapp/src/shared/lib/formatters.js';
 import { fa } from '../../webapp/src/shared/i18n/locales/fa.js';
 import { en } from '../../webapp/src/shared/i18n/locales/en.js';
@@ -29,6 +30,16 @@ describe('Webapp Formatters', () => {
     expect(formatNumber(42, 'fa')).toBe('۴۲');
     expect(formatNumber(1234, 'en')).toBe('1,234');
     expect(formatNumber(42, 'en')).toBe('42');
+  });
+
+  it('formats bytes with Persian units/digits in fa locale, ASCII in en locale', () => {
+    expect(formatBytes(null, 'fa')).toBe('-');
+    expect(formatBytes(0, 'fa')).toBe('۰ بایت');
+    expect(formatBytes(0, 'en')).toBe('0 B');
+    expect(formatBytes(500 * 1024 * 1024, 'en')).toBe('500 MB');
+    expect(formatBytes(500 * 1024 * 1024, 'fa')).toBe('۵۰۰ مگابایت');
+    expect(formatBytes(2 * 1024 * 1024 * 1024, 'en')).toBe('2 GB');
+    expect(formatBytes(2 * 1024 * 1024 * 1024, 'fa')).toBe('۲ گیگابایت');
   });
 });
 

@@ -1,6 +1,13 @@
-import React from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
 import { useTheme } from '@/shared/theme/ThemeContext.js';
+
+export interface ToastItem {
+  id: string;
+  message: string;
+  type?: 'success' | 'error' | 'warning';
+}
 
 export interface ToastProps {
   message: string;
@@ -37,6 +44,8 @@ export const Toast: React.FC<ToastProps> = ({
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       className={`p-3 sm:p-3.5 rounded-2xl text-xs sm:text-sm font-medium flex items-center justify-between gap-3 border backdrop-blur-md shadow-lg transition-all animate-toast-in ${variantStyles} ${className}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
@@ -53,12 +62,89 @@ export const Toast: React.FC<ToastProps> = ({
         <button
           type="button"
           onClick={onDismiss}
-          className="p-1.5 rounded-xl opacity-70 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-all cursor-pointer shrink-0"
+          className="min-h-[44px] min-w-[44px] p-2 rounded-xl opacity-70 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-all cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
           aria-label="Dismiss"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-4 h-4" />
         </button>
       )}
     </div>
   );
 };
+
+export interface ToastContainerProps {
+  toasts: ToastItem[];
+  onDismiss: (id: string) => void;
+  className?: string;
+}
+
+export const ToastContainer: React.FC<ToastContainerProps> = ({
+  toasts,
+  onDismiss,
+  className = '',
+}) => {
+  if (toasts.length === 0) return null;
+
+  return createPortal(
+    <aside
+      aria-live="polite"
+      role="region"
+      aria-label="Notifications"
+      className={`fixed inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[100000] pointer-events-none flex flex-col gap-2 ${className}`}
+      style={{ top: 'max(1rem, env(safe-area-inset-top, 1rem))' }}
+    >
+      {toasts.map((toast) => (
+        <div key={toast.id} className="pointer-events-auto w-full">
+          <Toast message={toast.message} type={toast.type} onDismiss={() => onDismiss(toast.id)} />
+        </div>
+      ))}
+    </aside>,
+    document.body
+  );
+};
+
+export function useToastQueue(defaultTimeout = 3500) {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  const removeToast = useCallback((id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const addToast = useCallback(
+    (
+      message: string,
+      type: 'success' | 'error' | 'warning' = 'success',
+      timeout = defaultTimeout
+    ) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setToasts((prev) => {
+        const exists = prev.some((t) => t.message === message && t.type === type);
+        if (exists) return prev;
+        return [...prev, { id, message, type }];
+      });
+
+      const timer = setTimeout(() => {
+        removeToast(id);
+      }, timeout);
+      timersRef.current.set(id, timer);
+
+      return id;
+    },
+    [defaultTimeout, removeToast]
+  );
+
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach((t) => clearTimeout(t));
+      timersRef.current.clear();
+    };
+  }, []);
+
+  return { toasts, addToast, removeToast };
+}

@@ -111,6 +111,14 @@ export function formatBytes(bytes?: number | null, locale: string = 'fa'): strin
     return locale === 'fa' ? `${toPersianDigits(formatted)} گیگابایت` : `${formatted} GB`;
   }
   const mb = bytes / (1024 * 1024);
-  const formatted = mb.toFixed(0);
-  return locale === 'fa' ? `${toPersianDigits(formatted)} مگابایت` : `${formatted} MB`;
+  if (mb >= 1) {
+    const formatted = mb.toFixed(1).replace(/\.0$/, '');
+    return locale === 'fa' ? `${toPersianDigits(formatted)} مگابایت` : `${formatted} MB`;
+  }
+  const kb = bytes / 1024;
+  if (kb >= 1) {
+    const formatted = kb.toFixed(0);
+    return locale === 'fa' ? `${toPersianDigits(formatted)} کیلوبایت` : `${formatted} KB`;
+  }
+  return locale === 'fa' ? `${toPersianDigits(Math.round(bytes))} بایت` : `${Math.round(bytes)} B`;
 }

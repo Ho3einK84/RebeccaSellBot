@@ -105,3 +105,28 @@ export interface UserTransactionsResponse {
   totalPages: number;
   page: number;
 }
+
+export interface CreateCheckoutPayload {
+  packageId?: string;
+  custom?: {
+    gb: number;
+    days: number;
+  };
+}
+
+export interface UserCheckoutResponse {
+  checkoutId: string;
+  name: string;
+  gb: number;
+  days: number;
+  price: number;
+  quotedAmount: number;
+  availableBalance: number;
+  expiresAt: string;
+}
+
+export interface UserConfirmCheckoutResponse {
+  success: boolean;
+  configUsername: string;
+  subUrl?: string;
+}

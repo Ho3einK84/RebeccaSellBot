@@ -48,6 +48,8 @@ export interface TranslationSchema {
     error: string;
     clear: string;
     search: string;
+    retry: string;
+    back: string;
   };
   auth: {
     connecting: string;
@@ -90,6 +92,12 @@ export interface TranslationSchema {
     backToComingSoon: string;
     backToAdmin: string;
     adminPreviewBadge: string;
+    sessionExpiredTitle: string;
+    sessionExpiredDesc: string;
+    accountBannedTitle: string;
+    accountBannedDesc: string;
+    reloadApp: string;
+    contactSupport: string;
     tabs: {
       dashboard: string;
       services: string;
@@ -129,6 +137,9 @@ export interface TranslationSchema {
       statusDisabled: string;
       statusLimited: string;
       statusExpired: string;
+      openLink: string;
+      qrError: string;
+      qrRetry: string;
     };
     shop: {
       title: string;
@@ -152,12 +163,33 @@ export interface TranslationSchema {
       customVolumePricePerGb: string;
       customVolumeOrderButton: string;
       customVolumeOrderBotButton: string;
+      emptyPackages: string;
+      emptyPackagesDesc: string;
+      goToServices: string;
+      orderVerifyingTitle: string;
+      orderVerifyingDesc: string;
+      checkoutExpiredTitle: string;
+      checkoutExpiredDesc: string;
+      recreateCheckout: string;
+      purchaseInProgress: string;
+      panelDownError: string;
+      checkoutErrorTitle: string;
+      checkoutErrorGeneric: string;
+      expiresIn: string;
+      configUsername: string;
+      subUrl: string;
+      retry: string;
+      goToWallet: string;
     };
     wallet: {
       title: string;
       currentBalance: string;
       cardTopupTitle: string;
       cardTopupDesc: string;
+      cardTopupUnavailableTitle: string;
+      cardTopupUnavailableDesc: string;
+      topupInBot: string;
+      bankCard: string;
       cardNumber: string;
       cardHolder: string;
       copyCard: string;
@@ -170,6 +202,9 @@ export interface TranslationSchema {
       typeRefund: string;
       typeCashback: string;
       typeReferral: string;
+      typeAdminAdjustment: string;
+      typeTransferSent: string;
+      typeTransferReceived: string;
       typeOther: string;
       totalLabel: string;
       reservedLabel: string;
@@ -189,6 +224,9 @@ export interface TranslationSchema {
       step3Desc: string;
       sendReceiptDirect: string;
       openBotTopup: string;
+      paginationPrev: string;
+      paginationNext: string;
+      paginationPage: string;
     };
     referral: {
       title: string;
