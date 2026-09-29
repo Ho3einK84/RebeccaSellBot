@@ -8,6 +8,7 @@ import {
   MessageCircle,
   ArrowUpRight,
   Sparkles,
+  ChevronLeft,
   ChevronRight,
   ShieldCheck,
   Activity,
@@ -26,6 +27,12 @@ import type {
   UserTransactionRecord,
   UserTabType,
 } from '@/shared/types/userPortal.js';
+import {
+  ServiceStatusDot,
+  ServiceStatusBadge,
+  ServiceAutoRenewBadge,
+  ServiceTrafficBar,
+} from '@/features/user-portal/components/ServiceStatusTraffic.js';
 
 interface DashboardTabProps {
   profile: UserPortalProfile | null;
@@ -71,19 +78,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   const handleSupportClick = () => {
     triggerHaptic('medium');
-    const supportUser = settings?.supportUsername || '';
-    if (supportUser) {
+    const supportUser = (settings?.supportUsername || '').trim();
+    if (!supportUser) return;
+
+    let url = supportUser;
+    if (!/^https?:\/\//i.test(supportUser)) {
       const cleanUsername = supportUser.replace(/^@/, '');
-      const url = `https://t.me/${cleanUsername}`;
-      if (window.Telegram?.WebApp?.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(url);
-      } else {
-        window.open(url, '_blank');
-      }
+      url = `https://t.me/${cleanUsername}`;
+    }
+
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+      window.Telegram.WebApp.openTelegramLink(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
-  const ArrowIcon = isRtl ? ChevronRight : ChevronRight;
+  const ArrowIcon = isRtl ? ChevronLeft : ChevronRight;
 
   return (
     <div className="w-full flex flex-col gap-4 pb-6">
@@ -252,12 +263,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               className="text-xs font-medium text-indigo-500 hover:text-indigo-400 flex items-center gap-0.5 cursor-pointer"
             >
               <span>{t('common.all')}</span>
-              <ArrowIcon className="w-3.5 h-3.5 rtl:rotate-180" />
+              <ArrowIcon className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        {configs.length === 0 ? (
+        {activeConfigs.length === 0 ? (
           <div
             className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 ${
               isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50 border-slate-200/80'
@@ -280,77 +291,49 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">
-            {configs.slice(0, 2).map((cfg) => {
-              const usedGb = cfg.panelUsedTraffic
-                ? Number((cfg.panelUsedTraffic / (1024 * 1024 * 1024)).toFixed(1))
-                : 0;
-              const limitGb = cfg.panelDataLimit
-                ? Number((cfg.panelDataLimit / (1024 * 1024 * 1024)).toFixed(0))
-                : 0;
-              const percent = limitGb > 0 ? Math.min(100, Math.round((usedGb / limitGb) * 100)) : 0;
-
-              return (
-                <div
-                  key={cfg.id}
-                  onClick={() => handleAction('services')}
-                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 text-start ${
-                    isDark
-                      ? 'bg-white/[0.025] border-white/[0.07] hover:border-indigo-500/30'
-                      : 'bg-white border-slate-200/80 hover:border-indigo-300 shadow-2xs'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
+            {activeConfigs.slice(0, 2).map((cfg) => (
+              <button
+                type="button"
+                key={cfg.id}
+                onClick={() => handleAction('services')}
+                className={`w-full p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 text-start ${
+                  isDark
+                    ? 'bg-white/[0.025] border-white/[0.07] hover:border-indigo-500/30'
+                    : 'bg-white border-slate-200/80 hover:border-indigo-300 shadow-2xs'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ServiceStatusDot status={cfg.panelStatus} />
                     <span
-                      className={`text-xs font-mono font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}
+                      className={`text-xs font-mono font-bold truncate ${
+                        isDark ? 'text-white' : 'text-slate-900'
+                      }`}
                     >
                       {cfg.configUsername}
                     </span>
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                        cfg.panelStatus === 'active'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}
-                    >
-                      {cfg.panelStatus === 'active'
-                        ? t('user.services.statusActive')
-                        : t('user.services.statusLimited')}
-                    </span>
                   </div>
-
-                  {/* Traffic progress bar */}
-                  {limitGb > 0 && (
-                    <div className="w-full flex flex-col gap-1">
-                      <div className="flex justify-between text-[11px] text-slate-500 dark:text-zinc-400">
-                        <span>{t('user.services.trafficUsed')}</span>
-                        <span className="font-mono">
-                          {usedGb} / {limitGb} GB ({percent}%)
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            percent > 90
-                              ? 'bg-rose-500'
-                              : percent > 75
-                                ? 'bg-amber-500'
-                                : 'bg-indigo-500'
-                          }`}
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <ServiceAutoRenewBadge enabled={cfg.autoRenewEnabled} />
+                    <ServiceStatusBadge status={cfg.panelStatus} />
+                  </div>
                 </div>
-              );
-            })}
+
+                <ServiceTrafficBar
+                  dataLimit={cfg.panelDataLimit}
+                  usedTraffic={cfg.panelUsedTraffic}
+                  compact
+                />
+              </button>
+            ))}
           </div>
         )}
       </section>
 
       {/* Support Card */}
-      {settings?.supportUsername && (
-        <section
+      {settings?.supportEnabled !== false && Boolean(settings?.supportUsername) && (
+        <button
+          type="button"
           onClick={handleSupportClick}
           className={`w-full p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-start transition-all cursor-pointer ${
             isDark
@@ -374,7 +357,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
           </div>
           <ArrowUpRight className="w-4 h-4 text-indigo-400 shrink-0 rtl:rotate-90" />
-        </section>
+        </button>
       )}
 
       {/* Recent Transactions Preview */}

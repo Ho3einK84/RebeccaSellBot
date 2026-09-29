@@ -1,10 +1,18 @@
 import React from 'react';
-import { Wifi, Copy, Check, QrCode, Calendar, ShieldCheck, ShoppingBag } from 'lucide-react';
+import { Wifi, Copy, Check, QrCode, ShieldCheck, ShoppingBag } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import type { UserConfigRecord } from '@/shared/types/userPortal.js';
+import {
+  ServiceStatusDot,
+  ServiceStatusBadge,
+  ServiceAutoRenewBadge,
+  ServiceTrafficBar,
+  ServiceExpiryView,
+  formatServiceCreatedDate,
+} from '@/features/user-portal/components/ServiceStatusTraffic.js';
 
 interface ServicesTabProps {
   configs: UserConfigRecord[];
@@ -19,7 +27,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
   onGoToShop,
   onNotify,
 }) => {
-  const { t, isRtl } = useLanguage();
+  const { t, locale } = useLanguage();
   const { isDark } = useThemeTokens();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
@@ -33,14 +41,6 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
   const handleQrClick = (subUrl: string, username: string) => {
     triggerHaptic('selection');
     onOpenQr(subUrl, username);
-  };
-
-  const calculateDaysRemaining = (expireTimestampSec: number | null): number | null => {
-    if (!expireTimestampSec) return null;
-    const nowSec = Math.floor(Date.now() / 1000);
-    const diffSec = expireTimestampSec - nowSec;
-    if (diffSec <= 0) return 0;
-    return Math.ceil(diffSec / 86400);
   };
 
   return (
@@ -97,14 +97,6 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
       ) : (
         <div className="flex flex-col gap-3">
           {configs.map((c) => {
-            const usedGb = c.panelUsedTraffic
-              ? Number((c.panelUsedTraffic / (1024 * 1024 * 1024)).toFixed(1))
-              : 0;
-            const limitGb = c.panelDataLimit
-              ? Number((c.panelDataLimit / (1024 * 1024 * 1024)).toFixed(0))
-              : 0;
-            const percent = limitGb > 0 ? Math.min(100, Math.round((usedGb / limitGb) * 100)) : 0;
-            const daysLeft = calculateDaysRemaining(c.panelExpire);
             const isSubCopied = isCopied(`sub-${c.id}`);
 
             return (
@@ -116,10 +108,10 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                     : 'bg-white border-slate-200/90 shadow-2xs hover:border-slate-300'
                 }`}
               >
-                {/* Header: Name and Status */}
-                <div className="flex items-center justify-between">
+                {/* Header: Name, Auto-renew, and Status */}
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <ServiceStatusDot status={c.panelStatus} />
                     <span
                       className={`text-xs sm:text-sm font-mono font-bold truncate ${
                         isDark ? 'text-white' : 'text-slate-900'
@@ -129,64 +121,21 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                     </span>
                   </div>
 
-                  <span
-                    className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 border ${
-                      c.panelStatus === 'active'
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                    }`}
-                  >
-                    {c.panelStatus === 'active'
-                      ? t('user.services.statusActive')
-                      : t('user.services.statusLimited')}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <ServiceAutoRenewBadge enabled={c.autoRenewEnabled} />
+                    <ServiceStatusBadge status={c.panelStatus} />
+                  </div>
                 </div>
 
                 {/* Traffic Usage Bar */}
-                {limitGb > 0 ? (
-                  <div className="w-full flex flex-col gap-1.5">
-                    <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-zinc-400">
-                      <span>{t('user.services.trafficUsed')}</span>
-                      <span className="font-mono font-semibold">
-                        {usedGb} / {limitGb} GB ({percent}%)
-                      </span>
-                    </div>
+                <ServiceTrafficBar dataLimit={c.panelDataLimit} usedTraffic={c.panelUsedTraffic} />
 
-                    <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          percent > 90
-                            ? 'bg-rose-500'
-                            : percent > 75
-                              ? 'bg-amber-500'
-                              : 'bg-indigo-500'
-                        }`}
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1">
-                    <span>{t('user.services.trafficUsed')}:</span>
-                    <span className="font-semibold">{t('user.services.unlimited')}</span>
-                  </div>
-                )}
+                {/* Expiration Info & Created Date */}
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 pt-1 border-t border-slate-200/50 dark:border-white/[0.05] gap-2 flex-wrap">
+                  <ServiceExpiryView expireTimestampSec={c.panelExpire} />
 
-                {/* Expiration Info */}
-                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 pt-1 border-t border-slate-200/50 dark:border-white/[0.05]">
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>
-                      {daysLeft !== null
-                        ? daysLeft === 0
-                          ? t('user.services.expired')
-                          : t('user.services.remainingDays').replace('{days}', String(daysLeft))
-                        : '—'}
-                    </span>
-                  </div>
-
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {new Date(c.createdAt).toLocaleDateString(isRtl ? 'fa-IR' : 'en-US')}
+                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
+                    {formatServiceCreatedDate(c.createdAt, locale, t)}
                   </span>
                 </div>
 
