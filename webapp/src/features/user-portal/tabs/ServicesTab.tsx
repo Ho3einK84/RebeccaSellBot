@@ -1,5 +1,5 @@
-import React from 'react';
-import { Wifi, Copy, Check, QrCode, ShieldCheck, ShoppingBag } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Wifi, Copy, Check, QrCode, ShieldCheck, ShoppingBag, Settings2 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
@@ -13,16 +13,19 @@ import {
   ServiceExpiryView,
   formatServiceCreatedDate,
 } from '@/features/user-portal/components/ServiceStatusTraffic.js';
+import { ServiceManagementModal } from '@/features/user-portal/components/ServiceManagementModal.js';
 
 interface ServicesTabProps {
   configs: UserConfigRecord[];
+  botUsername?: string;
   onOpenQr: (subUrl: string, configUsername: string) => void;
   onGoToShop: () => void;
-  onNotify: (message: string) => void;
+  onNotify: (message: string, type?: 'success' | 'error') => void;
 }
 
 export const ServicesTab: React.FC<ServicesTabProps> = ({
   configs,
+  botUsername,
   onOpenQr,
   onGoToShop,
   onNotify,
@@ -32,15 +35,27 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
 
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
+
+  const selectedConfig = useMemo(
+    () => configs.find((c) => c.id === selectedConfigId) ?? null,
+    [configs, selectedConfigId]
+  );
+
   const handleCopySub = (subUrl: string, id: string) => {
     triggerHaptic('light');
     copy(subUrl, id);
-    onNotify(t('user.services.linkCopied'));
+    onNotify(t('user.services.linkCopied'), 'success');
   };
 
   const handleQrClick = (subUrl: string, username: string) => {
     triggerHaptic('selection');
     onOpenQr(subUrl, username);
+  };
+
+  const handleManageClick = (configId: string) => {
+    triggerHaptic('selection');
+    setSelectedConfigId(configId);
   };
 
   return (
@@ -60,7 +75,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
           <button
             type="button"
             onClick={onGoToShop}
-            className="text-xs font-semibold text-indigo-500 hover:text-indigo-400 flex items-center gap-1 cursor-pointer"
+            className="min-h-[44px] px-2 text-xs font-semibold text-indigo-500 hover:text-indigo-400 flex items-center gap-1 cursor-pointer"
           >
             <ShoppingBag className="w-3.5 h-3.5" />
             <span>{t('user.dashboard.buyService')}</span>
@@ -88,7 +103,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
           <button
             type="button"
             onClick={onGoToShop}
-            className="mt-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md"
+            className="mt-2 min-h-[44px] px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md"
           >
             <ShoppingBag className="w-4 h-4" />
             <span>{t('user.services.buyFirst')}</span>
@@ -139,52 +154,81 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                   </span>
                 </div>
 
-                {/* Actions: Copy Sub Link & QR Code */}
-                {c.subUrl && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => handleCopySub(c.subUrl!, `sub-${c.id}`)}
-                      className={`flex-1 py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                        isSubCopied
-                          ? 'bg-emerald-600 text-white'
-                          : isDark
-                            ? 'bg-white/[0.06] hover:bg-white/10 text-white border border-white/10'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
-                      }`}
-                    >
-                      {isSubCopied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>{t('user.services.linkCopied')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>{t('user.services.copyLink')}</span>
-                        </>
-                      )}
-                    </button>
+                {/* Actions: Copy Link, QR, and Manage Service */}
+                <div className="flex items-center gap-2 pt-1">
+                  {c.subUrl && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleCopySub(c.subUrl!, `sub-${c.id}`)}
+                        className={`flex-1 min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                          isSubCopied
+                            ? 'bg-emerald-600 text-white'
+                            : isDark
+                              ? 'bg-white/[0.06] hover:bg-white/10 text-white border border-white/10'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
+                        }`}
+                      >
+                        {isSubCopied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{t('user.services.linkCopied')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>{t('user.services.copyLink')}</span>
+                          </>
+                        )}
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => handleQrClick(c.subUrl!, c.configUsername)}
-                      className={`p-2 rounded-xl border flex items-center justify-center transition-all active:scale-95 cursor-pointer ${
-                        isDark
-                          ? 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border-indigo-500/30'
-                          : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-indigo-200'
-                      }`}
-                      title={t('user.services.showQr')}
-                    >
-                      <QrCode className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
+                      <button
+                        type="button"
+                        onClick={() => handleQrClick(c.subUrl!, c.configUsername)}
+                        className={`min-h-[44px] p-2.5 rounded-xl border flex items-center justify-center transition-all active:scale-95 cursor-pointer ${
+                          isDark
+                            ? 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border-indigo-500/30'
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-indigo-200'
+                        }`}
+                        title={t('user.services.showQr')}
+                        aria-label={t('user.services.showQr')}
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+
+                  {/* Manage Service Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleManageClick(c.id)}
+                    className={`min-h-[44px] px-3.5 py-2 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
+                      isDark
+                        ? 'bg-white/[0.06] hover:bg-white/10 text-indigo-300 border-indigo-500/30'
+                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 shadow-2xs'
+                    }`}
+                    title={t('user.services.manage')}
+                    aria-label={t('user.services.manage')}
+                  >
+                    <Settings2 className="w-3.5 h-3.5" />
+                    <span>{t('user.services.manage')}</span>
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* Service Management Modal */}
+      <ServiceManagementModal
+        isOpen={selectedConfig !== null}
+        onClose={() => setSelectedConfigId(null)}
+        config={selectedConfig}
+        botUsername={botUsername}
+        onOpenQr={onOpenQr}
+        onNotify={onNotify}
+      />
     </div>
   );
 };

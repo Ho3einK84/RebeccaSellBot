@@ -457,11 +457,12 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
             ) : (
               <ServicesTab
                 configs={configs}
+                botUsername={settings?.botUsername}
                 onOpenQr={(subUrl, configUsername) =>
                   setQrModal({ isOpen: true, subUrl, configUsername })
                 }
                 onGoToShop={() => switchTab('shop')}
-                onNotify={(msg) => notify(msg, 'success')}
+                onNotify={(msg, type) => notify(msg, type ?? 'success')}
               />
             ))}
 
@@ -525,6 +526,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
         availableBalance={profile?.availableBalance ?? 0}
         currency={settings?.currency}
         onGoToWallet={() => switchTab('wallet')}
+        onGoToServices={() => switchTab('services')}
         onSuccess={(msg) => notify(msg, 'success')}
       />
     </div>

@@ -98,6 +98,20 @@ export function registerUserRoutes(
     keyGenerator: userRateLimitKey,
   };
 
+  const actionRateLimit30 = {
+    max: 30,
+    timeWindow: '1 minute',
+    hook: 'preHandler' as const,
+    keyGenerator: userRateLimitKey,
+  };
+
+  const actionRateLimit10 = {
+    max: 10,
+    timeWindow: '1 minute',
+    hook: 'preHandler' as const,
+    keyGenerator: userRateLimitKey,
+  };
+
   app.register(async (userScope) => {
     userScope.addHook('preHandler', authGuard);
 
@@ -260,10 +274,277 @@ export function registerUserRoutes(
           panelUsedTraffic: c.panelUsedTraffic,
           panelExpire: c.panelExpire,
           autoRenewEnabled: c.autoRenewEnabled,
+          autoRenewPackageId: c.autoRenewPackageId,
+          autoRenewPrice: c.autoRenewPrice,
+          lastSyncedAt: c.lastSyncedAt,
           createdAt: c.createdAt,
         }));
 
         return reply.code(200).send({ configs });
+      }
+    );
+
+    // POST /api/user/configs/:id/auto-renew
+    userScope.post<{
+      Params: { id: string };
+      Body?: {
+        enabled?: boolean;
+        packageId?: string;
+        price?: number;
+      };
+    }>(
+      '/api/user/configs/:id/auto-renew',
+      {
+        config: {
+          rateLimit: actionRateLimit30,
+        },
+      },
+      async (request, reply) => {
+        const telegramId = request.userSession?.telegramId;
+        if (!telegramId) {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
+
+        if (!options.configService) {
+          return reply
+            .code(503)
+            .send({ error: 'Config service unavailable', code: 'SERVICE_UNAVAILABLE' });
+        }
+
+        const config = await options.configService.getOwnedConfigById(
+          telegramId,
+          request.params.id
+        );
+        if (!config) {
+          const anyConfig = await options.configService.getConfigById?.(request.params.id);
+          if (anyConfig) {
+            return reply.code(403).send({ error: 'Forbidden', code: 'OWNER_MISMATCH' });
+          }
+          return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+        }
+
+        const enabled = Boolean(request.body?.enabled);
+        if (!enabled) {
+          await options.configService.setAutoRenew(telegramId, config.id, false);
+          return reply.code(200).send({ success: true, autoRenewEnabled: false });
+        }
+
+        let packageId = request.body?.packageId;
+        let price = request.body?.price;
+
+        if (!packageId || price === undefined) {
+          if (
+            config.autoRenewPackageId &&
+            config.autoRenewPrice !== null &&
+            config.autoRenewPrice !== undefined
+          ) {
+            packageId = config.autoRenewPackageId;
+            price = config.autoRenewPrice;
+          } else if (options.pricingService) {
+            const packages = options.pricingService.getPackages(config.panelId, config.serviceId);
+            const firstPkg = packages[0];
+            if (firstPkg) {
+              packageId = firstPkg.id;
+              price = firstPkg.price;
+            }
+          }
+        }
+
+        if (!packageId || price === undefined) {
+          return reply.code(400).send({
+            error: 'No package available for auto-renew',
+            code: 'PACKAGE_NOT_FOUND',
+          });
+        }
+
+        await options.configService.setAutoRenew(telegramId, config.id, true, packageId, price);
+        return reply.code(200).send({ success: true, autoRenewEnabled: true });
+      }
+    );
+
+    // POST /api/user/configs/:id/toggle-status
+    userScope.post<{
+      Params: { id: string };
+      Body?: {
+        status?: 'active' | 'disabled';
+      };
+    }>(
+      '/api/user/configs/:id/toggle-status',
+      {
+        config: {
+          rateLimit: actionRateLimit30,
+        },
+      },
+      async (request, reply) => {
+        const telegramId = request.userSession?.telegramId;
+        if (!telegramId) {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
+
+        if (!options.configService) {
+          return reply
+            .code(503)
+            .send({ error: 'Config service unavailable', code: 'SERVICE_UNAVAILABLE' });
+        }
+
+        const config = await options.configService.getOwnedConfigById(
+          telegramId,
+          request.params.id
+        );
+        if (!config) {
+          const anyConfig = await options.configService.getConfigById?.(request.params.id);
+          if (anyConfig) {
+            return reply.code(403).send({ error: 'Forbidden', code: 'OWNER_MISMATCH' });
+          }
+          return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+        }
+
+        try {
+          let finalStatus: 'active' | 'disabled';
+          const requestedStatus = request.body?.status;
+          if (requestedStatus === 'active') {
+            await options.configService.enableConfig(config.configUsername, config.panelId);
+            finalStatus = 'active';
+          } else if (requestedStatus === 'disabled') {
+            await options.configService.disableConfig(config.configUsername, config.panelId);
+            finalStatus = 'disabled';
+          } else {
+            const res = await options.configService.toggleConfig(
+              config.configUsername,
+              config.panelId
+            );
+            finalStatus = res === 'enabled' ? 'active' : 'disabled';
+          }
+
+          return reply.code(200).send({ success: true, status: finalStatus });
+        } catch (err) {
+          if (err instanceof RebeccaOriginDownError) {
+            return reply.code(503).send({ error: 'Panel unavailable', code: 'PANEL_DOWN' });
+          }
+          throw err;
+        }
+      }
+    );
+
+    // POST /api/user/configs/:id/revoke
+    userScope.post<{
+      Params: { id: string };
+    }>(
+      '/api/user/configs/:id/revoke',
+      {
+        config: {
+          rateLimit: actionRateLimit10,
+        },
+      },
+      async (request, reply) => {
+        const telegramId = request.userSession?.telegramId;
+        if (!telegramId) {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
+
+        if (!options.configService) {
+          return reply
+            .code(503)
+            .send({ error: 'Config service unavailable', code: 'SERVICE_UNAVAILABLE' });
+        }
+
+        const config = await options.configService.getOwnedConfigById(
+          telegramId,
+          request.params.id
+        );
+        if (!config) {
+          const anyConfig = await options.configService.getConfigById?.(request.params.id);
+          if (anyConfig) {
+            return reply.code(403).send({ error: 'Forbidden', code: 'OWNER_MISMATCH' });
+          }
+          return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+        }
+
+        try {
+          const subUrl = await options.configService.revokeSubscription(
+            config.configUsername,
+            config.panelId
+          );
+          return reply.code(200).send({ success: true, subUrl: subUrl ?? '' });
+        } catch (err) {
+          if (err instanceof RebeccaOriginDownError) {
+            return reply.code(503).send({ error: 'Panel unavailable', code: 'PANEL_DOWN' });
+          }
+          throw err;
+        }
+      }
+    );
+
+    // POST /api/user/configs/:id/refresh
+    userScope.post<{
+      Params: { id: string };
+    }>(
+      '/api/user/configs/:id/refresh',
+      {
+        config: {
+          rateLimit: actionRateLimit30,
+        },
+      },
+      async (request, reply) => {
+        const telegramId = request.userSession?.telegramId;
+        if (!telegramId) {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
+
+        if (!options.configService) {
+          return reply
+            .code(503)
+            .send({ error: 'Config service unavailable', code: 'SERVICE_UNAVAILABLE' });
+        }
+
+        const config = await options.configService.getOwnedConfigById(
+          telegramId,
+          request.params.id
+        );
+        if (!config) {
+          const anyConfig = await options.configService.getConfigById?.(request.params.id);
+          if (anyConfig) {
+            return reply.code(403).send({ error: 'Forbidden', code: 'OWNER_MISMATCH' });
+          }
+          return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+        }
+
+        try {
+          let refreshed: {
+            panelStatus: string | null;
+            panelDataLimit: number | bigint | null;
+            panelUsedTraffic: number | bigint | null;
+            panelExpire: number | bigint | null;
+            lastSyncedAt: Date | string | null;
+          };
+
+          if (typeof options.configService.refreshConfig === 'function') {
+            const res = await options.configService.refreshConfig(telegramId, config.id);
+            if (!res) {
+              return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+            }
+            refreshed = res;
+          } else {
+            const remote = await options.configService.getRemoteConfigDetail(config);
+            refreshed = {
+              panelStatus: remote.status,
+              panelDataLimit: remote.data_limit,
+              panelUsedTraffic: remote.used_traffic,
+              panelExpire: remote.expire,
+              lastSyncedAt: new Date(),
+            };
+          }
+
+          return reply.code(200).send({
+            success: true,
+            config: refreshed,
+          });
+        } catch (err) {
+          if (err instanceof RebeccaOriginDownError) {
+            return reply.code(503).send({ error: 'Panel unavailable', code: 'PANEL_DOWN' });
+          }
+          throw err;
+        }
       }
     );
 

@@ -43,7 +43,7 @@ import { recordCheckoutCompleted, recordCheckoutFailed } from '../../checkoutLif
 
 const SUBSCRIPTION_PAGE_SIZE = 4;
 const CONFIG_ID_CAPTURE = '([a-zA-Z0-9_]{3,40})';
-type UserConfigRecord = NonNullable<Awaited<ReturnType<ConfigService['getConfigById']>>>;
+export type UserConfigRecord = NonNullable<Awaited<ReturnType<ConfigService['getConfigById']>>>;
 type SubscriptionSnapshot = {
   remote?: RebeccaUserDetail;
   status: string;
@@ -55,7 +55,7 @@ type SubscriptionSnapshot = {
   subUrl?: string;
   autoRenewPackageName?: string;
 };
-type DeleteQuote =
+export type DeleteQuote =
   | {
       eligible: true;
       grossAmount: number;
@@ -199,7 +199,10 @@ export async function showSubscriptionDetail(
   return true;
 }
 
-async function renderRenewalSelection(ctx: MenuContext, config: UserConfigRecord): Promise<void> {
+export async function renderRenewalSelection(
+  ctx: MenuContext,
+  config: UserConfigRecord
+): Promise<void> {
   const keyboard = buildRenewalSelectionKeyboard(ctx, config.id, config.panelId, config.serviceId);
   await renderSubscriptionScreen(
     ctx,
@@ -1388,7 +1391,7 @@ function buildRenewalCheckoutScreen(
   });
 }
 
-function buildDeleteReviewScreen(
+export function buildDeleteReviewScreen(
   ctx: MenuContext,
   config: UserConfigRecord,
   quote: DeleteQuote

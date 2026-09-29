@@ -667,6 +667,37 @@ export class ConfigService {
     });
   }
 
+  /** Fetch live remote state, assert incarnation, update local cache and counters. */
+  async refreshConfig(telegramId: number, configId: string) {
+    const config = await this.getOwnedConfigById(telegramId, configId);
+    if (!config) return null;
+    return withConfigLock(config.panelId, config.configUsername, async () => {
+      const currentConfig = await this.getOwnedConfigById(telegramId, configId);
+      if (!currentConfig) return null;
+      const remote = await this.getRemoteConfigDetail(currentConfig);
+      await this.assertConfigIncarnation(currentConfig, remote);
+      const observedAt = new Date();
+      const lifecycle = observedConfigLifecycle(remote, observedAt);
+      await getDb().transaction(async (tx) => {
+        await tx.update(userConfigs).set(lifecycle).where(eq(userConfigs.id, currentConfig.id));
+        await tx
+          .update(users)
+          .set({
+            activeSubscriptionCount: activeConfigCountSql(currentConfig.telegramId),
+            updatedAt: observedAt,
+          })
+          .where(eq(users.telegramId, currentConfig.telegramId));
+      });
+      return {
+        panelStatus: lifecycle.panelStatus,
+        panelDataLimit: lifecycle.panelDataLimit,
+        panelUsedTraffic: lifecycle.panelUsedTraffic,
+        panelExpire: lifecycle.panelExpire,
+        lastSyncedAt: lifecycle.lastSyncedAt,
+      };
+    });
+  }
+
   async resetUsage(configUsername: string, panelId?: string): Promise<void> {
     const config = await this.resolveLocalConfig(configUsername, panelId);
     return withConfigLock(config.panelId, config.configUsername, async () => {

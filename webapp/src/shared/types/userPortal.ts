@@ -71,7 +71,36 @@ export interface UserConfigRecord {
   panelUsedTraffic: number | null;
   panelExpire: number | null;
   autoRenewEnabled: boolean;
+  autoRenewPackageId?: string | null;
+  autoRenewPrice?: number | null;
+  lastSyncedAt?: string | null;
   createdAt: string;
+}
+
+export interface ToggleAutoRenewResponse {
+  success: boolean;
+  autoRenewEnabled: boolean;
+}
+
+export interface ToggleConfigStatusResponse {
+  success: boolean;
+  status: string;
+}
+
+export interface RevokeConfigResponse {
+  success: boolean;
+  subUrl: string;
+}
+
+export interface RefreshConfigResponse {
+  success: boolean;
+  config: {
+    panelStatus: string | null;
+    panelDataLimit: number | null;
+    panelUsedTraffic: number | null;
+    panelExpire: number | null;
+    lastSyncedAt: string | Date | null;
+  };
 }
 
 export interface UserConfigsResponse {

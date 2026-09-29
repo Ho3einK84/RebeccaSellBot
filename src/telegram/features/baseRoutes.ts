@@ -1,7 +1,6 @@
-/** Basic navigation, locale and command routes. */
-
-import type { Bot } from 'grammy';
+import { InlineKeyboard, type Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
+import { callbackData } from '../callbackData.js';
 import {
   mainMenu,
   renderHomeDashboard,
@@ -16,7 +15,8 @@ import { showPromoCenter } from '../promoAdminUi.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
-import { formatSubscriptionLink, resolveServiceLocale, t } from '../locale.js';
+import { formatSubscriptionLink, localizedNumber, resolveServiceLocale, t } from '../locale.js';
+import { renderRenewalSelection, buildDeleteReviewScreen } from './subscriptions/routes.js';
 import {
   backKeyboard,
   buildEmptyState,
@@ -97,6 +97,76 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       ctx.menu.nav('shop-menu');
       await renderScreen(ctx, await renderShopMenuText(ctx), {
         parse_mode: 'Markdown',
+      });
+      return;
+    }
+
+    if (payload?.startsWith('renew_')) {
+      const configId = payload.slice('renew_'.length).trim();
+      const config = await services.configService.getOwnedConfigById(telegramId, configId);
+      if (!config) {
+        await renderScreen(
+          ctx,
+          buildEmptyState('⚠️', t(ctx, 'renewal_selection_title'), t(ctx, 'config_not_owned')),
+          { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+        );
+        return;
+      }
+      await renderRenewalSelection(ctx, config);
+      return;
+    }
+
+    if (payload?.startsWith('transfer_')) {
+      const configId = payload.slice('transfer_'.length).trim();
+      const config = await services.configService.getOwnedConfigById(telegramId, configId);
+      if (!config) {
+        await renderScreen(
+          ctx,
+          buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'config_not_owned')),
+          { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+        );
+        return;
+      }
+      ctx.session.transferConfigId = config.id;
+      ctx.session.transferConfigOwnerTelegramId = config.telegramId;
+      await ctx.conversation.enter('transferConfigConversation');
+      return;
+    }
+
+    if (payload?.startsWith('delete_')) {
+      const configId = payload.slice('delete_'.length).trim();
+      const config = await services.configService.getOwnedConfigById(telegramId, configId);
+      if (!config) {
+        await renderScreen(
+          ctx,
+          buildEmptyState('⚠️', t(ctx, 'config_delete_review_title'), t(ctx, 'config_not_owned')),
+          { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+        );
+        return;
+      }
+      const quote = await services.refundService.quote(config.telegramId, config.id);
+      const keyboard = new InlineKeyboard();
+      if (quote.eligible) {
+        keyboard
+          .text(
+            t(ctx, 'config_delete_refund_confirm_button', {
+              amount: localizedNumber(quote.refundAmount, ctx),
+            }),
+            callbackData('config', 'refund_confirm', config.id)
+          )
+          .row();
+      }
+      keyboard
+        .text(
+          t(ctx, 'config_delete_without_refund_button'),
+          callbackData('config', 'delete_confirm', config.id)
+        )
+        .row()
+        .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id));
+
+      await renderScreen(ctx, buildDeleteReviewScreen(ctx, config, quote), {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
       });
       return;
     }

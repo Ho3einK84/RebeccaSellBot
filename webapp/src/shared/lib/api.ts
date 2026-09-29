@@ -33,6 +33,10 @@ import type {
   CreateCheckoutPayload,
   UserCheckoutResponse,
   UserConfirmCheckoutResponse,
+  ToggleAutoRenewResponse,
+  ToggleConfigStatusResponse,
+  RevokeConfigResponse,
+  RefreshConfigResponse,
 } from '@/shared/types/userPortal.js';
 
 export class ApiClientError extends Error {
@@ -356,4 +360,40 @@ export const api = {
         method: 'POST',
       }
     ),
+
+  toggleAutoRenew: (
+    configId: string,
+    enabled: boolean,
+    packageId?: string,
+    price?: number
+  ): Promise<ToggleAutoRenewResponse> =>
+    request<ToggleAutoRenewResponse>(
+      `/api/user/configs/${encodeURIComponent(configId)}/auto-renew`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ enabled, packageId, price }),
+      }
+    ),
+
+  toggleConfigStatus: (
+    configId: string,
+    status?: 'active' | 'disabled'
+  ): Promise<ToggleConfigStatusResponse> =>
+    request<ToggleConfigStatusResponse>(
+      `/api/user/configs/${encodeURIComponent(configId)}/toggle-status`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ status }),
+      }
+    ),
+
+  revokeConfigLink: (configId: string): Promise<RevokeConfigResponse> =>
+    request<RevokeConfigResponse>(`/api/user/configs/${encodeURIComponent(configId)}/revoke`, {
+      method: 'POST',
+    }),
+
+  refreshConfigStats: (configId: string): Promise<RefreshConfigResponse> =>
+    request<RefreshConfigResponse>(`/api/user/configs/${encodeURIComponent(configId)}/refresh`, {
+      method: 'POST',
+    }),
 };

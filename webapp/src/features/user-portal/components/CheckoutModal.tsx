@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
 import {
   ShoppingCart,
@@ -83,8 +83,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const displayCurrency = currency || t('common.currency');
 
+  // Stable ref for availableBalance so createCheckoutSession does not depend on balance changes
+  const availableBalanceRef = useRef<number>(availableBalance);
+  availableBalanceRef.current = availableBalance;
+
+  // Track active step and processing status via refs to freeze state transitions
+  const stepRef = useRef<CheckoutStep>(step);
+  stepRef.current = step;
+
+  const isProcessingRef = useRef<boolean>(isProcessing);
+  isProcessingRef.current = isProcessing;
+
+  // Track session creation per open cycle to prevent duplicate session calls
+  const sessionCreatedRef = useRef<boolean>(false);
+
   const createCheckoutSession = useCallback(async () => {
     if (!pkg) return;
+    // Freeze: Never recreate checkout session if already in success or currently processing
+    if (stepRef.current === 'success' || isProcessingRef.current) return;
+
     setStep('loading');
     setErrorMessage('');
     setCheckout(null);
@@ -102,9 +119,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             packageId: pkg.id,
           });
 
+      // If state transitioned to success during network latency, do not overwrite
+      if (stepRef.current === 'success') return;
+
       setCheckout(res);
       setStep('review');
     } catch (err: unknown) {
+      if (stepRef.current === 'success') return;
+
       if (err instanceof ApiClientError) {
         const errData = err.data as
           | { code?: string; deficit?: number; availableBalance?: number; price?: number }
@@ -118,7 +140,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             errData?.deficit ??
             Math.max(
               0,
-              (errData?.price ?? pkg.price) - (errData?.availableBalance ?? availableBalance)
+              (errData?.price ?? pkg.price) -
+                (errData?.availableBalance ?? availableBalanceRef.current)
             );
           setDeficitAmount(deficit);
           setStep('insufficient_balance');
@@ -132,16 +155,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       }
       setStep('creation_error');
     }
-  }, [pkg, availableBalance, t]);
+  }, [pkg, t]);
 
   // Trigger createCheckoutSession when modal opens with a valid package
   useEffect(() => {
     if (isOpen && pkg) {
+      // Freeze modal state: if already in success, processing, or session already initiated for this open cycle, do nothing
+      if (sessionCreatedRef.current || stepRef.current === 'success' || isProcessingRef.current) {
+        return;
+      }
+      sessionCreatedRef.current = true;
       setSuccessData(null);
       setQrSrc('');
       setIsProcessing(false);
       void createCheckoutSession();
     } else if (!isOpen) {
+      // Clean up all state and refs when modal is closed
+      sessionCreatedRef.current = false;
       setStep('loading');
       setCheckout(null);
       setSuccessData(null);
@@ -151,7 +181,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setDeficitAmount(0);
       setRemainingSeconds(0);
     }
-  }, [isOpen, pkg?.id, pkg?.gbAmount, pkg?.durationDays, createCheckoutSession]);
+  }, [isOpen, pkg, createCheckoutSession]);
 
   // Live countdown timer for checkout expiry
   useEffect(() => {
@@ -257,7 +287,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           (err.code === 'INSUFFICIENT_BALANCE' || errData?.code === 'INSUFFICIENT_BALANCE')
         ) {
           setDeficitAmount(
-            errData?.deficit ?? Math.max(0, (checkout?.price ?? pkg?.price ?? 0) - availableBalance)
+            errData?.deficit ??
+              Math.max(0, (checkout?.price ?? pkg?.price ?? 0) - availableBalanceRef.current)
           );
           setStep('insufficient_balance');
           return;
@@ -279,17 +310,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const handleClose = () => {
     if (isProcessing) return;
+    triggerHaptic('light');
     onClose();
   };
 
   const handleGoToServices = () => {
     if (isProcessing) return;
+    triggerHaptic('selection');
     onClose();
     onGoToServices?.();
   };
 
   const handleGoToWallet = () => {
     if (isProcessing) return;
+    triggerHaptic('selection');
     onClose();
     onGoToWallet();
   };
@@ -300,8 +334,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={t('user.shop.orderModalTitle')}
-      icon={<ShoppingCart className="w-5 h-5 text-indigo-400" />}
+      title={step === 'success' ? t('user.shop.orderSuccess') : t('user.shop.orderModalTitle')}
+      icon={
+        step === 'success' ? (
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+        ) : (
+          <ShoppingCart className="w-5 h-5 text-indigo-400" />
+        )
+      }
       maxWidth="md"
       closeOnBackdrop={!isProcessing}
       hideCloseButton={isProcessing}
@@ -734,7 +774,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             )}
 
             {/* QR Code */}
-            {qrSrc && (
+            {qrSrc ? (
               <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center my-1">
                 <img
                   src={qrSrc}
@@ -742,7 +782,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   className="w-[160px] h-[160px] sm:w-[180px] sm:h-[180px] select-none pointer-events-none"
                 />
               </div>
-            )}
+            ) : successData.subUrl ? (
+              <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center my-1 w-[184px] h-[184px] sm:w-[204px] sm:h-[204px]">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              </div>
+            ) : null}
 
             {/* Action Button: Go to My Services */}
             <div className="w-full flex flex-col gap-2 mt-2">

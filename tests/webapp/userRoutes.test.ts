@@ -145,6 +145,73 @@ describe('WebApp User Routes (/api/user/*)', () => {
       return [];
     }),
     generateConfigName: vi.fn(async (telegramId: number) => `u${telegramId}_auto1`),
+    getOwnedConfigById: vi.fn(async (telegramId: number, configId: string) => {
+      if (telegramId === 55555 && configId === 'cfg_1') {
+        return {
+          id: 'cfg_1',
+          telegramId: 55555,
+          configUsername: 'u55555_srv1',
+          panelId: 'panel_1',
+          serviceId: 1,
+          subUrl: 'https://sub.example.com/token123',
+          panelStatus: 'active',
+          panelDataLimit: 50 * 1024 * 1024 * 1024,
+          panelUsedTraffic: 12 * 1024 * 1024 * 1024,
+          panelExpire: Math.floor(Date.now() / 1000) + 86400 * 20,
+          autoRenewEnabled: true,
+          autoRenewPackageId: 'pkg_30gb_30d',
+          autoRenewPrice: 120_000,
+          createdAt: new Date('2026-02-01T10:00:00Z'),
+          updatedAt: new Date('2026-02-01T10:00:00Z'),
+        };
+      }
+      return undefined;
+    }),
+    getConfigById: vi.fn(async (configId: string) => {
+      if (configId === 'cfg_1') {
+        return {
+          id: 'cfg_1',
+          telegramId: 55555,
+          configUsername: 'u55555_srv1',
+          panelId: 'panel_1',
+          serviceId: 1,
+          subUrl: 'https://sub.example.com/token123',
+          panelStatus: 'active',
+          panelDataLimit: 50 * 1024 * 1024 * 1024,
+          panelUsedTraffic: 12 * 1024 * 1024 * 1024,
+          panelExpire: Math.floor(Date.now() / 1000) + 86400 * 20,
+          autoRenewEnabled: true,
+          autoRenewPackageId: 'pkg_30gb_30d',
+          autoRenewPrice: 120_000,
+          createdAt: new Date('2026-02-01T10:00:00Z'),
+          updatedAt: new Date('2026-02-01T10:00:00Z'),
+        };
+      }
+      if (configId === 'cfg_other_user') {
+        return {
+          id: 'cfg_other_user',
+          telegramId: 77777,
+          configUsername: 'u77777_srv1',
+          panelId: 'panel_1',
+          serviceId: 1,
+          subUrl: 'https://sub.example.com/token777',
+          panelStatus: 'active',
+        };
+      }
+      return undefined;
+    }),
+    setAutoRenew: vi.fn(async () => ({})),
+    toggleConfig: vi.fn(async () => 'disabled'),
+    enableConfig: vi.fn(async () => {}),
+    disableConfig: vi.fn(async () => {}),
+    revokeSubscription: vi.fn(async () => 'https://sub.example.com/token_new'),
+    refreshConfig: vi.fn(async () => ({
+      panelStatus: 'active',
+      panelDataLimit: 50 * 1024 * 1024 * 1024,
+      panelUsedTraffic: 15 * 1024 * 1024 * 1024,
+      panelExpire: 1800000000,
+      lastSyncedAt: new Date('2026-03-01T12:00:00Z'),
+    })),
   };
 
   const mockPricingService = {
@@ -993,6 +1060,375 @@ describe('WebApp User Routes (/api/user/*)', () => {
       expect(rawText).not.toContain('secretPass');
       expect(rawText).not.toContain('10.0.0.1');
       expect(mockPurchaseCheckoutService.fail).toHaveBeenCalledWith('co_test_123');
+    });
+  });
+
+  describe('Service Management Routes (/api/user/configs/:id/*)', () => {
+    it('returns 404 CONFIG_NOT_FOUND when config does not exist', async () => {
+      const token = getUserToken(55555);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/user/configs/cfg_nonexistent/refresh',
+        cookies: { session: token },
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().code).toBe('CONFIG_NOT_FOUND');
+    });
+
+    it('returns 403 OWNER_MISMATCH when config belongs to another user', async () => {
+      const token = getUserToken(55555);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/user/configs/cfg_other_user/refresh',
+        cookies: { session: token },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe('OWNER_MISMATCH');
+    });
+
+    describe('POST /api/user/configs/:id/auto-renew', () => {
+      it('disables auto-renew when enabled is false', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: false },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true, autoRenewEnabled: false });
+        expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(55555, 'cfg_1', false);
+      });
+
+      it('enables auto-renew with explicit packageId and price', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true, packageId: 'pkg_10gb_10d', price: 40_000 },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true, autoRenewEnabled: true });
+        expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(
+          55555,
+          'cfg_1',
+          true,
+          'pkg_10gb_10d',
+          40_000
+        );
+      });
+
+      it('enables auto-renew using existing config package when none provided', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true, autoRenewEnabled: true });
+        expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(
+          55555,
+          'cfg_1',
+          true,
+          'pkg_30gb_30d',
+          120_000
+        );
+      });
+
+      it('enables auto-renew falling back to first package from pricingService when config has no autoRenewPackage', async () => {
+        mockConfigService.getOwnedConfigById.mockResolvedValueOnce({
+          id: 'cfg_1',
+          telegramId: 55555,
+          configUsername: 'u55555_srv1',
+          panelId: 'panel_1',
+          serviceId: 1,
+          autoRenewEnabled: false,
+          autoRenewPackageId: null,
+          autoRenewPrice: null,
+        } as any);
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true, autoRenewEnabled: true });
+        expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(
+          55555,
+          'cfg_1',
+          true,
+          'pkg_30gb_30d',
+          120_000
+        );
+      });
+
+      it('returns 400 PACKAGE_NOT_FOUND when no packages are available', async () => {
+        mockConfigService.getOwnedConfigById.mockResolvedValueOnce({
+          id: 'cfg_1',
+          telegramId: 55555,
+          configUsername: 'u55555_srv1',
+          panelId: 'panel_empty',
+          serviceId: 1,
+          autoRenewEnabled: false,
+          autoRenewPackageId: null,
+          autoRenewPrice: null,
+        } as any);
+        mockPricingService.getPackages.mockReturnValueOnce([]);
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true },
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json().code).toBe('PACKAGE_NOT_FOUND');
+      });
+
+      it('returns 404 CONFIG_NOT_FOUND when config does not exist', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_nonexistent/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true },
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json().code).toBe('CONFIG_NOT_FOUND');
+      });
+
+      it('returns 403 OWNER_MISMATCH when config belongs to another user', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_other_user/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true },
+        });
+
+        expect(res.statusCode).toBe(403);
+        expect(res.json().code).toBe('OWNER_MISMATCH');
+      });
+    });
+
+    describe('POST /api/user/configs/:id/toggle-status', () => {
+      it('toggles status when no body is provided', async () => {
+        mockConfigService.toggleConfig.mockResolvedValueOnce('disabled');
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/toggle-status',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true, status: 'disabled' });
+        expect(mockConfigService.toggleConfig).toHaveBeenCalledWith('u55555_srv1', 'panel_1');
+      });
+
+      it('explicitly enables config when status is active', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/toggle-status',
+          cookies: { session: token },
+          payload: { status: 'active' },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true, status: 'active' });
+        expect(mockConfigService.enableConfig).toHaveBeenCalledWith('u55555_srv1', 'panel_1');
+      });
+
+      it('explicitly disables config when status is disabled', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/toggle-status',
+          cookies: { session: token },
+          payload: { status: 'disabled' },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true, status: 'disabled' });
+        expect(mockConfigService.disableConfig).toHaveBeenCalledWith('u55555_srv1', 'panel_1');
+      });
+
+      it('returns 404 CONFIG_NOT_FOUND when config does not exist', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_nonexistent/toggle-status',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json().code).toBe('CONFIG_NOT_FOUND');
+      });
+
+      it('returns 403 OWNER_MISMATCH when config belongs to another user', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_other_user/toggle-status',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(403);
+        expect(res.json().code).toBe('OWNER_MISMATCH');
+      });
+
+      it('returns 503 PANEL_DOWN when Rebecca panel origin is down', async () => {
+        mockConfigService.toggleConfig.mockRejectedValueOnce(
+          new RebeccaOriginDownError('/api/user', 503, 1)
+        );
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/toggle-status',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(503);
+        expect(res.json().code).toBe('PANEL_DOWN');
+      });
+    });
+
+    describe('POST /api/user/configs/:id/revoke', () => {
+      it('successfully revokes subscription link', async () => {
+        mockConfigService.revokeSubscription.mockResolvedValueOnce(
+          'https://sub.example.com/token_rotated'
+        );
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/revoke',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({
+          success: true,
+          subUrl: 'https://sub.example.com/token_rotated',
+        });
+        expect(mockConfigService.revokeSubscription).toHaveBeenCalledWith('u55555_srv1', 'panel_1');
+      });
+
+      it('returns 404 CONFIG_NOT_FOUND when config does not exist', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_nonexistent/revoke',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json().code).toBe('CONFIG_NOT_FOUND');
+      });
+
+      it('returns 403 OWNER_MISMATCH when config belongs to another user', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_other_user/revoke',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(403);
+        expect(res.json().code).toBe('OWNER_MISMATCH');
+      });
+
+      it('returns 503 PANEL_DOWN when Rebecca panel origin is down', async () => {
+        mockConfigService.revokeSubscription.mockRejectedValueOnce(
+          new RebeccaOriginDownError('/api/user', 503, 1)
+        );
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/revoke',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(503);
+        expect(res.json().code).toBe('PANEL_DOWN');
+      });
+    });
+
+    describe('POST /api/user/configs/:id/refresh', () => {
+      it('successfully refreshes live config detail', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/refresh',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body.success).toBe(true);
+        expect(body.config.panelStatus).toBe('active');
+        expect(body.config.panelDataLimit).toBe(50 * 1024 * 1024 * 1024);
+        expect(mockConfigService.refreshConfig).toHaveBeenCalledWith(55555, 'cfg_1');
+      });
+
+      it('returns 404 CONFIG_NOT_FOUND when config does not exist', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_nonexistent/refresh',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json().code).toBe('CONFIG_NOT_FOUND');
+      });
+
+      it('returns 403 OWNER_MISMATCH when config belongs to another user', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_other_user/refresh',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(403);
+        expect(res.json().code).toBe('OWNER_MISMATCH');
+      });
+
+      it('returns 503 PANEL_DOWN when Rebecca panel origin is down', async () => {
+        mockConfigService.refreshConfig.mockRejectedValueOnce(
+          new RebeccaOriginDownError('/api/user', 503, 1)
+        );
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/refresh',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(503);
+        expect(res.json().code).toBe('PANEL_DOWN');
+      });
     });
   });
 });
