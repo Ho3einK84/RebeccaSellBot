@@ -29,18 +29,26 @@ import type {
   UserConfigsResponse,
   UserPackagesResponse,
   UserTransactionsResponse,
+  CustomVolumeQuoteResponse,
+  CreateCheckoutPayload,
+  UserCheckoutResponse,
+  UserConfirmCheckoutResponse,
 } from '@/shared/types/userPortal.js';
 
-class ApiClientError extends Error {
+export class ApiClientError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code?: string;
+  data?: unknown;
+  constructor(message: string, status: number, code?: string, data?: unknown) {
     super(message);
     this.name = 'ApiClientError';
     this.status = status;
+    this.code = code;
+    this.data = data;
   }
 }
 
-async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(url: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && options.body) {
     headers.set('Content-Type', 'application/json');
@@ -55,17 +63,35 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     headers,
   });
 
+  if (response.status === 401 && !isRetry && !url.includes('/api/auth/')) {
+    const initData = window.Telegram?.WebApp?.initData;
+    if (initData) {
+      try {
+        await api.validateTelegramAuth(initData);
+        return await request<T>(url, options, true);
+      } catch {
+        // Refresh failed, fall through to error handling
+      }
+    }
+  }
+
   if (!response.ok) {
     let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    let errorCode: string | undefined;
+    let errBody: unknown;
     try {
-      const errData = (await response.json()) as ApiErrorResponse;
+      errBody = await response.json();
+      const errData = errBody as ApiErrorResponse & { code?: string };
       if (errData.error || errData.message) {
         errorMessage = errData.error || errData.message || errorMessage;
+      }
+      if (errData.code) {
+        errorCode = errData.code;
       }
     } catch {
       // Body was not JSON
     }
-    throw new ApiClientError(errorMessage, response.status);
+    throw new ApiClientError(errorMessage, response.status, errorCode, errBody);
   }
 
   return response.json() as Promise<T>;
@@ -313,4 +339,21 @@ export const api = {
 
   getUserTransactions: (page = 1, limit = 10): Promise<UserTransactionsResponse> =>
     request<UserTransactionsResponse>(`/api/user/transactions?page=${page}&limit=${limit}`),
+
+  getUserQuote: (gb: number, days: number): Promise<CustomVolumeQuoteResponse> =>
+    request<CustomVolumeQuoteResponse>(`/api/user/quote?gb=${gb}&days=${days}`),
+
+  createCheckout: (payload: CreateCheckoutPayload): Promise<UserCheckoutResponse> =>
+    request<UserCheckoutResponse>('/api/user/checkout', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  confirmCheckout: (checkoutId: string): Promise<UserConfirmCheckoutResponse> =>
+    request<UserConfirmCheckoutResponse>(
+      `/api/user/checkout/${encodeURIComponent(checkoutId)}/confirm`,
+      {
+        method: 'POST',
+      }
+    ),
 };
