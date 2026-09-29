@@ -253,9 +253,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         <section
           className={`p-4 sm:p-5 rounded-2xl border flex flex-col gap-3.5 text-start ${cardClass}`}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-amber-500" />
+              <CreditCard className="w-4 h-4 text-amber-500 shrink-0" />
               <h3
                 className={`text-xs sm:text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}
               >
@@ -263,7 +263,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               </h3>
             </div>
 
-            <span className="text-[10px] text-slate-400 font-mono">
+            <span className="text-[10px] text-slate-400 dark:text-zinc-400 font-mono">
               {t('user.wallet.topupMinMaxHint')
                 .replace('{min}', formatToman(minAmount))
                 .replace('{max}', formatToman(maxAmount))}

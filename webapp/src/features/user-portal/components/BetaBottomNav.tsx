@@ -3,6 +3,7 @@ import { LayoutDashboard, Wifi, ShoppingBag, Wallet, Users } from 'lucide-react'
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import type { UserTabType } from '@/shared/types/userPortal.js';
 
 interface BetaBottomNavProps {
@@ -21,6 +22,7 @@ export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
   const { t } = useLanguage();
   const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
+  const { formatNumber } = useFormatters();
 
   const navItems = [
     { id: 'dashboard' as const, label: t('user.tabs.dashboard'), icon: LayoutDashboard },
@@ -82,7 +84,7 @@ export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
                 <Icon className="w-4 h-4" />
                 {item.count !== undefined && item.count > 0 && (
                   <span className="absolute -top-1 -end-1 min-w-[16px] h-4 px-1 rounded-full bg-indigo-600 text-white font-bold text-[9px] flex items-center justify-center shadow-xs font-mono ring-2 ring-white dark:ring-[#0a0c12]">
-                    {item.count}
+                    {formatNumber(item.count)}
                   </span>
                 )}
                 {item.hasDot && (

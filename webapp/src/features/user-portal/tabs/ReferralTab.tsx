@@ -16,7 +16,7 @@ interface ReferralTabProps {
 export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onNotify }) => {
   const { t } = useLanguage();
   const { isDark } = useThemeTokens();
-  const { formatToman } = useFormatters();
+  const { formatToman, formatNumber } = useFormatters();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
 
@@ -106,7 +106,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
               isDark ? 'text-white' : 'text-slate-900'
             }`}
           >
-            {profile?.referredUserCount ?? 0}
+            {formatNumber(profile?.referredUserCount ?? 0)}
           </span>
         </div>
 
@@ -123,14 +123,14 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           <span className="text-[11px] text-slate-500 dark:text-zinc-400">
             {t('user.referral.statsEarned')}
           </span>
-          <span
-            dir="ltr"
-            className={`font-mono text-lg sm:text-xl font-extrabold ${
+          <div
+            className={`flex items-center justify-center gap-1.5 font-mono text-lg sm:text-xl font-extrabold ${
               isDark ? 'text-emerald-400' : 'text-emerald-600'
             }`}
           >
-            {formatToman(profile?.referralBonusEarned ?? 0)} {currency}
-          </span>
+            <span>{formatToman(profile?.referralBonusEarned ?? 0)}</span>
+            <span className="text-xs font-sans font-medium opacity-80">{currency}</span>
+          </div>
         </div>
       </section>
 
@@ -142,54 +142,88 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
             : 'bg-white border-slate-200/90 shadow-2xs'
         }`}
       >
-        <div className="flex flex-col gap-1">
+        {/* Referral Code Box */}
+        <div className="flex flex-col gap-1.5">
           <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
             {t('user.referral.yourCode')}
           </span>
-          <div
+          <button
+            type="button"
             onClick={handleCopyCode}
-            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all active:scale-[0.99] ${
-              isDark ? 'bg-zinc-900 border-white/10' : 'bg-slate-50 border-slate-200'
-            }`}
-          >
-            <span dir="ltr" className="font-mono font-bold text-sm tracking-widest text-indigo-400">
-              {referralCode || '—'}
-            </span>
-            <span className="text-[11px] text-slate-400 flex items-center gap-1">
-              {isCopied('referral-code') ? (
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
-            </span>
-          </div>
-        </div>
-
-        {/* Link Box */}
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-            {t('user.referral.yourLink')}
-          </span>
-          <div
-            onClick={handleCopyLink}
-            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all active:scale-[0.99] ${
-              isDark ? 'bg-zinc-900 border-white/10' : 'bg-slate-50 border-slate-200'
+            className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer text-start ${
+              isDark ? 'bg-zinc-900/90 border-white/10' : 'bg-slate-50 border-slate-200'
             }`}
           >
             <span
               dir="ltr"
-              className="font-mono text-xs truncate max-w-[240px] sm:max-w-xs text-slate-600 dark:text-zinc-400"
+              className="font-mono font-bold text-xs sm:text-sm text-indigo-400 truncate flex-1 min-w-0 select-all"
+            >
+              {referralCode || '—'}
+            </span>
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors ${
+                isCopied('referral-code')
+                  ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/25'
+                  : isDark
+                    ? 'bg-white/5 text-zinc-300 border border-white/10'
+                    : 'bg-white text-slate-700 border border-slate-200 shadow-2xs'
+              }`}
+            >
+              {isCopied('referral-code') ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>{t('common.copied')}</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{t('common.copy')}</span>
+                </>
+              )}
+            </span>
+          </button>
+        </div>
+
+        {/* Link Box */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+            {t('user.referral.yourLink')}
+          </span>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer text-start ${
+              isDark ? 'bg-zinc-900/90 border-white/10' : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <span
+              dir="ltr"
+              className="font-mono text-xs truncate flex-1 min-w-0 text-slate-600 dark:text-zinc-400 select-all"
             >
               {inviteLink || '—'}
             </span>
-            <span className="text-[11px] text-slate-400 flex items-center gap-1 shrink-0">
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors ${
+                isCopied('referral-link')
+                  ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/25'
+                  : isDark
+                    ? 'bg-white/5 text-zinc-300 border border-white/10'
+                    : 'bg-white text-slate-700 border border-slate-200 shadow-2xs'
+              }`}
+            >
               {isCopied('referral-link') ? (
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>{t('common.copied')}</span>
+                </>
               ) : (
-                <Copy className="w-3.5 h-3.5" />
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{t('common.copy')}</span>
+                </>
               )}
             </span>
-          </div>
+          </button>
         </div>
 
         {/* Action Buttons: Copy Link & Share */}
