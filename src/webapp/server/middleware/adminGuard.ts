@@ -75,13 +75,6 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply): P
       }
     }
 
-    if (!token && typeof request.query === 'object' && request.query && 'token' in request.query) {
-      const queryToken = (request.query as { token?: unknown }).token;
-      if (typeof queryToken === 'string' && queryToken) {
-        token = queryToken;
-      }
-    }
-
     if (!token) {
       await reply.code(401).send({ error: 'Unauthorized' });
       return;

@@ -258,6 +258,7 @@ export async function createWebAppServer(
     pricingService: services.pricingService,
     translationService: services.translationService,
     botUsername: services.botUsername,
+    purchaseCheckoutService: services.purchaseCheckoutService,
   });
 
   // Static files & SPA fallback
