@@ -10,12 +10,15 @@ import {
   History,
   ShieldCheck,
   RotateCw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { useUserTransactions } from '../hooks/useUserPortalData.js';
 import type {
   UserPortalProfile,
   UserPortalSettings,
@@ -47,6 +50,11 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const { triggerHaptic } = useHaptic();
 
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
+  const [page, setPage] = useState<number>(1);
+
+  const { data: txQueryData, isFetching: isFetchingTx } = useUserTransactions(page, 10);
+  const currentTransactions = txQueryData?.transactions ?? transactions;
+  const totalPages = txQueryData?.totalPages ?? 1;
 
   const currency = settings?.currency || t('common.currency');
   const balance = profile?.balance ?? 0;
@@ -61,20 +69,18 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     return cleaned.replace(/(\d{4})/g, '$1 ').trim();
   };
 
-  const handleCopyCard = () => {
+  const handleCopyCard = async () => {
     if (!cardNumber) return;
     triggerHaptic('light');
-    copy(cardNumber.replace(/\s+/g, ''), 'bank-card');
-    onNotify(t('user.wallet.cardCopied'));
+    const ok = await copy(cardNumber.replace(/\s+/g, ''), 'bank-card');
+    if (ok) {
+      onNotify(t('user.wallet.cardCopied'));
+    }
   };
 
   const handleSelectPreset = (amount: number) => {
     triggerHaptic('selection');
-    setSelectedPreset(amount);
-    if (cardNumber) {
-      copy(cardNumber.replace(/\s+/g, ''), 'bank-card');
-      onNotify(`${formatToman(amount)} ${currency} - ${t('user.wallet.cardCopied')}`);
-    }
+    setSelectedPreset((prev) => (prev === amount ? null : amount));
   };
 
   const handleOpenBotForReceipt = (payload = 'receipt') => {
@@ -110,6 +116,12 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         return t('user.wallet.typeCashback');
       case 'referral_bonus':
         return t('user.wallet.typeReferral');
+      case 'admin_adjustment':
+        return t('user.wallet.typeAdminAdjustment');
+      case 'transfer_sent':
+        return t('user.wallet.typeTransferSent');
+      case 'transfer_received':
+        return t('user.wallet.typeTransferReceived');
       default:
         return t('user.wallet.typeOther');
     }
@@ -210,18 +222,25 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   triggerHaptic('light');
-                  copy(pendingReceipt.id, 'receipt-id');
-                  onNotify(t('common.copied'));
+                  const ok = await copy(pendingReceipt.id, 'receipt-id');
+                  if (ok) {
+                    onNotify(t('common.copied'));
+                  }
                 }}
-                className="inline-flex items-center gap-1 text-[11px] underline opacity-90 hover:opacity-100 cursor-pointer"
+                className="min-h-[44px] inline-flex items-center gap-1 text-[11px] underline opacity-90 hover:opacity-100 cursor-pointer p-1.5 rounded-lg"
+                aria-label={t('common.copy')}
               >
-                <span>{pendingReceipt.id}</span>
+                <span>
+                  {pendingReceipt.id.length > 15
+                    ? `${pendingReceipt.id.slice(0, 8)}...${pendingReceipt.id.slice(-4)}`
+                    : pendingReceipt.id}
+                </span>
                 {isCopied('receipt-id') ? (
-                  <Check className="w-3 h-3 text-emerald-500" />
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
                 ) : (
-                  <Copy className="w-2.5 h-2.5" />
+                  <Copy className="w-3 h-3" />
                 )}
               </button>
             </div>
@@ -229,8 +248,8 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         </section>
       )}
 
-      {/* Card to Card Topup Section */}
-      {cardNumber && (
+      {/* Card to Card Topup Section or Empty Card State */}
+      {cardNumber ? (
         <section
           className={`p-4 sm:p-5 rounded-2xl border flex flex-col gap-3.5 text-start ${cardClass}`}
         >
@@ -263,7 +282,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 : 'bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-800 border-slate-700 text-white'
             }`}
           >
-            {/* Top row: Chip and bank brand */}
+            {/* Top row: Chip and generic bank brand */}
             <div className="flex items-center justify-between">
               <div className="w-10 h-7 rounded-md bg-amber-400/80 border border-amber-300 flex items-center justify-center shadow-inner">
                 <div className="w-7 h-4 border border-amber-600/40 rounded-sm grid grid-cols-2" />
@@ -271,7 +290,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
               <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
                 <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                <span>بانک شتاب</span>
+                <span>{t('user.wallet.bankCard')}</span>
               </div>
             </div>
 
@@ -302,11 +321,12 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               <button
                 type="button"
                 onClick={handleCopyCard}
-                className={`py-1.5 px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs ${
+                className={`min-h-[44px] min-w-[44px] py-2 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs ${
                   isCopied('bank-card')
                     ? 'bg-emerald-600 text-white'
                     : 'bg-white/15 hover:bg-white/20 text-white border border-white/20'
                 }`}
+                aria-label={t('user.wallet.copyCard')}
               >
                 {isCopied('bank-card') ? (
                   <>
@@ -323,7 +343,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
             </div>
           </div>
 
-          {/* Quick preset amounts chips */}
+          {/* Quick preset amounts chips (Informative only) */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
               {t('user.wallet.quickAmounts')}
@@ -336,7 +356,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     key={amt}
                     type="button"
                     onClick={() => handleSelectPreset(amt)}
-                    className={`py-1.5 px-2.5 rounded-xl text-xs font-semibold font-mono border transition-all active:scale-95 cursor-pointer ${
+                    className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-semibold font-mono border transition-all active:scale-95 cursor-pointer flex items-center justify-center ${
                       isSelected
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
                         : isDark
@@ -407,7 +427,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotForReceipt('receipt')}
-              className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white"
+              className="w-full min-h-[44px] py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white"
             >
               <Send className="w-4 h-4 rtl:rotate-180" />
               <span>{t('user.wallet.sendReceiptDirect')}</span>
@@ -416,7 +436,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotForReceipt('topup')}
-              className={`w-full sm:w-auto py-3 px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer whitespace-nowrap ${
+              className={`w-full sm:w-auto min-h-[44px] py-3 px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer whitespace-nowrap ${
                 isDark
                   ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
                   : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
@@ -426,6 +446,31 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               <span>{t('user.wallet.openBotTopup')}</span>
             </button>
           </div>
+        </section>
+      ) : (
+        /* Empty Card State when card topup is not configured */
+        <section
+          className={`p-5 rounded-2xl border flex flex-col items-center text-center gap-3 ${cardClass}`}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20">
+            <CreditCard className="w-6 h-6" />
+          </div>
+          <div className="flex flex-col gap-1 max-w-sm">
+            <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              {t('user.wallet.cardTopupUnavailableTitle')}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed m-0">
+              {t('user.wallet.cardTopupUnavailableDesc')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleOpenBotForReceipt('topup')}
+            className="min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white"
+          >
+            <RotateCw className="w-4 h-4" />
+            <span>{t('user.wallet.topupInBot')}</span>
+          </button>
         </section>
       )}
 
@@ -442,7 +487,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           </h3>
         </div>
 
-        {transactions.length === 0 ? (
+        {currentTransactions.length === 0 ? (
           <div
             className={`p-6 rounded-2xl border text-center text-xs ${
               isDark
@@ -454,7 +499,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {transactions.map((tx) => {
+            {currentTransactions.map((tx) => {
               const isCredit = tx.amount > 0;
               const Icon = isCredit ? ArrowDownLeft : ArrowUpRight;
 
@@ -517,6 +562,59 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 </div>
               );
             })}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-200/60 dark:border-white/[0.06]">
+                <button
+                  type="button"
+                  disabled={page <= 1 || isFetchingTx}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setPage((p) => Math.max(1, p - 1));
+                  }}
+                  className={`min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-medium cursor-pointer transition-all active:scale-[0.98] border ${
+                    isDark
+                      ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08] disabled:opacity-30 disabled:pointer-events-none'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none shadow-xs'
+                  }`}
+                  aria-label={t('user.wallet.paginationPrev')}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-180 shrink-0" />
+                  <span>{t('user.wallet.paginationPrev')}</span>
+                </button>
+
+                <span
+                  className={`text-xs font-mono font-medium px-3 py-1.5 rounded-lg border ${
+                    isDark
+                      ? 'bg-white/[0.03] border-white/10 text-zinc-400'
+                      : 'bg-slate-100 border-slate-200/80 text-slate-600'
+                  }`}
+                >
+                  {t('user.wallet.paginationPage')
+                    .replace('{page}', String(page))
+                    .replace('{totalPages}', String(totalPages))}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={page >= totalPages || isFetchingTx}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setPage((p) => p + 1);
+                  }}
+                  className={`min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-medium cursor-pointer transition-all active:scale-[0.98] border ${
+                    isDark
+                      ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08] disabled:opacity-30 disabled:pointer-events-none'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none shadow-xs'
+                  }`}
+                  aria-label={t('user.wallet.paginationNext')}
+                >
+                  <span>{t('user.wallet.paginationNext')}</span>
+                  <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180 shrink-0" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>

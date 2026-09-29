@@ -16,13 +16,42 @@ interface UserPortalPageProps {
   user: TelegramWebAppUser;
 }
 
+const OPT_IN_STORAGE_KEY = 'rsbot_user_beta_opt_in';
+
+const getInitialBetaMode = (): boolean => {
+  try {
+    return localStorage.getItem(OPT_IN_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
 export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
   const { t } = useLanguage();
   const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
   const { copy, isCopied } = useCopy();
 
-  const [isBetaMode, setIsBetaMode] = useState<boolean>(false);
+  const [isBetaMode, setIsBetaMode] = useState<boolean>(getInitialBetaMode);
+
+  const handleEnterBeta = () => {
+    triggerHaptic('medium');
+    try {
+      localStorage.setItem(OPT_IN_STORAGE_KEY, 'true');
+    } catch {
+      // Safe fallback for restricted storage environments
+    }
+    setIsBetaMode(true);
+  };
+
+  const handleExitBeta = () => {
+    try {
+      localStorage.removeItem(OPT_IN_STORAGE_KEY);
+    } catch {
+      // Safe fallback for restricted storage environments
+    }
+    setIsBetaMode(false);
+  };
 
   const handleClose = () => {
     triggerHaptic('medium');
@@ -36,7 +65,7 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
   useTelegramBackButton(handleClose, !isBetaMode);
 
   if (isBetaMode) {
-    return <UserBetaPortal user={user} onExitBeta={() => setIsBetaMode(false)} />;
+    return <UserBetaPortal user={user} onExitBeta={handleExitBeta} />;
   }
 
   return (
@@ -90,11 +119,8 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
 
           <button
             type="button"
-            onClick={() => {
-              triggerHaptic('medium');
-              setIsBetaMode(true);
-            }}
-            className="w-full h-11 text-xs sm:text-sm font-bold active:scale-[0.98] rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white"
+            onClick={handleEnterBeta}
+            className="w-full min-h-[44px] h-11 text-xs sm:text-sm font-bold active:scale-[0.98] rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white"
           >
             <FlaskConical className="w-4 h-4" />
             <span>{t('user.enterBetaMode')}</span>

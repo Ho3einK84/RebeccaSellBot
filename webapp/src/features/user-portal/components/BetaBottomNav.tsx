@@ -64,7 +64,9 @@ export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
               key={item.id}
               type="button"
               onClick={() => handleSelect(item.id)}
-              className="flex flex-col items-center justify-center py-1 rounded-xl transition-all duration-150 relative select-none cursor-pointer active:scale-95 group"
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
+              className="flex flex-col items-center justify-center min-h-[48px] py-1 rounded-xl transition-all duration-150 relative select-none cursor-pointer active:scale-95 group"
             >
               <div
                 className={`w-11 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative ${
