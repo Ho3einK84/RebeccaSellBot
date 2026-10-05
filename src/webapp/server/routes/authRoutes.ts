@@ -83,6 +83,7 @@ export function registerAuthRoutes(
       );
 
       return reply.code(200).send({
+        token,
         role,
         user: validated.user,
         locale,

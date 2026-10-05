@@ -65,7 +65,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const { t } = useLanguage();
   const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
-  const { formatToman } = useFormatters();
+  const { formatToman, formatNumber } = useFormatters();
   const { copy, isCopied } = useCopy();
   const queryClient = useQueryClient();
 
@@ -214,11 +214,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         triggerHaptic('success');
 
         // Invalidate queries for user data
-        void queryClient.invalidateQueries({ queryKey: ['user-profile'] });
-        void queryClient.invalidateQueries({ queryKey: ['user-configs'] });
-        void queryClient.invalidateQueries({ queryKey: ['user-transactions'] });
         void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
         void queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
+        void queryClient.invalidateQueries({ queryKey: ['user-transactions'] });
         void queryClient.invalidateQueries({ queryKey: ['user'] });
 
         setSuccessData({
@@ -250,8 +248,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           errData?.code === 'PURCHASE_OUTCOME_PENDING'
         ) {
           // Funds reserved, verifying outcome
-          void queryClient.invalidateQueries({ queryKey: ['user-profile'] });
-          void queryClient.invalidateQueries({ queryKey: ['user-configs'] });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
           void queryClient.invalidateQueries({ queryKey: ['user-transactions'] });
           void queryClient.invalidateQueries({ queryKey: ['user'] });
           setStep('verifying');
@@ -403,12 +401,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   {checkout.name}
                 </span>
                 <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  {t('user.shop.trafficUnit').replace('{gb}', String(checkout.gb))}
+                  {t('user.shop.trafficUnit').replace('{gb}', formatNumber(checkout.gb))}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 pt-2 border-t border-slate-200/50 dark:border-white/[0.05]">
-                <span>{t('user.shop.daysUnit').replace('{days}', String(checkout.days))}</span>
+                <span>
+                  {t('user.shop.daysUnit').replace('{days}', formatNumber(checkout.days))}
+                </span>
                 <span className="font-bold text-sm text-indigo-500 dark:text-indigo-400">
                   {formatToman(checkout.price)} {displayCurrency}
                 </span>

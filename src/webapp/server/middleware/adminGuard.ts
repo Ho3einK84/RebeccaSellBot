@@ -35,7 +35,16 @@ export async function adminGuardWithCheck(
       }
     }
 
-    if (!token && typeof request.query === 'object' && request.query && 'token' in request.query) {
+    const rawUrl = request.raw?.url ?? request.url ?? '';
+    const isReceiptPhotoUrl = /^\/api\/admin\/receipts\/[^/?#]+\/photo(?:\?|#|$)/.test(rawUrl);
+
+    if (
+      !token &&
+      isReceiptPhotoUrl &&
+      typeof request.query === 'object' &&
+      request.query &&
+      'token' in request.query
+    ) {
       const queryToken = (request.query as { token?: unknown }).token;
       if (typeof queryToken === 'string' && queryToken) {
         token = queryToken;

@@ -4,7 +4,24 @@ type BackButtonHandler = () => void;
 
 const handlerStack: BackButtonHandler[] = [];
 
+let isListenerAttached = false;
+
+function ensureListenerAttached() {
+  if (isListenerAttached) return;
+  const backButton = window.Telegram?.WebApp?.BackButton;
+  if (!backButton?.onClick) return;
+
+  backButton.onClick(() => {
+    const topHandler = handlerStack[handlerStack.length - 1];
+    if (topHandler) {
+      topHandler();
+    }
+  });
+  isListenerAttached = true;
+}
+
 function syncTelegramBackButton() {
+  ensureListenerAttached();
   const tg = window.Telegram?.WebApp;
   if (!tg?.BackButton) return;
 
@@ -16,12 +33,7 @@ function syncTelegramBackButton() {
 }
 
 if (typeof window !== 'undefined') {
-  window.Telegram?.WebApp?.BackButton?.onClick(() => {
-    const topHandler = handlerStack[handlerStack.length - 1];
-    if (topHandler) {
-      topHandler();
-    }
-  });
+  ensureListenerAttached();
 }
 
 export function useTelegramBackButton(handler: BackButtonHandler, active: boolean = true) {

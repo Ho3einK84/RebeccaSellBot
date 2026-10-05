@@ -725,6 +725,34 @@ describe('WebApp Server & Admin Routes', () => {
       expect(response.statusCode).toBe(404);
     });
 
+    it('rejects query token on non-photo admin endpoints while accepting on photo endpoint', async () => {
+      const adminToken = getAdminToken();
+
+      // 1. Non-photo admin endpoints reject query token (403)
+      const statsRes = await app.inject({
+        method: 'GET',
+        url: `/api/admin/stats?token=${adminToken}`,
+      });
+      expect(statsRes.statusCode).toBe(403);
+      expect(statsRes.json()).toEqual({ error: 'Forbidden' });
+
+      const receiptsRes = await app.inject({
+        method: 'GET',
+        url: `/api/admin/receipts?token=${adminToken}`,
+      });
+      expect(receiptsRes.statusCode).toBe(403);
+      expect(receiptsRes.json()).toEqual({ error: 'Forbidden' });
+
+      // 2. Photo endpoint accepts query token (even without cookies or headers)
+      const photoRes = await app.inject({
+        method: 'GET',
+        url: `/api/admin/receipts/rec_missing/photo?token=${adminToken}`,
+      });
+      // Auth passed, handler executed and returned 404 for missing receipt (not 403 Forbidden)
+      expect(photoRes.statusCode).toBe(404);
+      expect(photoRes.json()).toEqual({ error: 'Receipt not found' });
+    });
+
     it('rejects a signed JWT when the admin was removed from the registry', async () => {
       mockAdminService.isAdmin.mockReturnValueOnce(false);
       const response = await app.inject({
@@ -756,7 +784,7 @@ describe('WebApp Server & Admin Routes', () => {
       return params.toString();
     }
 
-    it('authenticates admin user and sets session cookie', async () => {
+    it('authenticates admin user, sets session cookie, and returns Bearer token', async () => {
       const initData = createSignedInitData(12345);
 
       const response = await app.inject({
@@ -769,10 +797,23 @@ describe('WebApp Server & Admin Routes', () => {
       const body = response.json();
       expect(body.role).toBe('admin');
       expect(body.user.id).toBe(12345);
+      expect(typeof body.token).toBe('string');
+      expect(body.token.length).toBeGreaterThan(10);
       expect(response.cookies.some((c) => c.name === 'session')).toBe(true);
+
+      // Bearer token can authenticate requests without cookies
+      const statsResponse = await app.inject({
+        method: 'GET',
+        url: '/api/admin/stats',
+        headers: {
+          authorization: `Bearer ${body.token}`,
+        },
+      });
+      expect(statsResponse.statusCode).toBe(200);
+      expect(statsResponse.json().stats.totalUsers).toBe(100);
     });
 
-    it('authenticates regular user with user role, returning locale and settings', async () => {
+    it('authenticates regular user with user role, returning token, locale and settings', async () => {
       const initData = createSignedInitData(55555);
 
       const response = await app.inject({
@@ -785,8 +826,11 @@ describe('WebApp Server & Admin Routes', () => {
       const body = response.json();
       expect(body.role).toBe('user');
       expect(body.user.id).toBe(55555);
+      expect(typeof body.token).toBe('string');
+      expect(body.token.length).toBeGreaterThan(10);
       expect(body.locale).toBe('en');
       expect(body.languageSelectionEnabled).toBe(true);
+      expect(response.cookies.some((c) => c.name === 'session')).toBe(true);
     });
 
     it('falls back to default locale if user has no stored locale', async () => {

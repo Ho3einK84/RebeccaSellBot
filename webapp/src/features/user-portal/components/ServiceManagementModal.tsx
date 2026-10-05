@@ -74,10 +74,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   const isDisabled = config.panelStatus === 'disabled';
 
   const invalidateConfigQueries = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.user.configs }),
-      queryClient.invalidateQueries({ queryKey: ['user-configs'] }),
-    ]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
   };
 
   const handleCopySub = () => {

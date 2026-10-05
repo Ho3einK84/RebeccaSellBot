@@ -52,10 +52,23 @@ export class ApiClientError extends Error {
   }
 }
 
+let inMemoryToken: string | null = null;
+
+export function setAuthToken(token: string | null): void {
+  inMemoryToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return inMemoryToken;
+}
+
 async function request<T>(url: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && options.body) {
     headers.set('Content-Type', 'application/json');
+  }
+  if (!headers.has('Authorization') && inMemoryToken) {
+    headers.set('Authorization', `Bearer ${inMemoryToken}`);
   }
 
   const response = await fetch(url, {
@@ -102,11 +115,19 @@ async function request<T>(url: string, options: RequestInit = {}, isRetry = fals
 }
 
 export const api = {
-  validateTelegramAuth: (initData: string): Promise<AuthResponse> =>
-    request<AuthResponse>('/api/auth/telegram-validate', {
+  setAuthToken,
+  getAuthToken,
+
+  validateTelegramAuth: async (initData: string): Promise<AuthResponse> => {
+    const res = await request<AuthResponse>('/api/auth/telegram-validate', {
       method: 'POST',
       body: JSON.stringify({ initData }),
-    }),
+    });
+    if (res.token) {
+      inMemoryToken = res.token;
+    }
+    return res;
+  },
 
   updateUserLocale: async (locale: SupportedLocale): Promise<boolean> => {
     try {

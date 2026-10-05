@@ -14,6 +14,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import { api } from '@/shared/lib/api.js';
 import type { UserPackageItem, CustomVolumeSettings } from '@/shared/types/userPortal.js';
 
@@ -97,7 +98,8 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   const handleTypedGbChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
     setTypedGb(raw);
-    const parsed = parseInt(raw, 10);
+    const normalized = normalizeInputDigits(raw);
+    const parsed = parseInt(normalized, 10);
     if (!isNaN(parsed)) {
       const clamped = Math.min(Math.max(parsed, minGb), maxGb);
       setCustomGb(clamped);
@@ -105,7 +107,8 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   };
 
   const handleTypedGbBlur = () => {
-    let parsed = parseInt(typedGb, 10);
+    const normalized = normalizeInputDigits(typedGb);
+    let parsed = parseInt(normalized, 10);
     if (isNaN(parsed)) {
       parsed = minGb;
     }
@@ -252,9 +255,8 @@ export const ShopTab: React.FC<ShopTabProps> = ({
 
                 <div className="flex items-center gap-1 min-w-[75px] justify-center px-1">
                   <input
-                    type="number"
-                    min={minGb}
-                    max={maxGb}
+                    type="text"
+                    inputMode="numeric"
                     value={typedGb}
                     onChange={handleTypedGbChange}
                     onBlur={handleTypedGbBlur}

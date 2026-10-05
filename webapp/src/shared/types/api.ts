@@ -17,6 +17,7 @@ import type {
 export type SupportedLocale = 'fa' | 'en';
 
 export interface AuthResponse {
+  token?: string;
   role: 'admin' | 'user';
   user: TelegramWebAppUser;
   locale?: SupportedLocale;

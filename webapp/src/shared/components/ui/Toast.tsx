@@ -105,6 +105,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
 
 export function useToastQueue(defaultTimeout = 3500) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastsRef = useRef<ToastItem[]>([]);
   const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const removeToast = useCallback((id: string) => {
@@ -113,7 +114,8 @@ export function useToastQueue(defaultTimeout = 3500) {
       clearTimeout(timer);
       timersRef.current.delete(id);
     }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    toastsRef.current = toastsRef.current.filter((t) => t.id !== id);
+    setToasts(toastsRef.current);
   }, []);
 
   const addToast = useCallback(
@@ -122,12 +124,15 @@ export function useToastQueue(defaultTimeout = 3500) {
       type: 'success' | 'error' | 'warning' = 'success',
       timeout = defaultTimeout
     ) => {
+      const existing = toastsRef.current.find((t) => t.message === message && t.type === type);
+      if (existing) {
+        return existing.id;
+      }
+
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      setToasts((prev) => {
-        const exists = prev.some((t) => t.message === message && t.type === type);
-        if (exists) return prev;
-        return [...prev, { id, message, type }];
-      });
+      const newToast: ToastItem = { id, message, type };
+      toastsRef.current = [...toastsRef.current, newToast];
+      setToasts(toastsRef.current);
 
       const timer = setTimeout(() => {
         removeToast(id);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   toPersianDigits,
+  normalizeInputDigits,
   formatMoney,
   formatNumber,
   formatBytes,
@@ -13,6 +14,16 @@ describe('Webapp Formatters', () => {
     expect(toPersianDigits('0123456789')).toBe('۰۱۲۳۴۵۶۷۸۹');
     expect(toPersianDigits(12345)).toBe('۱۲۳۴۵');
     expect(toPersianDigits('Service ID: 42')).toBe('Service ID: ۴۲');
+  });
+
+  it('normalizes Persian and Arabic-Indic digits to ASCII digits for package inputs', () => {
+    expect(normalizeInputDigits('۰۱۲۳۴۵۶۷۸۹')).toBe('0123456789');
+    expect(normalizeInputDigits('٠١٢٣٤٥٦٧٨٩')).toBe('0123456789');
+    expect(normalizeInputDigits('۵۰')).toBe('50');
+    expect(parseInt(normalizeInputDigits('۵۰'), 10)).toBe(50);
+    expect(parseInt(normalizeInputDigits('١٠٠'), 10)).toBe(100);
+    expect(normalizeInputDigits('۳۰ گیگ')).toBe('30 گیگ');
+    expect(normalizeInputDigits('50')).toBe('50');
   });
 
   it('formats money with Persian digits and separator in fa locale, ASCII in en locale', () => {
