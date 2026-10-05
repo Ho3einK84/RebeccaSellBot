@@ -2,6 +2,7 @@ import React from 'react';
 import { Calendar } from 'lucide-react';
 import { useLanguage } from '../../../shared/i18n/LanguageContext.js';
 import { toPersianDigits, formatBytes } from '../../../shared/lib/formatters.js';
+import { Badge, type BadgeVariant } from '@/shared/components/ui/Badge.js';
 
 export type ServiceStatusType =
   'active' | 'limited' | 'expired' | 'disabled' | 'on_hold' | 'unknown';
@@ -233,6 +234,15 @@ export const ServiceStatusDot: React.FC<{
   return <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${info.dotClass} ${className}`} />;
 };
 
+const statusVariantMap: Record<ServiceStatusType, BadgeVariant> = {
+  active: 'success',
+  limited: 'warning',
+  expired: 'error',
+  disabled: 'neutral',
+  on_hold: 'warning',
+  unknown: 'neutral',
+};
+
 export const ServiceStatusBadge: React.FC<{
   status: string | null | undefined;
   showDot?: boolean;
@@ -242,12 +252,15 @@ export const ServiceStatusBadge: React.FC<{
   const info = getServiceStatusInfo(status, t);
 
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${info.badgeClass} ${className}`}
+    <Badge
+      variant={statusVariantMap[info.type] ?? 'neutral'}
+      size="xs"
+      dot={showDot}
+      pulse={info.isPulsing}
+      className={className}
     >
-      {showDot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${info.dotClass}`} />}
-      <span>{info.label}</span>
-    </span>
+      {info.label}
+    </Badge>
   );
 };
 
@@ -259,11 +272,9 @@ export const ServiceAutoRenewBadge: React.FC<{
   if (!enabled) return null;
 
   return (
-    <span
-      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 shrink-0 ${className}`}
-    >
+    <Badge variant="primary" size="xs" className={className}>
       {t('user.services.autoRenewEnabled')}
-    </span>
+    </Badge>
   );
 };
 

@@ -52,8 +52,8 @@ export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
       aria-label="User Navigation"
       className={`fixed bottom-0 inset-x-0 z-40 backdrop-blur-2xl border-t px-2 pt-1 pb-[max(env(safe-area-inset-bottom,0px),0.4rem)] transition-colors duration-200 ${
         isDark
-          ? 'bg-[#0a0c12]/92 border-white/[0.08] shadow-[0_-8px_32px_rgba(0,0,0,0.65)]'
-          : 'bg-white/94 border-slate-200/90 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]'
+          ? 'bg-[#090a0f]/90 border-white/10 shadow-[0_-8px_32px_rgba(0,0,0,0.65)]'
+          : 'bg-white/90 border-slate-200 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]'
       }`}
     >
       <div className="grid grid-cols-5 gap-1 max-w-md mx-auto items-center">

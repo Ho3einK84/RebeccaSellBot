@@ -14,6 +14,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import { api } from '@/shared/lib/api.js';
 import type { UserPackageItem, CustomVolumeSettings } from '@/shared/types/userPortal.js';
@@ -195,10 +196,10 @@ export const ShopTab: React.FC<ShopTabProps> = ({
               </div>
             </div>
 
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-500 dark:text-indigo-300 border border-indigo-500/25 shrink-0">
+            <Badge variant="primary" size="xs">
               <Sparkles className="w-2.5 h-2.5" />
               <span>{t('user.shop.customVolumeBadge')}</span>
-            </span>
+            </Badge>
           </div>
 
           {/* Quick preset chips */}
@@ -386,14 +387,14 @@ export const ShopTab: React.FC<ShopTabProps> = ({
 
                 {/* Badges: Traffic & Duration */}
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 border border-indigo-500/20">
+                  <Badge variant="primary" size="xs">
                     <Zap className="w-3 h-3 text-indigo-400" />
                     <span>{t('user.shop.trafficUnit').replace('{gb}', String(pkg.gbAmount))}</span>
-                  </span>
+                  </Badge>
 
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10">
+                  <Badge variant="neutral" size="xs">
                     {t('user.shop.daysUnit').replace('{days}', String(pkg.durationDays))}
-                  </span>
+                  </Badge>
                 </div>
 
                 {/* Feature bullet points */}

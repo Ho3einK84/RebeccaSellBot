@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Save, RotateCw, Check, Users } from 'lucide-react';
+import { Bell, Save, Check, Users } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import { useReceiptSettings } from '../hooks/useAdminReceipts.js';
 
 interface ReceiptSettingsModalProps {
@@ -232,36 +233,27 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
             </div>
 
             {/* Modal Actions */}
-            <div className="modal-action mt-5 flex gap-2.5">
-              <button
+            <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-slate-200 dark:border-white/10">
+              <Button
                 type="button"
-                className={`flex-1 h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center ${
-                  isDark
-                    ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
-                }`}
+                variant="secondary"
+                className="flex-1"
                 onClick={onClose}
                 disabled={isUpdating}
               >
                 {t('common.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className={`flex-1 h-10 px-4 rounded-xl font-semibold text-xs border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 ${
-                  isDark
-                    ? 'bg-indigo-500 hover:bg-indigo-400 text-white border-indigo-500 shadow-xs'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-xs'
-                }`}
+                variant="primary"
+                className="flex-1"
                 disabled={isUpdating}
+                loading={isUpdating}
                 onClick={handleSave}
               >
-                {isUpdating ? (
-                  <RotateCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Save className="w-3.5 h-3.5" />
-                )}
+                <Save className="w-3.5 h-3.5" />
                 <span>{t('admin.receipts.settingsSaveBtn')}</span>
-              </button>
+              </Button>
             </div>
           </>
         )}

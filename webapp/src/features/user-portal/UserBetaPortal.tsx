@@ -10,6 +10,8 @@ import { ShopTab } from './tabs/ShopTab.js';
 import { WalletTab } from './tabs/WalletTab.js';
 import { ReferralTab } from './tabs/ReferralTab.js';
 import { ToastContainer, useToastQueue } from '@/shared/components/ui/Toast.js';
+import { Button } from '@/shared/components/ui/Button.js';
+import { Skeleton, SkeletonCard, SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { AmbientBackground } from '@/shared/components/layout/AmbientBackground.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -33,13 +35,13 @@ interface UserBetaPortalProps {
 }
 
 const UserPortalSkeleton: React.FC<{ isDark: boolean }> = ({ isDark }) => (
-  <div className="w-full flex flex-col gap-3.5 animate-pulse">
+  <div className="w-full flex flex-col gap-3.5">
     {/* Header skeleton */}
     <div className="w-full flex items-center justify-between gap-2 mb-1">
-      <div className={`h-11 w-24 rounded-xl ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
+      <Skeleton className="h-11 w-24 rounded-xl" />
       <div className="flex items-center gap-1.5">
-        <div className={`w-11 h-11 rounded-xl ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
-        <div className={`w-11 h-11 rounded-xl ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
+        <Skeleton className="w-11 h-11 rounded-xl" />
+        <Skeleton className="w-11 h-11 rounded-xl" />
       </div>
     </div>
     {/* Profile row skeleton */}
@@ -48,52 +50,21 @@ const UserPortalSkeleton: React.FC<{ isDark: boolean }> = ({ isDark }) => (
         isDark ? 'bg-white/[0.03] border-white/5' : 'bg-slate-100 border-slate-200'
       }`}
     >
-      <div className={`w-8 h-8 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-300'}`} />
+      <Skeleton className="w-8 h-8 rounded-full" />
       <div className="flex-1 flex flex-col gap-1.5">
-        <div className={`h-3.5 w-32 rounded ${isDark ? 'bg-white/10' : 'bg-slate-300'}`} />
-        <div className={`h-2.5 w-16 rounded ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
+        <Skeleton className="h-3.5 w-32 rounded" />
+        <Skeleton className="h-2.5 w-16 rounded" />
       </div>
     </div>
     {/* Balance card skeleton */}
-    <div
-      className={`w-full p-5 rounded-2xl border flex items-center justify-between gap-3.5 ${
-        isDark ? 'bg-white/[0.03] border-white/5' : 'bg-white border-slate-200/80 shadow-2xs'
-      }`}
-    >
-      <div className="flex items-center gap-3.5">
-        <div className={`w-12 h-12 rounded-2xl ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-        <div className="flex flex-col gap-2">
-          <div className={`h-3 w-20 rounded ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
-          <div className={`h-6 w-32 rounded ${isDark ? 'bg-white/10' : 'bg-slate-300'}`} />
-        </div>
-      </div>
-    </div>
+    <SkeletonCard />
     {/* Two column action cards */}
     <div className="grid grid-cols-2 gap-3">
-      <div
-        className={`h-24 rounded-2xl border ${
-          isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-100 border-slate-200'
-        }`}
-      />
-      <div
-        className={`h-24 rounded-2xl border ${
-          isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-100 border-slate-200'
-        }`}
-      />
+      <Skeleton className="h-24 rounded-2xl" />
+      <Skeleton className="h-24 rounded-2xl" />
     </div>
     {/* List items skeleton */}
-    <div className="flex flex-col gap-2.5 mt-1">
-      <div
-        className={`h-16 rounded-2xl border ${
-          isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-100 border-slate-200'
-        }`}
-      />
-      <div
-        className={`h-16 rounded-2xl border ${
-          isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-100 border-slate-200'
-        }`}
-      />
-    </div>
+    <SkeletonList count={2} />
   </div>
 );
 
@@ -118,15 +89,17 @@ const SectionErrorCard: React.FC<{
         <h4 className="font-bold text-sm m-0">{title || t('common.networkError')}</h4>
         <p className="text-xs opacity-80 leading-relaxed m-0">{message || t('common.error')}</p>
       </div>
-      <button
-        type="button"
+      <Button
+        variant="danger"
+        size="sm"
         onClick={onRetry}
         disabled={isRetrying}
-        className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white cursor-pointer active:scale-95 transition-all disabled:opacity-50 shadow-xs"
+        loading={isRetrying}
+        className="min-h-[40px] px-4"
       >
         <RotateCw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
         <span>{t('common.retry')}</span>
-      </button>
+      </Button>
     </div>
   );
 };
@@ -308,25 +281,23 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
             </p>
           </div>
           <div className="w-full flex flex-col gap-2 mt-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => window.location.reload()}
-              className="w-full min-h-[44px] py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer active:scale-95 transition-all shadow-md"
+              className="w-full min-h-[44px] font-bold text-xs sm:text-sm"
             >
               <RotateCw className="w-4 h-4" />
               <span>{t('user.reloadApp')}</span>
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
               onClick={onExitBeta}
-              className={`w-full min-h-[44px] py-2.5 px-4 rounded-xl font-semibold text-xs border flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all ${
-                isDark
-                  ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10'
-                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-              }`}
+              className="w-full min-h-[44px] font-semibold text-xs"
             >
               <span>{t('common.back')}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -375,8 +346,9 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
                 </span>
               </a>
             )}
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="md"
               onClick={() => {
                 if (window.Telegram?.WebApp?.close) {
                   window.Telegram.WebApp.close();
@@ -384,15 +356,11 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
                   window.close();
                 }
               }}
-              className={`w-full min-h-[44px] py-2.5 px-4 rounded-xl font-semibold text-xs border flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all ${
-                isDark
-                  ? 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10'
-                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-              }`}
+              className="w-full min-h-[44px] font-semibold text-xs"
             >
               <Send className="w-3.5 h-3.5 rtl:rotate-180" />
               <span>{t('user.backToBot')}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </div>

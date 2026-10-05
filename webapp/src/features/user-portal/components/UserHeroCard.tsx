@@ -3,6 +3,7 @@ import { User, Star, Copy, Check, Sparkles } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
 
 interface UserHeroCardProps {
@@ -14,7 +15,7 @@ interface UserHeroCardProps {
 export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCopied }) => {
   const { t } = useLanguage();
   const { sanitizeDisplayName } = useFormatters();
-  const { isDark } = useThemeTokens();
+  const { isDark, cardClass } = useThemeTokens();
 
   const { displayName, initials } = sanitizeDisplayName(
     user.first_name,
@@ -149,27 +150,17 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
           )}
 
           {user.is_premium && (
-            <div
-              className={`inline-flex items-center gap-1 border px-2.5 py-1 rounded-full text-[11px] font-medium select-none ${
-                isDark
-                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
-                  : 'bg-amber-50 border-amber-200 text-amber-800'
-              }`}
-            >
+            <Badge variant="warning" size="xs">
               <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
               <span>{t('user.premiumUserBadge')}</span>
-            </div>
+            </Badge>
           )}
         </div>
       </section>
 
       {/* Hero Card: Coming Soon announcement */}
       <section
-        className={`w-full rounded-2xl p-4 sm:p-5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-colors ${
-          isDark
-            ? 'bg-white/[0.025] border-white/[0.08] text-white shadow-xl shadow-black/20'
-            : 'bg-white border-slate-200/90 text-slate-900 shadow-sm'
-        }`}
+        className={`w-full rounded-2xl p-4 sm:p-5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-colors ${cardClass}`}
       >
         <div
           className={`absolute top-0 inset-x-0 h-px ${
@@ -180,26 +171,13 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
         />
 
         <div className="flex items-center gap-2 mb-2.5">
-          <div
-            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-              isDark
-                ? 'bg-white/[0.06] border-white/10 text-zinc-300'
-                : 'bg-slate-100 border-slate-200 text-slate-700'
-            }`}
-          >
+          <Badge variant="neutral" size="xs">
             <Sparkles className={`w-3 h-3 ${isDark ? 'text-zinc-300' : 'text-slate-600'}`} />
             <span>{t('user.userPortalBadge')}</span>
-          </div>
-          <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-              isDark
-                ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
-                : 'bg-amber-50 border-amber-200 text-amber-800'
-            }`}
-          >
-            <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
+          </Badge>
+          <Badge variant="warning" dot pulse size="xs">
             <span>{t('user.inDevelopmentStatus')}</span>
-          </span>
+          </Badge>
         </div>
 
         <h2

@@ -3,6 +3,7 @@ import { Sun, Moon, Globe } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 
 export const UserHeader: React.FC = () => {
   const { t, locale, languageSelectionEnabled, setLocale } = useLanguage();
@@ -22,16 +23,9 @@ export const UserHeader: React.FC = () => {
   return (
     <header className="w-full max-w-md mx-auto flex items-center justify-between px-4 pt-3.5 pb-1 relative z-10 shrink-0">
       {/* Online status indicator */}
-      <div
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-          isDark
-            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-            : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-        }`}
-      >
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-pulse" />
-        <span>{t('user.serviceOnlineStatus')}</span>
-      </div>
+      <Badge variant="success" dot pulse size="sm">
+        {t('user.serviceOnlineStatus')}
+      </Badge>
 
       {/* Right utility buttons: Theme switch & Language */}
       <div className="flex items-center gap-1.5">

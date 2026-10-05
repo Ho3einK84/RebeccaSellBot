@@ -3,6 +3,8 @@ import { Search, X, Users, Filter, ArrowUpDown } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import type { UserFilterType, UserSortType } from '@/shared/types/admin.js';
 
 interface UserSearchBarProps {
@@ -64,15 +66,9 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
             {t('admin.users.title')}
           </h2>
         </div>
-        <span
-          className={`text-xs px-2.5 py-0.5 rounded-full border font-medium shrink-0 ${
-            isDark
-              ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-              : 'bg-slate-100 border-slate-200 text-slate-700'
-          }`}
-        >
+        <Badge variant="neutral" size="sm" className="shrink-0">
           {t('admin.users.totalCount', { count: formatNumber(totalCount) })}
-        </span>
+        </Badge>
       </div>
 
       {/* Search Input and Button */}
@@ -100,18 +96,16 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
             </button>
           )}
         </div>
-        <button
+        <Button
           type="button"
-          className={`h-10 px-3.5 sm:px-4 rounded-xl font-medium text-xs border transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 shrink-0 ${
-            isDark
-              ? 'bg-white/[0.06] hover:bg-white/[0.1] border-white/10 text-zinc-200 shadow-xs'
-              : 'bg-slate-900 hover:bg-slate-800 text-white border-transparent shadow-xs'
-          }`}
+          variant="primary"
+          size="md"
+          className="h-10 px-3.5 sm:px-4 text-xs shrink-0"
           onClick={() => onSearch()}
         >
           <Search className="w-3.5 h-3.5" />
           <span>{t('admin.users.searchBtn')}</span>
-        </button>
+        </Button>
       </div>
 
       {/* Filters and Sort Row */}

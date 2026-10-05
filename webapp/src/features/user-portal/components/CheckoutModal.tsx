@@ -16,6 +16,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Skeleton } from '@/shared/components/ui/Skeleton.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -446,37 +447,29 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {/* Action Buttons */}
             <div className="flex flex-col gap-2 mt-2">
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 disabled={isProcessing}
+                loading={isProcessing}
                 onClick={handleConfirmCheckout}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                className="w-full font-bold shadow-md"
               >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{t('common.loading')}</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{t('user.shop.confirmOrder')}</span>
-                  </>
-                )}
-              </button>
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{t('user.shop.confirmOrder')}</span>
+              </Button>
 
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 disabled={isProcessing}
                 onClick={handleClose}
-                className={`w-full py-2.5 rounded-xl border text-xs font-medium transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${
-                  isDark
-                    ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white'
-                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
+                className="w-full"
               >
                 {t('common.cancel')}
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -530,27 +523,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             <div className="w-full flex flex-col gap-2 mt-1">
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={handleGoToWallet}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-slate-950 transition-all active:scale-[0.98] cursor-pointer shadow-md"
+                className="w-full font-bold shadow-md bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-400/30"
               >
                 <Wallet className="w-4 h-4" />
                 <span>{t('user.shop.goToWallet')}</span>
                 <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={handleClose}
-                className={`w-full py-2.5 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-                  isDark
-                    ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white'
-                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
+                className="w-full"
               >
                 {t('common.cancel')}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -576,29 +569,29 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             <div className="w-full flex flex-col gap-2 mt-1">
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={() => {
                   triggerHaptic('medium');
                   void createCheckoutSession();
                 }}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white transition-all active:scale-[0.98] cursor-pointer shadow-md"
+                className="w-full font-bold shadow-md"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>{t('user.shop.recreateCheckout')}</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={handleClose}
-                className={`w-full py-2.5 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-                  isDark
-                    ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white'
-                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
+                className="w-full"
               >
                 {t('common.cancel')}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -624,26 +617,26 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             <div className="w-full flex flex-col gap-2 mt-2">
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={handleGoToServices}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white transition-all active:scale-[0.98] cursor-pointer shadow-md"
+                className="w-full font-bold shadow-md"
               >
                 <span>{t('user.shop.goToServices')}</span>
                 <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={handleClose}
-                className={`w-full py-2.5 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-                  isDark
-                    ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white'
-                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
+                className="w-full"
               >
                 {t('common.close')}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -669,8 +662,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             <div className="w-full flex flex-col gap-2 mt-1">
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={() => {
                   triggerHaptic('medium');
                   if (step === 'creation_error') {
@@ -679,23 +674,21 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     void handleConfirmCheckout();
                   }
                 }}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white transition-all active:scale-[0.98] cursor-pointer shadow-md"
+                className="w-full font-bold shadow-md"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>{t('user.shop.retry')}</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={handleClose}
-                className={`w-full py-2.5 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-                  isDark
-                    ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white'
-                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
+                className="w-full"
               >
                 {t('common.cancel')}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -790,26 +783,26 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {/* Action Button: Go to My Services */}
             <div className="w-full flex flex-col gap-2 mt-2">
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={handleGoToServices}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white transition-all active:scale-[0.98] cursor-pointer shadow-md"
+                className="w-full font-bold shadow-md"
               >
                 <span>{t('user.shop.goToServices')}</span>
                 <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={handleClose}
-                className={`w-full py-2.5 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-                  isDark
-                    ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white'
-                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
+                className="w-full"
               >
                 {t('common.close')}
-              </button>
+              </Button>
             </div>
           </div>
         )}

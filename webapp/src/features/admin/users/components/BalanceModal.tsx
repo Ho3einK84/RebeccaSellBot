@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Wallet, X, Check, RotateCw, Plus, Minus, Settings2 } from 'lucide-react';
+import { Wallet, X, Check, Plus, Minus, Settings2 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import type { UserProfile, BalanceOperation } from '@/shared/types/admin.js';
 
 interface BalanceModalProps {
@@ -297,38 +298,29 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
           </div>
 
           {/* Modal Action Buttons */}
-          <div className="modal-action mt-5 flex gap-2.5">
-            <button
+          <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-slate-200 dark:border-white/10">
+            <Button
               type="button"
-              className={`flex-1 h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
-              }`}
+              variant="secondary"
+              className="flex-1"
               onClick={handleClose}
               disabled={loading}
             >
               {t('common.cancel')}
-            </button>
+            </Button>
 
-            <button
+            <Button
               type="submit"
-              className={`flex-1 h-10 px-4 rounded-xl font-semibold text-xs transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 ${
-                isDark
-                  ? 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-xs'
-                  : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
-              }`}
+              variant="primary"
+              className="flex-1"
               disabled={loading || !isValidAmount || !reason.trim()}
+              loading={loading}
             >
-              {loading ? (
-                <RotateCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Check className="w-3.5 h-3.5" />
-              )}
+              <Check className="w-3.5 h-3.5" />
               <span>
                 {loading ? t('admin.modals.balanceSubmitting') : t('admin.modals.balanceSubmit')}
               </span>
-            </button>
+            </Button>
           </div>
         </form>
       </div>

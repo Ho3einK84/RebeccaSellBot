@@ -5,6 +5,7 @@ export type BadgeVariant = 'neutral' | 'success' | 'warning' | 'error' | 'primar
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
+  size?: 'xs' | 'sm' | 'md';
   dot?: boolean;
   pulse?: boolean;
 }
@@ -12,6 +13,7 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 export const Badge: React.FC<BadgeProps> = ({
   children,
   variant = 'neutral',
+  size = 'sm',
   dot = false,
   pulse = false,
   className = '',
@@ -19,9 +21,15 @@ export const Badge: React.FC<BadgeProps> = ({
 }) => {
   const { isDark } = useTheme();
 
+  const sizeClasses = {
+    xs: 'text-[10px] px-2 py-0.5 gap-1',
+    sm: 'text-[11px] px-2.5 py-0.5 gap-1.5',
+    md: 'text-xs px-3 py-1 gap-1.5',
+  }[size];
+
   const variantClasses: Record<BadgeVariant, string> = {
     neutral: isDark
-      ? 'bg-white/[0.04] border-white/10 text-zinc-300'
+      ? 'bg-white/[0.05] border-white/10 text-zinc-300'
       : 'bg-slate-100 border-slate-200 text-slate-700',
     success: isDark
       ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
@@ -51,7 +59,7 @@ export const Badge: React.FC<BadgeProps> = ({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium tracking-tight border select-none ${variantClasses[variant]} ${className}`}
+      className={`inline-flex items-center rounded-full font-medium tracking-tight border select-none shrink-0 ${sizeClasses} ${variantClasses[variant]} ${className}`}
       {...props}
     >
       {dot && (

@@ -11,6 +11,7 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -64,16 +65,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             >
               {t('admin.title')}
             </h1>
-            <span
-              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border shrink-0 ${
-                isDark
-                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-300'
-                  : 'bg-amber-50 border-amber-200 text-amber-800'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 status-pulse" />
-              <span>{t('admin.betaBadge')}</span>
-            </span>
+            <Badge variant="warning" dot pulse size="xs">
+              {t('admin.betaBadge')}
+            </Badge>
           </div>
         </div>
 

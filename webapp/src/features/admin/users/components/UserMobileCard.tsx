@@ -6,6 +6,7 @@ import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import type { UserProfile } from '@/shared/types/admin.js';
 
 interface UserMobileCardProps {
@@ -119,13 +120,11 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
 
       {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-2 pt-0.5">
-        <button
+        <Button
           type="button"
-          className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-medium transition-all active:scale-[0.98] cursor-pointer ${
-            isDark
-              ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-zinc-200'
-              : 'bg-white hover:bg-slate-50 border-slate-200/90 text-slate-800 shadow-xs'
-          }`}
+          variant="secondary"
+          size="sm"
+          className="h-8.5"
           disabled={inspecting}
           onClick={() => onInspect(user.telegramId)}
         >
@@ -135,20 +134,18 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
             <Eye className={`w-3.5 h-3.5 ${textMuted}`} />
           )}
           <span>{t('admin.users.btnDetails')}</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
-          className={`flex items-center justify-center gap-1.5 h-8.5 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer ${
-            isDark
-              ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/25 text-indigo-300 shadow-xs'
-              : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200/80 text-indigo-700 shadow-xs'
-          }`}
+          variant="primary"
+          size="sm"
+          className="h-8.5"
           onClick={() => onOpenBalanceModal(user)}
         >
           <Wallet className="w-3.5 h-3.5" />
           <span>{t('admin.users.btnChangeBalance')}</span>
-        </button>
+        </Button>
       </div>
     </Card>
   );

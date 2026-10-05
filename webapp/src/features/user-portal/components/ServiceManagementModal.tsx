@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/shared/components/ui/Modal.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
@@ -521,37 +522,33 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
-              <button
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
+              <Button
                 type="button"
+                variant="secondary"
+                className="flex-1"
                 onClick={() => setConfirmAction(null)}
                 disabled={isTogglingStatus || isRevoking}
-                className={`flex-1 min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center transition-all active:scale-95 cursor-pointer border ${
-                  isDark
-                    ? 'bg-white/5 hover:bg-white/10 text-white border-white/10'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                } disabled:opacity-50`}
               >
                 {t('common.cancel')}
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
+                variant={
+                  confirmAction === 'revoke'
+                    ? 'danger'
+                    : confirmAction === 'disable'
+                      ? 'danger'
+                      : 'success'
+                }
+                className="flex-1"
                 onClick={
                   confirmAction === 'revoke' ? handleExecuteRevoke : handleExecuteStatusToggle
                 }
                 disabled={isTogglingStatus || isRevoking}
-                className={`flex-1 min-h-[44px] py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer text-white shadow-xs ${
-                  confirmAction === 'revoke'
-                    ? 'bg-rose-600 hover:bg-rose-700'
-                    : confirmAction === 'disable'
-                      ? 'bg-amber-600 hover:bg-amber-700'
-                      : 'bg-emerald-600 hover:bg-emerald-700'
-                } disabled:opacity-50`}
+                loading={isTogglingStatus || isRevoking}
               >
-                {(isTogglingStatus || isRevoking) && (
-                  <RotateCw className="w-3.5 h-3.5 animate-spin" />
-                )}
                 <span>
                   {confirmAction === 'revoke'
                     ? t('user.services.revokeConfirm')
@@ -559,7 +556,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                       ? t('user.services.disableService')
                       : t('user.services.enableService')}
                 </span>
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

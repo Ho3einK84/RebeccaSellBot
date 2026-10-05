@@ -15,7 +15,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <input
         ref={ref}
-        className={`w-full h-10 px-3.5 rounded-xl border text-xs sm:text-sm transition-all outline-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] ${inputClass} ${errorBorder} ${className}`}
+        className={`w-full h-10 px-3.5 rounded-xl border text-xs sm:text-sm transition-all outline-none focus-visible:outline-none disabled:opacity-50 disabled:bg-slate-100/60 dark:disabled:bg-white/[0.03] disabled:cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.02)] ${inputClass} ${errorBorder} ${className}`}
         {...props}
       />
     );

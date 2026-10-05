@@ -15,6 +15,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
 
 interface BetaHeaderProps {
@@ -198,15 +199,15 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
               </span>
             </div>
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-500/15 text-indigo-500 dark:text-indigo-300 border border-indigo-500/25 shrink-0">
+              <Badge variant="primary" size="xs">
                 <FlaskConical className="w-2.5 h-2.5 shrink-0" />
                 <span>{t('user.betaBadge')}</span>
-              </span>
+              </Badge>
               {isAdminPreview && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 shrink-0">
+                <Badge variant="primary" size="xs">
                   <ShieldCheck className="w-2.5 h-2.5 shrink-0" />
                   <span>{t('user.adminPreviewBadge')}</span>
-                </span>
+                </Badge>
               )}
             </div>
           </div>

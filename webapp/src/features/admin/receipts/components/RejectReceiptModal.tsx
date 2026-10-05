@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { XCircle, X, RotateCw } from 'lucide-react';
+import { XCircle, X } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface RejectReceiptModalProps {
@@ -62,22 +63,14 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
   };
 
   return (
-    <Modal isOpen={Boolean(receipt)} onClose={handleClose} maxWidth="md">
+    <Modal
+      isOpen={Boolean(receipt)}
+      onClose={handleClose}
+      maxWidth="md"
+      title={t('admin.modals.rejectTitle')}
+      icon={<XCircle className="w-5 h-5 text-rose-500" />}
+    >
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className={`font-bold text-base flex items-center gap-2 ${textPrimary}`}>
-            <XCircle className="w-5 h-5 text-rose-500" />
-            <span>{t('admin.modals.rejectTitle')}</span>
-          </h3>
-          <button
-            type="button"
-            className="btn btn-ghost btn-circle btn-xs cursor-pointer text-slate-400 hover:text-white"
-            onClick={handleClose}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
         <p className={`text-xs m-0 ${textSecondary}`}>
           {t('admin.modals.rejectConfirm', {
             id: receipt.id,
@@ -123,42 +116,33 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
           onChange={(e) => setReason(e.target.value)}
         />
 
-        <div className="modal-action mt-5 flex gap-2.5">
-          <button
+        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-slate-200 dark:border-white/10">
+          <Button
             type="button"
-            className={`flex-1 h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
-            }`}
+            variant="secondary"
+            className="flex-1"
             onClick={handleClose}
             disabled={loading}
           >
             {t('common.cancel')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className={`flex-1 h-10 px-4 rounded-xl font-semibold text-xs border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 ${
-              isDark
-                ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-500/30 text-rose-300 shadow-xs'
-                : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-600 shadow-xs'
-            }`}
+            variant="danger"
+            className="flex-1"
             disabled={
               loading ||
               (!selectedPreset && !reason.trim()) ||
               (selectedPreset === 'other' && !reason.trim())
             }
+            loading={loading}
             onClick={handleConfirm}
           >
-            {loading ? (
-              <RotateCw className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <X className="w-3.5 h-3.5" />
-            )}
+            <X className="w-3.5 h-3.5" />
             <span>
               {loading ? t('admin.modals.rejectSubmitting') : t('admin.modals.rejectSubmit')}
             </span>
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

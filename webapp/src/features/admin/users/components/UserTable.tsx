@@ -5,6 +5,7 @@ import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import type { UserProfile } from '@/shared/types/admin.js';
 
 interface UserTableProps {
@@ -110,13 +111,10 @@ export const UserTable: React.FC<UserTableProps> = ({
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center justify-center gap-2">
-                    <button
+                    <Button
                       type="button"
-                      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 ${
-                        isDark
-                          ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
-                      }`}
+                      variant="secondary"
+                      size="sm"
                       disabled={isInspectingThis}
                       onClick={() => onInspect(u.telegramId)}
                     >
@@ -126,19 +124,16 @@ export const UserTable: React.FC<UserTableProps> = ({
                         <Eye className="w-3.5 h-3.5 opacity-70" />
                       )}
                       <span>{t('admin.users.btnDetails')}</span>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
-                        isDark
-                          ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/25 text-indigo-300 shadow-xs'
-                          : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200/80 text-indigo-700 shadow-xs'
-                      }`}
+                      variant="primary"
+                      size="sm"
                       onClick={() => onOpenBalanceModal(u)}
                     >
                       <Wallet className="w-3.5 h-3.5" />
                       <span>{t('admin.users.btnChangeBalance')}</span>
-                    </button>
+                    </Button>
                   </div>
                 </td>
               </tr>

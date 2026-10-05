@@ -15,7 +15,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({ className = '', ...props }) 
 
 export const SkeletonCard: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div
-    className={`rounded-2xl border p-4 sm:p-5 space-y-3 bg-white dark:bg-white/[0.02] border-slate-200/70 dark:border-white/[0.06] ${className}`}
+    className={`rounded-2xl border p-4 sm:p-5 space-y-3 bg-white dark:bg-zinc-900/50 border-slate-200 dark:border-white/10 ${className}`}
   >
     <div className="flex items-center justify-between">
       <Skeleton className="h-4 w-28" />
@@ -39,7 +39,7 @@ export const SkeletonList: React.FC<{ count?: number }> = ({ count = 3 }) => (
     {Array.from({ length: count }).map((_, i) => (
       <div
         key={i}
-        className="rounded-2xl border p-4 flex items-center justify-between gap-4 bg-white dark:bg-white/[0.02] border-slate-200/70 dark:border-white/[0.06]"
+        className="rounded-2xl border p-4 flex items-center justify-between gap-4 bg-white dark:bg-zinc-900/50 border-slate-200 dark:border-white/10"
       >
         <div className="space-y-2 flex-1">
           <div className="flex items-center gap-2">

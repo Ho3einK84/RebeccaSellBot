@@ -98,7 +98,7 @@ export const Modal: React.FC<ModalProps> = ({
         className={`${maxWidthClass} w-full p-5 sm:p-6 rounded-2xl sm:rounded-3xl border ${modalBoxClass} relative animate-modal-in max-h-[90dvh] overflow-y-auto z-10`}
       >
         {(title || icon) && (
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/60 dark:border-white/[0.08]">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-white/10">
             <h3
               className={`font-bold text-sm sm:text-base flex items-center gap-2.5 ${textPrimary}`}
             >
@@ -108,7 +108,7 @@ export const Modal: React.FC<ModalProps> = ({
             {!hideCloseButton && (
               <button
                 type="button"
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 onClick={onClose}
                 aria-label="Close modal"
               >

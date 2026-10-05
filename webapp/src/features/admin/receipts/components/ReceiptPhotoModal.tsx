@@ -4,6 +4,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
+import { Button } from '@/shared/components/ui/Button.js';
 
 interface ReceiptPhotoModalProps {
   photoUrl: string | null;
@@ -208,17 +209,15 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
           {!hasError &&
             (isZoomed ? t('admin.receipts.zoomHintActive') : t('admin.receipts.zoomHint'))}
         </span>
-        <button
+        <Button
           type="button"
-          className={`h-9 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center ${
-            isDark
-              ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
-          }`}
+          variant="secondary"
+          size="sm"
+          className="h-9 px-4"
           onClick={handleModalClose}
         >
           {t('common.close')}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

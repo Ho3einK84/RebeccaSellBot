@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { QrCode, Copy, Check, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
@@ -105,17 +106,19 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
               <span className="text-xs text-rose-500 font-medium text-center">
                 {t('user.services.qrError')}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="danger"
+                size="xs"
                 onClick={() => {
                   triggerHaptic('light');
                   setRetryKey((k) => k + 1);
                 }}
-                className="mt-1 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                className="mt-1"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>{t('user.services.qrRetry')}</span>
-              </button>
+              </Button>
             </div>
           ) : qrSrc ? (
             <img
@@ -132,16 +135,12 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
 
         {/* Action Button: Copy Subscription Link */}
         <div className="w-full flex flex-col gap-2 mt-2">
-          <button
+          <Button
             type="button"
+            variant={isCopied('qr-sub-url') ? 'success' : 'primary'}
+            size="md"
             onClick={handleCopy}
-            className={`w-full py-2.5 px-4 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer ${
-              isCopied('qr-sub-url')
-                ? 'bg-emerald-600 text-white'
-                : isDark
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
-            }`}
+            className="w-full"
           >
             {isCopied('qr-sub-url') ? (
               <>
@@ -154,34 +153,30 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
                 <span>{t('user.services.copyLink')}</span>
               </>
             )}
-          </button>
+          </Button>
 
           {/* Quick open or close */}
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={handleOpenLink}
-              className={`flex-1 py-2 px-3 rounded-xl border text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
+              className="flex-1"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               <span>{t('user.services.openLink')}</span>
-            </button>
+            </Button>
 
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={onClose}
-              className={`flex-1 py-2 px-3 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white'
-                  : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
-              }`}
+              className="flex-1"
             >
-              {t('common.close')}
-            </button>
+              <span>{t('common.close')}</span>
+            </Button>
           </div>
         </div>
       </div>

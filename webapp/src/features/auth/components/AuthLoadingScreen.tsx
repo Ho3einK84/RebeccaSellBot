@@ -17,8 +17,8 @@ export const AuthLoadingScreen: React.FC = () => {
         <div
           className={`p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border ${
             isDark
-              ? 'bg-[#10121a]/90 border-white/[0.08] backdrop-blur-xl'
-              : 'bg-white border-slate-200'
+              ? 'bg-zinc-900/90 border-white/10 backdrop-blur-xl shadow-2xl'
+              : 'bg-white border-slate-200 shadow-lg'
           }`}
         >
           <Loader2

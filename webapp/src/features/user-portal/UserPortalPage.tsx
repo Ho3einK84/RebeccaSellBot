@@ -10,6 +10,8 @@ import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
 
 interface UserPortalPageProps {
@@ -94,10 +96,10 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-500 dark:text-indigo-300 border border-indigo-500/25">
+            <Badge variant="primary" size="xs">
               <FlaskConical className="w-3 h-3" />
               <span>{t('user.betaBadge')}</span>
-            </div>
+            </Badge>
 
             <div className="inline-flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400 font-medium">
               <Sparkles className="w-3 h-3" />
@@ -117,33 +119,33 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
             {t('user.enterBetaModeDesc')}
           </p>
 
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="lg"
             onClick={handleEnterBeta}
-            className="w-full min-h-[44px] h-11 text-xs sm:text-sm font-bold active:scale-[0.98] rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white"
+            className="w-full min-h-[44px] h-11 text-xs sm:text-sm font-bold shadow-md bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 border-0"
           >
             <FlaskConical className="w-4 h-4" />
             <span>{t('user.enterBetaMode')}</span>
             <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
-          </button>
+          </Button>
         </section>
 
         <FeatureGrid />
 
         {/* Bottom CTA Action Button */}
         <footer className="w-full flex flex-col items-center gap-2 mt-auto cs-fade-in-delay-3">
-          <button
+          <Button
             type="button"
-            className={`w-full h-12 text-sm font-bold active:scale-[0.98] rounded-xl border-0 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md ${
-              isDark
-                ? 'bg-white text-black hover:bg-zinc-200'
-                : 'bg-slate-900 text-white hover:bg-slate-800'
-            }`}
+            variant="primary"
+            size="lg"
+            className="w-full h-12 text-sm font-bold shadow-md"
             onClick={handleClose}
           >
             <Send className="w-4 h-4 rtl:rotate-180" />
             <span>{t('user.backToBot')}</span>
-          </button>
+          </Button>
           <span
             className={`text-[11px] select-none ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}
           >

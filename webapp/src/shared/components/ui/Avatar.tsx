@@ -45,7 +45,7 @@ export const Avatar: React.FC<AvatarProps> = ({
       <img
         src={photoUrl}
         alt={name || username || 'User'}
-        className={`${radiusClass} object-cover shrink-0 border border-slate-200/80 dark:border-white/10 shadow-xs ${sizeClasses} ${className}`}
+        className={`${radiusClass} object-cover shrink-0 border border-slate-200 dark:border-white/10 shadow-xs ${sizeClasses} ${className}`}
         onError={() => setHasError(true)}
       />
     );

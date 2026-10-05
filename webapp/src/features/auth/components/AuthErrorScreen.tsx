@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ShieldX, AlertTriangle, ExternalLink, X } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { Button } from '@/shared/components/ui/Button.js';
 
 interface AuthErrorScreenProps {
   error: string | null;
@@ -60,7 +61,7 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
         <div
           className={`p-6 sm:p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border shadow-lg ${
             isDark
-              ? 'bg-[#10121a]/90 border-white/[0.08] shadow-black/40 backdrop-blur-xl'
+              ? 'bg-zinc-900/90 border-white/10 shadow-black/40 backdrop-blur-xl'
               : 'bg-white border-slate-200 shadow-slate-200/60'
           }`}
         >
@@ -109,18 +110,16 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
             </a>
 
             {/* Secondary: Close Window */}
-            <button
+            <Button
               type="button"
-              className={`h-11 rounded-xl font-medium text-sm transition-all active:scale-[0.98] cursor-pointer border flex items-center justify-center gap-2 ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
-              }`}
+              variant="secondary"
+              size="md"
+              className="h-11 w-full"
               onClick={handleClose}
             >
               <X className="w-4 h-4" />
               <span>{t('auth.closeWindow')}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </div>

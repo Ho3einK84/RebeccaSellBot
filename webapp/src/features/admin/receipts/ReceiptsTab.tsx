@@ -21,6 +21,7 @@ import { ReceiptDetailModal } from './components/ReceiptDetailModal.js';
 import { BatchApproveModal } from './components/BatchApproveModal.js';
 import { ReceiptSettingsModal } from './components/ReceiptSettingsModal.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
@@ -210,17 +211,11 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           </button>
 
           {/* Count Badge */}
-          <span
-            className={`text-xs px-2.5 py-0.5 rounded-full border font-medium shrink-0 ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-                : 'bg-slate-100 border-slate-200 text-slate-700'
-            }`}
-          >
+          <Badge variant="neutral" size="sm" className="shrink-0">
             {status === 'pending'
               ? `${formatNumber(pendingCount)} ${t('admin.receipts.tabPending')}`
               : `${formatNumber(total)} ${t('common.all')}`}
-          </span>
+          </Badge>
         </div>
       </div>
 

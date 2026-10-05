@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { QrCode, Copy, Check, X } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { UserConfigItem } from '@/shared/types/admin.js';
@@ -146,17 +147,15 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
 
         {/* Footer */}
         <div className="pt-2">
-          <button
+          <Button
             type="button"
-            className={`w-full h-9 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
-            }`}
+            variant="secondary"
+            size="sm"
+            className="w-full h-9"
             onClick={onClose}
           >
             {t('common.close')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

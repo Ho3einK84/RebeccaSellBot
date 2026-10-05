@@ -16,7 +16,7 @@ export const Card: React.FC<CardProps> = ({
   const { cardClass, subCardClass } = useThemeTokens();
   const baseClass = subCard ? subCardClass : cardClass;
   const interactiveClass = interactive
-    ? 'hover:border-slate-300 dark:hover:border-white/20 transition-all duration-200 cursor-pointer active:scale-[0.99]'
+    ? 'hover:border-slate-300 dark:hover:border-white/20 transition-all duration-200 cursor-pointer active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50'
     : 'transition-colors duration-150';
 
   return (

@@ -54,10 +54,10 @@
 :root {
   --bg-primary: #090a0f;
   --bg-secondary: #11131a;
-  --bg-card: rgba(255, 255, 255, 0.03);
-  --bg-card-hover: rgba(255, 255, 255, 0.06);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(255, 255, 255, 0.2);
+  --bg-card: rgba(24, 24, 27, 0.5);
+  --bg-card-hover: rgba(24, 24, 27, 0.7);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-focus: rgba(255, 255, 255, 0.25);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
@@ -75,7 +75,7 @@
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
   --bg-card-hover: #f1f5f9;
-  --border-color: rgba(0, 0, 0, 0.08);
+  --border-color: #e2e8f0;
   --border-focus: rgba(0, 0, 0, 0.2);
   --text-primary: #0f172a;
   --text-secondary: #475569;
@@ -89,10 +89,10 @@
   color-scheme: dark;
   --bg-primary: #090a0f;
   --bg-secondary: #11131a;
-  --bg-card: rgba(255, 255, 255, 0.03);
-  --bg-card-hover: rgba(255, 255, 255, 0.06);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(255, 255, 255, 0.2);
+  --bg-card: rgba(24, 24, 27, 0.5);
+  --bg-card-hover: rgba(24, 24, 27, 0.7);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-focus: rgba(255, 255, 255, 0.25);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;

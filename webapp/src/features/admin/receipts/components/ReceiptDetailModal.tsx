@@ -16,6 +16,7 @@ import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface ReceiptDetailModalProps {
@@ -250,46 +251,40 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
         <div className="modal-action mt-5 flex gap-2.5">
           {isPending && onApprove && onReject ? (
             <>
-              <button
+              <Button
                 type="button"
-                className={`flex-1 h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 ${
-                  isDark
-                    ? 'bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/25 text-rose-300'
-                    : 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-700'
-                }`}
+                variant="danger"
+                size="md"
+                className="flex-1"
                 onClick={() => onReject(receipt)}
                 disabled={loading}
               >
                 <XCircle className="w-3.5 h-3.5" />
                 <span>{t('admin.receipts.reject')}</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
-                className={`flex-1 h-10 px-4 rounded-xl font-semibold text-xs border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 ${
-                  isDark
-                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/30 text-emerald-300 shadow-xs'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-600 shadow-xs'
-                }`}
+                variant="success"
+                size="md"
+                className="flex-1"
                 onClick={() => onApprove(receipt)}
                 disabled={loading}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>{t('admin.receipts.approve')}</span>
-              </button>
+              </Button>
             </>
           ) : (
-            <button
+            <Button
               type="button"
-              className={`w-full h-10 px-4 rounded-xl text-xs font-medium border transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 shadow-xs'
-              }`}
+              variant="secondary"
+              size="md"
+              className="w-full"
               onClick={onClose}
             >
               {t('common.close')}
-            </button>
+            </Button>
           )}
         </div>
       </div>
