@@ -30,10 +30,10 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
         {/* Avatar */}
         <div className="relative mb-3.5 cs-avatar-entrance">
           <div
-            className={`absolute inset-0 rounded-full blur-xl cs-breathe bg-gradient-to-tr from-zinc-700/40 via-zinc-500/30 to-zinc-800/40`}
+            className={`absolute inset-0 rounded-full blur-xl cs-breathe bg-gradient-to-tr from-brand/25 via-brand/15 to-brand/20`}
           />
           <div
-            className={`relative w-[72px] h-[72px] sm:w-[78px] sm:h-[78px] rounded-full p-[2px] transition-colors bg-gradient-to-tr from-zinc-600 via-zinc-400 to-zinc-700 shadow-xl shadow-black/60 shadow-lg shadow-slate-200`}
+            className={`relative w-[72px] h-[72px] sm:w-[78px] sm:h-[78px] rounded-full p-[2px] transition-colors bg-gradient-to-tr from-brand/40 via-brand/20 to-brand/30 shadow-lg`}
           >
             <div
               className={`w-full h-full rounded-full overflow-hidden flex items-center justify-center border transition-colors bg-canvas border-line/10`}
@@ -57,7 +57,7 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
 
           {user.is_premium && (
             <div
-              className="absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full bg-gradient-to-tr from-warn to-warn border-2 border-[#090a0f] flex items-center justify-center shadow-md shadow-warn/30"
+              className="absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full bg-gradient-to-tr from-warn to-warn border-2 border-canvas flex items-center justify-center shadow-md shadow-warn/30"
               title={t('user.premiumUserBadge')}
             >
               <Star className="w-3 h-3 text-slate-950 fill-slate-950" />
@@ -70,13 +70,7 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
           className={`text-xl sm:text-2xl font-bold mb-2 tracking-tight flex items-center justify-center gap-1.5 flex-wrap cs-fade-in text-ink`}
         >
           <span>{t('user.greetingPrefix')}</span>
-          <bdi
-            className={
-              'bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent font-extrabold'
-            }
-          >
-            {displayName}
-          </bdi>
+          <bdi className="text-ink font-extrabold">{displayName}</bdi>
           <span className="animate-wave select-none text-lg">👋</span>
         </h1>
 
@@ -85,7 +79,7 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
           <button
             type="button"
             onClick={onCopyId}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-all active:scale-[0.97] cursor-pointer select-none group border bg-surface/[0.04] hover:bg-surface/[0.08] border-line/10 text-ink-muted shadow-xs`}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-all active:scale-[0.97] cursor-pointer select-none group border bg-surface-2 hover:bg-surface-3 border-line text-ink-muted shadow-xs`}
             title={t('common.copy')}
           >
             <span className={`text-[11px] text-ink-muted`}>{t('user.telegramId')}</span>
@@ -105,7 +99,7 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
           {user.username && (
             <div
               dir="ltr"
-              className={`inline-flex items-center gap-0.5 border px-2.5 py-1 rounded-full text-[11px] tnum select-none bg-surface/[0.04] border-line/10 text-ink-soft shadow-xs`}
+              className={`inline-flex items-center gap-0.5 border px-2.5 py-1 rounded-full text-[11px] tnum select-none bg-surface-2 border-line text-ink-soft shadow-xs`}
             >
               <span className={'text-ink-muted'}>@</span>
               <span>{user.username}</span>
@@ -126,7 +120,7 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
         className={`w-full rounded-2xl p-4 sm:p-5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-colors ${cardClass}`}
       >
         <div
-          className={`absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-zinc-400/30 to-transparent`}
+          className={`absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-brand/25 to-transparent`}
         />
 
         <div className="flex items-center gap-2 mb-2.5">

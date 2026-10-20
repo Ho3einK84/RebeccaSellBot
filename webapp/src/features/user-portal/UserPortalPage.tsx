@@ -85,7 +85,7 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
 
         {/* Section: Enter Experimental Mode */}
         <section
-          className={`w-full rounded-2xl p-4 sm:p-4.5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-all bg-gradient-to-br from-brand/30 via-zinc-900/50 to-brand/30 border-brand/30 shadow-lg shadow-brand/20 shadow-sm`}
+          className={`w-full rounded-2xl p-4 sm:p-4.5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-all bg-gradient-to-br from-brand-soft via-surface to-brand-soft/50 dark:from-brand/30 dark:via-surface dark:to-brand/20 border-brand/25 shadow-lg shadow-brand/15 shadow-sm`}
         >
           <div className="flex items-center justify-between mb-2">
             <Badge variant="primary" size="xs">
