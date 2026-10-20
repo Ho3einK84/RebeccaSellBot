@@ -131,7 +131,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     <div className="w-full flex flex-col gap-4 pb-6">
       {/* Wallet Balance Summary Card */}
       <section
-        className={`p-5 rounded-2xl border flex items-center justify-between gap-3 text-start transition-all bg-gradient-to-br from-brand/40 via-zinc-900/70 to-brand/30 border-line/[0.08] shadow-md shadow-2xs`}
+        className={`p-5 rounded-2xl border flex items-center justify-between gap-3 text-start transition-all bg-gradient-to-br from-brand-soft via-surface to-brand-soft/50 dark:from-brand/35 dark:via-surface dark:to-brand/20 border-brand/20 shadow-md shadow-2xs`}
       >
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-brand/10 text-brand flex items-center justify-center shrink-0 border border-brand/20">
@@ -187,7 +187,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           </p>
 
           <div
-            className={`p-3 rounded-xl border flex items-center justify-between text-xs tnum bg-black/30 border-warn/20`}
+            className={`p-3 rounded-xl border flex items-center justify-between text-xs tnum bg-surface-2/70 dark:bg-black/30 border-warn/25 text-ink`}
           >
             <div className="flex flex-col">
               <span className="text-[10px] opacity-75 font-sans">
@@ -256,40 +256,40 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
           {/* Bank Card Presentation Card */}
           <div
-            className={`p-4 sm:p-5 rounded-2xl border relative overflow-hidden flex flex-col justify-between gap-4 shadow-md bg-gradient-to-tr from-slate-950 via-brand/80 to-slate-900 border-brand/25 text-ink`}
+            className={`p-4 sm:p-5 rounded-2xl border relative overflow-hidden flex flex-col justify-between gap-4 shadow-lg bg-gradient-to-tr from-slate-950 via-brand/80 to-slate-900 border-white/10 text-white`}
           >
             {/* Top row: Chip and generic bank brand */}
             <div className="flex items-center justify-between">
-              <div className="w-10 h-7 rounded-md bg-warn/80 border border-warn flex items-center justify-center shadow-inner">
-                <div className="w-7 h-4 border border-warn/40 rounded-sm grid grid-cols-2" />
+              <div className="w-10 h-7 rounded-md bg-amber-400 border border-amber-300 flex items-center justify-center shadow-inner">
+                <div className="w-7 h-4 border border-amber-600/40 rounded-sm grid grid-cols-2" />
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted">
-                <ShieldCheck className="w-4 h-4 text-brand" />
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
+                <ShieldCheck className="w-4 h-4 text-brand-soft" />
                 <span>{t('user.wallet.bankCard')}</span>
               </div>
             </div>
 
             {/* Card Number */}
             <div className="flex flex-col gap-1 my-1">
-              <span className="text-[10px] text-ink-muted uppercase tracking-widest font-sans">
+              <span className="text-[10px] text-white/70 uppercase tracking-widest font-sans">
                 {t('user.wallet.cardNumber')}
               </span>
               <span
                 dir="ltr"
-                className="font-mono text-lg sm:text-xl font-extrabold tracking-widest text-warn text-start select-all"
+                className="font-mono text-lg sm:text-xl font-extrabold tracking-widest text-amber-300 text-start select-all drop-shadow-xs"
               >
                 {formatCardNumberSpaced(cardNumber)}
               </span>
             </div>
 
             {/* Bottom Row: Holder name and Copy Button */}
-            <div className="flex items-center justify-between pt-2 border-t border-line/10 gap-2">
+            <div className="flex items-center justify-between pt-2 border-t border-white/15 gap-2">
               <div className="flex flex-col min-w-0">
-                <span className="text-[10px] text-ink-muted font-sans">
+                <span className="text-[10px] text-white/70 font-sans">
                   {t('user.wallet.cardHolder')}
                 </span>
-                <span className="text-xs sm:text-sm font-bold text-ink truncate">
+                <span className="text-xs sm:text-sm font-bold text-white truncate">
                   {cardHolder || '—'}
                 </span>
               </div>
@@ -297,17 +297,17 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               <button
                 type="button"
                 onClick={handleCopyCard}
-                className={`min-h-[44px] min-w-[44px] py-2 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs ${isCopied('bank-card') ? 'bg-ok text-ink' : 'bg-surface/15 hover:bg-surface/20 text-ink border border-line/20'}`}
+                className={`min-h-[44px] min-w-[44px] py-2 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 shadow-xs ${isCopied('bank-card') ? 'bg-ok text-white' : 'bg-white/15 hover:bg-white/25 text-white border border-white/20'}`}
                 aria-label={t('user.wallet.copyCard')}
               >
                 {isCopied('bank-card') ? (
                   <>
-                    <Check className="w-3.5 h-3.5" />
+                    <Check className="w-3.5 h-3.5 text-white" />
                     <span>{t('user.wallet.cardCopied')}</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3.5 h-3.5" />
+                    <Copy className="w-3.5 h-3.5 text-white" />
                     <span>{t('user.wallet.copyCard')}</span>
                   </>
                 )}
@@ -328,7 +328,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     key={amt}
                     type="button"
                     onClick={() => handleSelectPreset(amt)}
-                    className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-semibold tnum border transition-all active:scale-95 cursor-pointer flex items-center justify-center ${isSelected ? 'bg-brand border-brand text-brand-ink shadow-xs' : 'bg-surface/[0.04] border-line/10 hover:bg-surface/10 text-ink-soft shadow-2xs'}`}
+                    className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-semibold tnum border transition-all active:scale-95 cursor-pointer flex items-center justify-center ${isSelected ? 'bg-brand border-brand text-brand-ink shadow-xs' : 'bg-surface-2 border-line hover:bg-surface-3 text-ink-soft shadow-2xs'}`}
                   >
                     {formatToman(amt)} {currency}
                   </button>
@@ -344,9 +344,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 1
               </div>
               <div className="flex flex-col min-w-0">
-                <span className={`text-xs font-bold text-slate-200`}>
-                  {t('user.wallet.step1Title')}
-                </span>
+                <span className="text-xs font-bold text-ink">{t('user.wallet.step1Title')}</span>
                 <span className="text-[11px] text-ink-muted">{t('user.wallet.step1Desc')}</span>
               </div>
             </div>
@@ -356,9 +354,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 2
               </div>
               <div className="flex flex-col min-w-0">
-                <span className={`text-xs font-bold text-slate-200`}>
-                  {t('user.wallet.step2Title')}
-                </span>
+                <span className="text-xs font-bold text-ink">{t('user.wallet.step2Title')}</span>
                 <span className="text-[11px] text-ink-muted">{t('user.wallet.step2Desc')}</span>
               </div>
             </div>
@@ -368,9 +364,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 3
               </div>
               <div className="flex flex-col min-w-0">
-                <span className={`text-xs font-bold text-slate-200`}>
-                  {t('user.wallet.step3Title')}
-                </span>
+                <span className="text-xs font-bold text-ink">{t('user.wallet.step3Title')}</span>
                 <span className="text-[11px] text-ink-muted">{t('user.wallet.step3Desc')}</span>
               </div>
             </div>
@@ -381,7 +375,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotForReceipt('receipt')}
-              className="w-full min-h-[44px] py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md bg-gradient-to-r from-brand to-brand hover:from-brand hover:to-brand text-ink"
+              className="w-full min-h-[44px] py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer shadow-md bg-brand hover:bg-brand text-brand-ink"
             >
               <Send className="w-4 h-4 rtl:rotate-180" />
               <span>{t('user.wallet.sendReceiptDirect')}</span>
@@ -390,7 +384,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotForReceipt('topup')}
-              className={`w-full sm:w-auto min-h-[44px] py-3 px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer whitespace-nowrap bg-surface/[0.04] border-line/10 hover:bg-surface/10 text-ink-soft`}
+              className="w-full sm:w-auto min-h-[44px] py-3 px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer whitespace-nowrap bg-surface-2 border-line hover:bg-surface-3 text-ink-soft"
             >
               <RotateCw className="w-3.5 h-3.5" />
               <span>{t('user.wallet.openBotTopup')}</span>
@@ -416,7 +410,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           <button
             type="button"
             onClick={() => handleOpenBotForReceipt('topup')}
-            className="min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-md bg-gradient-to-r from-brand to-brand hover:from-brand hover:to-brand text-ink"
+            className="min-h-[44px] px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-md bg-brand hover:bg-brand text-brand-ink"
           >
             <RotateCw className="w-4 h-4" />
             <span>{t('user.wallet.topupInBot')}</span>
@@ -435,7 +429,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
         {currentTransactions.length === 0 ? (
           <div
-            className={`p-6 rounded-2xl border text-center text-xs bg-surface/[0.02] border-line/[0.06] text-ink-muted`}
+            className={`p-6 rounded-2xl border text-center text-xs bg-surface border-line text-ink-muted`}
           >
             {t('user.wallet.txEmpty')}
           </div>
@@ -499,7 +493,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     triggerHaptic('selection');
                     setPage((p) => Math.max(1, p - 1));
                   }}
-                  className={`min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-medium cursor-pointer transition-all active:scale-[0.98] border bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08] disabled:opacity-30 disabled:pointer-events-none shadow-xs`}
+                  className={`min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-medium cursor-pointer transition-all active:scale-[0.98] border bg-surface-2 border-line text-ink-soft hover:bg-surface-3 disabled:opacity-30 disabled:pointer-events-none shadow-xs`}
                   aria-label={t('user.wallet.paginationPrev')}
                 >
                   <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-180 shrink-0" />
@@ -507,7 +501,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 </button>
 
                 <span
-                  className={`text-xs tnum font-medium px-3 py-1.5 rounded-lg border bg-surface/[0.03] border-line/10 text-ink-muted`}
+                  className={`text-xs tnum font-medium px-3 py-1.5 rounded-lg border bg-surface-2 border-line text-ink-muted`}
                 >
                   {t('user.wallet.paginationPage')
                     .replace('{page}', String(page))
@@ -521,7 +515,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     triggerHaptic('selection');
                     setPage((p) => p + 1);
                   }}
-                  className={`min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-medium cursor-pointer transition-all active:scale-[0.98] border bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08] disabled:opacity-30 disabled:pointer-events-none shadow-xs`}
+                  className={`min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-medium cursor-pointer transition-all active:scale-[0.98] border bg-surface-2 border-line text-ink-soft hover:bg-surface-3 disabled:opacity-30 disabled:pointer-events-none shadow-xs`}
                   aria-label={t('user.wallet.paginationNext')}
                 >
                   <span>{t('user.wallet.paginationNext')}</span>

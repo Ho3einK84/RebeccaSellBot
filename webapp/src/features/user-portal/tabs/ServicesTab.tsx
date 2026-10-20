@@ -79,9 +79,9 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
 
       {configs.length === 0 ? (
         <div
-          className={`p-6 rounded-3xl border text-center flex flex-col items-center gap-3 my-4 bg-surface/[0.02] border-line/[0.07] shadow-2xs`}
+          className={`p-6 rounded-3xl border text-center flex flex-col items-center gap-3 my-4 bg-surface border-line shadow-2xs`}
         >
-          <div className="w-14 h-14 rounded-2xl bg-brand/10 text-brand flex items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-brand/10 text-brand flex items-center justify-center border border-brand/15">
             <ShieldCheck className="w-7 h-7" />
           </div>
           <h3 className={`text-sm font-bold text-ink`}>{t('user.services.emptyTitle')}</h3>
@@ -103,7 +103,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
             return (
               <div
                 key={c.id}
-                className={`p-4 rounded-2xl border flex flex-col gap-3 text-start transition-all bg-surface/[0.03] border-line/[0.08] hover:border-line/[0.15] shadow-2xs`}
+                className={`p-4 rounded-2xl border flex flex-col gap-3 text-start transition-all bg-surface border-line hover:border-line-strong shadow-2xs`}
               >
                 {/* Header: Name, Auto-renew, and Status */}
                 <div className="flex items-center justify-between gap-2">
@@ -139,7 +139,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                       <button
                         type="button"
                         onClick={() => handleCopySub(c.subUrl!, `sub-${c.id}`)}
-                        className={`flex-1 min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${isSubCopied ? 'bg-ok text-ink' : 'bg-surface/[0.06] hover:bg-surface/10 text-ink border border-line/10'}`}
+                        className={`flex-1 min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${isSubCopied ? 'bg-ok text-white font-bold' : 'bg-surface-2 hover:bg-surface-3 text-ink-soft border border-line'}`}
                       >
                         {isSubCopied ? (
                           <>
@@ -157,7 +157,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                       <button
                         type="button"
                         onClick={() => handleQrClick(c.subUrl!, c.configUsername)}
-                        className={`min-h-[44px] p-2.5 rounded-xl border flex items-center justify-center transition-all active:scale-95 cursor-pointer bg-brand/20 hover:bg-brand/30 text-brand border-brand/30`}
+                        className="min-h-[44px] p-2.5 rounded-xl border flex items-center justify-center transition-all active:scale-95 cursor-pointer bg-brand-soft hover:bg-brand/20 text-brand border-brand/25"
                         title={t('user.services.showQr')}
                         aria-label={t('user.services.showQr')}
                       >
@@ -170,7 +170,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                   <button
                     type="button"
                     onClick={() => handleManageClick(c.id)}
-                    className={`min-h-[44px] px-3.5 py-2 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border bg-surface/[0.06] hover:bg-surface/10 text-brand border-brand/30 shadow-2xs`}
+                    className="min-h-[44px] px-3.5 py-2 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer border bg-surface-2 hover:bg-surface-3 text-brand border-brand/25 shadow-2xs"
                     title={t('user.services.manage')}
                     aria-label={t('user.services.manage')}
                   >

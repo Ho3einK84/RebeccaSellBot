@@ -180,9 +180,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <button
           type="button"
           onClick={() => handleAction('shop')}
-          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface/[0.03] border-line/[0.07] hover:bg-surface/[0.06] text-ink shadow-2xs`}
+          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface border-line hover:border-brand/30 hover:bg-surface-2 text-ink shadow-2xs`}
         >
-          <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center border border-brand/15">
             <ShoppingBag className="w-5 h-5" />
           </div>
           <span className="text-xs font-semibold">{t('user.dashboard.buyService')}</span>
@@ -191,9 +191,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <button
           type="button"
           onClick={() => handleAction('services')}
-          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface/[0.03] border-line/[0.07] hover:bg-surface/[0.06] text-ink shadow-2xs`}
+          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface border-line hover:border-brand/30 hover:bg-surface-2 text-ink shadow-2xs`}
         >
-          <div className="w-10 h-10 rounded-xl bg-ok/10 text-ok flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-ok/10 text-ok flex items-center justify-center border border-ok/15">
             <Wifi className="w-5 h-5" />
           </div>
           <span className="text-xs font-semibold">{t('user.dashboard.myConfigs')}</span>
@@ -202,9 +202,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <button
           type="button"
           onClick={() => handleAction('wallet')}
-          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface/[0.03] border-line/[0.07] hover:bg-surface/[0.06] text-ink shadow-2xs`}
+          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface border-line hover:border-brand/30 hover:bg-surface-2 text-ink shadow-2xs`}
         >
-          <div className="w-10 h-10 rounded-xl bg-warn/10 text-warn flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-warn/10 text-warn flex items-center justify-center border border-warn/15">
             <Wallet className="w-5 h-5" />
           </div>
           <span className="text-xs font-semibold">{t('user.tabs.wallet')}</span>
@@ -213,9 +213,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <button
           type="button"
           onClick={() => handleAction('referral')}
-          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface/[0.03] border-line/[0.07] hover:bg-surface/[0.06] text-ink shadow-2xs`}
+          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface border-line hover:border-brand/30 hover:bg-surface-2 text-ink shadow-2xs`}
         >
-          <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center border border-brand/15">
             <Users className="w-5 h-5" />
           </div>
           <span className="text-xs font-semibold">{t('user.dashboard.inviteEarn')}</span>
@@ -247,7 +247,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
         {activeConfigs.length === 0 ? (
           <div
-            className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 bg-surface/[0.02] border-line/[0.06]`}
+            className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 bg-surface border-line`}
           >
             <ShieldCheck className="w-8 h-8 text-brand/60 mt-1" />
             <span className={`text-xs font-bold text-ink-soft`}>
@@ -271,7 +271,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 type="button"
                 key={cfg.id}
                 onClick={() => handleAction('services')}
-                className={`w-full p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 text-start bg-surface/[0.025] border-line/[0.07] hover:border-brand/30 shadow-2xs`}
+                className={`w-full p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 text-start bg-surface border-line hover:border-brand/30 shadow-2xs`}
               >
                 <div className="flex items-center justify-between w-full gap-2">
                   <div className="flex items-center gap-2 min-w-0">
@@ -302,10 +302,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <button
           type="button"
           onClick={handleSupportClick}
-          className={`w-full p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-start transition-all cursor-pointer bg-brand/20 border-brand/20 hover:bg-brand/30`}
+          className={`w-full p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-start transition-all cursor-pointer bg-brand-soft border-brand/25 hover:bg-brand/15`}
         >
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand/15 text-brand flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-brand/15 text-brand flex items-center justify-center shrink-0 border border-brand/20">
               <MessageCircle className="w-4 h-4" />
             </div>
             <div className="flex flex-col">
@@ -340,7 +340,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
         {transactions.length === 0 ? (
           <div
-            className={`p-3.5 rounded-2xl border text-center text-[11px] bg-surface/[0.02] border-line/[0.06] text-ink-muted`}
+            className={`p-3.5 rounded-2xl border text-center text-[11px] bg-surface border-line text-ink-muted`}
           >
             {t('user.dashboard.noRecentActivity')}
           </div>
@@ -351,7 +351,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               return (
                 <div
                   key={tx.id}
-                  className={`p-3 rounded-xl border flex items-center justify-between text-start bg-surface/[0.02] border-line/[0.06]`}
+                  className={`p-3 rounded-xl border flex items-center justify-between text-start bg-surface border-line shadow-2xs`}
                 >
                   <div className="flex flex-col min-w-0 pr-2">
                     <span className={`text-xs font-semibold truncate text-ink-soft`}>

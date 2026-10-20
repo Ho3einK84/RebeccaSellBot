@@ -59,10 +59,10 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
     <div className="w-full flex flex-col gap-4 pb-6 text-start">
       {/* Referral Hero Banner */}
       <section
-        className={`p-5 rounded-3xl border relative overflow-hidden flex flex-col gap-3 transition-all bg-gradient-to-br from-brand/40 via-brand/20 to-zinc-900/60 border-brand/20 shadow-lg shadow-brand/20 shadow-2xs`}
+        className={`p-5 rounded-3xl border relative overflow-hidden flex flex-col gap-3 transition-all bg-gradient-to-br from-brand-soft via-surface to-brand-soft/50 dark:from-brand/35 dark:via-surface dark:to-brand/20 border-brand/20 shadow-lg shadow-brand/10 shadow-2xs`}
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-brand/15 text-brand flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-brand/15 text-brand flex items-center justify-center shrink-0 border border-brand/25">
             <Gift className="w-5 h-5" />
           </div>
           <div className="flex flex-col">
@@ -77,9 +77,9 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
       {/* Referral Stats Cards */}
       <section className="grid grid-cols-2 gap-3">
         <div
-          className={`p-4 rounded-2xl border flex flex-col gap-1 text-center justify-center bg-surface/[0.025] border-line/[0.07] shadow-2xs`}
+          className={`p-4 rounded-2xl border flex flex-col gap-1 text-center justify-center bg-surface border-line shadow-2xs`}
         >
-          <div className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center mx-auto mb-1">
+          <div className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center mx-auto mb-1 border border-brand/15">
             <Users className="w-4 h-4" />
           </div>
           <span className="text-[11px] text-ink-muted">{t('user.referral.statsInvited')}</span>
@@ -89,9 +89,9 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
         </div>
 
         <div
-          className={`p-4 rounded-2xl border flex flex-col gap-1 text-center justify-center bg-surface/[0.025] border-line/[0.07] shadow-2xs`}
+          className={`p-4 rounded-2xl border flex flex-col gap-1 text-center justify-center bg-surface border-line shadow-2xs`}
         >
-          <div className="w-8 h-8 rounded-xl bg-ok/10 text-ok flex items-center justify-center mx-auto mb-1">
+          <div className="w-8 h-8 rounded-xl bg-ok/10 text-ok flex items-center justify-center mx-auto mb-1 border border-ok/15">
             <Award className="w-4 h-4" />
           </div>
           <span className="text-[11px] text-ink-muted">{t('user.referral.statsEarned')}</span>
@@ -106,7 +106,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
 
       {/* Referral Code & Link Box */}
       <section
-        className={`p-4 sm:p-5 rounded-3xl border flex flex-col gap-3.5 bg-surface/[0.025] border-line/[0.08] shadow-2xs`}
+        className={`p-4 sm:p-5 rounded-3xl border flex flex-col gap-3.5 bg-surface border-line shadow-2xs`}
       >
         {/* Referral Code Box */}
         <div className="flex flex-col gap-1.5">
@@ -114,7 +114,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           <button
             type="button"
             onClick={handleCopyCode}
-            className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer text-start bg-surface/90 border-line/10`}
+            className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer text-start bg-surface-2 border-line hover:border-line-strong`}
           >
             <span
               dir="ltr"
@@ -123,7 +123,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
               {referralCode || '—'}
             </span>
             <span
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors ${isCopied('referral-code') ? 'bg-ok/15 text-ok border border-ok/25' : 'bg-surface/5 text-ink-soft border border-line/10 shadow-2xs'}`}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors ${isCopied('referral-code') ? 'bg-ok/15 text-ok border border-ok/25' : 'bg-surface-3 text-ink-soft border border-line shadow-2xs'}`}
             >
               {isCopied('referral-code') ? (
                 <>
@@ -146,7 +146,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           <button
             type="button"
             onClick={handleCopyLink}
-            className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer text-start bg-surface/90 border-line/10`}
+            className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer text-start bg-surface-2 border-line hover:border-line-strong`}
           >
             <span
               dir="ltr"
@@ -155,7 +155,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
               {inviteLink || '—'}
             </span>
             <span
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors ${isCopied('referral-link') ? 'bg-ok/15 text-ok border border-ok/25' : 'bg-surface/5 text-ink-soft border border-line/10 shadow-2xs'}`}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors ${isCopied('referral-link') ? 'bg-ok/15 text-ok border border-ok/25' : 'bg-surface-3 text-ink-soft border border-line shadow-2xs'}`}
             >
               {isCopied('referral-link') ? (
                 <>
@@ -177,7 +177,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           <button
             type="button"
             onClick={handleCopyLink}
-            className={`py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${isCopied('referral-link') ? 'bg-ok text-ink' : 'bg-surface/10 hover:bg-surface/15 text-ink border border-line/10'}`}
+            className={`py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${isCopied('referral-link') ? 'bg-ok text-white font-bold' : 'bg-surface-2 hover:bg-surface-3 text-ink-soft border border-line'}`}
           >
             {isCopied('referral-link') ? (
               <>
