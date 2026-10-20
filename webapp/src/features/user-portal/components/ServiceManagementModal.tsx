@@ -49,7 +49,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   onNotify,
 }) => {
   const { t, locale } = useLanguage();
-  const { isDark, textPrimary, textSecondary } = useThemeTokens();
+  const { textPrimary, textSecondary } = useThemeTokens();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
   const queryClient = useQueryClient();
@@ -203,7 +203,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
         title={
           <div className="flex items-center gap-2">
             <ServiceStatusDot status={config.panelStatus} />
-            <span className="font-mono text-sm sm:text-base font-bold truncate">
+            <span className="tnum text-sm sm:text-base font-bold truncate">
               {config.configUsername}
             </span>
           </div>
@@ -212,9 +212,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
         <div className="flex flex-col gap-4 text-start">
           {/* Status & Timing Overview */}
           <div
-            className={`p-3.5 rounded-2xl border flex flex-col gap-2.5 ${
-              isDark ? 'bg-white/[0.02] border-white/10' : 'bg-slate-50 border-slate-200'
-            }`}
+            className={`p-3.5 rounded-2xl border flex flex-col gap-2.5 bg-surface/[0.02] border-line/10`}
           >
             <div className="flex items-center justify-between gap-2">
               <span className={`text-xs font-semibold ${textSecondary}`}>
@@ -231,9 +229,9 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
               usedTraffic={config.panelUsedTraffic}
             />
 
-            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 pt-1 border-t border-slate-200/60 dark:border-white/[0.05] gap-2 flex-wrap">
+            <div className="flex items-center justify-between text-[11px] text-ink-muted pt-1 border-t border-line/60 gap-2 flex-wrap">
               <ServiceExpiryView expireTimestampSec={config.panelExpire} />
-              <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
+              <span className="text-[10px] text-ink-muted tnum">
                 {formatServiceCreatedDate(config.createdAt, locale, t)}
               </span>
             </div>
@@ -251,13 +249,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   <button
                     type="button"
                     onClick={handleCopySub}
-                    className={`min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border ${
-                      isSubCopied
-                        ? 'bg-emerald-600 text-white border-emerald-500'
-                        : isDark
-                          ? 'bg-white/[0.06] hover:bg-white/10 text-white border-white/10'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
-                    }`}
+                    className={`min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border ${isSubCopied ? 'bg-ok text-ink border-ok' : 'bg-surface/[0.06] hover:bg-surface/10 text-ink border-line/10'}`}
                   >
                     {isSubCopied ? (
                       <>
@@ -275,11 +267,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   <button
                     type="button"
                     onClick={handleOpenQr}
-                    className={`min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border ${
-                      isDark
-                        ? 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border-indigo-500/30'
-                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
-                    }`}
+                    className={`min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border bg-brand/20 hover:bg-brand/30 text-brand border-brand/30`}
                   >
                     <QrCode className="w-4 h-4" />
                     <span>{t('user.services.showQr')}</span>
@@ -293,15 +281,9 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
               type="button"
               onClick={handleRefreshStats}
               disabled={isRefreshing}
-              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border ${
-                isDark
-                  ? 'bg-white/[0.04] hover:bg-white/[0.08] text-white border-white/10'
-                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-2xs'
-              } disabled:opacity-50`}
+              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border bg-surface/[0.04] hover:bg-surface/[0.08] text-ink border-line/10 shadow-2xs disabled:opacity-50`}
             >
-              <RotateCw
-                className={`w-4 h-4 text-indigo-400 ${isRefreshing ? 'animate-spin' : ''}`}
-              />
+              <RotateCw className={`w-4 h-4 text-brand ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>
                 {isRefreshing ? t('user.services.refreshing') : t('user.services.refresh')}
               </span>
@@ -316,9 +298,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
 
             {/* Auto-Renew Switch Card */}
             <div
-              className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                isDark ? 'bg-white/[0.02] border-white/10' : 'bg-slate-50 border-slate-200'
-              }`}
+              className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 bg-surface/[0.02] border-line/10`}
             >
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className={`text-xs font-bold ${textPrimary}`}>
@@ -334,14 +314,10 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 onClick={handleToggleAutoRenew}
                 disabled={isTogglingAutoRenew}
                 aria-label={t('user.services.autoRenewToggle')}
-                className={`w-12 h-7 min-h-[28px] p-0.5 rounded-full transition-colors duration-200 ease-in-out relative shrink-0 cursor-pointer ${
-                  autoRenewOptimistic ? 'bg-emerald-500' : isDark ? 'bg-white/20' : 'bg-slate-300'
-                } disabled:opacity-50`}
+                className={`w-12 h-7 min-h-[28px] p-0.5 rounded-full transition-colors duration-200 ease-in-out relative shrink-0 cursor-pointer ${autoRenewOptimistic ? 'bg-ok' : 'bg-surface/20'} disabled:opacity-50`}
               >
                 <div
-                  className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
-                    autoRenewOptimistic ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0'
-                  }`}
+                  className={`w-6 h-6 rounded-full bg-surface shadow-md transform transition-transform duration-200 ease-in-out ${autoRenewOptimistic ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0'}`}
                 />
               </button>
             </div>
@@ -353,15 +329,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 triggerHaptic('warning');
                 setConfirmAction(isDisabled ? 'enable' : 'disable');
               }}
-              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-between transition-all active:scale-95 cursor-pointer border ${
-                isDisabled
-                  ? isDark
-                    ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
-                  : isDark
-                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
-                    : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
-              }`}
+              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-between transition-all active:scale-95 cursor-pointer border ${isDisabled ? 'bg-ok/10 hover:bg-ok/20 text-ok border-ok/30' : 'bg-warn/10 hover:bg-warn/20 text-warn border-warn/30'}`}
             >
               <div className="flex items-center gap-2">
                 <Power className="w-4 h-4" />
@@ -383,11 +351,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 triggerHaptic('warning');
                 setConfirmAction('revoke');
               }}
-              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-between transition-all active:scale-95 cursor-pointer border ${
-                isDark
-                  ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30'
-                  : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
-              }`}
+              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-between transition-all active:scale-95 cursor-pointer border bg-danger/10 hover:bg-danger/20 text-danger border-danger/30`}
             >
               <div className="flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
@@ -398,7 +362,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
           </div>
 
           {/* Bot Hand-off Actions */}
-          <div className="flex flex-col gap-2 pt-1 border-t border-slate-200/60 dark:border-white/[0.06]">
+          <div className="flex flex-col gap-2 pt-1 border-t border-line/60">
             <h4 className={`text-xs font-bold uppercase tracking-wider px-1 ${textSecondary}`}>
               {t('user.services.botActionsTitle')}
             </h4>
@@ -407,14 +371,10 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('renew')}
-              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-indigo-600/10 hover:bg-indigo-600/20 text-white border-indigo-500/25'
-                  : 'bg-indigo-50/70 hover:bg-indigo-100/70 text-slate-900 border-indigo-200'
-              }`}
+              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer bg-brand/10 hover:bg-brand/20 text-ink border-brand/25`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-brand/20 text-brand flex items-center justify-center shrink-0">
                   <RotateCw className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col text-start min-w-0">
@@ -424,21 +384,17 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   </span>
                 </div>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <ExternalLink className="w-3.5 h-3.5 text-brand shrink-0" />
             </button>
 
             {/* Transfer in Bot */}
             <button
               type="button"
               onClick={() => handleOpenBotAction('transfer')}
-              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-white/[0.02] hover:bg-white/[0.06] text-white border-white/10'
-                  : 'bg-white hover:bg-slate-50 text-slate-900 border-slate-200 shadow-2xs'
-              }`}
+              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer bg-surface/[0.02] hover:bg-surface/[0.06] text-ink border-line/10 shadow-2xs`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-info/20 text-info flex items-center justify-center shrink-0">
                   <Send className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col text-start min-w-0">
@@ -448,21 +404,17 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   </span>
                 </div>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <ExternalLink className="w-3.5 h-3.5 text-ink-muted shrink-0" />
             </button>
 
             {/* Delete / Refund in Bot */}
             <button
               type="button"
               onClick={() => handleOpenBotAction('delete')}
-              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-rose-500/5 hover:bg-rose-500/15 text-rose-300 border-rose-500/20'
-                  : 'bg-rose-50/60 hover:bg-rose-100/60 text-rose-700 border-rose-200'
-              }`}
+              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer bg-danger/5 hover:bg-danger/15 text-danger border-danger/20`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-danger/20 text-danger flex items-center justify-center shrink-0">
                   <Trash2 className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col text-start min-w-0">
@@ -472,7 +424,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   </span>
                 </div>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <ExternalLink className="w-3.5 h-3.5 text-danger shrink-0" />
             </button>
           </div>
         </div>
@@ -489,13 +441,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
           <div className="flex flex-col gap-4 text-start">
             <div className="flex items-start gap-3">
               <div
-                className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
-                  confirmAction === 'revoke'
-                    ? 'bg-rose-500/15 border-rose-500/25 text-rose-500'
-                    : confirmAction === 'disable'
-                      ? 'bg-amber-500/15 border-amber-500/25 text-amber-500'
-                      : 'bg-emerald-500/15 border-emerald-500/25 text-emerald-500'
-                }`}
+                className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${confirmAction === 'revoke' ? 'bg-danger/15 border-danger/25 text-danger' : confirmAction === 'disable' ? 'bg-warn/15 border-warn/25 text-warn' : 'bg-ok/15 border-ok/25 text-ok'}`}
               >
                 {confirmAction === 'revoke' ? (
                   <ShieldAlert className="w-5 h-5" />
@@ -522,7 +468,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-2 pt-2 border-t border-line">
               <Button
                 type="button"
                 variant="secondary"

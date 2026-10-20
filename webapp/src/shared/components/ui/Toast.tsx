@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
-import { useTheme } from '@/shared/theme/ThemeContext.js';
 
 export interface ToastItem {
   id: string;
@@ -22,24 +21,16 @@ export const Toast: React.FC<ToastProps> = ({
   onDismiss,
   className = '',
 }) => {
-  const { isDark } = useTheme();
-
   const variantStyles = {
-    success: isDark
-      ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300 shadow-emerald-950/20'
-      : 'bg-emerald-50/90 border-emerald-200 text-emerald-900 shadow-emerald-100/50',
-    error: isDark
-      ? 'bg-rose-950/40 border-rose-500/30 text-rose-300 shadow-rose-950/20'
-      : 'bg-rose-50/90 border-rose-200 text-rose-900 shadow-rose-100/50',
-    warning: isDark
-      ? 'bg-amber-950/40 border-amber-500/30 text-amber-300 shadow-amber-950/20'
-      : 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-amber-100/50',
+    success: 'bg-ok/40 border-ok/30 text-ok shadow-ok/20 shadow-ok/50',
+    error: 'bg-danger/40 border-danger/30 text-danger shadow-danger/20 shadow-danger/50',
+    warning: 'bg-warn/40 border-warn/30 text-warn shadow-warn/20 shadow-warn/50',
   }[type];
 
   const iconBg = {
-    success: isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700',
-    error: isDark ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-700',
-    warning: isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700',
+    success: 'bg-ok/20 text-ok',
+    error: 'bg-danger/20 text-danger',
+    warning: 'bg-warn/20 text-warn',
   }[type];
 
   return (
@@ -62,7 +53,7 @@ export const Toast: React.FC<ToastProps> = ({
         <button
           type="button"
           onClick={onDismiss}
-          className="min-h-[44px] min-w-[44px] p-2 rounded-xl opacity-70 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition-all cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
+          className="min-h-[44px] min-w-[44px] p-2 rounded-xl opacity-70 hover:opacity-100 hover:bg-ink/[0.06] transition-all cursor-pointer shrink-0 flex items-center justify-center active:scale-95"
           aria-label="Dismiss"
         >
           <X className="w-4 h-4" />

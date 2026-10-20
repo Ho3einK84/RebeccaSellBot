@@ -10,7 +10,7 @@ interface AuthErrorScreenProps {
 
 export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
   const { t, isRtl } = useLanguage();
-  const { isDark, textPrimary, textSecondary } = useThemeTokens();
+  const { textPrimary, textSecondary } = useThemeTokens();
 
   const handleClose = () => {
     if (window.Telegram?.WebApp?.close) {
@@ -59,22 +59,14 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
     >
       <div className="flex items-center justify-center w-full h-full p-4">
         <div
-          className={`p-6 sm:p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border shadow-lg ${
-            isDark
-              ? 'bg-zinc-900/90 border-white/10 shadow-black/40 backdrop-blur-xl'
-              : 'bg-white border-slate-200 shadow-slate-200/60'
-          }`}
+          className={`p-6 sm:p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border shadow-lg bg-surface/90 border-line/10 shadow-black/40 backdrop-blur-xl shadow-slate-200/60`}
         >
           {/* Brand Logo / Shield Icon */}
           <div
             className={`w-16 h-16 rounded-2xl flex items-center justify-center border ${
               isTelegramOnly
-                ? isDark
-                  ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
-                  : 'bg-indigo-50 border-indigo-200 text-indigo-600'
-                : isDark
-                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                  : 'bg-amber-50 border-amber-200 text-amber-600'
+                ? 'bg-brand/10 border-brand/20 text-brand'
+                : 'bg-warn/10 border-warn/20 text-warn'
             }`}
           >
             {isTelegramOnly ? (
@@ -99,11 +91,7 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
               href={openInTelegramUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={`h-11 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 no-underline ${
-                isDark
-                  ? 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-500/20'
-                  : 'bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/10'
-              }`}
+              className={`h-11 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 no-underline bg-brand hover:bg-brand text-brand-ink shadow-lg shadow-brand/20 shadow-slate-900/10`}
             >
               <ExternalLink className="w-4 h-4" />
               <span>{t('auth.openInTelegram')}</span>

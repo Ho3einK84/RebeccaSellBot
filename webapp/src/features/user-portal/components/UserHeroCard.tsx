@@ -15,7 +15,7 @@ interface UserHeroCardProps {
 export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCopied }) => {
   const { t } = useLanguage();
   const { sanitizeDisplayName } = useFormatters();
-  const { isDark, cardClass } = useThemeTokens();
+  const { cardClass } = useThemeTokens();
 
   const { displayName, initials } = sanitizeDisplayName(
     user.first_name,
@@ -30,23 +30,13 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
         {/* Avatar */}
         <div className="relative mb-3.5 cs-avatar-entrance">
           <div
-            className={`absolute inset-0 rounded-full blur-xl cs-breathe ${
-              isDark
-                ? 'bg-gradient-to-tr from-zinc-700/40 via-zinc-500/30 to-zinc-800/40'
-                : 'bg-gradient-to-tr from-slate-300/60 via-slate-200/50 to-slate-400/40'
-            }`}
+            className={`absolute inset-0 rounded-full blur-xl cs-breathe bg-gradient-to-tr from-zinc-700/40 via-zinc-500/30 to-zinc-800/40`}
           />
           <div
-            className={`relative w-[72px] h-[72px] sm:w-[78px] sm:h-[78px] rounded-full p-[2px] transition-colors ${
-              isDark
-                ? 'bg-gradient-to-tr from-zinc-600 via-zinc-400 to-zinc-700 shadow-xl shadow-black/60'
-                : 'bg-gradient-to-tr from-slate-300 via-slate-400 to-slate-200 shadow-lg shadow-slate-200'
-            }`}
+            className={`relative w-[72px] h-[72px] sm:w-[78px] sm:h-[78px] rounded-full p-[2px] transition-colors bg-gradient-to-tr from-zinc-600 via-zinc-400 to-zinc-700 shadow-xl shadow-black/60 shadow-lg shadow-slate-200`}
           >
             <div
-              className={`w-full h-full rounded-full overflow-hidden flex items-center justify-center border transition-colors ${
-                isDark ? 'bg-[#0f1118] border-white/10' : 'bg-slate-100 border-slate-200'
-              }`}
+              className={`w-full h-full rounded-full overflow-hidden flex items-center justify-center border transition-colors bg-canvas border-line/10`}
             >
               {user.photo_url ? (
                 <img
@@ -56,22 +46,18 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
                   loading="lazy"
                 />
               ) : initials ? (
-                <span
-                  className={`text-lg sm:text-xl font-bold font-mono tracking-wider ${
-                    isDark ? 'text-white' : 'text-slate-800'
-                  }`}
-                >
+                <span className={`text-lg sm:text-xl font-bold tnum tracking-wider text-ink`}>
                   {initials}
                 </span>
               ) : (
-                <User className={`w-7 h-7 ${isDark ? 'text-zinc-400' : 'text-slate-500'}`} />
+                <User className={`w-7 h-7 text-ink-muted`} />
               )}
             </div>
           </div>
 
           {user.is_premium && (
             <div
-              className="absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full bg-gradient-to-tr from-amber-400 to-amber-500 border-2 border-[#090a0f] flex items-center justify-center shadow-md shadow-amber-500/30"
+              className="absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full bg-gradient-to-tr from-warn to-warn border-2 border-[#090a0f] flex items-center justify-center shadow-md shadow-warn/30"
               title={t('user.premiumUserBadge')}
             >
               <Star className="w-3 h-3 text-slate-950 fill-slate-950" />
@@ -81,16 +67,12 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
 
         {/* User greeting */}
         <h1
-          className={`text-xl sm:text-2xl font-bold mb-2 tracking-tight flex items-center justify-center gap-1.5 flex-wrap cs-fade-in ${
-            isDark ? 'text-white' : 'text-slate-900'
-          }`}
+          className={`text-xl sm:text-2xl font-bold mb-2 tracking-tight flex items-center justify-center gap-1.5 flex-wrap cs-fade-in text-ink`}
         >
           <span>{t('user.greetingPrefix')}</span>
           <bdi
             className={
-              isDark
-                ? 'bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent font-extrabold'
-                : 'text-slate-950 font-extrabold'
+              'bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent font-extrabold'
             }
           >
             {displayName}
@@ -103,55 +85,36 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
           <button
             type="button"
             onClick={onCopyId}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-all active:scale-[0.97] cursor-pointer select-none group border ${
-              isDark
-                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-300'
-                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-            }`}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-all active:scale-[0.97] cursor-pointer select-none group border bg-surface/[0.04] hover:bg-surface/[0.08] border-line/10 text-ink-muted shadow-xs`}
             title={t('common.copy')}
           >
-            <span className={`text-[11px] ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>
-              {t('user.telegramId')}
-            </span>
-            <code
-              dir="ltr"
-              className={`font-mono font-semibold text-xs ${isDark ? 'text-zinc-200' : 'text-slate-800'}`}
-            >
+            <span className={`text-[11px] text-ink-muted`}>{t('user.telegramId')}</span>
+            <code dir="ltr" className={`tnum font-semibold text-xs text-ink-soft`}>
               {user.id}
             </code>
             {isCopied ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-500">
-                <Check className="w-3 h-3 text-emerald-500" />
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
+                <Check className="w-3 h-3 text-ok" />
                 <span>{t('user.copiedId')}</span>
               </span>
             ) : (
-              <Copy
-                className={`w-3 h-3 transition-colors ${
-                  isDark
-                    ? 'text-zinc-400 group-hover:text-white'
-                    : 'text-slate-400 group-hover:text-slate-900'
-                }`}
-              />
+              <Copy className={`w-3 h-3 transition-colors text-ink-muted group-hover:text-ink`} />
             )}
           </button>
 
           {user.username && (
             <div
               dir="ltr"
-              className={`inline-flex items-center gap-0.5 border px-2.5 py-1 rounded-full text-[11px] font-mono select-none ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-                  : 'bg-white border-slate-200 text-slate-700 shadow-xs'
-              }`}
+              className={`inline-flex items-center gap-0.5 border px-2.5 py-1 rounded-full text-[11px] tnum select-none bg-surface/[0.04] border-line/10 text-ink-soft shadow-xs`}
             >
-              <span className={isDark ? 'text-zinc-400' : 'text-slate-400'}>@</span>
+              <span className={'text-ink-muted'}>@</span>
               <span>{user.username}</span>
             </div>
           )}
 
           {user.is_premium && (
             <Badge variant="warning" size="xs">
-              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+              <Star className="w-2.5 h-2.5 fill-warn text-warn" />
               <span>{t('user.premiumUserBadge')}</span>
             </Badge>
           )}
@@ -163,16 +126,12 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
         className={`w-full rounded-2xl p-4 sm:p-5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-colors ${cardClass}`}
       >
         <div
-          className={`absolute top-0 inset-x-0 h-px ${
-            isDark
-              ? 'bg-gradient-to-r from-transparent via-zinc-400/30 to-transparent'
-              : 'bg-gradient-to-r from-transparent via-slate-300 to-transparent'
-          }`}
+          className={`absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-zinc-400/30 to-transparent`}
         />
 
         <div className="flex items-center gap-2 mb-2.5">
           <Badge variant="neutral" size="xs">
-            <Sparkles className={`w-3 h-3 ${isDark ? 'text-zinc-300' : 'text-slate-600'}`} />
+            <Sparkles className={`w-3 h-3 text-ink-soft`} />
             <span>{t('user.userPortalBadge')}</span>
           </Badge>
           <Badge variant="warning" dot pulse size="xs">
@@ -180,19 +139,11 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
           </Badge>
         </div>
 
-        <h2
-          className={`text-base sm:text-[17px] font-bold mb-1.5 leading-snug ${
-            isDark ? 'text-white' : 'text-slate-900'
-          }`}
-        >
+        <h2 className={`text-base sm:text-[17px] font-bold mb-1.5 leading-snug text-ink`}>
           {t('user.portalTitle')}
         </h2>
 
-        <p
-          className={`text-xs sm:text-[13px] leading-relaxed m-0 ${
-            isDark ? 'text-zinc-400' : 'text-slate-600'
-          }`}
-        >
+        <p className={`text-xs sm:text-[13px] leading-relaxed m-0 text-ink-muted`}>
           {t('user.portalDesc')}
         </p>
       </section>

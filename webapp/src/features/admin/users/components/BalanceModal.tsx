@@ -23,7 +23,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber } = useFormatters();
-  const { isDark, subCardClass, inputClass, textPrimary, textSecondary } = useThemeTokens();
+  const { subCardClass, inputClass, textPrimary, textSecondary } = useThemeTokens();
 
   const [operation, setOperation] = useState<BalanceOperation>('add');
   const [amountStr, setAmountStr] = useState<string>('');
@@ -78,14 +78,10 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
     <Modal isOpen={Boolean(user)} onClose={handleClose} maxWidth="md" closeOnBackdrop={!loading}>
       <div className="space-y-4">
         {/* Modal Header with User Context */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-white/[0.06]">
+        <div className="flex items-center justify-between pb-3 border-b border-line/60">
           <div className="flex items-center gap-2.5 min-w-0">
             <div
-              className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 shadow-xs ${
-                isDark
-                  ? 'bg-indigo-500/15 border-indigo-500/25 text-indigo-400'
-                  : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-              }`}
+              className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 shadow-xs bg-brand/15 border-brand/25 text-brand`}
             >
               <Wallet className="w-4.5 h-4.5" />
             </div>
@@ -93,8 +89,8 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
               <h3 className={`font-bold text-sm sm:text-base m-0 tracking-tight ${textPrimary}`}>
                 {t('admin.modals.balanceTitle')}
               </h3>
-              <div className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
-                <span>{[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}</span>
+              <div className="text-[11px] tnum text-brand truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <span>{[user.firstName, user.lastName].filter(Boolean).join('') || '—'}</span>
                 {user.username && <span dir="ltr">(@{user.username})</span>}
                 <span className="opacity-40">·</span>
                 <span dir="ltr">#{user.telegramId}</span>
@@ -103,7 +99,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
           </div>
           <button
             type="button"
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+            className="p-1.5 rounded-xl text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
             onClick={handleClose}
             aria-label="Close"
           >
@@ -117,30 +113,21 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
             className={`p-3 rounded-xl border flex items-center justify-between text-xs ${subCardClass}`}
           >
             <span className={textSecondary}>{t('admin.users.balanceCurLabel')}</span>
-            <span className={`font-bold font-mono text-sm sm:text-base ${textPrimary}`}>
-              {formatMoney(user.balance)}{' '}
-              <span className="text-xs font-normal text-slate-400">{t('common.currency')}</span>
+            <span className={`font-bold tnum text-sm sm:text-base ${textPrimary}`}>
+              {formatMoney(user.balance)}
+              {''}
+              <span className="text-xs font-normal text-ink-muted">{t('common.currency')}</span>
             </span>
           </div>
 
           {/* Segmented Operation Selector */}
           <div className="space-y-1.5">
             <div
-              className={`grid grid-cols-3 gap-1 p-1 rounded-xl border text-xs ${
-                isDark ? 'bg-white/[0.03] border-white/[0.08]' : 'bg-slate-100 border-slate-200/80'
-              }`}
+              className={`grid grid-cols-3 gap-1 p-1 rounded-xl border text-xs bg-surface/[0.03] border-line/[0.08]`}
             >
               <button
                 type="button"
-                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${
-                  operation === 'add'
-                    ? isDark
-                      ? 'bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 shadow-xs'
-                      : 'bg-white text-emerald-700 font-semibold shadow-xs border border-emerald-200'
-                    : isDark
-                      ? 'text-zinc-400 hover:text-zinc-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${operation === 'add' ? 'bg-ok/20 text-ok font-semibold border border-ok/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
                 onClick={() => setOperation('add')}
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -149,15 +136,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
 
               <button
                 type="button"
-                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${
-                  operation === 'deduct'
-                    ? isDark
-                      ? 'bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30 shadow-xs'
-                      : 'bg-white text-rose-700 font-semibold shadow-xs border border-rose-200'
-                    : isDark
-                      ? 'text-zinc-400 hover:text-zinc-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${operation === 'deduct' ? 'bg-danger/20 text-danger font-semibold border border-danger/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
                 onClick={() => setOperation('deduct')}
               >
                 <Minus className="w-3.5 h-3.5" />
@@ -166,15 +145,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
 
               <button
                 type="button"
-                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${
-                  operation === 'set'
-                    ? isDark
-                      ? 'bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 shadow-xs'
-                      : 'bg-white text-indigo-700 font-semibold shadow-xs border border-indigo-200'
-                    : isDark
-                      ? 'text-zinc-400 hover:text-zinc-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${operation === 'set' ? 'bg-brand/20 text-brand font-semibold border border-brand/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
                 onClick={() => setOperation('set')}
               >
                 <Settings2 className="w-3.5 h-3.5" />
@@ -193,7 +164,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
               inputMode="numeric"
               dir="ltr"
               required
-              className={`w-full h-10 px-3.5 text-sm font-mono rounded-xl border outline-none transition-all ${inputClass}`}
+              className={`w-full h-10 px-3.5 text-sm tnum rounded-xl border outline-none transition-all ${inputClass}`}
               placeholder={t('admin.modals.balanceAmountPlaceholder')}
               value={amountStr}
               onChange={(e) => {
@@ -219,15 +190,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
                   <button
                     key={quickAmt}
                     type="button"
-                    className={`h-8 px-1 rounded-lg text-[11px] sm:text-xs font-medium transition-all active:scale-95 cursor-pointer border flex items-center justify-center select-none ${
-                      isSelected
-                        ? isDark
-                          ? 'bg-indigo-500/25 border-indigo-500/40 text-indigo-300 font-bold shadow-xs'
-                          : 'bg-indigo-600 text-white border-indigo-600 font-bold shadow-xs'
-                        : isDark
-                          ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
-                          : 'bg-slate-50 border-slate-200/80 text-slate-700 hover:bg-slate-100'
-                    }`}
+                    className={`h-8 px-1 rounded-lg text-[11px] sm:text-xs font-medium transition-all active:scale-95 cursor-pointer border flex items-center justify-center select-none ${isSelected ? 'bg-brand/25 border-brand/40 text-brand font-bold shadow-xs' : 'bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08]'}`}
                     onClick={() => setAmountStr(String(quickAmt))}
                   >
                     {label}
@@ -240,19 +203,14 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
           {/* Calculated Balance Preview Card */}
           {isValidAmount && (
             <div
-              className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-colors ${
-                isDark
-                  ? 'bg-indigo-500/10 border-indigo-500/20'
-                  : 'bg-indigo-50/70 border-indigo-200/80'
-              }`}
+              className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-colors bg-brand/10 border-brand/20`}
             >
-              <span
-                className={isDark ? 'text-indigo-300 font-medium' : 'text-indigo-800 font-medium'}
-              >
+              <span className={'text-brand font-medium'}>
                 {t('admin.users.balancePreviewLabel')}
               </span>
-              <span className={`font-bold font-mono text-sm sm:text-base ${textPrimary}`}>
-                {formatMoney(previewNewBalance)}{' '}
+              <span className={`font-bold tnum text-sm sm:text-base ${textPrimary}`}>
+                {formatMoney(previewNewBalance)}
+                {''}
                 <span className="text-xs font-normal opacity-70">{t('common.currency')}</span>
               </span>
             </div>
@@ -279,15 +237,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
                   <button
                     key={quickReason}
                     type="button"
-                    className={`h-8 px-2.5 rounded-lg text-xs transition-all active:scale-95 cursor-pointer border select-none ${
-                      isSelected
-                        ? isDark
-                          ? 'bg-indigo-500/25 border-indigo-500/40 text-indigo-300 font-semibold shadow-xs'
-                          : 'bg-indigo-50 border-indigo-300 text-indigo-700 font-semibold shadow-xs'
-                        : isDark
-                          ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:bg-white/[0.08]'
-                          : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100'
-                    }`}
+                    className={`h-8 px-2.5 rounded-lg text-xs transition-all active:scale-95 cursor-pointer border select-none ${isSelected ? 'bg-brand/25 border-brand/40 text-brand font-semibold shadow-xs' : 'bg-surface/[0.04] border-line/10 text-ink-muted hover:bg-surface/[0.08]'}`}
                     onClick={() => setReason(quickReason)}
                   >
                     {quickReason}
@@ -298,7 +248,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
           </div>
 
           {/* Modal Action Buttons */}
-          <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-slate-200 dark:border-white/10">
+          <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
             <Button
               type="button"
               variant="secondary"

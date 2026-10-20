@@ -65,7 +65,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   const { t } = useLanguage();
   const { formatMoney, formatNumber, formatIsoDate, formatBytes, sanitizeDisplayName } =
     useFormatters();
-  const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   const [activeTab, setActiveTab] = useState<
     'finances' | 'configs' | 'orders' | 'receipts' | 'transactions'
@@ -167,11 +167,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
       <Modal isOpen={Boolean(dossier)} onClose={onClose} maxWidth="2xl">
         <div className="space-y-4 max-h-[82dvh] overflow-y-auto">
           {/* Executive Profile Header */}
-          <div
-            className={`flex items-start justify-between pb-4 border-b ${
-              isDark ? 'border-white/[0.08]' : 'border-slate-200/80'
-            }`}
-          >
+          <div className={`flex items-start justify-between pb-4 border-b border-line/[0.08]`}>
             <div className="flex items-center gap-3.5 min-w-0">
               <Avatar name={user.firstName} username={user.username} size="lg" />
               <div className="min-w-0">
@@ -193,7 +189,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 text-xs mt-1 flex-wrap">
-                  <span className="text-indigo-500 font-mono">
+                  <span className="text-brand tnum">
                     {user.username ? (
                       <span dir="ltr" className="inline-block unicode-isolate font-medium">
                         @{user.username}
@@ -205,18 +201,14 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   <span className={textMuted}>·</span>
                   <button
                     type="button"
-                    className={`inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer ${
-                      isDark
-                        ? 'bg-white/[0.04] border-white/10 hover:border-white/20 text-zinc-300'
-                        : 'bg-slate-100 border-slate-200/80 hover:border-slate-300 text-slate-700'
-                    }`}
+                    className={`inline-flex items-center gap-1 tnum text-[11px] px-2 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 hover:border-line/20 text-ink-soft`}
                     onClick={() => onCopyId(String(user.telegramId), 'dossier-id')}
                     title={t('common.copy')}
                   >
                     <span className="text-[10px] opacity-60">#</span>
                     <span dir="ltr">{user.telegramId}</span>
                     {isCopied('dossier-id') ? (
-                      <Check className="w-2.5 h-2.5 text-emerald-500" />
+                      <Check className="w-2.5 h-2.5 text-ok" />
                     ) : (
                       <Copy className="w-2.5 h-2.5 opacity-50" />
                     )}
@@ -227,7 +219,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
             <button
               type="button"
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+              className="p-1.5 rounded-xl text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
               onClick={onClose}
               aria-label="Close"
             >
@@ -236,18 +228,10 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           </div>
 
           {/* Segmented Dossier Tabs */}
-          <div className="p-1 rounded-xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1 overflow-x-auto scrollbar-none">
+          <div className="p-1 rounded-xl bg-surface-2 border border-line/80 flex items-center gap-1 overflow-x-auto scrollbar-none">
             <button
               type="button"
-              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${
-                activeTab === 'finances'
-                  ? isDark
-                    ? 'bg-white/10 text-white font-semibold shadow-xs'
-                    : 'bg-white text-slate-950 font-semibold shadow-xs'
-                  : isDark
-                    ? 'text-zinc-400 hover:text-zinc-200'
-                    : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${activeTab === 'finances' ? 'bg-surface/10 text-ink font-semibold shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
               onClick={() => setActiveTab('finances')}
             >
               {t('admin.users.tabFinances')}
@@ -255,15 +239,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
             <button
               type="button"
-              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${
-                activeTab === 'configs'
-                  ? isDark
-                    ? 'bg-white/10 text-white font-semibold shadow-xs'
-                    : 'bg-white text-slate-950 font-semibold shadow-xs'
-                  : isDark
-                    ? 'text-zinc-400 hover:text-zinc-200'
-                    : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${activeTab === 'configs' ? 'bg-surface/10 text-ink font-semibold shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
               onClick={() => setActiveTab('configs')}
             >
               {t('admin.users.tabConfigs')} ({formatNumber(configs.length)})
@@ -271,15 +247,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
             <button
               type="button"
-              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${
-                activeTab === 'transactions'
-                  ? isDark
-                    ? 'bg-white/10 text-white font-semibold shadow-xs'
-                    : 'bg-white text-slate-950 font-semibold shadow-xs'
-                  : isDark
-                    ? 'text-zinc-400 hover:text-zinc-200'
-                    : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${activeTab === 'transactions' ? 'bg-surface/10 text-ink font-semibold shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
               onClick={() => setActiveTab('transactions')}
             >
               {t('admin.users.tabTransactions')} ({formatNumber(transactions.length)})
@@ -287,15 +255,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
             <button
               type="button"
-              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${
-                activeTab === 'orders'
-                  ? isDark
-                    ? 'bg-white/10 text-white font-semibold shadow-xs'
-                    : 'bg-white text-slate-950 font-semibold shadow-xs'
-                  : isDark
-                    ? 'text-zinc-400 hover:text-zinc-200'
-                    : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${activeTab === 'orders' ? 'bg-surface/10 text-ink font-semibold shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
               onClick={() => setActiveTab('orders')}
             >
               {t('admin.users.tabOrders')} ({formatNumber(orders.length)})
@@ -303,15 +263,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
             <button
               type="button"
-              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${
-                activeTab === 'receipts'
-                  ? isDark
-                    ? 'bg-white/10 text-white font-semibold shadow-xs'
-                    : 'bg-white text-slate-950 font-semibold shadow-xs'
-                  : isDark
-                    ? 'text-zinc-400 hover:text-zinc-200'
-                    : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer shrink-0 text-center ${activeTab === 'receipts' ? 'bg-surface/10 text-ink font-semibold shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
               onClick={() => setActiveTab('receipts')}
             >
               {t('admin.users.tabReceipts')} ({formatNumber(receipts.length)})
@@ -325,11 +277,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userCurBalance')}
                 </span>
-                <div
-                  className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${
-                    isDark ? 'text-emerald-400' : 'text-emerald-600'
-                  }`}
-                >
+                <div className={`text-base sm:text-lg font-bold tnum tracking-tight mt-1 text-ok`}>
                   {formatMoney(user.balance)} {t('common.currency')}
                 </div>
               </div>
@@ -339,7 +287,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   {t('admin.users.userTotalDeposit')}
                 </span>
                 <div
-                  className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${textPrimary}`}
+                  className={`text-base sm:text-lg font-bold tnum tracking-tight mt-1 ${textPrimary}`}
                 >
                   {formatMoney(summary.totalDeposit)} {t('common.currency')}
                 </div>
@@ -350,7 +298,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   {t('admin.users.userTotalSpend')}
                 </span>
                 <div
-                  className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${textPrimary}`}
+                  className={`text-base sm:text-lg font-bold tnum tracking-tight mt-1 ${textPrimary}`}
                 >
                   {formatMoney(summary.totalSpend)} {t('common.currency')}
                 </div>
@@ -360,7 +308,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userActiveConfigs')}
                 </span>
-                <div className="text-base sm:text-lg font-bold text-indigo-500 font-mono tracking-tight mt-1">
+                <div className="text-base sm:text-lg font-bold text-brand tnum tracking-tight mt-1">
                   {formatNumber(summary.activeConfigsCount)}
                 </div>
               </div>
@@ -369,11 +317,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userApprovedReceipts')}
                 </span>
-                <div
-                  className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${
-                    isDark ? 'text-emerald-400' : 'text-emerald-600'
-                  }`}
-                >
+                <div className={`text-base sm:text-lg font-bold tnum tracking-tight mt-1 text-ok`}>
                   {formatNumber(summary.receiptsApprovedCount)}
                 </div>
               </div>
@@ -383,7 +327,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   {t('admin.users.userAuditEvents')}
                 </span>
                 <div
-                  className={`text-base sm:text-lg font-bold font-mono tracking-tight mt-1 ${textSecondary}`}
+                  className={`text-base sm:text-lg font-bold tnum tracking-tight mt-1 ${textSecondary}`}
                 >
                   {formatNumber(summary.auditEventsCount)}
                 </div>
@@ -426,16 +370,12 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         <div className="flex items-center gap-2 min-w-0">
                           <span
                             dir="ltr"
-                            className={`font-mono font-bold text-xs sm:text-sm truncate ${textPrimary}`}
+                            className={`tnum font-bold text-xs sm:text-sm truncate ${textPrimary}`}
                           >
                             {cfg.configUsername}
                           </span>
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded-md border font-medium ${
-                              isDark
-                                ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-                                : 'bg-slate-100 border-slate-200 text-slate-700'
-                            }`}
+                            className={`text-[10px] px-2 py-0.5 rounded-md border font-medium bg-surface/[0.04] border-line/10 text-ink-soft`}
                           >
                             {cfg.panelName || cfg.panelId}
                           </span>
@@ -468,24 +408,18 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         <div className="space-y-1">
                           <div className="flex justify-between items-center text-[11px]">
                             <span className={textMuted}>{t('admin.users.configTraffic')}</span>
-                            <span className="font-mono font-semibold" dir="ltr">
-                              {formatBytes(usedTraffic)} /{' '}
+                            <span className="tnum font-semibold" dir="ltr">
+                              {formatBytes(usedTraffic)} /{''}
                               {dataLimit > 0
                                 ? formatBytes(dataLimit)
                                 : t('admin.users.configTrafficUnlimited')}
-                              {progressPct !== null && ` (${formatNumber(progressPct)}%)`}
+                              {progressPct !== null && `(${formatNumber(progressPct)}%)`}
                             </span>
                           </div>
                           {progressPct !== null && (
-                            <div className="w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                            <div className="w-full h-1.5 rounded-full bg-black/10 overflow-hidden">
                               <div
-                                className={`h-full rounded-full transition-all duration-300 ${
-                                  progressPct > 90
-                                    ? 'bg-rose-500'
-                                    : progressPct > 70
-                                      ? 'bg-amber-500'
-                                      : 'bg-emerald-500'
-                                }`}
+                                className={`h-full rounded-full transition-all duration-300 ${progressPct > 90 ? 'bg-danger' : progressPct > 70 ? 'bg-warn' : 'bg-ok'}`}
                                 style={{ width: `${progressPct}%` }}
                               />
                             </div>
@@ -495,7 +429,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         {/* Expiry Date */}
                         <div className="flex items-center justify-between sm:justify-end gap-2 text-[11px]">
                           <span className={textMuted}>{t('admin.users.configExpire')}</span>
-                          <span className="font-mono font-medium">
+                          <span className="tnum font-medium">
                             {cfg.panelExpire
                               ? isExpired
                                 ? t('admin.users.configExpired')
@@ -508,23 +442,17 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                       </div>
 
                       {/* Config Action Toolbar */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/50 dark:border-white/[0.04]">
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-line/50">
                         {/* Sub link actions */}
                         {cfg.subUrl && (
                           <>
                             <button
                               type="button"
                               onClick={() => onCopyId(cfg.subUrl!, `sub-${cfg.id}`)}
-                              className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                                isCopied(`sub-${cfg.id}`)
-                                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-500'
-                                  : isDark
-                                    ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
-                                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                              }`}
+                              className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${isCopied(`sub-${cfg.id}`) ? 'bg-ok/15 border-ok/30 text-ok' : 'bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08]'}`}
                             >
                               {isCopied(`sub-${cfg.id}`) ? (
-                                <Check className="w-3 h-3 text-emerald-500" />
+                                <Check className="w-3 h-3 text-ok" />
                               ) : (
                                 <Copy className="w-3 h-3 opacity-60" />
                               )}
@@ -536,11 +464,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             <button
                               type="button"
                               onClick={() => setQrModalConfig(cfg)}
-                              className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                                isDark
-                                  ? 'bg-indigo-500/15 border-indigo-500/25 text-indigo-300 hover:bg-indigo-500/25'
-                                  : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                              }`}
+                              className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer bg-brand/15 border-brand/25 text-brand hover:bg-brand/25`}
                             >
                               <QrCode className="w-3 h-3" />
                               <span>{t('admin.users.btnShowQr')}</span>
@@ -554,11 +478,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             type="button"
                             disabled={isToggling}
                             onClick={() => handleToggle(cfg)}
-                            className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                              cfg.panelStatus === 'disabled'
-                                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
-                                : 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20'
-                            }`}
+                            className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${cfg.panelStatus === 'disabled' ? 'bg-ok/15 border-ok/30 text-ok hover:bg-ok/25' : 'bg-danger/10 border-danger/20 text-danger hover:bg-danger/20'}`}
                           >
                             {isToggling ? (
                               <RotateCw className="w-3 h-3 animate-spin" />
@@ -578,11 +498,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setConfirmModal({ type: 'reset-usage', config: cfg })}
-                            className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                              isDark
-                                ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
-                                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                            }`}
+                            className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08]`}
                           >
                             <RotateCcw className="w-3 h-3 opacity-60" />
                             <span>{t('admin.users.btnResetTraffic')}</span>
@@ -594,11 +510,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setConfirmModal({ type: 'revoke', config: cfg })}
-                            className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                              isDark
-                                ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
-                                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                            }`}
+                            className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08]`}
                           >
                             <RefreshCw className="w-3 h-3 opacity-60" />
                             <span>{t('admin.users.btnRevokeSub')}</span>
@@ -611,11 +523,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             type="button"
                             disabled={isSyncing}
                             onClick={() => handleSync(cfg)}
-                            className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ms-auto ${
-                              isDark
-                                ? 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-zinc-200'
-                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                            }`}
+                            className={`h-7.5 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-all active:scale-95 cursor-pointer ms-auto bg-surface/[0.04] border-line/10 text-ink-muted hover:text-ink-soft`}
                           >
                             <RotateCw
                               className={`w-3 h-3 opacity-60 ${isSyncing ? 'animate-spin' : ''}`}
@@ -648,11 +556,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
-                            isCredit
-                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                              : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
-                          }`}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${isCredit ? 'bg-ok/10 border-ok/20 text-ok' : 'bg-danger/10 border-danger/20 text-danger'}`}
                         >
                           {isCredit ? (
                             <ArrowDownLeft className="w-3.5 h-3.5 rtl:-scale-x-100" />
@@ -664,7 +568,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           <div className={`font-semibold text-xs truncate ${textPrimary}`}>
                             {tx.description}
                           </div>
-                          <div className={`text-[10px] font-mono ${textMuted}`}>
+                          <div className={`text-[10px] tnum ${textMuted}`}>
                             <span dir="ltr">{formatIsoDate(tx.createdAt)}</span>
                           </div>
                         </div>
@@ -672,22 +576,19 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
                       <div className="text-end space-y-0.5 shrink-0">
                         <div
-                          className={`font-mono font-bold text-xs sm:text-sm ${
-                            isCredit
-                              ? 'text-emerald-500 dark:text-emerald-400'
-                              : 'text-rose-500 dark:text-rose-400'
-                          }`}
+                          className={`tnum font-bold text-xs sm:text-sm ${isCredit ? 'text-ok ' : 'text-danger '}`}
                         >
                           <span dir="ltr">
                             {isCredit ? '+' : ''}
                             {formatMoney(tx.amount)}
-                          </span>{' '}
+                          </span>
+                          {''}
                           <span className="font-sans font-normal text-xs">
                             {t('common.currency')}
                           </span>
                         </div>
-                        <div className={`text-[10px] font-mono ${textMuted}`}>
-                          {t('admin.users.txBalanceAfter')}:{' '}
+                        <div className={`text-[10px] tnum ${textMuted}`}>
+                          {t('admin.users.txBalanceAfter')}:{''}
                           <span dir="ltr">{formatMoney(tx.balanceAfter)}</span>
                         </div>
                       </div>
@@ -715,17 +616,14 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                       <div className={`font-semibold text-xs sm:text-sm ${textPrimary}`}>
                         {order.packageName || t('admin.users.orderPackage')}
                       </div>
-                      <div className={`text-[11px] font-mono ${textMuted}`}>
+                      <div className={`text-[11px] tnum ${textMuted}`}>
                         {t('common.idLabel')} <span dir="ltr">{order.id}</span>
                       </div>
                     </div>
                     <div className="text-end space-y-0.5">
-                      <div
-                        className={`font-mono font-bold text-xs sm:text-sm ${
-                          isDark ? 'text-emerald-400' : 'text-emerald-600'
-                        }`}
-                      >
-                        <span dir="ltr">{formatMoney(order.amount)}</span>{' '}
+                      <div className={`tnum font-bold text-xs sm:text-sm text-ok`}>
+                        <span dir="ltr">{formatMoney(order.amount)}</span>
+                        {''}
                         <span className="font-sans font-normal text-xs">
                           {t('common.currency')}
                         </span>
@@ -754,10 +652,10 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                     className={`p-3 sm:p-3.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${subCardClass}`}
                   >
                     <div className="space-y-0.5">
-                      <div className={`font-bold font-mono text-xs sm:text-sm ${textPrimary}`}>
+                      <div className={`font-bold tnum text-xs sm:text-sm ${textPrimary}`}>
                         {formatMoney(rec.amount)} {t('common.currency')}
                       </div>
-                      <div className={`text-[11px] font-mono ${textMuted}`}>
+                      <div className={`text-[11px] tnum ${textMuted}`}>
                         {t('common.idLabel')} <span dir="ltr">{rec.id}</span>
                       </div>
                     </div>
@@ -765,11 +663,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                       {rec.photoFileId && (
                         <button
                           type="button"
-                          className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer ${
-                            isDark
-                              ? 'bg-indigo-500/10 border-indigo-500/25 hover:bg-indigo-500/20 text-indigo-300'
-                              : 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700'
-                          }`}
+                          className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer bg-brand/10 border-brand/25 hover:bg-brand/20 text-brand`}
                           onClick={() => setPhotoReceiptId(rec.id)}
                           title={t('admin.receipts.viewPhoto')}
                         >
@@ -806,19 +700,13 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
           {/* Bottom Action Bar */}
           <div
-            className={`modal-action flex flex-wrap justify-between items-center gap-2 pt-3 border-t ${
-              isDark ? 'border-white/[0.08]' : 'border-slate-200/80'
-            }`}
+            className={`modal-action flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-line/[0.08]`}
           >
             <div className="flex items-center gap-2">
               {/* Balance adjust button */}
               <button
                 type="button"
-                className={`h-9 px-3.5 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 ${
-                  isDark
-                    ? 'bg-indigo-500 hover:bg-indigo-400 text-white border-indigo-500 shadow-xs'
-                    : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-900 shadow-xs'
-                }`}
+                className={`h-9 px-3.5 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 bg-brand hover:bg-brand text-brand-ink border-brand shadow-xs`}
                 onClick={() => {
                   onOpenBalanceModal(user);
                 }}
@@ -831,11 +719,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               {onBanUser && (
                 <button
                   type="button"
-                  className={`h-9 px-3.5 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 ${
-                    user.isBanned
-                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
-                      : 'bg-rose-500/15 border-rose-500/30 text-rose-400 hover:bg-rose-500/25'
-                  }`}
+                  className={`h-9 px-3.5 rounded-xl font-semibold text-xs border transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 ${user.isBanned ? 'bg-ok/15 border-ok/30 text-ok hover:bg-ok/25' : 'bg-danger/15 border-danger/30 text-danger hover:bg-danger/25'}`}
                   onClick={() =>
                     setConfirmModal({
                       type: user.isBanned ? 'unban' : 'ban',
@@ -854,11 +738,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
             <button
               type="button"
-              className={`h-9 px-4 rounded-xl text-xs font-medium border transition-all active:scale-95 cursor-pointer flex items-center justify-center ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
-              }`}
+              className={`h-9 px-4 rounded-xl text-xs font-medium border transition-all active:scale-95 cursor-pointer flex items-center justify-center bg-surface/[0.04] border-line/10 text-ink-muted hover:bg-surface/[0.08] shadow-xs`}
               onClick={onClose}
             >
               {t('admin.users.btnCloseReport')}

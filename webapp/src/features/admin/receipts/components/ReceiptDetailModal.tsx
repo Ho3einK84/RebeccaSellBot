@@ -40,7 +40,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatIsoDate } = useFormatters();
-  const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!receipt) return null;
 
@@ -49,7 +49,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   const isRejected = receipt.status === 'rejected';
 
   const userDisplayName =
-    [receipt.user?.firstName, receipt.user?.lastName].filter(Boolean).join(' ') ||
+    [receipt.user?.firstName, receipt.user?.lastName].filter(Boolean).join('') ||
     receipt.user?.username ||
     `ID: ${receipt.telegramId}`;
 
@@ -60,47 +60,23 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
       title={
         <div className="flex items-center gap-2 flex-wrap">
           <span>{t('admin.receipts.detailModalTitle')}</span>
-          <span dir="ltr" className="font-mono text-xs text-indigo-400 font-normal">
+          <span dir="ltr" className="tnum text-xs text-brand font-normal">
             #{receipt.id.slice(-8)}
           </span>
         </div>
       }
-      icon={<Receipt className="w-5 h-5 text-indigo-500" />}
+      icon={<Receipt className="w-5 h-5 text-brand" />}
       maxWidth="md"
     >
       <div className="space-y-4">
         {/* Top Summary Banner */}
         <div
-          className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
-            isApproved
-              ? isDark
-                ? 'bg-emerald-500/10 border-emerald-500/25'
-                : 'bg-emerald-50 border-emerald-200'
-              : isRejected
-                ? isDark
-                  ? 'bg-rose-500/10 border-rose-500/25'
-                  : 'bg-rose-50 border-rose-200'
-                : isDark
-                  ? 'bg-amber-500/10 border-amber-500/25'
-                  : 'bg-amber-50 border-amber-200'
-          }`}
+          className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${isApproved ? 'bg-ok/10 border-ok/25' : isRejected ? 'bg-danger/10 border-danger/25' : 'bg-warn/10 border-warn/25'}`}
         >
           <div className="space-y-1">
             <span className={`text-xs block ${textMuted}`}>{t('common.amount')}</span>
             <div
-              className={`text-xl sm:text-2xl font-bold font-mono ${
-                isApproved
-                  ? isDark
-                    ? 'text-emerald-300'
-                    : 'text-emerald-700'
-                  : isRejected
-                    ? isDark
-                      ? 'text-rose-300'
-                      : 'text-rose-700'
-                    : isDark
-                      ? 'text-amber-300'
-                      : 'text-amber-700'
-              }`}
+              className={`text-xl sm:text-2xl font-bold tnum ${isApproved ? 'text-ok' : isRejected ? 'text-danger' : 'text-warn'}`}
             >
               {formatMoney(receipt.amount)} {t('common.currency')}
             </div>
@@ -122,15 +98,15 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
 
         {/* User Information Card */}
         <div className={`p-3.5 rounded-xl border space-y-2.5 text-xs ${subCardClass}`}>
-          <div className="flex items-center justify-between border-b pb-2 border-slate-200/60 dark:border-white/5">
+          <div className="flex items-center justify-between border-b pb-2 border-line/60">
             <div className="flex items-center gap-2 font-semibold">
-              <User className="w-4 h-4 text-indigo-400" />
+              <User className="w-4 h-4 text-brand" />
               <span className={textPrimary}>{t('common.customer')}</span>
             </div>
             {onInspectUser && (
               <button
                 type="button"
-                className="inline-flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-[11px] text-brand hover:text-brand transition-colors cursor-pointer"
                 onClick={() => {
                   onClose();
                   onInspectUser(receipt.telegramId);
@@ -149,14 +125,14 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
             </div>
             <div>
               <span className={`block ${textMuted}`}>{t('admin.users.colId')}</span>
-              <span dir="ltr" className={`font-mono ${textPrimary}`}>
+              <span dir="ltr" className={`tnum ${textPrimary}`}>
                 {receipt.telegramId}
               </span>
             </div>
             {receipt.user?.username && (
               <div>
                 <span className={`block ${textMuted}`}>{t('admin.users.colUsername')}</span>
-                <span dir="ltr" className="font-mono text-indigo-400">
+                <span dir="ltr" className="tnum text-brand">
                   @{receipt.user.username}
                 </span>
               </div>
@@ -164,7 +140,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
             {receipt.user?.balance !== undefined && (
               <div>
                 <span className={`block ${textMuted}`}>{t('admin.receipts.userBalance')}</span>
-                <span className={`font-mono font-semibold ${textPrimary}`}>
+                <span className={`tnum font-semibold ${textPrimary}`}>
                   {formatMoney(receipt.user.balance)} {t('common.currency')}
                 </span>
               </div>
@@ -179,7 +155,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               <FileText className="w-3.5 h-3.5" />
               <span>{t('common.receiptCode')}</span>
             </span>
-            <span dir="ltr" className={`font-mono ${textPrimary}`}>
+            <span dir="ltr" className={`tnum ${textPrimary}`}>
               {receipt.id}
             </span>
           </div>
@@ -189,7 +165,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               <Clock className="w-3.5 h-3.5" />
               <span>{t('admin.receipts.createdAtLabel')}</span>
             </span>
-            <span dir="ltr" className={`font-mono ${textSecondary}`}>
+            <span dir="ltr" className={`tnum ${textSecondary}`}>
               {formatIsoDate(receipt.createdAt)}
             </span>
           </div>
@@ -197,10 +173,10 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
           {receipt.reviewedBy && (
             <div className="flex justify-between items-center text-[11px]">
               <span className={`flex items-center gap-1.5 ${textMuted}`}>
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <ShieldCheck className="w-3.5 h-3.5 text-ok" />
                 <span>{t('admin.receipts.reviewedBy')}</span>
               </span>
-              <span dir="ltr" className={`font-mono ${textPrimary}`}>
+              <span dir="ltr" className={`tnum ${textPrimary}`}>
                 {receipt.reviewedBy}
               </span>
             </div>
@@ -212,19 +188,19 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
                 <Clock className="w-3.5 h-3.5" />
                 <span>{t('admin.receipts.reviewedAt')}</span>
               </span>
-              <span dir="ltr" className={`font-mono ${textSecondary}`}>
+              <span dir="ltr" className={`tnum ${textSecondary}`}>
                 {formatIsoDate(receipt.updatedAt)}
               </span>
             </div>
           )}
 
           {isRejected && receipt.rejectReason && (
-            <div className="flex flex-col gap-1 pt-1.5 border-t border-slate-200/50 dark:border-white/5">
-              <span className="font-sans flex items-center gap-1 text-rose-400 font-semibold text-[11px]">
+            <div className="flex flex-col gap-1 pt-1.5 border-t border-line/50">
+              <span className="font-sans flex items-center gap-1 text-danger font-semibold text-[11px]">
                 <AlertCircle className="w-3.5 h-3.5" />
                 <span>{t('admin.receipts.rejectionReason')}:</span>
               </span>
-              <span className="text-rose-300 font-sans text-xs bg-rose-500/10 p-2 rounded-lg">
+              <span className="text-danger font-sans text-xs bg-danger/10 p-2 rounded-lg">
                 {receipt.rejectReason}
               </span>
             </div>
@@ -235,11 +211,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
         {receipt.photoFileId && onViewPhoto && (
           <button
             type="button"
-            className={`w-full h-11 px-4 rounded-xl font-semibold text-xs border flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer ${
-              isDark
-                ? 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300'
-                : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700'
-            }`}
+            className={`w-full h-11 px-4 rounded-xl font-semibold text-xs border flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer bg-brand/15 hover:bg-brand/25 border-brand/30 text-brand`}
             onClick={() => onViewPhoto(receipt)}
           >
             <ImageIcon className="w-4 h-4" />

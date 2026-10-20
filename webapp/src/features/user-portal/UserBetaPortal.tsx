@@ -11,12 +11,15 @@ import { WalletTab } from './tabs/WalletTab.js';
 import { ReferralTab } from './tabs/ReferralTab.js';
 import { ToastContainer, useToastQueue } from '@/shared/components/ui/Toast.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Skeleton, SkeletonCard, SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { AmbientBackground } from '@/shared/components/layout/AmbientBackground.js';
+import { AppShell } from '@/shared/components/layout/AppShell.js';
+import { DesktopNav } from '@/shared/components/layout/DesktopNav.js';
+import { useUserNavItems } from './hooks/useUserNavItems.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { ApiClientError } from '@/shared/lib/api.js';
 import {
   useUserProfile,
@@ -34,34 +37,22 @@ interface UserBetaPortalProps {
   onSwitchToAdmin?: () => void;
 }
 
-const UserPortalSkeleton: React.FC<{ isDark: boolean }> = ({ isDark }) => (
-  <div className="w-full flex flex-col gap-3.5">
+const UserPortalSkeleton: React.FC = () => (
+  <div className="flex w-full flex-col gap-3">
     {/* Header skeleton */}
-    <div className="w-full flex items-center justify-between gap-2 mb-1">
-      <Skeleton className="h-11 w-24 rounded-xl" />
+    <div className="mb-1 flex w-full items-center justify-between gap-2">
+      <Skeleton className="h-[68px] flex-1 rounded-card" />
       <div className="flex items-center gap-1.5">
-        <Skeleton className="w-11 h-11 rounded-xl" />
-        <Skeleton className="w-11 h-11 rounded-xl" />
-      </div>
-    </div>
-    {/* Profile row skeleton */}
-    <div
-      className={`w-full px-3 py-2.5 rounded-xl border flex items-center gap-2.5 ${
-        isDark ? 'bg-white/[0.03] border-white/5' : 'bg-slate-100 border-slate-200'
-      }`}
-    >
-      <Skeleton className="w-8 h-8 rounded-full" />
-      <div className="flex-1 flex flex-col gap-1.5">
-        <Skeleton className="h-3.5 w-32 rounded" />
-        <Skeleton className="h-2.5 w-16 rounded" />
+        <Skeleton className="h-9 w-9 rounded-ctl" />
+        <Skeleton className="h-9 w-9 rounded-ctl" />
       </div>
     </div>
     {/* Balance card skeleton */}
     <SkeletonCard />
     {/* Two column action cards */}
     <div className="grid grid-cols-2 gap-3">
-      <Skeleton className="h-24 rounded-2xl" />
-      <Skeleton className="h-24 rounded-2xl" />
+      <Skeleton className="h-24 rounded-card" />
+      <Skeleton className="h-24 rounded-card" />
     </div>
     {/* List items skeleton */}
     <SkeletonList count={2} />
@@ -75,16 +66,9 @@ const SectionErrorCard: React.FC<{
   isRetrying?: boolean;
 }> = ({ title, message, onRetry, isRetrying = false }) => {
   const { t } = useLanguage();
-  const { isDark } = useThemeTokens();
   return (
-    <div
-      className={`p-5 rounded-2xl border text-center flex flex-col items-center gap-3 my-4 ${
-        isDark
-          ? 'bg-rose-950/20 border-rose-500/30 text-rose-200'
-          : 'bg-rose-50 border-rose-200 text-rose-900'
-      }`}
-    >
-      <AlertCircle className="w-8 h-8 text-rose-500 shrink-0" />
+    <div className="anim-fade my-4 flex flex-col items-center gap-3 rounded-card border border-danger/25 bg-danger-soft p-5 text-center text-ink">
+      <AlertCircle className="h-8 w-8 shrink-0 text-danger" />
       <div className="flex flex-col gap-1 max-w-sm">
         <h4 className="font-bold text-sm m-0">{title || t('common.networkError')}</h4>
         <p className="text-xs opacity-80 leading-relaxed m-0">{message || t('common.error')}</p>
@@ -111,7 +95,6 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
   onSwitchToAdmin,
 }) => {
   const { t } = useLanguage();
-  const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
   const { toasts, addToast, removeToast } = useToastQueue();
 
@@ -255,28 +238,23 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
   const packages = packagesData?.packages ?? [];
   const transactions = transactionsData?.transactions ?? [];
 
+  const navItems = useUserNavItems({
+    configsCount: configs.length,
+    hasPendingReceipt: Boolean(pendingReceipt),
+  });
+
   // Dedicated 401 Session Expired Screen
   if (is401) {
     return (
-      <div
-        className={`w-full min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4 safe-top relative ${
-          isDark ? 'bg-[#090a0f] text-slate-100' : 'bg-[#f8fafc] text-slate-900'
-        }`}
-      >
+      <div className="safe-top relative flex min-h-[100dvh] w-full flex-col items-center justify-center bg-canvas p-4 text-ink">
         <AmbientBackground />
-        <div
-          className={`w-full max-w-sm p-6 rounded-2xl border text-center flex flex-col items-center gap-4 relative z-10 ${
-            isDark
-              ? 'bg-zinc-900/90 border-white/10 shadow-2xl'
-              : 'bg-white border-slate-200 shadow-lg'
-          }`}
-        >
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center border border-amber-500/25">
-            <LogOut className="w-7 h-7" />
-          </div>
+        <div className="anim-rise relative z-10 flex w-full max-w-sm flex-col items-center gap-4 rounded-card border border-line bg-surface p-6 text-center shadow-e3">
+          <IconTile tone="warn" size="lg">
+            <LogOut />
+          </IconTile>
           <div className="flex flex-col gap-1.5">
-            <h2 className="text-base sm:text-lg font-bold m-0">{t('user.sessionExpiredTitle')}</h2>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed m-0">
+            <h2 className="m-0 text-base font-bold sm:text-lg">{t('user.sessionExpiredTitle')}</h2>
+            <p className="m-0 text-xs leading-relaxed text-ink-muted">
               {t('user.sessionExpiredDesc')}
             </p>
           </div>
@@ -308,27 +286,17 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
   if (isBanned) {
     const supportUsername = settings?.supportUsername || '';
     return (
-      <div
-        className={`w-full min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4 safe-top relative ${
-          isDark ? 'bg-[#090a0f] text-slate-100' : 'bg-[#f8fafc] text-slate-900'
-        }`}
-      >
+      <div className="safe-top relative flex min-h-[100dvh] w-full flex-col items-center justify-center bg-canvas p-4 text-ink">
         <AmbientBackground />
-        <div
-          className={`w-full max-w-sm p-6 rounded-2xl border text-center flex flex-col items-center gap-4 relative z-10 ${
-            isDark
-              ? 'bg-zinc-900/90 border-rose-500/25 shadow-2xl'
-              : 'bg-white border-rose-200 shadow-lg'
-          }`}
-        >
-          <div className="w-14 h-14 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center border border-rose-500/30">
-            <ShieldAlert className="w-7 h-7" />
-          </div>
+        <div className="anim-rise relative z-10 flex w-full max-w-sm flex-col items-center gap-4 rounded-card border border-danger/25 bg-surface p-6 text-center shadow-e3">
+          <IconTile tone="danger" size="lg">
+            <ShieldAlert />
+          </IconTile>
           <div className="flex flex-col gap-1.5">
-            <h2 className="text-base sm:text-lg font-bold text-rose-500 m-0">
+            <h2 className="m-0 text-base font-bold text-danger sm:text-lg">
               {t('user.accountBannedTitle')}
             </h2>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed m-0">
+            <p className="m-0 text-xs leading-relaxed text-ink-muted">
               {t('user.accountBannedDesc')}
             </p>
           </div>
@@ -338,7 +306,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
                 href={`https://t.me/${supportUsername.replace(/^@/, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer active:scale-95 transition-all shadow-md no-underline"
+                className="press rs-focus flex min-h-[44px] w-full items-center justify-center gap-2 rounded-ctl bg-brand px-4 py-2.5 text-xs font-bold text-brand-ink no-underline shadow-e2 sm:text-sm"
               >
                 <MessageCircle className="w-4 h-4" />
                 <span>
@@ -370,26 +338,28 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
   // First-load Skeleton Placeholder
   if (isProfileLoading && !profileData) {
     return (
-      <div className="w-full min-h-screen min-h-[100dvh] flex flex-col items-center justify-start safe-top relative">
-        <AmbientBackground />
-        <main className="w-full max-w-lg mx-auto flex flex-col px-4 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] relative z-10 flex-1">
-          <UserPortalSkeleton isDark={isDark} />
-        </main>
-        <BetaBottomNav
-          activeTab={activeTab}
-          onSelectTab={(tab) => switchTab(tab)}
-          configsCount={0}
-          hasPendingReceipt={false}
-        />
-      </div>
+      <AppShell
+        width="narrow"
+        transitionKey="skeleton"
+        bottomNav={
+          <BetaBottomNav
+            activeTab={activeTab}
+            onSelectTab={(tab) => switchTab(tab)}
+            configsCount={0}
+            hasPendingReceipt={false}
+          />
+        }
+      >
+        <UserPortalSkeleton />
+      </AppShell>
     );
   }
 
   return (
-    <div className="w-full min-h-screen min-h-[100dvh] flex flex-col items-center justify-start safe-top relative">
-      <AmbientBackground />
-
-      <main className="w-full max-w-lg mx-auto flex flex-col px-4 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] relative z-10 flex-1">
+    <AppShell
+      width="narrow"
+      transitionKey={activeTab}
+      header={
         <BetaHeader
           user={user}
           onRefresh={handleRefresh}
@@ -400,83 +370,88 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
           currency={settings?.currency}
           isRefreshing={isRefreshing}
         />
-
-        {/* Global Toast Notification Queue */}
-        <ToastContainer toasts={toasts} onDismiss={removeToast} />
-
-        {/* Tab view with entrance animation */}
-        <div key={activeTab} className="animate-tab-in flex-1 flex flex-col">
-          {activeTab === 'dashboard' &&
-            (isProfileError && !profileData ? (
-              <SectionErrorCard onRetry={refetchProfile} isRetrying={isRefetchingProfile} />
-            ) : (
-              <DashboardTab
-                profile={profile}
-                settings={settings}
-                configs={configs}
-                transactions={transactions}
-                onSwitchTab={(tab) => switchTab(tab)}
-              />
-            ))}
-
-          {activeTab === 'services' &&
-            (isConfigsError && (!configsData || configs.length === 0) ? (
-              <SectionErrorCard onRetry={refetchConfigs} isRetrying={isRefetchingConfigs} />
-            ) : (
-              <ServicesTab
-                configs={configs}
-                botUsername={settings?.botUsername}
-                onOpenQr={(subUrl, configUsername) =>
-                  setQrModal({ isOpen: true, subUrl, configUsername })
-                }
-                onGoToShop={() => switchTab('shop')}
-                onNotify={(msg, type) => notify(msg, type ?? 'success')}
-              />
-            ))}
-
-          {activeTab === 'shop' &&
-            (isPackagesError && (!packagesData || packages.length === 0) ? (
-              <SectionErrorCard onRetry={refetchPackages} isRetrying={isRefetchingPackages} />
-            ) : (
-              <ShopTab
-                packages={packages}
-                currency={settings?.currency}
-                customVolumeSettings={settings?.customVolume}
-                botUsername={settings?.botUsername}
-                onSelectPackage={(pkg) => setCheckoutModal({ isOpen: true, pkg })}
-              />
-            ))}
-
-          {activeTab === 'wallet' &&
-            (isProfileError && !profileData ? (
-              <SectionErrorCard onRetry={refetchProfile} isRetrying={isRefetchingProfile} />
-            ) : (
-              <WalletTab
-                profile={profile}
-                settings={settings}
-                transactions={transactions}
-                pendingReceipt={pendingReceipt}
-                onNotify={(msg) => notify(msg, 'success')}
-              />
-            ))}
-
-          {activeTab === 'referral' && (
-            <ReferralTab
+      }
+      desktopNav={
+        <DesktopNav
+          items={navItems}
+          activeId={activeTab}
+          onSelect={switchTab}
+          ariaLabel="ناوبری حساب کاربری"
+        />
+      }
+      overlay={<ToastContainer toasts={toasts} onDismiss={removeToast} />}
+      bottomNav={
+        <BetaBottomNav
+          activeTab={activeTab}
+          onSelectTab={(tab) => switchTab(tab)}
+          configsCount={configs.length}
+          hasPendingReceipt={Boolean(pendingReceipt)}
+        />
+      }
+    >
+      <div className="flex flex-1 flex-col">
+        {activeTab === 'dashboard' &&
+          (isProfileError && !profileData ? (
+            <SectionErrorCard onRetry={refetchProfile} isRetrying={isRefetchingProfile} />
+          ) : (
+            <DashboardTab
               profile={profile}
               settings={settings}
+              configs={configs}
+              transactions={transactions}
+              onSwitchTab={(tab) => switchTab(tab)}
+            />
+          ))}
+
+        {activeTab === 'services' &&
+          (isConfigsError && (!configsData || configs.length === 0) ? (
+            <SectionErrorCard onRetry={refetchConfigs} isRetrying={isRefetchingConfigs} />
+          ) : (
+            <ServicesTab
+              configs={configs}
+              botUsername={settings?.botUsername}
+              onOpenQr={(subUrl, configUsername) =>
+                setQrModal({ isOpen: true, subUrl, configUsername })
+              }
+              onGoToShop={() => switchTab('shop')}
+              onNotify={(msg, type) => notify(msg, type ?? 'success')}
+            />
+          ))}
+
+        {activeTab === 'shop' &&
+          (isPackagesError && (!packagesData || packages.length === 0) ? (
+            <SectionErrorCard onRetry={refetchPackages} isRetrying={isRefetchingPackages} />
+          ) : (
+            <ShopTab
+              packages={packages}
+              currency={settings?.currency}
+              customVolumeSettings={settings?.customVolume}
+              botUsername={settings?.botUsername}
+              onSelectPackage={(pkg) => setCheckoutModal({ isOpen: true, pkg })}
+            />
+          ))}
+
+        {activeTab === 'wallet' &&
+          (isProfileError && !profileData ? (
+            <SectionErrorCard onRetry={refetchProfile} isRetrying={isRefetchingProfile} />
+          ) : (
+            <WalletTab
+              profile={profile}
+              settings={settings}
+              transactions={transactions}
+              pendingReceipt={pendingReceipt}
               onNotify={(msg) => notify(msg, 'success')}
             />
-          )}
-        </div>
-      </main>
+          ))}
 
-      {/* Sticky Bottom Navigation Bar */}
-      <BetaBottomNav
-        activeTab={activeTab}
-        onSelectTab={(tab) => switchTab(tab)}
-        configsCount={configs.length}
-        hasPendingReceipt={Boolean(pendingReceipt)}
-      />
+        {activeTab === 'referral' && (
+          <ReferralTab
+            profile={profile}
+            settings={settings}
+            onNotify={(msg) => notify(msg, 'success')}
+          />
+        )}
+      </div>
 
       {/* QR Code Modal */}
       <QrCodeModal
@@ -497,6 +472,6 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
         onGoToServices={() => switchTab('services')}
         onSuccess={(msg) => notify(msg, 'success')}
       />
-    </div>
+    </AppShell>
   );
 };

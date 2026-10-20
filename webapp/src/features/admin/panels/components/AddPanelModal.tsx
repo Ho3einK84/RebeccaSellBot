@@ -81,19 +81,19 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.panels.addModalTitle')}
-      icon={<Server className="w-5 h-5 text-indigo-500" />}
+      icon={<Server className="w-5 h-5 text-brand" />}
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {validationError && (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-medium">
+          <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-medium">
             {validationError}
           </div>
         )}
 
         <div className="space-y-1.5 text-start">
           <label className={`block text-xs font-semibold ${textPrimary}`}>
-            {t('admin.panels.nameField')} <span className="text-rose-500">*</span>
+            {t('admin.panels.nameField')} <span className="text-danger">*</span>
           </label>
           <Input
             value={name}
@@ -107,7 +107,7 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
 
         <div className="space-y-1.5 text-start">
           <label className={`block text-xs font-semibold ${textPrimary}`}>
-            {t('admin.panels.urlField')} <span className="text-rose-500">*</span>
+            {t('admin.panels.urlField')} <span className="text-danger">*</span>
           </label>
           <Input
             type="url"
@@ -164,7 +164,7 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200/60 dark:border-white/[0.08]">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-line/60">
           <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
             {t('common.cancel')}
           </Button>

@@ -570,3 +570,237 @@ html[dir='ltr'] body {
     animation: none !important;
   }
 }
+
+/* =====================================================================
+   Design system tokens — "Aurora"
+   ---------------------------------------------------------------------
+   A single semantic layer shared by the admin panel and the user portal.
+   Components should reach for these tokens (`bg-surface`, `text-ink-soft`,
+   `border-line`, `rounded-card`, `text-brand`, …) instead of writing
+   `isDark ? … : …` ternaries, so both surfaces stay visually identical.
+   ===================================================================== */
+
+@theme inline {
+  --color-canvas: var(--rs-canvas);
+  --color-surface: var(--rs-surface);
+  --color-surface-2: var(--rs-surface-2);
+  --color-surface-3: var(--rs-surface-3);
+  --color-ink: var(--rs-ink);
+  --color-ink-soft: var(--rs-ink-soft);
+  --color-ink-muted: var(--rs-ink-muted);
+  --color-line: var(--rs-line);
+  --color-line-strong: var(--rs-line-strong);
+  --color-brand: var(--rs-brand);
+  --color-brand-soft: var(--rs-brand-soft);
+  --color-brand-ink: var(--rs-brand-ink);
+  --color-ok: var(--rs-ok);
+  --color-ok-soft: var(--rs-ok-soft);
+  --color-warn: var(--rs-warn);
+  --color-warn-soft: var(--rs-warn-soft);
+  --color-danger: var(--rs-danger);
+  --color-danger-soft: var(--rs-danger-soft);
+  --color-info: var(--rs-info);
+  --color-info-soft: var(--rs-info-soft);
+
+  --radius-ctl: 0.75rem; /* 12 — buttons, inputs */
+  --radius-tile: 0.875rem; /* 14 — icon tiles, sub cards */
+  --radius-card: 1.125rem; /* 18 — cards */
+  --radius-hero: 1.375rem; /* 22 — hero / modal */
+  --radius-sheet: 1.75rem; /* 28 — bottom sheets */
+
+  --shadow-e1: var(--rs-shadow-e1);
+  --shadow-e2: var(--rs-shadow-e2);
+  --shadow-e3: var(--rs-shadow-e3);
+
+  --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-snap: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+:root,
+[data-theme='dark'],
+.dark {
+  --rs-canvas: #08080d;
+  --rs-surface: rgba(255, 255, 255, 0.038);
+  --rs-surface-2: rgba(255, 255, 255, 0.065);
+  --rs-surface-3: rgba(255, 255, 255, 0.1);
+
+  /* AA-tuned text ramp (previous muted tone sat ~3:1 on cards) */
+  --rs-ink: #f2f3f7;
+  --rs-ink-soft: #b9bdc7;
+  --rs-ink-muted: #8d93a1;
+
+  --rs-line: rgba(255, 255, 255, 0.085);
+  --rs-line-strong: rgba(255, 255, 255, 0.16);
+
+  --rs-brand: #7c6bff;
+  --rs-brand-soft: rgba(124, 107, 255, 0.14);
+  --rs-brand-ink: #ffffff;
+
+  --rs-ok: #34d399;
+  --rs-ok-soft: rgba(52, 211, 153, 0.14);
+  --rs-warn: #fbbf24;
+  --rs-warn-soft: rgba(251, 191, 36, 0.14);
+  --rs-danger: #fb7185;
+  --rs-danger-soft: rgba(251, 113, 133, 0.14);
+  --rs-info: #38bdf8;
+  --rs-info-soft: rgba(56, 189, 248, 0.14);
+
+  --rs-shadow-e1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --rs-shadow-e2: 0 8px 24px -12px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --rs-shadow-e3: 0 24px 60px -20px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='light'],
+.light {
+  --rs-canvas: #f5f6fa;
+  --rs-surface: #ffffff;
+  --rs-surface-2: #f2f3f8;
+  --rs-surface-3: #e8eaf2;
+
+  --rs-ink: #101223;
+  --rs-ink-soft: #4c5265;
+  --rs-ink-muted: #6c7286;
+
+  --rs-line: #e5e7f0;
+  --rs-line-strong: #d2d6e4;
+
+  --rs-brand: #6555e0;
+  --rs-brand-soft: #ece8ff;
+  --rs-brand-ink: #ffffff;
+
+  --rs-ok: #0f9d6a;
+  --rs-ok-soft: #e4f7ef;
+  --rs-warn: #b0730a;
+  --rs-warn-soft: #fdf3e0;
+  --rs-danger: #dc2650;
+  --rs-danger-soft: #fdeaef;
+  --rs-info: #0b7fc4;
+  --rs-info-soft: #e6f4fd;
+
+  --rs-shadow-e1: 0 1px 2px rgba(16, 18, 35, 0.05);
+  --rs-shadow-e2: 0 6px 20px -10px rgba(16, 18, 35, 0.18), inset 0 1px 0 #fff;
+  --rs-shadow-e3: 0 24px 56px -22px rgba(16, 18, 35, 0.28), inset 0 1px 0 #fff;
+}
+
+/* ---------- Motion primitives ---------- */
+
+@keyframes rs-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes rs-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rs-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes rs-sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes rs-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.06);
+  }
+}
+
+.anim-rise {
+  animation: rs-rise 0.44s var(--ease-soft) both;
+}
+.anim-fade {
+  animation: rs-fade 0.28s ease-out both;
+}
+.anim-pop {
+  animation: rs-pop 0.34s var(--ease-snap) both;
+}
+.anim-breathe {
+  animation: rs-breathe 4.5s ease-in-out infinite;
+}
+
+/* Staggered entrance: put .anim-stagger on a container, children animate in
+   order. Keeps list/card entrances consistent across both panels. */
+.anim-stagger > * {
+  animation: rs-rise 0.42s var(--ease-soft) both;
+  animation-delay: calc(var(--stagger-step, 42ms) * var(--i, 0));
+}
+
+.press {
+  transition:
+    transform 0.16s var(--ease-soft),
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.press:active {
+  transform: scale(0.972);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Consistent keyboard focus treatment for every interactive element. */
+.rs-focus:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--rs-canvas),
+    0 0 0 4px color-mix(in oklab, var(--rs-brand) 65%, transparent);
+}
+
+/* Content inset that clears the floating bottom navigation. */
+.nav-inset {
+  padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .nav-inset {
+    padding-bottom: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-rise,
+  .anim-fade,
+  .anim-pop,
+  .anim-breathe,
+  .anim-stagger > * {
+    animation: none !important;
+  }
+  .press:active {
+    transform: none;
+  }
+}

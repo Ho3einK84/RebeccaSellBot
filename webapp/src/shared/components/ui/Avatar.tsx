@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { getAvatarChar } from '@/shared/lib/formatters.js';
-import { useTheme } from '@/shared/theme/ThemeContext.js';
 
 interface AvatarProps {
   name?: string | null;
@@ -11,6 +10,22 @@ interface AvatarProps {
   className?: string;
 }
 
+const sizeClasses = {
+  xs: 'w-7 h-7 text-xs',
+  sm: 'w-8 h-8 text-xs',
+  md: 'w-10 h-10 text-sm font-bold',
+  lg: 'w-12 h-12 text-base font-bold',
+  xl: 'w-16 h-16 text-xl font-bold',
+} as const;
+
+const radiusClasses = {
+  xs: 'rounded-lg',
+  sm: 'rounded-ctl',
+  md: 'rounded-ctl',
+  lg: 'rounded-tile',
+  xl: 'rounded-tile',
+} as const;
+
 export const Avatar: React.FC<AvatarProps> = ({
   name,
   username,
@@ -19,33 +34,15 @@ export const Avatar: React.FC<AvatarProps> = ({
   circle = false,
   className = '',
 }) => {
-  const { isDark } = useTheme();
   const [hasError, setHasError] = useState(false);
-
-  const sizeClasses = {
-    xs: 'w-7 h-7 text-xs',
-    sm: 'w-8 h-8 text-xs',
-    md: 'w-10 h-10 text-sm font-bold',
-    lg: 'w-12 h-12 text-base font-bold',
-    xl: 'w-16 h-16 text-xl font-bold',
-  }[size];
-
-  const radiusClass = circle
-    ? 'rounded-full'
-    : {
-        xs: 'rounded-lg',
-        sm: 'rounded-xl',
-        md: 'rounded-xl',
-        lg: 'rounded-2xl',
-        xl: 'rounded-2xl',
-      }[size];
+  const radiusClass = circle ? 'rounded-full' : radiusClasses[size];
 
   if (photoUrl && !hasError) {
     return (
       <img
         src={photoUrl}
         alt={name || username || 'User'}
-        className={`${radiusClass} object-cover shrink-0 border border-slate-200 dark:border-white/10 shadow-xs ${sizeClasses} ${className}`}
+        className={`${radiusClass} shrink-0 border border-line object-cover shadow-e1 ${sizeClasses[size]} ${className}`}
         onError={() => setHasError(true)}
       />
     );
@@ -55,11 +52,7 @@ export const Avatar: React.FC<AvatarProps> = ({
 
   return (
     <div
-      className={`${radiusClass} flex items-center justify-center shrink-0 border select-none transition-colors shadow-xs ${sizeClasses} ${
-        isDark
-          ? 'bg-gradient-to-tr from-indigo-500/15 via-violet-500/15 to-purple-500/15 border-indigo-500/25 text-indigo-300'
-          : 'bg-gradient-to-tr from-indigo-50 to-violet-50 border-indigo-200 text-indigo-700'
-      } ${className}`}
+      className={`${radiusClass} flex shrink-0 select-none items-center justify-center border border-brand/25 bg-brand-soft text-brand select-none transition-colors shadow-e1 ${sizeClasses[size]} ${className}`}
     >
       <span>{char}</span>
     </div>

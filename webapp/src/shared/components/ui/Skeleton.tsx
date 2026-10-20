@@ -5,18 +5,11 @@ interface SkeletonProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export const Skeleton: React.FC<SkeletonProps> = ({ className = '', ...props }) => {
-  return (
-    <div
-      className={`animate-pulse rounded-xl bg-slate-200/80 dark:bg-white/[0.06] ${className}`}
-      {...props}
-    />
-  );
+  return <div className={`animate-pulse rounded-xl bg-surface-3/80 ${className}`} {...props} />;
 };
 
 export const SkeletonCard: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <div
-    className={`rounded-2xl border p-4 sm:p-5 space-y-3 bg-white dark:bg-zinc-900/50 border-slate-200 dark:border-white/10 ${className}`}
-  >
+  <div className={`rounded-2xl border p-4 sm:p-5 space-y-3 bg-surface border-line ${className}`}>
     <div className="flex items-center justify-between">
       <Skeleton className="h-4 w-28" />
       <Skeleton className="h-8 w-8 rounded-xl" />
@@ -39,7 +32,7 @@ export const SkeletonList: React.FC<{ count?: number }> = ({ count = 3 }) => (
     {Array.from({ length: count }).map((_, i) => (
       <div
         key={i}
-        className="rounded-2xl border p-4 flex items-center justify-between gap-4 bg-white dark:bg-zinc-900/50 border-slate-200 dark:border-white/10"
+        className="rounded-2xl border p-4 flex items-center justify-between gap-4 bg-surface border-line"
       >
         <div className="space-y-2 flex-1">
           <div className="flex items-center gap-2">

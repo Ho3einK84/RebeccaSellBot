@@ -81,19 +81,19 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.panels.editModalTitle')}
-      icon={<Settings className="w-5 h-5 text-indigo-500" />}
+      icon={<Settings className="w-5 h-5 text-brand" />}
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {validationError && (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-medium">
+          <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-medium">
             {validationError}
           </div>
         )}
 
         <div className="space-y-1.5 text-start">
           <label className={`block text-xs font-semibold ${textPrimary}`}>
-            {t('admin.panels.nameField')} <span className="text-rose-500">*</span>
+            {t('admin.panels.nameField')} <span className="text-danger">*</span>
           </label>
           <Input
             value={name}
@@ -106,7 +106,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
 
         <div className="space-y-1.5 text-start">
           <label className={`block text-xs font-semibold ${textPrimary}`}>
-            {t('admin.panels.urlField')} <span className="text-rose-500">*</span>
+            {t('admin.panels.urlField')} <span className="text-danger">*</span>
           </label>
           <Input
             type="url"
@@ -144,7 +144,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
                 if (e.target.checked) setApiKey('');
               }}
               disabled={loading}
-              className="rounded border-slate-300 dark:border-white/20 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              className="rounded border-line-strong text-brand focus:ring-brand cursor-pointer"
             />
             <span className={`text-xs ${textSecondary}`}>
               {t('admin.panels.clearApiKeyOption')}
@@ -152,7 +152,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200/60 dark:border-white/[0.08]">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-line/60">
           <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
             {t('common.cancel')}
           </Button>

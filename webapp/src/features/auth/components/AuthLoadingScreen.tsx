@@ -5,7 +5,7 @@ import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 
 export const AuthLoadingScreen: React.FC = () => {
   const { t, isRtl } = useLanguage();
-  const { isDark, textSecondary } = useThemeTokens();
+  const { textSecondary } = useThemeTokens();
 
   return (
     <div
@@ -15,15 +15,9 @@ export const AuthLoadingScreen: React.FC = () => {
     >
       <div className="flex items-center justify-center w-full h-full p-4">
         <div
-          className={`p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border ${
-            isDark
-              ? 'bg-zinc-900/90 border-white/10 backdrop-blur-xl shadow-2xl'
-              : 'bg-white border-slate-200 shadow-lg'
-          }`}
+          className={`p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border bg-surface/90 border-line/10 backdrop-blur-xl shadow-2xl shadow-lg`}
         >
-          <Loader2
-            className={`w-10 h-10 animate-spin ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
-          />
+          <Loader2 className={`w-10 h-10 animate-spin text-brand`} />
           <p className={`text-sm font-medium ${textSecondary}`}>{t('auth.connecting')}</p>
         </div>
       </div>

@@ -21,7 +21,7 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
   isCopied,
 }) => {
   const { t } = useLanguage();
-  const { isDark, textPrimary, textMuted } = useThemeTokens();
+  const { textPrimary, textMuted } = useThemeTokens();
   const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,14 +57,10 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
     <Modal isOpen={Boolean(config)} onClose={onClose} maxWidth="sm">
       <div className="space-y-4 text-center">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-white/[0.06]">
+        <div className="flex items-center justify-between pb-3 border-b border-line/60">
           <div className="flex items-center gap-2 text-start">
             <div
-              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-                isDark
-                  ? 'bg-indigo-500/15 border-indigo-500/25 text-indigo-400'
-                  : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-              }`}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-brand/15 border-brand/25 text-brand`}
             >
               <QrCode className="w-4 h-4" />
             </div>
@@ -82,7 +78,7 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
           </div>
           <button
             type="button"
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+            className="p-1.5 rounded-xl text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
             onClick={onClose}
             aria-label="Close"
           >
@@ -92,7 +88,7 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
 
         {/* QR Code Container with crisp white background */}
         <div className="flex justify-center items-center py-2">
-          <div className="p-3 bg-white rounded-2xl shadow-md border border-slate-200 inline-block">
+          <div className="p-3 bg-surface rounded-2xl shadow-md border border-line inline-block">
             {qrUrl ? (
               <img
                 src={qrUrl}
@@ -100,7 +96,7 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
                 className="w-56 h-56 block object-contain select-none"
               />
             ) : (
-              <div className="w-56 h-56 flex items-center justify-center text-xs text-slate-400">
+              <div className="w-56 h-56 flex items-center justify-center text-xs text-ink-muted">
                 {config.subUrl ? t('common.loading') : t('admin.users.noSubUrl')}
               </div>
             )}
@@ -119,21 +115,11 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
                 readOnly
                 dir="ltr"
                 value={config.subUrl}
-                className={`w-full h-9 px-3 text-xs font-mono rounded-xl border outline-none truncate select-all ${
-                  isDark
-                    ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-                    : 'bg-slate-50 border-slate-200 text-slate-700'
-                }`}
+                className={`w-full h-9 px-3 text-xs font-mono rounded-xl border outline-none truncate select-all bg-surface/[0.04] border-line/10 text-ink-soft`}
               />
               <button
                 type="button"
-                className={`h-9 px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all active:scale-95 cursor-pointer ${
-                  isCopied
-                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-500'
-                    : isDark
-                      ? 'bg-white/[0.08] hover:bg-white/[0.12] border-white/15 text-white'
-                      : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-900 shadow-xs'
-                }`}
+                className={`h-9 px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all active:scale-95 cursor-pointer ${isCopied ? 'bg-ok/15 border-ok/30 text-ok' : 'bg-surface/[0.08] hover:bg-surface/[0.12] border-line/15 text-ink shadow-xs'}`}
                 onClick={() => onCopy(config.subUrl!, `qr-${config.id}`)}
               >
                 {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}

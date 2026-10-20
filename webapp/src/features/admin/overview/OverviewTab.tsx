@@ -1,11 +1,14 @@
 import React from 'react';
-import { Clock, Users, TrendingUp } from 'lucide-react';
+import { Clock, Users, TrendingUp, Wallet } from 'lucide-react';
 import { useAdminStats } from './hooks/useAdminStats.js';
 import { HealthBanner } from './components/HealthBanner.js';
 import { RevenueGrid } from './components/RevenueGrid.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { StatCard } from '@/shared/components/ui/StatCard.js';
+import { Button } from '@/shared/components/ui/Button.js';
+import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
+import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { SkeletonStatsGrid } from '@/shared/components/ui/Skeleton.js';
 import type { TabType } from '@/shared/types/admin.js';
 
@@ -13,11 +16,17 @@ interface OverviewTabProps {
   onSwitchTab: (tab: TabType) => void;
 }
 
+/**
+ * Admin overview.
+ * KPI cards all go through <StatCard/> so icon slot, value size, label weight and
+ * padding never drift between cards again (the previous hand-rolled markup had the
+ * health card mirrored, a smaller value font on the first card and two duplicate
+ * calendar icons).
+ */
 export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
   const { t } = useLanguage();
   const { stats, panelHealth, isLoading, error, refetch } = useAdminStats();
   const { formatMoney, formatNumber } = useFormatters();
-  const { cardClass, isDark, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (isLoading && !stats) {
     return <SkeletonStatsGrid count={6} />;
@@ -25,24 +34,17 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
 
   if (error && !stats) {
     return (
-      <div className="p-8 text-center flex flex-col items-center justify-center gap-3 rounded-2xl border bg-white/5 dark:bg-white/[0.02] border-rose-500/20">
-        <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center">
-          <Clock className="w-6 h-6" />
-        </div>
-        <div className="space-y-1">
-          <h3 className={`text-base font-bold m-0 ${textPrimary}`}>{t('common.error')}</h3>
-          <p className={`text-xs m-0 ${textSecondary}`}>
-            {error instanceof Error ? error.message : t('common.networkError')}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-xs"
-          onClick={() => refetch()}
-        >
-          <span>{t('common.refresh')}</span>
-        </button>
-      </div>
+      <EmptyState
+        icon={<Clock className="h-5 w-5" />}
+        tone="danger"
+        title={t('common.error')}
+        description={error instanceof Error ? error.message : t('common.networkError')}
+        action={
+          <Button variant="primary" size="sm" onClick={() => refetch()}>
+            {t('common.refresh')}
+          </Button>
+        }
+      />
     );
   }
 
@@ -50,107 +52,52 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
 
   return (
     <div className="space-y-4">
-      {/* Primary KPI Hero Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {/* Pending Receipts */}
-        <div
-          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer border transition-all duration-200 active:scale-[0.99] group hover:-translate-y-0.5 hover:border-amber-500/40 ${cardClass}`}
-          onClick={() => onSwitchTab('receipts')}
-        >
-          <div className="space-y-1">
-            <span
-              className={`text-xs font-semibold uppercase tracking-wider block ${textSecondary}`}
-            >
-              {t('admin.overview.pendingReceipts')}
-            </span>
-            <div className="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-amber-500 dark:text-amber-400">
-              {formatNumber(stats.pendingReceipts)}
-            </div>
-            <span className={`text-[11px] block ${textMuted}`}>
-              {t('admin.overview.pendingReceiptsSub')}
-            </span>
-          </div>
-          <div
-            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
-              isDark
-                ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                : 'bg-amber-50 border-amber-200 text-amber-700'
-            }`}
-          >
-            <Clock className="w-5 h-5" />
-          </div>
-        </div>
-
-        {/* Total Users */}
-        <div
-          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer border transition-all duration-200 active:scale-[0.99] group hover:-translate-y-0.5 hover:border-indigo-500/40 ${cardClass}`}
-          onClick={() => onSwitchTab('users')}
-        >
-          <div className="space-y-1">
-            <span
-              className={`text-xs font-semibold uppercase tracking-wider block ${textSecondary}`}
-            >
-              {t('admin.overview.totalUsers')}
-            </span>
-            <div
-              className={`text-2xl sm:text-3xl font-extrabold font-mono tracking-tight ${textPrimary}`}
-            >
-              {formatNumber(stats.totalUsers)}
-            </div>
-            <span className={`text-[11px] block ${textMuted}`}>
-              {t('admin.overview.totalUsersSub')}
-            </span>
-          </div>
-          <div
-            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
-              isDark
-                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
-                : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-            }`}
-          >
-            <Users className="w-5 h-5" />
-          </div>
-        </div>
-
-        {/* Total Sales */}
-        <div
-          className={`rounded-2xl p-4 sm:p-5 flex items-center justify-between border transition-all duration-200 group hover:-translate-y-0.5 hover:border-emerald-500/40 ${cardClass}`}
-        >
-          <div className="space-y-1">
-            <span
-              className={`text-xs font-semibold uppercase tracking-wider block ${textSecondary}`}
-            >
-              {t('admin.overview.totalSales')}
-            </span>
-            <div
-              className={`text-2xl sm:text-3xl font-extrabold font-mono tracking-tight ${
-                isDark ? 'text-emerald-400' : 'text-emerald-600'
-              }`}
-            >
-              {formatMoney(stats.totalSales)}{' '}
-              <span className={`text-xs font-normal ${textSecondary}`}>{t('common.currency')}</span>
-            </div>
-            <span className={`text-[11px] block ${textMuted}`}>
-              {t('admin.overview.totalSalesSub')}
-            </span>
-          </div>
-          <div
-            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105 shadow-xs ${
-              isDark
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-            }`}
-          >
-            <TrendingUp className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
-
-      {/* Panels Health Summary */}
+      {/* Health first: the most urgent signal used to be card #4 of 6. */}
       <HealthBanner panelHealth={panelHealth} onSwitchToPanels={() => onSwitchTab('panels')} />
 
-      {/* Revenue & Subscription Breakdown Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+        <StatCard
+          label={t('admin.overview.pendingReceipts')}
+          value={formatNumber(stats.pendingReceipts)}
+          hint={t('admin.overview.pendingReceiptsSub')}
+          icon={<Clock className="h-5 w-5" />}
+          tone="warn"
+          onClick={() => onSwitchTab('receipts')}
+          index={0}
+        />
+        <StatCard
+          label={t('admin.overview.totalUsers')}
+          value={formatNumber(stats.totalUsers)}
+          hint={t('admin.overview.totalUsersSub')}
+          icon={<Users className="h-5 w-5" />}
+          tone="brand"
+          onClick={() => onSwitchTab('users')}
+          index={1}
+        />
+        <StatCard
+          label={t('admin.overview.totalSales')}
+          value={formatMoney(stats.totalSales)}
+          unit={t('common.currency')}
+          hint={t('admin.overview.totalSalesSub')}
+          icon={<TrendingUp className="h-5 w-5" />}
+          tone="ok"
+          className="col-span-2 lg:col-span-1"
+          index={2}
+        />
+        <StatCard
+          label={t('admin.overview.dailyRevenue')}
+          value={formatMoney(stats.dailyRevenue)}
+          unit={t('common.currency')}
+          hint={t('admin.overview.dailyRevenueSub')}
+          icon={<Wallet className="h-5 w-5" />}
+          tone="ok"
+          className="col-span-2 lg:col-span-1"
+          index={3}
+        />
+      </div>
+
+      <SectionHeader title={t('admin.overview.revenueBreakdown')} />
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
         <RevenueGrid stats={stats} />
       </div>
     </div>

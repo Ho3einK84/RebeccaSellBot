@@ -8,14 +8,12 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className = '', error = false, ...props }, ref) => {
     const { inputClass } = useThemeTokens();
-    const errorBorder = error
-      ? '!border-rose-500/60 focus:!border-rose-500 focus:!ring-rose-500/20'
-      : '';
+    const errorBorder = error ? '!border-danger/70 focus:!ring-danger/25' : '';
 
     return (
       <input
         ref={ref}
-        className={`w-full h-10 px-3.5 rounded-xl border text-xs sm:text-sm transition-all outline-none focus-visible:outline-none disabled:opacity-50 disabled:bg-slate-100/60 dark:disabled:bg-white/[0.03] disabled:cursor-not-allowed shadow-[0_1px_2px_rgba(0,0,0,0.02)] ${inputClass} ${errorBorder} ${className}`}
+        className={`w-full h-11 px-3.5 rounded-ctl border text-sm transition-[border-color,box-shadow,background-color] outline-none focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${inputClass} ${errorBorder} ${className}`}
         {...props}
       />
     );

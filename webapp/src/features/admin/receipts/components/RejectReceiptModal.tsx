@@ -20,7 +20,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { isDark, inputClass, textPrimary, textSecondary } = useThemeTokens();
+  const { inputClass, textPrimary, textSecondary } = useThemeTokens();
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [reason, setReason] = useState<string>('');
 
@@ -68,7 +68,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
       onClose={handleClose}
       maxWidth="md"
       title={t('admin.modals.rejectTitle')}
-      icon={<XCircle className="w-5 h-5 text-rose-500" />}
+      icon={<XCircle className="w-5 h-5 text-danger" />}
     >
       <div className="space-y-4">
         <p className={`text-xs m-0 ${textSecondary}`}>
@@ -90,15 +90,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
                 <button
                   key={preset.key}
                   type="button"
-                  className={`px-3 py-1.5 rounded-xl text-xs transition-all active:scale-95 cursor-pointer border ${
-                    isSelected
-                      ? isDark
-                        ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 font-semibold shadow-xs'
-                        : 'bg-rose-50 border-rose-300 text-rose-800 font-semibold shadow-xs'
-                      : isDark
-                        ? 'bg-white/[0.04] border-white/10 text-zinc-300 hover:bg-white/[0.08]'
-                        : 'bg-slate-100 border-slate-200/80 text-slate-700 hover:bg-slate-200'
-                  }`}
+                  className={`px-3 py-1.5 rounded-xl text-xs transition-all active:scale-95 cursor-pointer border ${isSelected ? 'bg-danger/20 border-danger/40 text-danger font-semibold shadow-xs' : 'bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08]'}`}
                   onClick={() => handleSelectPreset(preset.key)}
                 >
                   {preset.label}
@@ -116,7 +108,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
           onChange={(e) => setReason(e.target.value)}
         />
 
-        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-slate-200 dark:border-white/10">
+        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
           <Button
             type="button"
             variant="secondary"

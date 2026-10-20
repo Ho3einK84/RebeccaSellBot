@@ -54,13 +54,7 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
         {/* Header */}
         <div className="flex items-start gap-3">
           <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
-              variant === 'danger'
-                ? 'bg-rose-500/15 border-rose-500/25 text-rose-500'
-                : variant === 'warning'
-                  ? 'bg-amber-500/15 border-amber-500/25 text-amber-500'
-                  : 'bg-indigo-500/15 border-indigo-500/25 text-indigo-500'
-            }`}
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${variant === 'danger' ? 'bg-danger/15 border-danger/25 text-danger' : variant === 'warning' ? 'bg-warn/15 border-warn/25 text-warn' : 'bg-brand/15 border-brand/25 text-brand'}`}
           >
             <AlertTriangle className="w-5 h-5" />
           </div>
@@ -86,7 +80,7 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-white/10">
+        <div className="flex items-center gap-2 pt-2 border-t border-line">
           <Button
             type="button"
             variant="secondary"

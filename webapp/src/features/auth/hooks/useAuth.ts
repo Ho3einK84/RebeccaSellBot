@@ -23,14 +23,18 @@ export function useAuth() {
     if (!initData) {
       // If opened in browser outside Telegram during development/testing
       if (import.meta.env.DEV) {
+        // `?role=user` renders the end-user experience instead of the admin one,
+        // so both surfaces can be previewed locally without a Telegram session.
+        const devRole =
+          new URLSearchParams(window.location.search).get('role') === 'user' ? 'user' : 'admin';
         const mockUser: TelegramWebAppUser = {
           id: 123456789,
-          first_name: 'مدیر',
-          last_name: 'سیستم',
-          username: 'admin',
+          first_name: devRole === 'user' ? 'علی' : 'مدیر',
+          last_name: devRole === 'user' ? 'رضایی' : 'سیستم',
+          username: devRole === 'user' ? 'ali_rezaei' : 'admin',
         };
         setAuthData({
-          role: 'admin',
+          role: devRole,
           user: mockUser,
           locale: 'fa',
           languageSelectionEnabled: true,

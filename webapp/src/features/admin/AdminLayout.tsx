@@ -13,10 +13,9 @@ import { useAdminReceipts } from './receipts/hooks/useAdminReceipts.js';
 import { useAdminStats } from './overview/hooks/useAdminStats.js';
 import { useAdminPanels } from './panels/hooks/useAdminPanels.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { AmbientBackground } from '@/shared/components/layout/AmbientBackground.js';
+import { AppShell } from '@/shared/components/layout/AppShell.js';
 import { Toast } from '@/shared/components/ui/Toast.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
@@ -29,7 +28,6 @@ interface AdminLayoutProps {
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPortal }) => {
   const { t } = useLanguage();
-  const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -108,15 +106,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
   ];
 
   return (
-    <div
-      className={`w-full min-h-screen min-h-[100dvh] flex flex-col relative transition-colors duration-200 safe-top ${
-        isDark ? 'bg-[#090a0f] text-slate-100' : 'bg-[#f8fafc] text-slate-900'
-      }`}
-    >
-      <AmbientBackground />
-
-      {/* Main Container */}
-      <main className="w-full max-w-6xl mx-auto p-3 sm:p-5 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] relative z-10 flex-1 flex flex-col">
+    <AppShell
+      header={
         <AdminHeader
           user={user}
           onRefresh={handleRefresh}
@@ -124,46 +115,43 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
           onNotify={notify}
           onSwitchToUserPortal={onSwitchToUserPortal}
         />
-
-        {/* Global Floating Toast Notification (Portaled above all modals) */}
-        {notification &&
-          createPortal(
-            <aside
-              aria-live="polite"
-              className="fixed top-4 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[100000] pointer-events-auto"
-            >
-              <Toast
-                message={notification.message}
-                type={notification.type}
-                onDismiss={() => setNotification(null)}
-              />
-            </aside>,
-            document.body
-          )}
-
-        {/* Desktop Navigation Tabs (Hidden on mobile) */}
+      }
+      desktopNav={
         <AdminDesktopNav tabs={tabsConfig} activeTab={activeTab} onSelectTab={switchTab} />
-
-        {/* Tab Routing with GPU-cheap Entrance Transition */}
-        <div key={activeTab} className="animate-tab-in flex-1 flex flex-col">
-          {activeTab === 'overview' && <OverviewTab onSwitchTab={switchTab} />}
-          {activeTab === 'receipts' && (
-            <ReceiptsTab onInspectUser={handleInspectUserFromReceipts} onNotify={notify} />
-          )}
-          {activeTab === 'users' && (
-            <UsersTab
-              onNotify={notify}
-              inspectedUserId={inspectingUserId}
-              onClearInspectedUser={() => setInspectingUserId(null)}
-            />
-          )}
-          {activeTab === 'panels' && <PanelsTab onNotify={notify} />}
-          {activeTab === 'coming-soon' && <ModulesTab />}
-        </div>
-      </main>
-
-      {/* Mobile Bottom Navigation Bar (< md) */}
-      <AdminBottomNav tabs={tabsConfig} activeTab={activeTab} onSelectTab={switchTab} />
-    </div>
+      }
+      transitionKey={activeTab}
+      bottomNav={<AdminBottomNav tabs={tabsConfig} activeTab={activeTab} onSelectTab={switchTab} />}
+      overlay={
+        notification
+          ? createPortal(
+              <aside
+                aria-live="polite"
+                className="fixed top-4 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[100000] pointer-events-auto"
+              >
+                <Toast
+                  message={notification.message}
+                  type={notification.type}
+                  onDismiss={() => setNotification(null)}
+                />
+              </aside>,
+              document.body
+            )
+          : null
+      }
+    >
+      {activeTab === 'overview' && <OverviewTab onSwitchTab={switchTab} />}
+      {activeTab === 'receipts' && (
+        <ReceiptsTab onInspectUser={handleInspectUserFromReceipts} onNotify={notify} />
+      )}
+      {activeTab === 'users' && (
+        <UsersTab
+          onNotify={notify}
+          inspectedUserId={inspectingUserId}
+          onClearInspectedUser={() => setInspectingUserId(null)}
+        />
+      )}
+      {activeTab === 'panels' && <PanelsTab onNotify={notify} />}
+      {activeTab === 'coming-soon' && <ModulesTab />}
+    </AppShell>
   );
 };
