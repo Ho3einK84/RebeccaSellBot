@@ -12,10 +12,14 @@ import {
 } from 'lucide-react';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { IconButton } from '@/shared/components/ui/IconButton.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { TopBar } from '@/shared/components/layout/TopBar.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
+import { toPersianDigits } from '@/shared/lib/formatters.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
 
 interface AdminHeaderProps {
@@ -34,7 +38,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   onSwitchToUserPortal,
 }) => {
   const { t, locale, languageSelectionEnabled, setLocale } = useLanguage();
-  const { isDark, toggleTheme, cardClass, textPrimary, textSecondary } = useThemeTokens();
+  const { isDark, toggleTheme } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
   const { copy, isCopied } = useCopy();
 
@@ -42,68 +46,39 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   const adminDisplayName = rawAdminName || 'Admin';
 
   return (
-    <header
-      className={`rounded-2xl p-3.5 sm:p-4 mb-4 border transition-all duration-200 ${cardClass}`}
-    >
-      {/* Top Tier: Brand, Title & Utility Actions */}
-      <div className="flex items-center justify-between gap-2.5 pb-3 border-b border-slate-200/60 dark:border-white/[0.06]">
-        {/* Brand & Panel Identity */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
-              isDark
-                ? 'bg-gradient-to-br from-indigo-500/20 to-violet-500/10 border-indigo-500/25 text-indigo-400 shadow-xs'
-                : 'bg-indigo-50 border-indigo-200/80 text-indigo-600 shadow-xs'
-            }`}
-          >
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-
-          <div className="flex items-center gap-2 min-w-0">
-            <h1
-              className={`text-sm sm:text-base font-bold m-0 tracking-tight truncate ${textPrimary}`}
-            >
-              {t('admin.title')}
-            </h1>
-            <Badge variant="warning" dot pulse size="xs">
-              {t('admin.betaBadge')}
-            </Badge>
-          </div>
-        </div>
-
-        {/* Quick Utility Actions */}
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Theme Toggle */}
-          <button
-            type="button"
-            className={`inline-flex items-center justify-center w-8 h-8 rounded-xl border transition-all active:scale-95 cursor-pointer ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
-                : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700 shadow-xs'
-            }`}
+    <TopBar
+      icon={
+        <IconTile tone="brand" size="md">
+          <ShieldCheck />
+        </IconTile>
+      }
+      title={t('admin.title')}
+      badge={
+        <Badge variant="warning" dot pulse size="xs" className="font-semibold">
+          {t('admin.betaBadge')}
+        </Badge>
+      }
+      actions={
+        <>
+          <IconButton
+            size="md"
+            label={isDark ? t('common.themeLight') : t('common.themeDark')}
             onClick={() => {
               triggerHaptic('light');
               toggleTheme();
             }}
-            title={isDark ? t('common.themeLight') : t('common.themeDark')}
-            aria-label={isDark ? t('common.themeLight') : t('common.themeDark')}
           >
             {isDark ? (
-              <Sun className="w-3.5 h-3.5 text-amber-300" />
+              <Sun className="h-4 w-4 text-warn" />
             ) : (
-              <Moon className="w-3.5 h-3.5 text-slate-700" />
+              <Moon className="h-4 w-4 text-ink-soft" />
             )}
-          </button>
+          </IconButton>
 
-          {/* Language Toggle */}
-          {languageSelectionEnabled && (
-            <button
-              type="button"
-              className={`inline-flex items-center gap-1 px-2 h-8 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
-                  : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700 shadow-xs'
-              }`}
+          {languageSelectionEnabled ? (
+            <IconButton
+              size="md"
+              label={t('common.language')}
               onClick={async () => {
                 triggerHaptic('light');
                 const next = locale === 'fa' ? 'en' : 'fa';
@@ -112,118 +87,78 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                   onNotify(t('admin.notifications.langChangeSuccess', undefined, next), 'success');
                 }
               }}
-              title={t('common.language')}
-              aria-label={t('common.language')}
             >
-              <Globe className="w-3.5 h-3.5 opacity-60" />
-              <span className="uppercase text-[11px] font-semibold">{locale}</span>
-            </button>
-          )}
+              <span className="flex items-center gap-0.5">
+                <Globe className="h-3.5 w-3.5 opacity-70" />
+                <span className="text-[10px] font-bold uppercase leading-none">
+                  {locale === 'fa' ? 'EN' : 'FA'}
+                </span>
+              </span>
+            </IconButton>
+          ) : null}
 
-          {/* Refresh Action */}
-          <button
-            type="button"
-            className={`inline-flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
-                : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700 shadow-xs'
-            }`}
-            onClick={onRefresh}
-            title={t('common.refresh')}
-            aria-label={t('common.refresh')}
-          >
-            <RotateCw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline ms-1.5">{t('common.refresh')}</span>
-          </button>
-
-          {/* Switch to User Portal (Beta Preview) */}
-          {onSwitchToUserPortal && (
-            <button
-              type="button"
-              className={`inline-flex items-center gap-1.5 px-2.5 h-8 rounded-xl border text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
-                isDark
-                  ? 'bg-purple-500/10 border-purple-500/25 hover:bg-purple-500/20 text-purple-300'
-                  : 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700 shadow-xs'
-              }`}
-              onClick={() => {
-                triggerHaptic('medium');
-                onSwitchToUserPortal();
-              }}
-              title={t('admin.enterUserBeta')}
-              aria-label={t('admin.enterUserBeta')}
-            >
-              <FlaskConical className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" />
-              <span className="hidden xs:inline sm:inline">{t('admin.enterUserBeta')}</span>
-            </button>
-          )}
-
-          {/* Exit Mini App */}
-          <button
-            type="button"
-            className={`inline-flex items-center justify-center w-8 h-8 rounded-xl border transition-all active:scale-95 cursor-pointer ${
-              isDark
-                ? 'bg-rose-500/10 border-rose-500/20 hover:bg-rose-500/20 text-rose-300'
-                : 'bg-rose-50 hover:bg-rose-100 border-rose-200/80 text-rose-700 shadow-xs'
-            }`}
-            onClick={onClose}
-            title={t('admin.exit')}
-            aria-label={t('admin.exit')}
-          >
-            <LogOut className="w-3.5 h-3.5 rtl:-scale-x-100" />
-          </button>
-        </div>
-      </div>
-
-      {/* Bottom Tier: User Profile & Identity Subline */}
-      <div className="flex items-center justify-between gap-2 pt-2.5 text-xs flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-          <Avatar
-            name={adminDisplayName}
-            username={user.username}
-            photoUrl={user.photo_url}
-            size="xs"
-            circle
-            className="shrink-0 ring-1 ring-slate-200 dark:ring-white/10"
-          />
-          <div className="flex items-baseline gap-1 min-w-0">
-            <span className={`text-xs shrink-0 ${textSecondary}`}>{t('common.welcome')}</span>
-            <span className={`font-semibold text-xs truncate ${textPrimary}`}>
-              {adminDisplayName}
+          <IconButton size="md" label={t('common.refresh')} onClick={onRefresh}>
+            <RotateCw className="h-4 w-4" />
+          </IconButton>
+        </>
+      }
+      footer={
+        <>
+          <div className="flex min-w-0 items-center gap-2">
+            <Avatar
+              name={adminDisplayName}
+              username={user.username}
+              photoUrl={user.photo_url}
+              size="xs"
+              circle
+              className="shrink-0 ring-1 ring-line"
+            />
+            <span className="min-w-0 truncate text-[11px] leading-tight text-ink-muted">
+              {t('common.welcome')}{' '}
+              <span className="text-xs font-semibold text-ink">{adminDisplayName}</span>
+            </span>
+            <span className="hidden shrink-0 rounded-md border border-brand/25 bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand sm:inline-block">
+              {t('admin.role')}
             </span>
           </div>
-        </div>
 
-        <div className="flex items-center gap-1.5 shrink-0 ms-auto">
-          <span
-            className={`text-[10px] font-medium px-2 py-0.5 rounded-md border select-none ${
-              isDark
-                ? 'text-indigo-300 bg-indigo-500/10 border-indigo-500/20'
-                : 'text-indigo-700 bg-indigo-50 border-indigo-200'
-            }`}
-          >
-            {t('admin.role')}
-          </span>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => copy(String(user.id), 'header-id')}
+              className="press rs-focus inline-flex items-center gap-1 rounded-md border border-line bg-surface-2 px-1.5 py-0.5 tnum text-[11px] text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+              title={t('common.copy')}
+              aria-label={t('common.copy')}
+            >
+              <span className="text-[10px] opacity-50">#</span>
+              <span dir="ltr">{locale === 'fa' ? toPersianDigits(String(user.id)) : user.id}</span>
+              {isCopied('header-id') ? (
+                <Check className="h-3 w-3 text-ok" />
+              ) : (
+                <Copy className="h-2.5 w-2.5 opacity-50" />
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => copy(String(user.id), 'header-id')}
-            className={`inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-md border transition-all active:scale-95 cursor-pointer ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 hover:border-white/20 text-zinc-300'
-                : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 hover:border-slate-300 text-slate-700 shadow-xs'
-            }`}
-            title={t('common.copy')}
-          >
-            <span className="text-[10px] opacity-50">#</span>
-            <span dir="ltr">{user.id}</span>
-            {isCopied('header-id') ? (
-              <Check className="w-3 h-3 text-emerald-500" />
-            ) : (
-              <Copy className="w-2.5 h-2.5 opacity-50 hover:opacity-100" />
-            )}
-          </button>
-        </div>
-      </div>
-    </header>
+            {onSwitchToUserPortal ? (
+              <IconButton
+                size="md"
+                tone="brand"
+                label={t('admin.enterUserBeta')}
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onSwitchToUserPortal();
+                }}
+              >
+                <FlaskConical className="h-4 w-4" />
+              </IconButton>
+            ) : null}
+
+            <IconButton size="md" tone="danger" label={t('admin.exit')} onClick={onClose}>
+              <LogOut className="h-4 w-4 rtl:-scale-x-100" />
+            </IconButton>
+          </div>
+        </>
+      }
+    />
   );
 };

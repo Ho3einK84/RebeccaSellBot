@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Save, Check, Users } from 'lucide-react';
+import { Bell, Save, Check, Users, RotateCw } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
@@ -18,7 +18,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
   onNotify,
 }) => {
   const { t } = useLanguage();
-  const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
   const { settings, isLoading, updateSettings, isUpdating } = useReceiptSettings();
 
   const [enabled, setEnabled] = useState(true);
@@ -79,13 +79,13 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.receipts.settingsModalTitle')}
-      icon={<Bell className="w-5 h-5 text-indigo-500" />}
+      icon={<Bell className="w-5 h-5 text-brand" />}
       maxWidth="md"
     >
       <div className="space-y-4">
         {isLoading ? (
           <div className="py-12 flex flex-col items-center justify-center gap-2">
-            <RotateCw className="w-6 h-6 animate-spin text-indigo-500" />
+            <RotateCw className="w-6 h-6 animate-spin text-brand" />
             <span className={`text-xs ${textMuted}`}>{t('common.loading')}</span>
           </div>
         ) : (
@@ -118,15 +118,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
-                  className={`p-3 rounded-xl border text-start transition-all cursor-pointer flex flex-col gap-1 ${
-                    mode === 'full'
-                      ? isDark
-                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
-                        : 'bg-indigo-50 border-indigo-300 text-indigo-800'
-                      : isDark
-                        ? 'bg-white/[0.02] border-white/10 text-zinc-400 hover:bg-white/[0.05]'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
+                  className={`p-3 rounded-xl border text-start transition-all cursor-pointer flex flex-col gap-1 ${mode === 'full' ? 'bg-brand/20 border-brand/50 text-brand' : 'bg-surface/[0.02] border-line/10 text-ink-muted hover:bg-surface/[0.05]'}`}
                   onClick={() => setMode('full')}
                 >
                   <div className="flex items-center justify-between">
@@ -142,15 +134,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
 
                 <button
                   type="button"
-                  className={`p-3 rounded-xl border text-start transition-all cursor-pointer flex flex-col gap-1 ${
-                    mode === 'simple'
-                      ? isDark
-                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
-                        : 'bg-indigo-50 border-indigo-300 text-indigo-800'
-                      : isDark
-                        ? 'bg-white/[0.02] border-white/10 text-zinc-400 hover:bg-white/[0.05]'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
+                  className={`p-3 rounded-xl border text-start transition-all cursor-pointer flex flex-col gap-1 ${mode === 'simple' ? 'bg-brand/20 border-brand/50 text-brand' : 'bg-surface/[0.02] border-line/10 text-ink-muted hover:bg-surface/[0.05]'}`}
                   onClick={() => setMode('simple')}
                 >
                   <div className="flex items-center justify-between">
@@ -170,20 +154,12 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
             <div className={`p-3.5 rounded-xl border space-y-2.5 ${subCardClass}`}>
               <div className="flex items-center justify-between">
                 <span className={`text-xs font-semibold flex items-center gap-1.5 ${textPrimary}`}>
-                  <Users className="w-3.5 h-3.5 text-indigo-400" />
+                  <Users className="w-3.5 h-3.5 text-brand" />
                   <span>{t('admin.receipts.settingsAdminsTitle')}</span>
                 </span>
                 <button
                   type="button"
-                  className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                    isAllAdmins
-                      ? isDark
-                        ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
-                        : 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                      : isDark
-                        ? 'bg-white/[0.04] border-white/10 text-zinc-400'
-                        : 'bg-slate-100 border-slate-200 text-slate-600'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${isAllAdmins ? 'bg-brand/20 border-brand/40 text-brand' : 'bg-surface/[0.04] border-line/10 text-ink-muted'}`}
                   onClick={() => {
                     setIsAllAdmins(true);
                     setSelectedAdmins([]);
@@ -201,28 +177,14 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                   return (
                     <div
                       key={adminId}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all cursor-pointer ${
-                        isChecked
-                          ? isDark
-                            ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300'
-                            : 'bg-indigo-50/70 border-indigo-200 text-indigo-900'
-                          : isDark
-                            ? 'bg-white/[0.02] border-white/5 text-zinc-400'
-                            : 'bg-white border-slate-200 text-slate-600'
-                      }`}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all cursor-pointer ${isChecked ? 'bg-brand/10 border-brand/25 text-brand' : 'bg-surface/[0.02] border-line/5 text-ink-muted'}`}
                       onClick={() => handleToggleAdmin(adminId)}
                     >
-                      <span dir="ltr" className="font-mono text-xs">
+                      <span dir="ltr" className="tnum text-xs">
                         {adminId}
                       </span>
                       <div
-                        className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                          isChecked
-                            ? 'bg-indigo-600 border-indigo-600 text-white'
-                            : isDark
-                              ? 'border-white/20'
-                              : 'border-slate-300'
-                        }`}
+                        className={`w-4 h-4 rounded-md border flex items-center justify-center ${isChecked ? 'bg-brand border-brand text-brand-ink' : 'border-line/20'}`}
                       >
                         {isChecked && <Check className="w-3 h-3" />}
                       </div>
@@ -233,7 +195,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
               <Button
                 type="button"
                 variant="secondary"

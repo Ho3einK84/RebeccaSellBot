@@ -22,7 +22,7 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney } = useFormatters();
-  const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!receipt) return null;
 
@@ -31,11 +31,7 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
-              isDark
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                : 'bg-emerald-50 border-emerald-200 text-emerald-600'
-            }`}
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 bg-ok/10 border-ok/20 text-ok`}
           >
             <CheckCircle2 className="w-5 h-5" />
           </div>
@@ -50,7 +46,7 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
           })}
         </p>
 
-        <div className={`p-3 rounded-xl border text-xs space-y-1 font-mono ${subCardClass}`}>
+        <div className={`p-3 rounded-xl border text-xs space-y-1 tnum ${subCardClass}`}>
           <div className="flex justify-between">
             <span className={`font-sans ${textMuted}`}>{t('common.userCode')}</span>
             <span dir="ltr" className={textPrimary}>
@@ -65,7 +61,7 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-slate-200 dark:border-white/10">
+        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
           <Button
             type="button"
             variant="secondary"

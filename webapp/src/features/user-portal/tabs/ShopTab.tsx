@@ -37,7 +37,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   onSelectPackage,
 }) => {
   const { t } = useLanguage();
-  const { isDark, cardClass } = useThemeTokens();
+  const { cardClass } = useThemeTokens();
   const { formatToman } = useFormatters();
   const { triggerHaptic } = useHaptic();
 
@@ -150,47 +150,31 @@ export const ShopTab: React.FC<ShopTabProps> = ({
     <div className="w-full flex flex-col gap-4 pb-6">
       {/* Shop Header Banner */}
       <div className="flex flex-col text-start px-1 gap-1">
-        <h2
-          className={`text-sm sm:text-base font-bold flex items-center gap-2 ${
-            isDark ? 'text-white' : 'text-slate-900'
-          }`}
-        >
-          <ShoppingBag className="w-4 h-4 text-indigo-400" />
+        <h2 className={`text-sm sm:text-base font-bold flex items-center gap-2 text-ink`}>
+          <ShoppingBag className="w-4 h-4 text-brand" />
           <span>{t('user.shop.title')}</span>
         </h2>
-        <p className="text-xs text-slate-500 dark:text-zinc-400 m-0">{t('user.shop.desc')}</p>
+        <p className="text-xs text-ink-muted m-0">{t('user.shop.desc')}</p>
       </div>
 
       {/* Custom Volume Calculator Section */}
       {isCustomEnabled && (
         <section
-          className={`rounded-2xl p-4 sm:p-5 border transition-all text-start relative overflow-hidden ${
-            isDark
-              ? 'bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-zinc-900/70 border-indigo-500/30 shadow-lg shadow-indigo-950/25'
-              : 'bg-gradient-to-br from-indigo-50/90 via-white to-purple-50/70 border-indigo-200 shadow-sm'
-          }`}
+          className={`rounded-2xl p-4 sm:p-5 border transition-all text-start relative overflow-hidden bg-gradient-to-br from-brand/40 via-brand/20 to-zinc-900/70 border-brand/30 shadow-lg shadow-brand/25 shadow-sm`}
         >
           {/* Header pill & badge */}
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2 min-w-0">
               <div
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-                  isDark
-                    ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300'
-                    : 'bg-indigo-100 border-indigo-200 text-indigo-600'
-                }`}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-brand/20 border-brand/30 text-brand`}
               >
                 <Sliders className="w-4 h-4" />
               </div>
               <div className="flex flex-col min-w-0">
-                <h3
-                  className={`text-xs sm:text-sm font-bold truncate ${
-                    isDark ? 'text-white' : 'text-slate-900'
-                  }`}
-                >
+                <h3 className={`text-xs sm:text-sm font-bold truncate text-ink`}>
                   {t('user.shop.customVolumeTitle')}
                 </h3>
-                <span className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                <span className="text-[11px] text-ink-muted truncate">
                   {t('user.shop.customVolumeSubtitle')}
                 </span>
               </div>
@@ -215,13 +199,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                       triggerHaptic('selection');
                       handleCustomGbChange(val);
                     }}
-                    className={`py-1 px-2.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer ${
-                      isSelected
-                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                        : isDark
-                          ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-zinc-300'
-                          : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-2xs'
-                    }`}
+                    className={`py-1 px-2.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer ${isSelected ? 'bg-brand border-brand text-brand-ink shadow-xs' : 'bg-surface/[0.04] border-line/10 hover:bg-surface/10 text-ink-soft shadow-2xs'}`}
                   >
                     {val} GB
                   </button>
@@ -232,12 +210,10 @@ export const ShopTab: React.FC<ShopTabProps> = ({
 
           {/* Interactive GB Slider & Stepper */}
           <div
-            className={`p-3.5 rounded-xl border flex flex-col gap-3 my-3 ${
-              isDark ? 'bg-black/25 border-white/[0.06]' : 'bg-slate-50/80 border-slate-200/80'
-            }`}
+            className={`p-3.5 rounded-xl border flex flex-col gap-3 my-3 bg-black/25 border-line/[0.06]`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-600 dark:text-zinc-400 font-medium">
+              <span className="text-xs text-ink-soft font-medium">
                 {t('user.shop.customVolumeGbLabel')}
               </span>
               <div className="flex items-center gap-1.5">
@@ -248,7 +224,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                     triggerHaptic('light');
                     handleCustomGbChange(customGb - 5);
                   }}
-                  className="w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                  className="w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-surface/5 border-line/10 text-ink-muted hover:bg-surface/10"
                   aria-label="Decrease GB"
                 >
                   <Minus className="w-3.5 h-3.5" />
@@ -261,9 +237,9 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                     value={typedGb}
                     onChange={handleTypedGbChange}
                     onBlur={handleTypedGbBlur}
-                    className="w-12 text-center font-mono font-bold text-base sm:text-lg text-indigo-500 dark:text-indigo-400 bg-transparent border-b border-indigo-500/30 focus:border-indigo-500 focus:outline-hidden py-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-12 text-center tnum font-bold text-base sm:text-lg text-brand bg-transparent border-b border-brand/30 focus:border-brand focus:outline-hidden py-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
-                  <span className="text-xs font-normal text-slate-400">GB</span>
+                  <span className="text-xs font-normal text-ink-muted">GB</span>
                 </div>
 
                 <button
@@ -273,7 +249,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                     triggerHaptic('light');
                     handleCustomGbChange(customGb + 5);
                   }}
-                  className="w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                  className="w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-surface/5 border-line/10 text-ink-muted hover:bg-surface/10"
                   aria-label="Increase GB"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -289,10 +265,10 @@ export const ShopTab: React.FC<ShopTabProps> = ({
               step={1}
               value={customGb}
               onChange={(e) => handleCustomGbChange(Number(e.target.value))}
-              className="range range-indigo range-xs w-full accent-indigo-500 cursor-pointer"
+              className="range range-indigo range-xs w-full accent-brand cursor-pointer"
             />
 
-            <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+            <div className="flex items-center justify-between text-[11px] text-ink-muted tnum">
               <span>{minGb} GB</span>
               <span>{t('user.shop.daysUnit').replace('{days}', String(customDays))}</span>
               <span>{maxGb} GB</span>
@@ -300,19 +276,15 @@ export const ShopTab: React.FC<ShopTabProps> = ({
           </div>
 
           {/* Pricing summary & Action Buttons */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-200/60 dark:border-white/[0.08]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-line/60">
             <div className="flex flex-col">
               <div className="flex items-baseline gap-1.5">
-                <span
-                  className={`text-lg sm:text-xl font-mono font-extrabold ${
-                    isDark ? 'text-white' : 'text-slate-900'
-                  }`}
-                >
+                <span className={`text-lg sm:text-xl tnum font-extrabold text-ink`}>
                   {formatToman(customPrice)}
                 </span>
-                <span className="text-xs text-slate-500 dark:text-zinc-400">{currency}</span>
+                <span className="text-xs text-ink-muted">{currency}</span>
               </div>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-ink-muted">
                 {t('user.shop.customVolumePricePerGb').replace(
                   '{price}',
                   `${formatToman(pricePerGb)} ${currency}`
@@ -325,11 +297,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                 <button
                   type="button"
                   onClick={handleOpenBotCustom}
-                  className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                    isDark
-                      ? 'bg-white/[0.05] border-white/10 hover:bg-white/10 text-zinc-300'
-                      : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
-                  }`}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer bg-surface/[0.05] border-line/10 hover:bg-surface/10 text-ink-soft`}
                   title={t('user.shop.customVolumeOrderBotButton')}
                 >
                   <Send className="w-3.5 h-3.5 rtl:rotate-180" />
@@ -342,7 +310,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
               <button
                 type="button"
                 onClick={handleOrderCustom}
-                className="flex-1 sm:flex-initial py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white"
+                className="flex-1 sm:flex-initial py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md bg-gradient-to-r from-brand to-brand hover:from-brand hover:to-brand text-ink"
               >
                 <Zap className="w-4 h-4" />
                 <span>{t('user.shop.customVolumeOrderButton')}</span>
@@ -355,40 +323,28 @@ export const ShopTab: React.FC<ShopTabProps> = ({
       {/* Pre-configured Packages Grid */}
       {packages.length === 0 ? (
         <div
-          className={`p-8 rounded-2xl border text-center my-4 flex flex-col items-center justify-center gap-2.5 ${
-            isDark
-              ? 'bg-white/[0.02] border-white/[0.07] text-zinc-400'
-              : 'bg-slate-50 border-slate-200 text-slate-500'
-          }`}
+          className={`p-8 rounded-2xl border text-center my-4 flex flex-col items-center justify-center gap-2.5 bg-surface/[0.02] border-line/[0.07] text-ink-muted`}
         >
-          <Package className="w-10 h-10 text-slate-400 opacity-60" />
-          <h3 className={`text-sm font-bold m-0 ${isDark ? 'text-zinc-200' : 'text-slate-800'}`}>
-            {t('user.shop.emptyPackages')}
-          </h3>
-          <p className="text-xs text-slate-400 max-w-xs m-0">{t('user.shop.emptyPackagesDesc')}</p>
+          <Package className="w-10 h-10 text-ink-muted opacity-60" />
+          <h3 className={`text-sm font-bold m-0 text-ink-soft`}>{t('user.shop.emptyPackages')}</h3>
+          <p className="text-xs text-ink-muted max-w-xs m-0">{t('user.shop.emptyPackagesDesc')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {packages.map((pkg) => (
             <div
               key={pkg.id}
-              className={`relative rounded-2xl p-4 sm:p-5 border transition-all flex flex-col justify-between gap-4 text-start ${cardClass} hover:border-indigo-500/30`}
+              className={`relative rounded-2xl p-4 sm:p-5 border transition-all flex flex-col justify-between gap-4 text-start ${cardClass} hover:border-brand/30`}
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <h3
-                    className={`text-sm sm:text-base font-bold truncate ${
-                      isDark ? 'text-white' : 'text-slate-900'
-                    }`}
-                  >
-                    {pkg.name}
-                  </h3>
+                  <h3 className={`text-sm sm:text-base font-bold truncate text-ink`}>{pkg.name}</h3>
                 </div>
 
                 {/* Badges: Traffic & Duration */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <Badge variant="primary" size="xs">
-                    <Zap className="w-3 h-3 text-indigo-400" />
+                    <Zap className="w-3 h-3 text-brand" />
                     <span>{t('user.shop.trafficUnit').replace('{gb}', String(pkg.gbAmount))}</span>
                   </Badge>
 
@@ -398,35 +354,31 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                 </div>
 
                 {/* Feature bullet points */}
-                <div className="flex flex-col gap-1 mt-1 text-[11px] text-slate-500 dark:text-zinc-400">
+                <div className="flex flex-col gap-1 mt-1 text-[11px] text-ink-muted">
                   <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-ok shrink-0" />
                     <span>{t('user.shop.fastConnectionFeature')}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-ok shrink-0" />
                     <span>{t('user.shop.allPlatformsFeature')}</span>
                   </div>
                 </div>
               </div>
 
               {/* Price and CTA */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-200/60 dark:border-white/[0.08] gap-2">
+              <div className="flex items-center justify-between pt-3 border-t border-line/60 gap-2">
                 <div className="flex items-baseline gap-1">
-                  <span
-                    className={`text-base sm:text-lg font-mono font-extrabold ${
-                      isDark ? 'text-white' : 'text-slate-950'
-                    }`}
-                  >
+                  <span className={`text-base sm:text-lg tnum font-extrabold text-ink`}>
                     {formatToman(pkg.price)}
                   </span>
-                  <span className="text-[11px] text-slate-500 dark:text-zinc-400">{currency}</span>
+                  <span className="text-[11px] text-ink-muted">{currency}</span>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => handleSelect(pkg)}
-                  className="py-2 px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white"
+                  className="py-2 px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm bg-brand hover:bg-brand text-brand-ink"
                 >
                   <span>{t('user.shop.selectPlan')}</span>
                 </button>

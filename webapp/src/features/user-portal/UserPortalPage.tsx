@@ -6,7 +6,6 @@ import { FeatureGrid } from './components/FeatureGrid.js';
 import { UserBetaPortal } from './UserBetaPortal.js';
 import { AmbientBackground } from '@/shared/components/layout/AmbientBackground.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
@@ -30,7 +29,6 @@ const getInitialBetaMode = (): boolean => {
 
 export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
   const { t } = useLanguage();
-  const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
   const { copy, isCopied } = useCopy();
 
@@ -72,9 +70,7 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
 
   return (
     <div
-      className={`cs-page w-full min-h-screen min-h-[100dvh] flex flex-col items-center justify-start safe-top transition-colors duration-200 ${
-        isDark ? 'bg-[#090a0f] text-slate-100' : 'bg-[#f8fafc] text-slate-900'
-      }`}
+      className={`cs-page w-full min-h-screen min-h-[100dvh] flex flex-col items-center justify-start safe-top transition-colors duration-200 bg-canvas text-ink`}
     >
       <AmbientBackground />
 
@@ -89,11 +85,7 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
 
         {/* Section: Enter Experimental Mode */}
         <section
-          className={`w-full rounded-2xl p-4 sm:p-4.5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-all ${
-            isDark
-              ? 'bg-gradient-to-br from-indigo-950/30 via-zinc-900/50 to-purple-950/30 border-indigo-500/30 shadow-lg shadow-indigo-950/20'
-              : 'bg-gradient-to-br from-indigo-50/90 via-white to-purple-50/80 border-indigo-200 shadow-sm'
-          }`}
+          className={`w-full rounded-2xl p-4 sm:p-4.5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-all bg-gradient-to-br from-brand/30 via-zinc-900/50 to-brand/30 border-brand/30 shadow-lg shadow-brand/20 shadow-sm`}
         >
           <div className="flex items-center justify-between mb-2">
             <Badge variant="primary" size="xs">
@@ -101,21 +93,17 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
               <span>{t('user.betaBadge')}</span>
             </Badge>
 
-            <div className="inline-flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400 font-medium">
+            <div className="inline-flex items-center gap-1 text-[10px] text-brand font-medium">
               <Sparkles className="w-3 h-3" />
               <span>{t('user.betaPreviewActive')}</span>
             </div>
           </div>
 
-          <h3
-            className={`text-sm sm:text-base font-bold mb-1.5 ${
-              isDark ? 'text-white' : 'text-slate-900'
-            }`}
-          >
+          <h3 className={`text-sm sm:text-base font-bold mb-1.5 text-ink`}>
             {t('user.enterBetaMode')}
           </h3>
 
-          <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed mb-3.5 m-0">
+          <p className="text-xs text-ink-soft leading-relaxed mb-3.5 m-0">
             {t('user.enterBetaModeDesc')}
           </p>
 
@@ -124,7 +112,7 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
             variant="primary"
             size="lg"
             onClick={handleEnterBeta}
-            className="w-full min-h-[44px] h-11 text-xs sm:text-sm font-bold shadow-md bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 border-0"
+            className="w-full min-h-[44px] h-11 text-xs sm:text-sm font-bold shadow-md bg-gradient-to-r from-brand via-brand to-brand hover:from-brand hover:to-brand border-0"
           >
             <FlaskConical className="w-4 h-4" />
             <span>{t('user.enterBetaMode')}</span>
@@ -146,9 +134,7 @@ export const UserPortalPage: React.FC<UserPortalPageProps> = ({ user }) => {
             <Send className="w-4 h-4 rtl:rotate-180" />
             <span>{t('user.backToBot')}</span>
           </Button>
-          <span
-            className={`text-[11px] select-none ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}
-          >
+          <span className={`text-[11px] select-none text-ink-muted`}>
             {t('user.closeMiniAppHint')}
           </span>
         </footer>

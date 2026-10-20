@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { SupportedLocale, NestedTranslationKey, TranslationSchema } from './types.js';
+import type {
+  SupportedLocale,
+  NestedTranslationKey,
+  TranslationSchema,
+  DeepPartial,
+} from './types.js';
 import { fa } from './locales/fa.js';
 import { en } from './locales/en.js';
 import { api } from '@/shared/lib/api.js';
 
-const locales: Record<SupportedLocale, TranslationSchema> = { fa, en };
+const locales: Record<SupportedLocale, DeepPartial<TranslationSchema>> = { fa, en };
 
 function getNestedValue(obj: unknown, path: string): string | undefined {
   if (!obj || typeof obj !== 'object') return undefined;

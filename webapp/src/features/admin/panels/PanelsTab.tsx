@@ -66,7 +66,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     setCustomTarget,
     deleteService,
   } = useAdminPanels();
-  const { isDark, textPrimary, textSecondary } = useThemeTokens();
+  const { textPrimary, textSecondary } = useThemeTokens();
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -273,11 +273,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-              isDark
-                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-xs'
-                : 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
-            }`}
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-brand/10 border-brand/20 text-brand shadow-xs`}
           >
             <Server className="w-4 h-4" />
           </div>
@@ -303,18 +299,14 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
             onClick={handleTestAll}
             title={t('admin.panels.testAllBtn')}
           >
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            <Zap className="w-3.5 h-3.5 text-warn" />
             <span>{t('admin.panels.testAllBtn')}</span>
           </Button>
 
           {/* Refresh Button */}
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] text-slate-300'
-                : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-xs'
-            }`}
+            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 hover:bg-surface/[0.08] text-ink-muted shadow-xs`}
             onClick={() => refetch()}
             title={t('common.refresh')}
           >
@@ -328,8 +320,8 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
 
       {/* Error State */}
       {isError && panels.length === 0 && (
-        <Card className="p-8 text-center flex flex-col items-center justify-center gap-3 border-rose-500/20">
-          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center">
+        <Card className="p-8 text-center flex flex-col items-center justify-center gap-3 border-danger/20">
+          <div className="w-12 h-12 rounded-2xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center">
             <XCircle className="w-6 h-6" />
           </div>
           <div className="space-y-1">
@@ -340,7 +332,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
           </div>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-xs"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 bg-brand hover:bg-brand text-brand-ink border-brand shadow-xs"
             onClick={() => refetch()}
           >
             <span>{t('common.refresh')}</span>
@@ -357,12 +349,8 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
               <div
                 className={`w-11 h-11 rounded-2xl flex items-center justify-center border shrink-0 transition-colors ${
                   allHealthy
-                    ? isDark
-                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : isDark
-                      ? 'bg-rose-500/15 text-rose-400 border-rose-500/25'
-                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                    ? 'bg-ok/15 text-ok border-ok/25'
+                    : 'bg-danger/15 text-danger border-danger/25'
                 }`}
               >
                 <Activity className="w-5 h-5" />
@@ -371,7 +359,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
                 <div className="flex items-center gap-2">
                   <span
                     className={`w-2 h-2 rounded-full ${
-                      allHealthy ? 'bg-emerald-500 status-pulse' : 'bg-rose-500'
+                      allHealthy ? 'bg-ok status-pulse' : 'bg-danger'
                     }`}
                   />
                   <h3 className={`text-sm font-bold m-0 tracking-tight ${textPrimary}`}>
@@ -393,63 +381,45 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
           {/* 4 Quick Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
             {/* Healthy Panels */}
-            <div
-              className={`p-3 rounded-xl border space-y-1 ${
-                isDark
-                  ? 'bg-white/[0.02] border-white/[0.06]'
-                  : 'bg-emerald-50/50 border-emerald-200/60'
-              }`}
-            >
-              <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+            <div className={`p-3 rounded-xl border space-y-1 bg-surface/[0.02] border-line/[0.06]`}>
+              <div className="flex items-center gap-1.5 text-[11px] text-ok font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>{t('admin.panels.fleetMetricHealthy')}</span>
               </div>
-              <div className="text-lg font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
+              <div className="text-lg font-extrabold tnum text-ok">
                 {formatNumber(healthyCount)}
               </div>
             </div>
 
             {/* Issues or Disabled */}
-            <div
-              className={`p-3 rounded-xl border space-y-1 ${
-                isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
-                <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+            <div className={`p-3 rounded-xl border space-y-1 bg-surface/[0.02] border-line/[0.06]`}>
+              <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
+                <AlertCircle className="w-3.5 h-3.5 text-warn" />
                 <span>{t('admin.panels.fleetMetricIssues')}</span>
               </div>
-              <div className="text-lg font-extrabold font-mono text-amber-600 dark:text-amber-400">
+              <div className="text-lg font-extrabold tnum text-warn">
                 {formatNumber(issuesCount)}
               </div>
             </div>
 
             {/* Fleet Total Active Configs */}
-            <div
-              className={`p-3 rounded-xl border space-y-1 ${
-                isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
-                <Users className="w-3.5 h-3.5 text-indigo-500" />
+            <div className={`p-3 rounded-xl border space-y-1 bg-surface/[0.02] border-line/[0.06]`}>
+              <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
+                <Users className="w-3.5 h-3.5 text-brand" />
                 <span>{t('admin.panels.fleetMetricConfigs')}</span>
               </div>
-              <div className="text-lg font-extrabold font-mono text-indigo-600 dark:text-indigo-400">
+              <div className="text-lg font-extrabold tnum text-brand">
                 {formatNumber(totalActiveConfigs)}
               </div>
             </div>
 
             {/* Fleet Total Services */}
-            <div
-              className={`p-3 rounded-xl border space-y-1 ${
-                isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
-                <Layers className="w-3.5 h-3.5 text-violet-500" />
+            <div className={`p-3 rounded-xl border space-y-1 bg-surface/[0.02] border-line/[0.06]`}>
+              <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
+                <Layers className="w-3.5 h-3.5 text-brand" />
                 <span>{t('admin.panels.fleetMetricServices')}</span>
               </div>
-              <div className="text-lg font-extrabold font-mono text-violet-600 dark:text-violet-400">
+              <div className="text-lg font-extrabold tnum text-brand">
                 {formatNumber(totalServices)}
               </div>
             </div>
@@ -464,10 +434,8 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
             type="button"
             className={`h-7 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
               filter === 'all'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : isDark
-                  ? 'bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]'
-                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                ? 'bg-brand text-brand-ink shadow-xs'
+                : 'bg-surface/[0.04] text-ink-soft hover:bg-surface/[0.08] border border-line'
             }`}
             onClick={() => setFilter('all')}
           >
@@ -478,10 +446,8 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
             type="button"
             className={`h-7 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
               filter === 'online'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : isDark
-                  ? 'bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]'
-                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                ? 'bg-ok text-ink shadow-xs'
+                : 'bg-surface/[0.04] text-ink-soft hover:bg-surface/[0.08] border border-line'
             }`}
             onClick={() => setFilter('online')}
           >
@@ -492,10 +458,8 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
             type="button"
             className={`h-7 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
               filter === 'issues'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : isDark
-                  ? 'bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]'
-                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                ? 'bg-warn text-ink shadow-xs'
+                : 'bg-surface/[0.04] text-ink-soft hover:bg-surface/[0.08] border border-line'
             }`}
             onClick={() => setFilter('issues')}
           >
@@ -507,7 +471,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
       {/* Empty State */}
       {!isLoading && !isError && panels.length === 0 && (
         <Card className="p-8 text-center space-y-3">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 flex items-center justify-center">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center">
             <Server className="w-6 h-6" />
           </div>
           <div className="space-y-1">
@@ -529,7 +493,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
       {/* Filtered Empty State */}
       {!isLoading && !isError && panels.length > 0 && filteredPanels.length === 0 && (
         <Card className="p-8 text-center space-y-3">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 flex items-center justify-center">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center">
             <Server className="w-6 h-6" />
           </div>
           <div className="space-y-1">

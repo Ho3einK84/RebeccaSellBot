@@ -25,17 +25,13 @@ export const UserTable: React.FC<UserTableProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber } = useFormatters();
-  const { isDark, textMuted, textPrimary } = useThemeTokens();
+  const { textMuted, textPrimary } = useThemeTokens();
 
   return (
     <Card className="hidden md:block overflow-x-auto shadow-xs">
       <table className="w-full text-xs text-start border-collapse">
         <thead
-          className={`text-[11px] font-semibold border-b ${
-            isDark
-              ? 'text-zinc-400 border-white/[0.08] bg-white/[0.01]'
-              : 'text-slate-500 border-slate-200/80 bg-slate-50/70'
-          }`}
+          className={`text-[11px] font-semibold border-b text-ink-muted border-line/[0.08] bg-surface/[0.01]`}
         >
           <tr>
             <th className="py-3 px-4 text-start">{t('admin.users.colId')}</th>
@@ -46,20 +42,18 @@ export const UserTable: React.FC<UserTableProps> = ({
             <th className="py-3 px-4 text-center">{t('admin.users.colActions')}</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-200/60 dark:divide-white/[0.04]">
+        <tbody className="divide-y divide-line/60">
           {users.map((u) => {
             const isInspectingThis = inspectingId === u.telegramId;
             return (
               <tr
                 key={u.telegramId}
-                className={`transition-colors duration-150 ${
-                  isDark ? 'hover:bg-white/[0.025]' : 'hover:bg-slate-50/80'
-                }`}
+                className={`transition-colors duration-150 hover:bg-surface/[0.025]`}
               >
-                <td className="py-3 px-4 font-mono">
+                <td className="py-3 px-4 tnum">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border font-mono text-xs transition-all active:scale-95 cursor-pointer bg-black/5 dark:bg-white/5 border-black/5 dark:border-white/5 hover:border-indigo-400/40"
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border tnum text-xs transition-all active:scale-95 cursor-pointer bg-black/5 border-black/5 hover:border-brand/40"
                     onClick={() => onCopyId(String(u.telegramId), `table-user-${u.telegramId}`)}
                     title={t('common.copy')}
                   >
@@ -67,7 +61,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                     <Copy className={`w-3 h-3 ${textMuted}`} />
                   </button>
                 </td>
-                <td className="py-3 px-4 text-indigo-500 font-mono">
+                <td className="py-3 px-4 text-brand tnum">
                   {u.username ? (
                     <span dir="ltr" className="inline-block unicode-isolate font-medium">
                       @{u.username}
@@ -78,7 +72,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                 </td>
                 <td className={`py-3 px-4 font-medium ${textPrimary}`}>
                   <div className="flex items-center gap-2">
-                    <span>{[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}</span>
+                    <span>{[u.firstName, u.lastName].filter(Boolean).join('') || '—'}</span>
                     {u.isBanned && (
                       <Badge variant="error" className="text-[10px] shrink-0">
                         {t('admin.users.bannedBadge')}
@@ -86,13 +80,10 @@ export const UserTable: React.FC<UserTableProps> = ({
                     )}
                   </div>
                 </td>
-                <td
-                  className={`py-3 px-4 font-bold font-mono ${
-                    isDark ? 'text-emerald-400' : 'text-emerald-600'
-                  }`}
-                >
-                  {formatMoney(u.balance)}{' '}
-                  <span className="text-[10px] font-normal text-slate-400">
+                <td className={`py-3 px-4 font-bold tnum text-ok`}>
+                  {formatMoney(u.balance)}
+                  {''}
+                  <span className="text-[10px] font-normal text-ink-muted">
                     {t('common.currency')}
                   </span>
                 </td>
@@ -119,7 +110,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                       onClick={() => onInspect(u.telegramId)}
                     >
                       {isInspectingThis ? (
-                        <RotateCw className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                        <RotateCw className="w-3.5 h-3.5 animate-spin text-brand" />
                       ) : (
                         <Eye className="w-3.5 h-3.5 opacity-70" />
                       )}

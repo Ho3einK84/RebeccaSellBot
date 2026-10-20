@@ -1,6 +1,6 @@
-import type { TranslationSchema } from '../types.js';
+import type { DeepPartial, TranslationSchema } from '../types.js';
 
-export const en: TranslationSchema = {
+export const en: DeepPartial<TranslationSchema> = {
   common: {
     loading: 'Connecting securely to server...',
     authError: 'Authentication Error',
@@ -313,6 +313,7 @@ export const en: TranslationSchema = {
       totalSales: 'Total Sales',
       totalSalesSub: 'Cumulative user purchases',
       dailyRevenue: "Today's Revenue",
+      revenueBreakdown: 'Revenue & subscriptions',
       dailyRevenueSub: 'Since 00:00 today',
       weeklyRevenue: 'Weekly Revenue',
       weeklyRevenueSub: 'Past 7 days',

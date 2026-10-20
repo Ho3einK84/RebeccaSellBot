@@ -31,30 +31,22 @@ export const UserHeader: React.FC = () => {
       <div className="flex items-center gap-1.5">
         <button
           type="button"
-          className={`inline-flex items-center justify-center w-8 h-8 rounded-full border transition-all active:scale-95 cursor-pointer ${
-            isDark
-              ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-slate-300'
-              : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-sm'
-          }`}
+          className={`inline-flex items-center justify-center w-8 h-8 rounded-full border transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 hover:bg-surface/10 text-ink-muted shadow-sm`}
           onClick={handleToggleTheme}
           aria-label={t('common.themeToggle')}
           title={isDark ? t('common.themeLight') : t('common.themeDark')}
         >
           {isDark ? (
-            <Sun className="w-4 h-4 text-amber-300" />
+            <Sun className="w-4 h-4 text-warn" />
           ) : (
-            <Moon className="w-4 h-4 text-slate-700" />
+            <Moon className="w-4 h-4 text-ink-soft" />
           )}
         </button>
 
         {languageSelectionEnabled && (
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 px-3 py-1 h-8 rounded-full border text-[11px] font-medium transition-all active:scale-95 cursor-pointer ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 hover:bg-white/10 text-slate-300'
-                : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 shadow-sm'
-            }`}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 h-8 rounded-full border text-[11px] font-medium transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 hover:bg-surface/10 text-ink-muted shadow-sm`}
             onClick={handleToggleLanguage}
             aria-label={t('common.switchLang')}
           >

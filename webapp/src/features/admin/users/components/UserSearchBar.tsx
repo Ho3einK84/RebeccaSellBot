@@ -32,7 +32,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
-  const { isDark, inputClass, textPrimary, textMuted } = useThemeTokens();
+  const { inputClass, textPrimary, textMuted } = useThemeTokens();
 
   const filterOptions: Array<{ id: UserFilterType; label: string }> = [
     { id: 'all', label: t('admin.users.filterAll') },
@@ -54,11 +54,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
       <div className="flex flex-row justify-between items-center gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-              isDark
-                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-xs'
-                : 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
-            }`}
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-brand/10 border-brand/20 text-brand shadow-xs`}
           >
             <Users className="w-4 h-4" />
           </div>
@@ -88,7 +84,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
           {searchQuery && (
             <button
               type="button"
-              className={`absolute end-2.5 top-2 p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer ${textMuted}`}
+              className={`absolute end-2.5 top-2 p-1 rounded-lg hover:bg-ink/[0.06] transition-colors cursor-pointer ${textMuted}`}
               onClick={onClear}
               aria-label="Clear search"
             >
@@ -120,15 +116,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
                 key={opt.id}
                 type="button"
                 onClick={() => onFilterChange?.(opt.id)}
-                className={`h-7 px-2.5 rounded-lg text-xs font-medium shrink-0 transition-all select-none cursor-pointer border ${
-                  isSelected
-                    ? isDark
-                      ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 font-semibold shadow-xs'
-                      : 'bg-indigo-50 border-indigo-300 text-indigo-700 font-semibold shadow-xs'
-                    : isDark
-                      ? 'bg-white/[0.03] border-white/[0.06] text-zinc-400 hover:text-zinc-200'
-                      : 'bg-slate-100/70 border-slate-200 text-slate-600 hover:text-slate-900'
-                }`}
+                className={`h-7 px-2.5 rounded-lg text-xs font-medium shrink-0 transition-all select-none cursor-pointer border ${isSelected ? 'bg-brand/20 border-brand/40 text-brand font-semibold shadow-xs' : 'bg-surface/[0.03] border-line/[0.06] text-ink-muted hover:text-ink-soft'}`}
               >
                 {opt.label}
               </button>
@@ -142,14 +130,10 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
           <select
             value={sort}
             onChange={(e) => onSortChange?.(e.target.value as UserSortType)}
-            className={`h-7 px-2 text-xs font-medium rounded-lg border outline-none transition-colors cursor-pointer ${
-              isDark
-                ? 'bg-white/[0.04] border-white/10 text-zinc-300'
-                : 'bg-white border-slate-200 text-slate-700 shadow-xs'
-            }`}
+            className={`h-7 px-2 text-xs font-medium rounded-lg border outline-none transition-colors cursor-pointer bg-surface/[0.04] border-line/10 text-ink-soft shadow-xs`}
           >
             {sortOptions.map((s) => (
-              <option key={s.id} value={s.id} className={isDark ? 'bg-zinc-900 text-white' : ''}>
+              <option key={s.id} value={s.id} className={'bg-surface text-ink'}>
                 {s.label}
               </option>
             ))}

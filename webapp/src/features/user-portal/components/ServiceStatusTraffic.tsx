@@ -3,6 +3,9 @@ import { Calendar } from 'lucide-react';
 import { useLanguage } from '../../../shared/i18n/LanguageContext.js';
 import { toPersianDigits, formatBytes } from '../../../shared/lib/formatters.js';
 import { Badge, type BadgeVariant } from '@/shared/components/ui/Badge.js';
+import type { NestedTranslationKey } from '@/shared/i18n/types.js';
+
+type TranslateFn = (key: NestedTranslationKey) => string;
 
 export type ServiceStatusType =
   'active' | 'limited' | 'expired' | 'disabled' | 'on_hold' | 'unknown';
@@ -37,7 +40,7 @@ export interface ServiceExpiryInfo {
  */
 export function getServiceStatusInfo(
   panelStatus: string | null | undefined,
-  t: (key: string) => string
+  t: TranslateFn
 ): ServiceStatusInfo {
   const normalized = (panelStatus || '').trim().toLowerCase();
 
@@ -46,49 +49,48 @@ export function getServiceStatusInfo(
       return {
         type: 'active',
         label: t('user.services.statusActive'),
-        badgeClass:
-          'bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20',
-        dotClass: 'bg-emerald-500 animate-pulse',
+        badgeClass: 'bg-ok/10 text-ok border-ok/20',
+        dotClass: 'bg-ok animate-pulse',
         isPulsing: true,
       };
     case 'limited':
       return {
         type: 'limited',
         label: t('user.services.statusLimited'),
-        badgeClass: 'bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/20',
-        dotClass: 'bg-amber-500',
+        badgeClass: 'bg-warn/10 text-warn border-warn/20',
+        dotClass: 'bg-warn',
         isPulsing: false,
       };
     case 'expired':
       return {
         type: 'expired',
         label: t('user.services.statusExpired'),
-        badgeClass: 'bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/20',
-        dotClass: 'bg-rose-500',
+        badgeClass: 'bg-danger/10 text-danger border-danger/20',
+        dotClass: 'bg-danger',
         isPulsing: false,
       };
     case 'disabled':
       return {
         type: 'disabled',
         label: t('user.services.statusDisabled'),
-        badgeClass: 'bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 border-zinc-500/20',
-        dotClass: 'bg-zinc-400 dark:bg-zinc-500',
+        badgeClass: 'bg-zinc-500/10 text-ink-muted border-zinc-500/20',
+        dotClass: 'bg-zinc-400',
         isPulsing: false,
       };
     case 'on_hold':
       return {
         type: 'on_hold',
         label: t('user.services.statusOnHold'),
-        badgeClass: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
-        dotClass: 'bg-yellow-500',
+        badgeClass: 'bg-warn/10 text-warn border-warn/20',
+        dotClass: 'bg-warn',
         isPulsing: false,
       };
     default:
       return {
         type: 'unknown',
         label: t('user.services.statusUnknown'),
-        badgeClass: 'bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 border-zinc-500/20',
-        dotClass: 'bg-zinc-400 dark:bg-zinc-500',
+        badgeClass: 'bg-zinc-500/10 text-ink-muted border-zinc-500/20',
+        dotClass: 'bg-zinc-400',
         isPulsing: false,
       };
   }
@@ -102,7 +104,7 @@ export function getServiceTrafficInfo(
   panelDataLimit: number | null | undefined,
   panelUsedTraffic: number | null | undefined,
   locale: string = 'fa',
-  t: (key: string) => string
+  t: TranslateFn
 ): ServiceTrafficInfo {
   const formattedUsed = formatBytes(panelUsedTraffic ?? 0, locale);
 
@@ -113,7 +115,7 @@ export function getServiceTrafficInfo(
       formattedLimit: '—',
       formattedUsed,
       percentage: null,
-      progressColorClass: 'bg-indigo-500',
+      progressColorClass: 'bg-brand',
     };
   }
 
@@ -124,7 +126,7 @@ export function getServiceTrafficInfo(
       formattedLimit: t('user.services.unlimited'),
       formattedUsed,
       percentage: null,
-      progressColorClass: 'bg-indigo-500',
+      progressColorClass: 'bg-brand',
     };
   }
 
@@ -134,7 +136,7 @@ export function getServiceTrafficInfo(
   const formattedLimit = formatBytes(limit, locale);
 
   const progressColorClass =
-    percentage > 90 ? 'bg-rose-500' : percentage > 75 ? 'bg-amber-500' : 'bg-indigo-500';
+    percentage > 90 ? 'bg-danger' : percentage > 75 ? 'bg-warn' : 'bg-brand';
 
   return {
     isUnlimited: false,
@@ -152,7 +154,7 @@ export function getServiceTrafficInfo(
 export function getServiceExpiryInfo(
   panelExpire: number | null | undefined,
   locale: string = 'fa',
-  t: (key: string) => string,
+  t: TranslateFn,
   nowSec?: number
 ): ServiceExpiryInfo {
   if (panelExpire === null || panelExpire === undefined) {
@@ -208,7 +210,7 @@ export function getServiceExpiryInfo(
 export function formatServiceCreatedDate(
   createdAt: string | null | undefined,
   locale: string = 'fa',
-  t: (key: string) => string
+  t: TranslateFn
 ): string {
   if (!createdAt) return '—';
   const date = new Date(createdAt);
@@ -289,27 +291,26 @@ export const ServiceTrafficBar: React.FC<{
 
   const percentLabel =
     info.percentage !== null
-      ? `(${locale === 'fa' ? toPersianDigits(info.percentage) : info.percentage}%)`
+      ? `(${locale === 'fa' ? `${toPersianDigits(info.percentage)}٪` : `${info.percentage}%`})`
       : '';
 
   return (
     <div className={`w-full flex flex-col ${compact ? 'gap-1' : 'gap-1.5'} ${className}`}>
-      <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-zinc-400">
-        <span>{t('user.services.trafficUsed')}</span>
-        <span className="font-mono font-semibold">
+      <div className="flex items-center justify-between gap-2 text-[11px] text-ink-muted">
+        <span className="shrink-0">{t('user.services.trafficUsed')}</span>
+        {/* LRM marks isolate the slash so "used / total" keeps its reading order in RTL */}
+        <span className="tnum shrink-0 font-semibold">
           {info.isUnlimited
-            ? `${info.formattedUsed} / ${info.formattedLimit}`
+            ? `${info.formattedUsed} ‎/‎ ${info.formattedLimit}`
             : info.isUnknownLimit
               ? `${info.formattedUsed} / —`
-              : `${info.formattedUsed} / ${info.formattedLimit} ${percentLabel}`}
+              : `${info.formattedUsed} ‎/‎ ${info.formattedLimit} ${percentLabel}`}
         </span>
       </div>
 
       {!info.isUnlimited && !info.isUnknownLimit && info.percentage !== null && (
         <div
-          className={`w-full ${
-            compact ? 'h-1.5' : 'h-2'
-          } rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden`}
+          className={`w-full ${compact ? 'h-1.5' : 'h-2'} rounded-full overflow-hidden bg-surface-3`}
         >
           <div
             className={`h-full rounded-full transition-all duration-500 ${info.progressColorClass}`}
@@ -329,15 +330,11 @@ export const ServiceExpiryView: React.FC<{
   const info = getServiceExpiryInfo(expireTimestampSec, locale, t);
 
   return (
-    <div
-      className={`flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 ${className}`}
-    >
+    <div className={`flex items-center gap-1.5 text-[11px] text-ink-muted ${className}`}>
       <Calendar className="w-3.5 h-3.5 shrink-0" />
       <span>{info.remainingText}</span>
       {info.formattedDate !== '—' && (
-        <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
-          ({info.formattedDate})
-        </span>
+        <span className="tnum text-[10px] text-ink-soft">({info.formattedDate})</span>
       )}
     </div>
   );

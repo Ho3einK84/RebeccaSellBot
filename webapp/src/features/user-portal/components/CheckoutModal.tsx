@@ -18,7 +18,6 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Skeleton } from '@/shared/components/ui/Skeleton.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
@@ -64,7 +63,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onSuccess,
 }) => {
   const { t } = useLanguage();
-  const { isDark } = useThemeTokens();
   const { triggerHaptic } = useHaptic();
   const { formatToman, formatNumber } = useFormatters();
   const { copy, isCopied } = useCopy();
@@ -92,6 +90,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const stepRef = useRef<CheckoutStep>(step);
   stepRef.current = step;
 
+  /**
+   * Live success check. The success transition may land while a request is
+   * still in flight, so read through a call (not an inline comparison) to avoid
+   * TypeScript narrowing `stepRef.current` with a stale union.
+   */
+  const reachedSuccess = (): boolean => stepRef.current === 'success';
+
   const isProcessingRef = useRef<boolean>(isProcessing);
   isProcessingRef.current = isProcessing;
 
@@ -101,7 +106,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const createCheckoutSession = useCallback(async () => {
     if (!pkg) return;
     // Freeze: Never recreate checkout session if already in success or currently processing
-    if (stepRef.current === 'success' || isProcessingRef.current) return;
+    if (reachedSuccess() || isProcessingRef.current) return;
 
     setStep('loading');
     setErrorMessage('');
@@ -121,12 +126,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           });
 
       // If state transitioned to success during network latency, do not overwrite
-      if (stepRef.current === 'success') return;
+      if (reachedSuccess()) return;
 
       setCheckout(res);
       setStep('review');
     } catch (err: unknown) {
-      if (stepRef.current === 'success') return;
+      if (reachedSuccess()) return;
 
       if (err instanceof ApiClientError) {
         const errData = err.data as
@@ -162,7 +167,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   useEffect(() => {
     if (isOpen && pkg) {
       // Freeze modal state: if already in success, processing, or session already initiated for this open cycle, do nothing
-      if (sessionCreatedRef.current || stepRef.current === 'success' || isProcessingRef.current) {
+      if (sessionCreatedRef.current || reachedSuccess() || isProcessingRef.current) {
         return;
       }
       sessionCreatedRef.current = true;
@@ -336,9 +341,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       title={step === 'success' ? t('user.shop.orderSuccess') : t('user.shop.orderModalTitle')}
       icon={
         step === 'success' ? (
-          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <CheckCircle2 className="w-5 h-5 text-ok" />
         ) : (
-          <ShoppingCart className="w-5 h-5 text-indigo-400" />
+          <ShoppingCart className="w-5 h-5 text-brand" />
         )
       }
       maxWidth="md"
@@ -350,21 +355,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {step === 'loading' && (
           <div className="flex flex-col gap-4">
             <div
-              className={`p-4 rounded-2xl border flex flex-col gap-3 ${
-                isDark ? 'bg-white/[0.03] border-white/[0.08]' : 'bg-slate-50 border-slate-200/80'
-              }`}
+              className={`p-4 rounded-2xl border flex flex-col gap-3 bg-surface/[0.03] border-line/[0.08]`}
             >
               <div className="flex items-center justify-between">
                 <Skeleton className="h-5 w-36 rounded-lg" />
                 <Skeleton className="h-5 w-16 rounded-full" />
               </div>
-              <div className="pt-2 border-t border-slate-200/50 dark:border-white/[0.05] flex items-center justify-between">
+              <div className="pt-2 border-t border-line/50 flex items-center justify-between">
                 <Skeleton className="h-4 w-20 rounded-md" />
                 <Skeleton className="h-5 w-24 rounded-md" />
               </div>
             </div>
 
-            <div className="flex items-center justify-center py-6 gap-2 text-indigo-500 dark:text-indigo-400 text-xs font-medium">
+            <div className="flex items-center justify-center py-6 gap-2 text-brand text-xs font-medium">
               <Loader2 className="w-5 h-5 animate-spin" />
               <span>{t('common.loading')}</span>
             </div>
@@ -376,10 +379,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           <>
             {/* Expiry countdown banner */}
             <div className="flex items-center justify-between px-1">
-              <span className="text-xs text-slate-500 dark:text-zinc-400">
-                {t('user.shop.orderModalTitle')}
-              </span>
-              <div className="flex items-center gap-1.5 text-xs text-amber-500 dark:text-amber-400 font-mono font-semibold px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <span className="text-xs text-ink-muted">{t('user.shop.orderModalTitle')}</span>
+              <div className="flex items-center gap-1.5 text-xs text-warn tnum font-semibold px-2.5 py-1 rounded-lg bg-warn/10 border border-warn/20">
                 <Clock className="w-3.5 h-3.5" />
                 <span>
                   {t('user.shop.expiresIn').replace('{time}', formatCountdown(remainingSeconds))}
@@ -389,58 +390,46 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {/* Server-confirmed package card */}
             <div
-              className={`p-4 rounded-2xl border ${
-                isDark
-                  ? 'bg-white/[0.03] border-white/[0.08]'
-                  : 'bg-slate-50 border-slate-200/80 shadow-2xs'
-              }`}
+              className={`p-4 rounded-2xl border bg-surface/[0.03] border-line/[0.08] shadow-2xs`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span
-                  className={`font-bold text-sm sm:text-base ${isDark ? 'text-white' : 'text-slate-900'}`}
-                >
-                  {checkout.name}
-                </span>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                <span className={`font-bold text-sm sm:text-base text-ink`}>{checkout.name}</span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand/10 text-brand border border-brand/20">
                   {t('user.shop.trafficUnit').replace('{gb}', formatNumber(checkout.gb))}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 pt-2 border-t border-slate-200/50 dark:border-white/[0.05]">
+              <div className="flex items-center justify-between text-xs text-ink-muted pt-2 border-t border-line/50">
                 <span>
                   {t('user.shop.daysUnit').replace('{days}', formatNumber(checkout.days))}
                 </span>
-                <span className="font-bold text-sm text-indigo-500 dark:text-indigo-400">
+                <span className="font-bold text-sm text-brand">
                   {formatToman(checkout.price)} {displayCurrency}
                 </span>
               </div>
             </div>
 
             {/* Feature points */}
-            <div className="flex flex-col gap-1.5 px-1 text-[11px] text-slate-500 dark:text-zinc-400">
+            <div className="flex flex-col gap-1.5 px-1 text-[11px] text-ink-muted">
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <ShieldCheck className="w-3.5 h-3.5 text-ok shrink-0" />
                 <span>{t('user.shop.fastConnectionFeature')}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <ShieldCheck className="w-3.5 h-3.5 text-ok shrink-0" />
                 <span>{t('user.shop.allPlatformsFeature')}</span>
               </div>
             </div>
 
             {/* Wallet Balance Status */}
             <div
-              className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
-                isDark
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              }`}
+              className={`p-3 rounded-xl border flex items-center justify-between text-xs bg-ok/10 border-ok/20 text-ok`}
             >
               <div className="flex items-center gap-2">
                 <Wallet className="w-4 h-4 shrink-0" />
                 <span>{t('user.dashboard.availableBalance')}</span>
               </div>
-              <span className="font-mono font-bold">
+              <span className="tnum font-bold">
                 {formatToman(checkout.availableBalance)} {displayCurrency}
               </span>
             </div>
@@ -477,46 +466,38 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 3: Insufficient Balance */}
         {step === 'insufficient_balance' && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+            <div className="w-12 h-12 rounded-2xl bg-warn/10 border border-warn/20 flex items-center justify-center text-warn">
               <AlertCircle className="w-6 h-6" />
             </div>
 
             <div className="flex flex-col gap-1">
-              <h3
-                className={`text-sm sm:text-base font-bold ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
+              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
                 {t('user.shop.insufficientBalance')}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 m-0">
+              <p className="text-xs text-ink-muted m-0">
                 {t('user.shop.chargeNeeded').replace('{amount}', formatToman(deficitAmount))}
               </p>
             </div>
 
             {/* Breakdown card */}
             <div
-              className={`w-full p-3.5 rounded-xl border flex flex-col gap-2 text-xs text-start ${
-                isDark ? 'bg-white/[0.03] border-white/[0.08]' : 'bg-slate-50 border-slate-200'
-              }`}
+              className={`w-full p-3.5 rounded-xl border flex flex-col gap-2 text-xs text-start bg-surface/[0.03] border-line/[0.08]`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-zinc-400">{t('common.amount')}:</span>
-                <span className="font-mono font-bold">
+                <span className="text-ink-muted">{t('common.amount')}:</span>
+                <span className="tnum font-bold">
                   {formatToman(checkout?.price ?? pkg.price)} {displayCurrency}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-zinc-400">
-                  {t('user.dashboard.availableBalance')}:
-                </span>
-                <span className="font-mono font-bold">
+                <span className="text-ink-muted">{t('user.dashboard.availableBalance')}:</span>
+                <span className="tnum font-bold">
                   {formatToman(checkout?.availableBalance ?? availableBalance)} {displayCurrency}
                 </span>
               </div>
-              <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 dark:border-white/[0.08] text-rose-500 font-semibold">
+              <div className="flex items-center justify-between pt-1.5 border-t border-line/60 text-danger font-semibold">
                 <span>{t('user.shop.chargeNeeded').split(':')[0]}:</span>
-                <span className="font-mono font-bold">
+                <span className="tnum font-bold">
                   {formatToman(deficitAmount)} {displayCurrency}
                 </span>
               </div>
@@ -528,7 +509,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 variant="primary"
                 size="md"
                 onClick={handleGoToWallet}
-                className="w-full font-bold shadow-md bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-400/30"
+                className="w-full font-bold shadow-md bg-warn hover:bg-warn text-slate-950 border-warn/30"
               >
                 <Wallet className="w-4 h-4" />
                 <span>{t('user.shop.goToWallet')}</span>
@@ -551,19 +532,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 4: Checkout Expired */}
         {step === 'expired' && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+            <div className="w-12 h-12 rounded-2xl bg-warn/10 border border-warn/20 flex items-center justify-center text-warn">
               <Clock className="w-6 h-6" />
             </div>
 
             <div className="flex flex-col gap-1">
-              <h3
-                className={`text-sm sm:text-base font-bold ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
+              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
                 {t('user.shop.checkoutExpiredTitle')}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 m-0 max-w-xs">
+              <p className="text-xs text-ink-muted m-0 max-w-xs">
                 {t('user.shop.checkoutExpiredDesc')}
               </p>
             </div>
@@ -599,19 +576,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 5: Verifying Screen (Outcome Pending) */}
         {step === 'verifying' && (
           <div className="flex flex-col items-center text-center gap-4 py-3">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+            <div className="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
 
             <div className="flex flex-col gap-1.5 max-w-sm">
-              <h3
-                className={`text-sm sm:text-base font-bold ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
+              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
                 {t('user.shop.orderVerifyingTitle')}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 m-0 leading-relaxed">
+              <p className="text-xs text-ink-muted m-0 leading-relaxed">
                 {t('user.shop.orderVerifyingDesc')}
               </p>
             </div>
@@ -644,19 +617,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 6: Creation Error or Confirm Error */}
         {(step === 'creation_error' || step === 'confirm_error') && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500">
+            <div className="w-12 h-12 rounded-2xl bg-danger/10 border border-danger/20 flex items-center justify-center text-danger">
               <AlertCircle className="w-6 h-6" />
             </div>
 
             <div className="flex flex-col gap-1 max-w-xs">
-              <h3
-                className={`text-sm sm:text-base font-bold ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
+              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
                 {t('user.shop.checkoutErrorTitle')}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 m-0">
+              <p className="text-xs text-ink-muted m-0">
                 {errorMessage || t('user.shop.checkoutErrorGeneric')}
               </p>
             </div>
@@ -696,45 +665,33 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 7: Success Screen */}
         {step === 'success' && successData && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+            <div className="w-12 h-12 rounded-2xl bg-ok/10 border border-ok/20 flex items-center justify-center text-ok">
               <CheckCircle2 className="w-6 h-6" />
             </div>
 
             <div className="flex flex-col gap-1">
-              <h3
-                className={`text-sm sm:text-base font-bold ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
+              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
                 {t('user.shop.orderSuccess')}
               </h3>
             </div>
 
             {/* Service Username */}
             <div
-              className={`w-full p-3 rounded-xl border flex items-center justify-between text-xs ${
-                isDark ? 'bg-white/[0.03] border-white/[0.08]' : 'bg-slate-50 border-slate-200'
-              }`}
+              className={`w-full p-3 rounded-xl border flex items-center justify-between text-xs bg-surface/[0.03] border-line/[0.08]`}
             >
-              <span className="text-slate-500 dark:text-zinc-400">
-                {t('user.shop.configUsername')}:
-              </span>
-              <span className="font-mono font-bold text-slate-900 dark:text-white">
-                {successData.configUsername}
-              </span>
+              <span className="text-ink-muted">{t('user.shop.configUsername')}:</span>
+              <span className="font-mono font-bold text-ink">{successData.configUsername}</span>
             </div>
 
             {/* Subscription URL with Copy feedback */}
             {successData.subUrl && (
               <div className="w-full flex flex-col gap-1.5 text-start">
-                <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
-                  {t('user.shop.subUrl')}
-                </span>
+                <span className="text-xs text-ink-muted font-medium">{t('user.shop.subUrl')}</span>
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
                     value={successData.subUrl}
-                    className="flex-1 py-2 px-3 rounded-xl border text-xs font-mono bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 select-all truncate text-slate-700 dark:text-zinc-300"
+                    className="flex-1 py-2 px-3 rounded-xl border text-xs font-mono bg-surface-2 border-line select-all truncate text-ink-soft"
                   />
                   <button
                     type="button"
@@ -742,13 +699,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       triggerHaptic('light');
                       copy(successData.subUrl!, 'checkout-sub-url');
                     }}
-                    className={`py-2 px-3.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                      isCopied('checkout-sub-url')
-                        ? 'bg-emerald-600 text-white'
-                        : isDark
-                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
-                    }`}
+                    className={`py-2 px-3.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${isCopied('checkout-sub-url') ? 'bg-ok text-brand-ink' : 'bg-brand hover:bg-brand text-brand-ink shadow-sm'}`}
                   >
                     {isCopied('checkout-sub-url') ? (
                       <>
@@ -768,7 +719,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {/* QR Code */}
             {qrSrc ? (
-              <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center my-1">
+              <div className="bg-surface p-3 rounded-2xl shadow-sm border border-line flex items-center justify-center my-1">
                 <img
                   src={qrSrc}
                   alt={t('user.services.qrTitle')}
@@ -776,8 +727,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 />
               </div>
             ) : successData.subUrl ? (
-              <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center my-1 w-[184px] h-[184px] sm:w-[204px] sm:h-[204px]">
-                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              <div className="bg-surface p-3 rounded-2xl shadow-sm border border-line flex items-center justify-center my-1 w-[184px] h-[184px] sm:w-[204px] sm:h-[204px]">
+                <Loader2 className="w-6 h-6 animate-spin text-ink-muted" />
               </div>
             ) : null}
 

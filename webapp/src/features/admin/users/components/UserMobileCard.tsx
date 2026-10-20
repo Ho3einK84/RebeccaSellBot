@@ -28,12 +28,12 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber, sanitizeDisplayName } = useFormatters();
-  const { isDark, subCardClass, textPrimary, textMuted } = useThemeTokens();
+  const { subCardClass, textPrimary, textMuted } = useThemeTokens();
 
   const { displayName } = sanitizeDisplayName(user.firstName, user.lastName, t('user.guestUser'));
 
   return (
-    <Card className="p-3.5 sm:p-4 space-y-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 group">
+    <Card className="p-3.5 sm:p-4 space-y-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong group">
       {/* User Info Header */}
       <div className="flex justify-between items-start gap-2">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -49,12 +49,9 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
                 </Badge>
               )}
             </div>
-            <div className="text-xs font-mono mt-0.5">
+            <div className="text-xs tnum mt-0.5">
               {user.username ? (
-                <span
-                  dir="ltr"
-                  className="inline-block unicode-isolate font-medium text-indigo-600 dark:text-indigo-400"
-                >
+                <span dir="ltr" className="inline-block unicode-isolate font-medium text-brand">
                   @{user.username}
                 </span>
               ) : (
@@ -67,20 +64,14 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
         {/* Telegram ID Chip */}
         <button
           type="button"
-          className={`inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded-lg border transition-all active:scale-95 shrink-0 cursor-pointer ${
-            isDark
-              ? 'bg-white/[0.04] border-white/10 hover:border-white/20 text-zinc-300'
-              : 'bg-slate-50 border-slate-200/80 hover:border-slate-300 text-slate-700 shadow-xs'
-          }`}
+          className={`inline-flex items-center gap-1.5 text-xs tnum px-2 py-0.5 rounded-lg border transition-all active:scale-95 shrink-0 cursor-pointer bg-surface/[0.04] border-line/10 hover:border-line/20 text-ink-soft shadow-xs`}
           onClick={() => onCopyId(String(user.telegramId), `user-${user.telegramId}`)}
           title={t('common.copy')}
         >
           <span className="text-[10px] opacity-50">#</span>
           <span dir="ltr">{user.telegramId}</span>
           {isCopied ? (
-            <span className="text-[10px] text-emerald-500 font-sans font-medium">
-              {t('common.copied')}
-            </span>
+            <span className="text-[10px] text-ok font-sans font-medium">{t('common.copied')}</span>
           ) : (
             <Copy className={`w-2.5 h-2.5 ${textMuted}`} />
           )}
@@ -92,14 +83,8 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
         className={`flex items-center justify-between py-2 px-3 rounded-xl border text-xs ${subCardClass}`}
       >
         <div className="flex items-center gap-1.5">
-          <Wallet className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
-          <span
-            className={`font-bold text-sm font-mono ${
-              isDark ? 'text-emerald-400' : 'text-emerald-600'
-            }`}
-          >
-            {formatMoney(user.balance)}
-          </span>
+          <Wallet className={`w-3.5 h-3.5 text-ok`} />
+          <span className={`font-bold text-sm tnum text-ok`}>{formatMoney(user.balance)}</span>
           <span className={`text-[11px] ${textMuted}`}>{t('common.currency')}</span>
         </div>
 
@@ -129,7 +114,7 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
           onClick={() => onInspect(user.telegramId)}
         >
           {inspecting ? (
-            <RotateCw className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+            <RotateCw className="w-3.5 h-3.5 animate-spin text-brand" />
           ) : (
             <Eye className={`w-3.5 h-3.5 ${textMuted}`} />
           )}

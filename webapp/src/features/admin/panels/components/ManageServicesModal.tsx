@@ -31,7 +31,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
   loading,
 }) => {
   const { t } = useLanguage();
-  const { isDark, subCardClass, textPrimary, textMuted } = useThemeTokens();
+  const { subCardClass, textPrimary, textMuted } = useThemeTokens();
 
   const [newServiceId, setNewServiceId] = useState('');
   const [newServiceName, setNewServiceName] = useState('');
@@ -97,12 +97,12 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={`${t('admin.panels.manageServicesTitle')} — ${panel.name}`}
-      icon={<Layers className="w-5 h-5 text-indigo-500" />}
+      icon={<Layers className="w-5 h-5 text-brand" />}
       maxWidth="lg"
     >
       <div className="space-y-5">
         {error && (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs font-medium">
+          <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-medium">
             {error}
           </div>
         )}
@@ -121,11 +121,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
               >
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span
-                    className={`w-7 h-7 rounded-lg border flex items-center justify-center font-mono text-xs font-bold ${
-                      isDark
-                        ? 'bg-white/[0.04] border-white/10 text-indigo-400'
-                        : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                    }`}
+                    className={`w-7 h-7 rounded-lg border flex items-center justify-center tnum text-xs font-bold bg-surface/[0.04] border-line/10 text-brand`}
                   >
                     {service.serviceId}
                   </span>
@@ -222,12 +218,10 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
         {/* Add New Service Form */}
         <form
           onSubmit={handleAdd}
-          className={`p-3.5 rounded-xl border space-y-3 ${
-            isDark ? 'bg-white/[0.02] border-white/[0.08]' : 'bg-slate-50/80 border-slate-200'
-          }`}
+          className={`p-3.5 rounded-xl border space-y-3 bg-surface/[0.02] border-line/[0.08]`}
         >
           <div className="flex items-center gap-2">
-            <Plus className="w-4 h-4 text-indigo-500" />
+            <Plus className="w-4 h-4 text-brand" />
             <span className={`text-xs font-bold ${textPrimary}`}>
               {t('admin.panels.addServiceTitle')}
             </span>
@@ -236,7 +230,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div className="space-y-1 text-start">
               <label className={`block text-[11px] font-medium ${textMuted}`}>
-                {t('admin.panels.serviceIdLabel')} <span className="text-rose-500">*</span>
+                {t('admin.panels.serviceIdLabel')} <span className="text-danger">*</span>
               </label>
               <Input
                 type="number"
@@ -251,7 +245,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
 
             <div className="space-y-1 text-start sm:col-span-2">
               <label className={`block text-[11px] font-medium ${textMuted}`}>
-                {t('admin.panels.serviceNameField')} <span className="text-rose-500">*</span>
+                {t('admin.panels.serviceNameField')} <span className="text-danger">*</span>
               </label>
               <div className="flex items-center gap-2">
                 <Input
@@ -276,7 +270,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
           </div>
         </form>
 
-        <div className="flex items-center justify-end pt-2 border-t border-slate-200/60 dark:border-white/[0.08]">
+        <div className="flex items-center justify-end pt-2 border-t border-line/60">
           <Button type="button" variant="secondary" onClick={onClose}>
             {t('common.close')}
           </Button>

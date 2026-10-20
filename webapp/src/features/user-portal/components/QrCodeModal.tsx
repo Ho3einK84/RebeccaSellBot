@@ -4,7 +4,6 @@ import { QrCode, Copy, Check, ExternalLink, AlertCircle, RefreshCw } from 'lucid
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 
@@ -22,7 +21,6 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
   configUsername,
 }) => {
   const { t } = useLanguage();
-  const { isDark } = useThemeTokens();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
   const [qrSrc, setQrSrc] = useState<string>('');
@@ -83,27 +81,23 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('user.services.qrTitle')}
-      icon={<QrCode className="w-5 h-5 text-indigo-400" />}
+      icon={<QrCode className="w-5 h-5 text-brand" />}
       maxWidth="sm"
     >
       <div className="flex flex-col items-center text-center gap-3.5 pt-1">
         <div className="flex flex-col items-center">
-          <span
-            className={`text-xs font-mono font-medium ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}
-          >
-            {configUsername}
-          </span>
-          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 max-w-[240px]">
+          <span className={`text-xs font-mono font-medium text-ink-soft`}>{configUsername}</span>
+          <p className="text-[11px] text-ink-muted mt-1 max-w-[240px]">
             {t('user.services.qrHint')}
           </p>
         </div>
 
         {/* QR Code Container with nice rounded white frame */}
-        <div className="bg-white p-3.5 rounded-2xl shadow-md border border-slate-200/80 flex items-center justify-center min-w-[220px] min-h-[220px]">
+        <div className="bg-surface p-3.5 rounded-2xl shadow-md border border-line/80 flex items-center justify-center min-w-[220px] min-h-[220px]">
           {hasError ? (
             <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex flex-col items-center justify-center gap-2 p-2">
-              <AlertCircle className="w-7 h-7 text-rose-500" />
-              <span className="text-xs text-rose-500 font-medium text-center">
+              <AlertCircle className="w-7 h-7 text-danger" />
+              <span className="text-xs text-danger font-medium text-center">
                 {t('user.services.qrError')}
               </span>
               <Button
@@ -127,7 +121,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
               className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] select-none pointer-events-none"
             />
           ) : (
-            <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex items-center justify-center text-slate-400 text-xs">
+            <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex items-center justify-center text-ink-muted text-xs">
               {t('common.loading')}
             </div>
           )}

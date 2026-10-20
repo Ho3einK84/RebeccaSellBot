@@ -1,6 +1,4 @@
-import type { TranslationSchema } from '../types.js';
-
-export const fa: TranslationSchema = {
+export const fa = {
   common: {
     loading: 'در حال برقراری ارتباط امن با سرور...',
     authError: 'خطای احراز هویت',
@@ -99,10 +97,10 @@ export const fa: TranslationSchema = {
     contactSupport: 'ارتباط با پشتیبانی',
     tabs: {
       dashboard: 'داشبورد',
-      services: 'سرویس‌های من',
+      services: 'سرویس های من',
       shop: 'خرید سرویس',
       wallet: 'کیف پول',
-      referral: 'زیرمجموعه‌گیری',
+      referral: 'زیرمجموعه گیری',
     },
     dashboard: {
       walletBalance: 'موجودی کیف پول',
@@ -299,10 +297,10 @@ export const fa: TranslationSchema = {
     enterUserBeta: 'حالت کاربری (آزمایشی)',
     tabs: {
       overview: 'آمار کلی',
-      receipts: 'رسیدها',
+      receipts: 'رسید ها',
       users: 'کاربران',
-      panels: 'پنل‌ها',
-      comingSoon: 'ماژول‌ها',
+      panels: 'پنل ها',
+      comingSoon: 'ماژول ها',
     },
     overview: {
       statsLoading: 'در حال بارگذاری آمار...',
@@ -313,6 +311,7 @@ export const fa: TranslationSchema = {
       totalSales: 'کل فروش',
       totalSalesSub: 'مجموع خریدهای موفق کاربران',
       dailyRevenue: 'درآمد امروز',
+      revenueBreakdown: 'درآمد و اشتراک ها',
       dailyRevenueSub: 'از ساعت ۰۰:۰۰ بامداد',
       weeklyRevenue: 'درآمد این هفته',
       weeklyRevenueSub: '۷ روز اخیر',

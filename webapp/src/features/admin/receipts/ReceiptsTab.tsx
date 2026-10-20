@@ -39,8 +39,7 @@ type ReceiptStatusFilter = 'pending' | 'approved' | 'rejected' | 'all';
 export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotify }) => {
   const { t } = useLanguage();
   const { formatNumber, formatMoney } = useFormatters();
-  const { isDark, textPrimary, textSecondary, textMuted, subCardClass, inputClass } =
-    useThemeTokens();
+  const { textPrimary, textSecondary, textMuted, subCardClass, inputClass } = useThemeTokens();
 
   // Filters & Pagination State
   const [status, setStatus] = useState<ReceiptStatusFilter>('pending');
@@ -181,11 +180,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
       <div className="flex flex-row justify-between items-center gap-2 mb-1">
         <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
-              isDark
-                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-xs'
-                : 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
-            }`}
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-brand/10 border-brand/20 text-brand shadow-xs`}
           >
             <Receipt className="w-4 h-4" />
           </div>
@@ -198,15 +193,11 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           {/* Telegram Settings Button */}
           <button
             type="button"
-            className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
-              isDark
-                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-300'
-                : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-xs'
-            }`}
+            className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border text-xs font-medium transition-all active:scale-95 cursor-pointer bg-surface/[0.04] hover:bg-surface/[0.08] border-line/10 text-ink-muted shadow-xs`}
             onClick={() => setIsSettingsModalOpen(true)}
             title={t('admin.receipts.settingsBtn')}
           >
-            <Bell className="w-3.5 h-3.5 text-indigo-400" />
+            <Bell className="w-3.5 h-3.5 text-brand" />
             <span className="hidden sm:inline">{t('admin.receipts.settingsBtn')}</span>
           </button>
 
@@ -236,7 +227,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           {search && (
             <button
               type="button"
-              className={`absolute top-1/2 -translate-y-1/2 end-3 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer`}
+              className={`absolute top-1/2 -translate-y-1/2 end-3 p-1 rounded-md text-ink-muted hover:text-ink transition-colors cursor-pointer`}
               onClick={() => setSearch('')}
               aria-label="Clear search"
             >
@@ -246,18 +237,10 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
         </div>
 
         {/* Status Tabs - Horizontally scrollable on small screens with no icon shrink */}
-        <div className="p-1 rounded-2xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1.5 overflow-x-auto scrollbar-none overscroll-x-contain touch-pan-x">
+        <div className="p-1 rounded-2xl bg-surface-2 border border-line/80 flex items-center gap-1.5 overflow-x-auto scrollbar-none overscroll-x-contain touch-pan-x">
           <button
             type="button"
-            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
-              status === 'pending'
-                ? isDark
-                  ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 shadow-xs'
-                  : 'bg-white text-amber-900 font-semibold border border-amber-200 shadow-xs'
-                : isDark
-                  ? 'text-zinc-400 hover:text-zinc-200'
-                  : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${status === 'pending' ? 'bg-warn/20 text-warn font-semibold border border-warn/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
             onClick={() => {
               setStatus('pending');
               setPage(1);
@@ -267,13 +250,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
             <span>{t('admin.receipts.tabPending')}</span>
             {pendingCount > 0 && (
               <span
-                className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold shrink-0 ${
-                  status === 'pending'
-                    ? 'bg-amber-500 text-white'
-                    : isDark
-                      ? 'bg-amber-500/20 text-amber-400'
-                      : 'bg-amber-100 text-amber-800'
-                }`}
+                className={`text-[10px] px-1.5 py-0.5 rounded-full tnum font-bold shrink-0 ${status === 'pending' ? 'bg-warn text-ink' : 'bg-warn/20 text-warn'}`}
               >
                 {formatNumber(pendingCount)}
               </span>
@@ -282,15 +259,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
           <button
             type="button"
-            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
-              status === 'approved'
-                ? isDark
-                  ? 'bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 shadow-xs'
-                  : 'bg-white text-emerald-900 font-semibold border border-emerald-200 shadow-xs'
-                : isDark
-                  ? 'text-zinc-400 hover:text-zinc-200'
-                  : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${status === 'approved' ? 'bg-ok/20 text-ok font-semibold border border-ok/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
             onClick={() => {
               setStatus('approved');
               setPage(1);
@@ -302,15 +271,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
           <button
             type="button"
-            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
-              status === 'rejected'
-                ? isDark
-                  ? 'bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30 shadow-xs'
-                  : 'bg-white text-rose-900 font-semibold border border-rose-200 shadow-xs'
-                : isDark
-                  ? 'text-zinc-400 hover:text-zinc-200'
-                  : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${status === 'rejected' ? 'bg-danger/20 text-danger font-semibold border border-danger/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
             onClick={() => {
               setStatus('rejected');
               setPage(1);
@@ -322,15 +283,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
           <button
             type="button"
-            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${
-              status === 'all'
-                ? isDark
-                  ? 'bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 shadow-xs'
-                  : 'bg-white text-indigo-900 font-semibold border border-indigo-200 shadow-xs'
-                : isDark
-                  ? 'text-zinc-400 hover:text-zinc-200'
-                  : 'text-slate-600 hover:text-slate-900'
-            }`}
+            className={`flex-1 min-w-max py-2 px-3.5 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap ${status === 'all' ? 'bg-brand/20 text-brand font-semibold border border-brand/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
             onClick={() => {
               setStatus('all');
               setPage(1);
@@ -345,30 +298,16 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
       {/* Batch Actions Bar (when pending & items available) */}
       {status === 'pending' && receipts.length > 0 && (
         <div
-          className={`p-2.5 sm:p-3 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 transition-all ${
-            selectedIds.size > 0
-              ? isDark
-                ? 'bg-indigo-500/10 border-indigo-500/30 shadow-xs'
-                : 'bg-indigo-50/80 border-indigo-200 shadow-xs'
-              : subCardClass
-          }`}
+          className={`p-2.5 sm:p-3 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 transition-all ${selectedIds.size > 0 ? 'bg-brand/10 border-brand/30 shadow-xs' : subCardClass}`}
         >
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition-all active:scale-95 cursor-pointer ${
-                isAllSelected
-                  ? isDark
-                    ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
-                    : 'bg-indigo-100 border-indigo-300 text-indigo-800'
-                  : isDark
-                    ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
+              className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition-all active:scale-95 cursor-pointer ${isAllSelected ? 'bg-brand/20 border-brand/40 text-brand' : 'bg-surface/[0.04] border-line/10 text-ink-muted hover:bg-surface/[0.08]'}`}
               onClick={handleToggleSelectAll}
             >
               {isAllSelected ? (
-                <CheckSquare className="w-3.5 h-3.5 text-indigo-400" />
+                <CheckSquare className="w-3.5 h-3.5 text-brand" />
               ) : (
                 <Square className="w-3.5 h-3.5 opacity-60" />
               )}
@@ -380,12 +319,10 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
             </button>
 
             {selectedIds.size > 0 && (
-              <span
-                className={`text-xs font-semibold ${isDark ? 'text-indigo-300' : 'text-indigo-800'}`}
-              >
+              <span className={`text-xs font-semibold text-brand`}>
                 {t('admin.receipts.batchSelectedCount', { count: String(selectedIds.size) })}
-                {' · '}
-                <span className="font-mono">
+                {'·'}
+                <span className="tnum">
                   {formatMoney(selectedTotalAmount)} {t('common.currency')}
                 </span>
               </span>
@@ -395,11 +332,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           {selectedIds.size > 0 && (
             <button
               type="button"
-              className={`inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-xl font-bold text-xs border transition-all active:scale-95 cursor-pointer shadow-sm ${
-                isDark
-                  ? 'bg-emerald-500/25 hover:bg-emerald-500/35 border-emerald-500/40 text-emerald-300'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-600'
-              }`}
+              className={`inline-flex items-center gap-1.5 h-8.5 px-3.5 rounded-xl font-bold text-xs border transition-all active:scale-95 cursor-pointer shadow-sm bg-ok/25 hover:bg-ok/35 border-ok/40 text-ok`}
               onClick={() => setIsBatchModalOpen(true)}
               disabled={isProcessingAction}
             >
@@ -417,8 +350,8 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
       {/* Error State */}
       {isError && receipts.length === 0 && (
-        <Card className="p-8 text-center flex flex-col items-center justify-center gap-3 border-rose-500/20">
-          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center">
+        <Card className="p-8 text-center flex flex-col items-center justify-center gap-3 border-danger/20">
+          <div className="w-12 h-12 rounded-2xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center">
             <XCircle className="w-6 h-6" />
           </div>
           <div className="space-y-1">
@@ -429,7 +362,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           </div>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-xs"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 bg-brand hover:bg-brand text-brand-ink border-brand shadow-xs"
             onClick={() => refetch()}
           >
             <span>{t('common.refresh')}</span>
@@ -441,15 +374,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
       {!isLoading && !isError && receipts.length === 0 && (
         <Card className="p-10 text-center flex flex-col items-center justify-center gap-3">
           <div
-            className={`w-12 h-12 rounded-2xl border flex items-center justify-center ${
-              status === 'pending' && !debouncedSearch
-                ? isDark
-                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                : isDark
-                  ? 'bg-white/[0.04] border-white/10 text-zinc-400'
-                  : 'bg-slate-100 border-slate-200 text-slate-500'
-            }`}
+            className={`w-12 h-12 rounded-2xl border flex items-center justify-center ${status === 'pending' && !debouncedSearch ? 'bg-ok/10 border-ok/25 text-ok' : 'bg-surface/[0.04] border-line/10 text-ink-muted'}`}
           >
             {status === 'pending' && !debouncedSearch ? (
               <CheckCircle2 className="w-6 h-6 status-pulse" />
@@ -466,7 +391,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
             {debouncedSearch && (
               <button
                 type="button"
-                className="text-xs text-indigo-400 hover:underline mt-2 inline-block cursor-pointer"
+                className="text-xs text-brand hover:underline mt-2 inline-block cursor-pointer"
                 onClick={() => setSearch('')}
               >
                 {t('common.clear')} {t('common.search')}

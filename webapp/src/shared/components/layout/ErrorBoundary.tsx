@@ -35,13 +35,13 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-[250px] w-full flex items-center justify-center p-4">
           <div className="glass-panel p-6 max-w-md w-full text-center flex flex-col items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+            <div className="w-12 h-12 rounded-full bg-danger/15 border border-danger/30 flex items-center justify-center text-danger">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-100">
+            <h3 className="text-base font-bold text-ink">
               {this.props.fallbackTitle || 'خطایی رخ داد'}
             </h3>
-            <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
+            <p className="text-xs text-ink-muted leading-relaxed max-w-xs">
               {this.state.error?.message ||
                 this.props.fallbackMessage ||
                 'متأسفانه مشکلی در نمایش این بخش پیش آمده است.'}

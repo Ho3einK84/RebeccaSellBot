@@ -35,8 +35,8 @@ describe('ServiceStatusTraffic Helper & Components', () => {
       expect(faInfo.label).toBe('فعال');
       expect(faInfo.isPulsing).toBe(true);
       expect(faInfo.dotClass).toContain('animate-pulse');
-      expect(faInfo.dotClass).toContain('bg-emerald-500');
-      expect(faInfo.badgeClass).toContain('bg-emerald-500');
+      expect(faInfo.dotClass).toContain('bg-ok');
+      expect(faInfo.badgeClass).toContain('bg-ok');
 
       const enInfo = getServiceStatusInfo('active', tEn);
       expect(enInfo.label).toBe('Active');
@@ -49,8 +49,8 @@ describe('ServiceStatusTraffic Helper & Components', () => {
       expect(faInfo.label).toBe('پایان حجم');
       expect(faInfo.isPulsing).toBe(false);
       expect(faInfo.dotClass).not.toContain('animate-pulse');
-      expect(faInfo.dotClass).toContain('bg-amber-500');
-      expect(faInfo.badgeClass).toContain('bg-amber-500');
+      expect(faInfo.dotClass).toContain('bg-warn');
+      expect(faInfo.badgeClass).toContain('bg-warn');
 
       const enInfo = getServiceStatusInfo('limited', tEn);
       expect(enInfo.label).toBe('Traffic Limit Reached');
@@ -63,8 +63,8 @@ describe('ServiceStatusTraffic Helper & Components', () => {
       expect(faInfo.label).toBe('منقضی شده');
       expect(faInfo.isPulsing).toBe(false);
       expect(faInfo.dotClass).not.toContain('animate-pulse');
-      expect(faInfo.dotClass).toContain('bg-rose-500');
-      expect(faInfo.badgeClass).toContain('bg-rose-500');
+      expect(faInfo.dotClass).toContain('bg-danger');
+      expect(faInfo.badgeClass).toContain('bg-danger');
 
       const enInfo = getServiceStatusInfo('expired', tEn);
       expect(enInfo.label).toBe('Expired');
@@ -91,8 +91,8 @@ describe('ServiceStatusTraffic Helper & Components', () => {
       expect(faInfo.label).toBe('در انتظار اتصال');
       expect(faInfo.isPulsing).toBe(false);
       expect(faInfo.dotClass).not.toContain('animate-pulse');
-      expect(faInfo.dotClass).toContain('bg-yellow-500');
-      expect(faInfo.badgeClass).toContain('bg-yellow-500');
+      expect(faInfo.dotClass).toContain('bg-warn');
+      expect(faInfo.badgeClass).toContain('bg-warn');
 
       const enInfo = getServiceStatusInfo('on_hold', tEn);
       expect(enInfo.label).toBe('On Hold');
@@ -171,7 +171,7 @@ describe('ServiceStatusTraffic Helper & Components', () => {
       expect(fa250.formattedLimit).toBe('۲۵۰ مگابایت');
       expect(fa250.formattedUsed).toBe('۱۲۵ مگابایت');
       expect(fa250.percentage).toBe(50);
-      expect(fa250.progressColorClass).toBe('bg-indigo-500');
+      expect(fa250.progressColorClass).toBe('bg-brand');
 
       const en250 = getServiceTrafficInfo(limit250Mb, used125Mb, 'en', tEn);
       expect(en250.isUnlimited).toBe(false);
@@ -186,7 +186,7 @@ describe('ServiceStatusTraffic Helper & Components', () => {
       expect(en400.isUnlimited).toBe(false);
       expect(en400.formattedLimit).toBe('400 MB');
       expect(en400.percentage).toBe(100);
-      expect(en400.progressColorClass).toBe('bg-rose-500');
+      expect(en400.progressColorClass).toBe('bg-danger');
     });
 
     it('formats multi-gigabyte limits and calculates correct color thresholds', () => {
@@ -197,17 +197,17 @@ describe('ServiceStatusTraffic Helper & Components', () => {
       expect(info50.formattedLimit).toBe('10 GB');
       expect(info50.formattedUsed).toBe('5 GB');
       expect(info50.percentage).toBe(50);
-      expect(info50.progressColorClass).toBe('bg-indigo-500');
+      expect(info50.progressColorClass).toBe('bg-brand');
 
       // 80% usage
       const info80 = getServiceTrafficInfo(limit10Gb, 8 * 1024 * 1024 * 1024, 'en', tEn);
       expect(info80.percentage).toBe(80);
-      expect(info80.progressColorClass).toBe('bg-amber-500');
+      expect(info80.progressColorClass).toBe('bg-warn');
 
       // 95% usage
       const info95 = getServiceTrafficInfo(limit10Gb, 9.5 * 1024 * 1024 * 1024, 'en', tEn);
       expect(info95.percentage).toBe(95);
-      expect(info95.progressColorClass).toBe('bg-rose-500');
+      expect(info95.progressColorClass).toBe('bg-danger');
     });
 
     it('handles zero or null used traffic gracefully', () => {

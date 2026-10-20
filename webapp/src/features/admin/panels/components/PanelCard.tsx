@@ -48,7 +48,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
-  const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
   const { copy, isCopied } = useCopy();
 
   const isHealthy = panel.healthy !== false;
@@ -65,9 +65,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
 
   return (
     <Card
-      className={`p-4 sm:p-5 space-y-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-white/20 group ${
-        !isEnabled ? 'opacity-85' : ''
-      }`}
+      className={`p-4 sm:p-5 space-y-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong group ${!isEnabled ? 'opacity-85' : ''}`}
     >
       {/* Top Header: Name, Status Badges, Test & Edit Buttons */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -97,7 +95,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
           )}
 
           {isEnabled && panel.latencyMs !== undefined && (
-            <Badge variant={latencyVariant} className="text-[10px] font-mono">
+            <Badge variant={latencyVariant} className="text-[10px] tnum">
               {t('admin.panels.latency', { ms: formatNumber(panel.latencyMs) })}
             </Badge>
           )}
@@ -142,22 +140,19 @@ export const PanelCard: React.FC<PanelCardProps> = ({
             {panel.baseUrl && (
               <button
                 type="button"
-                className="p-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+                className="p-1 rounded-lg hover:bg-surface-3/60 text-ink-muted hover:text-ink-soft transition-colors cursor-pointer"
                 onClick={() => copy(panel.baseUrl || '', `panel-url-${panel.id}`)}
                 title={t('common.copy')}
               >
                 {isCopied(`panel-url-${panel.id}`) ? (
-                  <Check className="w-3 h-3 text-emerald-500" />
+                  <Check className="w-3 h-3 text-ok" />
                 ) : (
                   <Copy className="w-3 h-3" />
                 )}
               </button>
             )}
           </div>
-          <code
-            dir="ltr"
-            className="break-all font-mono text-[11px] text-indigo-500 block text-start"
-          >
+          <code dir="ltr" className="break-all tnum text-[11px] text-brand block text-start">
             {panel.baseUrl || '—'}
           </code>
         </div>
@@ -167,8 +162,8 @@ export const PanelCard: React.FC<PanelCardProps> = ({
           <span className={`block text-[11px] font-medium ${textMuted}`}>
             {t('admin.panels.authMode')}
           </span>
-          <div className="flex items-center gap-1.5 font-mono">
-            <KeyRound className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+          <div className="flex items-center gap-1.5 tnum">
+            <KeyRound className="w-3.5 h-3.5 text-brand shrink-0" />
             <span dir="ltr" className={textPrimary}>
               {panel.credentialMode}
             </span>
@@ -179,43 +174,37 @@ export const PanelCard: React.FC<PanelCardProps> = ({
       {/* KPI Stats Strip */}
       <div className="grid grid-cols-3 gap-2">
         <div
-          className={`p-2.5 rounded-xl border text-center space-y-0.5 ${
-            isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50 border-slate-200/70'
-          }`}
+          className={`p-2.5 rounded-xl border text-center space-y-0.5 bg-surface/[0.02] border-line/[0.06]`}
         >
-          <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 dark:text-zinc-400">
-            <Users className="w-3 h-3 text-emerald-500" />
+          <div className="flex items-center justify-center gap-1 text-[11px] text-ink-muted">
+            <Users className="w-3 h-3 text-ok" />
             <span>{t('admin.panels.configsCountLabel')}</span>
           </div>
-          <div className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
+          <div className="text-sm font-bold tnum text-ok">
             {formatNumber(panel.activeConfigsCount ?? 0)}
           </div>
         </div>
 
         <div
-          className={`p-2.5 rounded-xl border text-center space-y-0.5 ${
-            isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50 border-slate-200/70'
-          }`}
+          className={`p-2.5 rounded-xl border text-center space-y-0.5 bg-surface/[0.02] border-line/[0.06]`}
         >
-          <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 dark:text-zinc-400">
-            <Package className="w-3 h-3 text-indigo-500" />
+          <div className="flex items-center justify-center gap-1 text-[11px] text-ink-muted">
+            <Package className="w-3 h-3 text-brand" />
             <span>{t('admin.panels.packagesCountLabel')}</span>
           </div>
-          <div className="text-sm font-bold font-mono text-indigo-600 dark:text-indigo-400">
+          <div className="text-sm font-bold tnum text-brand">
             {formatNumber(panel.packagesCount ?? 0)}
           </div>
         </div>
 
         <div
-          className={`p-2.5 rounded-xl border text-center space-y-0.5 ${
-            isDark ? 'bg-white/[0.02] border-white/[0.06]' : 'bg-slate-50 border-slate-200/70'
-          }`}
+          className={`p-2.5 rounded-xl border text-center space-y-0.5 bg-surface/[0.02] border-line/[0.06]`}
         >
-          <div className="flex items-center justify-center gap-1 text-[11px] text-slate-500 dark:text-zinc-400">
-            <Layers className="w-3 h-3 text-violet-500" />
+          <div className="flex items-center justify-center gap-1 text-[11px] text-ink-muted">
+            <Layers className="w-3 h-3 text-brand" />
             <span>{t('admin.panels.servicesCountLabel')}</span>
           </div>
-          <div className="text-sm font-bold font-mono text-violet-600 dark:text-violet-400">
+          <div className="text-sm font-bold tnum text-brand">
             {formatNumber(panel.services.length)}
           </div>
         </div>
@@ -229,7 +218,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
           </span>
           <button
             type="button"
-            className="text-[11px] font-semibold text-indigo-500 hover:text-indigo-600 cursor-pointer flex items-center gap-1"
+            className="text-[11px] font-semibold text-brand hover:text-brand cursor-pointer flex items-center gap-1"
             onClick={() => onManageServices(panel)}
           >
             <Layers className="w-3 h-3" />
@@ -242,19 +231,15 @@ export const PanelCard: React.FC<PanelCardProps> = ({
             {panel.services.map((s) => (
               <span
                 key={s.serviceId}
-                className={`inline-flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-lg border font-mono ${
-                  isDark
-                    ? 'bg-white/[0.03] border-white/10 text-zinc-300'
-                    : 'bg-slate-100 border-slate-200/80 text-slate-700'
-                }`}
+                className={`inline-flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-lg border tnum bg-surface/[0.03] border-line/10 text-ink-soft`}
               >
                 <span className="font-sans font-medium">{s.name}</span>
-                <span dir="ltr" className="text-[10px] text-slate-400 font-mono">
+                <span dir="ltr" className="text-[10px] text-ink-muted tnum">
                   ({s.serviceId})
                 </span>
                 {s.isDefault && (
                   <span
-                    className="inline-flex items-center text-[10px] text-amber-500 font-sans"
+                    className="inline-flex items-center text-[10px] text-warn font-sans"
                     title={t('admin.panels.defaultService')}
                   >
                     ⭐
@@ -262,7 +247,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
                 )}
                 {s.isCustomTarget && (
                   <span
-                    className="inline-flex items-center text-[10px] text-sky-500 font-sans"
+                    className="inline-flex items-center text-[10px] text-info font-sans"
                     title={t('admin.panels.customTargetBadge')}
                   >
                     🎯
@@ -277,7 +262,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
       </div>
 
       {/* Bottom Action Bar: Toggle, Set Default, Delete */}
-      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-white/[0.08] flex-wrap">
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-line/60 flex-wrap">
         <div className="flex items-center gap-2">
           {/* Enable / Disable Toggle */}
           <Button

@@ -24,7 +24,7 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney } = useFormatters();
-  const { isDark, subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!isOpen || receipts.length === 0) return null;
 
@@ -35,18 +35,14 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.receipts.batchApproveTitle')}
-      icon={<CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+      icon={<CheckCircle2 className="w-5 h-5 text-ok" />}
       maxWidth="md"
       closeOnBackdrop={!loading}
     >
       <div className="space-y-4">
         {/* Warning Banner */}
         <div
-          className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs ${
-            isDark
-              ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
-              : 'bg-amber-50 border-amber-200 text-amber-800'
-          }`}
+          className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs bg-warn/10 border-warn/20 text-warn`}
         >
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <p className="m-0 leading-relaxed">
@@ -64,17 +60,17 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
           {receipts.map((rec) => (
             <div
               key={rec.id}
-              className="flex items-center justify-between p-2 rounded-lg bg-black/5 dark:bg-white/[0.03] font-mono text-[11px]"
+              className="flex items-center justify-between p-2 rounded-lg bg-black/5 tnum text-[11px]"
             >
               <div className="flex items-center gap-2">
-                <span dir="ltr" className={`font-mono ${textMuted}`}>
+                <span dir="ltr" className={`tnum ${textMuted}`}>
                   #{rec.id.slice(-6)}
                 </span>
-                <span dir="ltr" className={`font-mono ${textSecondary}`}>
+                <span dir="ltr" className={`tnum ${textSecondary}`}>
                   {t('common.idLabel')} {rec.telegramId}
                 </span>
               </div>
-              <span className={`font-bold ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>
+              <span className={`font-bold text-ok`}>
                 {formatMoney(rec.amount)} {t('common.currency')}
               </span>
             </div>
@@ -86,12 +82,12 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
           <span className={textMuted}>
             {t('admin.receipts.batchSelectedCount', { count: String(receipts.length) })}
           </span>
-          <span className={`font-bold font-mono text-sm ${textPrimary}`}>
+          <span className={`font-bold tnum text-sm ${textPrimary}`}>
             {formatMoney(totalAmount)} {t('common.currency')}
           </span>
         </div>
 
-        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-slate-200 dark:border-white/10">
+        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
           <Button
             type="button"
             variant="secondary"
