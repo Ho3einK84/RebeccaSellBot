@@ -3,7 +3,7 @@ import { authGuard } from '../middleware/adminGuard.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
-import type { PricingService, PackageOption } from '../../../domain/services/PricingService.js';
+import type { PricingService } from '../../../domain/services/PricingService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import {
   type PurchaseCheckoutService,
@@ -15,6 +15,7 @@ import {
 } from '../../../domain/services/WalletService.js';
 import { RebeccaOriginDownError } from '../../../domain/services/RebeccaService.js';
 import { normalizeDataLimit } from '../../../domain/services/TrafficLimit.js';
+import { resolvePurchasePackage } from '../../../domain/services/PurchasePackageResolver.js';
 import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import {
@@ -62,6 +63,8 @@ interface CheckoutRequestBody {
     gb?: number;
     days?: number;
   };
+  price?: number;
+  quotedAmount?: number;
 }
 
 export function registerUserRoutes(
@@ -752,90 +755,29 @@ export function registerUserRoutes(
             .send({ error: 'Provide either packageId or custom volume', code: 'INVALID_REQUEST' });
         }
 
-        let pkg: PackageOption | undefined;
-        let target: { panelId?: string; serviceId?: number } = {};
-        let quotedAmount = 0;
-
-        if (hasPackageId) {
-          if (!options.pricingService) {
-            return reply.code(500).send({ error: 'Pricing service unavailable' });
-          }
-
-          const resolvedPkg = options.pricingService.getPackageById(body.packageId);
-          if (!resolvedPkg || resolvedPkg.enabled === false) {
-            return reply
-              .code(404)
-              .send({ error: 'Package not found or disabled', code: 'PACKAGE_NOT_FOUND' });
-          }
-
-          pkg = resolvedPkg;
-          quotedAmount = resolvedPkg.price;
-          if (resolvedPkg.panelId !== undefined || resolvedPkg.serviceId !== undefined) {
-            target = { panelId: resolvedPkg.panelId, serviceId: resolvedPkg.serviceId };
-          }
-        } else if (hasCustom) {
-          if (options.translationService && !customVolumeEnabled(options.translationService)) {
-            return reply
-              .code(400)
-              .send({ error: 'Custom volume is disabled', code: 'CUSTOM_VOLUME_DISABLED' });
-          }
-
-          const minGb =
-            typeof options.translationService?.getSettingNum === 'function'
-              ? options.translationService.getSettingNum('custom_min_gb', 5)
-              : 5;
-          const maxGb =
-            typeof options.translationService?.getSettingNum === 'function'
-              ? options.translationService.getSettingNum('custom_max_gb', 500)
-              : 500;
-          const defaultDays =
-            typeof options.translationService?.getSettingNum === 'function'
-              ? options.translationService.getSettingNum('custom_default_days', 30)
-              : 30;
-
-          const gb = body.custom!.gb;
-          const days = body.custom!.days ?? defaultDays;
-
-          if (
-            typeof gb !== 'number' ||
-            !Number.isSafeInteger(gb) ||
-            gb < minGb ||
-            gb > maxGb ||
-            typeof days !== 'number' ||
-            !Number.isSafeInteger(days) ||
-            days < 1 ||
-            days > 365
-          ) {
-            return reply
-              .code(400)
-              .send({ error: 'Volume or duration out of bounds', code: 'INVALID_CUSTOM_BOUNDS' });
-          }
-
-          if (!options.pricingService) {
-            return reply.code(500).send({ error: 'Pricing service unavailable' });
-          }
-
-          const quote = options.pricingService.getCustomPriceQuote(gb, days);
-          quotedAmount = quote.totalPrice;
-          target =
-            typeof options.pricingService.getCustomVolumeTarget === 'function'
-              ? options.pricingService.getCustomVolumeTarget()
-              : {};
-
-          pkg = {
-            id: `custom_${gb}gb_${days}d`,
-            name: `${gb} GB (${days} days)`,
-            gbAmount: gb,
-            durationDays: days,
-            price: quote.totalPrice,
-            ...target,
-          };
+        if (!options.pricingService) {
+          return reply.code(500).send({ error: 'Pricing service unavailable' });
         }
 
-        if (!pkg) {
-          return reply
-            .code(400)
-            .send({ error: 'Invalid checkout request', code: 'INVALID_REQUEST' });
+        const resolved = resolvePurchasePackage({
+          packageId: hasPackageId ? body.packageId : undefined,
+          custom: hasCustom ? body.custom : undefined,
+          pricingService: options.pricingService,
+          translationService: options.translationService,
+        });
+
+        if (!resolved.success) {
+          return reply.code(resolved.status).send({ error: resolved.error, code: resolved.code });
+        }
+
+        const { pkg, target, quotedAmount } = resolved;
+
+        const clientSpecifiedPrice = body.price !== undefined ? body.price : body.quotedAmount;
+        if (clientSpecifiedPrice !== undefined && clientSpecifiedPrice !== quotedAmount) {
+          return reply.code(400).send({
+            error: 'Client price mismatch with server quote',
+            code: 'PRICE_MISMATCH',
+          });
         }
 
         let profile = await options.userService.findProfile(String(telegramId));

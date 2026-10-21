@@ -756,7 +756,7 @@ describe('WebApp User Routes (/api/user/*)', () => {
       expect(mockPurchaseCheckoutService.create).not.toHaveBeenCalled();
     });
 
-    it('ignores tampered price or quotedAmount in request payload', async () => {
+    it('T3: rejects tampered price or quotedAmount in request payload (mismatch client vs server)', async () => {
       const token = getUserToken(55555);
       const res = await app.inject({
         method: 'POST',
@@ -766,6 +766,24 @@ describe('WebApp User Routes (/api/user/*)', () => {
           packageId: 'pkg_10gb_10d',
           price: 1,
           quotedAmount: 1,
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      const body = res.json();
+      expect(body.code).toBe('PRICE_MISMATCH');
+    });
+
+    it('T3: accepts checkout when client price matches server quote exactly', async () => {
+      const token = getUserToken(55555);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/user/checkout',
+        cookies: { session: token },
+        payload: {
+          packageId: 'pkg_10gb_10d',
+          price: 40_000,
+          quotedAmount: 40_000,
         },
       });
 
@@ -851,6 +869,63 @@ describe('WebApp User Routes (/api/user/*)', () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.json().code).toBe('CUSTOM_VOLUME_DISABLED');
+
+      // T2: Also reject custom package via packageId pattern when custom volume is disabled
+      const resPkgId = await app.inject({
+        method: 'POST',
+        url: '/api/user/checkout',
+        cookies: { session: token },
+        payload: { packageId: 'custom_10gb_30d' },
+      });
+      expect(resPkgId.statusCode).toBe(400);
+      expect(resPkgId.json().code).toBe('CUSTOM_VOLUME_DISABLED');
+    });
+
+    it('rejects out of bounds custom volume via packageId pattern', async () => {
+      mockTranslationService.getSetting.mockImplementation((key: string, defaultValue?: string) => {
+        if (key === 'custom_volume_enabled') return 'true';
+        return defaultValue;
+      });
+
+      const token = getUserToken(55555);
+
+      // GB out of bounds via packageId (10000 GB > 500)
+      const resHigh = await app.inject({
+        method: 'POST',
+        url: '/api/user/checkout',
+        cookies: { session: token },
+        payload: { packageId: 'custom_10000gb_30d' },
+      });
+      expect(resHigh.statusCode).toBe(400);
+      expect(resHigh.json().code).toBe('INVALID_CUSTOM_BOUNDS');
+
+      // Duration out of bounds via packageId (3650 days > 365)
+      const resDays = await app.inject({
+        method: 'POST',
+        url: '/api/user/checkout',
+        cookies: { session: token },
+        payload: { packageId: 'custom_10gb_3650d' },
+      });
+      expect(resDays.statusCode).toBe(400);
+      expect(resDays.json().code).toBe('INVALID_CUSTOM_BOUNDS');
+    });
+
+    it('T3: rejects client vs server price mismatch', async () => {
+      const token = getUserToken(55555);
+
+      // Client specifies manipulated price 1000 instead of server quote 10000
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/user/checkout',
+        cookies: { session: token },
+        payload: {
+          packageId: 'pkg_10gb_10d',
+          price: 1000,
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('PRICE_MISMATCH');
     });
 
     it('rejects malformed payload (missing both packageId and custom, or providing both)', async () => {
