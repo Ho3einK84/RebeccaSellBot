@@ -14,6 +14,7 @@ import {
   PurchaseOutcomePendingError,
 } from '../../../domain/services/WalletService.js';
 import { RebeccaOriginDownError } from '../../../domain/services/RebeccaService.js';
+import { normalizeDataLimit } from '../../../domain/services/TrafficLimit.js';
 import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import {
@@ -270,7 +271,7 @@ export function registerUserRoutes(
           configUsername: c.configUsername,
           subUrl: c.subUrl,
           panelStatus: c.panelStatus,
-          panelDataLimit: c.panelDataLimit,
+          panelDataLimit: normalizeDataLimit(c.panelDataLimit) ?? null,
           panelUsedTraffic: c.panelUsedTraffic,
           panelExpire: c.panelExpire,
           autoRenewEnabled: c.autoRenewEnabled,
@@ -528,7 +529,7 @@ export function registerUserRoutes(
             const remote = await options.configService.getRemoteConfigDetail(config);
             refreshed = {
               panelStatus: remote.status,
-              panelDataLimit: remote.data_limit,
+              panelDataLimit: normalizeDataLimit(remote.data_limit) ?? null,
               panelUsedTraffic: remote.used_traffic,
               panelExpire: remote.expire,
               lastSyncedAt: new Date(),

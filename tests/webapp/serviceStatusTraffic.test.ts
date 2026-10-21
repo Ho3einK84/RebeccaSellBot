@@ -128,36 +128,37 @@ describe('ServiceStatusTraffic Helper & Components', () => {
   });
 
   describe('Traffic Limit and Usage', () => {
-    it('handles null or undefined data limits as unknown ("—")', () => {
+    it('handles null, undefined, or 0 data limits as unlimited ("نامحدود" / "Unlimited")', () => {
+      // Contract: upstream Rebecca treats absent, null, and 0 all as unlimited
       const nullLimitFa = getServiceTrafficInfo(null, 1024 * 1024 * 1024, 'fa', tFa);
-      expect(nullLimitFa.isUnknownLimit).toBe(true);
-      expect(nullLimitFa.isUnlimited).toBe(false);
-      expect(nullLimitFa.formattedLimit).toBe('—');
+      expect(nullLimitFa.isUnknownLimit).toBe(false);
+      expect(nullLimitFa.isUnlimited).toBe(true);
+      expect(nullLimitFa.formattedLimit).toBe('نامحدود');
       expect(nullLimitFa.formattedUsed).toBe('۱ گیگابایت');
       expect(nullLimitFa.percentage).toBeNull();
 
       const undefLimitEn = getServiceTrafficInfo(undefined, 500 * 1024 * 1024, 'en', tEn);
-      expect(undefLimitEn.isUnknownLimit).toBe(true);
-      expect(undefLimitEn.isUnlimited).toBe(false);
-      expect(undefLimitEn.formattedLimit).toBe('—');
+      expect(undefLimitEn.isUnknownLimit).toBe(false);
+      expect(undefLimitEn.isUnlimited).toBe(true);
+      expect(undefLimitEn.formattedLimit).toBe('Unlimited');
       expect(undefLimitEn.formattedUsed).toBe('500 MB');
       expect(undefLimitEn.percentage).toBeNull();
+
+      const zeroLimitFa = getServiceTrafficInfo(0, 2 * 1024 * 1024 * 1024, 'fa', tFa);
+      expect(zeroLimitFa.isUnlimited).toBe(true);
+      expect(zeroLimitFa.isUnknownLimit).toBe(false);
+      expect(zeroLimitFa.formattedLimit).toBe('نامحدود');
+      expect(zeroLimitFa.formattedUsed).toBe('۲ گیگابایت');
+      expect(zeroLimitFa.percentage).toBeNull();
     });
 
-    it('handles limit === 0 as unlimited and distinguishes it from null', () => {
-      const unlimitedFa = getServiceTrafficInfo(0, 2 * 1024 * 1024 * 1024, 'fa', tFa);
-      expect(unlimitedFa.isUnlimited).toBe(true);
-      expect(unlimitedFa.isUnknownLimit).toBe(false);
-      expect(unlimitedFa.formattedLimit).toBe('نامحدود');
-      expect(unlimitedFa.formattedUsed).toBe('۲ گیگابایت');
-      expect(unlimitedFa.percentage).toBeNull();
-
-      const unlimitedEn = getServiceTrafficInfo(0, 500 * 1024 * 1024, 'en', tEn);
-      expect(unlimitedEn.isUnlimited).toBe(true);
-      expect(unlimitedEn.isUnknownLimit).toBe(false);
-      expect(unlimitedEn.formattedLimit).toBe('Unlimited');
-      expect(unlimitedEn.formattedUsed).toBe('500 MB');
-      expect(unlimitedEn.percentage).toBeNull();
+    it('handles NaN or unparseable limits as unknown ("—")', () => {
+      const nanLimitFa = getServiceTrafficInfo(NaN, 1024 * 1024 * 1024, 'fa', tFa);
+      expect(nanLimitFa.isUnknownLimit).toBe(true);
+      expect(nanLimitFa.isUnlimited).toBe(false);
+      expect(nanLimitFa.formattedLimit).toBe('—');
+      expect(nanLimitFa.formattedUsed).toBe('۱ گیگابایت');
+      expect(nanLimitFa.percentage).toBeNull();
     });
 
     it('does NOT round limits under 0.5 GB down to 0 or show unlimited', () => {

@@ -2,6 +2,7 @@
 
 import type { RebeccaUserDetail } from './RebeccaService.js';
 import { RebeccaApiError, RebeccaContractError, RebeccaOriginDownError } from './RebeccaService.js';
+import { normalizeDataLimit } from './TrafficLimit.js';
 import {
   ADMIN_BALANCE_OPERATIONS,
   type AdminBalanceAdjustment,
@@ -125,12 +126,15 @@ export function sanitizeRegistrationSource(value: string): string {
  */
 export function assertPanelPurchaseApplied(
   result: RebeccaUserDetail,
-  expectedDataLimit: number,
+  expectedDataLimit: number | null,
   expectedExpire: number
 ): void {
+  const actualLimit = normalizeDataLimit(result.data_limit) ?? null;
+  const expectedLimit = normalizeDataLimit(expectedDataLimit) ?? null;
+
   if (
     result.status !== 'active' ||
-    result.data_limit !== expectedDataLimit ||
+    actualLimit !== expectedLimit ||
     result.expire === null ||
     result.expire === undefined ||
     Math.abs(result.expire - expectedExpire) > 60

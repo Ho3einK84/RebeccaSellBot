@@ -1,7 +1,16 @@
 import { z } from 'zod';
+import { normalizeDataLimit } from '../domain/services/TrafficLimit.js';
 
 const safeInteger = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const nullableSafeInteger = safeInteger.nullable();
+
+export const trafficLimitSchema = z
+  .preprocess((val) => {
+    const normalized = normalizeDataLimit(val);
+    return normalized === undefined ? val : normalized;
+  }, safeInteger.nullable())
+  .default(null);
+
 const userStatusSchema = z.enum(['active', 'disabled', 'limited', 'expired', 'on_hold', 'deleted']);
 const subscriptionUrlsSchema = z.record(z.string(), z.string()).optional();
 const proxyMapSchema = z.record(z.string(), z.record(z.string(), z.unknown()));
@@ -28,7 +37,7 @@ export const rebeccaUserDetailSchema = z
     status: userStatusSchema,
     used_traffic: safeInteger,
     lifetime_used_traffic: safeInteger.optional().default(0),
-    data_limit: nullableSafeInteger,
+    data_limit: trafficLimitSchema,
     expire: nullableSafeInteger,
     created_at: z.string().optional().default(''),
     subscription_url: z.string(),
@@ -52,7 +61,7 @@ export const rebeccaUserListItemSchema = z
     username: z.string().min(1),
     status: userStatusSchema,
     used_traffic: safeInteger,
-    data_limit: nullableSafeInteger,
+    data_limit: trafficLimitSchema,
     expire: nullableSafeInteger,
     subscription_url: z.string(),
     subscription_urls: subscriptionUrlsSchema,

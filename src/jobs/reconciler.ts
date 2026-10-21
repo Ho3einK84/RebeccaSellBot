@@ -23,6 +23,7 @@ import {
   activeConfigCountSql,
   deletedConfigLifecycle,
   observedConfigLifecycle,
+  normalizeDataLimit,
 } from '../domain/services/ConfigLifecycle.js';
 import { logger } from '../infra/logger.js';
 import { forEachConcurrent, jobRunner } from './workerRuntime.js';
@@ -350,10 +351,15 @@ function determineRenewalOutcome(
   }
 
   const matchesTarget =
-    sameNullableNumber(remote.data_limit, intent.expectedDataLimit) &&
-    sameNullableNumber(remote.expire, intent.expectedExpire);
+    sameNullableNumber(
+      normalizeDataLimit(remote.data_limit) ?? null,
+      normalizeDataLimit(intent.expectedDataLimit) ?? null
+    ) && sameNullableNumber(remote.expire, intent.expectedExpire);
   const matchesPrevious =
-    sameNullableNumber(remote.data_limit, intent.previousDataLimit) &&
+    sameNullableNumber(
+      normalizeDataLimit(remote.data_limit) ?? null,
+      normalizeDataLimit(intent.previousDataLimit) ?? null
+    ) &&
     sameNullableNumber(remote.expire, intent.previousExpire) &&
     remote.status === intent.previousStatus;
 

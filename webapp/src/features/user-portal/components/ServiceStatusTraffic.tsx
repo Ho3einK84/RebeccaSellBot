@@ -2,8 +2,11 @@ import React from 'react';
 import { Calendar } from 'lucide-react';
 import { useLanguage } from '../../../shared/i18n/LanguageContext.js';
 import { toPersianDigits, formatBytes } from '../../../shared/lib/formatters.js';
+import { normalizeDataLimit } from '../../../shared/lib/traffic.js';
 import { Badge, type BadgeVariant } from '@/shared/components/ui/Badge.js';
 import type { NestedTranslationKey } from '@/shared/i18n/types.js';
+
+export { normalizeDataLimit };
 
 type TranslateFn = (key: NestedTranslationKey) => string;
 
@@ -107,8 +110,9 @@ export function getServiceTrafficInfo(
   t: TranslateFn
 ): ServiceTrafficInfo {
   const formattedUsed = formatBytes(panelUsedTraffic ?? 0, locale);
+  const normalized = normalizeDataLimit(panelDataLimit);
 
-  if (panelDataLimit === null || panelDataLimit === undefined) {
+  if (normalized === undefined) {
     return {
       isUnlimited: false,
       isUnknownLimit: true,
@@ -119,7 +123,7 @@ export function getServiceTrafficInfo(
     };
   }
 
-  if (panelDataLimit === 0) {
+  if (normalized === null) {
     return {
       isUnlimited: true,
       isUnknownLimit: false,
@@ -130,7 +134,7 @@ export function getServiceTrafficInfo(
     };
   }
 
-  const limit = Math.max(0, panelDataLimit);
+  const limit = Math.max(0, normalized);
   const used = Math.max(0, panelUsedTraffic ?? 0);
   const percentage = Math.min(100, Math.max(0, Math.round((used / limit) * 100)));
   const formattedLimit = formatBytes(limit, locale);

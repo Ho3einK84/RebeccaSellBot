@@ -40,6 +40,7 @@ import {
   rebeccaUserDetailSchema,
   rebeccaUsersResponseSchema,
 } from './RebeccaApiSchemas.js';
+import { normalizeDataLimit } from '../domain/services/TrafficLimit.js';
 
 // ─── Typed errors ────────────────────────────────────────────────────────────
 
@@ -588,11 +589,11 @@ export class RebeccaApiClient {
 
   /** POST /api/user → UserDetail (201 Created) */
   async createUser(payload: RebeccaCreateUserPayload): Promise<RebeccaUserDetail> {
-    // Coerce 0 → null for data_limit/expire so the backend treats them as unlimited/never
+    // Coerce 0 / undefined / null → null for data_limit/expire so the backend treats them as unlimited/never
     const body: Record<string, unknown> = {
       ...payload,
       status: payload.status ?? 'active',
-      data_limit: payload.data_limit === 0 ? null : (payload.data_limit ?? null),
+      data_limit: normalizeDataLimit(payload.data_limit) ?? null,
       expire: payload.expire === 0 ? null : (payload.expire ?? null),
     };
     return this.withAbsoluteSubscriptionUrls(
@@ -612,13 +613,19 @@ export class RebeccaApiClient {
     username: string,
     payload: RebeccaUpdateUserPayload
   ): Promise<RebeccaUserDetail> {
+    const body: Record<string, unknown> = {
+      ...payload,
+      ...(payload.data_limit !== undefined
+        ? { data_limit: normalizeDataLimit(payload.data_limit) ?? null }
+        : {}),
+    };
     return this.withAbsoluteSubscriptionUrls(
       this.parseContract<RebeccaUserDetail>(
         `/api/user/${encodeURIComponent(username)}`,
         rebeccaUserDetailSchema,
         await this.request(`/api/user/${encodeURIComponent(username)}`, {
           method: 'PUT',
-          body: JSON.stringify(payload),
+          body: JSON.stringify(body),
         })
       )
     );

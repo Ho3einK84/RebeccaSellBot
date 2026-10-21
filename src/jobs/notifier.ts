@@ -11,6 +11,7 @@ import { InlineKeyboard, type Api } from 'grammy';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { RebeccaUserDetail } from '../domain/services/RebeccaService.js';
 import { RebeccaOriginDownError } from '../domain/services/RebeccaService.js';
+import { normalizeDataLimit } from '../domain/services/TrafficLimit.js';
 import type { RebeccaPanelRegistry } from '../domain/services/RebeccaPanelRegistry.js';
 import type { RebeccaService } from '../domain/services/RebeccaService.js';
 import { getRebeccaService } from '../domain/services/RebeccaPanelAccess.js';
@@ -335,7 +336,7 @@ export function assessNotificationConditions(
   }: { thresholdGb: number; expiryWarningDays: number; now: Date }
 ): NotificationAssessment {
   const renewable = RENEWABLE_STATUSES.has(apiUser.status);
-  const dataLimit = apiUser.data_limit;
+  const dataLimit = normalizeDataLimit(apiUser.data_limit) ?? null;
   const usedTraffic = apiUser.used_traffic;
   const limitedData = typeof dataLimit === 'number' && Number.isFinite(dataLimit) && dataLimit > 0;
   const validUsage = typeof usedTraffic === 'number' && Number.isFinite(usedTraffic);

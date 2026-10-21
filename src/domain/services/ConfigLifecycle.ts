@@ -1,6 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { userConfigs } from '../../infra/schema.js';
 import type { RebeccaUserDetail } from './RebeccaService.js';
+import { normalizeDataLimit } from './TrafficLimit.js';
+
+export { normalizeDataLimit };
 
 export type ConfigLifecycleObservation = Pick<
   RebeccaUserDetail,
@@ -14,7 +17,7 @@ export function observedConfigLifecycle(
 ) {
   return {
     panelStatus: remote.status,
-    panelDataLimit: remote.data_limit,
+    panelDataLimit: normalizeDataLimit(remote.data_limit) ?? null,
     panelUsedTraffic: remote.used_traffic,
     panelExpire: remote.expire,
     lastSyncedAt: observedAt,
@@ -67,20 +70,22 @@ export function calculateTraffic(
   remote?: RemoteUserDetailSource | null,
   local?: ConfigTrafficAndStatusSource | null
 ): CalculatedTraffic {
-  let dataLimit: number | null = null;
+  let rawLimit: number | bigint | null | undefined = null;
   let usedTraffic: number | null = null;
   let isCached = false;
 
   if (remote) {
-    dataLimit = remote.data_limit ?? null;
+    rawLimit = remote.data_limit;
     usedTraffic = remote.used_traffic ?? null;
     isCached = false;
   } else if (local) {
-    dataLimit = local.panelDataLimit != null ? Number(local.panelDataLimit) : null;
+    rawLimit = local.panelDataLimit;
     usedTraffic = local.panelUsedTraffic != null ? Number(local.panelUsedTraffic) : null;
     isCached = true;
   }
 
+  const normalized = normalizeDataLimit(rawLimit);
+  const dataLimit = normalized ?? null;
   const isUnlimited = dataLimit == null;
   const isUnavailable = !remote && local?.panelUsedTraffic == null && local?.panelDataLimit == null;
   const remainingBytes =
