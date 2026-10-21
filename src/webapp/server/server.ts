@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
 import crypto from 'node:crypto';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCookie from '@fastify/cookie';
 import fastifyJwt from '@fastify/jwt';
@@ -21,26 +21,130 @@ export interface WebAppServerHandle {
   close: () => Promise<void>;
 }
 
+/**
+ * Resolves trusted proxy configuration constrained to the actual proxy hop
+ * behind Caddy (loopback and RFC1918 private subnets).
+ */
+export function resolveTrustProxy(config: Config): boolean | string | string[] {
+  const explicit = (config as unknown as Record<string, unknown>).TRUST_PROXY;
+  if (explicit !== undefined) {
+    if (explicit === true || explicit === 'true') return true;
+    if (explicit === false || explicit === 'false') return false;
+    if (typeof explicit === 'string') {
+      const parts = explicit
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return parts.length === 1 ? parts[0] : parts;
+    }
+  }
+  return ['127.0.0.1', '::1', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'];
+}
+
+/**
+ * Build a CORS allowlist from the configured public origins.
+ * Fail-closed: returns an empty array when no public origins are configured.
+ */
+export function resolveCorsAllowlist(config: Config): string[] {
+  const origins = new Set<string>();
+  for (const raw of [config.WEBAPP_URL, config.WEBHOOK_URL]) {
+    if (!raw) continue;
+    try {
+      origins.add(new URL(raw).origin);
+    } catch {
+      // ignore unparseable URLs; validation lives in config schema
+    }
+  }
+  return [...origins];
+}
+
+/**
+ * Resolve CORS options for Fastify.
+ * Fail-closed:
+ *  - empty allowlist => CORS disabled (origin: false, credentials: false)
+ *  - configured allowlist => matching origins allowed with credentials: true
+ *  - wildcard (*) => strictly opt-in and WITHOUT credentials
+ */
+export function resolveCorsOptions(config: Config): {
+  origin: string[] | string | boolean;
+  credentials: boolean;
+} {
+  const allowlist = resolveCorsAllowlist(config);
+  const allowWildcard =
+    (config as unknown as Record<string, unknown>).CORS_ALLOW_ALL === true ||
+    (config as unknown as Record<string, unknown>).CORS_ALLOW_ALL === 'true';
+
+  if (allowWildcard) {
+    return {
+      origin: '*',
+      credentials: false,
+    };
+  }
+
+  if (allowlist.length > 0) {
+    return {
+      origin: allowlist,
+      credentials: true,
+    };
+  }
+
+  return {
+    origin: false,
+    credentials: false,
+  };
+}
+
+/**
+ * Extracts verified client identity for rate limiting (authenticated telegramId or fallback IP).
+ */
+export function extractClientIdentity(req: FastifyRequest): string {
+  if (req.userSession?.telegramId) {
+    return `user:${req.userSession.telegramId}`;
+  }
+  const token =
+    req.cookies?.session ||
+    (req.headers?.authorization?.startsWith('Bearer ')
+      ? req.headers.authorization.slice(7).trim()
+      : undefined);
+
+  if (token && req.server.jwt) {
+    try {
+      const decoded = req.server.jwt.decode(token) as { telegramId?: number } | null;
+      if (decoded && Number.isSafeInteger(decoded.telegramId)) {
+        return `user:${decoded.telegramId}`;
+      }
+    } catch {
+      // Fallback to IP on unparseable token
+    }
+  }
+
+  const clientIp = req.ip || req.raw.socket.remoteAddress || '127.0.0.1';
+  return `ip:${clientIp}`;
+}
+
+/**
+ * Pre-route, per-identity rate limit key generator.
+ */
+export function resolveRateLimitKey(req: FastifyRequest): string {
+  const route = req.routeOptions?.url ?? req.raw.url?.split('?')[0] ?? 'unknown';
+  const identity = extractClientIdentity(req);
+  return `${route}:${identity}`;
+}
+
 export async function createWebAppServer(
   config: Config,
   services: BotServices
 ): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false, // Logging is handled via central pino logger without credential leakage
-    trustProxy: true,
+    trustProxy: resolveTrustProxy(config),
   });
 
   const sessionSecret =
     config.ADMIN_SESSION_SECRET ||
     crypto.createHmac('sha256', config.BOT_TOKEN).update('WebAppSessionSecret').digest('hex');
 
-  await app.register(fastifyCors, {
-    // Reflecting an arbitrary Origin with credentials (origin: true) lets
-    // any site make credentialed calls. Restrict to the configured frontend
-    // origins when known; same-origin production serving needs no CORS.
-    origin: resolveCorsAllowlist(config),
-    credentials: true,
-  });
+  await app.register(fastifyCors, resolveCorsOptions(config));
 
   await app.register(fastifyCookie, {
     secret: sessionSecret,
@@ -53,6 +157,8 @@ export async function createWebAppServer(
   await app.register(fastifyRateLimit, {
     max: 100,
     timeWindow: '1 minute',
+    hook: 'preHandler',
+    keyGenerator: resolveRateLimitKey,
   });
 
   const domainRegistry =
@@ -322,22 +428,4 @@ export async function startWebAppServer(
   };
 
   return { server, close };
-}
-
-/**
- * Build a CORS allowlist from the configured public origins.
- * Returns `true` (legacy reflect behavior) only when no public origin is
- * configured, preserving backward compatibility for custom setups.
- */
-function resolveCorsAllowlist(config: Config): string[] | true {
-  const origins = new Set<string>();
-  for (const raw of [config.WEBAPP_URL, config.WEBHOOK_URL]) {
-    if (!raw) continue;
-    try {
-      origins.add(new URL(raw).origin);
-    } catch {
-      // ignore unparseable URLs; validation lives in config schema
-    }
-  }
-  return origins.size > 0 ? [...origins] : true;
 }

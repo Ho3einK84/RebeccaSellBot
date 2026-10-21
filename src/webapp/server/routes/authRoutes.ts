@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { validateTelegramInitData } from '../auth.js';
+import { resolveRateLimitKey } from '../server.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
@@ -40,6 +41,7 @@ export function registerAuthRoutes(
         rateLimit: {
           max: 10,
           timeWindow: '1 minute',
+          keyGenerator: resolveRateLimitKey,
         },
       },
       schema: {

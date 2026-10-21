@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { authGuard } from '../middleware/adminGuard.js';
+import { resolveRateLimitKey } from '../server.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
@@ -79,7 +80,7 @@ export function registerUserRoutes(
     botUsername?: string;
   }
 ): void {
-  const userRateLimitKey = (req: FastifyRequest) => String(req.userSession?.telegramId || req.ip);
+  const userRateLimitKey = (req: FastifyRequest) => resolveRateLimitKey(req);
 
   const standardUserRateLimit = {
     max: 60,
