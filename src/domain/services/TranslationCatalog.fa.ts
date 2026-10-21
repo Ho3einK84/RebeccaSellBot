@@ -229,6 +229,10 @@ export const FA_TEXTS: Record<string, string> = {
   auto_renew_package_unavailable: 'بسته دیگر موجود نیست',
   auto_renew_package_unavailable_title: 'بستهٔ تمدید در دسترس نیست',
   auto_renew_package_unavailable_subtitle: 'یک بستهٔ جدید انتخاب کنید.',
+  auto_renew_price_changed: 'قیمت بسته تمدید افزایش یافته است',
+  auto_renew_price_changed_title: 'افزایش قیمت بسته تمدید',
+  auto_renew_price_changed_subtitle:
+    'قیمت بسته تمدید تغییر کرده است. لطفا تمدید خودکار را مجددا تایید کنید.',
   auto_renew_low_balance: '⚠️ موجودی برای تمدید خودکار `{username}` کافی نیست.',
   auto_renew_low_balance_title: 'تمدید خودکار انجام نشد',
   auto_renew_low_balance_subtitle: 'موجودی کافی نبود. کیف پول را شارژ کنید.',

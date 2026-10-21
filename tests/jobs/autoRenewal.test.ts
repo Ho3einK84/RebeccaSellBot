@@ -194,6 +194,106 @@ describe('runAutoRenewalSweep', () => {
     expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();
   });
 
+  it('T4: skips and disables auto-renew when package is disabled', async () => {
+    const disabledPkg = { ...PACKAGE, id: 'disabled_pkg', enabled: false };
+    const disabledCandidate = { ...CANDIDATE, autoRenewPackageId: 'disabled_pkg' };
+    const ctx = services({ candidates: [disabledCandidate], reserved: true });
+    // PricingService returns empty array when includeDisabled is false
+    ctx.pricingService.getPackages = vi.fn().mockReturnValue([]);
+    ctx.pricingService.getPackageById = vi.fn().mockReturnValue(disabledPkg);
+
+    await run(ctx);
+
+    expect(ctx.deliveryStore.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telegramId: CANDIDATE.telegramId,
+        configUsername: CANDIDATE.configUsername,
+      }),
+      'auto_renew_package_missing',
+      NOW
+    );
+    expect(ctx.telegramApi.sendMessage).toHaveBeenCalledWith(
+      77,
+      expect.stringContaining('auto_renew_package_unavailable_title'),
+      expect.objectContaining({ parse_mode: 'Markdown' })
+    );
+    expect(ctx.candidateStore.disableAutoRenew).toHaveBeenCalledWith(disabledCandidate);
+    expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();
+  });
+
+  it('T4: skips and disables auto-renew when package belongs to another panel', async () => {
+    const otherPanelCandidate = {
+      ...CANDIDATE,
+      panelId: 'panel_a',
+      autoRenewPackageId: 'panel_b_pkg',
+    };
+    const ctx = services({ candidates: [otherPanelCandidate], reserved: true });
+    ctx.pricingService.getPackages = vi.fn().mockReturnValue([]);
+    ctx.pricingService.getPackageById = vi
+      .fn()
+      .mockReturnValue({ ...PACKAGE, id: 'panel_b_pkg', panelId: 'panel_b' });
+
+    await run(ctx);
+
+    expect(ctx.telegramApi.sendMessage).toHaveBeenCalledWith(
+      77,
+      expect.stringContaining('auto_renew_package_unavailable_title'),
+      expect.objectContaining({ parse_mode: 'Markdown' })
+    );
+    expect(ctx.candidateStore.disableAutoRenew).toHaveBeenCalledWith(otherPanelCandidate);
+    expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();
+  });
+
+  it('T4: notifies price_changed and disables auto-renew when price increases above ceiling', async () => {
+    const increasedCandidate = {
+      ...CANDIDATE,
+      autoRenewPrice: 100_000, // ceiling is 100_000, but package price is 120_000
+    };
+    const ctx = services({ candidates: [increasedCandidate], reserved: true });
+
+    await run(ctx);
+
+    expect(ctx.deliveryStore.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telegramId: CANDIDATE.telegramId,
+        configUsername: CANDIDATE.configUsername,
+      }),
+      'auto_renew_package_missing',
+      NOW
+    );
+    expect(ctx.telegramApi.sendMessage).toHaveBeenCalledWith(
+      77,
+      expect.stringContaining('auto_renew_price_changed_title'),
+      expect.objectContaining({ parse_mode: 'Markdown' })
+    );
+    expect(ctx.candidateStore.disableAutoRenew).toHaveBeenCalledWith(increasedCandidate);
+    expect(ctx.executePurchaseSaga).not.toHaveBeenCalled();
+  });
+
+  it('T4: proceeds with renewal when price decreases below ceiling, charging the new lower price', async () => {
+    const cheaperPkg = { ...PACKAGE, price: 90_000 };
+    const decreasedCandidate = {
+      ...CANDIDATE,
+      autoRenewPrice: 120_000, // ceiling was 120_000, current price dropped to 90_000
+    };
+    const ctx = services({ candidates: [decreasedCandidate], balance: 100_000 });
+    ctx.pricingService.getPackages = vi.fn().mockReturnValue([cheaperPkg]);
+    ctx.pricingService.getPackageById = vi.fn().mockReturnValue(cheaperPkg);
+
+    await expect(run(ctx)).resolves.toEqual({ checked: 1, renewed: 1, skipped: 0 });
+    expect(ctx.executePurchaseSaga).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telegramId: 77,
+        amount: 90_000, // charges the cheaper price, not the 120_000 snapshot!
+      })
+    );
+    expect(ctx.telegramApi.sendMessage).toHaveBeenCalledWith(
+      77,
+      expect.stringContaining('auto_renew_success_title'),
+      expect.anything()
+    );
+  });
+
   it('skips configs that are not due', async () => {
     const ctx = services({
       remote: remoteUser({

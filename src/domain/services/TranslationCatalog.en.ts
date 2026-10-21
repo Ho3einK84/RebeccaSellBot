@@ -231,6 +231,10 @@ export const EN_TEXTS: Record<string, string> = {
   auto_renew_package_unavailable: 'Selected package is no longer available',
   auto_renew_package_unavailable_title: 'Renewal Package Unavailable',
   auto_renew_package_unavailable_subtitle: 'Choose a new package.',
+  auto_renew_price_changed: 'Package price has increased above approved ceiling',
+  auto_renew_price_changed_title: 'Renewal Price Increased',
+  auto_renew_price_changed_subtitle:
+    'The renewal package price changed. Please re-confirm automatic renewal.',
   auto_renew_low_balance: '⚠️ Insufficient balance to renew `{username}` automatically.',
   auto_renew_low_balance_title: 'Automatic Renewal Failed',
   auto_renew_low_balance_subtitle: 'Insufficient balance. Top up your wallet.',

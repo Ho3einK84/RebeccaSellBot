@@ -174,47 +174,56 @@ export async function runAutoRenewalSweep(
         continue;
       }
 
-      const selectedPackage =
-        pricingService.getPackageById?.(config.autoRenewPackageId) ??
-        pricingService
-          .getPackages(config.panelId, config.serviceId)
-          .find((pkg) => pkg.id === config.autoRenewPackageId);
-      if (
-        !selectedPackage ||
-        (selectedPackage.panelId !== undefined && selectedPackage.panelId !== config.panelId) ||
-        (selectedPackage.serviceId !== undefined &&
-          selectedPackage.serviceId !== config.serviceId) ||
-        config.autoRenewPrice === null ||
-        (config.autoRenewPrice !== undefined && selectedPackage.price !== config.autoRenewPrice)
-      ) {
+      const availablePackages =
+        pricingService.getPackages?.(config.panelId, config.serviceId, false) ?? [];
+      let selectedPackage = availablePackages.find((pkg) => pkg.id === config.autoRenewPackageId);
+
+      // Check fallback via getPackageById, ensuring enabled, matching panel/service, and non-synthetic
+      if (!selectedPackage && pricingService.getPackageById) {
+        const candidatePkg = pricingService.getPackageById(config.autoRenewPackageId);
+        if (
+          candidatePkg &&
+          candidatePkg.enabled !== false &&
+          (candidatePkg.panelId === undefined || candidatePkg.panelId === config.panelId) &&
+          (candidatePkg.serviceId === undefined || candidatePkg.serviceId === config.serviceId) &&
+          !/^custom_(\d+)gb_(\d+)d$/i.test(candidatePkg.id)
+        ) {
+          selectedPackage = candidatePkg;
+        }
+      }
+
+      const isPriceExceeded =
+        Boolean(selectedPackage) &&
+        (config.autoRenewPrice === null ||
+          (config.autoRenewPrice !== undefined && selectedPackage!.price > config.autoRenewPrice));
+
+      if (!selectedPackage || isPriceExceeded) {
         const reserved = await deliveryStore.reserve(config, 'auto_renew_package_missing', now);
         if (reserved) {
           try {
             const locale = config.locale ?? translationService.resolveLocale();
+            const titleKey = isPriceExceeded
+              ? 'auto_renew_price_changed_title'
+              : 'auto_renew_package_unavailable_title';
+            const subtitleKey = isPriceExceeded
+              ? 'auto_renew_price_changed_subtitle'
+              : 'auto_renew_package_unavailable_subtitle';
+            const footerKey = isPriceExceeded
+              ? 'auto_renew_price_changed'
+              : 'auto_renew_package_unavailable';
+
             await telegramApi.sendMessage(
               config.telegramId,
               buildScreen({
                 emoji: '⚠️',
-                title: tForLocale(
-                  translationService,
-                  locale,
-                  'auto_renew_package_unavailable_title'
-                ),
-                subtitle: tForLocale(
-                  translationService,
-                  locale,
-                  'auto_renew_package_unavailable_subtitle'
-                ),
+                title: tForLocale(translationService, locale, titleKey),
+                subtitle: tForLocale(translationService, locale, subtitleKey),
                 primary: {
                   emoji: '📱',
                   label: tForLocale(translationService, locale, 'auto_renew_service_label'),
                   value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
                 },
-                footer: `ℹ️ ${tForLocale(
-                  translationService,
-                  locale,
-                  'auto_renew_package_unavailable'
-                )}`,
+                footer: `ℹ️ ${tForLocale(translationService, locale, footerKey)}`,
               }),
               {
                 parse_mode: 'Markdown',

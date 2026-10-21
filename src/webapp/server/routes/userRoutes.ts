@@ -333,35 +333,52 @@ export function registerUserRoutes(
           return reply.code(200).send({ success: true, autoRenewEnabled: false });
         }
 
-        let packageId = request.body?.packageId;
-        let price = request.body?.price;
-
-        if (!packageId || price === undefined) {
-          if (
-            config.autoRenewPackageId &&
-            config.autoRenewPrice !== null &&
-            config.autoRenewPrice !== undefined
-          ) {
-            packageId = config.autoRenewPackageId;
-            price = config.autoRenewPrice;
-          } else if (options.pricingService) {
-            const packages = options.pricingService.getPackages(config.panelId, config.serviceId);
-            const firstPkg = packages[0];
-            if (firstPkg) {
-              packageId = firstPkg.id;
-              price = firstPkg.price;
-            }
-          }
+        if (!options.pricingService) {
+          return reply.code(500).send({ error: 'Pricing service unavailable' });
         }
 
-        if (!packageId || price === undefined) {
+        const availablePackages = options.pricingService.getPackages(
+          config.panelId,
+          config.serviceId,
+          false
+        );
+
+        let selectedPackage;
+        const requestedPackageId =
+          typeof request.body?.packageId === 'string' && request.body.packageId.trim().length > 0
+            ? request.body.packageId.trim()
+            : undefined;
+
+        if (requestedPackageId) {
+          selectedPackage = availablePackages.find((pkg) => pkg.id === requestedPackageId);
+          if (!selectedPackage) {
+            return reply.code(404).send({
+              error: 'Package not found, disabled, or does not match config panel/service',
+              code: 'PACKAGE_NOT_FOUND',
+            });
+          }
+        } else if (config.autoRenewPackageId) {
+          selectedPackage = availablePackages.find((pkg) => pkg.id === config.autoRenewPackageId);
+        }
+
+        if (!selectedPackage && availablePackages.length > 0) {
+          selectedPackage = availablePackages[0];
+        }
+
+        if (!selectedPackage) {
           return reply.code(400).send({
             error: 'No package available for auto-renew',
             code: 'PACKAGE_NOT_FOUND',
           });
         }
 
-        await options.configService.setAutoRenew(telegramId, config.id, true, packageId, price);
+        await options.configService.setAutoRenew(
+          telegramId,
+          config.id,
+          true,
+          selectedPackage.id,
+          selectedPackage.price
+        );
         return reply.code(200).send({ success: true, autoRenewEnabled: true });
       }
     );

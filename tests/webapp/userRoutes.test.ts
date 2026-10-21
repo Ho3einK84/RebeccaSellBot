@@ -1198,6 +1198,40 @@ describe('WebApp User Routes (/api/user/*)', () => {
         );
       });
 
+      it('T4: ignores client-supplied manipulated price in body and sets price strictly from pricingService', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true, packageId: 'pkg_10gb_10d', price: 1 }, // client attempts price 1
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true, autoRenewEnabled: true });
+        // Price must be server-side 40_000, NOT the client's 1!
+        expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(
+          55555,
+          'cfg_1',
+          true,
+          'pkg_10gb_10d',
+          40_000
+        );
+      });
+
+      it('T4: returns 404 PACKAGE_NOT_FOUND when requested package is disabled or nonexistent', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true, packageId: 'pkg_disabled' },
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json().code).toBe('PACKAGE_NOT_FOUND');
+      });
+
       it('enables auto-renew using existing config package when none provided', async () => {
         const token = getUserToken(55555);
         const res = await app.inject({
