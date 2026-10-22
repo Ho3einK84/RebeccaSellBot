@@ -24,6 +24,10 @@ import { Badge } from '@/shared/components/ui/Badge.js';
 import { UserConfigQrModal } from './UserConfigQrModal.js';
 import { UserConfirmModal } from './UserConfirmModal.js';
 import { ReceiptPhotoModal } from '@/features/admin/receipts/components/ReceiptPhotoModal.js';
+import {
+  getTransactionTypeLabel,
+  formatTransactionDescription,
+} from '@/shared/lib/transactionFormatters.js';
 import type { UserDossierResponse } from '@/shared/types/api.js';
 import type { UserProfile, UserConfigItem } from '@/shared/types/admin.js';
 
@@ -62,7 +66,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   onRevokeConfigSubUrl,
   onSyncConfig,
 }) => {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const { formatMoney, formatNumber, formatIsoDate, formatBytes, sanitizeDisplayName } =
     useFormatters();
   const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
@@ -549,6 +553,8 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               ) : (
                 transactions.map((tx) => {
                   const isCredit = tx.amount > 0;
+                  const typeLabel = getTransactionTypeLabel(tx.type, tx.description, t);
+                  const friendlyDesc = formatTransactionDescription(tx.description, locale);
                   return (
                     <div
                       key={tx.id}
@@ -565,11 +571,19 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           )}
                         </div>
                         <div className="space-y-0.5 min-w-0">
-                          <div className={`font-semibold text-xs truncate ${textPrimary}`}>
-                            {tx.description}
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-bold text-xs truncate ${textPrimary}`}>
+                              {typeLabel}
+                            </span>
+                            <span className={`text-[10px] tnum ${textMuted}`} dir="ltr">
+                              {formatIsoDate(tx.createdAt)}
+                            </span>
                           </div>
-                          <div className={`text-[10px] tnum ${textMuted}`}>
-                            <span dir="ltr">{formatIsoDate(tx.createdAt)}</span>
+                          <div
+                            className={`text-[11px] truncate ${textSecondary}`}
+                            title={friendlyDesc}
+                          >
+                            {friendlyDesc}
                           </div>
                         </div>
                       </div>
@@ -581,14 +595,13 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           <span dir="ltr">
                             {isCredit ? '+' : ''}
                             {formatMoney(tx.amount)}
-                          </span>
-                          {''}
+                          </span>{' '}
                           <span className="font-sans font-normal text-xs">
                             {t('common.currency')}
                           </span>
                         </div>
                         <div className={`text-[10px] tnum ${textMuted}`}>
-                          {t('admin.users.txBalanceAfter')}:{''}
+                          {t('admin.users.txBalanceAfter')}:{' '}
                           <span dir="ltr">{formatMoney(tx.balanceAfter)}</span>
                         </div>
                       </div>

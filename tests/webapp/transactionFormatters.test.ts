@@ -142,6 +142,22 @@ describe('transactionFormatters', () => {
 
       const transfer = 'Transfer to user 98765: gift';
       expect(formatTransactionDescription(transfer, 'fa')).toBe('انتقال موجودی به کاربر');
+
+      const adminAdjustmentWithNote = 'Admin 6698253699: credit; شارژ توسط مدیریت';
+      expect(formatTransactionDescription(adminAdjustmentWithNote, 'fa')).toBe(
+        'تنظیم مدیریت: شارژ توسط مدیریت'
+      );
+      expect(formatTransactionDescription(adminAdjustmentWithNote, 'en')).toBe(
+        'Admin adjustment: شارژ توسط مدیریت'
+      );
+
+      const adminAdjustmentPlain = 'Admin 6698253699: credit';
+      expect(formatTransactionDescription(adminAdjustmentPlain, 'fa')).toBe(
+        'تنظیم موجودی توسط مدیریت'
+      );
+      expect(formatTransactionDescription(adminAdjustmentPlain, 'en')).toBe(
+        'Admin balance adjustment'
+      );
     });
 
     it('passes through custom or unknown descriptions unaltered', () => {

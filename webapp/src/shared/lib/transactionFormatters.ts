@@ -188,5 +188,14 @@ export function formatTransactionDescription(
     return isFa ? 'انتقال موجودی دریافتی از کاربر' : 'Balance transfer received';
   }
 
+  // 13. Admin adjustment: Admin <id>: <operation>; <note>
+  if ((m = desc.match(/^Admin\s+(\d+):\s*([^;]+)(?:;\s*(.*))?/i))) {
+    const note = m[3]?.trim();
+    if (note && note !== m[2].trim()) {
+      return isFa ? `تنظیم مدیریت: ${note}` : `Admin adjustment: ${note}`;
+    }
+    return isFa ? 'تنظیم موجودی توسط مدیریت' : 'Admin balance adjustment';
+  }
+
   return desc;
 }
