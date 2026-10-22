@@ -21,6 +21,7 @@ import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { api, ApiClientError } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
+import { openTelegramLinkAndMinimize } from '@/shared/lib/telegramNavigation.js';
 import type { UserConfigRecord } from '@/shared/types/userPortal.js';
 import {
   ServiceStatusDot,
@@ -187,11 +188,8 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
     const url = cleanBot
       ? `https://t.me/${cleanBot}?start=${action}_${config.id}`
       : `https://t.me?start=${action}_${config.id}`;
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-      window.Telegram.WebApp.openTelegramLink(url);
-    } else {
-      window.open(url, '_blank');
-    }
+    onClose();
+    openTelegramLinkAndMinimize(url);
   };
 
   return (

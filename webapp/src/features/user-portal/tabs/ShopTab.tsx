@@ -16,6 +16,7 @@ import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { normalizeInputDigits } from '@/shared/lib/formatters.js';
+import { openTelegramLinkAndMinimize } from '@/shared/lib/telegramNavigation.js';
 import { api } from '@/shared/lib/api.js';
 import type { UserPackageItem, CustomVolumeSettings } from '@/shared/types/userPortal.js';
 
@@ -135,11 +136,8 @@ export const ShopTab: React.FC<ShopTabProps> = ({
     const cleanBot = botUsername?.replace(/^@/, '');
     if (cleanBot) {
       const url = `https://t.me/${cleanBot}?start=custom`;
-      if (window.Telegram?.WebApp?.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(url);
-        setTimeout(() => window.Telegram?.WebApp?.close?.(), 300);
-        return;
-      }
+      openTelegramLinkAndMinimize(url);
+      return;
     }
     handleOrderCustom();
   };

@@ -18,6 +18,7 @@ import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { openTelegramLinkAndMinimize, minimizeOrCloseWebApp } from '@/shared/lib/telegramNavigation.js';
 import { useUserTransactions } from '../hooks/useUserPortalData.js';
 import type {
   UserPortalProfile,
@@ -89,19 +90,10 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     if (botUser) {
       const cleanBot = botUser.replace(/^@/, '');
       const url = `https://t.me/${cleanBot}?start=${payload}`;
-      if (window.Telegram?.WebApp?.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(url);
-        setTimeout(() => {
-          window.Telegram?.WebApp?.close?.();
-        }, 350);
-        return;
-      }
+      openTelegramLinkAndMinimize(url);
+      return;
     }
-    if (window.Telegram?.WebApp?.close) {
-      window.Telegram.WebApp.close();
-    } else {
-      window.close();
-    }
+    minimizeOrCloseWebApp();
   };
 
   const getTransactionTypeLabel = (type: string): string => {
