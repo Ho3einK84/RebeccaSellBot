@@ -5,8 +5,6 @@ import {
   Copy,
   Check,
   Send,
-  ArrowDownLeft,
-  ArrowUpRight,
   History,
   ShieldCheck,
   RotateCw,
@@ -18,7 +16,11 @@ import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
-import { openTelegramLinkAndMinimize, minimizeOrCloseWebApp } from '@/shared/lib/telegramNavigation.js';
+import {
+  openTelegramLinkAndMinimize,
+  minimizeOrCloseWebApp,
+} from '@/shared/lib/telegramNavigation.js';
+import { TransactionItem } from '@/features/user-portal/components/TransactionItem.js';
 import { useUserTransactions } from '../hooks/useUserPortalData.js';
 import type {
   UserPortalProfile,
@@ -44,8 +46,8 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   pendingReceipt,
   onNotify,
 }) => {
-  const { t, isRtl } = useLanguage();
-  const { isDark, cardClass, subCardClass } = useThemeTokens();
+  const { t } = useLanguage();
+  const { cardClass, subCardClass } = useThemeTokens();
   const { formatToman } = useFormatters();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
@@ -94,29 +96,6 @@ export const WalletTab: React.FC<WalletTabProps> = ({
       return;
     }
     minimizeOrCloseWebApp();
-  };
-
-  const getTransactionTypeLabel = (type: string): string => {
-    switch (type) {
-      case 'topup':
-        return t('user.wallet.typeTopup');
-      case 'purchase':
-        return t('user.wallet.typePurchase');
-      case 'refund':
-        return t('user.wallet.typeRefund');
-      case 'cashback':
-        return t('user.wallet.typeCashback');
-      case 'referral_bonus':
-        return t('user.wallet.typeReferral');
-      case 'admin_adjustment':
-        return t('user.wallet.typeAdminAdjustment');
-      case 'transfer_sent':
-        return t('user.wallet.typeTransferSent');
-      case 'transfer_received':
-        return t('user.wallet.typeTransferReceived');
-      default:
-        return t('user.wallet.typeOther');
-    }
   };
 
   return (
@@ -427,53 +406,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {currentTransactions.map((tx) => {
-              const isCredit = tx.amount > 0;
-              const Icon = isCredit ? ArrowDownLeft : ArrowUpRight;
-
-              return (
-                <div
-                  key={tx.id}
-                  className={`p-3.5 rounded-2xl border flex items-center justify-between text-start gap-2.5 transition-all ${isDark ? `${subCardClass} hover:border-line/[0.12]` : 'bg-surface border-line/80 shadow-2xs hover:border-line-strong'}`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isCredit ? 'bg-ok/10 text-ok border border-ok/20' : 'bg-danger/10 text-danger border border-danger/20'}`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-xs font-bold truncate text-ink`}>
-                          {getTransactionTypeLabel(tx.type)}
-                        </span>
-                        <span className="text-[10px] text-ink-muted tnum">
-                          {new Date(tx.createdAt).toLocaleDateString(isRtl ? 'fa-IR' : 'en-US')}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-ink-muted truncate">{tx.description}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end shrink-0">
-                    <span
-                      dir="ltr"
-                      className={`tnum font-bold text-xs sm:text-sm ${isCredit ? 'text-ok' : 'text-danger'}`}
-                    >
-                      {isCredit ? '+' : ''}
-                      {formatToman(tx.amount)} {currency}
-                    </span>
-                    <span className="text-[10px] text-ink-muted tnum">
-                      {t('user.wallet.balanceAfterLabel').replace(
-                        '{amount}',
-                        formatToman(tx.balanceAfter)
-                      )}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+            {currentTransactions.map((tx) => (
+              <TransactionItem key={tx.id} tx={tx} currency={currency} />
+            ))}
 
             {/* Pagination Controls */}
             {totalPages > 1 && (

@@ -31,6 +31,7 @@ import {
   ServiceAutoRenewBadge,
   ServiceTrafficBar,
 } from '@/features/user-portal/components/ServiceStatusTraffic.js';
+import { TransactionItem } from '@/features/user-portal/components/TransactionItem.js';
 
 interface DashboardTabProps {
   profile: UserPortalProfile | null;
@@ -346,33 +347,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {transactions.slice(0, 3).map((tx) => {
-              const isCredit = tx.amount > 0;
-              return (
-                <div
-                  key={tx.id}
-                  className={`p-3 rounded-xl border flex items-center justify-between text-start bg-surface border-line shadow-2xs`}
-                >
-                  <div className="flex flex-col min-w-0 pr-2">
-                    <span className={`text-xs font-semibold truncate text-ink-soft`}>
-                      {tx.description}
-                    </span>
-                    <span className="text-[10px] text-ink-muted">
-                      {new Date(tx.createdAt).toLocaleDateString(isRtl ? 'fa-IR' : 'en-US')}
-                    </span>
-                  </div>
-                  <span
-                    dir="ltr"
-                    className={`tnum font-bold text-xs shrink-0 ${
-                      isCredit ? 'text-ok' : 'text-danger'
-                    }`}
-                  >
-                    {isCredit ? '+' : ''}
-                    {formatToman(tx.amount)} {currency}
-                  </span>
-                </div>
-              );
-            })}
+            {transactions.slice(0, 3).map((tx) => (
+              <TransactionItem key={tx.id} tx={tx} currency={currency} />
+            ))}
           </div>
         )}
       </section>

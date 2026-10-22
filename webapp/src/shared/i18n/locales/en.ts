@@ -243,6 +243,7 @@ export const en: DeepPartial<TranslationSchema> = {
       txEmpty: 'No transactions recorded yet.',
       typeTopup: 'Deposit',
       typePurchase: 'Purchase',
+      typeRenewal: 'Renewal',
       typeRefund: 'Refund',
       typeCashback: 'Cashback',
       typeReferral: 'Referral Bonus',

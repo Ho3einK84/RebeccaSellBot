@@ -50,7 +50,7 @@ describe('Bot /start service deep links (renew_, transfer_, delete_)', () => {
         ]),
       },
       refundService: {
-        quote: vi.fn(async (_telegramId: number, configId: string) => ({
+        quote: vi.fn(async (_telegramId: number, _configId: string) => ({
           eligible: true,
           grossAmount: 50000,
           cashbackWithheld: 0,

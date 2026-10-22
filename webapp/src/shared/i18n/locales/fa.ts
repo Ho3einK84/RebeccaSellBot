@@ -242,6 +242,7 @@ export const fa = {
       txEmpty: 'هنوز هیچ تراکنشی ثبت نشده است.',
       typeTopup: 'افزایش موجودی',
       typePurchase: 'خرید اشتراک',
+      typeRenewal: 'تمدید اشتراک',
       typeRefund: 'بازگشت وجه',
       typeCashback: 'کش‌بک خرید',
       typeReferral: 'پاداش دعوت',
