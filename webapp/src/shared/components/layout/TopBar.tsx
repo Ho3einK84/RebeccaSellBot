@@ -16,7 +16,7 @@ export interface TopBarProps {
 
 /**
  * Unified top chrome shared by Coming-Soon, User Portal, and Admin Panel.
- * Uses flat matte surface depth and crisp 1px structural borders with zero glassmorphism.
+ * Uses flat matte surface depth and crisp 1px structural borders.
  */
 export const TopBar: React.FC<TopBarProps> = ({
   icon,
@@ -28,14 +28,16 @@ export const TopBar: React.FC<TopBarProps> = ({
   className = '',
 }) => (
   <header
-    className={`rounded-card border border-line bg-surface px-4 py-3 shadow-[var(--shadow-card)] ${className}`}
+    className={`rounded-card border border-line bg-surface px-3.5 py-3 sm:px-4 sm:py-3.5 shadow-[var(--shadow-card)] ${className}`}
   >
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="flex items-center justify-between gap-2.5">
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
         {icon}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 min-w-0">
-            <h1 className="truncate font-semibold text-base text-ink leading-[1.4] m-0">{title}</h1>
+            <h1 className="truncate font-semibold text-sm sm:text-base text-ink leading-[1.4] m-0">
+              {title}
+            </h1>
             {badge}
           </div>
           {subtitle ? (
@@ -46,11 +48,13 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
       </div>
 
-      {actions ? <div className="flex items-center gap-1.5 shrink-0">{actions}</div> : null}
+      {actions ? (
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">{actions}</div>
+      ) : null}
     </div>
 
     {footer ? (
-      <div className="mt-3 pt-3 border-t border-line flex flex-wrap items-center justify-between gap-2.5 text-xs">
+      <div className="mt-3 pt-2.5 border-t border-line flex flex-wrap items-center justify-between gap-2 text-xs">
         {footer}
       </div>
     ) : null}

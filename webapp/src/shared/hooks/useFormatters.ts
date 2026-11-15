@@ -3,6 +3,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import {
   formatMoney as formatMoneyUtil,
   formatNumber as formatNumberUtil,
+  formatId as formatIdUtil,
   formatIsoDate as formatIsoDateUtil,
   formatBytes as formatBytesUtil,
   getAvatarChar as getAvatarCharUtil,
@@ -18,6 +19,11 @@ export function useFormatters() {
   const formatMoney = useCallback((amount: number) => formatMoneyUtil(amount, locale), [locale]);
 
   const formatNumber = useCallback((num: number) => formatNumberUtil(num, locale), [locale]);
+
+  const formatId = useCallback(
+    (value: string | number | null | undefined) => formatIdUtil(value, locale),
+    [locale]
+  );
 
   const formatIsoDate = useCallback(
     (isoString?: string | null) => formatIsoDateUtil(isoString, locale),
@@ -44,6 +50,7 @@ export function useFormatters() {
     formatMoney,
     formatToman: formatMoney,
     formatNumber,
+    formatId,
     formatIsoDate,
     formatBytes,
     getAvatarChar,

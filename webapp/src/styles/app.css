@@ -44,14 +44,16 @@
   --font-sans:
     'Vazirmatn', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  --font-mono:
+    'Vazirmatn', ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Monaco, Consolas,
+    monospace;
 
   /* Radii follow clean 4px/2px nesting scale */
   --radius-ctl: 0.5rem;
   --radius-tile: 0.625rem;
   --radius-item: 0.625rem;
   --radius-card: 0.875rem;
-  --radius-sheet: 1rem;
+  --radius-sheet: 1.25rem;
 }
 
 @theme inline {
@@ -222,9 +224,16 @@ body {
   line-height: 1.4;
 }
 
-.tnum {
+.tnum,
+.font-mono {
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
+}
+
+.rs-backdrop-blur {
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
 .rs-card-surface {
@@ -420,7 +429,7 @@ body {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -436,11 +445,11 @@ body {
 @keyframes rs-modal-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(10px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -451,7 +460,7 @@ body {
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: none;
   }
 }
 
@@ -462,7 +471,7 @@ body {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 

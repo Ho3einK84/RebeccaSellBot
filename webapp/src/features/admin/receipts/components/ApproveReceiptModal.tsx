@@ -23,45 +23,25 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney } = useFormatters();
+  const { formatMoney, formatId } = useFormatters();
   const { textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!receipt) return null;
 
   return (
-    <Modal isOpen={Boolean(receipt)} onClose={onClose} maxWidth="sm">
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <IconTile tone="ok" size="md">
-            <CheckCircle2 />
-          </IconTile>
-          <h3 className={`font-semibold text-base m-0 ${textPrimary}`}>
-            {t('admin.receipts.approveConfirmTitle')}
-          </h3>
-        </div>
-
-        <p className={`text-xs leading-relaxed m-0 ${textSecondary}`}>
-          {t('admin.receipts.approveConfirmBody', {
-            amount: `${formatMoney(receipt.amount)} ${t('common.currency')}`,
-          })}
-        </p>
-
-        <Card subCard padding="sm" className="text-xs space-y-1.5 tnum">
-          <div className="flex justify-between gap-2">
-            <span className={textMuted}>{t('common.userCode')}</span>
-            <bdi dir="ltr" className={`font-mono ${textPrimary}`}>
-              {receipt.telegramId}
-            </bdi>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className={textMuted}>{t('common.receiptCode')}</span>
-            <bdi dir="ltr" className={`font-mono truncate ${textPrimary}`}>
-              {receipt.id}
-            </bdi>
-          </div>
-        </Card>
-
-        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
+    <Modal
+      isOpen={Boolean(receipt)}
+      onClose={onClose}
+      maxWidth="sm"
+      closeOnBackdrop={!loading}
+      title={t('admin.receipts.approveConfirmTitle')}
+      icon={
+        <IconTile tone="ok" size="sm">
+          <CheckCircle2 />
+        </IconTile>
+      }
+      footer={
+        <div className="flex items-center gap-2.5">
           <Button
             type="button"
             variant="secondary"
@@ -83,6 +63,29 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
             <span>{t('admin.receipts.approveConfirmBtn')}</span>
           </Button>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        <p className={`text-xs leading-relaxed m-0 ${textSecondary}`}>
+          {t('admin.receipts.approveConfirmBody', {
+            amount: `${formatMoney(receipt.amount)} ${t('common.currency')}`,
+          })}
+        </p>
+
+        <Card subCard padding="sm" className="text-xs space-y-1.5 tnum">
+          <div className="flex justify-between gap-2">
+            <span className={textMuted}>{t('common.userCode')}</span>
+            <bdi dir="ltr" className={`tnum font-medium ${textPrimary}`}>
+              #{formatId(receipt.telegramId)}
+            </bdi>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className={textMuted}>{t('common.receiptCode')}</span>
+            <bdi dir="ltr" className={`tnum font-medium truncate ${textPrimary}`}>
+              #{formatId(receipt.id)}
+            </bdi>
+          </div>
+        </Card>
       </div>
     </Modal>
   );

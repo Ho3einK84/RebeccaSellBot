@@ -44,7 +44,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
   disabled = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatIsoDate, sanitizeDisplayName } = useFormatters();
+  const { formatMoney, formatId, formatIsoDate, sanitizeDisplayName } = useFormatters();
   const { textPrimary, textMuted } = useThemeTokens();
   const { copy, isCopied } = useCopy();
 
@@ -129,8 +129,8 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             onClick={() => copy(String(receipt.telegramId), `receipt-user-${receipt.telegramId}`)}
             title={t('common.copy')}
           >
-            <bdi dir="ltr" className="font-mono">
-              #{receipt.telegramId}
+            <bdi dir="ltr" className="tnum font-medium">
+              #{formatId(receipt.telegramId)}
             </bdi>
             {isCopied(`receipt-user-${receipt.telegramId}`) ? (
               <Check className="w-3 h-3 text-ok-fg shrink-0" />
@@ -167,8 +167,8 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
         {/* Meta Footer */}
         <div className={`pt-2 border-t border-line text-[11px] ${textMuted} flex flex-col gap-1.5`}>
           <div className="flex items-center gap-2 flex-wrap">
-            <bdi dir="ltr" className="tnum font-mono font-medium">
-              #{receipt.id.slice(0, 8)}
+            <bdi dir="ltr" className="tnum font-medium">
+              #{formatId(receipt.id.slice(0, 8))}
             </bdi>
 
             <span className="opacity-40">·</span>
@@ -186,8 +186,8 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
               <ShieldCheck className="w-3.5 h-3.5 text-ok-fg shrink-0" />
               <span>
                 {t('admin.receipts.reviewedBy')}:{' '}
-                <bdi dir="ltr" className="tnum font-mono">
-                  #{receipt.reviewedBy}
+                <bdi dir="ltr" className="tnum font-medium">
+                  #{formatId(receipt.reviewedBy)}
                 </bdi>
               </span>
             </div>

@@ -14,12 +14,12 @@ interface UserHeroCardProps {
 }
 
 export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCopied }) => {
-  const { t, locale } = useLanguage();
-  const { sanitizeDisplayName, toPersianDigits } = useFormatters();
+  const { t } = useLanguage();
+  const { sanitizeDisplayName, formatId } = useFormatters();
 
   const { displayName } = sanitizeDisplayName(user.first_name, user.last_name, t('user.guestUser'));
 
-  const formattedId = locale === 'fa' ? toPersianDigits(String(user.id)) : String(user.id);
+  const formattedId = formatId(user.id);
 
   return (
     <Card padding="lg" className="space-y-4">
@@ -57,8 +57,8 @@ export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCo
           title={t('user.telegramId')}
         >
           <span className="text-[11px] text-ink-muted">{t('user.telegramId')}</span>
-          <bdi dir="ltr" className="tnum font-mono font-medium text-ink">
-            {formattedId}
+          <bdi dir="ltr" className="tnum font-medium text-ink">
+            #{formattedId}
           </bdi>
           {isCopied ? (
             <Check className="w-3.5 h-3.5 text-ok-fg shrink-0" />
