@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Sliders } from 'lucide-react';
+import { Info, Sliders } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import type {
   CreatePriceOverridePayload,
@@ -21,6 +23,7 @@ interface PriceOverrideModalProps {
   mode: 'create' | 'edit';
   initialOverride: CustomPriceOverrideDto | null;
   existingOverrides: readonly CustomPriceOverrideDto[];
+  defaultDays?: number;
   isSubmitting: boolean;
   onClose: () => void;
   onCreate: (payload: CreatePriceOverridePayload) => Promise<void>;
@@ -32,12 +35,15 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
   mode,
   initialOverride,
   existingOverrides,
+  defaultDays = 30,
   isSubmitting,
   onClose,
   onCreate,
   onUpdate,
 }) => {
   const { t } = useLanguage();
+  const { formatNumber } = useFormatters();
+  const daysDisplay = formatNumber(defaultDays);
   const [values, setValues] = useState<PriceOverrideFormValues>({
     id: '',
     minGb: '',
@@ -234,42 +240,59 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
           <p className="text-xs text-danger -mt-2">{fieldError('gbRange')}</p>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label
-              htmlFor="override-min-days"
-              className="block text-xs font-semibold text-ink-soft mb-1"
-            >
-              {t('admin.packages.overrides.minDaysLabel')}
-            </label>
-            <Input
-              id="override-min-days"
-              dir="ltr"
-              inputMode="numeric"
-              className="tnum"
-              value={values.minDays}
-              placeholder={t('admin.packages.overrides.optionalPlaceholder')}
-              onChange={(e) => setValues((prev) => ({ ...prev, minDays: e.target.value }))}
-            />
+        {/* Duration bounds — dashed/dimmed while buyers stay on fixed Default Duration */}
+        <div className="p-3 rounded-ctl border border-dashed border-line-strong bg-surface-2/50 opacity-90 space-y-2.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[11px] font-semibold text-ink-soft">
+              {t('admin.packages.overrides.daysBoundsDimTitle')}
+            </span>
+            <Badge variant="outline" size="xs" className="border-dashed">
+              {t('admin.packages.custom.fixedDaysStatusBadge')}
+            </Badge>
           </div>
 
-          <div>
-            <label
-              htmlFor="override-max-days"
-              className="block text-xs font-semibold text-ink-soft mb-1"
-            >
-              {t('admin.packages.overrides.maxDaysLabel')}
-            </label>
-            <Input
-              id="override-max-days"
-              dir="ltr"
-              inputMode="numeric"
-              className="tnum"
-              value={values.maxDays}
-              placeholder={t('admin.packages.overrides.optionalPlaceholder')}
-              onChange={(e) => setValues((prev) => ({ ...prev, maxDays: e.target.value }))}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="override-min-days"
+                className="block text-xs font-semibold text-ink-soft mb-1"
+              >
+                {t('admin.packages.overrides.minDaysLabel')}
+              </label>
+              <Input
+                id="override-min-days"
+                dir="ltr"
+                inputMode="numeric"
+                className="tnum"
+                value={values.minDays}
+                placeholder={t('admin.packages.overrides.optionalPlaceholder')}
+                onChange={(e) => setValues((prev) => ({ ...prev, minDays: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="override-max-days"
+                className="block text-xs font-semibold text-ink-soft mb-1"
+              >
+                {t('admin.packages.overrides.maxDaysLabel')}
+              </label>
+              <Input
+                id="override-max-days"
+                dir="ltr"
+                inputMode="numeric"
+                className="tnum"
+                value={values.maxDays}
+                placeholder={t('admin.packages.overrides.optionalPlaceholder')}
+                onChange={(e) => setValues((prev) => ({ ...prev, maxDays: e.target.value }))}
+              />
+            </div>
           </div>
+
+          <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed">
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
+            <span>{t('admin.packages.overrides.daysBoundsDimHint', { days: daysDisplay })}</span>
+          </p>
         </div>
         {fieldError('daysRange') && (
           <p className="text-xs text-danger -mt-2">{fieldError('daysRange')}</p>
@@ -291,12 +314,12 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
             placeholder={t('admin.packages.overrides.optionalPlaceholder')}
             onChange={(e) => setValues((prev) => ({ ...prev, price: e.target.value }))}
           />
-          <p className="text-2xs text-ink-muted mt-1">
+          <p className="text-[11px] text-ink-muted mt-1">
             {t('admin.packages.overrides.fixedPriceHint')}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
           <div>
             <label
               htmlFor="override-per-gb"
@@ -315,13 +338,15 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
             />
           </div>
 
-          <div>
-            <label
-              htmlFor="override-per-day"
-              className="block text-xs font-semibold text-ink-soft mb-1"
-            >
-              {t('admin.packages.overrides.pricePerDayLabel')}
-            </label>
+          <div className="p-2.5 rounded-ctl border border-dashed border-line-strong bg-surface-2/50 opacity-90 space-y-1.5">
+            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+              <label htmlFor="override-per-day" className="text-xs font-semibold text-ink-soft">
+                {t('admin.packages.overrides.pricePerDayLabel')}
+              </label>
+              <Badge variant="outline" size="xs" className="border-dashed">
+                {t('admin.packages.custom.fixedDaysStatusBadge')}
+              </Badge>
+            </div>
             <Input
               id="override-per-day"
               dir="ltr"
@@ -331,6 +356,9 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
               placeholder={t('admin.packages.overrides.optionalPlaceholder')}
               onChange={(e) => setValues((prev) => ({ ...prev, pricePerDay: e.target.value }))}
             />
+            <p className="text-[11px] text-ink-muted leading-relaxed">
+              {t('admin.packages.overrides.pricePerDayDimHint', { days: daysDisplay })}
+            </p>
           </div>
         </div>
         {fieldError('pricing') && (

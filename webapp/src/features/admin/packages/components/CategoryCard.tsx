@@ -34,29 +34,41 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   const { primary, secondary } = formatBilingualPackageName(category.name, locale);
 
   return (
-    <Card padding="md" className={!category.enabled ? 'opacity-80 bg-surface-2/60' : ''}>
-      <div className="flex items-start justify-between gap-2">
+    <Card
+      padding="md"
+      className={`transition-all ${
+        category.enabled ? 'hover:border-line-strong' : 'opacity-80 bg-surface-2/60 border-line'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-7 h-7 rounded-ctl bg-surface-2 border border-line flex items-center justify-center text-sm shrink-0">
+            <span className="w-8 h-8 rounded-ctl bg-surface-2 border border-line flex items-center justify-center text-base shrink-0">
               {category.icon ? category.icon : <Folder className="w-4 h-4 text-brand" />}
             </span>
-            <h3 className="text-sm font-bold text-ink truncate">{primary}</h3>
-            <Badge variant={category.enabled ? 'success' : 'neutral'} size="xs" dot>
-              {category.enabled
-                ? t('admin.packages.card.activeBadge')
-                : t('admin.packages.card.inactiveBadge')}
-            </Badge>
-            <Badge variant="info" size="xs">
-              {t('admin.packages.categories.packageCount', {
-                count: formatNumber(category.linkedPackagesCount),
-              })}
-            </Badge>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="text-sm font-bold text-ink truncate">{primary}</h3>
+                <Badge variant={category.enabled ? 'success' : 'neutral'} size="xs" dot>
+                  {category.enabled
+                    ? t('admin.packages.card.activeBadge')
+                    : t('admin.packages.card.inactiveBadge')}
+                </Badge>
+                <Badge variant={category.linkedPackagesCount > 0 ? 'info' : 'neutral'} size="xs">
+                  {category.linkedPackagesCount > 0
+                    ? t('admin.packages.categories.packageCount', {
+                        count: formatNumber(category.linkedPackagesCount),
+                      })
+                    : t('admin.packages.categories.packageCountZero')}
+                </Badge>
+              </div>
+              {secondary && (
+                <p className="text-[11px] text-ink-muted mt-0.5 truncate">{secondary}</p>
+              )}
+            </div>
           </div>
 
-          {secondary && <p className="text-2xs text-ink-muted mt-1 truncate">{secondary}</p>}
-
-          <p className="text-xs text-ink-soft mt-1.5 line-clamp-2">
+          <p className="text-xs text-ink-soft mt-2 line-clamp-2">
             {category.description || t('admin.packages.categories.noDescription')}
           </p>
         </div>
@@ -75,7 +87,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
       </div>
 
       <div className="mt-3 pt-2.5 border-t border-line flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap text-2xs text-ink-muted">
+        <div className="flex items-center gap-2 flex-wrap text-[11px] text-ink-muted">
           <span
             dir="ltr"
             className="font-mono bg-surface-2 border border-line rounded px-1.5 py-0.5"

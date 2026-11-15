@@ -34,19 +34,14 @@ export const CategoriesListSection: React.FC<CategoriesListSectionProps> = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="space-y-1">
         <SectionHeader
           title={t('admin.packages.categories.title')}
           count={categories.length}
           icon={<FolderOpen className="w-4 h-4 text-brand" />}
         />
-        <Button variant="primary" size="sm" onClick={onNewCategory}>
-          <Plus className="w-4 h-4" />
-          <span>{t('admin.packages.categories.newCategory')}</span>
-        </Button>
+        <p className="text-xs text-ink-muted">{t('admin.packages.categories.subtitle')}</p>
       </div>
-
-      <p className="text-xs text-ink-muted">{t('admin.packages.categories.subtitle')}</p>
 
       {uncategorizedCount > 0 && (
         <div className="p-2.5 rounded-ctl bg-surface border border-line text-xs text-ink-soft flex items-center gap-2">

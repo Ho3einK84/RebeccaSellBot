@@ -109,37 +109,24 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
 
       {/* Search & Filters Card */}
       <div className="bg-surface border border-line rounded-card p-3 space-y-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="w-4 h-4 text-ink-muted absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <Input
-              value={criteria.search}
-              placeholder={t('admin.packages.filters.searchPlaceholder')}
-              className="ps-9 pe-8 text-xs"
-              onChange={(e) => setCriteria((prev) => ({ ...prev, search: e.target.value }))}
-            />
-            {criteria.search && (
-              <button
-                type="button"
-                onClick={() => setCriteria((prev) => ({ ...prev, search: '' }))}
-                aria-label={t('admin.packages.filters.clearSearch')}
-                className="absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={atLimit}
-            onClick={onNewPackage}
-            className="shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{t('admin.packages.actions.newPackage')}</span>
-          </Button>
+        <div className="relative">
+          <Search className="w-4 h-4 text-ink-muted absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Input
+            value={criteria.search}
+            placeholder={t('admin.packages.filters.searchPlaceholder')}
+            className="ps-9 pe-8 text-xs"
+            onChange={(e) => setCriteria((prev) => ({ ...prev, search: e.target.value }))}
+          />
+          {criteria.search && (
+            <button
+              type="button"
+              onClick={() => setCriteria((prev) => ({ ...prev, search: '' }))}
+              aria-label={t('admin.packages.filters.clearSearch')}
+              className="absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -193,7 +180,7 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
           </select>
         </div>
 
-        <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5 text-2xs text-ink-muted">
+        <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5 text-[11px] text-ink-muted">
           <span className="tnum">
             {t('admin.packages.filters.countShowing', {
               shown: formatNumber(filteredPackages.length),
@@ -206,7 +193,7 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
               <button
                 type="button"
                 onClick={resetFilters}
-                className="text-brand font-semibold hover:underline"
+                className="text-brand-fg font-semibold hover:underline"
               >
                 {t('admin.packages.empty.resetFilters')}
               </button>
@@ -241,24 +228,32 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
         />
       ) : (
         <div className="space-y-2.5">
-          {filteredPackages.map((pkg, idx) => (
-            <PackageCard
-              key={pkg.id}
-              pkg={pkg}
-              index={idx}
-              totalCount={packages.length}
-              reorderEnabled={!hasActiveFilters}
-              categoriesById={categoriesById}
-              targetsById={targetsById}
-              isToggling={isTogglingPackage && togglingPackageId === pkg.id}
-              isReordering={isReorderingPackages}
-              onToggle={onTogglePackage}
-              onMove={onMovePackage}
-              onEdit={onEditPackage}
-              onClone={onClonePackage}
-              onDelete={onDeletePackage}
-            />
-          ))}
+          {filteredPackages.map((pkg, idx) => {
+            const catalogIndex = hasActiveFilters
+              ? Math.max(
+                  0,
+                  packages.findIndex((item) => item.id === pkg.id)
+                )
+              : idx;
+            return (
+              <PackageCard
+                key={pkg.id}
+                pkg={pkg}
+                index={catalogIndex}
+                totalCount={packages.length}
+                reorderEnabled={!hasActiveFilters}
+                categoriesById={categoriesById}
+                targetsById={targetsById}
+                isToggling={isTogglingPackage && togglingPackageId === pkg.id}
+                isReordering={isReorderingPackages}
+                onToggle={onTogglePackage}
+                onMove={onMovePackage}
+                onEdit={onEditPackage}
+                onClone={onClonePackage}
+                onDelete={onDeletePackage}
+              />
+            );
+          })}
         </div>
       )}
     </div>

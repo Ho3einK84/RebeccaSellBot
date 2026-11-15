@@ -386,17 +386,25 @@ body {
   transition: transform 160ms var(--ease-out-calm);
 }
 
-.rs-switch:checked {
+.rs-switch:checked,
+.rs-switch[aria-checked='true'] {
   background-color: var(--rs-brand);
   border-color: var(--rs-brand);
 }
 
-[dir='ltr'] .rs-switch:checked::after {
+[dir='ltr'] .rs-switch:checked::after,
+[dir='ltr'] .rs-switch[aria-checked='true']::after {
   transform: translateX(18px);
 }
 
-[dir='rtl'] .rs-switch:checked::after {
+[dir='rtl'] .rs-switch:checked::after,
+[dir='rtl'] .rs-switch[aria-checked='true']::after {
   transform: translateX(-18px);
+}
+
+.rs-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .rs-switch:focus-visible {

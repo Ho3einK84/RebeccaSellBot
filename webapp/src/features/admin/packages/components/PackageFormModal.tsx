@@ -275,7 +275,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
               <button
                 type="button"
                 onClick={handleAutoGenerateId}
-                className="inline-flex items-center gap-1 text-2xs font-medium text-brand hover:underline"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-fg hover:underline"
               >
                 <Wand2 className="w-3 h-3" />
                 {t('admin.packages.form.autoIdLabel')}
@@ -291,7 +291,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
             className="font-mono text-xs"
             onChange={(e) => setValues((prev) => ({ ...prev, id: e.target.value }))}
           />
-          <p className="text-2xs text-ink-muted mt-1">{t('admin.packages.form.idHint')}</p>
+          <p className="text-[11px] text-ink-muted mt-1">{t('admin.packages.form.idHint')}</p>
           {fieldError('id') && <p className="text-xs text-danger mt-1">{fieldError('id')}</p>}
         </div>
 
@@ -309,7 +309,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
             placeholder={t('admin.packages.form.namePlaceholder')}
             onChange={(e) => setValues((prev) => ({ ...prev, name: e.target.value }))}
           />
-          <p className="text-2xs text-ink-muted mt-1">{t('admin.packages.form.nameHint')}</p>
+          <p className="text-[11px] text-ink-muted mt-1">{t('admin.packages.form.nameHint')}</p>
           {fieldError('name') && <p className="text-xs text-danger mt-1">{fieldError('name')}</p>}
         </div>
 
@@ -352,6 +352,22 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
               placeholder={t('admin.packages.form.daysPlaceholder')}
               onChange={(e) => setValues((prev) => ({ ...prev, durationDays: e.target.value }))}
             />
+            <div className="flex items-center gap-1 flex-wrap mt-1.5">
+              {(['30', '60', '90', '365'] as const).map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setValues((prev) => ({ ...prev, durationDays: days }))}
+                  className={`px-1.5 py-0.5 rounded border text-[11px] font-medium tnum transition-colors ${
+                    values.durationDays === days
+                      ? 'bg-brand-soft border-brand/40 text-brand-fg'
+                      : 'bg-surface-2 border-line text-ink-muted hover:text-ink'
+                  }`}
+                >
+                  {t('admin.packages.form.presetDays', { days })}
+                </button>
+              ))}
+            </div>
             {fieldError('durationDays') && (
               <p className="text-xs text-danger mt-1">{fieldError('durationDays')}</p>
             )}
@@ -489,7 +505,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
               )}
             </select>
             {values.panelId && (
-              <p className="text-2xs text-ink-muted mt-1">
+              <p className="text-[11px] text-ink-muted mt-1">
                 {t('admin.packages.form.serviceRequiredHint')}
               </p>
             )}
@@ -510,7 +526,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
             <div className="text-xs font-semibold text-ink">
               {t('admin.packages.form.enabledLabel')}
             </div>
-            <div className="text-2xs text-ink-muted mt-0.5">
+            <div className="text-[11px] text-ink-muted mt-0.5">
               {t('admin.packages.form.enabledHint')}
             </div>
           </div>

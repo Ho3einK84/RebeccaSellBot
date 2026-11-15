@@ -195,7 +195,26 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
               placeholder={t('admin.packages.categories.iconPlaceholder')}
               onChange={(e) => setValues((prev) => ({ ...prev, icon: e.target.value }))}
             />
-            <p className="text-2xs text-ink-muted mt-1">
+            <div className="flex items-center gap-1 flex-wrap mt-1.5">
+              <span className="text-[11px] text-ink-muted">
+                {t('admin.packages.categories.iconPresetsLabel')}
+              </span>
+              {(['⚡', '💎', '🚀', '🎮', '🛡', '🌐'] as const).map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setValues((prev) => ({ ...prev, icon: emoji }))}
+                  className={`px-1.5 py-0.5 rounded border text-xs transition-colors ${
+                    values.icon === emoji
+                      ? 'bg-brand-soft border-brand/40 text-ink'
+                      : 'bg-surface-2 border-line hover:border-line-strong'
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-ink-muted mt-1">
               {t('admin.packages.categories.iconHint')}
             </p>
             {fieldError('icon') && <p className="text-xs text-danger mt-1">{fieldError('icon')}</p>}
@@ -248,7 +267,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
             <div className="text-xs font-semibold text-ink">
               {t('admin.packages.categories.enabledLabel')}
             </div>
-            <div className="text-2xs text-ink-muted mt-0.5">
+            <div className="text-[11px] text-ink-muted mt-0.5">
               {t('admin.packages.categories.enabledHint')}
             </div>
           </div>

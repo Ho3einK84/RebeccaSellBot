@@ -688,6 +688,8 @@ export const fa = {
         customEnabled: 'فعال',
         customDisabled: 'غیرفعال',
         customRatesHint: '{perGb} ت/گیگ · {perDay} ت/روز',
+        customRateOnlyHint: '{perGb} ت/گیگ پایه · مدت ثابت {days} روز',
+        customRatePlusDayHint: '{perGb} ت/گیگ · +{perDay} ت/روز (روی مدت ثابت)',
         rulesCount: 'قوانین تعرفه',
         rulesHint: '{tiers} پله · {overrides} قاعده',
       },
@@ -696,6 +698,7 @@ export const fa = {
         newCategory: 'دسته جدید',
         newTier: 'پله جدید',
         newOverride: 'قاعده جدید',
+        openSimulator: 'شبیه‌ساز قیمت',
         edit: 'ویرایش',
         clone: 'کپی',
         delete: 'حذف',
@@ -778,6 +781,8 @@ export const fa = {
         gbPlaceholder: '۱ تا ۱۰۰۰۰',
         daysLabel: 'مدت اعتبار (روز)',
         daysPlaceholder: '۱ تا ۳۶۵۰',
+        durationPresetsLabel: 'انتخاب سریع مدت:',
+        presetDays: '{days} روز',
         priceLabel: 'قیمت (تومان)',
         pricePlaceholder: 'حداقل ۱ تومان',
         liveUnitPrice: 'نرخ موثر هر گیگابایت: {price} تومان',
@@ -810,6 +815,7 @@ export const fa = {
         emptyTitle: 'هیچ دسته‌بندی تعریف نشده است',
         emptyDesc: 'با ساخت دسته‌بندی می‌توانید بسته‌های ویژه، اقتصادی یا گیمینگ را جدا کنید.',
         packageCount: '{count} بسته',
+        packageCountZero: 'بدون بسته',
         displayOrderLabel: 'ترتیب نمایش: {order}',
         noDescription: 'بدون توضیحات',
         uncategorizedBanner: '{count} بسته در حال حاضر بدون دسته‌بندی است.',
@@ -820,6 +826,7 @@ export const fa = {
         iconLabel: 'آیکون / ایموجی (اختیاری)',
         iconPlaceholder: 'مثال: ⚡',
         iconHint: 'حداکثر ۳۲ کاراکتر برای نمایش کنار عنوان دسته',
+        iconPresetsLabel: 'پیشنهاد سریع:',
         orderLabel: 'ترتیب نمایش',
         orderPlaceholder: '۰ به بالا',
         descLabel: 'توضیحات کوتاه (اختیاری)',
@@ -838,6 +845,9 @@ export const fa = {
         enabledHint: 'در صورت غیرفعال‌سازی، تب حجم دلخواه در ربات و وب‌اپ بسته می‌شود.',
         pricePerGbLabel: 'نرخ پایه هر گیگابایت (تومان)',
         pricePerDayLabel: 'نرخ پایه هر روز اعتبار (تومان)',
+        fixedDaysStatusBadge: 'فقط روی مدت ثابت',
+        pricePerDayExplain:
+          'کاربران در ربات و وب‌اپ فعلاً نمی‌توانند مدت دلخواه انتخاب کنند و مدت سرویس روی «مدت پیش‌فرض ({days} روز)» قفل است. بنابراین مقدار نرخ روزانه فقط به عنوان هزینه ثابت ({days} × نرخ روز) به قیمت کل اضافه می‌شود؛ برای تعرفه صرفاً حجمی آن را روی ۰ بگذارید.',
         zeroPriceWarning:
           'نرخ پایه هر گیگابایت برابر صفر است؛ مطمئن شوید پله‌های حجمی یا قواعد سفارشی قیمت را پوشش می‌دهند.',
         zeroBothRatesWarning:
@@ -845,16 +855,21 @@ export const fa = {
         minGbLabel: 'حداقل حجم (گیگ)',
         maxGbLabel: 'حداکثر حجم (گیگ)',
         defaultDaysLabel: 'مدت پیش‌فرض (روز)',
+        defaultDaysLiveBadge: 'قفل برای مشتری',
+        defaultDaysHint:
+          'مبنای ثابت مدت زمان تمام سفارش‌های حجم دلخواه در ربات تلگرام و پورتال وب.',
         webDaysWarning:
           'هشدار پورتال وب: محاسبه و خرید بسته دلخواه برای بیش از ۳۶۵ روز در وب‌اپ و ربات مسدود می‌شود؛ بازه پیشنهادی ۱ تا ۳۶۵ روز است.',
         targetPanelLabel: 'پنل پیش‌فرض حجم دلخواه',
         targetServiceLabel: 'سرویس پیش‌فرض حجم دلخواه',
+        dirtyNotice: 'تغییرات ذخیره نشده است',
         saveSettings: 'ذخیره تنظیمات حجم دلخواه',
         savingSettings: 'در حال ذخیره...',
       },
       tiers: {
         title: 'پله‌های حجمی (تخفیف پلکانی)',
         subtitle: 'تعیین نرخ ثابت هر گیگ یا درصد تخفیف متناسب با حجم درخواستی',
+        liveBadge: 'فعال در ربات و وب‌اپ',
         addButton: 'افزودن پله',
         emptyTitle: 'پله حجمی ثبت نشده است',
         emptyDesc: 'با تعریف پله‌های حجمی به کاربران پرمصرف نرخ یا تخفیف پلکانی ارائه دهید.',
@@ -881,6 +896,14 @@ export const fa = {
       overrides: {
         title: 'قواعد استثنای قیمت (Price Overrides)',
         subtitle: 'تعیین قیمت ثابت یا نرخ اختصاصی برای بازه‌های خاص حجم و مدت',
+        partialActiveBadge: 'بخشی وابسته به مدت ثابت',
+        fixedDaysScopeNote:
+          'شرط‌های حجمی (حداقل/حداکثر گیگ) و مبالغ «قیمت ثابت کل» یا «نرخ هر گیگ» همین الان در ربات و وب‌اپ اعمال می‌شوند؛ اما شروط بازه روز و «نرخ هر روز» تا زمان فعال‌شدن انتخاب روز توسط مشتری، فقط با «مدت پیش‌فرض ({days} روز)» سنجیده می‌شوند.',
+        daysBoundsDimTitle: 'فیلدهای وابسته به انتخاب روز (فعلاً روی مدت ثابت بررسی می‌شوند)',
+        daysBoundsDimHint:
+          'از آن‌جا که کاربر فعلاً امکان تغییر تعداد روز در ربات و وب‌اپ ندارد، شرط حداقل/حداکثر روز فقط با مقدار «مدت پیش‌فرض» ({days} روز) مقایسه می‌شود.',
+        pricePerDayDimHint:
+          'نرخ جایگزین هر روز نیز فعلاً فقط در «مدت پیش‌فرض» ({days} روز) ضرب می‌شود.',
         priorityNotice:
           'ترتیب مهم است: اولین قاعده‌ای که با حجم و مدت سفارش منطبق باشد اعمال می‌شود.',
         addButton: 'افزودن قاعده',
@@ -913,6 +936,9 @@ export const fa = {
       policies: {
         title: 'نمایش فروشگاه و سیاست‌های اشتراک',
         subtitle: 'نحوه نمایش نام بسته‌ها و آستانه‌های هشدار مصرف، انقضا و بازگشت وجه',
+        liveBadge: 'فعال در ربات و سیستم',
+        telegramOnlyBadge: 'فقط منوی ربات تلگرام',
+        dirtyNotice: 'تغییرات ذخیره نشده است',
         displayModeLabel: 'فرمت نمایش دکمه بسته در ربات',
         displayModeSpecs: 'مشخصات کامل (حجم، مدت و قیمت)',
         displayModeName: 'فقط نام و قیمت بسته',
@@ -930,6 +956,10 @@ export const fa = {
         subtitle: 'آزمایش قیمت نهایی و قانون اعمال‌شده پیش از انتشار برای مشتریان',
         gbLabel: 'حجم آزمایشی (گیگابایت)',
         daysLabel: 'مدت آزمایشی (روز)',
+        resetToDefaultDays: 'بازنشانی به {days} روز',
+        fixedDaysPreviewBadge: 'پیش‌نمایش ادمین',
+        fixedDaysPreviewHint:
+          'کاربران در خرید واقعی فعلاً با «مدت پیش‌فرض» ({days} روز) قیمت‌گذاری می‌شوند؛ این فیلد امکان تست قواعد چندروزه را برای ادمین فراهم می‌کند.',
         calculateButton: 'محاسبه قیمت',
         calculating: 'در حال محاسبه...',
         totalPriceLabel: 'قیمت نهایی محاسبه‌شده',
@@ -939,6 +969,9 @@ export const fa = {
         sourceTier: 'پله حجمی: {id}',
         sourceOverride: 'قاعده استثنا: {id}',
         discountSaved: 'تخفیف / تعدیل پلکانی: {amount} تومان',
+        savingsVsBase: '{amount} تومان کمتر از تعرفه پایه',
+        surchargeVsBase: '{amount} تومان بالاتر از تعرفه پایه',
+        presetSample: '{gb} گیگ',
         volumeSubtotalLabel: 'سهم حجم ({rate} ت/گیگ)',
         durationSubtotalLabel: 'سهم مدت ({rate} ت/روز)',
         warningDisabled:

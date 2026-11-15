@@ -690,6 +690,8 @@ export const en: DeepPartial<TranslationSchema> = {
         customEnabled: 'Enabled',
         customDisabled: 'Disabled',
         customRatesHint: '{perGb} T/GB · {perDay} T/day',
+        customRateOnlyHint: '{perGb} T/GB base · fixed {days}d',
+        customRatePlusDayHint: '{perGb} T/GB · +{perDay} T/d (fixed days)',
         rulesCount: 'Pricing Rules',
         rulesHint: '{tiers} tiers · {overrides} overrides',
       },
@@ -698,6 +700,7 @@ export const en: DeepPartial<TranslationSchema> = {
         newCategory: 'New Category',
         newTier: 'New Tier',
         newOverride: 'New Override',
+        openSimulator: 'Price Simulator',
         edit: 'Edit',
         clone: 'Clone',
         delete: 'Delete',
@@ -780,6 +783,8 @@ export const en: DeepPartial<TranslationSchema> = {
         gbPlaceholder: '1 to 10000',
         daysLabel: 'Duration (Days)',
         daysPlaceholder: '1 to 3650',
+        durationPresetsLabel: 'Quick duration:',
+        presetDays: '{days}d',
         priceLabel: 'Price (Toman)',
         pricePlaceholder: 'Minimum 1 Toman',
         liveUnitPrice: 'Effective rate: {price} Toman/GB',
@@ -812,6 +817,7 @@ export const en: DeepPartial<TranslationSchema> = {
         emptyTitle: 'No categories created yet',
         emptyDesc: 'Organize plans into groups like Economy, VIP, or Gaming.',
         packageCount: '{count} plans',
+        packageCountZero: 'No plans',
         displayOrderLabel: 'Order: {order}',
         noDescription: 'No description',
         uncategorizedBanner: '{count} plans are currently uncategorized.',
@@ -822,6 +828,7 @@ export const en: DeepPartial<TranslationSchema> = {
         iconLabel: 'Icon / Emoji (optional)',
         iconPlaceholder: 'e.g. ⚡',
         iconHint: 'Up to 32 characters displayed beside the category name',
+        iconPresetsLabel: 'Quick picks:',
         orderLabel: 'Display Order',
         orderPlaceholder: '0 or higher',
         descLabel: 'Short Description (optional)',
@@ -840,6 +847,9 @@ export const en: DeepPartial<TranslationSchema> = {
         enabledHint: 'When disabled, the custom builder tab is hidden in the bot and web app.',
         pricePerGbLabel: 'Base Price per GB (Toman)',
         pricePerDayLabel: 'Base Price per Day (Toman)',
+        fixedDaysStatusBadge: 'Fixed-days only',
+        pricePerDayExplain:
+          'Customers cannot pick arbitrary durations in the Bot or User Webapp yet — validity stays locked to Default Duration ({days} days). Any rate here adds a flat ({days} × per-day) surcharge; keep at 0 for volume-only pricing.',
         zeroPriceWarning:
           'Base price per GB is 0; make sure volume tiers or overrides define pricing.',
         zeroBothRatesWarning:
@@ -847,16 +857,21 @@ export const en: DeepPartial<TranslationSchema> = {
         minGbLabel: 'Minimum Volume (GB)',
         maxGbLabel: 'Maximum Volume (GB)',
         defaultDaysLabel: 'Default Duration (Days)',
+        defaultDaysLiveBadge: 'Fixed for buyers',
+        defaultDaysHint:
+          'Fixed validity assigned to every custom-volume order in both Telegram Bot and User Webapp.',
         webDaysWarning:
           'Webapp notice: storefront quote and custom checkout reject durations above 365 days; 1–365 days is recommended.',
         targetPanelLabel: 'Default Custom Target Panel',
         targetServiceLabel: 'Default Custom Target Service',
+        dirtyNotice: 'Unsaved changes',
         saveSettings: 'Save Custom Settings',
         savingSettings: 'Saving...',
       },
       tiers: {
         title: 'Volume Pricing Tiers',
         subtitle: 'Set a fixed per-GB rate or percentage discount by volume bracket',
+        liveBadge: 'Live in Bot & Web',
         addButton: 'Add Tier',
         emptyTitle: 'No volume tiers configured',
         emptyDesc: 'Reward higher-volume custom orders with tiered rates or discounts.',
@@ -883,6 +898,14 @@ export const en: DeepPartial<TranslationSchema> = {
       overrides: {
         title: 'Custom Price Overrides',
         subtitle: 'Override total price or unit rates for specific GB and day ranges',
+        partialActiveBadge: 'Partial · Fixed-days mode',
+        fixedDaysScopeNote:
+          'Volume bounds and Fixed Total / Per-GB prices apply live today across the Bot and User Webapp. Day bounds and Per-Day rates only check against the fixed Default Duration ({days} days) until user-selectable duration launches.',
+        daysBoundsDimTitle: 'Duration-Scoped Fields (checked against fixed Default Duration only)',
+        daysBoundsDimHint:
+          'Since buyers cannot select custom days in the Bot or Webapp yet, min/max days only match against Default Duration ({days} days).',
+        pricePerDayDimHint:
+          'Override per-day rate also multiplies only by the fixed Default Duration ({days} days).',
         priorityNotice:
           'Order matters: the first matching override in this list wins and determines final pricing.',
         addButton: 'Add Override',
@@ -916,6 +939,9 @@ export const en: DeepPartial<TranslationSchema> = {
         title: 'Storefront Display & Subscription Policies',
         subtitle:
           'Bot button formatting and thresholds for low traffic, expiry alerts, and refunds',
+        liveBadge: 'Live in Bot & Jobs',
+        telegramOnlyBadge: 'Telegram Bot Only',
+        dirtyNotice: 'Unsaved changes',
         displayModeLabel: 'Bot Plan Button Display Mode',
         displayModeSpecs: 'Full Specs (GB, days & price)',
         displayModeName: 'Name & Price Only',
@@ -933,6 +959,10 @@ export const en: DeepPartial<TranslationSchema> = {
         subtitle: 'Preview the exact final price and matched rule before publishing changes',
         gbLabel: 'Test Volume (GB)',
         daysLabel: 'Test Duration (Days)',
+        resetToDefaultDays: 'Reset to {days}d',
+        fixedDaysPreviewBadge: 'Admin preview',
+        fixedDaysPreviewHint:
+          'Live customer checkouts currently fix duration at Default Duration ({days} days). Changing days here previews multi-day rules for admins.',
         calculateButton: 'Calculate Quote',
         calculating: 'Calculating...',
         totalPriceLabel: 'Calculated Total Price',
@@ -942,6 +972,9 @@ export const en: DeepPartial<TranslationSchema> = {
         sourceTier: 'Volume Tier: {id}',
         sourceOverride: 'Price Override: {id}',
         discountSaved: 'Tier / Rule Adjustment: {amount} Toman',
+        savingsVsBase: '{amount} T less than base rate',
+        surchargeVsBase: '{amount} T above base rate',
+        presetSample: '{gb} GB',
         volumeSubtotalLabel: 'Volume part ({rate} T/GB)',
         durationSubtotalLabel: 'Duration part ({rate} T/day)',
         warningDisabled: 'Custom builder is currently disabled; preview shows formula calculation.',

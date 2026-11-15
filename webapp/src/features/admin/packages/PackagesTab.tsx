@@ -260,15 +260,23 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center">
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={packages.length >= (packagesData?.bounds.maxPackages ?? 50)}
-            onClick={openCreatePackage}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>{t('admin.packages.actions.newPackage')}</span>
-          </Button>
+          {subTab === 'packages' && (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={packages.length >= (packagesData?.bounds.maxPackages ?? 50)}
+              onClick={openCreatePackage}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{t('admin.packages.actions.newPackage')}</span>
+            </Button>
+          )}
+          {subTab === 'categories' && (
+            <Button variant="primary" size="sm" onClick={openCreateCategory}>
+              <Plus className="w-3.5 h-3.5" />
+              <span>{t('admin.packages.actions.newCategory')}</span>
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -319,7 +327,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
               <div className="text-lg font-semibold tnum text-ink">
                 <bdi dir="ltr">{formatNumber(kpis.activePackages)}</bdi>
               </div>
-              <div className="text-2xs text-ink-muted tnum">
+              <div className="text-[11px] text-ink-muted tnum truncate">
                 {t('admin.packages.kpi.activePackagesHint', {
                   total: formatNumber(kpis.totalPackages),
                 })}
@@ -334,7 +342,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
               <div className="text-lg font-semibold tnum text-ink">
                 <bdi dir="ltr">{formatNumber(kpis.totalCategories)}</bdi>
               </div>
-              <div className="text-2xs text-ink-muted tnum">
+              <div className="text-[11px] text-ink-muted tnum truncate">
                 {t('admin.packages.kpi.categoriesHint', {
                   active: formatNumber(kpis.activeCategories),
                 })}
@@ -347,7 +355,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
                 <span className="truncate">{t('admin.packages.kpi.customStatus')}</span>
               </div>
               <div
-                className={`text-sm font-bold ${
+                className={`text-sm font-bold pt-0.5 ${
                   kpis.customEnabled ? 'text-ok-fg' : 'text-ink-muted'
                 }`}
               >
@@ -355,11 +363,16 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
                   ? t('admin.packages.kpi.customEnabled')
                   : t('admin.packages.kpi.customDisabled')}
               </div>
-              <div className="text-2xs text-ink-muted tnum truncate">
-                {t('admin.packages.kpi.customRatesHint', {
-                  perGb: formatMoney(kpis.pricePerGb),
-                  perDay: formatMoney(kpis.pricePerDay),
-                })}
+              <div className="text-[11px] text-ink-muted tnum truncate">
+                {kpis.pricePerDay > 0
+                  ? t('admin.packages.kpi.customRatePlusDayHint', {
+                      perGb: formatMoney(kpis.pricePerGb),
+                      perDay: formatMoney(kpis.pricePerDay),
+                    })
+                  : t('admin.packages.kpi.customRateOnlyHint', {
+                      perGb: formatMoney(kpis.pricePerGb),
+                      days: formatNumber(customSettings.defaultDays),
+                    })}
               </div>
             </Card>
 
@@ -371,7 +384,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
               <div className="text-lg font-semibold tnum text-ink">
                 <bdi dir="ltr">{formatNumber(kpis.tiersCount + kpis.overridesCount)}</bdi>
               </div>
-              <div className="text-2xs text-ink-muted tnum truncate">
+              <div className="text-[11px] text-ink-muted tnum truncate">
                 {t('admin.packages.kpi.rulesHint', {
                   tiers: formatNumber(kpis.tiersCount),
                   overrides: formatNumber(kpis.overridesCount),
@@ -393,12 +406,21 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
               onClick={() => handleSwitchSubTab('packages')}
               className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-ctl text-xs font-semibold transition-colors ${
                 subTab === 'packages'
-                  ? 'bg-brand text-white shadow-sm'
+                  ? 'bg-brand text-brand-ink shadow-sm'
                   : 'text-ink-soft hover:bg-surface-2'
               }`}
             >
               <Package className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">{t('admin.packages.subtabs.packages')}</span>
+              <span
+                className={`text-[11px] px-1.5 py-0.5 rounded-full tnum leading-none ${
+                  subTab === 'packages'
+                    ? 'bg-black/15 text-brand-ink'
+                    : 'bg-surface-2 text-ink-muted'
+                }`}
+              >
+                {formatNumber(packages.length)}
+              </span>
             </button>
 
             <button
@@ -408,12 +430,21 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
               onClick={() => handleSwitchSubTab('categories')}
               className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-ctl text-xs font-semibold transition-colors ${
                 subTab === 'categories'
-                  ? 'bg-brand text-white shadow-sm'
+                  ? 'bg-brand text-brand-ink shadow-sm'
                   : 'text-ink-soft hover:bg-surface-2'
               }`}
             >
               <FolderOpen className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">{t('admin.packages.subtabs.categories')}</span>
+              <span
+                className={`text-[11px] px-1.5 py-0.5 rounded-full tnum leading-none ${
+                  subTab === 'categories'
+                    ? 'bg-black/15 text-brand-ink'
+                    : 'bg-surface-2 text-ink-muted'
+                }`}
+              >
+                {formatNumber(categories.length)}
+              </span>
             </button>
 
             <button
@@ -423,12 +454,21 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
               onClick={() => handleSwitchSubTab('pricing')}
               className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-ctl text-xs font-semibold transition-colors ${
                 subTab === 'pricing'
-                  ? 'bg-brand text-white shadow-sm'
+                  ? 'bg-brand text-brand-ink shadow-sm'
                   : 'text-ink-soft hover:bg-surface-2'
               }`}
             >
               <Layers className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">{t('admin.packages.subtabs.pricing')}</span>
+              <span
+                className={`text-[11px] px-1.5 py-0.5 rounded-full tnum leading-none ${
+                  subTab === 'pricing'
+                    ? 'bg-black/15 text-brand-ink'
+                    : 'bg-surface-2 text-ink-muted'
+                }`}
+              >
+                {formatNumber(tiers.length + overrides.length)}
+              </span>
             </button>
           </div>
 
@@ -660,6 +700,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
         mode={overrideModalMode}
         initialOverride={editingOverride}
         existingOverrides={overrides}
+        defaultDays={customSettings.defaultDays}
         isSubmitting={adminPkg.isCreatingOverride || adminPkg.isUpdatingOverride}
         onClose={() => setOverrideModalOpen(false)}
         onCreate={async (payload) => {

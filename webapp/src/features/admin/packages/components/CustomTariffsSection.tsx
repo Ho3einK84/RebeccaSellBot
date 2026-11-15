@@ -223,6 +223,23 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
   };
 
   const maxRules = bounds.maxRules || MAX_PRICE_RULES;
+  const effectiveDefaultDays = liveCustomDays ?? settings.defaultDays;
+
+  const isCustomDirty =
+    customForm.enabled !== settings.enabled ||
+    customForm.pricePerGb.trim() !== String(settings.pricePerGb) ||
+    customForm.pricePerDay.trim() !== String(settings.pricePerDay) ||
+    customForm.minGb.trim() !== String(settings.minGb) ||
+    customForm.maxGb.trim() !== String(settings.maxGb) ||
+    customForm.defaultDays.trim() !== String(settings.defaultDays) ||
+    customForm.panelId !== (settings.target?.panelId ?? '') ||
+    customForm.serviceId !== (settings.target ? String(settings.target.serviceId) : '');
+
+  const isPoliciesDirty =
+    policiesForm.packageDisplayMode !== policies.packageDisplayMode ||
+    policiesForm.lowTrafficThresholdGb.trim() !== String(policies.lowTrafficThresholdGb) ||
+    policiesForm.expiryWarningDays.trim() !== String(policies.expiryWarningDays) ||
+    policiesForm.refundWindowHours.trim() !== String(policies.refundWindowHours);
 
   return (
     <div className="space-y-4">
@@ -230,7 +247,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       <Card padding="md" className="space-y-4">
         <div>
           <h3 className="text-sm font-bold text-ink">{t('admin.packages.custom.title')}</h3>
-          <p className="text-2xs text-ink-muted mt-0.5">{t('admin.packages.custom.subtitle')}</p>
+          <p className="text-[11px] text-ink-muted mt-0.5">{t('admin.packages.custom.subtitle')}</p>
         </div>
 
         <form onSubmit={handleCustomSubmit} className="space-y-3.5">
@@ -239,7 +256,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
               <div className="text-xs font-semibold text-ink">
                 {t('admin.packages.custom.enabledLabel')}
               </div>
-              <div className="text-2xs text-ink-muted mt-0.5">
+              <div className="text-[11px] text-ink-muted mt-0.5">
                 {t('admin.packages.custom.enabledHint')}
               </div>
             </div>
@@ -251,64 +268,28 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
             />
           </label>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="custom-per-gb"
-                className="block text-xs font-semibold text-ink-soft mb-1"
-              >
-                {t('admin.packages.custom.pricePerGbLabel')}
-              </label>
-              <Input
-                id="custom-per-gb"
-                dir="ltr"
-                inputMode="numeric"
-                className="tnum"
-                value={customForm.pricePerGb}
-                onChange={(e) => setCustomForm((prev) => ({ ...prev, pricePerGb: e.target.value }))}
-              />
-              {customError('pricePerGb') && (
-                <p className="text-xs text-danger mt-1">{customError('pricePerGb')}</p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="custom-per-day"
-                className="block text-xs font-semibold text-ink-soft mb-1"
-              >
-                {t('admin.packages.custom.pricePerDayLabel')}
-              </label>
-              <Input
-                id="custom-per-day"
-                dir="ltr"
-                inputMode="numeric"
-                className="tnum"
-                value={customForm.pricePerDay}
-                onChange={(e) =>
-                  setCustomForm((prev) => ({ ...prev, pricePerDay: e.target.value }))
-                }
-              />
-              {customError('pricePerDay') && (
-                <p className="text-xs text-danger mt-1">{customError('pricePerDay')}</p>
-              )}
-            </div>
+          {/* Active Custom Volume Rate & Bounds */}
+          <div>
+            <label
+              htmlFor="custom-per-gb"
+              className="block text-xs font-semibold text-ink-soft mb-1"
+            >
+              {t('admin.packages.custom.pricePerGbLabel')}
+            </label>
+            <Input
+              id="custom-per-gb"
+              dir="ltr"
+              inputMode="numeric"
+              className="tnum"
+              value={customForm.pricePerGb}
+              onChange={(e) => setCustomForm((prev) => ({ ...prev, pricePerGb: e.target.value }))}
+            />
+            {customError('pricePerGb') && (
+              <p className="text-xs text-danger mt-1">{customError('pricePerGb')}</p>
+            )}
           </div>
 
-          {(livePerGb === 0 && livePerDay === 0) ||
-          settings.warnings.includes('ZERO_BASE_RATES') ? (
-            <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{t('admin.packages.custom.zeroBothRatesWarning')}</span>
-            </div>
-          ) : livePerGb === 0 ? (
-            <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{t('admin.packages.custom.zeroPriceWarning')}</span>
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
             <div>
               <label
                 htmlFor="custom-min-gb"
@@ -344,12 +325,17 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
             </div>
 
             <div>
-              <label
-                htmlFor="custom-default-days"
-                className="block text-xs font-semibold text-ink-soft mb-1"
-              >
-                {t('admin.packages.custom.defaultDaysLabel')}
-              </label>
+              <div className="flex items-center justify-between gap-1.5 flex-wrap mb-1">
+                <label
+                  htmlFor="custom-default-days"
+                  className="text-xs font-semibold text-ink-soft"
+                >
+                  {t('admin.packages.custom.defaultDaysLabel')}
+                </label>
+                <Badge variant="success" size="xs">
+                  {t('admin.packages.custom.defaultDaysLiveBadge')}
+                </Badge>
+              </div>
               <Input
                 id="custom-default-days"
                 dir="ltr"
@@ -360,6 +346,9 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   setCustomForm((prev) => ({ ...prev, defaultDays: e.target.value }))
                 }
               />
+              <p className="text-[11px] text-ink-muted mt-1 leading-relaxed">
+                {t('admin.packages.custom.defaultDaysHint')}
+              </p>
             </div>
           </div>
 
@@ -367,6 +356,50 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
           {customError('defaultDays') && (
             <p className="text-xs text-danger">{customError('defaultDays')}</p>
           )}
+
+          {/* Price per day — dashed & dimmed because buyers cannot select custom days yet */}
+          <div className="p-3 rounded-tile border border-dashed border-line-strong bg-surface-2/45 opacity-90 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <label htmlFor="custom-per-day" className="text-xs font-semibold text-ink-soft">
+                {t('admin.packages.custom.pricePerDayLabel')}
+              </label>
+              <Badge variant="outline" size="xs" className="border-dashed">
+                {t('admin.packages.custom.fixedDaysStatusBadge')}
+              </Badge>
+            </div>
+            <Input
+              id="custom-per-day"
+              dir="ltr"
+              inputMode="numeric"
+              className="tnum"
+              value={customForm.pricePerDay}
+              onChange={(e) => setCustomForm((prev) => ({ ...prev, pricePerDay: e.target.value }))}
+            />
+            {customError('pricePerDay') && (
+              <p className="text-xs text-danger mt-1">{customError('pricePerDay')}</p>
+            )}
+            <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed">
+              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
+              <span>
+                {t('admin.packages.custom.pricePerDayExplain', {
+                  days: formatNumber(effectiveDefaultDays),
+                })}
+              </span>
+            </p>
+          </div>
+
+          {(livePerGb === 0 && livePerDay === 0) ||
+          settings.warnings.includes('ZERO_BASE_RATES') ? (
+            <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{t('admin.packages.custom.zeroBothRatesWarning')}</span>
+            </div>
+          ) : livePerGb === 0 ? (
+            <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{t('admin.packages.custom.zeroPriceWarning')}</span>
+            </div>
+          ) : null}
 
           {((liveCustomDays !== null && liveCustomDays > WEB_MAX_DURATION_DAYS) ||
             settings.warnings.includes('DEFAULT_DAYS_EXCEEDS_WEB_LIMIT')) && (
@@ -455,7 +488,12 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
           </div>
           {customError('target') && <p className="text-xs text-danger">{customError('target')}</p>}
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2.5 flex-wrap">
+            {isCustomDirty && (
+              <Badge variant="warning" size="xs">
+                {t('admin.packages.custom.dirtyNotice')}
+              </Badge>
+            )}
             <Button type="submit" variant="primary" size="sm" loading={isUpdatingCustomSettings}>
               <Save className="w-4 h-4" />
               <span>
@@ -472,6 +510,8 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       <QuoteSimulatorCard
         defaultGb={settings.minGb}
         defaultDays={settings.defaultDays}
+        basePricePerGb={settings.pricePerGb}
+        basePricePerDay={settings.pricePerDay}
         isSimulating={isSimulatingQuote}
         result={quoteResult}
         onSimulate={onSimulateQuote}
@@ -481,10 +521,15 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       <Card padding="md" className="space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
-            <Layers className="w-4 h-4 text-brand shrink-0" />
+            <Layers className="w-4 h-4 text-brand-fg shrink-0" />
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-ink">{t('admin.packages.tiers.title')}</h3>
-              <p className="text-2xs text-ink-muted">{t('admin.packages.tiers.subtitle')}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-ink">{t('admin.packages.tiers.title')}</h3>
+                <Badge variant="success" size="xs" dot>
+                  {t('admin.packages.tiers.liveBadge')}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-ink-muted">{t('admin.packages.tiers.subtitle')}</p>
             </div>
           </div>
           <Button
@@ -498,7 +543,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
           </Button>
         </div>
 
-        <div className="p-2.5 rounded-ctl bg-surface-2 border border-line text-2xs text-ink-muted flex items-center gap-2">
+        <div className="p-2.5 rounded-ctl bg-surface-2 border border-line text-[11px] text-ink-muted flex items-center gap-2">
           <Info className="w-3.5 h-3.5 text-info shrink-0" />
           <span>{t('admin.packages.tiers.sortNotice')}</span>
         </div>
@@ -551,7 +596,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-2xs text-ink-muted flex-wrap">
+                    <div className="flex items-center gap-2 text-[11px] text-ink-muted flex-wrap">
                       <span dir="ltr" className="font-mono">
                         {tier.id}
                       </span>
@@ -584,10 +629,17 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       <Card padding="md" className="space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
-            <Sliders className="w-4 h-4 text-brand shrink-0" />
+            <Sliders className="w-4 h-4 text-brand-fg shrink-0" />
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-ink">{t('admin.packages.overrides.title')}</h3>
-              <p className="text-2xs text-ink-muted">{t('admin.packages.overrides.subtitle')}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-ink">
+                  {t('admin.packages.overrides.title')}
+                </h3>
+                <Badge variant="outline" size="xs" className="border-dashed">
+                  {t('admin.packages.overrides.partialActiveBadge')}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-ink-muted">{t('admin.packages.overrides.subtitle')}</p>
             </div>
           </div>
           <Button
@@ -601,7 +653,16 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
           </Button>
         </div>
 
-        <div className="p-2.5 rounded-ctl bg-info-soft border border-info/30 text-info text-2xs flex items-center gap-2">
+        <div className="p-2.5 rounded-ctl border border-dashed border-line-strong bg-surface-2/50 text-[11px] text-ink-soft flex items-start gap-2 leading-relaxed">
+          <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
+          <span>
+            {t('admin.packages.overrides.fixedDaysScopeNote', {
+              days: formatNumber(settings.defaultDays),
+            })}
+          </span>
+        </div>
+
+        <div className="p-2.5 rounded-ctl bg-info-soft border border-info/30 text-info-fg text-[11px] flex items-center gap-2">
           <Info className="w-3.5 h-3.5 shrink-0" />
           <span>{t('admin.packages.overrides.priorityNotice')}</span>
         </div>
@@ -625,7 +686,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                 >
                   <div className="min-w-0 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-2xs font-bold px-1.5 py-0.5 rounded bg-surface-3 text-ink-soft tnum">
+                      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-surface-3 text-ink-soft tnum">
                         #{formatNumber(idx + 1)}
                       </span>
                       <span dir="ltr" className="text-xs font-mono font-semibold text-ink">
@@ -639,7 +700,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                           ? t('admin.packages.overrides.gbRange', { range: gbCond })
                           : t('admin.packages.overrides.conditionAllGb')}
                       </Badge>
-                      <Badge variant="outline" size="xs">
+                      <Badge variant="outline" size="xs" className="border-dashed opacity-75">
                         {daysCond
                           ? t('admin.packages.overrides.daysRange', { range: daysCond })
                           : t('admin.packages.overrides.conditionAllDays')}
@@ -659,7 +720,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                         </Badge>
                       )}
                       {rule.pricePerDay != null && (
-                        <Badge variant="info" size="xs">
+                        <Badge variant="outline" size="xs" className="border-dashed opacity-80">
                           {t('admin.packages.overrides.ratePerDayBadge', {
                             price: formatMoney(rule.pricePerDay),
                           })}
@@ -709,11 +770,16 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       <Card padding="md" className="space-y-4">
         <div className="flex items-start gap-2.5">
           <div className="w-8 h-8 rounded-tile bg-surface-2 border border-line flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-4 h-4 text-ok" />
+            <ShieldCheck className="w-4 h-4 text-ok-fg" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-ink">{t('admin.packages.policies.title')}</h3>
-            <p className="text-2xs text-ink-muted mt-0.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-ink">{t('admin.packages.policies.title')}</h3>
+              <Badge variant="success" size="xs" dot>
+                {t('admin.packages.policies.liveBadge')}
+              </Badge>
+            </div>
+            <p className="text-[11px] text-ink-muted mt-0.5">
               {t('admin.packages.policies.subtitle')}
             </p>
           </div>
@@ -721,9 +787,14 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
 
         <form onSubmit={handlePoliciesSubmit} className="space-y-3.5">
           <div>
-            <span className="block text-xs font-semibold text-ink-soft mb-1.5">
-              {t('admin.packages.policies.displayModeLabel')}
-            </span>
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5">
+              <span className="text-xs font-semibold text-ink-soft">
+                {t('admin.packages.policies.displayModeLabel')}
+              </span>
+              <Badge variant="outline" size="xs">
+                {t('admin.packages.policies.telegramOnlyBadge')}
+              </Badge>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
@@ -750,7 +821,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                 {t('admin.packages.policies.displayModeName')}
               </button>
             </div>
-            <p className="text-2xs text-ink-muted mt-1">
+            <p className="text-[11px] text-ink-muted mt-1">
               {t('admin.packages.policies.displayModeHint')}
             </p>
           </div>
@@ -773,7 +844,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   setPoliciesForm((prev) => ({ ...prev, lowTrafficThresholdGb: e.target.value }))
                 }
               />
-              <p className="text-2xs text-ink-muted mt-1">
+              <p className="text-[11px] text-ink-muted mt-1">
                 {t('admin.packages.policies.lowTrafficHint')}
               </p>
               {policyError('lowTrafficThresholdGb') && (
@@ -798,7 +869,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   setPoliciesForm((prev) => ({ ...prev, expiryWarningDays: e.target.value }))
                 }
               />
-              <p className="text-2xs text-ink-muted mt-1">
+              <p className="text-[11px] text-ink-muted mt-1">
                 {t('admin.packages.policies.expiryWarningHint')}
               </p>
               {policyError('expiryWarningDays') && (
@@ -823,7 +894,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   setPoliciesForm((prev) => ({ ...prev, refundWindowHours: e.target.value }))
                 }
               />
-              <p className="text-2xs text-ink-muted mt-1">
+              <p className="text-[11px] text-ink-muted mt-1">
                 {t('admin.packages.policies.refundWindowHint')}
               </p>
               {policyError('refundWindowHours') && (
@@ -832,7 +903,12 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2.5 flex-wrap">
+            {isPoliciesDirty && (
+              <Badge variant="warning" size="xs">
+                {t('admin.packages.policies.dirtyNotice')}
+              </Badge>
+            )}
             <Button type="submit" variant="primary" size="sm" loading={isUpdatingPolicies}>
               <Save className="w-4 h-4" />
               <span>{t('admin.packages.policies.savePolicies')}</span>
