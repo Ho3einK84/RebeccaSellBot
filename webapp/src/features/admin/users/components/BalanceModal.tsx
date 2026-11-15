@@ -90,7 +90,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
                 {t('admin.modals.balanceTitle')}
               </h3>
               <div className="text-[11px] tnum text-brand truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
-                <span>{[user.firstName, user.lastName].filter(Boolean).join('') || '—'}</span>
+                <span>{[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}</span>
                 {user.username && <span dir="ltr">(@{user.username})</span>}
                 <span className="opacity-40">·</span>
                 <span dir="ltr">#{user.telegramId}</span>
@@ -101,7 +101,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
             type="button"
             className="p-1.5 rounded-xl text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
             onClick={handleClose}
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X className="w-4 h-4" />
           </button>

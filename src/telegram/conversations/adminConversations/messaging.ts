@@ -54,7 +54,9 @@ export async function adminBroadcastConversation(
   if (!audienceChoice) return;
 
   const audience = audienceChoice.slice('broadcast:audience:'.length) as BroadcastAudience;
-  const recipientCount = await ctx.services.broadcastService.countAudience(audience);
+  const recipientCount = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.broadcastService.countAudience(audience)
+  );
   const audienceLabel = t(ctx, `admin_broadcast_audience_${audience}`);
 
   if (recipientCount === 0) {
@@ -156,7 +158,10 @@ export async function adminBroadcastConversation(
 
       if (action === 'broadcast:test') {
         try {
-          await ctx.api.sendMessage(adminId, broadcastText);
+          const messageToSend = broadcastText;
+          await conversation.external((outsideCtx) =>
+            (outsideCtx?.api ?? ctx.api).sendMessage(adminId, messageToSend)
+          );
           testSentNotice = t(ctx, 'admin_broadcast_test_sent');
         } catch (err) {
           logger.warn({ err, adminId }, 'Failed to deliver test broadcast to admin');
@@ -180,11 +185,13 @@ export async function adminBroadcastConversation(
     break;
   }
 
-  const job = await ctx.services.broadcastService.createJob({
-    actorTelegramId: adminId,
-    audience,
-    message: broadcastText,
-  });
+  const job = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.broadcastService.createJob({
+      actorTelegramId: adminId,
+      audience,
+      message: broadcastText,
+    })
+  );
 
   await replyInAdminConversation(
     conversation,
@@ -300,14 +307,16 @@ export async function adminDirectMessageConversation(
   try {
     // Operator-authored broadcasts and direct messages intentionally retain their
     // exact plaintext; wrapping or forcing a parse mode would change their meaning.
-    await ctx.api.sendMessage(telegramId, directMessage);
-    await ctx.services.userService.recordAdminAction({
-      actorTelegramId: adminId,
-      action: 'direct_message_sent',
-      entityType: 'telegram_user',
-      entityId: String(telegramId),
-      targetTelegramId: telegramId,
-      metadata: { messageLength: directMessage.length },
+    await conversation.external(async (outsideCtx) => {
+      await ctx.api.sendMessage(telegramId, directMessage);
+      await outsideCtx.services!.userService.recordAdminAction({
+        actorTelegramId: adminId,
+        action: 'direct_message_sent',
+        entityType: 'telegram_user',
+        entityId: String(telegramId),
+        targetTelegramId: telegramId,
+        metadata: { messageLength: directMessage.length },
+      });
     });
     await replyInAdminConversation(
       conversation,

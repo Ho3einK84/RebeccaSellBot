@@ -19,7 +19,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
-  const { settings, isLoading, updateSettings, isUpdating } = useReceiptSettings();
+  const { settings, isLoading, updateSettings, isUpdating } = useReceiptSettings(isOpen);
 
   const [enabled, setEnabled] = useState(true);
   const [mode, setMode] = useState<'full' | 'simple'>('full');

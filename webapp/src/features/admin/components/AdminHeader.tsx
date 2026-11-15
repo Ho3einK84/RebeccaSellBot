@@ -43,7 +43,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   const { copy, isCopied } = useCopy();
 
   const rawAdminName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
-  const adminDisplayName = rawAdminName || 'Admin';
+  const adminDisplayName = rawAdminName || t('admin.defaultAdminName');
 
   return (
     <TopBar

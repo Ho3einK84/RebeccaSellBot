@@ -28,18 +28,22 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
         ? `https://t.me?start=${referralCode}`
         : '';
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (!inviteLink) return;
     triggerHaptic('light');
-    copy(inviteLink, 'referral-link');
-    onNotify(t('user.referral.linkCopied'));
+    const ok = await copy(inviteLink, 'referral-link');
+    if (ok) {
+      onNotify(t('user.referral.linkCopied'));
+    }
   };
 
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
     if (!referralCode) return;
     triggerHaptic('light');
-    copy(referralCode, 'referral-code');
-    onNotify(t('user.referral.linkCopied'));
+    const ok = await copy(referralCode, 'referral-code');
+    if (ok) {
+      onNotify(t('user.referral.linkCopied'));
+    }
   };
 
   const handleShareTelegram = () => {
@@ -51,7 +55,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(shareUrl);
     } else {
-      window.open(shareUrl, '_blank');
+      window.open(shareUrl, '_blank', 'noopener,noreferrer');
     }
   };
 

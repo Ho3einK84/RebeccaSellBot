@@ -79,11 +79,13 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
     await queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
   };
 
-  const handleCopySub = () => {
+  const handleCopySub = async () => {
     if (!config.subUrl) return;
     triggerHaptic('light');
-    copy(config.subUrl, `modal-sub-${config.id}`);
-    onNotify(t('user.services.linkCopied'), 'success');
+    const ok = await copy(config.subUrl, `modal-sub-${config.id}`);
+    if (ok) {
+      onNotify(t('user.services.linkCopied'), 'success');
+    }
   };
 
   const handleOpenQr = () => {

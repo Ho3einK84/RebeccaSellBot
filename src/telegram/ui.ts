@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { InlineKeyboard, type Middleware, type Transformer } from 'grammy';
+import { InlineKeyboard, type Bot, type Middleware, type Transformer } from 'grammy';
 import type {
   ConversationContext,
   MenuContext,
@@ -26,6 +26,8 @@ type EditMessageTextOptions = NonNullable<Parameters<MenuContext['editMessageTex
 export type RenderUiScreenOptions = EditMessageTextOptions & {
   /** Set to false when a route intentionally opens a separate popover screen. */
   preferEdit?: boolean;
+  /** Semantic role to track for the finally rendered message. */
+  role?: UiMessageRole;
 };
 
 export type RenderUiScreenResult = 'edited' | 'unchanged' | 'replied';
@@ -216,7 +218,7 @@ export async function renderUiScreen(
   text: string,
   options: RenderUiScreenOptions = {}
 ): Promise<RenderUiScreenResult> {
-  const { preferEdit = true, ...apiOptions } = options;
+  const { preferEdit = true, role = 'screen', ...apiOptions } = options;
   const callbackMessageId = ctx.callbackQuery?.message?.message_id;
 
   if (
@@ -226,11 +228,11 @@ export async function renderUiScreen(
   ) {
     try {
       await ctx.editMessageText(text, apiOptions);
-      if (ctx.session) rememberUiMessage(ctx.session, callbackMessageId, 'screen');
+      if (ctx.session) rememberUiMessage(ctx.session, callbackMessageId, role);
       return 'edited';
     } catch (error) {
       if (isMessageNotModifiedError(error)) {
-        if (ctx.session) rememberUiMessage(ctx.session, callbackMessageId, 'screen');
+        if (ctx.session) rememberUiMessage(ctx.session, callbackMessageId, role);
         return 'unchanged';
       }
       if (!isMessageEditUnavailableError(error)) throw error;
@@ -242,7 +244,7 @@ export async function renderUiScreen(
     text,
     apiOptions as NonNullable<Parameters<MenuContext['reply']>[1]>
   );
-  if (ctx.session) rememberUiMessage(ctx.session, message.message_id, 'screen');
+  if (ctx.session) rememberUiMessage(ctx.session, message.message_id, role);
   return 'replied';
 }
 
@@ -507,6 +509,10 @@ export async function waitForTextInput(
     if (!(await acceptConversationOwner(input, ownerId))) continue;
     if (await handleConversationCancel(conversation, input, cancelDestination)) return undefined;
     await forwardConversationNavigation(conversation, input);
+    if (input.callbackQuery) {
+      await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
+      continue;
+    }
     if (input.message && 'text' in input.message) {
       await deleteConsumedInputMessage(input);
       return input.message.text;
@@ -537,6 +543,10 @@ export async function waitForReceiptMediaInput(
     if (!(await acceptConversationOwner(input, ownerId))) continue;
     if (await handleConversationCancel(conversation, input, cancelDestination)) return undefined;
     await forwardConversationNavigation(conversation, input);
+    if (input.callbackQuery) {
+      await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
+      continue;
+    }
     const photos = input.message && 'photo' in input.message ? input.message.photo : undefined;
     if (photos && photos.length > 0) {
       await deleteConsumedInputMessage(input);
@@ -630,10 +640,67 @@ export async function handleConversationCancel(
   } else {
     await deleteConsumedInputMessage(ctx);
   }
+  if (typeof conversation.external === 'function') {
+    await conversation.external((outsideCtx) => {
+      clearTransientConversationSession(outsideCtx?.session ?? (ctx as MenuContext).session);
+    });
+  } else {
+    clearTransientConversationSession((ctx as MenuContext).session);
+  }
   await replyInConversationWithRole(conversation, ctx, t(ctx, 'operation_cancelled'), 'prompt', {
     reply_markup: backKeyboard(ctx, destination),
   });
   return true;
+}
+
+/** Defense-in-depth admin authorization check for direct admin callback handlers. */
+export async function requireAdminCallback(ctx: MenuContext): Promise<boolean> {
+  const telegramId = ctx.from?.id;
+  if (telegramId && ctx.services?.isAdmin?.(telegramId)) return true;
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'access_denied'), show_alert: true });
+  }
+  return false;
+}
+
+/** Wrap `bot.callbackQuery` registrations so every admin route enforces `requireAdminCallback`. */
+export function guardAdminCallbacks(
+  bot: Pick<Bot<MenuContext>, 'callbackQuery'>
+): Bot<MenuContext>['callbackQuery'] {
+  return ((
+    trigger: Parameters<Bot<MenuContext>['callbackQuery']>[0],
+    ...handlers: Parameters<Bot<MenuContext>['callbackQuery']>[1][]
+  ) =>
+    bot.callbackQuery(
+      trigger,
+      ...handlers.map((handler) => async (ctx: MenuContext, next: () => Promise<void>) => {
+        if (!(await requireAdminCallback(ctx))) return;
+        return await (
+          handler as unknown as (ctx: MenuContext, next: () => Promise<void>) => unknown
+        )(ctx, next);
+      })
+    )) as Bot<MenuContext>['callbackQuery'];
+}
+
+/** Reset transient conversation handoff keys without clearing durable UI tracking or promo selection. */
+export function clearTransientConversationSession(session: SessionData | undefined): void {
+  if (!session) return;
+  delete session.adminPromoEditId;
+  delete session.adminBalanceTargetTelegramId;
+  delete session.adminDirectMessageTargetTelegramId;
+  delete session.transferConfigId;
+  delete session.transferConfigOwnerTelegramId;
+  delete session.orphanAssignIssueId;
+  delete session.renewConfigId;
+  delete session.renewConfigUsername;
+  delete session.pendingConfigId;
+  delete session.pendingAutoRenew;
+  delete session.adminPanelId;
+  delete session.adminPanelAction;
+  delete session.adminPanelActionAt;
+  delete session.adminPanelDraft;
+  delete session.adminReceiptBatch;
+  delete session.adminQuickTopup;
 }
 
 /** Admin variant of explicit conversation cancellation. */
@@ -660,6 +727,13 @@ export async function forwardConversationNavigation(
   );
   const isBotCommand = /^\/[a-z][a-z0-9_]*(?:@[a-z0-9_]+)?(?:\s|$)/iu.test(messageText ?? '');
   if (isNavigationCallback || (isBotCommand && messageText !== '/cancel')) {
+    if (typeof conversation.external === 'function') {
+      await conversation.external((outsideCtx) => {
+        clearTransientConversationSession(outsideCtx?.session ?? (ctx as MenuContext).session);
+      });
+    } else {
+      clearTransientConversationSession((ctx as MenuContext).session);
+    }
     await conversation.halt({ next: true });
   }
 }

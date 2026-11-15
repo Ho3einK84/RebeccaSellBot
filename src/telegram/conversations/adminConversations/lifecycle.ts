@@ -96,9 +96,11 @@ export async function adminAssignOrphanConversation(
 ): Promise<void> {
   const actorTelegramId = await requireAdmin(conversation, ctx);
   if (!actorTelegramId || !ctx.services) return;
-  const issueId = await conversation.external(
-    (outsideCtx) => outsideCtx.session.orphanAssignIssueId as string | undefined
-  );
+  const issueId = await conversation.external((outsideCtx) => {
+    const selected = outsideCtx.session.orphanAssignIssueId as string | undefined;
+    outsideCtx.session.orphanAssignIssueId = undefined;
+    return selected;
+  });
   if (!issueId) {
     await replyInAdminConversation(
       conversation,
@@ -125,7 +127,9 @@ export async function adminAssignOrphanConversation(
   );
   const query = await waitForAdminTextInput(conversation);
   if (query === undefined) return;
-  const target = await ctx.services.userService.findProfile(query);
+  const target = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.userService.findProfile(query)
+  );
   if (!target) {
     await replyInAdminConversation(
       conversation,
@@ -136,14 +140,13 @@ export async function adminAssignOrphanConversation(
     return;
   }
   try {
-    const result = await ctx.services.configReconciliationService.assignRemoteUnbound(
-      issueId,
-      target.telegramId,
-      actorTelegramId
+    const result = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.configReconciliationService.assignRemoteUnbound(
+        issueId,
+        target.telegramId,
+        actorTelegramId
+      )
     );
-    await conversation.external((outsideCtx) => {
-      outsideCtx.session.orphanAssignIssueId = undefined;
-    });
     await replyInAdminConversation(
       conversation,
       ctx,

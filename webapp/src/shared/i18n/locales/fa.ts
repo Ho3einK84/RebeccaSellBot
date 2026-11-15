@@ -42,6 +42,7 @@ export const fa = {
     search: 'جست‌وجو',
     retry: 'تلاش مجدد',
     back: 'بازگشت',
+    clearSearch: 'پاک کردن جست‌وجو',
   },
   auth: {
     connecting: 'در حال برقراری ارتباط امن با سرور...',
@@ -290,6 +291,8 @@ export const fa = {
   },
   admin: {
     title: 'مدیریت',
+    navLabel: 'ناوبری پنل مدیریت',
+    defaultAdminName: 'مدیر',
     welcome: 'خوش آمدید، {name} (شناسه: {id}) · مدیر سیستم',
     role: 'مدیر سیستم',
     exit: 'خروج از پنل',
@@ -307,6 +310,7 @@ export const fa = {
       statsLoading: 'در حال بارگذاری آمار...',
       pendingReceipts: 'رسیدهای در انتظار بررسی',
       pendingReceiptsSub: 'نیاز به بررسی و تأیید مدیر',
+      panelHealthEmpty: 'هیچ پنلی تنظیم نشده است',
       totalUsers: 'کل کاربران',
       totalUsersSub: 'حساب‌های ثبت‌شده در ربات',
       totalSales: 'کل فروش',

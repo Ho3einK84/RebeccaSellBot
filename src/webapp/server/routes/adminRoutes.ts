@@ -9,11 +9,12 @@ import {
   type RebeccaPanelRegistry,
   RebeccaPanelInUseError,
 } from '../../../domain/services/RebeccaPanelRegistry.js';
+import { RebeccaOriginDownError } from '../../../domain/services/RebeccaService.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import type { AdminBalanceOperation } from '../../../domain/services/WalletContracts.js';
 import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
-import { getTelegramFileUrl, downloadTelegramFile } from '../../../infra/telegramFiles.js';
+import { downloadTelegramFile } from '../../../infra/telegramFiles.js';
 import {
   sendReceiptApprovalNotification,
   sendReceiptRejectionNotification,
@@ -188,13 +189,21 @@ export function registerAdminRoutes(
       async (request, reply) => {
         const { ids, action } = request.body;
         const adminId = request.userSession!.telegramId;
-        if (!ids || ids.length === 0) {
+        const cleanedIds = Array.isArray(ids)
+          ? Array.from(new Set(ids.map((v) => v.trim()).filter(Boolean)))
+          : [];
+        if (cleanedIds.length === 0) {
           return reply.code(400).send({ error: 'No receipt IDs provided' });
+        }
+        if (cleanedIds.length > 100) {
+          return reply
+            .code(400)
+            .send({ error: 'Cannot process more than 100 receipts in a single batch' });
         }
 
         if (action === 'approve') {
           let approvedCount = 0;
-          for (const receiptId of ids) {
+          for (const receiptId of cleanedIds) {
             try {
               const result = await services.walletService.approveTopup(receiptId, adminId);
               if (!result) continue;
@@ -226,9 +235,8 @@ export function registerAdminRoutes(
       }
     );
 
-    // GET /api/admin/receipts/:id/photo — redirect to the Telegram-hosted
-    // receipt image so the <img> tag constructed by the frontend resolves
-    // instead of hitting the generic 404 handler.
+    // GET /api/admin/receipts/:id/photo — securely proxy Telegram-hosted
+    // receipt images through the backend without ever exposing BOT_TOKEN.
     adminScope.get<{
       Params: { id: string };
       Querystring: { download?: string };
@@ -244,23 +252,23 @@ export function registerAdminRoutes(
       if (!services.botToken) {
         return reply.code(404).send({ error: 'Receipt photo unavailable' });
       }
-      if (request.query?.download) {
-        const downloaded = await downloadTelegramFile(services.botToken, receipt.photoFileId);
-        if (!downloaded.ok) {
-          return reply.code(502).send({ error: downloaded.error });
-        }
-        return reply
-          .header('Content-Type', downloaded.contentType)
-          .header('Content-Disposition', `attachment; filename="receipt-${id}.jpg"`)
-          .send(downloaded.buffer);
+
+      const downloaded = await downloadTelegramFile(services.botToken, receipt.photoFileId);
+      if (!downloaded.ok) {
+        return reply.code(502).send({ error: downloaded.error });
       }
 
-      const resolved = await getTelegramFileUrl(services.botToken, receipt.photoFileId);
-      if (!resolved.ok) {
-        return reply.code(502).send({ error: resolved.error });
-      }
+      const safeId = id.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const disposition = request.query?.download
+        ? `attachment; filename="receipt-${safeId}.jpg"`
+        : `inline; filename="receipt-${safeId}.jpg"`;
 
-      return reply.redirect(resolved.url);
+      return reply
+        .header('Content-Type', downloaded.contentType)
+        .header('Content-Disposition', disposition)
+        .header('Cache-Control', 'private, no-store')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(downloaded.buffer);
     });
 
     // POST /api/admin/receipts/:id/action
@@ -321,7 +329,16 @@ export function registerAdminRoutes(
           return reply.code(400).send({ error: 'A rejection reason is required' });
         }
 
-        const result = await services.walletService.rejectTopup(id, adminId, reason.trim());
+        const trimmedReason = reason.trim();
+        let result;
+        try {
+          result = await services.walletService.rejectTopup(id, adminId, trimmedReason);
+        } catch (err: unknown) {
+          if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
+            return reply.code(404).send({ error: 'Receipt owner not found' });
+          }
+          throw err;
+        }
         if (!result) {
           return reply.code(404).send({ error: 'Receipt not found or already processed' });
         }
@@ -332,22 +349,29 @@ export function registerAdminRoutes(
           entityType: 'topup_receipt',
           entityId: id,
           targetTelegramId: result.telegramId,
-          metadata: { reason: reason.trim() },
+          metadata: { reason: trimmedReason },
         });
 
         if (services.botApi && services.translationService) {
-          await sendReceiptRejectionNotification(
-            services.botApi,
-            {
-              userService: services.userService,
-              translationService: services.translationService,
-            },
-            {
-              telegramId: result.telegramId,
-              receiptId: id,
-              reason: reason.trim(),
-            }
-          );
+          try {
+            await sendReceiptRejectionNotification(
+              services.botApi,
+              {
+                userService: services.userService,
+                translationService: services.translationService,
+              },
+              {
+                telegramId: result.telegramId,
+                receiptId: id,
+                reason: trimmedReason,
+              }
+            );
+          } catch (notifyErr) {
+            request.log.warn(
+              { err: notifyErr, receiptId: id },
+              'Failed to send receipt rejection notification'
+            );
+          }
         }
 
         return reply.code(200).send({ success: true });
@@ -367,8 +391,12 @@ export function registerAdminRoutes(
       const { search, page, limit, filter, sort } = request.query;
 
       if (search?.trim()) {
-        const limit = clampPositiveInt(request.query.limit, 10, 50);
-        let users = await services.userService.searchProfiles(search.trim(), limit);
+        const parsedLimit = clampPositiveInt(limit, 10, 50);
+        const parsedPage = clampPositiveInt(page, 1, 1_000_000);
+        const needsExpandedFetch =
+          (filter && filter !== 'all') || (sort && sort !== 'newest') || parsedPage > 1;
+        const fetchCap = needsExpandedFetch ? 200 : parsedLimit;
+        let users = await services.userService.searchProfiles(search.trim(), fetchCap);
         if (filter === 'active_subs') {
           users = users.filter((u) => u.activeSubscriptionCount > 0);
         } else if (filter === 'has_balance') {
@@ -383,11 +411,15 @@ export function registerAdminRoutes(
         } else if (sort === 'spend_desc') {
           users.sort((a, b) => b.totalSpend - a.totalSpend);
         }
+        const total = users.length;
+        const totalPages = Math.max(1, Math.ceil(total / parsedLimit));
+        const safePage = Math.min(parsedPage, totalPages);
+        const sliced = users.slice((safePage - 1) * parsedLimit, safePage * parsedLimit);
         return reply.code(200).send({
-          users,
-          total: users.length,
-          page: 1,
-          totalPages: 1,
+          users: sliced,
+          total,
+          page: safePage,
+          totalPages,
         });
       }
 
@@ -506,6 +538,9 @@ export function registerAdminRoutes(
       Body: { panelId?: string };
     }>('/api/admin/users/:id/configs/:configUsername/toggle', async (request, reply) => {
       const telegramId = Number(request.params.id);
+      if (!Number.isSafeInteger(telegramId) || telegramId <= 0) {
+        return reply.code(400).send({ error: 'Invalid user ID' });
+      }
       const { configUsername } = request.params;
       const { panelId } = request.body || {};
       if (!services.configService) {
@@ -530,6 +565,9 @@ export function registerAdminRoutes(
         });
         return reply.code(200).send({ success: true, status });
       } catch (err: unknown) {
+        if (err instanceof RebeccaOriginDownError) {
+          return reply.code(503).send({ error: 'Panel unavailable', code: 'PANEL_DOWN' });
+        }
         const message = err instanceof Error ? err.message : 'Failed to toggle config';
         return reply.code(400).send({ error: message });
       }
@@ -541,6 +579,9 @@ export function registerAdminRoutes(
       Body: { panelId?: string };
     }>('/api/admin/users/:id/configs/:configUsername/reset-usage', async (request, reply) => {
       const telegramId = Number(request.params.id);
+      if (!Number.isSafeInteger(telegramId) || telegramId <= 0) {
+        return reply.code(400).send({ error: 'Invalid user ID' });
+      }
       const { configUsername } = request.params;
       const { panelId } = request.body || {};
       if (!services.configService) {
@@ -565,6 +606,9 @@ export function registerAdminRoutes(
         });
         return reply.code(200).send({ success: true });
       } catch (err: unknown) {
+        if (err instanceof RebeccaOriginDownError) {
+          return reply.code(503).send({ error: 'Panel unavailable', code: 'PANEL_DOWN' });
+        }
         const message = err instanceof Error ? err.message : 'Failed to reset usage';
         return reply.code(400).send({ error: message });
       }
@@ -576,6 +620,9 @@ export function registerAdminRoutes(
       Body: { panelId?: string };
     }>('/api/admin/users/:id/configs/:configUsername/revoke', async (request, reply) => {
       const telegramId = Number(request.params.id);
+      if (!Number.isSafeInteger(telegramId) || telegramId <= 0) {
+        return reply.code(400).send({ error: 'Invalid user ID' });
+      }
       const { configUsername } = request.params;
       const { panelId } = request.body || {};
       if (!services.configService) {
@@ -600,6 +647,9 @@ export function registerAdminRoutes(
         });
         return reply.code(200).send({ success: true, subUrl: newSubUrl });
       } catch (err: unknown) {
+        if (err instanceof RebeccaOriginDownError) {
+          return reply.code(503).send({ error: 'Panel unavailable', code: 'PANEL_DOWN' });
+        }
         const message = err instanceof Error ? err.message : 'Failed to revoke subscription';
         return reply.code(400).send({ error: message });
       }
@@ -611,6 +661,9 @@ export function registerAdminRoutes(
       Body: { panelId?: string };
     }>('/api/admin/users/:id/configs/:configUsername/sync', async (request, reply) => {
       const telegramId = Number(request.params.id);
+      if (!Number.isSafeInteger(telegramId) || telegramId <= 0) {
+        return reply.code(400).send({ error: 'Invalid user ID' });
+      }
       const { configUsername } = request.params;
       const { panelId } = request.body || {};
       if (!services.configService) {
@@ -630,6 +683,9 @@ export function registerAdminRoutes(
         const detail = await services.configService.getRemoteConfigDetail(config);
         return reply.code(200).send({ success: true, detail });
       } catch (err: unknown) {
+        if (err instanceof RebeccaOriginDownError) {
+          return reply.code(503).send({ error: 'Panel unavailable', code: 'PANEL_DOWN' });
+        }
         const message = err instanceof Error ? err.message : 'Failed to sync config with panel';
         return reply.code(400).send({ error: message });
       }
@@ -826,7 +882,20 @@ export function registerAdminRoutes(
           .code(400)
           .send({ error: err instanceof Error ? err.message : 'Invalid panel URL' });
       }
-      const parsedServiceId = serviceId ? Number(serviceId) : 1;
+      if (apiKey !== undefined && typeof apiKey !== 'string') {
+        return reply.code(400).send({ error: 'Invalid API key' });
+      }
+      if (serviceName !== undefined && typeof serviceName !== 'string') {
+        return reply.code(400).send({ error: 'Invalid service name' });
+      }
+      const rawServiceId: unknown = serviceId;
+      const parsedServiceId =
+        rawServiceId === undefined
+          ? 1
+          : typeof rawServiceId === 'number' ||
+              (typeof rawServiceId === 'string' && rawServiceId.trim().length > 0)
+            ? Number(rawServiceId)
+            : NaN;
       if (
         !Number.isSafeInteger(parsedServiceId) ||
         parsedServiceId <= 0 ||
@@ -894,19 +963,25 @@ export function registerAdminRoutes(
       }
 
       if (apiKey !== undefined) {
-        changes.apiKey =
-          typeof apiKey === 'string' ? apiKey.trim() || null : apiKey === null ? null : undefined;
+        if (apiKey !== null && typeof apiKey !== 'string') {
+          return reply.code(400).send({ error: 'Invalid API key' });
+        }
+        changes.apiKey = typeof apiKey === 'string' ? apiKey.trim() || null : null;
       }
 
       const adminId = request.userSession!.telegramId;
       try {
         await services.panelRegistry.updatePanel(id, changes);
+        const auditMetadata: Record<string, unknown> = { ...changes };
+        if ('apiKey' in auditMetadata) {
+          auditMetadata.apiKey = changes.apiKey === null ? '[CLEARED]' : '[REDACTED]';
+        }
         await services.userService.recordAdminAction({
           actorTelegramId: adminId,
           action: 'admin_update_panel',
           entityType: 'rebecca_panel',
           entityId: id,
-          metadata: changes,
+          metadata: auditMetadata,
         });
         return reply.code(200).send({ success: true });
       } catch (err: unknown) {
@@ -1193,7 +1268,9 @@ export function registerAdminRoutes(
  * and huge values that previously caused Drizzle errors / full scans.
  */
 function clampPositiveInt(raw: string | undefined, fallback: number, max: number): number {
+  if (raw === undefined || raw === '') return fallback;
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(1, Math.min(Math.trunc(parsed) || fallback, max));
+  const truncated = Math.trunc(parsed);
+  if (!Number.isSafeInteger(truncated) || truncated < 1) return fallback;
+  return Math.min(truncated, max);
 }

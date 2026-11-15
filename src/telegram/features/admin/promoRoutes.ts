@@ -1,7 +1,7 @@
 import type { Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
 import { t } from '../../locale.js';
-import { buildEmptyState, buildScreen } from '../../ui.js';
+import { buildEmptyState, buildScreen, guardAdminCallbacks } from '../../ui.js';
 import {
   promoCenterKeyboard,
   promoDeleteConfirmKeyboard,
@@ -14,6 +14,8 @@ import {
 const UUID_CAPTURE = '([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})';
 
 export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
+  const adminCallback = guardAdminCallbacks(bot);
+
   async function renderDetail(ctx: MenuContext, id: string): Promise<void> {
     const view = await promoDetailView(ctx, id);
     if (!view) {
@@ -28,48 +30,48 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
     await renderPromoScreen(ctx, view.text, view.keyboard, 'Markdown');
   }
 
-  bot.callbackQuery('promo:list', async (ctx) => {
+  adminCallback('promo:list', async (ctx) => {
     await ctx.answerCallbackQuery();
     await showPromoCenter(ctx, 1);
   });
 
-  bot.callbackQuery(/^promo:page:(\d+)$/u, async (ctx) => {
+  adminCallback(/^promo:page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await showPromoCenter(ctx, Number(ctx.match[1]) || 1);
   });
 
-  bot.callbackQuery('promo:create', async (ctx) => {
+  adminCallback('promo:create', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminCreatePromoConversation');
   });
 
-  bot.callbackQuery('promo:bulk', async (ctx) => {
+  adminCallback('promo:bulk', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminBulkPromoConversation');
   });
 
-  bot.callbackQuery('promo:search', async (ctx) => {
+  adminCallback('promo:search', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminSearchPromoConversation');
   });
 
-  bot.callbackQuery(new RegExp(`^promo:redemptions:${UUID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^promo:redemptions:${UUID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery();
     await showPromoRedemptions(ctx, ctx.match[1]!, Number(ctx.match[2]) || 1);
   });
 
-  bot.callbackQuery(new RegExp(`^promo:open:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^promo:open:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderDetail(ctx, ctx.match[1]!);
   });
 
-  bot.callbackQuery(new RegExp(`^promo:edit:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^promo:edit:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     ctx.session.adminPromoEditId = ctx.match[1]!;
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminEditPromoConversation');
   });
 
-  bot.callbackQuery(new RegExp(`^promo:set:([01]):${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^promo:set:([01]):${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const active = ctx.match[1] === '1';
     const id = ctx.match[2]!;
@@ -90,12 +92,12 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
 
   // A pre-upgrade toggle does not encode the intended state. Refresh it
   // instead of risking an inverse mutation from a stale or repeated click.
-  bot.callbackQuery(new RegExp(`^promo:toggle:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^promo:toggle:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderDetail(ctx, ctx.match[1]!);
   });
 
-  bot.callbackQuery(new RegExp(`^promo:delete:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^promo:delete:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const id = ctx.match[1]!;
     const promo = await ctx.services.promoService.getPromoCodeById(id);
@@ -122,7 +124,7 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
     );
   });
 
-  bot.callbackQuery(new RegExp(`^promo:delete_confirm:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^promo:delete_confirm:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const id = ctx.match[1]!;
     const promo = await ctx.services.promoService.getPromoCodeById(id);
@@ -137,7 +139,7 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
   });
 
   // Old session-token buttons and future unknown promo actions fail visibly.
-  bot.callbackQuery(/^promo:/u, async (ctx) => {
+  adminCallback(/^promo:/u, async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'admin_promo_stale_button'), show_alert: true });
     await showPromoCenter(ctx, 1);
   });

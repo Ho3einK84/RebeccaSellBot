@@ -61,7 +61,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     deletePanel,
     isDeleting,
     addService,
-    isAddingService,
+    isMutatingService,
     setDefaultService,
     setCustomTarget,
     deleteService,
@@ -558,7 +558,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
         onSetDefaultService={handleSetDefaultService}
         onSetCustomTarget={handleSetCustomTarget}
         onDeleteService={handleDeleteService}
-        loading={isAddingService}
+        loading={isMutatingService}
       />
 
       <DeletePanelModal

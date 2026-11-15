@@ -1,7 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { logger } from '../../../infra/logger.js';
-import { localizedNumber, t } from '../../locale.js';
+import { localizedNumber, resolveContextLocale, t } from '../../locale.js';
 import {
   DEFAULT_SETTINGS,
   templatePlaceholders,
@@ -22,6 +22,7 @@ import {
 } from '../../ui.js';
 import { requireAdmin } from './shared.js';
 import { escapeTelegramMarkdown, validateTelegramMarkdown } from '../../rendering.js';
+import { callbackData, TELEGRAM_CALLBACK_MAX_BYTES } from '../../callbackData.js';
 
 // ── Essential User-Facing Texts ───────────────────────────────────────────────
 
@@ -311,13 +312,116 @@ export function buildCategoryKeyboard(ctx: ConversationContext): InlineKeyboard 
   const keyboard = new InlineKeyboard();
   let count = 0;
   for (const cat of TEXT_CATEGORIES) {
-    keyboard.text(t(ctx, cat.labelKey), `text-cat:${cat.id}`);
+    keyboard.text(t(ctx, cat.labelKey), callbackData('text-cat', cat.id));
     count++;
     if (count % 2 === 0) keyboard.row();
   }
   if (count % 2 !== 0) keyboard.row();
   keyboard.text(t(ctx, 'admin_text_back_to_menu'), 'text-nav:mode_select');
   return keyboard;
+}
+
+function encodeTextKeyCallback(index: number, key: string): string {
+  const direct = `text-pk:${key}`;
+  if (Buffer.byteLength(direct, 'utf8') <= TELEGRAM_CALLBACK_MAX_BYTES) {
+    return callbackData('text-pk', key);
+  }
+  return callbackData('text-pi', String(index));
+}
+
+function decodeTextKeyCallback(data: string, pageKeys: readonly string[]): string | undefined {
+  if (data.startsWith('text-pk:')) {
+    return data.slice('text-pk:'.length);
+  }
+  if (data.startsWith('text-pi:')) {
+    const idx = Number.parseInt(data.slice('text-pi:'.length), 10);
+    if (Number.isInteger(idx) && idx >= 0 && idx < pageKeys.length) {
+      return pageKeys[idx];
+    }
+  }
+  return undefined;
+}
+
+async function answerUnexpectedCallback(input: ConversationContext): Promise<void> {
+  if (!input.callbackQuery) return;
+  await input.answerCallbackQuery?.({
+    text: t(input, 'button_action_failed'),
+    show_alert: false,
+  });
+}
+
+async function trySaveTextOverride(
+  conversation: MyConversation,
+  activeCtx: ConversationContext,
+  qualifiedKey: string,
+  newText: string,
+  defaultValue: string
+): Promise<boolean> {
+  const validation = validateTranslationOverrideDetailed(newText, defaultValue);
+  if (!validation.valid) {
+    await replyInAdminConversation(
+      conversation,
+      activeCtx,
+      buildEmptyState(
+        '⚠️',
+        t(activeCtx, 'admin_text_editor_title'),
+        formatValidationError(validation, activeCtx)
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return false;
+  }
+  const mdVal = validateTelegramMarkdown(newText);
+  if (!mdVal.valid) {
+    await replyInAdminConversation(
+      conversation,
+      activeCtx,
+      buildEmptyState(
+        '⚠️',
+        t(activeCtx, 'admin_text_editor_title'),
+        `${t(activeCtx, 'admin_text_invalid_markdown')}: ${escapeTelegramMarkdown(mdVal.error ?? '')}`
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return false;
+  }
+  try {
+    await conversation.external((outsideCtx) =>
+      (outsideCtx?.services ?? activeCtx.services)!.translationService.updateSetting(
+        qualifiedKey,
+        newText
+      )
+    );
+  } catch (err) {
+    logger.error({ err, key: qualifiedKey }, 'Failed to update text setting override');
+    await replyInAdminConversation(
+      conversation,
+      activeCtx,
+      buildEmptyState(
+        '⚠️',
+        t(activeCtx, 'admin_text_editor_title'),
+        t(activeCtx, 'operation_failed')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return false;
+  }
+  await replyInAdminConversation(
+    conversation,
+    activeCtx,
+    buildScreen({
+      emoji: '✅',
+      title: t(activeCtx, 'admin_text_saved_title'),
+      primary: {
+        emoji: '📝',
+        label: t(activeCtx, 'admin_text_key_label'),
+        value: escapeTelegramMarkdown(qualifiedKey),
+      },
+      footer: t(activeCtx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
+    }),
+    { parse_mode: 'Markdown' }
+  );
+  return true;
 }
 
 // ── Placeholders Mock Dictionary for Live Previews ─────────────────────────────
@@ -448,17 +552,19 @@ export async function adminEditTextsConversation(
   if (!(await requireAdmin(conversation, ctx)) || !ctx.services) return;
   const ownerId = await conversationOwnerId(conversation);
 
-  let currentLocale: SupportedLocale =
-    ctx.services.translationService.resolveLocale(ctx.from?.language_code) ?? 'fa';
+  let currentLocale: SupportedLocale = resolveContextLocale(ctx);
   let state: EditorState = { screen: 'mode_select' };
   let activeCtx = ctx;
 
   for (;;) {
-    const translationService = ctx.services.translationService;
-
     // ── 1. Mode Selection Screen (Main Hub) ──────────────────────────────────
     if (state.screen === 'mode_select') {
-      const customizedCount = translationService.getCustomizedKeys(currentLocale).length;
+      const customizedCount = await conversation.external(
+        (outsideCtx) =>
+          (outsideCtx?.services ?? activeCtx.services)!.translationService.getCustomizedKeys(
+            currentLocale
+          ).length
+      );
       const langLabel = currentLocale === 'fa' ? '🦁 فارسی' : '🇬🇧 English';
       const switchLangLabel = currentLocale === 'fa' ? '🇬🇧 English' : '🦁 فارسی';
 
@@ -554,6 +660,10 @@ export async function adminEditTextsConversation(
         state = { screen: 'mode_select' };
         continue;
       }
+      if (input.callbackQuery) {
+        await answerUnexpectedCallback(input);
+        continue;
+      }
       if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
         await deleteConsumedInputMessage(input);
         const query = input.message.text.trim();
@@ -572,9 +682,9 @@ export async function adminEditTextsConversation(
       const pageItems = items.slice(safePage * KEYS_PER_PAGE, (safePage + 1) * KEYS_PER_PAGE);
 
       const keyboard = new InlineKeyboard();
-      for (const item of pageItems) {
-        keyboard.text(t(activeCtx, item.labelKey), `text-pk:${item.key}`).row();
-      }
+      pageItems.forEach((item, idx) => {
+        keyboard.text(t(activeCtx, item.labelKey), encodeTextKeyCallback(idx, item.key)).row();
+      });
       if (safePage > 0) {
         keyboard.text(t(activeCtx, 'admin_text_prev_page'), 'text-p:prev');
       }
@@ -621,11 +731,14 @@ export async function adminEditTextsConversation(
         state = { screen: 'essential_list', page: Math.min(pageCount - 1, safePage + 1) };
         continue;
       }
-      if (data.startsWith('text-pk:')) {
-        const key = data.slice('text-pk:'.length);
+      const selectedEssentialKey = decodeTextKeyCallback(
+        data,
+        pageItems.map((item) => item.key)
+      );
+      if (selectedEssentialKey) {
         state = {
           screen: 'key_detail',
-          key,
+          key: selectedEssentialKey,
           returnState: { screen: 'essential_list', page: safePage },
         };
         continue;
@@ -678,8 +791,11 @@ export async function adminEditTextsConversation(
         continue;
       }
 
-      const allKeys = translationService
-        .getTranslationKeys()
+      const allKeys = (
+        await conversation.external((outsideCtx) =>
+          (outsideCtx?.services ?? activeCtx.services)!.translationService.getTranslationKeys()
+        )
+      )
         .filter((k) => category.matches(k))
         .filter((k) =>
           current.search ? k.toLowerCase().includes(current.search.toLowerCase()) : true
@@ -691,9 +807,9 @@ export async function adminEditTextsConversation(
       const pageKeys = allKeys.slice(safePage * KEYS_PER_PAGE, (safePage + 1) * KEYS_PER_PAGE);
 
       const keyboard = new InlineKeyboard();
-      for (const k of pageKeys) {
-        keyboard.text(k, `text-pk:${k}`).row();
-      }
+      pageKeys.forEach((k, idx) => {
+        keyboard.text(k, encodeTextKeyCallback(idx, k)).row();
+      });
 
       if (current.search) {
         keyboard.text(t(activeCtx, 'admin_text_search_clear'), 'text-incat-clear').row();
@@ -784,11 +900,11 @@ export async function adminEditTextsConversation(
         };
         continue;
       }
-      if (data.startsWith('text-pk:')) {
-        const key = data.slice('text-pk:'.length);
+      const selectedCategoryKey = decodeTextKeyCallback(data, pageKeys);
+      if (selectedCategoryKey) {
         state = {
           screen: 'key_detail',
-          key,
+          key: selectedCategoryKey,
           returnState: {
             screen: 'key_list',
             categoryId: current.categoryId,
@@ -839,6 +955,10 @@ export async function adminEditTextsConversation(
         };
         continue;
       }
+      if (input.callbackQuery) {
+        await answerUnexpectedCallback(input);
+        continue;
+      }
       if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
         await deleteConsumedInputMessage(input);
         state = {
@@ -853,7 +973,11 @@ export async function adminEditTextsConversation(
 
     // ── 5. Customized Texts List ─────────────────────────────────────────────
     if (state.screen === 'customized_list') {
-      const keys = translationService.getCustomizedKeys(currentLocale);
+      const keys = await conversation.external((outsideCtx) =>
+        (outsideCtx?.services ?? activeCtx.services)!.translationService.getCustomizedKeys(
+          currentLocale
+        )
+      );
       if (keys.length === 0) {
         await promptInConversation(
           conversation,
@@ -886,7 +1010,9 @@ export async function adminEditTextsConversation(
         if (input.callbackQuery?.data === 'text-nav:mode_select') {
           await input.answerCallbackQuery?.();
           state = { screen: 'mode_select' };
+          continue;
         }
+        await answerUnexpectedCallback(input);
         continue;
       }
 
@@ -895,9 +1021,9 @@ export async function adminEditTextsConversation(
       const pageKeys = keys.slice(safePage * KEYS_PER_PAGE, (safePage + 1) * KEYS_PER_PAGE);
 
       const keyboard = new InlineKeyboard();
-      for (const k of pageKeys) {
-        keyboard.text(k, `text-pk:${k}`).row();
-      }
+      pageKeys.forEach((k, idx) => {
+        keyboard.text(k, encodeTextKeyCallback(idx, k)).row();
+      });
       if (safePage > 0) {
         keyboard.text(t(activeCtx, 'admin_text_prev_page'), 'text-p:prev');
       }
@@ -944,11 +1070,11 @@ export async function adminEditTextsConversation(
         state = { screen: 'customized_list', page: Math.min(pageCount - 1, safePage + 1) };
         continue;
       }
-      if (data.startsWith('text-pk:')) {
-        const key = data.slice('text-pk:'.length);
+      const selectedCustomKey = decodeTextKeyCallback(data, pageKeys);
+      if (selectedCustomKey) {
         state = {
           screen: 'key_detail',
-          key,
+          key: selectedCustomKey,
           returnState: { screen: 'customized_list', page: safePage },
         };
         continue;
@@ -959,7 +1085,12 @@ export async function adminEditTextsConversation(
     // ── 6. Global Search Results ─────────────────────────────────────────────
     if (state.screen === 'search_results') {
       const current: SearchResultsState = state;
-      const results = translationService.searchTranslations(current.query, currentLocale);
+      const results = await conversation.external((outsideCtx) =>
+        (outsideCtx?.services ?? activeCtx.services)!.translationService.searchTranslations(
+          current.query,
+          currentLocale
+        )
+      );
 
       if (results.length === 0) {
         await promptInConversation(
@@ -1001,9 +1132,9 @@ export async function adminEditTextsConversation(
       const pageKeys = results.slice(safePage * KEYS_PER_PAGE, (safePage + 1) * KEYS_PER_PAGE);
 
       const keyboard = new InlineKeyboard();
-      for (const k of pageKeys) {
-        keyboard.text(k, `text-pk:${k}`).row();
-      }
+      pageKeys.forEach((k, idx) => {
+        keyboard.text(k, encodeTextKeyCallback(idx, k)).row();
+      });
       if (safePage > 0) {
         keyboard.text(t(activeCtx, 'admin_text_prev_page'), 'text-p:prev');
       }
@@ -1019,12 +1150,10 @@ export async function adminEditTextsConversation(
         buildScreen({
           emoji: '🔍',
           title: t(activeCtx, 'admin_text_search_results_title'),
-          subtitle: escapeTelegramMarkdown(
-            t(activeCtx, 'admin_text_search_results_prompt', {
-              count: localizedNumber(results.length, activeCtx),
-              search: escapeTelegramMarkdown(current.query),
-            })
-          ),
+          subtitle: t(activeCtx, 'admin_text_search_results_prompt', {
+            count: localizedNumber(results.length, activeCtx),
+            search: escapeTelegramMarkdown(current.query),
+          }),
           primary: {
             emoji: '📚',
             label: t(activeCtx, 'admin_text_key_label'),
@@ -1059,11 +1188,11 @@ export async function adminEditTextsConversation(
         };
         continue;
       }
-      if (data.startsWith('text-pk:')) {
-        const selectedKey = data.slice('text-pk:'.length);
+      const selectedSearchKey = decodeTextKeyCallback(data, pageKeys);
+      if (selectedSearchKey) {
         state = {
           screen: 'key_detail',
-          key: selectedKey,
+          key: selectedSearchKey,
           returnState: { screen: 'search_results', query: current.query, page: safePage },
         };
         continue;
@@ -1075,9 +1204,14 @@ export async function adminEditTextsConversation(
     if (state.screen === 'key_detail') {
       const current: KeyDetailState = state;
       const qualifiedKey = `${currentLocale}.${current.key}`;
-      const currentValue = translationService.get(qualifiedKey);
+      const { currentValue, isCustomized } = await conversation.external((outsideCtx) => {
+        const ts = (outsideCtx?.services ?? activeCtx.services)!.translationService;
+        return {
+          currentValue: ts.get(qualifiedKey),
+          isCustomized: ts.getStoredSetting(qualifiedKey) !== undefined,
+        };
+      });
       const defaultValue = DEFAULT_SETTINGS[qualifiedKey] ?? currentValue;
-      const isCustomized = translationService.getStoredSetting(qualifiedKey) !== undefined;
 
       const placeholders = templatePlaceholders(defaultValue);
       const placeholderInfoText = formatPlaceholdersInfo(placeholders, currentLocale, activeCtx);
@@ -1144,55 +1278,20 @@ export async function adminEditTextsConversation(
       // Handle Direct Text Input as an instant edit attempt
       if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
         await deleteConsumedInputMessage(input);
-        const newText = input.message.text.trim();
-        const validation = validateTranslationOverrideDetailed(newText, defaultValue);
-        if (!validation.valid) {
-          await replyInAdminConversation(
-            conversation,
-            activeCtx,
-            buildEmptyState(
-              '⚠️',
-              t(activeCtx, 'admin_text_editor_title'),
-              formatValidationError(validation, activeCtx)
-            ),
-            { parse_mode: 'Markdown' }
-          );
-          continue;
-        }
-        const mdVal = validateTelegramMarkdown(newText);
-        if (!mdVal.valid) {
-          await replyInAdminConversation(
-            conversation,
-            activeCtx,
-            buildEmptyState(
-              '⚠️',
-              t(activeCtx, 'admin_text_editor_title'),
-              `${t(activeCtx, 'admin_text_invalid_markdown')}: ${mdVal.error ?? ''}`
-            ),
-            { parse_mode: 'Markdown' }
-          );
-          continue;
-        }
-        await translationService.updateSetting(qualifiedKey, newText);
-        await replyInAdminConversation(
+        await trySaveTextOverride(
           conversation,
           activeCtx,
-          buildScreen({
-            emoji: '✅',
-            title: t(activeCtx, 'admin_text_saved_title'),
-            primary: {
-              emoji: '📝',
-              label: t(activeCtx, 'admin_text_key_label'),
-              value: escapeTelegramMarkdown(qualifiedKey),
-            },
-            footer: t(activeCtx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
-          }),
-          { parse_mode: 'Markdown' }
+          qualifiedKey,
+          input.message.text.trim(),
+          defaultValue
         );
         continue;
       }
 
-      if (!data) continue;
+      if (!data) {
+        await answerUnexpectedCallback(input);
+        continue;
+      }
       await input.answerCallbackQuery?.();
 
       if (data === 'text-nav:back') {
@@ -1218,7 +1317,9 @@ export async function adminEditTextsConversation(
     if (state.screen === 'key_edit_prompt') {
       const current: KeyEditPromptState = state;
       const qualifiedKey = `${currentLocale}.${current.key}`;
-      const currentValue = translationService.get(qualifiedKey);
+      const currentValue = await conversation.external((outsideCtx) =>
+        (outsideCtx?.services ?? activeCtx.services)!.translationService.get(qualifiedKey)
+      );
       const defaultValue = DEFAULT_SETTINGS[qualifiedKey] ?? currentValue;
 
       await promptInConversation(
@@ -1250,55 +1351,23 @@ export async function adminEditTextsConversation(
         state = { screen: 'key_detail', key: current.key, returnState: current.returnState };
         continue;
       }
+      if (input.callbackQuery) {
+        await answerUnexpectedCallback(input);
+        continue;
+      }
 
       if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
         await deleteConsumedInputMessage(input);
-        const newText = input.message.text.trim();
-        const validation = validateTranslationOverrideDetailed(newText, defaultValue);
-        if (!validation.valid) {
-          await replyInAdminConversation(
-            conversation,
-            activeCtx,
-            buildEmptyState(
-              '⚠️',
-              t(activeCtx, 'admin_text_editor_title'),
-              formatValidationError(validation, activeCtx)
-            ),
-            { parse_mode: 'Markdown' }
-          );
-          continue;
-        }
-        const mdVal = validateTelegramMarkdown(newText);
-        if (!mdVal.valid) {
-          await replyInAdminConversation(
-            conversation,
-            activeCtx,
-            buildEmptyState(
-              '⚠️',
-              t(activeCtx, 'admin_text_editor_title'),
-              `${t(activeCtx, 'admin_text_invalid_markdown')}: ${mdVal.error ?? ''}`
-            ),
-            { parse_mode: 'Markdown' }
-          );
-          continue;
-        }
-        await translationService.updateSetting(qualifiedKey, newText);
-        await replyInAdminConversation(
+        const saved = await trySaveTextOverride(
           conversation,
           activeCtx,
-          buildScreen({
-            emoji: '✅',
-            title: t(activeCtx, 'admin_text_saved_title'),
-            primary: {
-              emoji: '📝',
-              label: t(activeCtx, 'admin_text_key_label'),
-              value: escapeTelegramMarkdown(qualifiedKey),
-            },
-            footer: t(activeCtx, 'admin_text_saved', { key: escapeTelegramMarkdown(qualifiedKey) }),
-          }),
-          { parse_mode: 'Markdown' }
+          qualifiedKey,
+          input.message.text.trim(),
+          defaultValue
         );
-        state = { screen: 'key_detail', key: current.key, returnState: current.returnState };
+        if (saved) {
+          state = { screen: 'key_detail', key: current.key, returnState: current.returnState };
+        }
         continue;
       }
       continue;
@@ -1308,10 +1377,12 @@ export async function adminEditTextsConversation(
     if (state.screen === 'key_preview') {
       const current: KeyPreviewState = state;
       const qualifiedKey = `${currentLocale}.${current.key}`;
-      const renderedSample = translationService.get(
-        qualifiedKey,
-        currentLocale,
-        SAMPLE_PLACEHOLDER_VALUES
+      const renderedSample = await conversation.external((outsideCtx) =>
+        (outsideCtx?.services ?? activeCtx.services)!.translationService.get(
+          qualifiedKey,
+          currentLocale,
+          SAMPLE_PLACEHOLDER_VALUES
+        )
       );
 
       await promptInConversation(
@@ -1351,7 +1422,9 @@ export async function adminEditTextsConversation(
       if (input.callbackQuery?.data === 'text-nav:detail') {
         await input.answerCallbackQuery?.();
         state = { screen: 'key_detail', key: current.key, returnState: current.returnState };
+        continue;
       }
+      await answerUnexpectedCallback(input);
       continue;
     }
 
@@ -1398,7 +1471,11 @@ export async function adminEditTextsConversation(
       }
       if (data === 'text-act:reset_confirm') {
         try {
-          await translationService.deleteSetting(qualifiedKey);
+          await conversation.external((outsideCtx) =>
+            (outsideCtx?.services ?? activeCtx.services)!.translationService.deleteSetting(
+              qualifiedKey
+            )
+          );
           await replyInAdminConversation(
             conversation,
             activeCtx,

@@ -360,9 +360,13 @@ export function registerUserRoutes(
           }
         } else if (config.autoRenewPackageId) {
           selectedPackage = availablePackages.find((pkg) => pkg.id === config.autoRenewPackageId);
-        }
-
-        if (!selectedPackage && availablePackages.length > 0) {
+          if (!selectedPackage) {
+            return reply.code(404).send({
+              error: 'Configured auto-renew package is no longer available',
+              code: 'PACKAGE_NOT_FOUND',
+            });
+          }
+        } else if (availablePackages.length > 0) {
           selectedPackage = availablePackages[0];
         }
 
@@ -421,9 +425,20 @@ export function registerUserRoutes(
           return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
         }
 
+        const requestedStatus = request.body?.status;
+        if (
+          requestedStatus !== undefined &&
+          requestedStatus !== 'active' &&
+          requestedStatus !== 'disabled'
+        ) {
+          return reply.code(400).send({
+            error: "Status must be 'active' or 'disabled'",
+            code: 'INVALID_STATUS',
+          });
+        }
+
         try {
           let finalStatus: 'active' | 'disabled';
-          const requestedStatus = request.body?.status;
           if (requestedStatus === 'active') {
             await options.configService.enableConfig(config.configUsername, config.panelId);
             finalStatus = 'active';
@@ -709,8 +724,11 @@ export function registerUserRoutes(
               pricePerGb: quote.pricePerGb,
               pricePerDay: quote.pricePerDay,
             });
-          } catch {
-            // fallback to linear calculation
+          } catch (err: unknown) {
+            return reply.code(400).send({
+              error: err instanceof Error ? err.message : 'Invalid custom quote parameters',
+              code: 'INVALID_CUSTOM_BOUNDS',
+            });
           }
         }
 
@@ -748,16 +766,12 @@ export function registerUserRoutes(
           return reply.code(401).send({ error: 'Unauthorized' });
         }
 
-        if (await options.userService.isBanned?.(telegramId)) {
-          return reply.code(403).send({ error: 'User is banned', code: 'USER_BANNED' });
-        }
-
         if (!options.purchaseCheckoutService) {
           return reply.code(500).send({ error: 'Purchase checkout service unavailable' });
         }
 
         const body = request.body;
-        if (!body || typeof body !== 'object') {
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
           return reply
             .code(400)
             .send({ error: 'Invalid checkout request', code: 'INVALID_REQUEST' });
@@ -859,10 +873,6 @@ export function registerUserRoutes(
         const telegramId = request.userSession?.telegramId;
         if (!telegramId) {
           return reply.code(401).send({ error: 'Unauthorized' });
-        }
-
-        if (await options.userService.isBanned?.(telegramId)) {
-          return reply.code(403).send({ error: 'User is banned', code: 'USER_BANNED' });
         }
 
         if (!options.purchaseCheckoutService) {

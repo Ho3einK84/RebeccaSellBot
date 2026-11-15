@@ -68,12 +68,25 @@ export function buildHeader(emoji: string, title: string, subtitle?: string): st
     : `*${unstarredTitle}*`;
   if (!subtitle) return `${headerLine}\n`;
   const trimmedSubtitle = subtitle.trim();
-  const isAlreadyItalic = trimmedSubtitle.startsWith('_') && trimmedSubtitle.endsWith('_');
-  const hasUnderscore = trimmedSubtitle.includes('_');
-  if (isAlreadyItalic || hasUnderscore) {
+  const isAlreadyItalic =
+    trimmedSubtitle.length >= 2 &&
+    trimmedSubtitle.startsWith('_') &&
+    trimmedSubtitle.endsWith('_') &&
+    !hasOddTrailingBackslashes(trimmedSubtitle, trimmedSubtitle.length - 1);
+  // Legacy Telegram Markdown v1 terminates italics on `_` even if preceded by `\`,
+  // so any subtitle containing `_` must stay outside `_..._` wrappers.
+  if (isAlreadyItalic || trimmedSubtitle.includes('_')) {
     return `${headerLine}\n${trimmedSubtitle}\n`;
   }
   return `${headerLine}\n_${trimmedSubtitle}_\n`;
+}
+
+function hasOddTrailingBackslashes(value: string, index: number): boolean {
+  let backslashes = 0;
+  for (let i = index - 1; i >= 0 && value[i] === '\\'; i--) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
 }
 
 /**

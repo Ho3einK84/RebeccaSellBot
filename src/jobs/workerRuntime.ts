@@ -26,7 +26,7 @@ export class PostgresAdvisoryJobLockProvider implements JobLockProvider {
         return null;
       }
     } catch (err) {
-      client.release();
+      client.release(err instanceof Error ? err : new Error(String(err)));
       throw err;
     }
 
@@ -34,10 +34,14 @@ export class PostgresAdvisoryJobLockProvider implements JobLockProvider {
     return async () => {
       if (released) return;
       released = true;
+      let releaseError: Error | undefined;
       try {
         await client.query('SELECT pg_advisory_unlock($1::bigint)', [lockKey.toString()]);
+      } catch (err) {
+        releaseError = err instanceof Error ? err : new Error(String(err));
+        logger.error({ err, job: name }, 'Failed to release PostgreSQL advisory lock');
       } finally {
-        client.release();
+        client.release(releaseError);
       }
     };
   }
@@ -72,6 +76,8 @@ export class JobRunner {
     } finally {
       try {
         await release?.();
+      } catch (err) {
+        logger.error({ err, job: name }, 'Error while releasing job lock');
       } finally {
         this.running.delete(name);
         if (this.running.size === 0) {
@@ -122,7 +128,8 @@ export async function forEachConcurrent<T>(
   worker: (item: T, index: number) => Promise<void>
 ): Promise<void> {
   if (items.length === 0) return;
-  const width = Math.max(1, Math.min(Math.floor(concurrency), items.length));
+  const normalizedConcurrency = Number.isFinite(concurrency) ? Math.floor(concurrency) : 1;
+  const width = Math.max(1, Math.min(normalizedConcurrency, items.length));
   let cursor = 0;
 
   const consume = async (): Promise<void> => {

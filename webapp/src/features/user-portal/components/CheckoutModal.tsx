@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useReducer, useEffect, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
 import {
   ShoppingCart,
@@ -23,7 +23,14 @@ import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { api, ApiClientError } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
-import type { UserPackageItem, UserCheckoutResponse } from '@/shared/types/userPortal.js';
+import type { UserPackageItem } from '@/shared/types/userPortal.js';
+import {
+  INITIAL_CHECKOUT_STATE,
+  buildPackageKey,
+  checkoutReducer,
+  formatCountdown,
+  resolveRetryAction,
+} from './checkoutState.js';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -34,22 +41,6 @@ interface CheckoutModalProps {
   onGoToWallet: () => void;
   onGoToServices?: () => void;
   onSuccess: (message: string) => void;
-}
-
-type CheckoutStep =
-  | 'loading'
-  | 'review'
-  | 'insufficient_balance'
-  | 'creation_error'
-  | 'expired'
-  | 'verifying'
-  | 'confirm_error'
-  | 'success';
-
-function formatCountdown(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
@@ -68,17 +59,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const { copy, isCopied } = useCopy();
   const queryClient = useQueryClient();
 
-  const [step, setStep] = useState<CheckoutStep>('loading');
-  const [checkout, setCheckout] = useState<UserCheckoutResponse | null>(null);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string>('');
-  const [deficitAmount, setDeficitAmount] = useState<number>(0);
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
-  const [successData, setSuccessData] = useState<{
-    configUsername: string;
-    subUrl?: string;
-  } | null>(null);
-  const [qrSrc, setQrSrc] = useState<string>('');
+  const [state, dispatch] = useReducer(checkoutReducer, INITIAL_CHECKOUT_STATE);
+  const {
+    step,
+    checkout,
+    isProcessing,
+    errorMessage,
+    deficitAmount,
+    remainingSeconds,
+    successData,
+    qrSrc,
+  } = state;
 
   const displayCurrency = currency || t('common.currency');
 
@@ -86,8 +77,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const availableBalanceRef = useRef<number>(availableBalance);
   availableBalanceRef.current = availableBalance;
 
-  // Track active step and processing status via refs to freeze state transitions
-  const stepRef = useRef<CheckoutStep>(step);
+  // Track active step and processing status via refs to freeze async continuations
+  const stepRef = useRef(step);
   stepRef.current = step;
 
   /**
@@ -100,17 +91,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const isProcessingRef = useRef<boolean>(isProcessing);
   isProcessingRef.current = isProcessing;
 
-  // Track session creation per open cycle to prevent duplicate session calls
-  const sessionCreatedRef = useRef<boolean>(false);
+  // Track session creation per open cycle & package key to prevent duplicate calls
+  const sessionPkgKeyRef = useRef<string | null>(null);
 
   const createCheckoutSession = useCallback(async () => {
-    if (!pkg) return;
+    const pkgKey = buildPackageKey(pkg);
+    if (!pkg || !pkgKey) return;
     // Freeze: Never recreate checkout session if already in success or currently processing
     if (reachedSuccess() || isProcessingRef.current) return;
 
-    setStep('loading');
-    setErrorMessage('');
-    setCheckout(null);
+    dispatch({ type: 'CREATE_START', pkgKey });
 
     try {
       const isCustom = pkg.id === 'custom' || pkg.id.startsWith('custom');
@@ -128,8 +118,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       // If state transitioned to success during network latency, do not overwrite
       if (reachedSuccess()) return;
 
-      setCheckout(res);
-      setStep('review');
+      dispatch({ type: 'CREATE_SUCCESS', checkout: res });
     } catch (err: unknown) {
       if (reachedSuccess()) return;
 
@@ -149,43 +138,47 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               (errData?.price ?? pkg.price) -
                 (errData?.availableBalance ?? availableBalanceRef.current)
             );
-          setDeficitAmount(deficit);
-          setStep('insufficient_balance');
+          dispatch({ type: 'CREATE_INSUFFICIENT_BALANCE', deficit });
           return;
         }
-        setErrorMessage(err.message || t('user.shop.checkoutErrorGeneric'));
+        dispatch({
+          type: 'CREATE_ERROR',
+          message: err.message || t('user.shop.checkoutErrorGeneric'),
+        });
       } else if (err instanceof Error) {
-        setErrorMessage(err.message || t('user.shop.checkoutErrorGeneric'));
+        dispatch({
+          type: 'CREATE_ERROR',
+          message: err.message || t('user.shop.checkoutErrorGeneric'),
+        });
       } else {
-        setErrorMessage(t('user.shop.checkoutErrorGeneric'));
+        dispatch({
+          type: 'CREATE_ERROR',
+          message: t('user.shop.checkoutErrorGeneric'),
+        });
       }
-      setStep('creation_error');
     }
   }, [pkg, t]);
 
-  // Trigger createCheckoutSession when modal opens with a valid package
+  // Trigger createCheckoutSession when modal opens with a valid package or switches packages
   useEffect(() => {
-    if (isOpen && pkg) {
-      // Freeze modal state: if already in success, processing, or session already initiated for this open cycle, do nothing
-      if (sessionCreatedRef.current || reachedSuccess() || isProcessingRef.current) {
+    const currentPkgKey = buildPackageKey(pkg);
+    if (isOpen && pkg && currentPkgKey) {
+      if (sessionPkgKeyRef.current === currentPkgKey) {
+        // Freeze modal state for the active open cycle of the same package
         return;
       }
-      sessionCreatedRef.current = true;
-      setSuccessData(null);
-      setQrSrc('');
-      setIsProcessing(false);
+      if (sessionPkgKeyRef.current !== null && !reachedSuccess() && !isProcessingRef.current) {
+        // Package changed while modal stayed open: reset before initiating the new session
+        dispatch({ type: 'RESET' });
+      }
+      if (reachedSuccess() || isProcessingRef.current) {
+        return;
+      }
+      sessionPkgKeyRef.current = currentPkgKey;
       void createCheckoutSession();
     } else if (!isOpen) {
-      // Clean up all state and refs when modal is closed
-      sessionCreatedRef.current = false;
-      setStep('loading');
-      setCheckout(null);
-      setSuccessData(null);
-      setQrSrc('');
-      setIsProcessing(false);
-      setErrorMessage('');
-      setDeficitAmount(0);
-      setRemainingSeconds(0);
+      sessionPkgKeyRef.current = null;
+      dispatch({ type: 'RESET' });
     }
   }, [isOpen, pkg, createCheckoutSession]);
 
@@ -193,25 +186,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   useEffect(() => {
     if (step !== 'review' || !checkout?.expiresAt) return;
 
-    const calculateRemaining = () => {
-      const expiresMs = new Date(checkout.expiresAt).getTime();
-      const nowMs = Date.now();
-      const diffSec = Math.max(0, Math.floor((expiresMs - nowMs) / 1000));
-      setRemainingSeconds(diffSec);
-      if (diffSec <= 0) {
-        setStep('expired');
-      }
+    const tick = () => {
+      dispatch({ type: 'TICK_EXPIRY', nowMs: Date.now() });
     };
 
-    calculateRemaining();
-    const interval = setInterval(calculateRemaining, 1000);
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [step, checkout?.expiresAt]);
 
   const handleConfirmCheckout = async () => {
     if (!checkout || isProcessing) return;
-    setIsProcessing(true);
-    setErrorMessage('');
+    dispatch({ type: 'CONFIRM_START' });
     triggerHaptic('medium');
 
     try {
@@ -222,12 +208,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         // Invalidate queries for user data
         void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
         void queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
-        void queryClient.invalidateQueries({ queryKey: ['user-transactions'] });
+        void queryClient.invalidateQueries({ queryKey: ['user', 'transactions'] });
         void queryClient.invalidateQueries({ queryKey: ['user'] });
 
-        setSuccessData({
-          configUsername: res.configUsername,
-          subUrl: res.subUrl,
+        dispatch({
+          type: 'CONFIRM_SUCCESS',
+          data: {
+            configUsername: res.configUsername,
+            subUrl: res.subUrl,
+          },
         });
 
         if (res.subUrl) {
@@ -236,11 +225,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             margin: 1.5,
             color: { dark: '#000000', light: '#ffffff' },
           })
-            .then((url) => setQrSrc(url))
-            .catch(() => setQrSrc(''));
+            .then((url) => dispatch({ type: 'SET_QR', qrSrc: url }))
+            .catch(() => dispatch({ type: 'SET_QR', qrSrc: '' }));
         }
 
-        setStep('success');
         onSuccess(t('user.shop.orderSuccess'));
       }
     } catch (err: unknown) {
@@ -256,9 +244,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           // Funds reserved, verifying outcome
           void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
           void queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
-          void queryClient.invalidateQueries({ queryKey: ['user-transactions'] });
+          void queryClient.invalidateQueries({ queryKey: ['user', 'transactions'] });
           void queryClient.invalidateQueries({ queryKey: ['user'] });
-          setStep('verifying');
+          dispatch({ type: 'CONFIRM_VERIFYING' });
           return;
         }
 
@@ -266,8 +254,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           err.status === 409 &&
           (err.code === 'PURCHASE_IN_PROGRESS' || errData?.code === 'PURCHASE_IN_PROGRESS')
         ) {
-          setErrorMessage(t('user.shop.purchaseInProgress'));
-          setStep('confirm_error');
+          dispatch({ type: 'CONFIRM_ERROR', message: t('user.shop.purchaseInProgress') });
           return;
         }
 
@@ -276,13 +263,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           err.code === 'CHECKOUT_EXPIRED' ||
           errData?.code === 'CHECKOUT_EXPIRED'
         ) {
-          setStep('expired');
+          dispatch({ type: 'CONFIRM_EXPIRED' });
           return;
         }
 
         if (err.status === 503 || err.code === 'PANEL_DOWN' || errData?.code === 'PANEL_DOWN') {
-          setErrorMessage(t('user.shop.panelDownError'));
-          setStep('confirm_error');
+          dispatch({ type: 'CONFIRM_ERROR', message: t('user.shop.panelDownError') });
           return;
         }
 
@@ -290,25 +276,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           err.status === 409 &&
           (err.code === 'INSUFFICIENT_BALANCE' || errData?.code === 'INSUFFICIENT_BALANCE')
         ) {
-          setDeficitAmount(
-            errData?.deficit ??
-              Math.max(0, (checkout?.price ?? pkg?.price ?? 0) - availableBalanceRef.current)
-          );
-          setStep('insufficient_balance');
+          dispatch({
+            type: 'CONFIRM_INSUFFICIENT_BALANCE',
+            deficit:
+              errData?.deficit ??
+              Math.max(0, (checkout?.price ?? pkg?.price ?? 0) - availableBalanceRef.current),
+          });
           return;
         }
 
-        setErrorMessage(err.message || t('user.shop.checkoutErrorGeneric'));
-        setStep('confirm_error');
+        dispatch({
+          type: 'CONFIRM_ERROR',
+          message: err.message || t('user.shop.checkoutErrorGeneric'),
+        });
       } else if (err instanceof Error) {
-        setErrorMessage(err.message || t('user.shop.checkoutErrorGeneric'));
-        setStep('confirm_error');
+        dispatch({
+          type: 'CONFIRM_ERROR',
+          message: err.message || t('user.shop.checkoutErrorGeneric'),
+        });
       } else {
-        setErrorMessage(t('user.shop.checkoutErrorGeneric'));
-        setStep('confirm_error');
+        dispatch({
+          type: 'CONFIRM_ERROR',
+          message: t('user.shop.checkoutErrorGeneric'),
+        });
       }
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -637,10 +628,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 size="md"
                 onClick={() => {
                   triggerHaptic('medium');
-                  if (step === 'creation_error') {
+                  const retryAction = resolveRetryAction();
+                  if (retryAction === 'create_new_session') {
                     void createCheckoutSession();
-                  } else {
-                    void handleConfirmCheckout();
                   }
                 }}
                 className="w-full font-bold shadow-md"

@@ -221,10 +221,27 @@ function jwtExpiry(token: string): number | null {
     const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as {
       exp?: number;
     };
-    return payload.exp ?? null;
+    return typeof payload.exp === 'number' && Number.isFinite(payload.exp) && payload.exp > 0
+      ? payload.exp
+      : null;
   } catch {
     return null;
   }
+}
+
+async function cancelResponseBody(res: Response): Promise<void> {
+  try {
+    await res.body?.cancel?.();
+  } catch {
+    // Ignore stream cancellation errors on mocked or closed responses.
+  }
+}
+
+function isAbortLikeError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === 'AbortError' || err.name === 'TimeoutError' || err.name === 'NetworkError')
+  );
 }
 
 // ─── Client ──────────────────────────────────────────────────────────────────
@@ -339,41 +356,56 @@ export class RebeccaApiClient {
   private async fetchAuthToken(nowSec: number, generation: number): Promise<string> {
     const url = `${this.baseUrl}/api/admin/token`;
     // Rebecca accepts JSON body (confirmed in admin_auth.go readAdminLoginRequest)
-    let res: Response;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let accessToken: string;
     try {
-      res = await this.fetchWithTimeout(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ username: this.adminUsername, password: this.adminPassword }),
-      });
-    } catch (networkErr: unknown) {
-      this.recordFailure();
-      logger.error(
-        { err: networkErr, endpoint: '/api/admin/token' },
-        'Rebecca API: token fetch network failure'
-      );
-      throw new RebeccaOriginDownError('/api/admin/token', null, 1, false);
-    }
-
-    if (!res.ok) {
-      const errBody = await res.text();
-      logger.error(
-        { status: res.status, errorBodyLength: errBody.length },
-        'Rebecca API: token fetch failed'
-      );
-      if (RETRYABLE_5XX.has(res.status)) {
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ username: this.adminUsername, password: this.adminPassword }),
+          signal: controller.signal,
+        });
+      } catch (networkErr: unknown) {
         this.recordFailure();
-        throw new RebeccaOriginDownError('/api/admin/token', res.status, 1, false);
+        logger.error(
+          { err: networkErr, endpoint: '/api/admin/token' },
+          'Rebecca API: token fetch network failure'
+        );
+        throw new RebeccaOriginDownError('/api/admin/token', null, 1, false);
       }
-      throw new RebeccaApiError(res.status, '/api/admin/token', errBody);
+
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        logger.error(
+          { status: res.status, errorBodyLength: errBody.length },
+          'Rebecca API: token fetch failed'
+        );
+        if (RETRYABLE_5XX.has(res.status)) {
+          this.recordFailure();
+          throw new RebeccaOriginDownError('/api/admin/token', res.status, 1, false);
+        }
+        throw new RebeccaApiError(res.status, '/api/admin/token', errBody);
+      }
+
+      const data = await this.parseResponseJson<{ access_token: string; token_type?: string }>(
+        res,
+        '/api/admin/token',
+        rebeccaTokenResponseSchema
+      );
+      accessToken = data.access_token;
+    } catch (err) {
+      if (isAbortLikeError(err)) {
+        this.recordFailure();
+        throw new RebeccaOriginDownError('/api/admin/token', null, 1, false);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
     }
 
-    const data = await this.parseResponseJson<{ access_token: string; token_type?: string }>(
-      res,
-      '/api/admin/token',
-      rebeccaTokenResponseSchema
-    );
-    const accessToken = data.access_token;
     this.recordSuccess();
     // Live panel settings can change while the token request is in flight. Do
     // not cache or use a token produced from stale credentials against the new
@@ -381,7 +413,7 @@ export class RebeccaApiClient {
     if (this.authGeneration !== generation) return this.getAuthToken();
 
     this.accessToken = accessToken;
-    // Parse expiry from JWT; fall back to 24 h
+    // Parse expiry from JWT; fall back to 24 h (including exp === 0 non-expiring default)
     const exp = jwtExpiry(accessToken);
     this.tokenExpiresAt = exp ?? nowSec + 86_400;
     return accessToken;
@@ -394,23 +426,16 @@ export class RebeccaApiClient {
     this.authTokenRequest = null;
   }
 
-  // ── Fetch with timeout ─────────────────────────────────────────────────────
-
-  private fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
-  }
-
   // ── Core request with retry + 521 resilience ───────────────────────────────
 
   private async request(
     endpoint: string,
     options: RequestInit = {},
     attempt = 0,
-    requestDispatched = false
+    requestDispatched = false,
+    authRefreshed = false
   ): Promise<unknown> {
-    if (attempt === 0) {
+    if (attempt === 0 && !authRefreshed) {
       this.checkCircuit(endpoint);
     }
 
@@ -425,56 +450,94 @@ export class RebeccaApiClient {
       ...(options.headers as Record<string, string>),
     };
 
-    let res: Response;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    type Outcome =
+      | { kind: 'ok'; data: unknown }
+      | { kind: 'auth_retry' }
+      | { kind: 'retryable'; status: number | null; err: unknown; dispatched: boolean };
+    let outcome: Outcome;
+
     try {
-      res = await this.fetchWithTimeout(url, { ...options, headers });
-    } catch (networkErr: unknown) {
-      // Network-level error (ECONNRESET, AbortError from timeout, etc.)
+      let res: Response | null = null;
+      try {
+        res = await fetch(url, { ...options, headers, signal: controller.signal });
+      } catch (networkErr: unknown) {
+        outcome = {
+          kind: 'retryable',
+          status: null,
+          err: networkErr,
+          dispatched: requestDispatched || networkFailureMayHaveDispatched(networkErr),
+        };
+      }
+
+      if (res) {
+        if (res.status === 401 && !this.apiKey) {
+          if (!authRefreshed) {
+            await cancelResponseBody(res);
+            outcome = { kind: 'auth_retry' };
+          } else {
+            const body = await res.text().catch(() => '');
+            throw new RebeccaApiError(res.status, endpoint, body);
+          }
+        } else if (RETRYABLE_5XX.has(res.status)) {
+          await cancelResponseBody(res);
+          outcome = {
+            kind: 'retryable',
+            status: res.status,
+            err: null,
+            dispatched: true,
+          };
+        } else if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          logger.error(
+            {
+              status: res.status,
+              endpoint: safeEndpointForLogs(endpoint),
+              errorBodyLength: errBody.length,
+            },
+            'Rebecca API error'
+          );
+          throw new RebeccaApiError(res.status, endpoint, errBody);
+        } else if (res.status === 204) {
+          this.recordSuccess();
+          outcome = { kind: 'ok', data: undefined };
+        } else {
+          try {
+            const data = await this.readJson(res, endpoint);
+            this.recordSuccess();
+            outcome = { kind: 'ok', data };
+          } catch (readErr: unknown) {
+            if (isAbortLikeError(readErr)) {
+              outcome = { kind: 'retryable', status: null, err: readErr, dispatched: true };
+            } else {
+              throw readErr;
+            }
+          }
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (outcome!.kind === 'auth_retry') {
+      this.invalidateToken();
+      return this.request(endpoint, options, attempt, requestDispatched, true);
+    }
+
+    if (outcome!.kind === 'retryable') {
       return this.handleRetryableFailure(
         endpoint,
         options,
         attempt,
-        null,
-        networkErr,
-        requestDispatched || networkFailureMayHaveDispatched(networkErr)
+        outcome!.status,
+        outcome!.err,
+        outcome!.dispatched,
+        authRefreshed
       );
     }
 
-    // 401 — token may have expired; invalidate and retry once (no backoff)
-    if (res.status === 401 && !this.apiKey) {
-      if (attempt === 0) {
-        this.invalidateToken();
-        return this.request(endpoint, options, attempt + 1);
-      }
-      const body = await res.text();
-      throw new RebeccaApiError(res.status, endpoint, body);
-    }
-
-    // 5xx Cloudflare/origin error — retryable with backoff
-    if (RETRYABLE_5XX.has(res.status)) {
-      return this.handleRetryableFailure(endpoint, options, attempt, res.status, null, true);
-    }
-
-    if (!res.ok) {
-      const errBody = await res.text();
-      logger.error(
-        {
-          status: res.status,
-          endpoint: safeEndpointForLogs(endpoint),
-          errorBodyLength: errBody.length,
-        },
-        'Rebecca API error'
-      );
-      throw new RebeccaApiError(res.status, endpoint, errBody);
-    }
-
-    // Successful response — recover circuit
-    this.recordSuccess();
-
-    // 204 No Content
-    if (res.status === 204) return undefined;
-
-    return this.readJson(res, endpoint);
+    return outcome!.data;
   }
 
   private async handleRetryableFailure(
@@ -483,7 +546,8 @@ export class RebeccaApiClient {
     attempt: number,
     statusCode: number | null,
     networkErr: unknown,
-    requestDispatched: boolean
+    requestDispatched: boolean,
+    authRefreshed: boolean
   ): Promise<unknown> {
     const label = statusCode != null ? `HTTP ${statusCode}` : 'network error';
     logger.warn(
@@ -505,13 +569,14 @@ export class RebeccaApiClient {
     const jitter = Math.random() * 100;
     await new Promise((r) => setTimeout(r, backoff + jitter));
 
-    return this.request(endpoint, options, attempt + 1, requestDispatched);
+    return this.request(endpoint, options, attempt + 1, requestDispatched, authRefreshed);
   }
 
   private async readJson(res: Response, endpoint: string): Promise<unknown> {
     try {
       return await res.json();
     } catch (err) {
+      if (isAbortLikeError(err)) throw err;
       throw new RebeccaContractError(endpoint, 1, { cause: err });
     }
   }
@@ -618,6 +683,9 @@ export class RebeccaApiClient {
       ...(payload.data_limit !== undefined
         ? { data_limit: normalizeDataLimit(payload.data_limit) ?? null }
         : {}),
+      ...(payload.expire !== undefined
+        ? { expire: payload.expire === 0 ? null : payload.expire }
+        : {}),
     };
     return this.withAbsoluteSubscriptionUrls(
       this.parseContract<RebeccaUserDetail>(
@@ -704,6 +772,7 @@ export class RebeccaApiClient {
         method: 'GET',
         signal: controller.signal,
       }).finally(() => clearTimeout(timer));
+      await cancelResponseBody(res);
       const healthy = res.status < 500 || !RETRYABLE_5XX.has(res.status);
       if (healthy) {
         this.resetCircuitBreaker();

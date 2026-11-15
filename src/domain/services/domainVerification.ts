@@ -30,14 +30,26 @@ export function normalizeDomainInput(raw: string): NormalizedDomainResult {
     return { valid: false, hostname: '', url: '', error: 'Domain input cannot be empty' };
   }
 
-  // Remove protocol if present
-  let sanitized = trimmed.replace(/^[a-zA-Z]+:\/\//, '');
+  const schemeMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//u);
+  if (schemeMatch) {
+    const scheme = schemeMatch[1]!.toLowerCase();
+    if (scheme !== 'http' && scheme !== 'https') {
+      return { valid: false, hostname: '', url: '', error: 'Unsupported URL scheme' };
+    }
+  }
 
-  // Remove path, query string, or hash
-  sanitized = sanitized.split('/')[0].split('?')[0].split('#')[0];
+  let parsed: URL;
+  try {
+    parsed = new URL(schemeMatch ? trimmed : `https://${trimmed}`);
+  } catch {
+    return { valid: false, hostname: '', url: '', error: 'Invalid domain name format' };
+  }
 
-  // Remove port if provided (e.g. app.example.com:443)
-  sanitized = sanitized.split(':')[0].trim().toLowerCase();
+  if (parsed.username || parsed.password) {
+    return { valid: false, hostname: '', url: '', error: 'Invalid domain name format' };
+  }
+
+  const sanitized = parsed.hostname.toLowerCase().replace(/\.$/, '');
 
   if (!sanitized) {
     return { valid: false, hostname: '', url: '', error: 'Invalid hostname format' };
@@ -120,10 +132,26 @@ export async function verifyDomainSslAndReachability(
   url: string,
   timeoutMs = 10000
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
-  const firstProbe = await probeDomainHealth(url, Math.min(5000, timeoutMs));
+  const budgetMs = Number.isFinite(timeoutMs) ? Math.max(500, timeoutMs) : 10000;
+  const deadline = Date.now() + budgetMs;
+
+  const firstProbeTimeout = Math.min(5000, budgetMs);
+  const firstProbe = await probeDomainHealth(url, firstProbeTimeout);
   if (firstProbe.ok) return firstProbe;
 
-  // Wait briefly for ACME TLS certificate issuance to complete, then retry
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  return probeDomainHealth(url, Math.max(5000, timeoutMs - 5000));
+  const remainingBeforeRetry = deadline - Date.now();
+  if (remainingBeforeRetry <= 300) {
+    return firstProbe;
+  }
+
+  // Wait briefly for ACME TLS certificate issuance to complete, within timeout budget
+  const retryDelay = Math.min(1500, Math.floor(remainingBeforeRetry / 2));
+  await new Promise((resolve) => setTimeout(resolve, retryDelay));
+
+  const remainingForSecondProbe = deadline - Date.now();
+  if (remainingForSecondProbe <= 100) {
+    return firstProbe;
+  }
+
+  return probeDomainHealth(url, remainingForSecondProbe);
 }

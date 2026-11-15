@@ -72,7 +72,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
     if (window.Telegram?.WebApp?.openLink) {
       window.Telegram.WebApp.openLink(subUrl);
     } else {
-      window.open(subUrl, '_blank');
+      window.open(subUrl, '_blank', 'noopener,noreferrer');
     }
   };
 

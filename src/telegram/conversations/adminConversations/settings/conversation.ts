@@ -179,7 +179,11 @@ async function editLocaleSetting(
   ctx: ConversationContext,
   definition: SettingDefinition
 ): Promise<FlowOutcome> {
-  const current = ctx.services?.translationService.getSetting(definition.key, 'fa') ?? 'fa';
+  const current = await conversation.external(
+    (outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)?.translationService.getSetting(definition.key, 'fa') ??
+      'fa'
+  );
   const callbackPrefix = 'set-loc:';
   const keyboard = buildLocaleSettingKeyboard(ctx, current, callbackPrefix);
   await promptInConversation(
@@ -380,7 +384,11 @@ export async function saveSetting(
   definition: SettingDefinition,
   value: string
 ): Promise<FlowOutcome> {
-  const oldValue = ctx.services?.translationService.getSetting(definition.key, '') ?? '';
+  const oldValue = await conversation.external(
+    (outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)?.translationService.getSetting(definition.key, '') ??
+      ''
+  );
   let failure: 'save' | 'apply' | 'rollback' | undefined;
   try {
     await conversation.external(async (outsideCtx) => {

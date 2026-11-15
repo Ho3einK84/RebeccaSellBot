@@ -4,7 +4,7 @@ import { InlineKeyboard, type Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { logger } from '../../infra/logger.js';
-import { observedContextLocale, t, tm } from '../locale.js';
+import { localizedNumber, observedContextLocale, t, tm } from '../locale.js';
 import {
   backKeyboard,
   buildEmptyState,
@@ -13,7 +13,11 @@ import {
   renderScreen,
 } from '../ui.js';
 import { callbackData } from '../callbackData.js';
-import { buildSubscriptionActionKeyboard, showSubscriptionDetail } from './subscriptions/routes.js';
+import {
+  buildDeleteReviewScreen,
+  buildSubscriptionActionKeyboard,
+  showSubscriptionDetail,
+} from './subscriptions/routes.js';
 import { sanitizeTelegramInlineCode } from '../rendering.js';
 import { RebeccaOriginDownError } from '../../domain/services/RebeccaService.js';
 
@@ -85,10 +89,40 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
         );
         return;
       }
+      const quote = await services.refundService.quote(localConfig.telegramId, localConfig.id);
+      if (quote.eligible) {
+        await renderConfigScreen(
+          ctx,
+          buildDeleteReviewScreen(ctx, localConfig, quote),
+          new InlineKeyboard()
+            .text(
+              t(ctx, 'config_delete_refund_confirm_button', {
+                amount: localizedNumber(quote.refundAmount, ctx),
+              }),
+              callbackData('config', 'refund_confirm', localConfig.id)
+            )
+            .row()
+            .text(
+              t(ctx, 'config_delete_without_refund_button'),
+              callbackData('config', 'delete_confirm', localConfig.id)
+            )
+            .row()
+            .text(t(ctx, 'menu_back'), callbackData('config', 'refresh', localConfig.id))
+        );
+        return;
+      }
       // First tap only shows a warning; deletion requires an explicit confirm.
+      const confirmData =
+        Buffer.byteLength(`config_delete_confirm:${configUsername}`, 'utf8') <= 64
+          ? callbackData('config_delete_confirm', configUsername)
+          : callbackData('config', 'delete_confirm', localConfig.id);
+      const cancelData =
+        Buffer.byteLength(`config_delete_cancel:${configUsername}`, 'utf8') <= 64
+          ? callbackData('config_delete_cancel', configUsername)
+          : callbackData('config', 'view', localConfig.id);
       const confirmMenu = new InlineKeyboard()
-        .text(t(ctx, 'config_delete_confirm_button'), `config_delete_confirm:${configUsername}`)
-        .text(t(ctx, 'config_delete_cancel_button'), `config_delete_cancel:${configUsername}`)
+        .text(t(ctx, 'config_delete_confirm_button'), confirmData)
+        .text(t(ctx, 'config_delete_cancel_button'), cancelData)
         .row()
         .text(t(ctx, 'menu_back_main'), 'nav:main');
       await renderConfigScreen(
@@ -108,7 +142,30 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
       return;
     }
 
-    // Confirmed deletion.
+    // Confirmed deletion. Prevent legacy buttons from silently bypassing an eligible refund.
+    const quote = await services.refundService.quote(localConfig.telegramId, localConfig.id);
+    if (quote.eligible) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+      await renderConfigScreen(
+        ctx,
+        buildDeleteReviewScreen(ctx, localConfig, quote),
+        new InlineKeyboard()
+          .text(
+            t(ctx, 'config_delete_refund_confirm_button', {
+              amount: localizedNumber(quote.refundAmount, ctx),
+            }),
+            callbackData('config', 'refund_confirm', localConfig.id)
+          )
+          .row()
+          .text(
+            t(ctx, 'config_delete_without_refund_button'),
+            callbackData('config', 'delete_confirm', localConfig.id)
+          )
+          .row()
+          .text(t(ctx, 'menu_back'), callbackData('config', 'refresh', localConfig.id))
+      );
+      return;
+    }
     if (!acquireUserActionCooldown(telegramId, `config-delete:${configUsername}`, 1_000)) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress'), show_alert: false });
       return;

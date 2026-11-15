@@ -1,7 +1,12 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { Api } from 'grammy';
 import fs from 'node:fs/promises';
-import { BackupService, BACKUP_FORMAT_VERSION } from '../../src/domain/services/BackupService.js';
+import os from 'node:os';
+import path from 'node:path';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  BACKUP_FORMAT_VERSION,
+  BackupService,
+  type BackupTelegramClient,
+} from '../../src/domain/services/BackupService.js';
 import type { TranslationService } from '../../src/domain/services/TranslationService.js';
 
 function mockTranslationService(initialSettings: Record<string, string> = {}) {
@@ -43,59 +48,29 @@ describe('BackupService', () => {
   let backupService: BackupService;
 
   beforeEach(() => {
+    vi.restoreAllMocks();
     mockTs = mockTranslationService({
       backup_enabled: 'true',
       backup_interval_hours: '24',
       backup_target_chat_id: '-1001234567890',
       backup_include_env: 'false',
+      admin_backup_caption_header: 'Backup Ready',
+      admin_backup_caption_instance: 'Instance: `{instance}`',
+      admin_backup_caption_date: 'Date: {date}',
+      admin_backup_caption_size: 'Size: {size}',
+      admin_backup_caption_version: 'Version: `{version}`',
     });
     backupService = new BackupService(mockTs, {
       databaseUrl: 'postgres://user:pass@localhost:5432/testdb',
       instanceName: 'test_instance',
+      createDocumentInput: (filePath, fileName) => ({ filePath, fileName, kind: 'custom_input' }),
     });
   });
 
-  describe('isBackupDue', () => {
-    it('returns false when backup is disabled', () => {
-      mockTs.store.set('backup_enabled', 'false');
-      expect(backupService.isBackupDue()).toBe(false);
-    });
-
-    it('returns false when target chat ID is missing', () => {
-      mockTs.store.set('backup_target_chat_id', '');
-      expect(backupService.isBackupDue()).toBe(false);
-    });
-
-    it('returns true when last_run_at is empty (never executed)', () => {
-      mockTs.store.set('backup_last_run_at', '');
-      expect(backupService.isBackupDue()).toBe(true);
-    });
-
-    it('returns false when last execution was recent', () => {
+  describe('isBackupDue & getBackupStatus', () => {
+    it('evaluates disabled, missing target, empty last_run, recent run, and due interval', () => {
       const now = new Date('2026-08-24T12:00:00Z');
-      const twoHoursAgo = new Date('2026-08-24T10:00:00Z');
-      mockTs.store.set('backup_last_run_at', twoHoursAgo.toISOString());
-      mockTs.store.set('backup_interval_hours', '24');
-
-      expect(backupService.isBackupDue(now)).toBe(false);
-    });
-
-    it('returns true when interval hours have elapsed', () => {
-      const now = new Date('2026-08-24T12:00:00Z');
-      const twentyFiveHoursAgo = new Date('2026-08-23T11:00:00Z');
-      mockTs.store.set('backup_last_run_at', twentyFiveHoursAgo.toISOString());
-      mockTs.store.set('backup_interval_hours', '24');
-
-      expect(backupService.isBackupDue(now)).toBe(true);
-    });
-  });
-
-  describe('getBackupStatus', () => {
-    it('returns snapshot of current settings and status', () => {
-      const now = new Date('2026-08-24T12:00:00Z');
-      const status = backupService.getBackupStatus(now);
-
-      expect(status).toEqual({
+      expect(backupService.getBackupStatus(now)).toEqual({
         enabled: true,
         intervalHours: 24,
         targetChatId: '-1001234567890',
@@ -104,124 +79,75 @@ describe('BackupService', () => {
         lastStatus: null,
         isDue: true,
       });
+
+      mockTs.store.set('backup_last_run_at', new Date('2026-08-24T10:00:00Z').toISOString());
+      expect(backupService.isBackupDue(now)).toBe(false);
+
+      mockTs.store.set('backup_last_run_at', new Date('2026-08-23T11:00:00Z').toISOString());
+      expect(backupService.isBackupDue(now)).toBe(true);
+
+      mockTs.store.set('backup_target_chat_id', '');
+      expect(backupService.isBackupDue(now)).toBe(false);
+
+      mockTs.store.set('backup_target_chat_id', '-1001234567890');
+      mockTs.store.set('backup_enabled', 'false');
+      expect(backupService.isBackupDue(now)).toBe(false);
     });
   });
 
   describe('createBackupBundle', () => {
-    it('generates a compressed archive with manifest and cleans up', async () => {
+    it('generates archive with manifest, optionally includes .env, and cleans up', async () => {
       const bundle = await backupService.createBackupBundle({
         label: 'unit_test',
         includeEnv: false,
       });
-
       expect(bundle.fileName).toContain('unit_test_test_instance');
       expect(bundle.fileName).toMatch(/\.tar\.gz$/);
       expect(bundle.sizeBytes).toBeGreaterThan(0);
       expect(bundle.manifest.format_version).toBe(BACKUP_FORMAT_VERSION);
       expect(bundle.manifest.instance).toBe('test_instance');
-
-      // Verify file exists on disk
-      const stat = await fs.stat(bundle.archivePath);
-      expect(stat.isFile()).toBe(true);
-
-      // Clean up and verify deletion
+      expect((await fs.stat(bundle.archivePath)).isFile()).toBe(true);
       await bundle.cleanup();
       await expect(fs.stat(bundle.archivePath)).rejects.toThrow();
-    });
 
-    it('includes .env and docker-compose.yml when includeEnv is true', async () => {
-      const bundle = await backupService.createBackupBundle({
+      const envBundle = await backupService.createBackupBundle({
         label: 'env_test',
         includeEnv: true,
       });
-
-      expect(bundle.manifest.contents).toContain('.env');
-      expect(bundle.manifest.contents).toContain('docker-compose.yml');
-      expect(bundle.manifest.contents).toContain('database.dump');
-      expect(bundle.manifest.contents).toContain('manifest.txt');
-
-      await bundle.cleanup();
-    });
-  });
-
-  describe('sendBackupToChat', () => {
-    it('delivers backup to Telegram API and updates last run metadata on success', async () => {
-      const mockApi = {
-        sendDocument: vi.fn().mockResolvedValue({ message_id: 12345 }),
-      } as unknown as Api;
-
-      const result = await backupService.sendBackupToChat(mockApi, '-1001234567890');
-
-      expect(result.success).toBe(true);
-      expect(result.messageId).toBe(12345);
-      expect(mockApi.sendDocument).toHaveBeenCalledTimes(1);
-      expect(mockTs.updateSettings).toHaveBeenCalledWith(
-        expect.objectContaining({
-          backup_last_status: 'success',
-        })
+      expect(envBundle.manifest.contents).toEqual(
+        expect.arrayContaining(['.env', 'docker-compose.yml', 'database.dump', 'manifest.txt'])
       );
+      await envBundle.cleanup();
     });
 
-    it('records error status when Telegram API call fails', async () => {
-      const mockApi = {
-        sendDocument: vi.fn().mockRejectedValue(new Error('CHAT_NOT_FOUND')),
-      } as unknown as Api;
+    it('rejects concurrent backups and resets lock even when mkdir fails', async () => {
+      const bundle1 = await backupService.createBackupBundle({ label: 'concurrent_1' });
+      try {
+        await expect(backupService.createBackupBundle({ label: 'concurrent_2' })).rejects.toThrow(
+          /BACKUP_ALREADY_IN_PROGRESS/
+        );
+      } finally {
+        await bundle1.cleanup();
+      }
 
-      const result = await backupService.sendBackupToChat(mockApi, '-1001234567890');
+      const badTempBase = path.join(os.tmpdir(), `rsbot-not-a-dir-${Date.now()}`);
+      await fs.writeFile(badTempBase, 'file-blocking-mkdir');
+      try {
+        const mkdirSpy = vi.spyOn(fs, 'mkdir').mockRejectedValueOnce(new Error('EACCES'));
+        await expect(backupService.createBackupBundle({ label: 'mkdir_fail' })).rejects.toThrow(
+          'EACCES'
+        );
+        mkdirSpy.mockRestore();
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('CHAT_NOT_FOUND');
-      expect(mockTs.updateSetting).toHaveBeenCalledWith(
-        'backup_last_status',
-        expect.stringContaining('CHAT_NOT_FOUND')
-      );
-    });
-  });
-
-  describe('performScheduledSweep', () => {
-    it('skips when disabled', async () => {
-      mockTs.store.set('backup_enabled', 'false');
-      const mockApi = { sendDocument: vi.fn() } as unknown as Api;
-
-      const result = await backupService.performScheduledSweep(mockApi);
-      expect(result).toEqual({ ran: false, reason: 'disabled' });
-      expect(mockApi.sendDocument).not.toHaveBeenCalled();
-    });
-
-    it('skips when destination target is missing', async () => {
-      mockTs.store.set('backup_target_chat_id', '');
-      const mockApi = { sendDocument: vi.fn() } as unknown as Api;
-
-      const result = await backupService.performScheduledSweep(mockApi);
-      expect(result).toEqual({ ran: false, reason: 'missing_target' });
-      expect(mockApi.sendDocument).not.toHaveBeenCalled();
+        // Lock must not remain wedged after mkdir failure
+        const recovered = await backupService.createBackupBundle({ label: 'recovered' });
+        await recovered.cleanup();
+      } finally {
+        await fs.rm(badTempBase, { force: true });
+      }
     });
 
-    it('skips when not yet due', async () => {
-      const now = new Date('2026-08-24T12:00:00Z');
-      mockTs.store.set('backup_last_run_at', new Date('2026-08-24T10:00:00Z').toISOString());
-      const mockApi = { sendDocument: vi.fn() } as unknown as Api;
-
-      const result = await backupService.performScheduledSweep(mockApi, now);
-      expect(result).toEqual({ ran: false, reason: 'not_due' });
-      expect(mockApi.sendDocument).not.toHaveBeenCalled();
-    });
-
-    it('runs and delivers backup when due', async () => {
-      const now = new Date('2026-08-24T12:00:00Z');
-      mockTs.store.set('backup_last_run_at', new Date('2026-08-23T10:00:00Z').toISOString());
-      const mockApi = {
-        sendDocument: vi.fn().mockResolvedValue({ message_id: 999 }),
-      } as unknown as Api;
-
-      const result = await backupService.performScheduledSweep(mockApi, now);
-      expect(result.ran).toBe(true);
-      expect(result.success).toBe(true);
-      expect(result.messageId).toBe(999);
-      expect(mockApi.sendDocument).toHaveBeenCalledTimes(1);
-    });
-
-    it('throws error in production when pg_dump fails', async () => {
+    it('throws DATABASE_DUMP_FAILED in production when pg_dump fails', async () => {
       const originalNodeEnv = process.env.NODE_ENV;
       try {
         process.env.NODE_ENV = 'production';
@@ -232,27 +158,54 @@ describe('BackupService', () => {
         process.env.NODE_ENV = originalNodeEnv;
       }
     });
+  });
 
-    it('rejects concurrent backup generation requests', async () => {
-      const bundle1 = await backupService.createBackupBundle({ label: 'concurrent_1' });
-      try {
-        await expect(backupService.createBackupBundle({ label: 'concurrent_2' })).rejects.toThrow(
-          /BACKUP_ALREADY_IN_PROGRESS/
-        );
-      } finally {
-        await bundle1.cleanup();
-      }
+  describe('sendBackupToChat & performScheduledSweep', () => {
+    it('delivers backup via createDocumentInput adapter, sanitizes Markdown caption, and records success', async () => {
+      const sendDocument = vi.fn().mockResolvedValue({ message_id: 12345 });
+      const client: BackupTelegramClient = { sendDocument };
+      const trickyService = new BackupService(mockTs, {
+        databaseUrl: 'postgres://user:pass@localhost:5432/testdb',
+        instanceName: 'shop`prod_1',
+        createDocumentInput: (filePath, fileName) => ({ wrappedPath: filePath, fileName }),
+      });
 
-      // After cleanup, next backup should succeed
-      const bundle2 = await backupService.createBackupBundle({ label: 'concurrent_3' });
-      await bundle2.cleanup();
+      const result = await trickyService.sendBackupToChat(client, '-1001234567890');
+      expect(result).toMatchObject({ success: true, messageId: 12345 });
+      expect(sendDocument).toHaveBeenCalledTimes(1);
+      const [, doc, opts] = sendDocument.mock.calls[0]!;
+      expect(doc).toMatchObject({ fileName: expect.stringMatching(/\.tar\.gz$/) });
+      expect(opts?.caption).toContain('`shopprod_1`');
+      expect(opts?.parse_mode).toBe('Markdown');
+      expect(mockTs.updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ backup_last_status: 'success' })
+      );
     });
 
-    it('fails when backup size exceeds Telegram 50MB limit', async () => {
-      const mockApi = {
-        sendDocument: vi.fn(),
-      } as unknown as Api;
+    it('records error and returns success: false when createBackupBundle or Telegram API fails', async () => {
+      const client: BackupTelegramClient = {
+        sendDocument: vi.fn().mockRejectedValue(new Error('CHAT_NOT_FOUND')),
+      };
+      const sendErr = await backupService.sendBackupToChat(client, '-1001234567890');
+      expect(sendErr.success).toBe(false);
+      expect(sendErr.error).toContain('CHAT_NOT_FOUND');
+      expect(mockTs.updateSetting).toHaveBeenCalledWith(
+        'backup_last_status',
+        expect.stringContaining('CHAT_NOT_FOUND')
+      );
 
+      vi.spyOn(backupService, 'createBackupBundle').mockRejectedValueOnce(new Error('DISK_FULL'));
+      const bundleErr = await backupService.sendBackupToChat(client, '-1001234567890');
+      expect(bundleErr).toEqual({ success: false, error: 'DISK_FULL' });
+      expect(mockTs.updateSetting).toHaveBeenLastCalledWith(
+        'backup_last_status',
+        'error: DISK_FULL'
+      );
+    });
+
+    it('fails cleanly when bundle exceeds Telegram 50MB limit', async () => {
+      const client: BackupTelegramClient = { sendDocument: vi.fn() };
+      const cleanup = vi.fn().mockResolvedValue(undefined);
       vi.spyOn(backupService, 'createBackupBundle').mockResolvedValueOnce({
         archivePath: '/tmp/fake_large_backup.tar.gz',
         fileName: 'fake_large_backup.tar.gz',
@@ -264,13 +217,48 @@ describe('BackupService', () => {
           git_commit: 'unknown',
           contents: ['database.dump'],
         },
-        cleanup: vi.fn().mockResolvedValue(undefined),
+        cleanup,
       });
 
-      const result = await backupService.sendBackupToChat(mockApi, '-1001234567890');
+      const result = await backupService.sendBackupToChat(client, '-1001234567890');
       expect(result.success).toBe(false);
       expect(result.error).toContain('exceeds Telegram 50 MB document limit');
-      expect(mockApi.sendDocument).not.toHaveBeenCalled();
+      expect(client.sendDocument).not.toHaveBeenCalled();
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles scheduled sweep skip conditions and due execution', async () => {
+      const client: BackupTelegramClient = {
+        sendDocument: vi.fn().mockResolvedValue({ message_id: 999 }),
+      };
+
+      mockTs.store.set('backup_enabled', 'false');
+      await expect(backupService.performScheduledSweep(client)).resolves.toEqual({
+        ran: false,
+        reason: 'disabled',
+      });
+
+      mockTs.store.set('backup_enabled', 'true');
+      mockTs.store.set('backup_target_chat_id', '');
+      await expect(backupService.performScheduledSweep(client)).resolves.toEqual({
+        ran: false,
+        reason: 'missing_target',
+      });
+
+      const now = new Date('2026-08-24T12:00:00Z');
+      mockTs.store.set('backup_target_chat_id', '-1001234567890');
+      mockTs.store.set('backup_last_run_at', new Date('2026-08-24T10:00:00Z').toISOString());
+      await expect(backupService.performScheduledSweep(client, now)).resolves.toEqual({
+        ran: false,
+        reason: 'not_due',
+      });
+
+      mockTs.store.set('backup_last_run_at', new Date('2026-08-23T10:00:00Z').toISOString());
+      await expect(backupService.performScheduledSweep(client, now)).resolves.toMatchObject({
+        ran: true,
+        success: true,
+        messageId: 999,
+      });
     });
   });
 });

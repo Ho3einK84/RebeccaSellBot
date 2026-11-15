@@ -23,7 +23,7 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney } = useFormatters();
+  const { formatMoney, formatNumber } = useFormatters();
   const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!isOpen || receipts.length === 0) return null;
@@ -47,7 +47,7 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <p className="m-0 leading-relaxed">
             {t('admin.receipts.batchApproveConfirmBody', {
-              count: String(receipts.length),
+              count: formatNumber(receipts.length),
               amount: `${formatMoney(totalAmount)} ${t('common.currency')}`,
             })}
           </p>
@@ -80,7 +80,7 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
         {/* Total Summary */}
         <div className="flex items-center justify-between px-1 text-xs">
           <span className={textMuted}>
-            {t('admin.receipts.batchSelectedCount', { count: String(receipts.length) })}
+            {t('admin.receipts.batchSelectedCount', { count: formatNumber(receipts.length) })}
           </span>
           <span className={`font-bold tnum text-sm ${textPrimary}`}>
             {formatMoney(totalAmount)} {t('common.currency')}

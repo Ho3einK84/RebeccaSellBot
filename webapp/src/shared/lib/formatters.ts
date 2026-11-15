@@ -15,6 +15,7 @@ export function normalizeInputDigits(input: string): string {
 }
 
 export function formatMoney(amount: number, locale: string = 'fa'): string {
+  if (!Number.isFinite(amount)) return '-';
   const rounded = Math.round(amount);
   if (locale === 'fa') {
     const formatted = rounded.toLocaleString('en-US');
@@ -24,11 +25,18 @@ export function formatMoney(amount: number, locale: string = 'fa'): string {
 }
 
 export function formatNumber(num: number, locale: string = 'fa'): string {
+  if (!Number.isFinite(num)) return '-';
+  const rounded = Math.round(num);
   if (locale === 'fa') {
-    const formatted = Math.round(num).toLocaleString('en-US');
+    const formatted = rounded.toLocaleString('en-US');
     return toPersianDigits(formatted.replace(/,/g, '٬'));
   }
-  return num.toLocaleString('en-US');
+  return rounded.toLocaleString('en-US');
+}
+
+export function formatCardNumberSpaced(raw: string): string {
+  const cleaned = normalizeInputDigits(raw).replace(/\D/g, '');
+  return cleaned.replace(/(\d{4})/g, '$1 ').trim();
 }
 
 export function getAvatarChar(name?: string | null, username?: string | null): string {

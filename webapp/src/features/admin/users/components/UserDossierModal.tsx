@@ -225,7 +225,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               type="button"
               className="p-1.5 rounded-xl text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t('common.close')}
             >
               <X className="w-4 h-4" />
             </button>
@@ -413,11 +413,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           <div className="flex justify-between items-center text-[11px]">
                             <span className={textMuted}>{t('admin.users.configTraffic')}</span>
                             <span className="tnum font-semibold" dir="ltr">
-                              {formatBytes(usedTraffic)} /{''}
+                              {formatBytes(usedTraffic)} /{' '}
                               {dataLimit > 0
                                 ? formatBytes(dataLimit)
                                 : t('admin.users.configTrafficUnlimited')}
-                              {progressPct !== null && `(${formatNumber(progressPct)}%)`}
+                              {progressPct !== null && ` (${formatNumber(progressPct)}%)`}
                             </span>
                           </div>
                           {progressPct !== null && (
@@ -815,7 +815,9 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
       )}
 
       <ReceiptPhotoModal
-        photoUrl={photoReceiptId ? `/api/admin/receipts/${photoReceiptId}/photo` : null}
+        photoUrl={
+          photoReceiptId ? `/api/admin/receipts/${encodeURIComponent(photoReceiptId)}/photo` : null
+        }
         receiptId={photoReceiptId}
         onClose={() => setPhotoReceiptId(null)}
         onErrorNotify={() => onNotify?.(t('admin.receipts.noPhoto'), 'error')}

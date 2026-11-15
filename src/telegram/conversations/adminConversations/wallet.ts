@@ -136,7 +136,11 @@ async function promptReceiptPreview(
       : await ctx.replyWithPhoto(media.fileId, options);
 
   await conversation.external((outsideCtx) => {
-    rememberUiMessage(outsideCtx.session, message.message_id, 'prompt');
+    const targetSession =
+      outsideCtx?.session ?? (ctx as { session?: Parameters<typeof rememberUiMessage>[0] }).session;
+    if (targetSession) {
+      rememberUiMessage(targetSession, message.message_id, 'prompt');
+    }
   });
 }
 
@@ -144,10 +148,14 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
   const telegramId = ctx.from?.id;
   if (!telegramId || !ctx.services) return;
 
-  trackFunnelEvent('topup_enter');
+  await conversation.external(() => {
+    trackFunnelEvent('topup_enter');
+  });
 
   // Check if user already has a pending receipt
-  const pendingReceipt = await ctx.services.walletService.getPendingReceiptForUser?.(telegramId);
+  const pendingReceipt = await conversation.external((outsideCtx) =>
+    (outsideCtx?.services ?? ctx.services)!.walletService.getPendingReceiptForUser?.(telegramId)
+  );
   if (pendingReceipt) {
     await replyInConversation(
       conversation,
@@ -167,10 +175,15 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     return;
   }
 
-  const cardNumber = ctx.services.translationService.getSetting('card_number', '—');
-  const cardHolder = ctx.services.translationService.getSetting('card_holder', '—');
-  const minimum = ctx.services.translationService.getSettingNum('topup_min_amount', 10_000);
-  const maximum = ctx.services.translationService.getSettingNum('topup_max_amount', 10_000_000);
+  const { cardNumber, cardHolder, minimum, maximum } = await conversation.external((outsideCtx) => {
+    const ts = (outsideCtx?.services ?? ctx.services)!.translationService;
+    return {
+      cardNumber: ts.getSetting('card_number', '—'),
+      cardHolder: ts.getSetting('card_holder', '—'),
+      minimum: ts.getSettingNum('topup_min_amount', 10_000),
+      maximum: ts.getSettingNum('topup_max_amount', 10_000_000),
+    };
+  });
 
   const presets = buildTopupPresets(minimum, maximum);
   const presetKeyboard = new InlineKeyboard();
@@ -207,13 +220,18 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     if (await handleConversationCancel(conversation, input)) return;
     await forwardConversationNavigation(conversation, input);
 
-    const callbackData = input.callbackQuery?.data;
-    if (callbackData && callbackData.startsWith('amount:')) {
-      await input.answerCallbackQuery();
-      const val = Number(callbackData.slice('amount:'.length));
-      if (Number.isSafeInteger(val) && val >= minimum && val <= maximum) {
-        amountToman = val;
-        break;
+    if (input.callbackQuery) {
+      const callbackData = input.callbackQuery.data ?? '';
+      if (callbackData.startsWith('amount:')) {
+        await input.answerCallbackQuery();
+        const val = Number(callbackData.slice('amount:'.length));
+        if (Number.isSafeInteger(val) && val >= minimum && val <= maximum) {
+          amountToman = val;
+          break;
+        }
+      } else {
+        await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
+        continue;
       }
     }
 
@@ -288,18 +306,18 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
   const mediaType = mediaInput.type;
 
   try {
-    const receiptId = await ctx.services.walletService.submitTopupReceipt(
-      telegramId,
-      amountToman,
-      photoFileId,
-      mediaType
-    );
-    trackFunnelEvent('receipt_submit');
-
-    // Real-time admin notification: forward the receipt immediately so admins
-    // can act without opening the pending-receipts section. The section remains
-    // available for later browsing/management.
-    await notifyAdminsOfReceipt(ctx, receiptId, telegramId, amountToman, photoFileId, mediaType);
+    const receiptId = await conversation.external(async (outsideCtx) => {
+      const targetCtx = outsideCtx?.services ? outsideCtx : ctx;
+      const id = await targetCtx.services!.walletService.submitTopupReceipt(
+        telegramId,
+        amountToman,
+        photoFileId,
+        mediaType
+      );
+      trackFunnelEvent('receipt_submit');
+      await notifyAdminsOfReceipt(targetCtx, id, telegramId, amountToman, photoFileId, mediaType);
+      return id;
+    });
 
     await sendArtifactInConversation(
       conversation,
@@ -724,7 +742,9 @@ async function applyAdminBalanceOperation(
     }
   }
 
-  const currentBalance = await ctx.services.walletService.getBalance(telegramId);
+  const currentBalance = await conversation.external((outsideCtx) =>
+    (outsideCtx?.services ?? ctx.services)!.walletService.getBalance(telegramId)
+  );
   const confirmationKeyboard = new InlineKeyboard()
     .text(t(ctx, 'admin_balance_confirm_button'), 'balance-confirm')
     .row()
@@ -770,15 +790,18 @@ async function applyAdminBalanceOperation(
   if (!(await waitForAdminCallbackInput(conversation, ['balance-confirm']))) return;
 
   try {
-    const referenceId = `admin_bal_${operation}_${telegramId}_${Date.now()}`;
-    const updated = await ctx.services.walletService.adjustBalanceAdmin({
-      telegramId,
-      operation,
-      amount,
-      adminId,
-      description: `Admin dashboard ${source}`,
-      referenceId,
-    });
+    const timestamp = await conversation.now();
+    const referenceId = `admin_bal_${operation}_${telegramId}_${timestamp}`;
+    const updated = await conversation.external((outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)!.walletService.adjustBalanceAdmin({
+        telegramId,
+        operation,
+        amount,
+        adminId,
+        description: `Admin dashboard ${source}`,
+        referenceId,
+      })
+    );
     await replyInAdminConversation(
       conversation,
       ctx,
@@ -797,12 +820,15 @@ async function applyAdminBalanceOperation(
       }),
       { parse_mode: 'Markdown' }
     );
-    if (ctx.services) {
-      await sendBalanceAdjustmentNotification(ctx.api, ctx.services, {
-        telegramId,
-        newBalance: updated,
-      });
-    }
+    await conversation.external(async (outsideCtx) => {
+      const targetCtx = outsideCtx?.services ? outsideCtx : ctx;
+      if (targetCtx.services) {
+        await sendBalanceAdjustmentNotification(targetCtx.api, targetCtx.services, {
+          telegramId,
+          newBalance: updated,
+        });
+      }
+    });
   } catch (err) {
     await replyInAdminConversation(
       conversation,

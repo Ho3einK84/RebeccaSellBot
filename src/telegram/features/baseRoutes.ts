@@ -21,7 +21,9 @@ import {
   backKeyboard,
   buildEmptyState,
   buildScreen,
+  clearTransientConversationSession,
   forgetUiMessage,
+  guardAdminCallbacks,
   rememberArtifactMessage,
   renderScreen,
   safelyDeleteMessage,
@@ -236,10 +238,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     const requested = ctx.match[1];
     const telegramId = ctx.from.id;
     const showAdmin = requested === 'admin' || requested === 'admin:sales';
-    ctx.session.adminPanelAction = undefined;
-    ctx.session.adminPanelId = undefined;
-    ctx.session.adminPanelDraft = undefined;
-    delete ctx.session.adminQuickTopup;
+    clearTransientConversationSession(ctx.session);
     await ctx.answerCallbackQuery();
     if (showAdmin && !services.isAdmin(telegramId)) {
       await renderScreen(
@@ -275,37 +274,39 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     }
   });
 
-  bot.callbackQuery('admin:sales:packages', async (ctx) => {
+  const adminCallback = guardAdminCallbacks(bot);
+
+  adminCallback('admin:sales:packages', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminManagePackagesConversation');
   });
 
-  bot.callbackQuery('admin:sales:custom_volume', async (ctx) => {
+  adminCallback('admin:sales:custom_volume', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminCustomVolumeConversation');
   });
 
-  bot.callbackQuery('admin:sales:trial', async (ctx) => {
+  adminCallback('admin:sales:trial', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminTrialSettingsConversation');
   });
 
-  bot.callbackQuery('admin:sales:promo', async (ctx) => {
+  adminCallback('admin:sales:promo', async (ctx) => {
     await ctx.answerCallbackQuery();
     await showPromoCenter(ctx);
   });
 
-  bot.callbackQuery('admin:sales:referral', async (ctx) => {
+  adminCallback('admin:sales:referral', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminReferralSettingsConversation');
   });
 
-  bot.callbackQuery('admin:sales:payment', async (ctx) => {
+  adminCallback('admin:sales:payment', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminPaymentSettingsConversation');
   });
 
-  bot.callbackQuery('admin:sales:lucky_wheel', async (ctx) => {
+  adminCallback('admin:sales:lucky_wheel', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminLuckyWheelSettingsConversation');
   });
@@ -400,7 +401,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   // Clear pending promo code from shop
   bot.callbackQuery('shop:clear_promo', async (ctx) => {
     delete ctx.session.pendingPromo;
-    await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable') });
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderScreen(ctx, await renderShopMenuText(ctx), {
       parse_mode: 'Markdown',
       reply_markup: shopMenu,
@@ -423,10 +424,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
 
   // Fallback for a stale Cancel button after a conversation has already ended.
   bot.callbackQuery('conversation:cancel', async (ctx) => {
-    ctx.session.adminPanelAction = undefined;
-    ctx.session.adminPanelId = undefined;
-    ctx.session.adminPanelDraft = undefined;
-    delete ctx.session.adminQuickTopup;
+    clearTransientConversationSession(ctx.session);
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
     await renderScreen(
       ctx,

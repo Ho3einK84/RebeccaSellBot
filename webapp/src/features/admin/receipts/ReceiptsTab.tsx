@@ -165,7 +165,10 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
     try {
       const ids = receiptsToApprove.map((r) => r.id);
       await batchActionMutation.mutateAsync({ ids, action: 'approve' });
-      onNotify(t('admin.receipts.batchApproveSuccess', { count: String(ids.length) }), 'success');
+      onNotify(
+        t('admin.receipts.batchApproveSuccess', { count: formatNumber(ids.length) }),
+        'success'
+      );
       setSelectedIds(new Set());
       setIsBatchModalOpen(false);
     } catch (err: unknown) {
@@ -229,7 +232,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
               type="button"
               className={`absolute top-1/2 -translate-y-1/2 end-3 p-1 rounded-md text-ink-muted hover:text-ink transition-colors cursor-pointer`}
               onClick={() => setSearch('')}
-              aria-label="Clear search"
+              aria-label={t('common.clearSearch')}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -320,7 +323,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
             {selectedIds.size > 0 && (
               <span className={`text-xs font-semibold text-brand`}>
-                {t('admin.receipts.batchSelectedCount', { count: String(selectedIds.size) })}
+                {t('admin.receipts.batchSelectedCount', { count: formatNumber(selectedIds.size) })}
                 {'·'}
                 <span className="tnum">
                   {formatMoney(selectedTotalAmount)} {t('common.currency')}
@@ -338,7 +341,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
             >
               <Check className="w-3.5 h-3.5" />
               <span>
-                {t('admin.receipts.batchApproveBtn', { count: String(selectedIds.size) })}
+                {t('admin.receipts.batchApproveBtn', { count: formatNumber(selectedIds.size) })}
               </span>
             </button>
           )}
@@ -433,7 +436,9 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
 
       {/* Modals */}
       <ReceiptPhotoModal
-        photoUrl={photoTarget ? `/api/admin/receipts/${photoTarget.id}/photo` : null}
+        photoUrl={
+          photoTarget ? `/api/admin/receipts/${encodeURIComponent(photoTarget.id)}/photo` : null
+        }
         receiptId={photoTarget?.id ?? null}
         onClose={() => setPhotoTarget(null)}
         onErrorNotify={() => onNotify(t('admin.receipts.noPhoto'), 'error')}

@@ -1,8 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createWebAppServer } from '../../src/webapp/server/server.js';
-import type { Config } from '../../src/infra/config.js';
-import type { BotServices } from '../../src/telegram/types.js';
 import { PurchaseCheckoutUnavailableError } from '../../src/domain/services/PurchaseCheckoutService.js';
 import {
   PurchaseInProgressError,
@@ -10,410 +8,20 @@ import {
 } from '../../src/domain/services/WalletService.js';
 import { RebeccaOriginDownError } from '../../src/domain/services/RebeccaService.js';
 import { normalizeSupportUsername } from '../../src/webapp/server/routes/userRoutes.js';
+import { createMockUserServices, createTestConfig } from './helpers/webappTestHarness.js';
 
 describe('WebApp User Routes (/api/user/*)', () => {
   let app: FastifyInstance;
-
-  const mockAdminService = {
-    adminIds: [12345],
-    isAdmin: vi.fn((id: number) => id === 12345),
-  };
-
-  const mockWalletService = {
-    getOrCreateUser: vi.fn(async (telegramId: number) => ({
-      telegramId,
-      username: 'sample_user',
-      balance: 100_000,
-      reservedBalance: 0,
-      referralCode: 'ref_123',
-    })),
-    listTransactionsForUser: vi.fn(async (telegramId: number, page = 1, _pageSize = 10) => ({
-      transactions: [
-        {
-          id: 'tx_101',
-          telegramId,
-          amount: 50_000,
-          balanceAfter: 150_000,
-          type: 'topup',
-          description: 'شارژ کیف پول',
-          createdAt: new Date('2026-03-01T12:00:00Z'),
-        },
-      ],
-      total: 1,
-      totalPages: 1,
-      page,
-    })),
-    executePurchaseSaga: vi.fn(
-      async (params: { telegramId: number; amount: number; configUsername: string }) => ({
-        success: true,
-        configUsername: params.configUsername,
-        subUrl: 'https://sub.example.com/token123',
-      })
-    ),
-    getPendingReceiptForUser: vi.fn(async (_telegramId: number) => null as any),
-  };
-
-  const mockUserService = {
-    findProfile: vi.fn(async (query: string) => {
-      const parsedId = Number(query);
-      if (parsedId === 55555) {
-        return {
-          id: 'u-55555-uuid',
-          telegramId: 55555,
-          username: 'test_user',
-          firstName: 'Ali',
-          lastName: 'Reza',
-          balance: 75_000,
-          reservedBalance: 10_000,
-          referralCode: 'ref_55555',
-          totalSpend: 250_000,
-          activeSubscriptionCount: 2,
-          transactionCount: 5,
-          referredUserCount: 3,
-          referralBonusEarned: 15_000,
-          cashbackEarned: 5_000,
-          hasUsedTrial: true,
-          createdAt: new Date('2026-01-01T00:00:00Z'),
-        };
-      }
-      if (parsedId === 66666) {
-        return {
-          id: 'u-66666-uuid',
-          telegramId: 66666,
-          username: 'rich_user',
-          firstName: 'Rich',
-          lastName: 'User',
-          balance: 500_000,
-          reservedBalance: 0,
-          referralCode: 'ref_66666',
-          totalSpend: 1_000_000,
-          activeSubscriptionCount: 5,
-          transactionCount: 10,
-          referredUserCount: 0,
-          referralBonusEarned: 0,
-          cashbackEarned: 0,
-          hasUsedTrial: true,
-          createdAt: new Date('2026-01-01T00:00:00Z'),
-        };
-      }
-      if (parsedId === 99999) {
-        return {
-          id: 'u-99999-uuid',
-          telegramId: 99999,
-          username: 'banned_user',
-          firstName: 'Banned',
-          lastName: 'User',
-          balance: 100_000,
-          reservedBalance: 0,
-          referralCode: 'ref_99999',
-          totalSpend: 0,
-          activeSubscriptionCount: 0,
-          transactionCount: 0,
-          referredUserCount: 0,
-          referralBonusEarned: 0,
-          cashbackEarned: 0,
-          hasUsedTrial: false,
-          createdAt: new Date('2026-01-01T00:00:00Z'),
-        };
-      }
-      return null;
-    }),
-    isBanned: vi.fn(async (telegramId: number) => telegramId === 99999),
-    getLocale: vi.fn(async () => 'fa' as const),
-    updateLocale: vi.fn(async () => {}),
-  };
-
-  const mockConfigService = {
-    listConfigsForOwner: vi.fn(async (telegramId: number) => {
-      if (telegramId === 55555) {
-        return [
-          {
-            id: 'cfg_1',
-            telegramId: 55555,
-            configUsername: 'u55555_srv1',
-            subUrl: 'https://sub.example.com/token123',
-            panelStatus: 'active',
-            panelDataLimit: 50 * 1024 * 1024 * 1024,
-            panelUsedTraffic: 12 * 1024 * 1024 * 1024,
-            panelExpire: Math.floor(Date.now() / 1000) + 86400 * 20,
-            autoRenewEnabled: true,
-            createdAt: new Date('2026-02-01T10:00:00Z'),
-            updatedAt: new Date('2026-02-01T10:00:00Z'),
-          },
-        ];
-      }
-      return [];
-    }),
-    generateConfigName: vi.fn(async (telegramId: number) => `u${telegramId}_auto1`),
-    getOwnedConfigById: vi.fn(async (telegramId: number, configId: string) => {
-      if (telegramId === 55555 && configId === 'cfg_1') {
-        return {
-          id: 'cfg_1',
-          telegramId: 55555,
-          configUsername: 'u55555_srv1',
-          panelId: 'panel_1',
-          serviceId: 1,
-          subUrl: 'https://sub.example.com/token123',
-          panelStatus: 'active',
-          panelDataLimit: 50 * 1024 * 1024 * 1024,
-          panelUsedTraffic: 12 * 1024 * 1024 * 1024,
-          panelExpire: Math.floor(Date.now() / 1000) + 86400 * 20,
-          autoRenewEnabled: true,
-          autoRenewPackageId: 'pkg_30gb_30d',
-          autoRenewPrice: 120_000,
-          createdAt: new Date('2026-02-01T10:00:00Z'),
-          updatedAt: new Date('2026-02-01T10:00:00Z'),
-        };
-      }
-      return undefined;
-    }),
-    getConfigById: vi.fn(async (configId: string) => {
-      if (configId === 'cfg_1') {
-        return {
-          id: 'cfg_1',
-          telegramId: 55555,
-          configUsername: 'u55555_srv1',
-          panelId: 'panel_1',
-          serviceId: 1,
-          subUrl: 'https://sub.example.com/token123',
-          panelStatus: 'active',
-          panelDataLimit: 50 * 1024 * 1024 * 1024,
-          panelUsedTraffic: 12 * 1024 * 1024 * 1024,
-          panelExpire: Math.floor(Date.now() / 1000) + 86400 * 20,
-          autoRenewEnabled: true,
-          autoRenewPackageId: 'pkg_30gb_30d',
-          autoRenewPrice: 120_000,
-          createdAt: new Date('2026-02-01T10:00:00Z'),
-          updatedAt: new Date('2026-02-01T10:00:00Z'),
-        };
-      }
-      if (configId === 'cfg_other_user') {
-        return {
-          id: 'cfg_other_user',
-          telegramId: 77777,
-          configUsername: 'u77777_srv1',
-          panelId: 'panel_1',
-          serviceId: 1,
-          subUrl: 'https://sub.example.com/token777',
-          panelStatus: 'active',
-        };
-      }
-      return undefined;
-    }),
-    setAutoRenew: vi.fn(async () => ({})),
-    toggleConfig: vi.fn(async () => 'disabled'),
-    enableConfig: vi.fn(async () => {}),
-    disableConfig: vi.fn(async () => {}),
-    revokeSubscription: vi.fn(async () => 'https://sub.example.com/token_new'),
-    refreshConfig: vi.fn(async () => ({
-      panelStatus: 'active',
-      panelDataLimit: 50 * 1024 * 1024 * 1024,
-      panelUsedTraffic: 15 * 1024 * 1024 * 1024,
-      panelExpire: 1800000000,
-      lastSyncedAt: new Date('2026-03-01T12:00:00Z'),
-    })),
-  };
-
-  const mockPricingService = {
-    getPackages: vi.fn((_panelId, _serviceId, includeDisabled = false) => {
-      const pkgs = [
-        {
-          id: 'pkg_30gb_30d',
-          name: '30 GB - 30 Days',
-          gbAmount: 30,
-          durationDays: 30,
-          price: 120_000,
-          enabled: true,
-        },
-        {
-          id: 'pkg_10gb_10d',
-          name: '10 GB - 10 Days',
-          gbAmount: 10,
-          durationDays: 10,
-          price: 40_000,
-          enabled: true,
-        },
-        {
-          id: 'pkg_disabled',
-          name: 'Disabled Pkg',
-          gbAmount: 10,
-          durationDays: 10,
-          price: 50_000,
-          enabled: false,
-        },
-      ];
-      return includeDisabled ? pkgs : pkgs.filter((p) => p.enabled !== false);
-    }),
-    getPackageById: vi.fn((id: string | null | undefined) => {
-      if (id === 'pkg_30gb_30d') {
-        return {
-          id: 'pkg_30gb_30d',
-          name: '30 GB - 30 Days',
-          gbAmount: 30,
-          durationDays: 30,
-          price: 120_000,
-          enabled: true,
-        };
-      }
-      if (id === 'pkg_10gb_10d') {
-        return {
-          id: 'pkg_10gb_10d',
-          name: '10 GB - 10 Days',
-          gbAmount: 10,
-          durationDays: 10,
-          price: 40_000,
-          enabled: true,
-        };
-      }
-      if (id === 'pkg_disabled') {
-        return {
-          id: 'pkg_disabled',
-          name: 'Disabled Pkg',
-          gbAmount: 10,
-          durationDays: 10,
-          price: 50_000,
-          enabled: false,
-        };
-      }
-      return undefined;
-    }),
-    getCustomPriceQuote: vi.fn((gb: number, _days: number) => ({
-      totalPrice: gb * 5000,
-      volumePrice: gb * 5000,
-      durationPrice: 0,
-      pricePerGb: 5000,
-      pricePerDay: 0,
-    })),
-    getCustomVolumeTarget: vi.fn(() => ({ panelId: 'panel_test', serviceId: 1 })),
-  };
-
-  const mockPurchaseCheckoutService = {
-    create: vi.fn(
-      async (input: {
-        telegramId: number;
-        kind: string;
-        pkg: {
-          id: string;
-          name: string;
-          gbAmount: number;
-          durationDays: number;
-          price: number;
-        };
-        panelId?: string;
-        serviceId?: number;
-        quotedAmount?: number;
-      }) => ({
-        id: 'co_test_123',
-        telegramId: input.telegramId,
-        kind: input.kind,
-        configId: null,
-        packageId: input.pkg.id,
-        packageName: input.pkg.name,
-        panelId: input.panelId ?? 'panel_test',
-        serviceId: input.serviceId ?? 1,
-        amount: input.pkg.price,
-        quotedAmount: input.quotedAmount ?? input.pkg.price,
-        gbAmount: input.pkg.gbAmount,
-        durationDays: input.pkg.durationDays,
-        promoCode: null,
-        status: 'pending',
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-        claimedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-    ),
-    claim: vi.fn(async (checkoutId: string, telegramId: number) => {
-      if (checkoutId === 'co_missing') {
-        throw new PurchaseCheckoutUnavailableError('missing');
-      }
-      if (checkoutId === 'co_expired') {
-        throw new PurchaseCheckoutUnavailableError('expired');
-      }
-      if (checkoutId === 'co_consumed') {
-        throw new PurchaseCheckoutUnavailableError('consumed');
-      }
-      if (checkoutId === 'co_other_user') {
-        throw new PurchaseCheckoutUnavailableError('owner_mismatch');
-      }
-      return {
-        id: checkoutId,
-        telegramId,
-        kind: 'new_config',
-        configId: null,
-        packageId: 'pkg_10gb_10d',
-        packageName: '10 GB - 10 Days',
-        panelId: 'panel_test',
-        serviceId: 1,
-        amount: 40_000,
-        quotedAmount: 40_000,
-        gbAmount: 10,
-        durationDays: 10,
-        promoCode: null,
-        status: 'processing',
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-        claimedAt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    }),
-    complete: vi.fn(async () => {}),
-    fail: vi.fn(async () => {}),
-  };
-
-  const mockTranslationService = {
-    getDefaultLocale: vi.fn(() => 'fa' as const),
-    getSetting: vi.fn((key: string, defaultValue?: string) => {
-      if (key === 'currency') return 'تومان';
-      if (key === 'card_number') return '6037997911112222';
-      if (key === 'card_holder') return 'حسین کمالی';
-      if (key === 'support_destination') return '@RebeccaSupport';
-      if (key === 'custom_volume_enabled') return 'true';
-      return defaultValue;
-    }),
-    getSettingBool: vi.fn((key: string, defaultValue = true) => {
-      if (key === 'support_enabled') return true;
-      return defaultValue;
-    }),
-    getSettingNum: vi.fn((key: string, defaultValue?: number) => {
-      if (key === 'custom_min_gb') return 5;
-      if (key === 'custom_max_gb') return 500;
-      if (key === 'custom_default_days') return 30;
-      if (key === 'price_per_gb') return 5000;
-      if (key === 'price_per_day') return 0;
-      if (key === 'topup_min_amount') return 10_000;
-      if (key === 'topup_max_amount') return 10_000_000;
-      return defaultValue;
-    }),
-  };
-
-  const mockPanelRegistry = {
-    healthSummary: vi.fn(async () => ({ configured: 1, healthy: 1 })),
-  };
-
-  const mockConfig = {
-    NODE_ENV: 'test',
-    BOT_TOKEN: '123456:test_token',
-    ADMIN_IDS: [12345],
-    DEFAULT_LOCALE: 'fa',
-    INSTANCE_NAME: 'test',
-    WEBAPP_URL: 'https://app.example.com',
-    WEBAPP_PORT: 3002,
-    WEBAPP_HOST: '0.0.0.0',
-    ADMIN_SESSION_SECRET: 'test_session_secret_at_least_32_characters_long!!',
-  } as unknown as Config;
-
-  const mockServices = {
-    adminService: mockAdminService,
-    walletService: mockWalletService,
-    userService: mockUserService,
-    configService: mockConfigService,
-    pricingService: mockPricingService,
-    translationService: mockTranslationService,
-    purchaseCheckoutService: mockPurchaseCheckoutService,
-    panelRegistry: mockPanelRegistry,
-    botUsername: 'RebeccaSellBot',
-  } as unknown as BotServices;
+  const {
+    mockServices,
+    mockWalletService,
+    mockUserService,
+    mockConfigService,
+    mockPricingService,
+    mockPurchaseCheckoutService,
+    mockTranslationService,
+  } = createMockUserServices();
+  const mockConfig = createTestConfig();
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -1537,6 +1145,77 @@ describe('WebApp User Routes (/api/user/*)', () => {
 
         expect(res.statusCode).toBe(503);
         expect(res.json().code).toBe('PANEL_DOWN');
+      });
+    });
+
+    describe('Regression Tests — Bounds, Status, Auto-Renew & Checkout Validation', () => {
+      it('GET /api/user/quote propagates pricingService bounds errors as 400 INVALID_CUSTOM_BOUNDS', async () => {
+        mockPricingService.getCustomPriceQuote.mockImplementationOnce(() => {
+          throw new Error('Volume exceeds configured bounds');
+        });
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/user/quote?gb=25&days=30',
+          cookies: { session: token },
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json().code).toBe('INVALID_CUSTOM_BOUNDS');
+        expect(res.json().error).toBe('Volume exceeds configured bounds');
+      });
+
+      it('POST /api/user/configs/:id/toggle-status rejects invalid status values with 400 INVALID_STATUS', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/toggle-status',
+          cookies: { session: token },
+          payload: { status: 'bogus' },
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json().code).toBe('INVALID_STATUS');
+      });
+
+      it('POST /api/user/configs/:id/auto-renew returns 404 PACKAGE_NOT_FOUND when saved config autoRenewPackageId is unavailable', async () => {
+        mockConfigService.getOwnedConfigById.mockResolvedValueOnce({
+          id: 'cfg_1',
+          telegramId: 55555,
+          configUsername: 'u55555_srv1',
+          panelId: 'panel_1',
+          serviceId: 1,
+          autoRenewEnabled: false,
+          autoRenewPackageId: 'pkg_retired_no_longer_sold',
+          autoRenewPrice: 90_000,
+        } as any);
+
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/configs/cfg_1/auto-renew',
+          cookies: { session: token },
+          payload: { enabled: true },
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json().code).toBe('PACKAGE_NOT_FOUND');
+        expect(res.json().error).toContain('no longer available');
+        expect(mockConfigService.setAutoRenew).not.toHaveBeenCalled();
+      });
+
+      it('POST /api/user/checkout rejects top-level JSON array payloads with 400 INVALID_REQUEST', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/user/checkout',
+          cookies: { session: token },
+          payload: ['pkg_30gb_30d'] as unknown as Record<string, unknown>,
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json().code).toBe('INVALID_REQUEST');
       });
     });
   });

@@ -314,6 +314,9 @@ export function isAdminCallbackData(data: string): boolean {
     data.startsWith('backup:') ||
     data.startsWith('webapp:') ||
     data.startsWith('naming:') ||
+    data.startsWith('nm-set:') ||
+    data.startsWith('pfx:') ||
+    data.startsWith('tmpl:') ||
     data.startsWith('trial:') ||
     data.startsWith('target:') ||
     data.startsWith('balance-op:') ||

@@ -101,6 +101,13 @@ export class RebeccaPanelRegistry {
 
   async initialize(translationService: TranslationService): Promise<void> {
     const db = getDb();
+    const [existingLegacy] = await db
+      .select({ id: rebeccaPanels.id })
+      .from(rebeccaPanels)
+      .where(eq(rebeccaPanels.id, LEGACY_PANEL_ID))
+      .limit(1);
+    const legacySeeded = !existingLegacy;
+
     await db
       .insert(rebeccaPanels)
       .values({ id: LEGACY_PANEL_ID, name: 'پنل اصلی', enabled: false, isDefault: true })
@@ -127,20 +134,36 @@ export class RebeccaPanelRegistry {
     const storedService = positiveServiceId(
       translationService.getStoredSetting('rebecca_service_id')
     );
-    const baseUrl = legacy.baseUrl || storedUrl || this.bootstrap.baseUrl;
+    const shouldBootstrapUrl = legacySeeded || !legacy.baseUrl || Boolean(storedUrl);
+    const baseUrl =
+      legacy.baseUrl || storedUrl || (legacySeeded ? this.bootstrap.baseUrl : undefined);
     const apiKey = storedKey || this.bootstrap.apiKey;
     const adminPassword = this.bootstrap.adminPassword;
-    const shouldImportCredentials = !legacy.apiKeyEncrypted && !legacy.adminPasswordEncrypted;
+    const shouldImportCredentials =
+      Boolean(storedKey) || (!legacy.apiKeyEncrypted && !legacy.adminPasswordEncrypted);
 
-    if (baseUrl || (shouldImportCredentials && (apiKey || adminPassword))) {
-      let normalizedUrl: string | null = null;
+    if ((shouldBootstrapUrl && baseUrl) || (shouldImportCredentials && (apiKey || adminPassword))) {
+      let normalizedUrl: string | null = legacy.baseUrl ?? null;
       if (baseUrl) {
         try {
           normalizedUrl = validateRebeccaBaseUrl(baseUrl);
         } catch {
+          normalizedUrl = null;
           logger.warn({ panelId: LEGACY_PANEL_ID }, 'Invalid legacy Rebecca URL was disabled');
         }
       }
+      const nextHasCredentials = Boolean(
+        legacy.apiKeyEncrypted ||
+        legacy.adminPasswordEncrypted ||
+        (shouldImportCredentials && (apiKey || adminPassword))
+      );
+      const nextEnabled =
+        normalizedUrl === null
+          ? false
+          : legacySeeded || storedUrl || storedKey
+            ? nextHasCredentials
+            : legacy.enabled && nextHasCredentials;
+
       await db
         .update(rebeccaPanels)
         .set({
@@ -152,20 +175,14 @@ export class RebeccaPanelRegistry {
                 adminPasswordEncrypted: this.cipher.encrypt(adminPassword),
               }
             : {}),
-          enabled:
-            Boolean(normalizedUrl) &&
-            Boolean(
-              legacy.apiKeyEncrypted ||
-              legacy.adminPasswordEncrypted ||
-              (shouldImportCredentials && (apiKey || adminPassword))
-            ),
+          enabled: nextEnabled,
           updatedAt: new Date(),
         })
         .where(eq(rebeccaPanels.id, LEGACY_PANEL_ID));
     }
 
-    const desiredServiceId = storedService ?? this.bootstrap.serviceId;
-    if (validServiceId(desiredServiceId)) {
+    const desiredServiceId = storedService ?? (legacySeeded ? this.bootstrap.serviceId : undefined);
+    if (desiredServiceId !== undefined && validServiceId(desiredServiceId)) {
       await db.transaction(async (tx) => {
         await tx
           .update(rebeccaPanelServices)
@@ -300,10 +317,20 @@ export class RebeccaPanelRegistry {
     const values = validatePanelInput(input);
     const db = getDb();
     const panelId = `rp_${crypto.randomBytes(6).toString('hex')}`;
-    const hasEnabledDefault = this.panels.some(
-      (panel) => panel.isDefault && this.clients.has(panel.id)
-    );
     await db.transaction(async (tx) => {
+      const existingPanels = await tx
+        .select({
+          id: rebeccaPanels.id,
+          enabled: rebeccaPanels.enabled,
+          isDefault: rebeccaPanels.isDefault,
+          baseUrl: rebeccaPanels.baseUrl,
+          apiKeyEncrypted: rebeccaPanels.apiKeyEncrypted,
+          adminPasswordEncrypted: rebeccaPanels.adminPasswordEncrypted,
+        })
+        .from(rebeccaPanels);
+      const hasEnabledDefault = existingPanels.some(
+        (panel) => panel.isDefault && isPanelRowUsable(panel)
+      );
       if (!hasEnabledDefault) {
         await tx.update(rebeccaPanels).set({ isDefault: false, updatedAt: new Date() });
       }
@@ -371,23 +398,37 @@ export class RebeccaPanelRegistry {
   }
 
   async setPanelEnabled(panelId: string, enabled: boolean): Promise<void> {
-    const panel = await this.requirePanelRow(panelId);
-    if (enabled && (!panel.baseUrl || (!panel.apiKeyEncrypted && !panel.adminPasswordEncrypted))) {
-      throw new RebeccaPanelNotConfiguredError(panelId);
-    }
-    const replacement =
-      !enabled && panel.isDefault
-        ? this.panels.find(
-            (candidate) => candidate.id !== panelId && this.clients.has(candidate.id)
-          )
-        : undefined;
-    const makeDefault =
-      enabled &&
-      !this.panels.some(
-        (candidate) =>
-          candidate.id !== panelId && candidate.isDefault && this.clients.has(candidate.id)
-      );
     await getDb().transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          id: rebeccaPanels.id,
+          enabled: rebeccaPanels.enabled,
+          isDefault: rebeccaPanels.isDefault,
+          baseUrl: rebeccaPanels.baseUrl,
+          apiKeyEncrypted: rebeccaPanels.apiKeyEncrypted,
+          adminPasswordEncrypted: rebeccaPanels.adminPasswordEncrypted,
+        })
+        .from(rebeccaPanels);
+      const panel = rows.find((row) => row.id === panelId);
+      if (!panel) throw new Error('PANEL_NOT_FOUND');
+      if (
+        enabled &&
+        (!panel.baseUrl || (!panel.apiKeyEncrypted && !panel.adminPasswordEncrypted))
+      ) {
+        throw new RebeccaPanelNotConfiguredError(panelId);
+      }
+
+      const replacement =
+        !enabled && panel.isDefault
+          ? rows.find((candidate) => candidate.id !== panelId && isPanelRowUsable(candidate))
+          : undefined;
+      const makeDefault =
+        enabled &&
+        !rows.some(
+          (candidate) =>
+            candidate.id !== panelId && candidate.isDefault && isPanelRowUsable(candidate)
+        );
+
       if (makeDefault) {
         await tx.update(rebeccaPanels).set({ isDefault: false, updatedAt: new Date() });
       }
@@ -683,4 +724,17 @@ function positiveServiceId(value: string | undefined): number | undefined {
   if (!value || !/^[1-9]\d*$/u.test(value.trim())) return undefined;
   const parsed = Number(value);
   return validServiceId(parsed) ? parsed : undefined;
+}
+
+function isPanelRowUsable(row: {
+  enabled: boolean;
+  baseUrl: string | null;
+  apiKeyEncrypted: string | null;
+  adminPasswordEncrypted: string | null;
+}): boolean {
+  return (
+    row.enabled &&
+    Boolean(row.baseUrl) &&
+    Boolean(row.apiKeyEncrypted || row.adminPasswordEncrypted)
+  );
 }

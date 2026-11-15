@@ -5,6 +5,7 @@ import {
   buildEmptyState,
   buildScreen,
   buildStatusBadge,
+  guardAdminCallbacks,
   renderScreen,
   type StatusType,
 } from '../../ui.js';
@@ -128,12 +129,14 @@ export async function renderBroadcastStatus(
 }
 
 export function registerAdminBroadcastRoutes(bot: Bot<MenuContext>): void {
-  bot.callbackQuery(new RegExp(`^admin:broadcast:status:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  const adminCallback = guardAdminCallbacks(bot);
+
+  adminCallback(new RegExp(`^admin:broadcast:status:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderBroadcastStatus(ctx, ctx.match[1]!);
   });
 
-  bot.callbackQuery(new RegExp(`^admin:broadcast:cancel:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^admin:broadcast:cancel:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const jobId = ctx.match[1]!;
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });

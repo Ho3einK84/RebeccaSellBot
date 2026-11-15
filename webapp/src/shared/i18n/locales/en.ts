@@ -44,6 +44,7 @@ export const en: DeepPartial<TranslationSchema> = {
     search: 'Search',
     retry: 'Retry',
     back: 'Back',
+    clearSearch: 'Clear search',
   },
   auth: {
     connecting: 'Connecting securely to server...',
@@ -292,6 +293,8 @@ export const en: DeepPartial<TranslationSchema> = {
   },
   admin: {
     title: 'Management',
+    navLabel: 'Admin panel navigation',
+    defaultAdminName: 'Admin',
     welcome: 'Welcome, {name} (ID: {id}) · System Admin',
     role: 'System Admin',
     exit: 'Exit Dashboard',
@@ -331,6 +334,7 @@ export const en: DeepPartial<TranslationSchema> = {
       panelHealthTitle: 'Panels Health',
       panelHealthOk: 'Healthy & Online',
       panelHealthError: 'Connection Error',
+      panelHealthEmpty: 'No panels configured',
       panelHealthSub: '{healthy} of {configured} panels available',
     },
     receipts: {
@@ -357,7 +361,7 @@ export const en: DeepPartial<TranslationSchema> = {
       downloadReceipt: 'Download Receipt',
       approveConfirmTitle: 'Approve Payment Receipt',
       approveConfirmBody:
-        'Are you sure you want to approve this receipt for {amount} Toman? Customer wallet will be credited immediately.',
+        'Are you sure you want to approve this receipt for {amount}? Customer wallet will be credited immediately.',
       approveConfirmBtn: 'Approve & Credit Wallet',
       tabPending: 'Pending',
       tabApproved: 'Approved',
@@ -370,7 +374,7 @@ export const en: DeepPartial<TranslationSchema> = {
       batchApproveBtn: 'Batch Approve {count} Receipts',
       batchApproveTitle: 'Batch Approve Selected Receipts',
       batchApproveConfirmBody:
-        'Are you sure you want to approve {count} receipts with a total of {amount} Toman? All respective user wallets will be credited immediately.',
+        'Are you sure you want to approve {count} receipts with a total of {amount}? All respective user wallets will be credited immediately.',
       batchApproveConfirmBtn: 'Approve All Selected',
       batchApproveSuccess: '{count} receipts approved and credited successfully.',
       settingsBtn: 'Notify Settings',

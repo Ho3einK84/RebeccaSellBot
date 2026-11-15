@@ -4,8 +4,7 @@ import { getDb } from './db.js';
 import { grammySessions } from './schema.js';
 import { logger } from './logger.js';
 
-interface L1CacheEntry<T> {
-  readonly value: T;
+interface L1CacheEntry {
   readonly rawJson: string;
   readonly expiresAt: number;
 }
@@ -14,7 +13,7 @@ export class PostgresSessionAdapter<T> implements StorageAdapter<T> {
   /**
    * In-memory L1 cache to avoid redundant database round-trips for active users.
    */
-  private readonly l1Cache = new Map<string, L1CacheEntry<T>>();
+  private readonly l1Cache = new Map<string, L1CacheEntry>();
 
   /**
    * Snapshot loaded by the current update. grammY persists an accessed session
@@ -56,7 +55,7 @@ export class PostgresSessionAdapter<T> implements StorageAdapter<T> {
       }
       const value = rows[0].value;
       const parsed = JSON.parse(value) as T;
-      this.setL1Cache(key, parsed, value);
+      this.setL1Cache(key, value);
       this.rememberReadSnapshot(key, value);
       return parsed;
     } catch (err) {
@@ -68,7 +67,7 @@ export class PostgresSessionAdapter<T> implements StorageAdapter<T> {
   async write(key: string, value: T): Promise<void> {
     try {
       const strVal = JSON.stringify(value);
-      this.setL1Cache(key, value, strVal);
+      this.setL1Cache(key, strVal);
       const hadReadSnapshot = this.readSnapshots.has(key);
       const readSnapshot = this.readSnapshots.get(key);
       this.readSnapshots.delete(key);
@@ -100,10 +99,11 @@ export class PostgresSessionAdapter<T> implements StorageAdapter<T> {
     }
   }
 
-  private setL1Cache(key: string, value: T, rawJson: string): void {
-    if (this.ttlMs <= 0) return;
+  private setL1Cache(key: string, rawJson: string): void {
+    if (this.ttlMs <= 0 || this.maxCapacity <= 0) return;
+    // Delete first so overwriting an existing key moves it to MRU position.
+    this.l1Cache.delete(key);
     this.l1Cache.set(key, {
-      value,
       rawJson,
       expiresAt: Date.now() + this.ttlMs,
     });

@@ -1,6 +1,9 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../../infra/logger.js';
+
+const INSTANCE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
 
 export interface DomainRegistryRecord {
   instance: string;
@@ -33,31 +36,38 @@ export class DomainRegistryService {
     }
   }
 
-  public register(record: Omit<DomainRegistryRecord, 'updatedAt'>): void {
+  public register(record: Omit<DomainRegistryRecord, 'updatedAt'>): boolean {
     this.ensureDirectory();
     const normalizedDomain = record.domain.toLowerCase().trim();
-    const filePath = path.join(this.registryDir, `${record.instance}.json`);
+    const filePath = this.resolveInstanceFilePath(record.instance);
     const fullRecord: DomainRegistryRecord = {
       ...record,
       domain: normalizedDomain,
       updatedAt: new Date().toISOString(),
     };
 
+    const tempPath = `${filePath}.tmp.${crypto.randomUUID()}`;
     try {
-      const tempPath = `${filePath}.tmp.${Date.now()}`;
       fs.writeFileSync(tempPath, JSON.stringify(fullRecord, null, 2), 'utf8');
       fs.renameSync(tempPath, filePath);
       logger.info(
         { instance: fullRecord.instance, domain: fullRecord.domain, target: fullRecord.target },
         'Registered domain in multi-instance registry'
       );
+      return true;
     } catch (err) {
+      try {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      } catch {
+        // Best-effort temp cleanup
+      }
       logger.error({ err, filePath }, 'Failed to write domain registry file');
+      return false;
     }
   }
 
   public unregister(instance: string): void {
-    const filePath = path.join(this.registryDir, `${instance}.json`);
+    const filePath = this.resolveInstanceFilePath(instance);
     try {
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
@@ -66,6 +76,18 @@ export class DomainRegistryService {
     } catch (err) {
       logger.error({ err, filePath }, 'Failed to delete domain registry file');
     }
+  }
+
+  private resolveInstanceFilePath(instance: string): string {
+    if (!INSTANCE_NAME_RE.test(instance) || instance.includes('..')) {
+      throw new Error('INVALID_REGISTRY_INSTANCE');
+    }
+    const baseDir = path.resolve(this.registryDir);
+    const resolved = path.resolve(baseDir, `${instance}.json`);
+    if (!resolved.startsWith(`${baseDir}${path.sep}`)) {
+      throw new Error('INVALID_REGISTRY_INSTANCE');
+    }
+    return resolved;
   }
 
   public getAll(): DomainRegistryRecord[] {

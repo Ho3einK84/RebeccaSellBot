@@ -41,6 +41,7 @@ import { isRebeccaPanelRegistryAccess, normalizeRebeccaPanelAccess } from './Reb
 
 import {
   PendingTopupReceiptError,
+  PurchaseInProgressError,
   type AdminBalanceAdjustment,
   type DashboardStats,
   type PurchaseSagaParams,
@@ -285,7 +286,7 @@ export class WalletService {
   async adjustBalanceAdmin(params: AdminBalanceAdjustment): Promise<number> {
     assertAdminBalanceAdjustment(params);
     const db = getDb();
-    return await db.transaction(async (tx) => {
+    const balance = await db.transaction(async (tx) => {
       const [user] = await tx
         .select()
         .from(users)
@@ -375,9 +376,11 @@ export class WalletService {
         }),
       });
 
-      this.invalidateUserCache(params.telegramId);
       return updated.balance;
     });
+
+    this.invalidateUserCache(params.telegramId);
+    return balance;
   }
 
   // Top-up approval by admin
@@ -386,8 +389,7 @@ export class WalletService {
     adminId: number
   ): Promise<{ telegramId: number; amount: number } | null> {
     const db = getDb();
-    let result: { telegramId: number; amount: number } | null = null;
-    await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [rec] = await tx
         .update(topupReceipts)
         .set({ status: 'approved', reviewedBy: adminId, updatedAt: new Date() })
@@ -397,7 +399,7 @@ export class WalletService {
             AND ${topupReceipts.amount} > 0`
         )
         .returning();
-      if (!rec) return;
+      if (!rec) return null;
 
       const updatedUsers = await tx
         .update(users)
@@ -433,9 +435,11 @@ export class WalletService {
         metadata: JSON.stringify({ amount: rec.amount }),
       });
 
-      this.invalidateUserCache(rec.telegramId);
-      result = { telegramId: rec.telegramId, amount: rec.amount };
+      return { telegramId: rec.telegramId, amount: rec.amount };
     });
+    if (result) {
+      this.invalidateUserCache(result.telegramId);
+    }
     return result;
   }
 
@@ -624,21 +628,30 @@ export class WalletService {
     }
 
     if (search) {
+      const escapedSearch = escapeLikePattern(search);
       const isNum = /^\d+$/.test(search);
       if (isNum) {
-        whereConditions.push(
-          or(
-            eq(topupReceipts.telegramId, Number(search)),
-            sql`${topupReceipts.id} ILIKE ${`%${search}%`}`
-          )!
-        );
+        const parsedId = Number(search);
+        const searchPattern = `%${escapedSearch}%`;
+        if (Number.isSafeInteger(parsedId) && parsedId > 0) {
+          whereConditions.push(
+            or(
+              eq(topupReceipts.telegramId, parsedId),
+              sql`${topupReceipts.id} ILIKE ${searchPattern} ESCAPE '\\'`
+            )!
+          );
+        } else {
+          whereConditions.push(sql`${topupReceipts.id} ILIKE ${searchPattern} ESCAPE '\\'`);
+        }
       } else {
         const cleanUser = search.replace(/^@/, '');
+        const searchPattern = `%${escapedSearch}%`;
+        const cleanUserPattern = `%${escapeLikePattern(cleanUser)}%`;
         whereConditions.push(
           or(
-            sql`${topupReceipts.id} ILIKE ${`%${search}%`}`,
-            sql`${users.username} ILIKE ${`%${cleanUser}%`}`,
-            sql`${users.firstName} ILIKE ${`%${search}%`}`
+            sql`${topupReceipts.id} ILIKE ${searchPattern} ESCAPE '\\'`,
+            sql`${users.username} ILIKE ${cleanUserPattern} ESCAPE '\\'`,
+            sql`${users.firstName} ILIKE ${searchPattern} ESCAPE '\\'`
           )!
         );
       }
@@ -680,6 +693,9 @@ export class WalletService {
     const total = Number(totalRow?.value ?? 0);
     const pendingCount = Number(pendingRow?.value ?? 0);
     const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    if (safePage > totalPages) {
+      return this.listTopupsPage({ ...options, page: totalPages, pageSize: safePageSize });
+    }
 
     const rejectedIds = rawRows.filter((r) => r.status === 'rejected').map((r) => r.id);
     const rejectReasons = new Map<string, string>();
@@ -842,7 +858,16 @@ export class WalletService {
   // Purchase orchestration lives in WalletPurchaseSaga so balance/top-up
   // operations stay independent from remote mutation/reconciliation logic.
   async executePurchaseSaga(params: PurchaseSagaParams): Promise<PurchaseSagaResult> {
-    return this.purchaseSaga.execute(params);
+    try {
+      const result = await this.purchaseSaga.execute(params);
+      this.invalidateUserCache(params.telegramId);
+      return result;
+    } catch (err) {
+      if (!(err instanceof PurchaseInProgressError)) {
+        this.invalidateUserCache(params.telegramId);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -863,7 +888,7 @@ export class WalletService {
     assertPositiveSafeInteger(params.amount, 'INVALID_TRANSFER_AMOUNT');
 
     const db = getDb();
-    return db.transaction(async (tx) => {
+    const transferResult = await db.transaction(async (tx) => {
       // Deterministic lock order by telegramId (ascending) to prevent deadlocks
       const [firstId, secondId] =
         params.fromTelegramId < params.toTelegramId
@@ -980,9 +1005,6 @@ export class WalletService {
         }),
       });
 
-      this.invalidateUserCache(params.fromTelegramId);
-      this.invalidateUserCache(params.toTelegramId);
-
       return {
         success: true,
         fromTelegramId: params.fromTelegramId,
@@ -994,6 +1016,10 @@ export class WalletService {
         txIdRecipient,
       };
     });
+
+    this.invalidateUserCache(params.fromTelegramId);
+    this.invalidateUserCache(params.toTelegramId);
+    return transferResult;
   }
 
   /**
@@ -1010,20 +1036,26 @@ export class WalletService {
     page: number;
   }> {
     const db = getDb();
+    const safePageSize = Math.max(1, Math.min(Math.trunc(pageSize) || 5, 50));
     const [countRes] = await db
       .select({ count: sql<number>`count(*)` })
       .from(walletTransactions)
       .where(eq(walletTransactions.telegramId, telegramId));
     const total = Number(countRes?.count ?? 0);
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const requestedPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1;
+    const safePage = Math.min(requestedPage, totalPages);
     const rows = await db
       .select()
       .from(walletTransactions)
       .where(eq(walletTransactions.telegramId, telegramId))
       .orderBy(desc(walletTransactions.createdAt))
-      .limit(pageSize)
-      .offset((safePage - 1) * pageSize);
+      .limit(safePageSize)
+      .offset((safePage - 1) * safePageSize);
     return { transactions: rows, total, totalPages, page: safePage };
   }
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/gu, '\\$&');
 }

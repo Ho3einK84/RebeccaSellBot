@@ -1,9 +1,23 @@
-import React, { useState } from 'react';
-import { Image as ImageIcon, ZoomIn, ZoomOut, Download, RotateCw, Copy, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Image as ImageIcon,
+  ZoomIn,
+  ZoomOut,
+  Download,
+  RotateCw,
+  Copy,
+  Check,
+  Loader2,
+} from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { api } from '@/shared/lib/api.js';
+
+export function appendDownloadQuery(photoUrl: string): string {
+  return photoUrl.includes('?') ? `${photoUrl}&download=1` : `${photoUrl}?download=1`;
+}
 
 interface ReceiptPhotoModalProps {
   photoUrl: string | null;
@@ -23,8 +37,52 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
   const { t } = useLanguage();
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
   const { copy, isCopied } = useCopy();
+
+  useEffect(() => {
+    setIsZoomed(false);
+    setHasError(false);
+
+    if (!photoUrl) {
+      setPreviewSrc(null);
+      setIsLoadingPhoto(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    setIsLoadingPhoto(true);
+    setPreviewSrc(null);
+
+    api
+      .fetchBlob(photoUrl, { signal: controller.signal })
+      .then((blob) => {
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPreviewSrc(objectUrl);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        console.error('Receipt photo preview error:', err);
+        setHasError(true);
+        onErrorNotify?.();
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoadingPhoto(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [photoUrl, onErrorNotify]);
 
   if (!photoUrl) return null;
 
@@ -39,12 +97,8 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
     if (!photoUrl || isDownloading) return;
     setIsDownloading(true);
     try {
-      const downloadEndpoint = photoUrl.includes('?')
-        ? `${photoUrl}&download=1`
-        : `${photoUrl}?download=1`;
-      const res = await fetch(downloadEndpoint, { credentials: 'include' });
-      if (!res.ok) throw new Error('Download failed');
-      const blob = await res.blob();
+      const downloadEndpoint = appendDownloadQuery(photoUrl);
+      const blob = await api.fetchBlob(downloadEndpoint);
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -141,7 +195,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       <div
         className={`rounded-2xl overflow-auto border flex items-center justify-center p-2 transition-all relative select-none ${
           isZoomed ? 'min-h-[380px] max-h-[75vh]' : 'min-h-[260px] max-h-[60vh]'
-        } bg-black/70 border-line/10 bg-surface/5 border-line`}
+        } bg-black/70 border-line/10`}
         style={{
           touchAction: isZoomed ? 'pan-x pan-y' : 'auto',
           WebkitOverflowScrolling: 'touch',
@@ -165,6 +219,11 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
               <span>{t('admin.receipts.downloadReceipt')}</span>
             </button>
           </div>
+        ) : isLoadingPhoto || !previewSrc ? (
+          <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-brand text-xs">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span>{t('common.loading')}</span>
+          </div>
         ) : (
           <div
             className={`transition-all duration-200 ${
@@ -172,8 +231,8 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
             }`}
           >
             <img
-              key={photoUrl}
-              src={photoUrl}
+              key={previewSrc}
+              src={previewSrc}
               alt="Receipt proof"
               className={`rounded-xl shadow-md transition-all mx-auto select-none ${
                 isZoomed

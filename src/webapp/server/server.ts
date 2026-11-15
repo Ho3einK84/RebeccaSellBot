@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
 import crypto from 'node:crypto';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -98,23 +99,38 @@ export function resolveCorsOptions(config: Config): {
  * Extracts verified client identity for rate limiting (authenticated telegramId or fallback IP).
  */
 export function extractClientIdentity(req: FastifyRequest): string {
-  if (req.userSession?.telegramId) {
+  if (
+    req.userSession?.telegramId &&
+    Number.isSafeInteger(req.userSession.telegramId) &&
+    req.userSession.telegramId > 0
+  ) {
     return `user:${req.userSession.telegramId}`;
   }
-  const token =
-    req.cookies?.session ||
-    (req.headers?.authorization?.startsWith('Bearer ')
-      ? req.headers.authorization.slice(7).trim()
-      : undefined);
+
+  let token: string | undefined = req.cookies?.session;
+  if (!token && typeof req.headers?.authorization === 'string') {
+    const spaceIdx = req.headers.authorization.indexOf(' ');
+    if (spaceIdx > 0 && req.headers.authorization.slice(0, spaceIdx).toLowerCase() === 'bearer') {
+      const candidate = req.headers.authorization.slice(spaceIdx + 1).trim();
+      if (candidate) {
+        token = candidate;
+      }
+    }
+  }
 
   if (token && req.server.jwt) {
     try {
-      const decoded = req.server.jwt.decode(token) as { telegramId?: number } | null;
-      if (decoded && Number.isSafeInteger(decoded.telegramId)) {
-        return `user:${decoded.telegramId}`;
+      const verified = req.server.jwt.verify(token) as { telegramId?: unknown } | null;
+      if (
+        verified &&
+        typeof verified.telegramId === 'number' &&
+        Number.isSafeInteger(verified.telegramId) &&
+        verified.telegramId > 0
+      ) {
+        return `user:${verified.telegramId}`;
       }
     } catch {
-      // Fallback to IP on unparseable token
+      // Fallback to IP on invalid or forged token
     }
   }
 
@@ -164,12 +180,25 @@ export async function createWebAppServer(
   const domainRegistry =
     services.domainRegistryService ?? new DomainRegistryService(config.REGISTRY_DIR);
 
+  const HOP_BY_HOP_HEADERS = new Set([
+    'connection',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'proxy-connection',
+    'te',
+    'trailers',
+    'transfer-encoding',
+    'upgrade',
+  ]);
+
   // Multi-instance mesh reverse proxy dispatcher
   // When Caddy's catch-all reverse proxies traffic to this primary container,
   // transparently stream and dispatch requests intended for peer instances.
   app.addHook('onRequest', async (req, reply) => {
     // Caddy TLS verification endpoint is always handled locally
-    if (req.raw.url?.startsWith('/api/caddy-check')) {
+    const requestPath = req.raw.url?.split('?')[0] ?? '';
+    if (requestPath === '/api/caddy-check') {
       return;
     }
 
@@ -220,37 +249,69 @@ export async function createWebAppServer(
       return;
     }
 
-    // Guard against circular proxy loops
-    const currentHops = Number(req.headers['x-rsbot-proxy-hops'] || 0);
+    // Guard against circular or malformed proxy loop headers
+    const rawHopsHeader = req.headers['x-rsbot-proxy-hops'];
+    const rawHopsStr = Array.isArray(rawHopsHeader) ? rawHopsHeader[0] : rawHopsHeader;
+    let currentHops = 0;
+    if (rawHopsStr !== undefined && rawHopsStr !== '') {
+      const parsedHops = Number(rawHopsStr);
+      if (!Number.isInteger(parsedHops) || parsedHops < 0) {
+        return reply.code(400).send({ error: 'Invalid proxy hop header' });
+      }
+      currentHops = parsedHops;
+    }
     if (currentHops >= 3) {
       return reply.code(508).send({ error: 'Loop detected across instance reverse proxies' });
     }
-
-    reply.hijack();
 
     let targetUrl: URL;
     try {
       targetUrl = new URL(peerRecord.target);
     } catch {
-      reply.raw.writeHead(502, { 'content-type': 'application/json' });
-      reply.raw.end(JSON.stringify({ error: `Invalid peer target URL: ${peerRecord.target}` }));
-      return;
+      return reply.code(502).send({ error: `Invalid peer target URL: ${peerRecord.target}` });
     }
 
-    const proxyReq = http.request(
+    if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+      return reply
+        .code(502)
+        .send({ error: `Unsupported peer target protocol: ${targetUrl.protocol}` });
+    }
+
+    reply.hijack();
+
+    const forwardHeaders: http.OutgoingHttpHeaders = {};
+    const connectionTokens = new Set(
+      typeof req.headers.connection === 'string'
+        ? req.headers.connection
+            .split(',')
+            .map((h) => h.trim().toLowerCase())
+            .filter(Boolean)
+        : []
+    );
+    for (const [key, value] of Object.entries(req.raw.headers)) {
+      const lower = key.toLowerCase();
+      if (HOP_BY_HOP_HEADERS.has(lower) || connectionTokens.has(lower)) {
+        continue;
+      }
+      forwardHeaders[key] = value;
+    }
+    forwardHeaders.host = hostHeader;
+    forwardHeaders['x-forwarded-host'] = hostHeader;
+    forwardHeaders['x-forwarded-for'] = req.ip || req.raw.socket.remoteAddress || '';
+    forwardHeaders['x-forwarded-proto'] = 'https';
+    forwardHeaders['x-rsbot-proxy-hops'] = String(currentHops + 1);
+
+    const transport = targetUrl.protocol === 'https:' ? https : http;
+    let timedOut = false;
+
+    const proxyReq = transport.request(
       {
         hostname: targetUrl.hostname,
         port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
         path: req.raw.url,
         method: req.raw.method,
-        headers: {
-          ...req.raw.headers,
-          host: hostHeader,
-          'x-forwarded-host': hostHeader,
-          'x-forwarded-for': req.ip || req.raw.socket.remoteAddress || '',
-          'x-forwarded-proto': 'https',
-          'x-rsbot-proxy-hops': String(currentHops + 1),
-        },
+        headers: forwardHeaders,
+        timeout: 15_000,
       },
       (proxyRes) => {
         reply.raw.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
@@ -258,19 +319,32 @@ export async function createWebAppServer(
       }
     );
 
+    proxyReq.on('timeout', () => {
+      timedOut = true;
+      proxyReq.destroy(new Error('Upstream mesh proxy timeout'));
+    });
+
     proxyReq.on('error', (err) => {
       logger.warn(
         { err: err.message, target: peerRecord.target, host: incomingHost },
         'Multi-instance mesh proxy request failed'
       );
       if (!reply.raw.headersSent) {
-        reply.raw.writeHead(502, { 'content-type': 'application/json' });
+        reply.raw.writeHead(timedOut ? 504 : 502, { 'content-type': 'application/json' });
         reply.raw.end(
           JSON.stringify({
             error: `Target instance '${peerRecord.instance}' is temporarily unreachable`,
             details: err.message,
           })
         );
+      } else if (!reply.raw.writableEnded) {
+        reply.raw.destroy(err);
+      }
+    });
+
+    reply.raw.on('close', () => {
+      if (!reply.raw.writableEnded && !proxyReq.destroyed) {
+        proxyReq.destroy();
       }
     });
 

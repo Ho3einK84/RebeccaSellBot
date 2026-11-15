@@ -1,9 +1,9 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { localizedNumber, t } from '../../../locale.js';
-import { buildScreen, isMessageNotModifiedError, promptInConversation } from '../../../ui.js';
+import { buildScreen } from '../../../ui.js';
 import { requireAdmin } from '../shared.js';
-import { waitForSettingsInput } from './navigation.js';
+import { renderSettingsScreen, waitForSettingsInput } from './navigation.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
 import { renderSalesMenu } from '../../../keyboards/adminMenu.js';
@@ -17,63 +17,48 @@ export async function adminReferralSettingsConversation(
   let activeCtx = ctx;
 
   for (;;) {
-    const ts = ctx.services.translationService;
-    const refBonus = ts.getSettingNum('referral_bonus_toman', 10000);
-    const cashback = ts.getSettingNum('cashback_percent', 5);
+    const state = await conversation.external((outsideCtx) => {
+      const ts = (outsideCtx?.services ?? activeCtx.services)?.translationService;
+      if (!ts) return undefined;
+      return {
+        refBonus: ts.getSettingNum('referral_bonus_toman', 10000),
+        cashback: ts.getSettingNum('cashback_percent', 5),
+      };
+    });
+    if (!state) return;
+    const { refBonus, cashback } = state;
 
     const screenText = buildScreen({
       emoji: '👥',
-      title: t(ctx, 'admin_sales_referral_title'),
-      subtitle: t(ctx, 'admin_sales_referral_subtitle'),
+      title: t(activeCtx, 'admin_sales_referral_title'),
+      subtitle: t(activeCtx, 'admin_sales_referral_subtitle'),
       sections: [
         {
           emoji: '🎁',
-          title: t(ctx, 'admin_setting_group_referral'),
+          title: t(activeCtx, 'admin_setting_group_referral'),
           fields: [
             {
-              label: t(ctx, 'admin_setting_referral_bonus_toman'),
-              value: `${localizedNumber(refBonus, ctx)} ${t(ctx, 'currency_toman')}`,
+              label: t(activeCtx, 'admin_setting_referral_bonus_toman'),
+              value: `${localizedNumber(refBonus, activeCtx)} ${t(activeCtx, 'currency_toman')}`,
             },
             {
-              label: t(ctx, 'admin_setting_cashback_percent'),
-              value: `${localizedNumber(cashback, ctx)}%`,
+              label: t(activeCtx, 'admin_setting_cashback_percent'),
+              value: `${localizedNumber(cashback, activeCtx)}%`,
             },
           ],
         },
       ],
-      footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+      footer: `ℹ️ ${t(activeCtx, 'admin_home_hint')}`,
     });
 
     const keyboard = new InlineKeyboard()
-      .text(t(ctx, 'admin_setting_referral_bonus_toman'), 'ref:edit:referral_bonus_toman')
+      .text(t(activeCtx, 'admin_setting_referral_bonus_toman'), 'ref:edit:referral_bonus_toman')
       .row()
-      .text(t(ctx, 'admin_setting_cashback_percent'), 'ref:edit:cashback_percent')
+      .text(t(activeCtx, 'admin_setting_cashback_percent'), 'ref:edit:cashback_percent')
       .row()
-      .text(t(ctx, 'admin_menu_back_to_sales'), 'ref:back');
+      .text(t(activeCtx, 'admin_menu_back_to_sales'), 'ref:back');
 
-    let renderedInPlace = false;
-    const messageId = activeCtx.callbackQuery?.message?.message_id;
-    const chatId = activeCtx.chat?.id;
-    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
-      try {
-        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-        renderedInPlace = true;
-      } catch (error) {
-        if (isMessageNotModifiedError(error)) {
-          renderedInPlace = true;
-        }
-      }
-    }
-
-    if (!renderedInPlace) {
-      await promptInConversation(conversation, activeCtx, screenText, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-      });
-    }
+    await renderSettingsScreen(conversation, activeCtx, screenText, keyboard);
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['ref:edit:'],

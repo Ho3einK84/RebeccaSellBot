@@ -3,12 +3,13 @@
  * credits. WalletService owns the purchase saga and invokes this service only
  * after its purchase transaction has completed.
  */
-import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { getDb } from '../../infra/db.js';
 import { purchaseIntents, refundIntents, users, walletTransactions } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
 import type { TranslationService } from './TranslationService.js';
+import { dbIntegerToSafeNumber } from './DbNumber.js';
 
 export type BonusSnapshot = {
   cashbackPercent: number;
@@ -21,7 +22,20 @@ type DbInstance = ReturnType<typeof getDb>;
 type DbTransaction = Parameters<Parameters<DbInstance['transaction']>[0]>[0];
 
 export class ReferralService {
+  private readonly invalidationHooks: Array<(telegramId: number) => void> = [];
+
   constructor(private readonly translationService: TranslationService) {}
+
+  /** Register a callback invoked post-commit whenever bonuses credit a user's wallet. */
+  registerInvalidationHook(hook: (telegramId: number) => void): void {
+    this.invalidationHooks.push(hook);
+  }
+
+  private notifyInvalidation(telegramId: number): void {
+    for (const hook of this.invalidationHooks) {
+      hook(telegramId);
+    }
+  }
 
   /**
    * Resolve a deep-link payload to its exact, existing referral code. The
@@ -102,6 +116,8 @@ export class ReferralService {
     intentId: string
   ): Promise<void> {
     const db = getDb();
+    const creditedUsers = new Set<number>();
+
     await db.transaction(async (tx) => {
       // 1. Lock the purchase intent row
       const [intent] = await tx
@@ -144,19 +160,16 @@ export class ReferralService {
       }
 
       // Resolve snapshotted or fallback values:
-      // If snapshot is present in row, use it unconditionally (never re-read global settings).
-      // For legacy rows where snapshot columns are NULL, calculate safely once or default to 0.
+      // Modern intents always populate non-null numeric snapshot columns (even
+      // when referrerTelegramId is null because there was no referrer or it was
+      // a repeat purchase). Only legacy rows with NULL numeric snapshot columns
+      // need the fallback query.
       let referralBonus = intent.referralBonusAmount;
       let referrerId = intent.referrerTelegramId;
       let cashbackAmount = intent.cashbackAmount;
       let cashbackPercent = intent.cashbackPercent;
 
-      if (
-        referralBonus === null ||
-        referrerId === null ||
-        cashbackAmount === null ||
-        cashbackPercent === null
-      ) {
+      if (referralBonus === null || cashbackAmount === null || cashbackPercent === null) {
         const [user] = await tx
           .select()
           .from(users)
@@ -204,6 +217,7 @@ export class ReferralService {
           description: `Referral bonus for user ${telegramId}`,
         });
         if (awarded) {
+          creditedUsers.add(referrerId);
           logger.info(
             { referrerId, bonusAmount: referralBonus, referenceId },
             'Referral bonus awarded'
@@ -221,6 +235,7 @@ export class ReferralService {
           description: `Cashback ${cashbackPercent ?? 0}% for purchase ${intentId}`,
         });
         if (awarded) {
+          creditedUsers.add(telegramId);
           logger.info({ telegramId, cashbackAmount, referenceId }, 'Cashback awarded');
         }
       }
@@ -230,17 +245,20 @@ export class ReferralService {
         .set({ bonusesProcessedAt: new Date(), updatedAt: new Date() })
         .where(eq(purchaseIntents.id, intentId));
     });
+
+    for (const id of creditedUsers) {
+      this.notifyInvalidation(id);
+    }
   }
 
   /**
-   * Credit a wallet exactly once. The ledger's unique reference ID is the
-   * idempotency key. A concurrent retry that races after the pre-check may hit
-   * the unique constraint; PostgreSQL rolls back its balance update together
-   * with the failed insert, so no duplicate credit can escape. Unexpected
-   * failures propagate so the durable reconciliation retry can see them.
+   * Credit a wallet exactly once using a SQL savepoint inside the outer
+   * transaction so a concurrent 23505 unique conflict rolls back only the
+   * conflicting credit without aborting the surrounding PostgreSQL transaction.
    */
   private async creditWalletInTransaction(
-    tx: Pick<DbTransaction, 'select' | 'update' | 'insert'>,
+    tx: Pick<DbTransaction, 'select' | 'update' | 'insert'> &
+      Partial<Pick<DbTransaction, 'execute'>>,
     params: {
       telegramId: number;
       amount: number;
@@ -249,13 +267,23 @@ export class ReferralService {
       description: string;
     }
   ): Promise<boolean> {
+    const savepoint = 'sp_referral_wallet_credit';
+    const hasSavepoint = typeof tx.execute === 'function';
+    if (hasSavepoint) {
+      await tx.execute!(sql.raw(`SAVEPOINT ${savepoint}`));
+    }
     try {
       const [alreadyCredited] = await tx
         .select({ id: walletTransactions.id })
         .from(walletTransactions)
         .where(eq(walletTransactions.referenceId, params.referenceId))
         .limit(1);
-      if (alreadyCredited) return false;
+      if (alreadyCredited) {
+        if (hasSavepoint) {
+          await tx.execute!(sql.raw(`RELEASE SAVEPOINT ${savepoint}`));
+        }
+        return false;
+      }
 
       const [updatedUser] = await tx
         .update(users)
@@ -276,8 +304,14 @@ export class ReferralService {
         referenceId: params.referenceId,
         description: params.description,
       });
+      if (hasSavepoint) {
+        await tx.execute!(sql.raw(`RELEASE SAVEPOINT ${savepoint}`));
+      }
       return true;
     } catch (err) {
+      if (hasSavepoint) {
+        await tx.execute!(sql.raw(`ROLLBACK TO SAVEPOINT ${savepoint}`)).catch(() => undefined);
+      }
       if (isUniqueViolation(err)) {
         logger.debug(
           { referenceId: params.referenceId },
@@ -301,14 +335,27 @@ export class ReferralService {
       .select({ count: sql<number>`count(*)` })
       .from(users)
       .where(eq(users.referrerId, telegramId));
-    const totalInvited = Number(invitedRes?.count ?? 0);
+    const totalInvited = dbIntegerToSafeNumber(
+      invitedRes?.count ?? 0,
+      'referral_stats.totalInvited'
+    );
 
     const [activeBuyersRes] = await db
       .select({ count: sql<number>`count(distinct ${users.telegramId})` })
       .from(users)
-      .innerJoin(walletTransactions, eq(users.telegramId, walletTransactions.telegramId))
-      .where(and(eq(users.referrerId, telegramId), eq(walletTransactions.type, 'purchase')));
-    const activeBuyers = Number(activeBuyersRes?.count ?? 0);
+      .innerJoin(purchaseIntents, eq(users.telegramId, purchaseIntents.telegramId))
+      .where(
+        and(
+          eq(users.referrerId, telegramId),
+          eq(purchaseIntents.status, 'completed'),
+          isNull(purchaseIntents.refundedAt),
+          gt(purchaseIntents.amount, 0)
+        )
+      );
+    const activeBuyers = dbIntegerToSafeNumber(
+      activeBuyersRes?.count ?? 0,
+      'referral_stats.activeBuyers'
+    );
 
     const [bonusRes] = await db
       .select({ sum: sql<number>`COALESCE(sum(${walletTransactions.amount}), 0)` })
@@ -319,7 +366,10 @@ export class ReferralService {
           eq(walletTransactions.type, 'referral_bonus')
         )
       );
-    const totalReferralBonus = Number(bonusRes?.sum ?? 0);
+    const totalReferralBonus = dbIntegerToSafeNumber(
+      bonusRes?.sum ?? 0,
+      'referral_stats.totalReferralBonus'
+    );
 
     const [cashbackRes] = await db
       .select({ sum: sql<number>`COALESCE(sum(${walletTransactions.amount}), 0)` })
@@ -327,7 +377,10 @@ export class ReferralService {
       .where(
         and(eq(walletTransactions.telegramId, telegramId), eq(walletTransactions.type, 'cashback'))
       );
-    const totalCashback = Number(cashbackRes?.sum ?? 0);
+    const totalCashback = dbIntegerToSafeNumber(
+      cashbackRes?.sum ?? 0,
+      'referral_stats.totalCashback'
+    );
 
     return { totalInvited, activeBuyers, totalReferralBonus, totalCashback };
   }

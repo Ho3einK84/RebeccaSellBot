@@ -79,13 +79,14 @@ export function useAdminReceipts(options: number | UseAdminReceiptsOptions = 20)
   };
 }
 
-export function useReceiptSettings() {
+export function useReceiptSettings(enabled = true) {
   const queryClient = useQueryClient();
   const { triggerHaptic } = useHaptic();
 
   const query = useQuery({
     queryKey: queryKeys.receiptSettings,
     queryFn: () => api.getReceiptSettings(),
+    enabled,
   });
 
   const updateMutation = useMutation({

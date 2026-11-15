@@ -1,7 +1,15 @@
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
 import { localizedDate, localizedNumber, t } from '../../locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge, renderScreen } from '../../ui.js';
+import {
+  buildEmptyState,
+  buildScreen,
+  buildStatusBadge,
+  guardAdminCallbacks,
+  isMessageEditUnavailableError,
+  isMessageNotModifiedError,
+  renderScreen,
+} from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import {
   sendReceiptApprovalNotification,
@@ -57,17 +65,40 @@ export async function showReceiptQueue(ctx: MenuContext, requestedPage = 1): Pro
 export type ReceiptRejectReason =
   'unclear' | 'not_received' | 'duplicate' | 'amount_mismatch' | 'other';
 
+const REJECT_REASON_CODES: Record<ReceiptRejectReason, string> = {
+  unclear: 'u',
+  not_received: 'n',
+  duplicate: 'd',
+  amount_mismatch: 'a',
+  other: 'o',
+};
+
+const REJECT_CODE_TO_REASON: Record<string, ReceiptRejectReason> = {
+  u: 'unclear',
+  n: 'not_received',
+  d: 'duplicate',
+  a: 'amount_mismatch',
+  o: 'other',
+  unclear: 'unclear',
+  not_received: 'not_received',
+  duplicate: 'duplicate',
+  amount_mismatch: 'amount_mismatch',
+  other: 'other',
+};
+
 export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
-  bot.callbackQuery(/^receipt:page:(\d+)$/u, async (ctx) => {
+  const adminCallback = guardAdminCallbacks(bot);
+
+  adminCallback(/^receipt:page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await showReceiptQueue(ctx, Number(ctx.match[1]) || 1);
   });
 
-  bot.callbackQuery(new RegExp(`^receipt:view:${RECEIPT_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^receipt:view:${RECEIPT_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     await showReceiptReview(ctx, ctx.match[1]!, Number(ctx.match[2]) || 1);
   });
 
-  bot.callbackQuery(/^receipt:quick_approve:([a-zA-Z0-9_-]+)(?::(\d+))?$/u, async (ctx) => {
+  adminCallback(/^(?:receipt:quick_approve|rcpt:qa):([a-zA-Z0-9_-]+)(?::(\d+))?$/u, async (ctx) => {
     if (!ctx.services) return;
     const receiptId = ctx.match[1]!;
     const page = Number(ctx.match[2]) || 1;
@@ -82,20 +113,21 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
     }
   });
 
-  bot.callbackQuery(
-    /^receipt:(approve|reject)_prompt:([a-zA-Z0-9_-]+)(?::(\d+))?$/u,
+  adminCallback(
+    /^(?:receipt:(approve|reject)_prompt|rcpt:(ap|rp)):([a-zA-Z0-9_-]+)(?::(\d+))?$/u,
     async (ctx) => {
-      await promptReceiptReview(ctx, ctx.match[1]!, ctx.match[2]!, Number(ctx.match[3]) || 1);
+      const action = ctx.match[1] ?? (ctx.match[2] === 'ap' ? 'approve' : 'reject');
+      await promptReceiptReview(ctx, action, ctx.match[3]!, Number(ctx.match[4]) || 1);
     }
   );
 
-  bot.callbackQuery(
+  adminCallback(
     /^(?:receipt:reject_confirm|rcpt:rej):([a-zA-Z0-9_-]+):(\d+):([a-z_]+)$/u,
     async (ctx) => {
-      if (!ctx.services || !ctx.services.isAdmin(ctx.from.id)) return;
+      if (!ctx.services) return;
       const receiptId = ctx.match[1]!;
       const page = Number(ctx.match[2]) || 1;
-      const reason = ctx.match[3]! as ReceiptRejectReason;
+      const reason = REJECT_CODE_TO_REASON[ctx.match[3]!] ?? 'other';
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
 
       const result = await ctx.services.walletService.rejectTopup(receiptId, ctx.from.id);
@@ -108,13 +140,14 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
     }
   );
 
-  bot.callbackQuery(
-    /^receipt:(approve|reject)_confirm:([a-zA-Z0-9_-]+)(?::(\d+))?$/u,
+  adminCallback(
+    /^(?:receipt:(approve|reject)_confirm|rcpt:(ac|rc)):([a-zA-Z0-9_-]+)(?::(\d+))?$/u,
     async (ctx) => {
       if (!ctx.services) return;
-      const action = ctx.match[1]! as 'approve' | 'reject';
-      const receiptId = ctx.match[2]!;
-      const page = Number(ctx.match[3]) || 1;
+      const action = (ctx.match[1] ?? (ctx.match[2] === 'ac' ? 'approve' : 'reject')) as
+        'approve' | 'reject';
+      const receiptId = ctx.match[3]!;
+      const page = Number(ctx.match[4]) || 1;
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
 
       if (action === 'approve') {
@@ -138,7 +171,7 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
     }
   );
 
-  bot.callbackQuery(/^receipt:batch_prompt:(\d+)$/u, async (ctx) => {
+  adminCallback(/^receipt:batch_prompt:(\d+)$/u, async (ctx) => {
     if (!ctx.services) return;
     const page = Number(ctx.match[1]) || 1;
     const result = (await ctx.services.walletService.listPendingTopupsPage(
@@ -179,7 +212,7 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
     );
   });
 
-  bot.callbackQuery('receipt:batch_confirm', async (ctx) => {
+  adminCallback('receipt:batch_confirm', async (ctx) => {
     if (!ctx.services) return;
     const batch = ctx.session.adminReceiptBatch;
     delete ctx.session.adminReceiptBatch;
@@ -214,7 +247,7 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
   });
 
   // Convert buttons emitted before the confirmation refactor into review screens.
-  bot.callbackQuery(/^receipt-(approve|reject):([a-zA-Z0-9_-]+)$/u, async (ctx) => {
+  adminCallback(/^receipt-(approve|reject):([a-zA-Z0-9_-]+)$/u, async (ctx) => {
     await promptReceiptReview(ctx, ctx.match[1]!, ctx.match[2]!);
   });
 }
@@ -231,10 +264,10 @@ async function showReceiptReview(ctx: MenuContext, receiptId: string, page: numb
 
   await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
   const keyboard = new InlineKeyboard()
-    .text(t(ctx, 'admin_receipt_approve'), `receipt:quick_approve:${receipt.id}:${page}`)
-    .text(t(ctx, 'admin_receipt_reject'), `receipt:reject_prompt:${receipt.id}:${page}`)
+    .text(t(ctx, 'admin_receipt_approve'), callbackData('rcpt', 'qa', receipt.id, page))
+    .text(t(ctx, 'admin_receipt_reject'), callbackData('rcpt', 'rp', receipt.id, page))
     .row()
-    .text(t(ctx, 'menu_back'), `receipt:page:${page}`);
+    .text(t(ctx, 'menu_back'), callbackData('receipt', 'page', page));
   const text = buildReceiptReviewScreen(ctx, receipt);
 
   if (receipt.photoFileId) {
@@ -287,11 +320,11 @@ async function promptReceiptReview(
       keyboard
         .text(
           t(ctx, `admin_receipt_reject_reason_${reason}`),
-          `rcpt:rej:${receipt.id}:${page}:${reason}`
+          callbackData('rcpt', 'rej', receipt.id, page, REJECT_REASON_CODES[reason])
         )
         .row();
     }
-    keyboard.text(t(ctx, 'menu_cancel'), `receipt:view:${receipt.id}:${page}`);
+    keyboard.text(t(ctx, 'menu_cancel'), callbackData('receipt', 'view', receipt.id, page));
 
     const text = buildScreen({
       emoji: '⛔',
@@ -353,9 +386,9 @@ async function promptReceiptReview(
     footer: t(ctx, 'admin_receipt_approve_consequence'),
   });
   const keyboard = new InlineKeyboard()
-    .text(t(ctx, 'admin_confirm_button'), `receipt:approve_confirm:${receipt.id}:${page}`)
+    .text(t(ctx, 'admin_confirm_button'), callbackData('rcpt', 'ac', receipt.id, page))
     .row()
-    .text(t(ctx, 'menu_cancel'), `receipt:view:${receipt.id}:${page}`);
+    .text(t(ctx, 'menu_cancel'), callbackData('receipt', 'view', receipt.id, page));
   await renderReceiptCaptionOrText(ctx, text, keyboard);
 }
 
@@ -558,12 +591,17 @@ async function renderReceiptCaptionOrText(
   keyboard: InlineKeyboard
 ): Promise<void> {
   if (isMediaCallback(ctx)) {
-    await ctx.editMessageCaption({
-      caption: text,
-      parse_mode: 'Markdown',
-      reply_markup: keyboard,
-    });
-    return;
+    try {
+      await ctx.editMessageCaption({
+        caption: text,
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      });
+      return;
+    } catch (error) {
+      if (isMessageNotModifiedError(error)) return;
+      if (!isMessageEditUnavailableError(error)) throw error;
+    }
   }
   await renderReceiptText(ctx, text, keyboard);
 }
@@ -573,10 +611,6 @@ async function renderReceiptText(
   text: string,
   keyboard: InlineKeyboard
 ): Promise<void> {
-  if (ctx.callbackQuery?.message && !isMediaCallback(ctx)) {
-    await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
-    return;
-  }
   await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
 }
 

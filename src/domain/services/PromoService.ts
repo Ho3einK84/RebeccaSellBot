@@ -227,7 +227,8 @@ export class PromoService {
           .toUpperCase()
           .replace(/[^A-Z0-9_-]/gu, '')
       : '';
-    const prefix = cleanPrefix ? `${cleanPrefix}-` : '';
+    const boundedPrefix = cleanPrefix.slice(0, 119);
+    const prefix = boundedPrefix ? `${boundedPrefix}-` : '';
 
     const db = getDb();
     const generatedCodes: string[] = [];
@@ -247,15 +248,16 @@ export class PromoService {
 
     await db.transaction(async (tx) => {
       for (let i = 0; i < cleanCount; i++) {
-        let candidate = '';
+        let candidate: string | null = null;
         for (let attempt = 0; attempt < 10; attempt++) {
-          candidate = `${prefix}${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+          const attemptCode = `${prefix}${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
           const [exists] = await tx
             .select({ code: promoCodes.code })
             .from(promoCodes)
-            .where(eq(promoCodes.code, candidate))
+            .where(eq(promoCodes.code, attemptCode))
             .limit(1);
-          if (!exists && !generatedCodes.includes(candidate)) {
+          if (!exists && !generatedCodes.includes(attemptCode)) {
+            candidate = attemptCode;
             break;
           }
         }
@@ -350,6 +352,9 @@ export class PromoService {
     const total = Number(totalRow?.value ?? 0);
     const totalPages = Math.max(1, Math.ceil(total / safePageSize));
     const resolvedPage = Math.min(safePage, totalPages);
+    if (resolvedPage !== safePage) {
+      return this.listRedemptions(codeOrId, resolvedPage, safePageSize);
+    }
 
     return {
       items: rows.map((r) => ({

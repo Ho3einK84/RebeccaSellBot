@@ -24,6 +24,10 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }
   const displayCurrency = currency || t('common.currency');
   const typeLabel = getTransactionTypeLabel(tx.type, tx.description, t);
   const friendlyDescription = formatTransactionDescription(tx.description, locale);
+  const parsedCreatedAt = new Date(tx.createdAt);
+  const formattedCreatedAt = Number.isNaN(parsedCreatedAt.getTime())
+    ? '—'
+    : parsedCreatedAt.toLocaleDateString(isRtl ? 'fa-IR' : 'en-US');
 
   return (
     <div
@@ -47,9 +51,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }
         <div className="flex flex-col min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold truncate text-ink">{typeLabel}</span>
-            <span className="text-[10px] text-ink-muted tnum">
-              {new Date(tx.createdAt).toLocaleDateString(isRtl ? 'fa-IR' : 'en-US')}
-            </span>
+            <span className="text-[10px] text-ink-muted tnum">{formattedCreatedAt}</span>
           </div>
           <span className="text-[11px] text-ink-muted truncate" title={friendlyDescription}>
             {friendlyDescription}

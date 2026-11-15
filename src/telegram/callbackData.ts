@@ -1,4 +1,4 @@
-const TELEGRAM_CALLBACK_MAX_BYTES = 64;
+export const TELEGRAM_CALLBACK_MAX_BYTES = 64;
 
 /** Build callback data and fail during rendering rather than at Telegram API time. */
 export function callbackData(...parts: Array<string | number>): string {

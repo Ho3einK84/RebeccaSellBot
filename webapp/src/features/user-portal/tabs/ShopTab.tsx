@@ -46,7 +46,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
 
   const isCustomEnabled = customVolumeSettings?.enabled !== false;
   const minGb = customVolumeSettings?.minGb ?? 5;
-  const maxGb = customVolumeSettings?.maxGb ?? 300;
+  const maxGb = customVolumeSettings?.maxGb ?? 500;
   const pricePerGb = customVolumeSettings?.pricePerGb ?? 5000;
   const pricePerDay = customVolumeSettings?.pricePerDay ?? 0;
   const defaultDays = customVolumeSettings?.defaultDays ?? 30;
@@ -55,8 +55,22 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   const [typedGb, setTypedGb] = useState<string>(() =>
     String(Math.min(Math.max(30, minGb), maxGb))
   );
-  const [customDays] = useState<number>(defaultDays);
+  const [customDays, setCustomDays] = useState<number>(defaultDays);
   const [serverQuote, setServerQuote] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCustomDays(defaultDays);
+  }, [defaultDays]);
+
+  useEffect(() => {
+    setCustomGb((prev) => {
+      const clamped = Math.min(Math.max(prev, minGb), maxGb);
+      if (clamped !== prev) {
+        setTypedGb(String(clamped));
+      }
+      return clamped;
+    });
+  }, [minGb, maxGb]);
 
   // Linear calculation fallback
   const linearPrice = Math.max(0, customGb * pricePerGb + customDays * pricePerDay);

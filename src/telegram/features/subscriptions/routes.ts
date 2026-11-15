@@ -1,6 +1,6 @@
 import { InlineKeyboard, InputFile, type Bot } from 'grammy';
 import QRCode from 'qrcode';
-import type { MenuContext } from '../../types.js';
+import type { MenuContext, UiMessageRole } from '../../types.js';
 import { callbackData } from '../../callbackData.js';
 import {
   formatPackageButtonLabel,
@@ -348,7 +348,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           gbAmount: pkg.gbAmount,
           durationDays: pkg.durationDays,
           amount: price,
-          pricePerGb: Math.round(price / pkg.gbAmount),
+          pricePerGb: pkg.gbAmount > 0 ? Math.round(price / pkg.gbAmount) : price,
           promoCode: pendingPromo.quote?.code,
         }),
         new InlineKeyboard()
@@ -432,7 +432,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       await renderScreen(
         ctx,
         purchaseFailureMessage(ctx.services!.translationService, err, resolveContextLocale(ctx)),
-        { reply_markup: failureMarkup }
+        { parse_mode: 'Markdown', reply_markup: failureMarkup }
       );
       return;
     }
@@ -800,11 +800,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
               },
             ],
           }),
-          new InlineKeyboard()
+          new InlineKeyboard(),
+          'artifact'
         );
-        if (ctx.callbackQuery?.message) {
-          rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
-        }
         await ctx.reply(t(ctx, 'navigation_continue_hint'), {
           reply_markup: new InlineKeyboard()
             .text(t(ctx, 'menu_my_configs'), `subs:page:${ctx.session.subscriptionListPage ?? 1}`)
@@ -1299,7 +1297,9 @@ function formatOnline(ctx: MenuContext, onlineAt: string | undefined): string {
 function localizedSubscriptionStatusLabel(ctx: MenuContext, status: string): string {
   const key = `subscription_state_${status}`;
   const translated = t(ctx, key);
-  return translated === key ? t(ctx, 'subscription_state_unknown', { status }) : translated;
+  return translated === key
+    ? t(ctx, 'subscription_state_unknown', { status: escapeTelegramMarkdown(status) })
+    : translated;
 }
 
 function statusBadgeType(status: string): StatusType {
@@ -1510,7 +1510,8 @@ function buildDeleteResultScreen(
 async function renderSubscriptionScreen(
   ctx: MenuContext,
   text: string,
-  keyboard: InlineKeyboard
+  keyboard: InlineKeyboard,
+  role: UiMessageRole = 'screen'
 ): Promise<void> {
-  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: keyboard, role });
 }

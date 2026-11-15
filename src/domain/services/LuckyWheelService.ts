@@ -82,11 +82,23 @@ export class LuckyWheelService {
     this.invalidationHook = hook;
   }
 
+  private isEnabled(): boolean {
+    const reader = this.translationService as unknown as {
+      getSettingBool?: (key: string, defaultValue?: boolean) => boolean;
+      getSetting: (key: string, fallback?: string) => string;
+    };
+    if (typeof reader.getSettingBool === 'function') {
+      return reader.getSettingBool('lucky_wheel_enabled', true);
+    }
+    const raw = reader.getSetting('lucky_wheel_enabled', 'true').trim().toLowerCase();
+    return raw !== 'false' && raw !== '0';
+  }
+
   /**
    * Retrieves the current user's lucky wheel eligibility, timers, and luck state.
    */
   async getStatus(telegramId: number): Promise<LuckyWheelStatus> {
-    const enabled = this.translationService.getSetting('lucky_wheel_enabled', 'true') === 'true';
+    const enabled = this.isEnabled();
     const minPrize = clampLuckySetting(
       this.translationService.getSettingNum('lucky_wheel_min_amount', 1_000),
       0,
@@ -226,8 +238,8 @@ export class LuckyWheelService {
    */
   async spin(telegramId: number): Promise<LuckyWheelSpinResult> {
     const db = getDb();
-    return db.transaction(async (tx) => {
-      const enabled = this.translationService.getSetting('lucky_wheel_enabled', 'true') === 'true';
+    const result = await db.transaction(async (tx) => {
+      const enabled = this.isEnabled();
       if (!enabled) {
         throw new Error('LUCKY_WHEEL_DISABLED');
       }
@@ -317,15 +329,20 @@ export class LuckyWheelService {
         createdAt: now,
       });
 
-      // 2. Credit wallet
-      const balanceAfter = user.balance + amount;
-      await tx
+      // 2. Credit wallet safely in SQL
+      const nextBalance = user.balance + amount;
+      if (!Number.isSafeInteger(nextBalance)) {
+        throw new Error('BALANCE_OVERFLOW');
+      }
+      const [updatedUser] = await tx
         .update(users)
         .set({
-          balance: balanceAfter,
+          balance: sql`${users.balance} + ${amount}`,
           updatedAt: now,
         })
-        .where(eq(users.telegramId, telegramId));
+        .where(eq(users.telegramId, telegramId))
+        .returning({ balance: users.balance });
+      const balanceAfter = updatedUser?.balance ?? nextBalance;
 
       // 3. Write wallet transaction ledger
       await tx.insert(walletTransactions).values({
@@ -338,8 +355,6 @@ export class LuckyWheelService {
         description: `Lucky wheel spin #${spinNumber} prize (+${amount} Toman, Luck: ${effectiveLuckPercent}%)`,
         createdAt: now,
       });
-
-      this.invalidationHook?.(telegramId);
 
       const nextCooldownMs = cooldownHours * 3600 * 1000;
       const nextSpinAt = new Date(now.getTime() + nextCooldownMs);
@@ -358,6 +373,9 @@ export class LuckyWheelService {
         effectiveLuckPercent,
       };
     });
+
+    this.invalidationHook?.(telegramId);
+    return result;
   }
 }
 

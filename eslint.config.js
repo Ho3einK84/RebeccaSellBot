@@ -10,7 +10,14 @@ export default tseslint.config(
 
   // Global ignores
   {
-    ignores: ['dist/**', 'node_modules/**', 'drizzle/**', 'postinstall.cjs'],
+    ignores: [
+      'dist/**',
+      'webapp/dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'drizzle/**',
+      'postinstall.cjs',
+    ],
   },
 
   // Project overrides

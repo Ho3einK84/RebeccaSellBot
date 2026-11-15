@@ -1,5 +1,6 @@
 import React from 'react';
 import { BottomNav } from '@/shared/components/layout/BottomNav.js';
+import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import type { TabType } from '@/shared/types/admin.js';
 
 export interface TabConfig {
@@ -16,11 +17,14 @@ interface AdminBottomNavProps {
 }
 
 /** Admin mobile navigation — thin adapter over the shared `BottomNav`. */
-export const AdminBottomNav: React.FC<AdminBottomNavProps> = ({ tabs, activeTab, onSelectTab }) => (
-  <BottomNav
-    items={tabs}
-    activeId={activeTab}
-    onSelect={onSelectTab}
-    ariaLabel="ناوبری پنل مدیریت"
-  />
-);
+export const AdminBottomNav: React.FC<AdminBottomNavProps> = ({ tabs, activeTab, onSelectTab }) => {
+  const { t } = useLanguage();
+  return (
+    <BottomNav
+      items={tabs}
+      activeId={activeTab}
+      onSelect={onSelectTab}
+      ariaLabel={t('admin.navLabel')}
+    />
+  );
+};

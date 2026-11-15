@@ -2,9 +2,15 @@ import { InlineKeyboard, type Bot } from 'grammy';
 import { LastAdminRemovalError } from '../../../domain/services/AdminService.js';
 import type { MenuContext } from '../../types.js';
 import { localizedDate, localizedNumber, t } from '../../locale.js';
-import { buildEmptyState, buildScreen, buildStatusBadge, renderScreen } from '../../ui.js';
+import {
+  buildEmptyState,
+  buildScreen,
+  buildStatusBadge,
+  guardAdminCallbacks,
+  renderScreen,
+} from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
-import { sanitizeTelegramInlineCode } from '../../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 const ORPHAN_PAGE_SIZE = 6;
 const UUID_CAPTURE = '([0-9a-fA-F-]{36})';
@@ -76,9 +82,9 @@ export async function renderAdminRegistry(ctx: MenuContext): Promise<void> {
               const isCurrentAdmin = admin.telegramId === ctx.from?.id;
               let label = String(admin.telegramId);
               if (profile?.username) {
-                label = `@${profile.username} (${admin.telegramId})`;
+                label = `@${escapeTelegramMarkdown(profile.username)} (${admin.telegramId})`;
               } else if (profile?.firstName) {
-                label = `${profile.firstName} (${admin.telegramId})`;
+                label = `${escapeTelegramMarkdown(profile.firstName)} (${admin.telegramId})`;
               }
               return {
                 emoji: isCurrentAdmin ? '⭐' : '🛡️',
@@ -126,14 +132,16 @@ export async function renderOrphanIssues(ctx: MenuContext, requestedPage = 1): P
 }
 
 export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
-  bot.callbackQuery('admin:admins:open', async (ctx) => {
+  const adminCallback = guardAdminCallbacks(bot);
+
+  adminCallback('admin:admins:open', async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderAdminRegistry(ctx);
   });
-  bot.callbackQuery(/^admin:admins:noop:\d+$/u, async (ctx) => {
+  adminCallback(/^admin:admins:noop:\d+$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
   });
-  bot.callbackQuery(/^admin:admins:view:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:admins:view:(\d+)$/u, async (ctx) => {
     if (!ctx.services) return;
     const target = Number(ctx.match[1]);
     const admins = await ctx.services.adminService.listAdmins();
@@ -155,7 +163,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
       profileFields.push({
         emoji: '👤',
         label: t(ctx, 'admin_detail_username_label'),
-        value: `@${profile.username}`,
+        value: `@${escapeTelegramMarkdown(profile.username)}`,
       });
     }
     if (profile?.firstName) {
@@ -163,7 +171,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
       profileFields.push({
         emoji: '📝',
         label: t(ctx, 'admin_detail_name_label'),
-        value: fullName,
+        value: escapeTelegramMarkdown(fullName),
       });
     }
     profileFields.push({
@@ -218,16 +226,16 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
       keyboard
     );
   });
-  bot.callbackQuery('admin:admins:add', async (ctx) => {
+  adminCallback('admin:admins:add', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminAddAdminConversation');
   });
-  bot.callbackQuery(/^admin:admins:remove:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:admins:remove:(\d+)$/u, async (ctx) => {
     const target = Number(ctx.match[1]);
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     const profile = await ctx.services?.userService.findProfile(String(target));
     const targetDisplay = profile?.username
-      ? `@${profile.username} (\`${target}\`)`
+      ? `@${escapeTelegramMarkdown(profile.username)} (\`${target}\`)`
       : `\`${target}\``;
 
     await renderMaintenanceScreen(
@@ -252,7 +260,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
         .text(t(ctx, 'menu_cancel'), 'admin:admins:open')
     );
   });
-  bot.callbackQuery(/^admin:admins:remove_confirm:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:admins:remove_confirm:(\d+)$/u, async (ctx) => {
     if (!ctx.services) return;
     const target = Number(ctx.match[1]);
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
@@ -296,15 +304,15 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
     }
   });
 
-  bot.callbackQuery(/^admin:orphans:page:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:orphans:page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderOrphanIssues(ctx, Number(ctx.match[1]) || 1);
   });
-  bot.callbackQuery('admin:orphans:open', async (ctx) => {
+  adminCallback('admin:orphans:open', async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderOrphanIssues(ctx, 1);
   });
-  bot.callbackQuery(new RegExp(`^admin:orphan:view:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^admin:orphan:view:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const issue = (await ctx.services.configReconciliationService.getIssue(ctx.match[1]!)) as
       OrphanIssue | undefined;
@@ -323,7 +331,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
     }
     await renderOrphanIssueDetail(ctx, issue);
   });
-  bot.callbackQuery('admin:orphans:scan', async (ctx) => {
+  adminCallback('admin:orphans:scan', async (ctx) => {
     if (!ctx.services) return;
     await ctx.answerCallbackQuery({ text: t(ctx, 'admin_orphan_scanning') });
     try {
@@ -384,7 +392,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
       );
     }
   });
-  bot.callbackQuery('admin:orphans:baseline', async (ctx) => {
+  adminCallback('admin:orphans:baseline', async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderMaintenanceScreen(
       ctx,
@@ -400,7 +408,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
         .text(t(ctx, 'menu_cancel'), 'admin:orphans:open')
     );
   });
-  bot.callbackQuery('admin:orphans:baseline_confirm', async (ctx) => {
+  adminCallback('admin:orphans:baseline_confirm', async (ctx) => {
     if (!ctx.services) return;
     await ctx.answerCallbackQuery({ text: t(ctx, 'admin_orphan_baseline_running') });
     try {
@@ -452,12 +460,12 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
       );
     }
   });
-  bot.callbackQuery(new RegExp(`^admin:orphan:assign:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^admin:orphan:assign:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     ctx.session.orphanAssignIssueId = ctx.match[1];
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminAssignOrphanConversation');
   });
-  bot.callbackQuery(new RegExp(`^admin:orphan:remove:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^admin:orphan:remove:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const issue = (await ctx.services.configReconciliationService.getIssue(ctx.match[1]!)) as
       OrphanIssue | undefined;
@@ -491,55 +499,52 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
         .text(t(ctx, 'menu_cancel'), callbackData('admin', 'orphan', 'view', issue.id))
     );
   });
-  bot.callbackQuery(
-    new RegExp(`^admin:orphan:remove_confirm:${UUID_CAPTURE}$`, 'u'),
-    async (ctx) => {
-      if (!ctx.services) return;
-      await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
-      try {
-        const removed = await ctx.services.configReconciliationService.removeLocalMissing(
-          ctx.match[1]!,
-          ctx.from.id
-        );
-        await renderMaintenanceScreen(
-          ctx,
-          removed
-            ? buildScreen({
+  adminCallback(new RegExp(`^admin:orphan:remove_confirm:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+    if (!ctx.services) return;
+    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+    try {
+      const removed = await ctx.services.configReconciliationService.removeLocalMissing(
+        ctx.match[1]!,
+        ctx.from.id
+      );
+      await renderMaintenanceScreen(
+        ctx,
+        removed
+          ? buildScreen({
+              emoji: '✅',
+              title: t(ctx, 'admin_orphan_remove_title'),
+              primary: {
                 emoji: '✅',
-                title: t(ctx, 'admin_orphan_remove_title'),
-                primary: {
-                  emoji: '✅',
-                  label: t(ctx, 'ui_status_active'),
-                  value: buildStatusBadge(ctx, 'active'),
-                },
-                footer: t(ctx, 'admin_orphan_removed'),
-              })
-            : buildEmptyState(
-                '⚠️',
-                t(ctx, 'admin_orphan_queue_title'),
-                t(ctx, 'admin_orphan_issue_missing')
-              ),
-          buildOrphanQueueActions(ctx)
-        );
-      } catch (err) {
-        await renderMaintenanceScreen(
-          ctx,
-          buildEmptyState(
-            '⚠️',
-            t(ctx, 'admin_orphan_remove_title'),
-            t(
-              ctx,
-              err instanceof Error && err.message === 'ORPHAN_REMOTE_REAPPEARED'
-                ? 'admin_orphan_remote_reappeared'
-                : 'admin_orphan_remove_failed'
-            )
-          ),
-          buildOrphanQueueActions(ctx)
-        );
-      }
+                label: t(ctx, 'ui_status_active'),
+                value: buildStatusBadge(ctx, 'active'),
+              },
+              footer: t(ctx, 'admin_orphan_removed'),
+            })
+          : buildEmptyState(
+              '⚠️',
+              t(ctx, 'admin_orphan_queue_title'),
+              t(ctx, 'admin_orphan_issue_missing')
+            ),
+        buildOrphanQueueActions(ctx)
+      );
+    } catch (err) {
+      await renderMaintenanceScreen(
+        ctx,
+        buildEmptyState(
+          '⚠️',
+          t(ctx, 'admin_orphan_remove_title'),
+          t(
+            ctx,
+            err instanceof Error && err.message === 'ORPHAN_REMOTE_REAPPEARED'
+              ? 'admin_orphan_remote_reappeared'
+              : 'admin_orphan_remove_failed'
+          )
+        ),
+        buildOrphanQueueActions(ctx)
+      );
     }
-  );
-  bot.callbackQuery(new RegExp(`^admin:orphan:ignore:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+  });
+  adminCallback(new RegExp(`^admin:orphan:ignore:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const ignored = await ctx.services.configReconciliationService.ignoreIssue(
       ctx.match[1]!,

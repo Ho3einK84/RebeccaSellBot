@@ -11,7 +11,6 @@ import { escapeTelegramMarkdown } from '../../../rendering.js';
 import {
   buildEmptyState,
   buildScreen,
-  isMessageNotModifiedError,
   promptInConversation,
   replyInAdminConversation,
 } from '../../../ui.js';
@@ -20,7 +19,7 @@ import {
   buildSettingsPrompt,
   truncateButtonLabel,
 } from './presentation.js';
-import { waitForSettingsInput } from './navigation.js';
+import { renderSettingsScreen, waitForSettingsInput } from './navigation.js';
 import { requireAdmin } from '../shared.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
@@ -47,7 +46,9 @@ export async function managePackages(
   ctx: ConversationContext
 ): Promise<PackageManagerOutcome> {
   if (!ctx.services) return 'cancel';
-  let packages = currentPackages(ctx);
+  let packages = await conversation.external((outsideCtx) =>
+    currentPackages(outsideCtx?.services ? outsideCtx : ctx)
+  );
   let page = 0;
   let activeCtx: ConversationContext = ctx;
 
@@ -58,36 +59,14 @@ export async function managePackages(
       page * PACKAGE_PAGE_SIZE,
       (page + 1) * PACKAGE_PAGE_SIZE
     );
-    const keyboard = buildPackageManagerKeyboard(ctx, packages, page);
-    const screenText = buildPackageManagerScreen(ctx, visiblePackages, {
+    const keyboard = buildPackageManagerKeyboard(activeCtx, packages, page);
+    const screenText = buildPackageManagerScreen(activeCtx, visiblePackages, {
       totalCount: packages.length,
       page,
       totalPages: pageCount,
     });
 
-    let renderedInPlace = false;
-    const messageId = activeCtx.callbackQuery?.message?.message_id;
-    const chatId = activeCtx.chat?.id;
-    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
-      try {
-        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-        renderedInPlace = true;
-      } catch (error) {
-        if (isMessageNotModifiedError(error)) {
-          renderedInPlace = true;
-        }
-      }
-    }
-
-    if (!renderedInPlace) {
-      await promptInConversation(conversation, activeCtx, screenText, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-      });
-    }
+    await renderSettingsScreen(conversation, activeCtx, screenText, keyboard);
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: [
@@ -114,7 +93,9 @@ export async function managePackages(
     if (input.data === 'pkg-categories') {
       const outcome = await manageCategories(conversation, activeCtx);
       if (outcome === 'cancel') return 'cancel';
-      packages = currentPackages(ctx);
+      packages = await conversation.external((outsideCtx) =>
+        currentPackages(outsideCtx?.services ? outsideCtx : activeCtx)
+      );
       continue;
     }
 
@@ -144,18 +125,22 @@ export async function managePackages(
       if (packages.length >= MAX_PACKAGE_COUNT) {
         const action = await showPackageNotice(
           conversation,
-          ctx,
+          activeCtx,
           buildEmptyState(
             '⚠️',
-            t(ctx, 'admin_package_manager_title'),
-            t(ctx, 'admin_pkg_limit_reached', { count: localizedNumber(MAX_PACKAGE_COUNT, ctx) })
+            t(activeCtx, 'admin_package_manager_title'),
+            t(activeCtx, 'admin_pkg_limit_reached', {
+              count: localizedNumber(MAX_PACKAGE_COUNT, activeCtx),
+            })
           )
         );
         if (action !== 'continue') return action;
         continue;
       }
-      const cloneSuffix = t(ctx, 'admin_pkg_copy_suffix');
-      const cloneName = `${existing.name} ${cloneSuffix}`.slice(0, 120);
+      const cloneSuffix = t(activeCtx, 'admin_pkg_copy_suffix');
+      const maxBaseChars = Math.max(1, 120 - [...cloneSuffix].length - 1);
+      const cloneName =
+        `${[...existing.name].slice(0, maxBaseChars).join('')} ${cloneSuffix}`.trim();
       const cloneId = generatePackageId(cloneName, packages);
       const clonedPkg: PackageOption = {
         ...existing,
@@ -188,27 +173,29 @@ export async function managePackages(
       if (packages.length >= MAX_PACKAGE_COUNT) {
         const action = await showPackageNotice(
           conversation,
-          ctx,
+          activeCtx,
           buildEmptyState(
             '⚠️',
-            t(ctx, 'admin_package_manager_title'),
-            t(ctx, 'admin_pkg_limit_reached', { count: localizedNumber(MAX_PACKAGE_COUNT, ctx) })
+            t(activeCtx, 'admin_package_manager_title'),
+            t(activeCtx, 'admin_pkg_limit_reached', {
+              count: localizedNumber(MAX_PACKAGE_COUNT, activeCtx),
+            })
           )
         );
         if (action !== 'continue') return action;
         continue;
       }
-      const created = await promptPackageFields(conversation, ctx, packages);
+      const created = await promptPackageFields(conversation, activeCtx, packages);
       if (created.type === 'cancel') return 'cancel';
       if (created.type === 'back') continue;
       if (hasDuplicatePackageName(packages, created.value.name)) {
         const action = await showPackageNotice(
           conversation,
-          ctx,
+          activeCtx,
           buildEmptyState(
             '⚠️',
-            t(ctx, 'admin_package_manager_title'),
-            t(ctx, 'admin_pkg_duplicate_name')
+            t(activeCtx, 'admin_package_manager_title'),
+            t(activeCtx, 'admin_pkg_duplicate_name')
           )
         );
         if (action !== 'continue') return action;
@@ -220,17 +207,17 @@ export async function managePackages(
       const index = packages.findIndex((pkg) => pkg.id === pkgId);
       const existing = index === -1 ? undefined : packages[index];
       if (!existing || index === -1) continue;
-      const updated = await promptPackageFields(conversation, ctx, packages, existing);
+      const updated = await promptPackageFields(conversation, activeCtx, packages, existing);
       if (updated.type === 'cancel') return 'cancel';
       if (updated.type === 'back') continue;
       if (hasDuplicatePackageName(packages, updated.value.name, index)) {
         const action = await showPackageNotice(
           conversation,
-          ctx,
+          activeCtx,
           buildEmptyState(
             '⚠️',
-            t(ctx, 'admin_package_manager_title'),
-            t(ctx, 'admin_pkg_duplicate_name')
+            t(activeCtx, 'admin_package_manager_title'),
+            t(activeCtx, 'admin_pkg_duplicate_name')
           )
         );
         if (action !== 'continue') return action;
@@ -244,32 +231,32 @@ export async function managePackages(
       if (packages.length <= 1) {
         const action = await showPackageNotice(
           conversation,
-          ctx,
+          activeCtx,
           buildEmptyState(
             '⚠️',
-            t(ctx, 'admin_package_manager_title'),
-            t(ctx, 'admin_pkg_last_removed')
+            t(activeCtx, 'admin_package_manager_title'),
+            t(activeCtx, 'admin_pkg_last_removed')
           )
         );
         if (action !== 'continue') return action;
         continue;
       }
       const confirmKeyboard = new InlineKeyboard()
-        .text(t(ctx, 'admin_confirm_button'), callbackData('pkg-del-confirm', pkgId))
+        .text(t(activeCtx, 'admin_confirm_button'), callbackData('pkg-del-confirm', pkgId))
         .row()
-        .text(t(ctx, 'menu_cancel'), 'pkg-del-cancel');
+        .text(t(activeCtx, 'menu_cancel'), 'pkg-del-cancel');
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '⚠️',
-          title: t(ctx, 'admin_package_manager_title'),
+          title: t(activeCtx, 'admin_package_manager_title'),
           primary: {
             emoji: '📦',
-            label: t(ctx, 'checkout_package_section'),
+            label: t(activeCtx, 'checkout_package_section'),
             value: escapeTelegramMarkdown(existing.name),
           },
-          footer: t(ctx, 'admin_pkg_delete_confirm', {
+          footer: t(activeCtx, 'admin_pkg_delete_confirm', {
             name: escapeTelegramMarkdown(existing.name),
           }),
         }),
@@ -302,11 +289,11 @@ export async function managePackages(
     } catch {
       const action = await showPackageNotice(
         conversation,
-        ctx,
+        activeCtx,
         buildEmptyState(
           '⚠️',
-          t(ctx, 'admin_package_manager_title'),
-          t(ctx, 'admin_setting_save_failed')
+          t(activeCtx, 'admin_package_manager_title'),
+          t(activeCtx, 'admin_setting_save_failed')
         )
       );
       if (action !== 'continue') return action;
@@ -467,7 +454,12 @@ async function choosePackageCategory(
   ctx: ConversationContext,
   existingCategoryId?: string
 ): Promise<FieldResult<string | undefined>> {
-  const categories = (await ctx.services?.packageCategoryService?.listCategories(true)) ?? [];
+  const categories = await conversation.external(
+    async (outsideCtx) =>
+      (await (outsideCtx?.services ?? ctx.services)?.packageCategoryService?.listCategories(
+        true
+      )) ?? []
+  );
   if (categories.length === 0) {
     return { type: 'value', value: undefined };
   }
@@ -510,9 +502,11 @@ async function choosePackageTarget(
   ctx: ConversationContext,
   existing?: PackageOption
 ): Promise<FieldResult<{ panelId: string; serviceId: number }>> {
-  const panels = ctx.services?.panelRegistry
-    .listPanels()
-    .filter((panel) => panel.enabled && panel.services.length > 0);
+  const panels = await conversation.external((outsideCtx) =>
+    (outsideCtx?.services ?? ctx.services)?.panelRegistry
+      .listPanels()
+      .filter((panel) => panel.enabled && panel.services.length > 0)
+  );
   if (!panels?.length) {
     await replyInAdminConversation(
       conversation,
@@ -730,7 +724,12 @@ async function manageCategories(
   let activeCtx = ctx;
 
   for (;;) {
-    const categories = await ctx.services.packageCategoryService.listCategories(true);
+    const categories = await conversation.external(
+      async (outsideCtx) =>
+        (await (outsideCtx?.services ?? activeCtx.services)?.packageCategoryService?.listCategories(
+          true
+        )) ?? []
+    );
 
     const keyboard = new InlineKeyboard();
     for (const [index, cat] of categories.entries()) {
@@ -750,40 +749,18 @@ async function manageCategories(
     }
 
     keyboard
-      .text(t(ctx, 'admin_category_add_button'), 'cat:add')
+      .text(t(activeCtx, 'admin_category_add_button'), 'cat:add')
       .row()
-      .text(t(ctx, 'admin_menu_back_to_packages'), 'cat:back');
+      .text(t(activeCtx, 'admin_menu_back_to_packages'), 'cat:back');
 
     const screenText = buildScreen({
       emoji: '🏷️',
-      title: t(ctx, 'admin_category_manager_title'),
-      subtitle: t(ctx, 'admin_category_manager_subtitle'),
-      footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+      title: t(activeCtx, 'admin_category_manager_title'),
+      subtitle: t(activeCtx, 'admin_category_manager_subtitle'),
+      footer: `ℹ️ ${t(activeCtx, 'admin_home_hint')}`,
     });
 
-    let renderedInPlace = false;
-    const messageId = activeCtx.callbackQuery?.message?.message_id;
-    const chatId = activeCtx.chat?.id;
-    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
-      try {
-        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-        renderedInPlace = true;
-      } catch (error) {
-        if (isMessageNotModifiedError(error)) {
-          renderedInPlace = true;
-        }
-      }
-    }
-
-    if (!renderedInPlace) {
-      await promptInConversation(conversation, activeCtx, screenText, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-      });
-    }
+    await renderSettingsScreen(conversation, activeCtx, screenText, keyboard);
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['cat:edit:', 'cat:up:', 'cat:down:', 'cat:del:', 'cat:add'],
@@ -799,20 +776,22 @@ async function manageCategories(
     if (input.data === 'cat:add') {
       const nameResult = await askPackageString(
         conversation,
-        ctx,
+        activeCtx,
         'admin_category_name_prompt',
         undefined,
         (val) => val.length >= 1 && val.length <= 100
       );
+      if (nameResult.type === 'cancel') return 'cancel';
       if (nameResult.type !== 'value') continue;
 
       const iconResult = await askPackageString(
         conversation,
-        ctx,
+        activeCtx,
         'admin_category_icon_prompt',
         undefined,
         () => true
       );
+      if (iconResult.type === 'cancel') return 'cancel';
       const icon =
         iconResult.type === 'value' && iconResult.value !== '-' ? iconResult.value : undefined;
 
@@ -826,69 +805,35 @@ async function manageCategories(
       continue;
     }
 
-    if (input.data.startsWith('cat:up:')) {
-      const catId = input.data.slice('cat:up:'.length);
-      const index = categories.findIndex((c) => c.id === catId);
-      if (index > 0) {
-        const reordered = [...categories];
-        const [removed] = reordered.splice(index, 1);
-        if (removed) reordered.splice(index - 1, 0, removed);
-        await conversation.external(async (outsideCtx) => {
-          if (!outsideCtx.services) return;
-          await outsideCtx.services.packageCategoryService.reorderCategories(
-            reordered.map((c) => c.id)
-          );
-        });
-      }
-      continue;
-    }
-
-    if (input.data.startsWith('cat:down:')) {
-      const catId = input.data.slice('cat:down:'.length);
-      const index = categories.findIndex((c) => c.id === catId);
-      if (index >= 0 && index < categories.length - 1) {
-        const reordered = [...categories];
-        const [removed] = reordered.splice(index, 1);
-        if (removed) reordered.splice(index + 1, 0, removed);
-        await conversation.external(async (outsideCtx) => {
-          if (!outsideCtx.services) return;
-          await outsideCtx.services.packageCategoryService.reorderCategories(
-            reordered.map((c) => c.id)
-          );
-        });
-      }
-      continue;
-    }
-
     if (input.data.startsWith('cat:edit:')) {
       const catId = input.data.slice('cat:edit:'.length);
       const existing = categories.find((c) => c.id === catId);
       if (!existing) continue;
 
       const editMenu = new InlineKeyboard()
-        .text(t(ctx, 'admin_panel_edit_name_button'), callbackData('cat:edit-name', catId))
+        .text(t(activeCtx, 'admin_panel_edit_name_button'), callbackData('cat:edit-name', catId))
         .text(
-          '🎨 ' + t(ctx, 'admin_category_icon_prompt').slice(0, 10),
+          '🎨 ' + [...t(activeCtx, 'admin_category_icon_prompt')].slice(0, 10).join(''),
           callbackData('cat:edit-icon', catId)
         )
         .row()
         .text(
-          `${existing.enabled ? t(ctx, 'admin_panel_disable_button') : t(ctx, 'admin_panel_enable_button')}`,
+          `${existing.enabled ? t(activeCtx, 'admin_panel_disable_button') : t(activeCtx, 'admin_panel_enable_button')}`,
           callbackData('cat:toggle', catId)
         )
         .row()
-        .text(t(ctx, 'admin_menu_back_to_categories'), 'cat:edit-back');
+        .text(t(activeCtx, 'admin_menu_back_to_categories'), 'cat:edit-back');
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '🏷️',
-          title: existing.name,
+          title: escapeTelegramMarkdown(existing.name),
           primary: {
             emoji: existing.icon || '📦',
-            label: t(ctx, 'admin_pkg_category_label'),
-            value: existing.name,
+            label: t(activeCtx, 'admin_pkg_category_label'),
+            value: escapeTelegramMarkdown(existing.name),
           },
         }),
         { parse_mode: 'Markdown', reply_markup: editMenu }
@@ -900,7 +845,9 @@ async function manageCategories(
         retryKeyboard: editMenu,
       });
 
+      if (editChoice.type === 'cancel') return 'cancel';
       if (editChoice.type !== 'callback') continue;
+      const editCtx = editChoice.ctx;
 
       if (editChoice.data.startsWith('cat:toggle:')) {
         await conversation.external(async (outsideCtx) => {
@@ -912,11 +859,12 @@ async function manageCategories(
       } else if (editChoice.data.startsWith('cat:edit-name:')) {
         const newName = await askPackageString(
           conversation,
-          ctx,
+          editCtx,
           'admin_category_name_prompt',
           existing.name,
           (val) => val.length >= 1 && val.length <= 100
         );
+        if (newName.type === 'cancel') return 'cancel';
         if (newName.type === 'value') {
           await conversation.external(async (outsideCtx) => {
             if (!outsideCtx.services) return;
@@ -928,11 +876,12 @@ async function manageCategories(
       } else if (editChoice.data.startsWith('cat:edit-icon:')) {
         const newIcon = await askPackageString(
           conversation,
-          ctx,
+          editCtx,
           'admin_category_icon_prompt',
           existing.icon ?? undefined,
           () => true
         );
+        if (newIcon.type === 'cancel') return 'cancel';
         if (newIcon.type === 'value') {
           await conversation.external(async (outsideCtx) => {
             if (!outsideCtx.services) return;
@@ -968,17 +917,19 @@ async function manageCategories(
 
     if (input.data.startsWith('cat:del:')) {
       const catId = input.data.slice('cat:del:'.length);
-      const category = await ctx.services.packageCategoryService.getCategoryById(catId);
+      const category = await conversation.external(async (outsideCtx) =>
+        (outsideCtx?.services ?? activeCtx.services)?.packageCategoryService.getCategoryById(catId)
+      );
       if (!category) continue;
 
       const confirmKeyboard = new InlineKeyboard()
-        .text(t(ctx, 'admin_confirm_button'), callbackData('cat:del-confirm', catId))
+        .text(t(activeCtx, 'admin_confirm_button'), callbackData('cat:del-confirm', catId))
         .row()
-        .text(t(ctx, 'menu_cancel'), 'cat:del-cancel');
+        .text(t(activeCtx, 'menu_cancel'), 'cat:del-cancel');
 
       await promptInConversation(
         conversation,
-        ctx,
+        activeCtx,
         buildScreen({
           emoji: '⚠️',
           title: t(ctx, 'admin_category_manager_title'),
@@ -1100,29 +1051,7 @@ export async function managePackagePolicies(
       .row()
       .text(t(activeCtx, 'admin_menu_back_to_packages'), 'pp:back');
 
-    let renderedInPlace = false;
-    const messageId = activeCtx.callbackQuery?.message?.message_id;
-    const chatId = activeCtx.chat?.id;
-    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
-      try {
-        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-        renderedInPlace = true;
-      } catch (error) {
-        if (isMessageNotModifiedError(error)) {
-          renderedInPlace = true;
-        }
-      }
-    }
-
-    if (!renderedInPlace) {
-      await promptInConversation(conversation, activeCtx, screenText, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-      });
-    }
+    await renderSettingsScreen(conversation, activeCtx, screenText, keyboard);
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['pp:toggle:', 'pp:edit:'],

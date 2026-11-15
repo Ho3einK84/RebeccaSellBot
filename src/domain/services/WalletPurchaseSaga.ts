@@ -25,6 +25,7 @@ import { purchaseOwnershipMarker, remoteFingerprint } from './RebeccaOwnership.j
 import { verifyOrEstablishConfigIncarnation } from './ConfigIncarnation.js';
 import { withConfigLock } from './ConfigLock.js';
 import {
+  PARTIAL_RENEWAL_REVIEW_MESSAGE,
   PurchaseInProgressError,
   PurchaseOutcomePendingError,
   type PurchaseSagaParams,
@@ -41,8 +42,6 @@ import {
 } from './WalletSupport.js';
 
 const NON_TERMINAL_INTENT_STATUSES = ['pending', 'reconciliation_required'] as const;
-const PARTIAL_RENEWAL_REVIEW_MESSAGE =
-  'Traffic reset applied but renewal update outcome is unresolved; manual review required';
 const FOREGROUND_LEASE_MS = 12 * 60 * 1000;
 
 export class WalletPurchaseSaga {

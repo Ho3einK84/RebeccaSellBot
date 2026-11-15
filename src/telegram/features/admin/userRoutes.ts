@@ -6,6 +6,7 @@ import {
   buildEmptyState,
   buildScreen,
   buildStatusBadge,
+  guardAdminCallbacks,
   renderScreen,
 } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
@@ -91,29 +92,31 @@ export async function renderUserListPage(ctx: MenuContext, requestedPage = 1): P
 }
 
 export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
-  bot.callbackQuery(/^admin:users:page:(\d+)$/u, async (ctx) => {
+  const adminCallback = guardAdminCallbacks(bot);
+
+  adminCallback(/^admin:users:page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderUserListPage(ctx, Number(ctx.match[1]) || 1);
   });
 
-  bot.callbackQuery('admin:users:search', async (ctx) => {
+  adminCallback('admin:users:search', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminSearchUserConversation');
   });
 
-  bot.callbackQuery(/^admin:user:view:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:user:view:(\d+)$/u, async (ctx) => {
     delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery();
     await renderUserProfile(ctx, Number(ctx.match[1]));
   });
 
-  bot.callbackQuery(/^admin:user:balance:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:user:balance:(\d+)$/u, async (ctx) => {
     ctx.session.adminBalanceTargetTelegramId = Number(ctx.match[1]);
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminSetBalanceConversation');
   });
 
-  bot.callbackQuery(/^admin:user:quick_topup:(\d+):(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:user:quick_topup:(\d+):(\d+)$/u, async (ctx) => {
     const targetId = Number(ctx.match[1]);
     const amount = Number(ctx.match[2]);
     if (!isSafePositiveInteger(targetId) || !isSafePositiveInteger(amount)) {
@@ -126,7 +129,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
 
   // Pre-upgrade confirmation callbacks lacked an idempotency token. Refresh
   // them into a new one-time confirmation without crediting the wallet.
-  bot.callbackQuery(/^admin:user:quick_topup_confirm:(\d+):(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:user:quick_topup_confirm:(\d+):(\d+)$/u, async (ctx) => {
     const targetId = Number(ctx.match[1]);
     const amount = Number(ctx.match[2]);
     if (!isSafePositiveInteger(targetId) || !isSafePositiveInteger(amount)) {
@@ -137,11 +140,11 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     await showQuickTopupConfirmation(ctx, targetId, amount);
   });
 
-  bot.callbackQuery(/^admin:q:([0-9a-f]{16})$/u, async (ctx) => {
+  adminCallback(/^admin:q:([0-9a-f]{16})$/u, async (ctx) => {
     if (!ctx.services) return;
     const token = ctx.match[1]!;
     const pending = ctx.session.adminQuickTopup;
-    if (!pending || pending.token !== token) {
+    if (!pending || pending.token !== token || pending.status !== 'pending') {
       await ctx.answerCallbackQuery({ text: t(ctx, 'button_action_failed'), show_alert: true });
       return;
     }
@@ -173,7 +176,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     }
   });
 
-  bot.callbackQuery(/^admin:user:ban_prompt:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:user:ban_prompt:(\d+)$/u, async (ctx) => {
     if (!ctx.services) return;
     const targetId = Number(ctx.match[1]);
     const user = await ctx.services.userService.findProfile(String(targetId));
@@ -215,7 +218,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     );
   });
 
-  bot.callbackQuery(/^admin:user:ban:(\d+):([01])$/u, async (ctx) => {
+  adminCallback(/^admin:user:ban:(\d+):([01])$/u, async (ctx) => {
     if (!ctx.services) return;
     const targetId = Number(ctx.match[1]);
     const banned = ctx.match[2] === '1';
@@ -243,7 +246,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     if (updated) await renderUserProfile(ctx, targetId);
   });
 
-  bot.callbackQuery(/^admin:user:subscriptions:(\d+)(?::(\d+))?$/u, async (ctx) => {
+  adminCallback(/^admin:user:subscriptions:(\d+)(?::(\d+))?$/u, async (ctx) => {
     if (!ctx.services) return;
     const targetId = Number(ctx.match[1]);
     const requestedPage = Number(ctx.match[2]) || 1;
@@ -367,43 +370,43 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     );
   });
 
-  bot.callbackQuery(/^admin:user:reports:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:user:reports:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderUserReportsHub(ctx, Number(ctx.match[1]));
   });
 
-  bot.callbackQuery(/^admin:user:reports:ledger:(\d+)(?::(\d+))?$/u, async (ctx) => {
+  adminCallback(/^admin:user:reports:ledger:(\d+)(?::(\d+))?$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderUserReportsLedger(ctx, Number(ctx.match[1]), Number(ctx.match[2]) || 1);
   });
 
-  bot.callbackQuery(/^admin:user:reports:orders:(\d+)(?::(\d+))?$/u, async (ctx) => {
+  adminCallback(/^admin:user:reports:orders:(\d+)(?::(\d+))?$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderUserReportsOrders(ctx, Number(ctx.match[1]), Number(ctx.match[2]) || 1);
   });
 
-  bot.callbackQuery(/^admin:user:reports:receipts:(\d+)(?::(\d+))?$/u, async (ctx) => {
+  adminCallback(/^admin:user:reports:receipts:(\d+)(?::(\d+))?$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderUserReportsReceipts(ctx, Number(ctx.match[1]), Number(ctx.match[2]) || 1);
   });
 
-  bot.callbackQuery(/^admin:user:reports:audit:(\d+)(?::(\d+))?$/u, async (ctx) => {
+  adminCallback(/^admin:user:reports:audit:(\d+)(?::(\d+))?$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderUserReportsAudit(ctx, Number(ctx.match[1]), Number(ctx.match[2]) || 1);
   });
 
-  bot.callbackQuery(/^admin:user:audit:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:user:audit:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderUserReportsHub(ctx, Number(ctx.match[1]));
   });
 
-  bot.callbackQuery(/^admin:user:message:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin:user:message:(\d+)$/u, async (ctx) => {
     ctx.session.adminDirectMessageTargetTelegramId = Number(ctx.match[1]);
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminDirectMessageConversation');
   });
 
-  bot.callbackQuery(/^admin:config:transfer:([a-zA-Z0-9_]{3,40})$/u, async (ctx) => {
+  adminCallback(/^admin:config:transfer:([a-zA-Z0-9_]{3,40})$/u, async (ctx) => {
     if (!ctx.services) return;
     const config = await ctx.services.configService.getConfigById(ctx.match[1]!);
     if (!config) {
@@ -420,24 +423,25 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
   });
 
   // Compatibility for buttons emitted by older deployments.
-  bot.callbackQuery(/^admin_users_page:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin_users_page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderUserListPage(ctx, Number(ctx.match[1]) || 1);
   });
-  bot.callbackQuery(/^admin_user_view:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin_user_view:(\d+)$/u, async (ctx) => {
+    delete ctx.session.adminQuickTopup;
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderUserProfile(ctx, Number(ctx.match[1]));
   });
-  bot.callbackQuery('admin_user_search_start', async (ctx) => {
+  adminCallback('admin_user_search_start', async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await ctx.conversation.enter('adminSearchUserConversation');
   });
-  bot.callbackQuery(/^admin_user_set_balance:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin_user_set_balance:(\d+)$/u, async (ctx) => {
     ctx.session.adminBalanceTargetTelegramId = Number(ctx.match[1]);
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await ctx.conversation.enter('adminSetBalanceConversation');
   });
-  bot.callbackQuery(/^admin_user_toggle_ban:(\d+)$/u, async (ctx) => {
+  adminCallback(/^admin_user_toggle_ban:(\d+)$/u, async (ctx) => {
     if (!ctx.services) return;
     const targetId = Number(ctx.match[1]);
     const user = await ctx.services.userService.findProfile(String(targetId));
@@ -975,7 +979,7 @@ export async function renderUserReportsLedger(
       const icon = transactionIcon(tx.type, tx.amount);
       const sign = tx.amount > 0 ? '+' : '';
       const typeKey = TRANSACTION_TYPE_MAP[tx.type];
-      const typeLabel = typeKey ? t(ctx, typeKey) : tx.type;
+      const typeLabel = typeKey ? t(ctx, typeKey) : escapeTelegramMarkdown(tx.type);
       return {
         emoji: icon,
         title: `${typeLabel} · ${localizedDate(new Date(tx.createdAt), ctx)}`,

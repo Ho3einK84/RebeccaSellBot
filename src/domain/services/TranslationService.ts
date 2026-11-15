@@ -7,7 +7,7 @@
  * overrides; hardcoded defaults stay separate so a missing, deleted, or
  * temporarily unreadable row can never make a bot handler fail.
  */
-import { eq } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
 import { settings } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
@@ -225,12 +225,13 @@ export class TranslationService {
     const now = new Date();
     const db = getDb();
     await db.transaction(async (tx) => {
-      for (const [key, value] of entries) {
-        await tx
-          .insert(settings)
-          .values({ key, value, updatedAt: now })
-          .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: now } });
-      }
+      await tx
+        .insert(settings)
+        .values(entries.map(([key, value]) => ({ key, value, updatedAt: now })))
+        .onConflictDoUpdate({
+          target: settings.key,
+          set: { value: sql`excluded.value`, updatedAt: now },
+        });
     });
 
     const nextCache = new Map(this.cache);
@@ -273,6 +274,7 @@ export class TranslationService {
     // uses the latest code defaults in DEFAULT_SETTINGS, while preserving admin edits.
     try {
       const rows = await db.select().from(settings);
+      const stockKeysToDelete: string[] = [];
       for (const row of rows) {
         if (!row.key.startsWith('fa.') && !row.key.startsWith('en.')) continue;
         const codeDefault = DEFAULT_SETTINGS[row.key];
@@ -281,8 +283,11 @@ export class TranslationService {
         // Equality is the only safe evidence that a row was auto-seeded. Emoji
         // heuristics previously deleted legitimate administrator copy.
         if (row.value === codeDefault) {
-          await db.delete(settings).where(eq(settings.key, row.key));
+          stockKeysToDelete.push(row.key);
         }
+      }
+      if (stockKeysToDelete.length > 0) {
+        await db.delete(settings).where(inArray(settings.key, stockKeysToDelete));
       }
     } catch (err) {
       logger.warn({ err }, 'Failed to sync stock translation settings');

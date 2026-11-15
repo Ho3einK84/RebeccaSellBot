@@ -10,6 +10,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    unstubEnvs: true,
+    unstubGlobals: true,
     // Keep CI and small production hosts stable; each worker loads the full
     // TypeScript/grammY graph and the suite does not benefit from wide fan-out.
     maxWorkers: 2,
@@ -17,10 +19,16 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      include: ['src/**/*.ts', 'webapp/src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/infra/schema.ts',
+        '**/*.d.ts',
+        'webapp/src/main.tsx',
+        'webapp/src/vite-env.d.ts',
+        'webapp/src/index.css',
+      ],
       thresholds: {
-        // Current whole-repository floor (including Telegram route assembly
-        // and declarative schema/catalog files). Raise these as route-level
-        // integration coverage is added; never lower them silently.
+        // Whole-repository floor. Calibrated in Phase 3 verification; never lower silently.
         statements: 34,
         branches: 31,
         functions: 37,

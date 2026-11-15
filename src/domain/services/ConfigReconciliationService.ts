@@ -509,6 +509,7 @@ export class ConfigReconciliationService {
   ): Promise<number> {
     const db = getDb();
     const remoteByUsername = new Map(remoteUsers.map((user) => [user.username, user]));
+    const affectedTelegramIds = new Set<number>();
     let missing = 0;
     for (const config of localConfigs) {
       const remote = remoteByUsername.get(config.configUsername);
@@ -532,6 +533,7 @@ export class ConfigReconciliationService {
       }
       if (!remote || remote.status === 'deleted' || !isVerified) {
         missing += 1;
+        affectedTelegramIds.add(config.telegramId);
         await db
           .update(userConfigs)
           .set(deletedConfigLifecycle(scanStartedAt))
@@ -547,6 +549,7 @@ export class ConfigReconciliationService {
         continue;
       }
 
+      affectedTelegramIds.add(config.telegramId);
       await Promise.all([
         db
           .update(userConfigs)
@@ -567,6 +570,16 @@ export class ConfigReconciliationService {
             )
           ),
       ]);
+    }
+    const countUpdatedAt = new Date();
+    for (const telegramId of affectedTelegramIds) {
+      await db
+        .update(users)
+        .set({
+          activeSubscriptionCount: activeConfigCountSql(telegramId),
+          updatedAt: countUpdatedAt,
+        })
+        .where(eq(users.telegramId, telegramId));
     }
     return missing;
   }

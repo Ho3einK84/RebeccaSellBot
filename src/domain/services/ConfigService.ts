@@ -121,15 +121,22 @@ export class ConfigService {
    */
   async syncCounters(requiredPanelId?: string): Promise<number> {
     const db = getDb();
+    const namingMode = this.translationService.getSetting('naming_mode', 'custom');
     const prefix = this.translationService.getSetting('naming_prefix', 'rebecca');
     const template = this.translationService.getSetting(
       'custom_naming_template',
       '{prefix}_{counter}'
     );
+    const customPattern =
+      namingMode === 'prefix_date_counter'
+        ? prefixDateCounterPattern(prefix)
+        : namingMode === 'prefix_telegramid_number'
+          ? prefixTelegramIdCounterPattern(prefix)
+          : templateCounterPattern(template, prefix);
     const patterns: Record<string, RegExp> = {
       prefix_number: prefixCounterPattern(prefix),
       telegramid_number: /^(?:\d+)_(?<counter>\d+)$/i,
-      custom: templateCounterPattern(template, prefix),
+      custom: customPattern,
     };
     const panelIds = requiredPanelId ? [requiredPanelId] : this.panels.getEnabledPanelIds();
     const aggregateCounters = Object.fromEntries(
@@ -428,13 +435,13 @@ export class ConfigService {
   async claimSubLink(telegramId: number, subUrl: string): Promise<SubscriptionClaimResult> {
     const db = getDb();
 
-    if (!this.acquireClaimCooldown(telegramId)) {
-      return { success: false, messageKey: 'claim_rate_limited' };
-    }
-
     const normalizedSubUrl = normalizeSubscriptionUrl(subUrl);
     if (!normalizedSubUrl || !isLikelySubscriptionUrl(normalizedSubUrl)) {
       return { success: false, messageKey: 'claim_failed' };
+    }
+
+    if (!this.acquireClaimCooldown(telegramId)) {
+      return { success: false, messageKey: 'claim_rate_limited' };
     }
 
     try {
@@ -704,6 +711,27 @@ export class ConfigService {
       const remote = await this.panels.getService(config.panelId).getUser(config.configUsername);
       await this.assertConfigIncarnation(config, remote);
       await this.panels.getService(config.panelId).resetUserTraffic(config.configUsername);
+
+      const observedAt = new Date();
+      const nextStatus = remote.status === 'limited' ? 'active' : remote.status;
+      await getDb().transaction(async (tx) => {
+        await tx
+          .update(userConfigs)
+          .set({
+            ...observedConfigLifecycle(
+              { ...remote, status: nextStatus, used_traffic: 0 },
+              observedAt
+            ),
+          })
+          .where(eq(userConfigs.id, config.id));
+        await tx
+          .update(users)
+          .set({
+            activeSubscriptionCount: activeConfigCountSql(config.telegramId),
+            updatedAt: observedAt,
+          })
+          .where(eq(users.telegramId, config.telegramId));
+      });
     });
   }
 
@@ -1206,6 +1234,22 @@ function prefixCounterPattern(prefix: string): RegExp {
     return /_(?<counter>\d+)$/i;
   }
   return new RegExp(`^${escapeRegExp(normalized)}_(?<counter>\\d+)$`, 'i');
+}
+
+function prefixDateCounterPattern(prefix: string): RegExp {
+  const normalized = sanitize(prefix);
+  if (`${normalized}_9999_${MAX_COUNTER}`.length > MAX_REBECCA_USERNAME_LENGTH) {
+    return /_(?<counter>\d+)$/i;
+  }
+  return new RegExp(`^${escapeRegExp(normalized)}_\\d{4}_(?<counter>\\d+)$`, 'i');
+}
+
+function prefixTelegramIdCounterPattern(prefix: string): RegExp {
+  const normalized = sanitize(prefix);
+  if (`${normalized}_999999999999999_${MAX_COUNTER}`.length > MAX_REBECCA_USERNAME_LENGTH) {
+    return /_(?<counter>\d+)$/i;
+  }
+  return new RegExp(`^${escapeRegExp(normalized)}_\\d+_(?<counter>\\d+)$`, 'i');
 }
 
 function trimMessagePunctuation(value: string): string {

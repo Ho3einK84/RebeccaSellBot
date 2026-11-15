@@ -31,12 +31,22 @@ export function validateTelegramInitData(
   botToken: string,
   maxAgeSeconds = 86_400
 ): ValidatedInitData | null {
-  if (!rawInitData || typeof rawInitData !== 'string') {
+  if (
+    !rawInitData ||
+    typeof rawInitData !== 'string' ||
+    !botToken ||
+    typeof botToken !== 'string'
+  ) {
     return null;
   }
 
   try {
     const params = new URLSearchParams(rawInitData);
+    const rawKeys = Array.from(params.keys());
+    if (new Set(rawKeys).size !== rawKeys.length) {
+      return null;
+    }
+
     const hash = params.get('hash');
     if (!hash) {
       return null;
@@ -85,7 +95,13 @@ export function validateTelegramInitData(
     }
 
     const parsedUser = JSON.parse(rawUser) as ValidatedTelegramUser;
-    if (!parsedUser || !Number.isSafeInteger(parsedUser.id) || parsedUser.id <= 0) {
+    if (
+      !parsedUser ||
+      typeof parsedUser !== 'object' ||
+      Array.isArray(parsedUser) ||
+      !Number.isSafeInteger(parsedUser.id) ||
+      parsedUser.id <= 0
+    ) {
       return null;
     }
 

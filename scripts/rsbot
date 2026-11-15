@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # Instance-aware lifecycle manager. It never assumes the current directory and
 # always loads the selected instance's .env for Compose interpolation.
 
-readonly BASE_PATH="/opt/RebeccaSellBot"
+readonly BASE_PATH="${RSBOT_BASE_PATH:-/opt/RebeccaSellBot}"
 readonly BACKUP_FORMAT_VERSION="1"
 readonly DEFAULT_BACKUP_RETENTION=14
 
@@ -39,6 +39,24 @@ HELP
 
 validate_instance() { [[ "$1" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ ]]; }
 
+env_value_from_file() {
+  local file="$1" key="$2" raw_value value cr=$'\r' sq="'"
+  raw_value="$(sed -n "s/^${key}=//p" "$file" | head -n 1)"
+  [[ -n "$raw_value" ]] || return 1
+  value="${raw_value%"$cr"}"
+  if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+    value="${BASH_REMATCH[1]}"
+  elif [[ "$value" =~ ^$sq(.*)$sq$ ]]; then
+    value="${BASH_REMATCH[1]}"
+  fi
+  printf '%s' "$value"
+}
+
+if [[ $# -eq 0 || "${1:-}" == "--help" || "${1:-}" == "-h" || "${1:-}" == "help" ]]; then
+  show_help
+  exit 0
+fi
+
 if docker info >/dev/null 2>&1; then
   DOCKER=(docker)
 elif command -v sudo >/dev/null 2>&1; then
@@ -63,8 +81,8 @@ if [[ "${1:-}" == "list" ]]; then
     [[ -d "$instance_dir" && -f "$instance_dir/.env" && -f "$instance_dir/docker-compose.yml" ]] || continue
     validate_instance "$instance_name" || continue
     found=true
-    state="$("${DOCKER[@]}" compose --env-file "$instance_dir/.env" -p "$instance_name" \
-      -f "$instance_dir/docker-compose.yml" ps --status running --quiet 2>/dev/null | wc -l | tr -d ' ')"
+    state="$( ("${DOCKER[@]}" compose --env-file "$instance_dir/.env" -p "$instance_name" \
+      -f "$instance_dir/docker-compose.yml" ps --status running --quiet 2>/dev/null || true) | wc -l | tr -d ' ' )"
     w_port="$(env_value_from_file "$instance_dir/.env" WEBAPP_HOST_PORT 2>/dev/null || env_value_from_file "$instance_dir/.env" WEBAPP_PORT 2>/dev/null || printf '3002')"
     h_port="$(env_value_from_file "$instance_dir/.env" WEBHOOK_HOST_PORT 2>/dev/null || env_value_from_file "$instance_dir/.env" WEBHOOK_PORT 2>/dev/null || printf '3000')"
     mode="$(env_value_from_file "$instance_dir/.env" BOT_DELIVERY_MODE 2>/dev/null || printf 'polling')"
@@ -76,11 +94,6 @@ if [[ "${1:-}" == "list" ]]; then
     fi
   done
   [[ "$found" == true ]] || printf '  No instances found.\n'
-  exit 0
-fi
-
-if [[ $# -eq 0 || "${1:-}" == "--help" || "${1:-}" == "-h" || "${1:-}" == "help" ]]; then
-  show_help
   exit 0
 fi
 
@@ -137,19 +150,6 @@ wait_for_stack() {
     show_failure_diagnostics
     return 1
   fi
-}
-
-env_value_from_file() {
-  local file="$1" key="$2" raw_value value cr=$'\r' sq="'"
-  raw_value="$(sed -n "s/^${key}=//p" "$file" | head -n 1)"
-  [[ -n "$raw_value" ]] || return 1
-  value="${raw_value%"$cr"}"
-  if [[ "$value" =~ ^\"(.*)\"$ ]]; then
-    value="${BASH_REMATCH[1]}"
-  elif [[ "$value" =~ ^$sq(.*)$sq$ ]]; then
-    value="${BASH_REMATCH[1]}"
-  fi
-  printf '%s' "$value"
 }
 
 env_value() {
@@ -432,7 +432,7 @@ verify_instance() {
     printf "  ✔ Instance directory exists: %s\n" "$INSTANCE_DIR"
   else
     printf "  ✘ Instance directory missing: %s\n" "$INSTANCE_DIR" >&2
-    ((errors++))
+    errors=$((errors + 1))
   fi
 
   if [[ -f "$ENV_FILE" ]]; then
@@ -442,18 +442,18 @@ verify_instance() {
       printf "  ✔ .env permissions secure (%s): %s\n" "$env_perm" "$ENV_FILE"
     else
       printf "  ! .env permissions are %s (recommended: 0600): %s\n" "$env_perm" "$ENV_FILE"
-      ((warnings++))
+      warnings=$((warnings + 1))
     fi
   else
     printf "  ✘ .env file missing: %s\n" "$ENV_FILE" >&2
-    ((errors++))
+    errors=$((errors + 1))
   fi
 
   if [[ -f "$COMPOSE_FILE" ]]; then
     printf "  ✔ docker-compose.yml exists\n"
   else
     printf "  ✘ docker-compose.yml missing\n" >&2
-    ((errors++))
+    errors=$((errors + 1))
   fi
 
   # 2. Compose file validation
@@ -462,7 +462,7 @@ verify_instance() {
     printf "  ✔ Compose configuration syntax is valid\n"
   else
     printf "  ✘ Compose configuration validation failed\n" >&2
-    ((errors++))
+    errors=$((errors + 1))
   fi
 
   # 3. Container statuses
@@ -475,14 +475,14 @@ verify_instance() {
     printf "  ✔ Database container: %s\n" "$db_status"
   else
     printf "  ✘ Database container not running/healthy: %s\n" "${db_status:-stopped}" >&2
-    ((errors++))
+    errors=$((errors + 1))
   fi
 
   if [[ "$bot_status" =~ (healthy|running) ]]; then
     printf "  ✔ Bot container: %s\n" "$bot_status"
   else
     printf "  ✘ Bot container not running/healthy: %s\n" "${bot_status:-stopped}" >&2
-    ((errors++))
+    errors=$((errors + 1))
   fi
 
   # 4. Database connectivity
@@ -498,22 +498,23 @@ verify_instance() {
       printf "  ✔ Database schema contains %s public tables\n" "${table_count:-0}"
     else
       printf "  ✘ PostgreSQL connection check failed for '%s'\n" "$db_name" >&2
-      ((errors++))
+      errors=$((errors + 1))
     fi
   else
     printf "  ✘ DB_USER or DB_NAME not configured in .env\n" >&2
-    ((errors++))
+    errors=$((errors + 1))
   fi
 
   # 5. Readyz endpoint probe
   printf "\n[5/6] Probing internal health endpoint (/readyz)...\n"
-  local health_code
-  health_code="$(dc exec -T bot node -e "fetch('http://127.0.0.1:3001/readyz').then(r=>console.log(r.status)).catch(()=>console.log('err'))" 2>/dev/null || printf 'err')"
+  local health_port health_code
+  health_port="$(env_value_from_file "$ENV_FILE" HEALTH_CHECK_PORT 2>/dev/null || env_value_from_file "$ENV_FILE" PORT 2>/dev/null || printf '3001')"
+  health_code="$(dc exec -T bot node -e "fetch('http://127.0.0.1:${health_port}/readyz').then(r=>console.log(r.status)).catch(()=>console.log('err'))" 2>/dev/null || printf 'err')"
   if [[ "$health_code" == "200" ]]; then
     printf "  ✔ Bot health endpoint responded HTTP 200 (healthy)\n"
   else
     printf "  ! Bot health endpoint responded: %s (bot may be initializing or stopped)\n" "$health_code"
-    ((warnings++))
+    warnings=$((warnings + 1))
   fi
 
   # 6. Multi-instance isolation and port collision audit
@@ -531,7 +532,7 @@ verify_instance() {
     local other_name
     other_name="$(basename "$other_dir")"
     [[ "$other_name" != "$INSTANCE" ]] || continue
-    ((other_count++))
+    other_count=$((other_count + 1))
 
     local other_webapp_port other_webhook_port
     other_webapp_port="$(env_value_from_file "$other_dir/.env" WEBAPP_HOST_PORT 2>/dev/null || env_value_from_file "$other_dir/.env" WEBAPP_PORT 2>/dev/null || printf '3002')"
@@ -539,12 +540,12 @@ verify_instance() {
 
     if [[ "$my_webapp_port" == "$other_webapp_port" ]]; then
       printf "  ✘ Port collision with instance '%s': WEBAPP_HOST_PORT=%s is already in use\n" "$other_name" "$my_webapp_port" >&2
-      ((errors++))
+      errors=$((errors + 1))
       collision_found=true
     fi
     if [[ "$my_webhook_port" == "$other_webhook_port" ]]; then
       printf "  ✘ Port collision with instance '%s': WEBHOOK_HOST_PORT=%s is already in use\n" "$other_name" "$my_webhook_port" >&2
-      ((errors++))
+      errors=$((errors + 1))
       collision_found=true
     fi
   done

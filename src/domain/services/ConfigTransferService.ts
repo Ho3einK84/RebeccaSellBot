@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
 import { auditLogs, notificationDeliveries, userConfigs, users } from '../../infra/schema.js';
+import { activeConfigCountSql } from './ConfigLifecycle.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { RebeccaService } from './RebeccaService.js';
 import {
@@ -45,6 +46,9 @@ export class ConfigTransferService {
     if (!params.allowAdminOverride && config.telegramId !== params.fromTelegramId) {
       throw new Error('CONFIG_NOT_OWNED');
     }
+    if (config.telegramId === params.toTelegramId) {
+      throw new Error('TRANSFER_TO_SELF');
+    }
 
     return withConfigLock(config.panelId, config.configUsername, async () => {
       // Never move a stale/deleted local shell. The panel remains the authority.
@@ -82,11 +86,7 @@ export class ConfigTransferService {
           await tx
             .update(users)
             .set({
-              activeSubscriptionCount: sql`(
-                SELECT COUNT(*)::integer FROM ${userConfigs}
-                WHERE ${userConfigs.telegramId} = ${telegramId}
-                  AND ${userConfigs.panelStatus} = 'active'
-              )`,
+              activeSubscriptionCount: activeConfigCountSql(telegramId),
               updatedAt: new Date(),
             })
             .where(eq(users.telegramId, telegramId));

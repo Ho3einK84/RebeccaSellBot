@@ -7,8 +7,40 @@ import {
   deleteConsumedInputMessage,
   forwardConversationNavigation,
   handleAdminConversationCancel,
+  isMessageNotModifiedError,
   promptInConversation,
 } from '../../../ui.js';
+
+export async function renderSettingsScreen(
+  conversation: MyConversation,
+  activeCtx: ConversationContext,
+  text: string,
+  keyboard?: InlineKeyboard
+): Promise<void> {
+  const messageId = activeCtx.callbackQuery?.message?.message_id;
+  const chatId = activeCtx.chat?.id;
+  if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
+    const rendered = await conversation.external(async (outsideCtx) => {
+      const api = outsideCtx?.api ?? activeCtx.api;
+      if (!api) return false;
+      try {
+        await api.editMessageText(chatId, messageId, text, {
+          parse_mode: 'Markdown',
+          ...(keyboard ? { reply_markup: keyboard } : {}),
+        });
+        return true;
+      } catch (error) {
+        return isMessageNotModifiedError(error);
+      }
+    });
+    if (rendered) return;
+  }
+
+  await promptInConversation(conversation, activeCtx, text, {
+    parse_mode: 'Markdown',
+    ...(keyboard ? { reply_markup: keyboard } : {}),
+  });
+}
 
 export type SettingsInput =
   | { type: 'text'; value: string; ctx: ConversationContext }

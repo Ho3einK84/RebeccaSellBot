@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 const CIPHER_VERSION = 'v1';
 const IV_BYTES = 12;
+const AUTH_TAG_BYTES = 16;
 
 /** AES-GCM envelope for Rebecca credentials stored in PostgreSQL. */
 export class CredentialCipher {
@@ -42,13 +43,16 @@ export class CredentialCipher {
     ) {
       throw new Error('PANEL_CREDENTIAL_ENVELOPE_INVALID');
     }
+    const iv = Buffer.from(ivRaw, 'base64url');
+    const tag = Buffer.from(tagRaw, 'base64url');
+    if (iv.length !== IV_BYTES || tag.length !== AUTH_TAG_BYTES) {
+      throw new Error('PANEL_CREDENTIAL_ENVELOPE_INVALID');
+    }
     try {
-      const decipher = crypto.createDecipheriv(
-        'aes-256-gcm',
-        this.key,
-        Buffer.from(ivRaw, 'base64url')
-      );
-      decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
+      const decipher = crypto.createDecipheriv('aes-256-gcm', this.key, iv, {
+        authTagLength: AUTH_TAG_BYTES,
+      });
+      decipher.setAuthTag(tag);
       return Buffer.concat([
         decipher.update(Buffer.from(ciphertextRaw, 'base64url')),
         decipher.final(),

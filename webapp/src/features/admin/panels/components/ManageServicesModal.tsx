@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layers, Plus, Star, Target, Trash2 } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Input } from '@/shared/components/ui/Input.js';
@@ -37,6 +37,13 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
   const [newServiceName, setNewServiceName] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNewServiceId('');
+    setNewServiceName('');
+    setConfirmDeleteId(null);
+    setError(null);
+  }, [isOpen, panel?.id]);
 
   if (!panel) return null;
 

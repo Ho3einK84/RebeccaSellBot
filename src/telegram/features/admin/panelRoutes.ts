@@ -12,6 +12,7 @@ import {
   buildScreen,
   buildStatusBadge,
   deleteConsumedInputMessage,
+  guardAdminCallbacks,
   renderScreen,
   type ScreenField,
 } from '../../ui.js';
@@ -500,32 +501,34 @@ function serviceDetailText(
 }
 
 export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
+  const adminCallback = guardAdminCallbacks(bot);
+
   // Compact callbacks keep the longest valid panel/service action below Telegram's
   // 64-byte callback-data limit. The older admin:* routes remain below for
   // compatibility with buttons that were already sent.
-  bot.callbackQuery('a:p:open', async (ctx) => {
+  adminCallback('a:p:open', async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPanelRegistry(ctx);
   });
-  bot.callbackQuery('a:p:n', async (ctx) => ctx.answerCallbackQuery());
-  bot.callbackQuery(/^a:p:page:(\d+)$/u, async (ctx) => {
+  adminCallback('a:p:n', async (ctx) => ctx.answerCallbackQuery());
+  adminCallback(/^a:p:page:(\d+)$/u, async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPanelRegistry(ctx, Number(ctx.match[1]) || 1);
   });
-  bot.callbackQuery('a:p:add', startPanelAdd);
-  bot.callbackQuery(new RegExp(`^a:p:v:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback('a:p:add', startPanelAdd);
+  adminCallback(new RegExp(`^a:p:v:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPanelDetail(ctx, ctx.match[1]!);
   });
-  bot.callbackQuery(new RegExp(`^a:p:sm:${PANEL_ID_CAPTURE}(?::(\\d+))?$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:sm:${PANEL_ID_CAPTURE}(?::(\\d+))?$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPanelServicesMenu(ctx, ctx.match[1]!, Number(ctx.match[2]) || 1);
   });
-  bot.callbackQuery(new RegExp(`^a:p:sd:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:sd:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderServiceDetail(ctx, ctx.match[1]!, Number(ctx.match[2]));
   });
-  bot.callbackQuery(new RegExp(`^a:p:ss:([dcx]):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:ss:([dcx]):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const action = ctx.match[1]!;
     const panelId = ctx.match[2]!;
@@ -536,22 +539,22 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     }
     await updatePanelService(ctx, action === 'd' ? 'default' : 'custom', panelId, serviceId);
   });
-  bot.callbackQuery(new RegExp(`^a:p:ss:xc:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:ss:xc:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     await deletePanelService(ctx, ctx.match[1]!, Number(ctx.match[2]));
   });
-  bot.callbackQuery(new RegExp(`^a:p:e:${PANEL_ID_CAPTURE}:([nuks])$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:e:${PANEL_ID_CAPTURE}:([nuks])$`, 'u'), async (ctx) => {
     await beginPanelEdit(ctx, ctx.match[1]!, COMPACT_PANEL_EDIT_ACTIONS[ctx.match[2]!]!);
   });
-  bot.callbackQuery(new RegExp(`^a:p:t:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:t:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await testPanelConnection(ctx, ctx.match[1]!);
   });
-  bot.callbackQuery(new RegExp(`^a:p:g:${PANEL_ID_CAPTURE}:([01])$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:g:${PANEL_ID_CAPTURE}:([01])$`, 'u'), async (ctx) => {
     await setPanelEnabled(ctx, ctx.match[1]!, ctx.match[2] === '1');
   });
-  bot.callbackQuery(new RegExp(`^a:p:d:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:d:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await setDefaultPanel(ctx, ctx.match[1]!);
   });
-  bot.callbackQuery(new RegExp(`^a:p:s:([dcx]):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:s:([dcx]):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const action = ctx.match[1]!;
     const panelId = ctx.match[2]!;
@@ -562,48 +565,45 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     }
     await updatePanelService(ctx, action === 'd' ? 'default' : 'custom', panelId, serviceId);
   });
-  bot.callbackQuery(new RegExp(`^a:p:s:xc:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:s:xc:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     await deletePanelService(ctx, ctx.match[1]!, Number(ctx.match[2]));
   });
-  bot.callbackQuery(new RegExp(`^a:p:x:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:x:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await promptPanelDeletion(ctx, ctx.match[1]!, true);
   });
-  bot.callbackQuery(new RegExp(`^a:p:xc:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:xc:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await deletePanel(ctx, ctx.match[1]!);
   });
 
-  bot.callbackQuery('admin:panels:open', async (ctx) => {
+  adminCallback('admin:panels:open', async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderPanelRegistry(ctx);
   });
-  bot.callbackQuery('admin:panel:noop', async (ctx) => ctx.answerCallbackQuery());
-  bot.callbackQuery('admin:panel:add', startPanelAdd);
-  bot.callbackQuery(
+  adminCallback('admin:panel:noop', async (ctx) => ctx.answerCallbackQuery());
+  adminCallback('admin:panel:add', startPanelAdd);
+  adminCallback(
     new RegExp(`^admin:panel:view:${PANEL_ID_CAPTURE}(?::(\\d+))?$`, 'u'),
     async (ctx) => {
       await ctx.answerCallbackQuery();
       await renderPanelDetail(ctx, ctx.match[1]!);
     }
   );
-  bot.callbackQuery(
+  adminCallback(
     new RegExp(`^admin:panel:edit:${PANEL_ID_CAPTURE}:(name|url|api_key|add_service)$`, 'u'),
     async (ctx) => {
       await beginPanelEdit(ctx, ctx.match[1]!, ctx.match[2]! as PanelEditAction);
     }
   );
-  bot.callbackQuery(new RegExp(`^admin:panel:test:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^admin:panel:test:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await testPanelConnection(ctx, ctx.match[1]!);
   });
-  bot.callbackQuery(
-    new RegExp(`^admin:panel:toggle:${PANEL_ID_CAPTURE}:([01])$`, 'u'),
-    async (ctx) => {
-      await setPanelEnabled(ctx, ctx.match[1]!, ctx.match[2] === '1');
-    }
-  );
-  bot.callbackQuery(new RegExp(`^admin:panel:default:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^admin:panel:toggle:${PANEL_ID_CAPTURE}:([01])$`, 'u'), async (ctx) => {
+    await setPanelEnabled(ctx, ctx.match[1]!, ctx.match[2] === '1');
+  });
+  adminCallback(new RegExp(`^admin:panel:default:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await setDefaultPanel(ctx, ctx.match[1]!);
   });
-  bot.callbackQuery(
+  adminCallback(
     new RegExp(`^admin:panel:service:(default|custom|delete):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'),
     async (ctx) => {
       if (!ctx.services) return;
@@ -617,16 +617,16 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
       await updatePanelService(ctx, action, panelId, serviceId);
     }
   );
-  bot.callbackQuery(
+  adminCallback(
     new RegExp(`^admin:panel:service:delete_confirm:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'),
     async (ctx) => {
       await deletePanelService(ctx, ctx.match[1]!, Number(ctx.match[2]));
     }
   );
-  bot.callbackQuery(new RegExp(`^admin:panel:delete:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^admin:panel:delete:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await promptPanelDeletion(ctx, ctx.match[1]!, true);
   });
-  bot.callbackQuery(
+  adminCallback(
     new RegExp(`^admin:panel:delete_confirm:${PANEL_ID_CAPTURE}$`, 'u'),
     async (ctx) => {
       await deletePanel(ctx, ctx.match[1]!);
@@ -648,8 +648,8 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     }
 
     const apiKey = ctx.message.text.trim();
-    await deleteConsumedInputMessage(ctx);
     if (apiKey === '/cancel') {
+      await deleteConsumedInputMessage(ctx);
       clearPendingPanelSecret(ctx);
       await renderPanelScreen(
         ctx,
@@ -659,7 +659,12 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
       );
       return;
     }
-    if (!apiKey || apiKey.startsWith('/') || apiKey.length > 512 || /\s/u.test(apiKey)) {
+    if (apiKey.startsWith('/')) {
+      clearPendingPanelSecret(ctx);
+      return next();
+    }
+    await deleteConsumedInputMessage(ctx);
+    if (!apiKey || apiKey.length > 512 || /\s/u.test(apiKey)) {
       await renderPanelScreen(
         ctx,
         buildEmptyState('⚠️', t(ctx, 'admin_panel_api_key_title'), t(ctx, 'admin_setting_invalid')),

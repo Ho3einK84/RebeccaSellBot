@@ -131,6 +131,7 @@ export function registerLuckyWheelRoutes(bot: Bot<MenuContext>, services: BotSer
         errCode === 'LUCKY_WHEEL_DISABLED' ||
         errCode === 'USER_BANNED'
       ) {
+        await ctx.answerCallbackQuery();
         await renderLuckyWheelScreen(ctx);
       } else {
         await ctx.answerCallbackQuery({

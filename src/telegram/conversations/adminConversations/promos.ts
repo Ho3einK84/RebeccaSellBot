@@ -15,7 +15,7 @@ import {
   waitForAdminTextInput,
 } from '../../ui.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
-import { escapeTelegramMarkdown } from '../../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 export async function adminCreatePromoConversation(
   conversation: MyConversation,
@@ -46,7 +46,9 @@ export async function adminEditPromoConversation(
     );
     return;
   }
-  const promo = await ctx.services.promoService.getPromoCodeById(id);
+  const promo = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.promoService.getPromoCodeById(id)
+  );
   if (!promo) {
     await replyInAdminConversation(
       conversation,
@@ -77,7 +79,9 @@ export async function adminSearchPromoConversation(
   );
   const input = await waitForAdminTextInput(conversation);
   if (input === undefined) return;
-  const result = await ctx.services.promoService.listCodes(1, 10, input);
+  const result = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.promoService.listCodes(1, 10, input)
+  );
   if (result.items.length === 0) {
     await replyInAdminConversation(
       conversation,
@@ -239,20 +243,22 @@ export async function adminBulkPromoConversation(
   if (!confirmation) return;
 
   try {
-    const codes = await ctx.services.promoService.createBulkPromoCodes({
-      count,
-      prefix: prefix || undefined,
-      type,
-      value,
-      maxUses,
-      maxUsesPerUser,
-      minPurchaseAmount,
-      maxDiscountAmount,
-      firstPurchaseOnly,
-      expiresAt,
-    });
+    const codes = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.promoService.createBulkPromoCodes({
+        count,
+        prefix: prefix || undefined,
+        type,
+        value,
+        maxUses,
+        maxUsesPerUser,
+        minPurchaseAmount,
+        maxDiscountAmount,
+        firstPurchaseOnly,
+        expiresAt,
+      })
+    );
 
-    const codeList = codes.map((c) => `\`${c}\``).join('\n');
+    const codeList = codes.map((c) => `\`${sanitizeTelegramInlineCode(c)}\``).join('\n');
     await replyInAdminConversation(
       conversation,
       ctx,
@@ -433,22 +439,26 @@ async function runPromoEditor(
   if (!confirmation) return;
 
   try {
-    await ctx.services.promoService.createPromoCode({
-      code,
-      type,
-      value,
-      maxUses,
-      maxUsesPerUser,
-      minPurchaseAmount,
-      maxDiscountAmount,
-      firstPurchaseOnly,
-      expiresAt,
+    const saved = await conversation.external(async (outsideCtx) => {
+      const promoService = outsideCtx.services!.promoService;
+      await promoService.createPromoCode({
+        code,
+        type,
+        value,
+        maxUses,
+        maxUsesPerUser,
+        minPurchaseAmount,
+        maxDiscountAmount,
+        firstPurchaseOnly,
+        expiresAt,
+      });
+      const persisted = await promoService.getPromoCode(code);
+      if (!persisted) throw new Error('PROMO_SAVE_READBACK_FAILED');
+      if (persisted.active !== active) {
+        await promoService.setPromoActiveById(persisted.id, active);
+      }
+      return persisted;
     });
-    const saved = await ctx.services.promoService.getPromoCode(code);
-    if (!saved) throw new Error('PROMO_SAVE_READBACK_FAILED');
-    if (saved.active !== active) {
-      await ctx.services.promoService.setPromoActiveById(saved.id, active);
-    }
     await replyInAdminConversation(
       conversation,
       ctx,

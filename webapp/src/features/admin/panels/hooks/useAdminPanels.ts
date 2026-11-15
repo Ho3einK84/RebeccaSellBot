@@ -242,6 +242,11 @@ export function useAdminPanels() {
     isSettingDefault: setDefaultPanelMutation.isPending,
     isDeleting: deletePanelMutation.isPending,
     isAddingService: addServiceMutation.isPending,
+    isMutatingService:
+      addServiceMutation.isPending ||
+      setDefaultServiceMutation.isPending ||
+      setCustomTargetMutation.isPending ||
+      deleteServiceMutation.isPending,
     testPanel: (panelId: string) => testMutation.mutateAsync(panelId),
     testAllPanels: () => testAllMutation.mutateAsync(),
     createPanel: (payload: CreatePanelPayload) => createPanelMutation.mutateAsync(payload),

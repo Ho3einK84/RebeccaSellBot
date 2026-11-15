@@ -5,7 +5,6 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { InputFile, type Api } from 'grammy';
 import { logger } from '../../infra/logger.js';
 import type { TranslationService } from './TranslationService.js';
 import {
@@ -16,7 +15,15 @@ import {
   backupLastStatus,
   backupTargetChatId,
 } from './FeatureSettings.js';
-import { escapeTelegramMarkdown } from '../../telegram/rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from './TelegramFormatting.js';
+
+export interface BackupTelegramClient {
+  sendDocument(
+    chatId: number | string,
+    document: unknown,
+    options?: { caption?: string; parse_mode?: string }
+  ): Promise<{ message_id: number }>;
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -69,6 +76,7 @@ export interface BackupServiceOptions {
   instanceName?: string;
   baseDir?: string;
   tempBaseDir?: string;
+  createDocumentInput?: (filePath: string, fileName: string) => unknown;
 }
 
 export class BackupService {
@@ -76,6 +84,7 @@ export class BackupService {
   private readonly instanceName: string;
   private readonly baseDir: string;
   private readonly tempBaseDir: string;
+  private readonly createDocumentInput: (filePath: string, fileName: string) => unknown;
   private isBackingUp = false;
 
   constructor(
@@ -86,6 +95,8 @@ export class BackupService {
     this.instanceName = options.instanceName ?? process.env.INSTANCE_NAME ?? 'main';
     this.baseDir = options.baseDir ?? process.cwd();
     this.tempBaseDir = options.tempBaseDir ?? os.tmpdir();
+    this.createDocumentInput =
+      options.createDocumentInput ?? ((filePath, fileName) => ({ filePath, fileName }));
   }
 
   /**
@@ -160,8 +171,6 @@ export class BackupService {
       `${label}_${this.instanceName}_${timestamp}_${randomSuffix}.tar.gz`
     );
 
-    await fs.mkdir(tempDir, { recursive: true, mode: 0o700 });
-
     let cleanedUp = false;
     const cleanup = async () => {
       if (cleanedUp) return;
@@ -172,6 +181,7 @@ export class BackupService {
     };
 
     try {
+      await fs.mkdir(tempDir, { recursive: true, mode: 0o700 });
       const dumpFile = path.join(tempDir, 'database.dump');
       await this.dumpDatabase(dumpFile);
 
@@ -244,7 +254,7 @@ export class BackupService {
    * Create a backup bundle and send it to a specified Telegram chat/channel.
    */
   async sendBackupToChat(
-    telegramApi: Api,
+    telegramApi: BackupTelegramClient,
     targetChatId: string | number,
     options: {
       label?: string;
@@ -252,8 +262,9 @@ export class BackupService {
       locale?: string;
     } = {}
   ): Promise<BackupSendResult> {
-    const bundle = await this.createBackupBundle({ label: options.label });
+    let bundle: BackupBundleResult | undefined;
     try {
+      bundle = await this.createBackupBundle({ label: options.label });
       const MAX_TELEGRAM_DOCUMENT_SIZE = 50 * 1024 * 1024;
       if (bundle.sizeBytes > MAX_TELEGRAM_DOCUMENT_SIZE) {
         throw new Error(
@@ -262,7 +273,7 @@ export class BackupService {
       }
 
       const caption = options.customCaption ?? this.buildDefaultCaption(bundle, options.locale);
-      const inputFile = new InputFile(bundle.archivePath, bundle.fileName);
+      const inputFile = this.createDocumentInput(bundle.archivePath, bundle.fileName);
 
       let sent;
       try {
@@ -276,7 +287,7 @@ export class BackupService {
           'Failed to send backup document with Markdown caption; retrying with plain text caption'
         );
         const plainCaption = `💾 RebeccaSellBot Backup (${bundle.manifest.instance}) - ${bundle.fileName}`;
-        const retryInputFile = new InputFile(bundle.archivePath, bundle.fileName);
+        const retryInputFile = this.createDocumentInput(bundle.archivePath, bundle.fileName);
         sent = await telegramApi.sendDocument(targetChatId, retryInputFile, {
           caption: plainCaption,
         });
@@ -310,24 +321,27 @@ export class BackupService {
         `error: ${errorMessage.slice(0, 200)}`
       );
       logger.error(
-        { err, targetChatId, fileName: bundle.fileName },
+        { err, targetChatId, fileName: bundle?.fileName },
         'Failed to deliver backup archive to Telegram destination'
       );
       return {
         success: false,
-        fileName: bundle.fileName,
-        sizeBytes: bundle.sizeBytes,
+        fileName: bundle?.fileName,
+        sizeBytes: bundle?.sizeBytes,
         error: errorMessage,
       };
     } finally {
-      await bundle.cleanup();
+      await bundle?.cleanup();
     }
   }
 
   /**
    * Execute scheduled backup sweep if conditions are satisfied.
    */
-  async performScheduledSweep(telegramApi: Api, now = new Date()): Promise<BackupSweepResult> {
+  async performScheduledSweep(
+    telegramApi: BackupTelegramClient,
+    now = new Date()
+  ): Promise<BackupSweepResult> {
     if (!backupEnabled(this.translationService)) {
       return { ran: false, reason: 'disabled' };
     }
@@ -555,16 +569,16 @@ networks:
 
     const header = this.translationService.get('admin_backup_caption_header', locale);
     const instance = this.translationService.get('admin_backup_caption_instance', locale, {
-      instance: bundle.manifest.instance,
+      instance: sanitizeTelegramInlineCode(bundle.manifest.instance),
     });
     const date = this.translationService.get('admin_backup_caption_date', locale, {
-      date: dateFormatted,
+      date: escapeTelegramMarkdown(dateFormatted),
     });
     const size = this.translationService.get('admin_backup_caption_size', locale, {
-      size: formattedSize,
+      size: escapeTelegramMarkdown(formattedSize),
     });
     const version = this.translationService.get('admin_backup_caption_version', locale, {
-      version: bundle.manifest.format_version,
+      version: sanitizeTelegramInlineCode(bundle.manifest.format_version),
     });
 
     return [`*${escapeTelegramMarkdown(header)}*`, instance, date, size, version].join('\n');

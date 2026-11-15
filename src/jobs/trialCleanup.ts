@@ -50,20 +50,30 @@ export async function sweepExpiredTrialConfigs(
   if (trials.length === 0) return 0;
 
   let removed = 0;
+  const downPanels = new Set<string>();
   await forEachConcurrent(trials, 4, async (trial) => {
+    const panelKey = trial.panelId ?? 'legacy';
+    if (downPanels.has(panelKey)) return;
+
     const reason = await trialExpiryReason(
       panels,
       trial.panelId,
       trial.configUsername,
-      graceCutoffSeconds
+      graceCutoffSeconds,
+      downPanels
     );
     if (reason === null) return;
 
     try {
-      if (trial.panelId) {
-        await configService.deleteConfigCompletely(trial.configUsername, trial.panelId);
-      } else {
-        await configService.deleteConfigCompletely(trial.configUsername);
+      const deleted = trial.panelId
+        ? await configService.deleteConfigCompletely(trial.configUsername, trial.panelId)
+        : await configService.deleteConfigCompletely(trial.configUsername);
+      if (!deleted) {
+        logger.debug(
+          { configUsername: trial.configUsername, reason },
+          'Expired trial cleanup skipped: configuration was not deleted'
+        );
+        return;
       }
       removed += 1;
       logger.info(
@@ -90,8 +100,10 @@ async function trialExpiryReason(
   panels: RebeccaPanelRegistry | RebeccaService,
   panelId: string,
   configUsername: string,
-  graceCutoffSeconds: number
+  graceCutoffSeconds: number,
+  downPanels: Set<string>
 ): Promise<'expired' | 'deleted' | null> {
+  const panelKey = panelId ?? 'legacy';
   try {
     const remote = await getRebeccaService(panels, panelId).getUser(configUsername);
     if (remote.status === 'deleted') return 'deleted';
@@ -105,8 +117,12 @@ async function trialExpiryReason(
       return 'deleted';
     }
     if (err instanceof RebeccaOriginDownError) {
-      // Panel unreachable — defer the whole sweep rather than deleting blindly.
-      logger.warn({ configUsername }, 'Trial cleanup deferred: Rebecca panel origin down');
+      // Panel unreachable — skip further remote checks against it in this sweep.
+      downPanels.add(panelKey);
+      logger.warn(
+        { panelId: panelKey, configUsername },
+        'Trial cleanup deferred: Rebecca panel origin down'
+      );
       return null;
     }
     logger.warn({ err, configUsername }, 'Trial cleanup deferred: remote state unavailable');

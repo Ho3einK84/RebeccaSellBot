@@ -51,6 +51,7 @@ async function requireCustomVolume(
     const isEnabled =
       !!outsideCtx.services && customVolumeEnabled(outsideCtx.services.translationService);
     if (!isEnabled && clearRenewalSession) {
+      outsideCtx.session.renewConfigId = undefined;
       outsideCtx.session.renewConfigUsername = undefined;
     }
     return isEnabled;
@@ -179,7 +180,9 @@ async function executePurchaseFlow(
   // Pricing rules live in settings and are evaluated server-side. The
   // confirmation uses the same base amount that the wallet saga receives;
   // promo settlement remains authoritative inside the saga transaction.
-  const customQuote = ctx.services.pricingService.getCustomPriceQuote(gbAmount, durationDays);
+  const customQuote = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.pricingService.getCustomPriceQuote(gbAmount, durationDays)
+  );
   const pricePerGb = customQuote.pricePerGb;
   const totalCost = customQuote.totalPrice;
 
@@ -192,14 +195,18 @@ async function executePurchaseFlow(
   }
   const displayedCost = pendingPromo.quote?.finalAmount ?? totalCost;
 
-  const balance = await ctx.services.walletService.getAvailableBalance(telegramId);
+  const balance = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.walletService.getAvailableBalance(telegramId)
+  );
   if (balance < displayedCost) {
     await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'));
     return;
   }
 
   const packageNameStr = customPackageName(ctx, gbAmount, durationDays);
-  const target = ctx.services.pricingService.getCustomVolumeTarget();
+  const target = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.pricingService.getCustomVolumeTarget()
+  );
   let checkout: PurchaseCheckout;
   let res: { configUsername: string; subUrl?: string };
   try {
@@ -289,9 +296,8 @@ async function executePurchaseFlow(
   );
 
   try {
-    const configName = await ctx.services.configService.generateConfigName(
-      telegramId,
-      checkout.panelId
+    const configName = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.configService.generateConfigName(telegramId, checkout.panelId)
     );
     // This is the authoritative last check: no awaited work may occur between
     // it and entering the purchase saga.
@@ -301,36 +307,44 @@ async function executePurchaseFlow(
       );
       return;
     }
-    res = await ctx.services.walletService.executePurchaseSaga({
-      telegramId,
-      amount: checkout.amount,
-      maxAmount: checkout.quotedAmount,
-      type: 'new_config',
-      configUsername: configName,
-      gbAmount: checkout.gbAmount,
-      durationDays: checkout.durationDays,
-      panelId: checkout.panelId,
-      serviceId: checkout.serviceId,
-      checkoutId: checkout.id,
-      ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
-    });
+    res = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.walletService.executePurchaseSaga({
+        telegramId,
+        amount: checkout.amount,
+        maxAmount: checkout.quotedAmount,
+        type: 'new_config',
+        configUsername: configName,
+        gbAmount: checkout.gbAmount,
+        durationDays: checkout.durationDays,
+        panelId: checkout.panelId,
+        serviceId: checkout.serviceId,
+        checkoutId: checkout.id,
+        ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
+      })
+    );
   } catch (err: unknown) {
     await conversation.external((outsideCtx) =>
       recordCheckoutFailed(outsideCtx.services!.purchaseCheckoutService, checkout.id)
     );
-    await ctx.api.editMessageText(
-      ctx.chat!.id,
-      progressMessage.message_id,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'purchase_failed_title'),
-        purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
-      ),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:main'),
-      }
+    const failureText = buildEmptyState(
+      '⚠️',
+      t(ctx, 'purchase_failed_title'),
+      purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
     );
+    const failureMarkup = new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:main');
+    try {
+      await conversation.external(() =>
+        ctx.api.editMessageText(ctx.chat!.id, progressMessage.message_id, failureText, {
+          parse_mode: 'Markdown',
+          reply_markup: failureMarkup,
+        })
+      );
+    } catch {
+      await replyInConversation(conversation, ctx, failureText, {
+        parse_mode: 'Markdown',
+        reply_markup: failureMarkup,
+      });
+    }
     return;
   }
 
@@ -352,11 +366,10 @@ async function executePurchaseFlow(
     },
   });
   try {
-    const createdMsg = await ctx.api.editMessageText(
-      ctx.chat!.id,
-      progressMessage.message_id,
-      successText,
-      { parse_mode: 'Markdown' }
+    const createdMsg = await conversation.external(() =>
+      ctx.api.editMessageText(ctx.chat!.id, progressMessage.message_id, successText, {
+        parse_mode: 'Markdown',
+      })
     );
     if (typeof createdMsg === 'object' && createdMsg && 'message_id' in createdMsg) {
       await conversation.external((outsideCtx) => {
@@ -475,7 +488,8 @@ export async function customAmountConversation(
   }
 
   // Use the admin-configured default duration instead of asking the user.
-  await executePurchaseFlow(conversation, ctx, gbAmount, customDurationDays(ctx));
+  const durationDays = await conversation.external((outsideCtx) => customDurationDays(outsideCtx));
+  await executePurchaseFlow(conversation, ctx, gbAmount, durationDays);
 }
 
 export async function renewConfigConversation(
@@ -490,9 +504,12 @@ export async function renewConfigConversation(
     ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
   );
 
-  const configId = await conversation.external(
-    (outsideCtx) => outsideCtx.session.renewConfigId as string | undefined
-  );
+  const configId = await conversation.external((outsideCtx) => {
+    const selected = outsideCtx.session.renewConfigId as string | undefined;
+    outsideCtx.session.renewConfigId = undefined;
+    outsideCtx.session.renewConfigUsername = undefined;
+    return selected;
+  });
   const config = configId
     ? await conversation.external((outsideCtx) =>
         isAdmin
@@ -546,9 +563,11 @@ export async function renewConfigConversation(
   }
 
   // Use the admin-configured default duration instead of prompting for custom days
-  const durationDays = customDurationDays(ctx);
+  const durationDays = await conversation.external((outsideCtx) => customDurationDays(outsideCtx));
 
-  const customQuote = ctx.services.pricingService.getCustomPriceQuote(gbAmount, durationDays);
+  const customQuote = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.pricingService.getCustomPriceQuote(gbAmount, durationDays)
+  );
   const pricePerGb = customQuote.pricePerGb;
   const totalCost = customQuote.totalPrice;
 
@@ -561,7 +580,9 @@ export async function renewConfigConversation(
   }
   const displayedCost = pendingPromo.quote?.finalAmount ?? totalCost;
 
-  const balance = await ctx.services.walletService.getAvailableBalance(targetTelegramId);
+  const balance = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.walletService.getAvailableBalance(targetTelegramId)
+  );
   if (balance < displayedCost) {
     await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'));
     return;
@@ -669,37 +690,45 @@ export async function renewConfigConversation(
       );
       return;
     }
-    res = await ctx.services.walletService.executePurchaseSaga({
-      telegramId: targetTelegramId,
-      amount: checkout.amount,
-      maxAmount: checkout.quotedAmount,
-      type: 'renew_config',
-      configUsername: config.configUsername,
-      gbAmount: checkout.gbAmount,
-      durationDays: checkout.durationDays,
-      panelId: checkout.panelId,
-      serviceId: checkout.serviceId,
-      checkoutId: checkout.id,
-      ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
-      allowAdminOverride: isAdmin,
-    });
+    res = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.walletService.executePurchaseSaga({
+        telegramId: targetTelegramId,
+        amount: checkout.amount,
+        maxAmount: checkout.quotedAmount,
+        type: 'renew_config',
+        configUsername: config.configUsername,
+        gbAmount: checkout.gbAmount,
+        durationDays: checkout.durationDays,
+        panelId: checkout.panelId,
+        serviceId: checkout.serviceId,
+        checkoutId: checkout.id,
+        ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
+        allowAdminOverride: isAdmin,
+      })
+    );
   } catch (err: unknown) {
     await conversation.external((outsideCtx) =>
       recordCheckoutFailed(outsideCtx.services!.purchaseCheckoutService, checkout.id)
     );
-    await ctx.api.editMessageText(
-      ctx.chat!.id,
-      progressMessage.message_id,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'renewal_failed_title'),
-        purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
-      ),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack),
-      }
+    const failureText = buildEmptyState(
+      '⚠️',
+      t(ctx, 'renewal_failed_title'),
+      purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
     );
+    const failureMarkup = new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack);
+    try {
+      await conversation.external(() =>
+        ctx.api.editMessageText(ctx.chat!.id, progressMessage.message_id, failureText, {
+          parse_mode: 'Markdown',
+          reply_markup: failureMarkup,
+        })
+      );
+    } catch {
+      await replyInConversation(conversation, ctx, failureText, {
+        parse_mode: 'Markdown',
+        reply_markup: failureMarkup,
+      });
+    }
     return;
   }
 
@@ -733,10 +762,12 @@ export async function renewConfigConversation(
     ],
   });
   try {
-    await ctx.api.editMessageText(ctx.chat!.id, progressMessage.message_id, renewalSuccessText, {
-      parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack),
-    });
+    await conversation.external(() =>
+      ctx.api.editMessageText(ctx.chat!.id, progressMessage.message_id, renewalSuccessText, {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack),
+      })
+    );
   } catch (err) {
     logger.warn(
       { errorName: err instanceof Error ? err.name : typeof err, checkoutId: checkout.id },
@@ -819,12 +850,12 @@ export async function autoRenewCustomConversation(
     gbAmount = val;
   }
 
-  const durationDays = customDurationDays(ctx);
+  const durationDays = await conversation.external((outsideCtx) => customDurationDays(outsideCtx));
   const customPackageId = `custom_${gbAmount}gb_${durationDays}d`;
-  const approvedPrice = ctx.services.pricingService.getCustomPriceQuote(
-    gbAmount,
-    durationDays
-  ).totalPrice;
+  const approvedPrice = await conversation.external(
+    (outsideCtx) =>
+      outsideCtx.services!.pricingService.getCustomPriceQuote(gbAmount, durationDays).totalPrice
+  );
 
   await promptInConversation(
     conversation,
@@ -1009,10 +1040,15 @@ export async function transferConfigConversation(
   const actorTelegramId = ctx.from?.id;
   if (!actorTelegramId || !ctx.services) return;
 
-  const sessionState = await conversation.external((outsideCtx) => ({
-    configId: outsideCtx.session.transferConfigId as string | undefined,
-    ownerTelegramId: outsideCtx.session.transferConfigOwnerTelegramId as number | undefined,
-  }));
+  const sessionState = await conversation.external((outsideCtx) => {
+    const state = {
+      configId: outsideCtx.session.transferConfigId as string | undefined,
+      ownerTelegramId: outsideCtx.session.transferConfigOwnerTelegramId as number | undefined,
+    };
+    outsideCtx.session.transferConfigId = undefined;
+    outsideCtx.session.transferConfigOwnerTelegramId = undefined;
+    return state;
+  });
   if (!sessionState.configId) {
     await replyInConversation(
       conversation,
@@ -1048,7 +1084,9 @@ export async function transferConfigConversation(
     );
     const targetInput = await waitForTextInput(conversation);
     if (targetInput === undefined) return;
-    const found = await ctx.services.userService.findProfile(targetInput);
+    const found = await conversation.external((outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)!.userService.findProfile(targetInput)
+    );
     if (!found) {
       await promptInConversation(
         conversation,
@@ -1118,17 +1156,15 @@ export async function transferConfigConversation(
   if (choice === undefined) return;
 
   try {
-    const result = await ctx.services.configTransferService.transfer({
-      configId: sessionState.configId,
-      fromTelegramId: ownerTelegramId,
-      toTelegramId: target.telegramId,
-      actorTelegramId,
-      allowAdminOverride: ownerTelegramId !== actorTelegramId,
-    });
-    await conversation.external((outsideCtx) => {
-      outsideCtx.session.transferConfigId = undefined;
-      outsideCtx.session.transferConfigOwnerTelegramId = undefined;
-    });
+    const result = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.configTransferService.transfer({
+        configId: sessionState.configId!,
+        fromTelegramId: ownerTelegramId,
+        toTelegramId: target.telegramId,
+        actorTelegramId,
+        allowAdminOverride: ownerTelegramId !== actorTelegramId,
+      })
+    );
     await replyInConversation(
       conversation,
       ctx,
@@ -1158,60 +1194,70 @@ export async function transferConfigConversation(
       { parse_mode: 'Markdown' }
     );
     try {
-      const recipientLocale =
-        (await ctx.services.userService.getLocale(target.telegramId)) ?? resolveContextLocale(ctx);
-      await ctx.api.sendMessage(
-        target.telegramId,
-        buildScreen({
-          emoji: '🎁',
-          title: tForLocale(
-            ctx.services.translationService,
-            recipientLocale,
-            'transfer_recipient_notice_title'
-          ),
-          subtitle: tForLocale(
-            ctx.services.translationService,
-            recipientLocale,
-            'transfer_recipient_notice_subtitle'
-          ),
-          primary: {
-            emoji: '📱',
-            label: tForLocale(
-              ctx.services.translationService,
+      const recipientLocale = await conversation.external(
+        async (outsideCtx) =>
+          (await (outsideCtx?.services ?? ctx.services)!.userService.getLocale(
+            target.telegramId
+          )) ?? resolveContextLocale(ctx)
+      );
+      await conversation.external(() =>
+        ctx.api.sendMessage(
+          target.telegramId,
+          buildScreen({
+            emoji: '🎁',
+            title: tForLocale(
+              ctx.services!.translationService,
               recipientLocale,
-              'transfer_service_label'
+              'transfer_recipient_notice_title'
             ),
-            value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
-          },
-          sections: [
-            {
-              emoji: '👤',
-              title: tForLocale(
-                ctx.services.translationService,
+            subtitle: tForLocale(
+              ctx.services!.translationService,
+              recipientLocale,
+              'transfer_recipient_notice_subtitle'
+            ),
+            primary: {
+              emoji: '📱',
+              label: tForLocale(
+                ctx.services!.translationService,
                 recipientLocale,
-                'transfer_sender_label'
+                'transfer_service_label'
               ),
-              fields: [
-                {
-                  emoji: '🆔',
-                  label: tForLocale(
-                    ctx.services.translationService,
-                    recipientLocale,
-                    'transfer_recipient_id_label'
-                  ),
-                  value: `\`${result.fromTelegramId}\``,
-                },
-              ],
+              value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
             },
-          ],
-        }),
-        {
-          parse_mode: 'Markdown',
-          reply_markup: new InlineKeyboard().text(
-            tForLocale(ctx.services.translationService, recipientLocale, 'menu_my_subscriptions'),
-            'subs:page:1'
-          ),
-        }
+            sections: [
+              {
+                emoji: '👤',
+                title: tForLocale(
+                  ctx.services!.translationService,
+                  recipientLocale,
+                  'transfer_sender_label'
+                ),
+                fields: [
+                  {
+                    emoji: '🆔',
+                    label: tForLocale(
+                      ctx.services!.translationService,
+                      recipientLocale,
+                      'transfer_recipient_id_label'
+                    ),
+                    value: `\`${result.fromTelegramId}\``,
+                  },
+                ],
+              },
+            ],
+          }),
+          {
+            parse_mode: 'Markdown',
+            reply_markup: new InlineKeyboard().text(
+              tForLocale(
+                ctx.services!.translationService,
+                recipientLocale,
+                'menu_my_subscriptions'
+              ),
+              'subs:page:1'
+            ),
+          }
+        )
       );
     } catch {
       // Transfer ownership is authoritative even if Telegram delivery is blocked.
@@ -1243,7 +1289,9 @@ export async function transferBalanceConversation(
   const senderTelegramId = ctx.from?.id;
   if (!senderTelegramId || !ctx.services) return;
 
-  const isEnabled = walletTransferEnabled(ctx.services.translationService);
+  const isEnabled = await conversation.external((outsideCtx) =>
+    walletTransferEnabled((outsideCtx?.services ?? ctx.services)!.translationService)
+  );
   if (!isEnabled) {
     await replyInConversation(
       conversation,
@@ -1254,8 +1302,16 @@ export async function transferBalanceConversation(
     return;
   }
 
-  const senderBalance = await ctx.services.walletService.getBalance(senderTelegramId);
-  const minAmount = walletTransferMinAmount(ctx.services.translationService);
+  const { senderBalance, minAmount } = await conversation.external(async (outsideCtx) => {
+    const services = (outsideCtx?.services ?? ctx.services)!;
+    const ws = services.walletService;
+    return {
+      senderBalance: ws.getAvailableBalance
+        ? await ws.getAvailableBalance(senderTelegramId)
+        : await ws.getBalance(senderTelegramId),
+      minAmount: walletTransferMinAmount(services.translationService),
+    };
+  });
 
   if (senderBalance < minAmount) {
     await replyInConversation(
@@ -1289,7 +1345,9 @@ export async function transferBalanceConversation(
     const targetInput = await waitForTextInput(conversation);
     if (targetInput === undefined) return;
 
-    const found = await ctx.services.userService.findProfile(targetInput);
+    const found = await conversation.external((outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)!.userService.findProfile(targetInput)
+    );
     if (!found) {
       await promptInConversation(
         conversation,
@@ -1472,11 +1530,13 @@ export async function transferBalanceConversation(
   if (choice === undefined) return;
 
   try {
-    const result = await ctx.services.walletService.transferBalance({
-      fromTelegramId: senderTelegramId,
-      toTelegramId: target.telegramId,
-      amount: parsedAmount,
-    });
+    const result = await conversation.external((outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)!.walletService.transferBalance({
+        fromTelegramId: senderTelegramId,
+        toTelegramId: target.telegramId,
+        amount: parsedAmount,
+      })
+    );
 
     // Notify sender of success
     await replyInConversation(
@@ -1524,79 +1584,85 @@ export async function transferBalanceConversation(
 
     // Notify recipient in their configured language
     try {
-      const recipientLocale =
-        (await ctx.services.userService.getLocale(target.telegramId)) ?? resolveContextLocale(ctx);
-      await ctx.api.sendMessage(
-        target.telegramId,
-        buildScreen({
-          emoji: '🎁',
-          title: tForLocale(
-            ctx.services.translationService,
-            recipientLocale,
-            'wallet_transfer_recipient_notice_title'
-          ),
-          subtitle: tForLocale(
-            ctx.services.translationService,
-            recipientLocale,
-            'wallet_transfer_recipient_notice_subtitle'
-          ),
-          primary: {
-            emoji: '💰',
-            label: tForLocale(
-              ctx.services.translationService,
+      const recipientLocale = await conversation.external(
+        async (outsideCtx) =>
+          (await (outsideCtx?.services ?? ctx.services)!.userService.getLocale(
+            target.telegramId
+          )) ?? resolveContextLocale(ctx)
+      );
+      await conversation.external(() =>
+        ctx.api.sendMessage(
+          target.telegramId,
+          buildScreen({
+            emoji: '🎁',
+            title: tForLocale(
+              ctx.services!.translationService,
               recipientLocale,
-              'wallet_transfer_amount_label'
+              'wallet_transfer_recipient_notice_title'
             ),
-            value: `${localizedNumberForLocale(result.amount, recipientLocale)} ${tForLocale(ctx.services.translationService, recipientLocale, 'currency_toman')}`,
-          },
-          sections: [
-            {
-              emoji: '👤',
-              title: tForLocale(
-                ctx.services.translationService,
+            subtitle: tForLocale(
+              ctx.services!.translationService,
+              recipientLocale,
+              'wallet_transfer_recipient_notice_subtitle'
+            ),
+            primary: {
+              emoji: '💰',
+              label: tForLocale(
+                ctx.services!.translationService,
                 recipientLocale,
-                'wallet_transfer_sender_label'
+                'wallet_transfer_amount_label'
               ),
-              fields: [
-                {
-                  emoji: '🆔',
-                  label: tForLocale(
-                    ctx.services.translationService,
-                    recipientLocale,
-                    'transfer_recipient_id_label'
-                  ),
-                  value: `\`${senderTelegramId}\``,
-                },
-              ],
+              value: `${localizedNumberForLocale(result.amount, recipientLocale)} ${tForLocale(ctx.services!.translationService, recipientLocale, 'currency_toman')}`,
             },
-            {
-              emoji: '👛',
-              title: tForLocale(
-                ctx.services.translationService,
-                recipientLocale,
-                'wallet_available_balance'
-              ),
-              fields: [
-                {
-                  emoji: '💳',
-                  label: tForLocale(
-                    ctx.services.translationService,
-                    recipientLocale,
-                    'wallet_available_balance'
-                  ),
-                  value: `${localizedNumberForLocale(result.toBalanceAfter, recipientLocale)} ${tForLocale(ctx.services.translationService, recipientLocale, 'currency_toman')}`,
-                },
-              ],
-            },
-          ],
-        }),
-        {
-          parse_mode: 'Markdown',
-          reply_markup: new InlineKeyboard().text(
-            tForLocale(ctx.services.translationService, recipientLocale, 'menu_wallet'),
-            'nav:wallet'
-          ),
-        }
+            sections: [
+              {
+                emoji: '👤',
+                title: tForLocale(
+                  ctx.services!.translationService,
+                  recipientLocale,
+                  'wallet_transfer_sender_label'
+                ),
+                fields: [
+                  {
+                    emoji: '🆔',
+                    label: tForLocale(
+                      ctx.services!.translationService,
+                      recipientLocale,
+                      'transfer_recipient_id_label'
+                    ),
+                    value: `\`${senderTelegramId}\``,
+                  },
+                ],
+              },
+              {
+                emoji: '👛',
+                title: tForLocale(
+                  ctx.services!.translationService,
+                  recipientLocale,
+                  'wallet_available_balance'
+                ),
+                fields: [
+                  {
+                    emoji: '💳',
+                    label: tForLocale(
+                      ctx.services!.translationService,
+                      recipientLocale,
+                      'wallet_available_balance'
+                    ),
+                    value: `${localizedNumberForLocale(result.toBalanceAfter, recipientLocale)} ${tForLocale(ctx.services!.translationService, recipientLocale, 'currency_toman')}`,
+                  },
+                ],
+              },
+            ],
+          }),
+          {
+            parse_mode: 'Markdown',
+            reply_markup: new InlineKeyboard().text(
+              tForLocale(ctx.services!.translationService, recipientLocale, 'menu_wallet'),
+              'nav:wallet'
+            ),
+          }
+        )
       );
     } catch {
       // Transfer is authoritative even if Telegram notification fails (e.g. user blocked bot)

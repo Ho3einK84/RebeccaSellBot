@@ -50,6 +50,7 @@ jobs:
       - name: PostgreSQL integration and concurrency tests
         env:
           TEST_DATABASE_URL: postgres://rsbot_test:rsbot_test@127.0.0.1:5432/rsbot_test
+          REQUIRE_INTEGRATION_DB: '1'
         run: npm run test:integration
 
       - name: Build production image

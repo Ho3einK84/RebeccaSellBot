@@ -1,14 +1,9 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { t, tm } from '../../../locale.js';
-import {
-  buildEmptyState,
-  buildPromptScreen,
-  isMessageNotModifiedError,
-  promptInConversation,
-} from '../../../ui.js';
+import { buildEmptyState, buildPromptScreen, promptInConversation } from '../../../ui.js';
 import { requireAdmin } from '../shared.js';
-import { waitForSettingsInput } from './navigation.js';
+import { renderSettingsScreen, waitForSettingsInput } from './navigation.js';
 import {
   buildCustomNamingTemplatePrompt,
   buildNamingDashboardScreen,
@@ -31,10 +26,12 @@ export async function manageNamingSettings(
   let sampleCounter = 1;
 
   for (;;) {
-    const ts = activeCtx.services?.translationService;
-    if (!ts) return 'cancel';
+    const prefix = await conversation.external((outsideCtx) => {
+      const ts = (outsideCtx?.services ?? activeCtx.services)?.translationService;
+      return ts ? ts.getSetting('naming_prefix', 'rebecca') : undefined;
+    });
+    if (prefix === undefined) return 'cancel';
 
-    const prefix = ts.getSetting('naming_prefix', 'rebecca');
     const screenText = buildNamingDashboardScreen(activeCtx, sampleId, sampleCounter);
 
     const keyboard = new InlineKeyboard()
@@ -50,29 +47,7 @@ export async function manageNamingSettings(
       .row()
       .text(t(activeCtx, 'admin_settings_back_groups'), 'naming:back');
 
-    let renderedInPlace = false;
-    const messageId = activeCtx.callbackQuery?.message?.message_id;
-    const chatId = activeCtx.chat?.id;
-    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
-      try {
-        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-        renderedInPlace = true;
-      } catch (error) {
-        if (isMessageNotModifiedError(error)) {
-          renderedInPlace = true;
-        }
-      }
-    }
-
-    if (!renderedInPlace) {
-      await promptInConversation(conversation, activeCtx, screenText, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-      });
-    }
+    await renderSettingsScreen(conversation, activeCtx, screenText, keyboard);
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: [
@@ -95,7 +70,7 @@ export async function manageNamingSettings(
 
     if (input.data === 'naming:refresh') {
       sampleCounter += 1;
-      sampleId = Math.floor(1000000000 + Math.random() * 8999999999);
+      sampleId = Math.floor(1000000000 + (await conversation.random()) * 8999999999);
       continue;
     }
 
@@ -123,7 +98,9 @@ async function chooseNamingMode(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<FlowOutcome> {
-  const current = ctx.services?.translationService.getSetting('naming_mode', 'custom');
+  const current = await conversation.external((outsideCtx) =>
+    (outsideCtx?.services ?? ctx.services)?.translationService.getSetting('naming_mode', 'custom')
+  );
 
   const modes: Array<{ id: string; labelKey: string }> = [
     { id: 'prefix_number', labelKey: 'admin_setting_naming_mode_prefix_number' },
@@ -193,8 +170,13 @@ async function editNamingPrefix(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<FlowOutcome> {
-  const current =
-    ctx.services?.translationService.getSetting('naming_prefix', 'rebecca') ?? 'rebecca';
+  const current = await conversation.external(
+    (outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)?.translationService.getSetting(
+        'naming_prefix',
+        'rebecca'
+      ) ?? 'rebecca'
+  );
   const keyboard = new InlineKeyboard().text(t(ctx, 'admin_naming_back_to_naming'), 'pfx:back');
 
   const promptText = buildPromptScreen(

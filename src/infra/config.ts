@@ -23,9 +23,27 @@ const positiveIntegerSchema = (name: string, defaultValue?: number) =>
         .pipe(z.number().int().safe().positive(`${name} must be a positive integer`))
     );
 
-const healthCheckPortSchema = positiveIntegerSchema('HEALTH_CHECK_PORT', 3001).pipe(
-  z.number().max(65_535, 'HEALTH_CHECK_PORT is out of range')
-);
+const optionalPositiveIntegerSchema = (name: string) =>
+  z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    })
+    .pipe(
+      z
+        .string()
+        .regex(/^[1-9]\d*$/, `${name} must be a positive integer`)
+        .transform((value) => Number(value))
+        .pipe(z.number().int().safe().positive(`${name} must be a positive integer`))
+        .optional()
+    );
+
+const portRange = (name: string) =>
+  optionalPositiveIntegerSchema(name).pipe(
+    z.number().max(65_535, `${name} is out of range`).optional()
+  );
 
 const optionalSecretSchema = z
   .string()
@@ -95,10 +113,8 @@ const configSchema = z
       z.number().max(2_147_483_647, 'REBECCA_SERVICE_ID is out of range')
     ),
     PANEL_CREDENTIALS_KEY: panelCredentialsKeySchema,
-    PORT: positiveIntegerSchema('PORT')
-      .pipe(z.number().max(65_535, 'PORT is out of range'))
-      .optional(),
-    HEALTH_CHECK_PORT: healthCheckPortSchema,
+    PORT: portRange('PORT'),
+    HEALTH_CHECK_PORT: portRange('HEALTH_CHECK_PORT'),
     DEFAULT_LOCALE: z.enum(['fa', 'en']).default('fa'),
     INSTANCE_NAME: optionalStringWithDefault('main'),
     SUPPORT_URL: z
@@ -131,14 +147,8 @@ const configSchema = z
         }
       }, 'WEBHOOK_URL must be a valid HTTPS URL'),
     WEBHOOK_SECRET_TOKEN: optionalSecretSchema,
-    WEBHOOK_PORT: positiveIntegerSchema(
-      'WEBHOOK_PORT',
-      process.env.PORT ? Number(process.env.PORT) : 3000
-    ).pipe(z.number().max(65_535, 'WEBHOOK_PORT is out of range')),
-    WEBHOOK_HOST_PORT: positiveIntegerSchema(
-      'WEBHOOK_HOST_PORT',
-      process.env.WEBHOOK_PORT ? Number(process.env.WEBHOOK_PORT) : 3000
-    ).pipe(z.number().max(65_535, 'WEBHOOK_HOST_PORT is out of range')),
+    WEBHOOK_PORT: portRange('WEBHOOK_PORT'),
+    WEBHOOK_HOST_PORT: portRange('WEBHOOK_HOST_PORT'),
     WEBHOOK_PATH: z
       .string()
       .optional()
@@ -174,10 +184,7 @@ const configSchema = z
     WEBAPP_PORT: positiveIntegerSchema('WEBAPP_PORT', 3002).pipe(
       z.number().max(65_535, 'WEBAPP_PORT is out of range')
     ),
-    WEBAPP_HOST_PORT: positiveIntegerSchema(
-      'WEBAPP_HOST_PORT',
-      process.env.WEBAPP_PORT ? Number(process.env.WEBAPP_PORT) : 3002
-    ).pipe(z.number().max(65_535, 'WEBAPP_HOST_PORT is out of range')),
+    WEBAPP_HOST_PORT: portRange('WEBAPP_HOST_PORT'),
     WEBAPP_HOST: optionalStringWithDefault('0.0.0.0'),
     ADMIN_SESSION_SECRET: optionalSecretSchema,
     REGISTRY_DIR: optionalStringWithDefault(
@@ -215,23 +222,26 @@ const configSchema = z
       effectivePath = effectivePath || '/webhook';
     }
 
-    let effectiveHealthPort = val.HEALTH_CHECK_PORT;
-    let effectiveWebhookPort = val.WEBHOOK_PORT;
-    if (val.PORT) {
-      if (!process.env.HEALTH_CHECK_PORT) {
-        effectiveHealthPort = val.PORT;
-      }
-      if (!process.env.WEBHOOK_PORT) {
-        effectiveWebhookPort = val.PORT;
-      }
-    }
+    const effectiveHealthPort = val.HEALTH_CHECK_PORT ?? val.PORT ?? 3001;
+    const effectiveWebhookPort = val.WEBHOOK_PORT ?? val.PORT ?? 3000;
+    const effectiveWebhookHostPort = val.WEBHOOK_HOST_PORT ?? effectiveWebhookPort;
+    const effectiveWebAppHostPort = val.WEBAPP_HOST_PORT ?? val.WEBAPP_PORT;
+    const usesUnifiedPort =
+      val.PORT !== undefined &&
+      val.HEALTH_CHECK_PORT === undefined &&
+      val.WEBHOOK_PORT === undefined &&
+      effectiveHealthPort === val.PORT &&
+      effectiveWebhookPort === val.PORT;
 
     return {
       ...val,
       HEALTH_CHECK_PORT: effectiveHealthPort,
       WEBHOOK_PORT: effectiveWebhookPort,
+      WEBHOOK_HOST_PORT: effectiveWebhookHostPort,
+      WEBAPP_HOST_PORT: effectiveWebAppHostPort,
       BOT_DELIVERY_MODE: effectiveMode,
       WEBHOOK_PATH: effectivePath,
+      __usesUnifiedPort: usesUnifiedPort,
     };
   })
   .superRefine((value, ctx) => {
@@ -264,7 +274,7 @@ const configSchema = z
             'WEBHOOK_SECRET_TOKEN must contain only 1–256 alphanumeric characters, underscores, or hyphens',
         });
       }
-      if (!value.PORT && value.WEBHOOK_PORT === value.HEALTH_CHECK_PORT) {
+      if (!value.__usesUnifiedPort && value.WEBHOOK_PORT === value.HEALTH_CHECK_PORT) {
         ctx.addIssue({
           code: 'custom',
           path: ['WEBHOOK_PORT'],
@@ -305,11 +315,16 @@ const configSchema = z
       path: ['REBECCA_API_KEY'],
       message: 'REBECCA_API_KEY or REBECCA_ADMIN_PASSWORD is required in production',
     });
-  });
+  })
+  .transform(({ __usesUnifiedPort: _, ...clean }) => clean);
 
 export type Config = z.infer<typeof configSchema>;
 
 let parsedConfig: Config | null = null;
+
+export function resetConfigForTesting(): void {
+  parsedConfig = null;
+}
 
 export function loadConfig(): Config {
   if (parsedConfig) return parsedConfig;

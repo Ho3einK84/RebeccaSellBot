@@ -21,6 +21,7 @@ import {
   minimizeOrCloseWebApp,
 } from '@/shared/lib/telegramNavigation.js';
 import { TransactionItem } from '@/features/user-portal/components/TransactionItem.js';
+import { formatCardNumberSpaced } from '@/shared/lib/formatters.js';
 import { useUserTransactions } from '../hooks/useUserPortalData.js';
 import type {
   UserPortalProfile,
@@ -66,11 +67,6 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const cardHolder = settings?.cardHolder || '';
   const minAmount = settings?.topupMinAmount ?? 10_000;
   const maxAmount = settings?.topupMaxAmount ?? 10_000_000;
-
-  const formatCardNumberSpaced = (raw: string): string => {
-    const cleaned = raw.replace(/\D/g, '');
-    return cleaned.replace(/(\d{4})/g, '$1').trim();
-  };
 
   const handleCopyCard = async () => {
     if (!cardNumber) return;

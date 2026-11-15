@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Server } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Input } from '@/shared/components/ui/Input.js';
@@ -29,6 +29,17 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
   const [serviceId, setServiceId] = useState('1');
   const [serviceName, setServiceName] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setName('');
+      setBaseUrl('');
+      setApiKey('');
+      setServiceId('1');
+      setServiceName('');
+      setValidationError(null);
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

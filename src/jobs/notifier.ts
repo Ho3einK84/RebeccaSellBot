@@ -299,7 +299,7 @@ export async function runNotifierSweep(
         // The reservation is deliberately released only for an undelivered
         // Telegram message. The next sweep can retry without creating hourly
         // duplicates after a successful send.
-        await deliveryStore.release(cfg, notificationTypes, new Date());
+        await deliveryStore.release(cfg, notificationTypes, now);
         logger.warn(
           {
             errorName: err instanceof Error ? err.name : typeof err,
@@ -425,7 +425,7 @@ function notificationReason(
   );
 }
 
-function positiveFinite(value: number): number {
+export function positiveFinite(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 

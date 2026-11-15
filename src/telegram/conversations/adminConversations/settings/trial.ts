@@ -1,9 +1,9 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { localizedNumber, t } from '../../../locale.js';
-import { buildScreen, isMessageNotModifiedError, promptInConversation } from '../../../ui.js';
+import { buildScreen } from '../../../ui.js';
 import { requireAdmin } from '../shared.js';
-import { waitForSettingsInput } from './navigation.js';
+import { renderSettingsScreen, waitForSettingsInput } from './navigation.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
 import { renderSalesMenu } from '../../../keyboards/adminMenu.js';
@@ -17,77 +17,62 @@ export async function adminTrialSettingsConversation(
   let activeCtx = ctx;
 
   for (;;) {
-    const ts = ctx.services.translationService;
-    const isEnabled = ts.getSettingBool('trial_enabled', true);
-    const trialGb = ts.getSettingNum('trial_gb', 1);
-    const trialDays = ts.getSettingNum('trial_days', 3);
+    const state = await conversation.external((outsideCtx) => {
+      const ts = (outsideCtx?.services ?? activeCtx.services)?.translationService;
+      if (!ts) return undefined;
+      return {
+        isEnabled: ts.getSettingBool('trial_enabled', true),
+        trialGb: ts.getSettingNum('trial_gb', 1),
+        trialDays: ts.getSettingNum('trial_days', 3),
+      };
+    });
+    if (!state) return;
+    const { isEnabled, trialGb, trialDays } = state;
 
-    const onBadge = t(ctx, 'admin_overview_active');
-    const offBadge = t(ctx, 'admin_overview_inactive');
+    const onBadge = t(activeCtx, 'admin_overview_active');
+    const offBadge = t(activeCtx, 'admin_overview_inactive');
 
     const screenText = buildScreen({
       emoji: '🎁',
-      title: t(ctx, 'admin_sales_trial_title'),
-      subtitle: t(ctx, 'admin_sales_trial_subtitle'),
+      title: t(activeCtx, 'admin_sales_trial_title'),
+      subtitle: t(activeCtx, 'admin_sales_trial_subtitle'),
       primary: {
         emoji: isEnabled ? '🟢' : '⚪️',
-        label: t(ctx, 'admin_setting_trial_enabled'),
+        label: t(activeCtx, 'admin_setting_trial_enabled'),
         value: isEnabled ? onBadge : offBadge,
       },
       sections: [
         {
           emoji: '⚙️',
-          title: t(ctx, 'admin_sales_trial_specs_section'),
+          title: t(activeCtx, 'admin_sales_trial_specs_section'),
           fields: [
             {
-              label: t(ctx, 'admin_setting_trial_gb'),
-              value: `${localizedNumber(trialGb, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+              label: t(activeCtx, 'admin_setting_trial_gb'),
+              value: `${localizedNumber(trialGb, activeCtx)} ${t(activeCtx, 'traffic_unit_gb')}`,
             },
             {
-              label: t(ctx, 'admin_setting_trial_days'),
-              value: `${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')}`,
+              label: t(activeCtx, 'admin_setting_trial_days'),
+              value: `${localizedNumber(trialDays, activeCtx)} ${t(activeCtx, 'days_unit')}`,
             },
           ],
         },
       ],
-      footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+      footer: `ℹ️ ${t(activeCtx, 'admin_home_hint')}`,
     });
 
     const keyboard = new InlineKeyboard()
       .text(
-        `${t(ctx, 'admin_setting_trial_enabled')}: ${isEnabled ? onBadge : offBadge}`,
+        `${t(activeCtx, 'admin_setting_trial_enabled')}: ${isEnabled ? onBadge : offBadge}`,
         'trial:toggle'
       )
       .row()
-      .text(t(ctx, 'admin_setting_trial_gb'), 'trial:edit:trial_gb')
+      .text(t(activeCtx, 'admin_setting_trial_gb'), 'trial:edit:trial_gb')
       .row()
-      .text(t(ctx, 'admin_setting_trial_days'), 'trial:edit:trial_days')
+      .text(t(activeCtx, 'admin_setting_trial_days'), 'trial:edit:trial_days')
       .row()
-      .text(t(ctx, 'admin_menu_back_to_sales'), 'trial:back');
+      .text(t(activeCtx, 'admin_menu_back_to_sales'), 'trial:back');
 
-    let renderedInPlace = false;
-    const messageId = activeCtx.callbackQuery?.message?.message_id;
-    const chatId = activeCtx.chat?.id;
-    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
-      try {
-        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-        renderedInPlace = true;
-      } catch (error) {
-        if (isMessageNotModifiedError(error)) {
-          renderedInPlace = true;
-        }
-      }
-    }
-
-    if (!renderedInPlace) {
-      await promptInConversation(conversation, activeCtx, screenText, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-      });
-    }
+    await renderSettingsScreen(conversation, activeCtx, screenText, keyboard);
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['trial:toggle', 'trial:edit:'],

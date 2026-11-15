@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
 import { purchaseCheckouts, purchaseIntents } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
@@ -102,7 +102,7 @@ export class PurchaseCheckoutService {
           and(
             eq(purchaseCheckouts.id, checkoutId),
             eq(purchaseCheckouts.status, 'pending'),
-            lt(purchaseCheckouts.expiresAt, now)
+            lte(purchaseCheckouts.expiresAt, now)
           )
         );
       throw new PurchaseCheckoutUnavailableError('expired');
@@ -152,7 +152,7 @@ export class PurchaseCheckoutService {
           eq(purchaseCheckouts.id, checkoutId),
           allowAdminOverride ? sql`1=1` : eq(purchaseCheckouts.telegramId, telegramId),
           eq(purchaseCheckouts.status, 'pending'),
-          sql`${purchaseCheckouts.expiresAt} > ${now}`
+          gt(purchaseCheckouts.expiresAt, now)
         )
       )
       .returning();

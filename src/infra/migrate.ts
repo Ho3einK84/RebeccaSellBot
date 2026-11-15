@@ -1,4 +1,6 @@
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { closeDatabase, getDb, initDatabase } from './db.js';
 import { logger } from './logger.js';
 import dotenv from 'dotenv';
@@ -7,19 +9,20 @@ import type * as schema from './schema.js';
 
 dotenv.config();
 
+const MIGRATIONS_FOLDER = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../drizzle'
+);
+
 export async function autoMigrate(
   dbInstance: ReturnType<typeof drizzle<typeof schema>>
 ): Promise<void> {
   logger.info('Auto-checking & running database migrations...');
   try {
-    await migrate(dbInstance, { migrationsFolder: './drizzle' });
+    await migrate(dbInstance, { migrationsFolder: MIGRATIONS_FOLDER });
     logger.info('Database migrations applied successfully');
   } catch (err: unknown) {
-    const errorDetails =
-      err instanceof Error
-        ? { message: err.message, stack: err.stack, ...(typeof err === 'object' ? err : {}) }
-        : { raw: err };
-    logger.error({ err: errorDetails }, 'Failed to run database migrations');
+    logger.error({ err }, 'Failed to run database migrations');
     throw err;
   }
 }

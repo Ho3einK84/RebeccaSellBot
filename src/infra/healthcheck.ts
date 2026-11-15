@@ -74,35 +74,49 @@ export function markHealthFailed(error: unknown): void {
   });
 }
 
-export async function startHealthCheckServer(port: number): Promise<http.Server> {
+export async function startHealthCheckServer(
+  port: number,
+  host = '127.0.0.1'
+): Promise<http.Server> {
   if (server) return server;
   snapshot = createInitialSnapshot();
 
-  server = http.createServer((req, res) => {
+  const candidate = http.createServer((req, res) => {
     void handleHealthRequest(req, res);
   });
 
-  await new Promise<void>((resolve, reject) => {
-    const onError = (error: Error) => {
-      server?.off('listening', onListening);
-      serverPort = null;
-      reject(error);
-    };
-    const onListening = () => {
-      server?.off('error', onError);
-      serverPort = port;
-      resolve();
-    };
-    server!.once('error', onError);
-    server!.once('listening', onListening);
-    server!.listen(port, '127.0.0.1');
-  });
-  logger.info({ port }, 'Health check HTTP server running (internal only)');
-  server.on('error', (err) => {
-    logger.error({ err, port }, 'Health check HTTP server failed');
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: Error) => {
+        candidate.off('listening', onListening);
+        if (server === candidate) {
+          server = null;
+        }
+        serverPort = null;
+        reject(error);
+      };
+      const onListening = () => {
+        candidate.off('error', onError);
+        const address = candidate.address();
+        server = candidate;
+        serverPort = typeof address === 'object' && address ? address.port : port;
+        resolve();
+      };
+      candidate.once('error', onError);
+      candidate.once('listening', onListening);
+      candidate.listen(port, host);
+    });
+  } catch (error) {
+    candidate.close();
+    throw error;
+  }
+
+  logger.info({ host, port: serverPort }, 'Health check HTTP server running');
+  candidate.on('error', (err) => {
+    logger.error({ err, port: serverPort }, 'Health check HTTP server failed');
   });
 
-  return server;
+  return candidate;
 }
 
 async function handleHealthRequest(
@@ -147,11 +161,17 @@ async function handleHealthRequest(
       if (handled) return;
     }
 
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not Found');
+    if (!res.headersSent) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not Found');
+    }
   } catch {
-    res.writeHead(503, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ...snapshot, database: 'unavailable' }));
+    if (!res.headersSent) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ...snapshot, database: 'unavailable' }));
+    } else if (!res.writableEnded) {
+      res.end();
+    }
   }
 }
 
@@ -178,6 +198,7 @@ export async function stopHealthCheckServer(): Promise<void> {
   serverPort = null;
   fallbackHandler = null;
   if (!activeServer?.listening) return;
+  activeServer.closeIdleConnections?.();
   await new Promise<void>((resolve, reject) => {
     activeServer.close((error) => (error ? reject(error) : resolve()));
   });

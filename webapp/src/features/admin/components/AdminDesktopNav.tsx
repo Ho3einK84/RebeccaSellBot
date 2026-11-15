@@ -1,5 +1,6 @@
 import React from 'react';
 import { DesktopNav } from '@/shared/components/layout/DesktopNav.js';
+import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import type { TabConfig } from './AdminBottomNav.js';
 import type { TabType } from '@/shared/types/admin.js';
 
@@ -14,11 +15,14 @@ export const AdminDesktopNav: React.FC<AdminDesktopNavProps> = ({
   tabs,
   activeTab,
   onSelectTab,
-}) => (
-  <DesktopNav
-    items={tabs}
-    activeId={activeTab}
-    onSelect={onSelectTab}
-    ariaLabel="ناوبری پنل مدیریت"
-  />
-);
+}) => {
+  const { t } = useLanguage();
+  return (
+    <DesktopNav
+      items={tabs}
+      activeId={activeTab}
+      onSelect={onSelectTab}
+      ariaLabel={t('admin.navLabel')}
+    />
+  );
+};

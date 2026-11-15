@@ -1,6 +1,7 @@
 import type { TranslationService } from './TranslationService.js';
 import type { WalletService } from './WalletService.js';
 import { logger } from '../../infra/logger.js';
+import { walletTransferEnabled, walletTransferMinAmount } from './FeatureSettings.js';
 
 export type PaymentMethodType = 'manual' | 'automated';
 
@@ -96,12 +97,8 @@ export class PaymentService {
     return {
       cardNumber: this.translationService.getSetting('card_number', ''),
       cardHolder: this.translationService.getSetting('card_holder', ''),
-      walletTransferEnabled:
-        this.translationService.getSetting('wallet_transfer_enabled', 'true') !== 'false',
-      walletTransferMinAmount: this.translationService.getSettingNum(
-        'wallet_transfer_min_amount',
-        10_000
-      ),
+      walletTransferEnabled: walletTransferEnabled(this.translationService),
+      walletTransferMinAmount: walletTransferMinAmount(this.translationService),
     };
   }
 
@@ -118,7 +115,13 @@ export class PaymentService {
       entries.wallet_transfer_enabled = updates.walletTransferEnabled ? 'true' : 'false';
     }
     if (updates.walletTransferMinAmount !== undefined) {
-      entries.wallet_transfer_min_amount = String(Math.max(1, updates.walletTransferMinAmount));
+      if (
+        !Number.isSafeInteger(updates.walletTransferMinAmount) ||
+        updates.walletTransferMinAmount < 1
+      ) {
+        throw new Error('INVALID_WALLET_TRANSFER_MIN_AMOUNT');
+      }
+      entries.wallet_transfer_min_amount = String(updates.walletTransferMinAmount);
     }
 
     if (Object.keys(entries).length > 0) {

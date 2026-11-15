@@ -1,5 +1,8 @@
 /** Public wallet and purchase contracts/errors. */
 
+export const PARTIAL_RENEWAL_REVIEW_MESSAGE =
+  'Traffic reset applied but renewal update outcome is unresolved; manual review required';
+
 export interface PurchaseSagaParams {
   telegramId: number;
   /** Base package price in configured minor units. Promotion settlement derives the final amount in-tx. */

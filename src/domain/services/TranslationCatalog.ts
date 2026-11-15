@@ -37,8 +37,10 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   package_display_mode: 'specs',
   // Default subscription length (days) applied to the custom-volume flow.
   custom_default_days: '30',
-  // Admin switch for exposing custom-volume purchase and renewal flows.
+  // Admin switch and GB boundaries for custom-volume purchase and renewal flows.
   custom_volume_enabled: 'true',
+  custom_min_gb: '5',
+  custom_max_gb: '500',
   custom_volume_target_json: '{}',
   card_number: '6037997900000000',
   card_holder: 'Name',

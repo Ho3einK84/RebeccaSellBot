@@ -1,15 +1,10 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { t } from '../../../locale.js';
-import {
-  buildScreen,
-  isMessageNotModifiedError,
-  promptInConversation,
-  replyInAdminConversation,
-} from '../../../ui.js';
-import { escapeTelegramMarkdown } from '../../../rendering.js';
+import { buildScreen, promptInConversation, replyInAdminConversation } from '../../../ui.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../../rendering.js';
 import { requireAdmin } from '../shared.js';
-import { waitForSettingsInput } from './navigation.js';
+import { renderSettingsScreen, waitForSettingsInput } from './navigation.js';
 import {
   normalizeDomainInput,
   getServerPublicIp,
@@ -25,16 +20,21 @@ export async function adminWebAppSettingsConversation(
   let activeCtx = ctx;
 
   for (;;) {
-    const ts = activeCtx.services?.translationService;
-    if (!ts || !activeCtx.services) return;
-
-    const enabled =
-      ts.getSettingBool('webapp_enabled', false) && Boolean(activeCtx.services.webAppUrl);
-    const webAppUrl = activeCtx.services.webAppUrl || ts.getSetting('webapp_url', '').trim();
-    const port = activeCtx.services.webAppHostPort ?? activeCtx.services.webAppPort ?? 3002;
-    const isRunning = activeCtx.services.isWebAppRunning
-      ? activeCtx.services.isWebAppRunning()
-      : Boolean(activeCtx.services.webAppUrl);
+    const state = await conversation.external((outsideCtx) => {
+      const services = outsideCtx?.services ?? activeCtx.services;
+      const ts = services?.translationService;
+      if (!ts || !services) return undefined;
+      return {
+        enabled: ts.getSettingBool('webapp_enabled', false) && Boolean(services.webAppUrl),
+        webAppUrl: services.webAppUrl || ts.getSetting('webapp_url', '').trim(),
+        port: services.webAppHostPort ?? services.webAppPort ?? 3002,
+        isRunning: services.isWebAppRunning
+          ? services.isWebAppRunning()
+          : Boolean(services.webAppUrl),
+      };
+    });
+    if (!state) return;
+    const { enabled, webAppUrl, port, isRunning } = state;
 
     const serverIp = (await conversation.external(() => getServerPublicIp())) || '';
 
@@ -58,12 +58,12 @@ export async function adminWebAppSettingsConversation(
             {
               label: t(activeCtx, 'admin_webapp_url_label'),
               value: webAppUrl
-                ? `\`${escapeTelegramMarkdown(webAppUrl)}\``
+                ? `\`${sanitizeTelegramInlineCode(webAppUrl)}\``
                 : t(activeCtx, 'admin_setting_not_configured'),
             },
             {
               label: t(activeCtx, 'admin_webapp_port_label'),
-              value: `\`${port}\` (Reverse Proxy Port)`,
+              value: `\`${sanitizeTelegramInlineCode(String(port))}\` (Reverse Proxy Port)`,
             },
             {
               label: t(activeCtx, 'admin_webapp_delivery_label'),
@@ -89,7 +89,7 @@ export async function adminWebAppSettingsConversation(
               ? [
                   {
                     label: t(activeCtx, 'admin_webapp_server_ip_label'),
-                    value: `\`${serverIp}\``,
+                    value: `\`${sanitizeTelegramInlineCode(serverIp)}\``,
                   },
                 ]
               : []),
@@ -101,7 +101,7 @@ export async function adminWebAppSettingsConversation(
               label: 'Reverse Proxy',
               value: t(activeCtx, 'admin_webapp_guide_desc', {
                 port,
-                serverIp: serverIp || 'YOUR_SERVER_IP',
+                serverIp: escapeTelegramMarkdown(serverIp || 'YOUR_SERVER_IP'),
               }),
             },
           ],
@@ -122,29 +122,7 @@ export async function adminWebAppSettingsConversation(
       .row()
       .text(t(activeCtx, 'admin_menu_back_to_admin'), 'nav:admin');
 
-    let renderedInPlace = false;
-    const messageId = activeCtx.callbackQuery?.message?.message_id;
-    const chatId = activeCtx.chat?.id;
-    if (messageId !== undefined && chatId !== undefined && activeCtx.api) {
-      try {
-        await activeCtx.api.editMessageText(chatId, messageId, screenText, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-        renderedInPlace = true;
-      } catch (error) {
-        if (isMessageNotModifiedError(error)) {
-          renderedInPlace = true;
-        }
-      }
-    }
-
-    if (!renderedInPlace) {
-      await promptInConversation(conversation, activeCtx, screenText, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-      });
-    }
+    await renderSettingsScreen(conversation, activeCtx, screenText, keyboard);
 
     const input = await waitForSettingsInput(conversation, {
       callbackPrefixes: ['webapp:toggle:', 'webapp:edit:'],

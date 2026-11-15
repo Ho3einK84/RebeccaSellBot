@@ -40,10 +40,12 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
     [configs, selectedConfigId]
   );
 
-  const handleCopySub = (subUrl: string, id: string) => {
+  const handleCopySub = async (subUrl: string, id: string) => {
     triggerHaptic('light');
-    copy(subUrl, id);
-    onNotify(t('user.services.linkCopied'), 'success');
+    const ok = await copy(subUrl, id);
+    if (ok) {
+      onNotify(t('user.services.linkCopied'), 'success');
+    }
   };
 
   const handleQrClick = (subUrl: string, username: string) => {

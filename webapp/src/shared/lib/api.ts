@@ -53,6 +53,7 @@ export class ApiClientError extends Error {
 }
 
 let inMemoryToken: string | null = null;
+let refreshInFlight: Promise<void> | null = null;
 
 export function setAuthToken(token: string | null): void {
   inMemoryToken = token;
@@ -62,7 +63,11 @@ export function getAuthToken(): string | null {
   return inMemoryToken;
 }
 
-async function request<T>(url: string, options: RequestInit = {}, isRetry = false): Promise<T> {
+async function fetchWithAuth(
+  url: string,
+  options: RequestInit = {},
+  isRetry = false
+): Promise<Response> {
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && options.body) {
     headers.set('Content-Type', 'application/json');
@@ -81,37 +86,61 @@ async function request<T>(url: string, options: RequestInit = {}, isRetry = fals
   });
 
   if (response.status === 401 && !isRetry && !url.includes('/api/auth/')) {
-    const initData = window.Telegram?.WebApp?.initData;
+    const initData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : undefined;
     if (initData) {
       try {
-        await api.validateTelegramAuth(initData);
-        return await request<T>(url, options, true);
+        if (!refreshInFlight) {
+          refreshInFlight = api
+            .validateTelegramAuth(initData)
+            .then(() => undefined)
+            .finally(() => {
+              refreshInFlight = null;
+            });
+        }
+        await refreshInFlight;
+        return await fetchWithAuth(url, options, true);
       } catch {
         // Refresh failed, fall through to error handling
       }
     }
   }
 
-  if (!response.ok) {
-    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-    let errorCode: string | undefined;
-    let errBody: unknown;
-    try {
-      errBody = await response.json();
-      const errData = errBody as ApiErrorResponse & { code?: string };
-      if (errData.error || errData.message) {
-        errorMessage = errData.error || errData.message || errorMessage;
-      }
-      if (errData.code) {
-        errorCode = errData.code;
-      }
-    } catch {
-      // Body was not JSON
-    }
-    throw new ApiClientError(errorMessage, response.status, errorCode, errBody);
-  }
+  return response;
+}
 
+async function parseErrorResponse(response: Response): Promise<ApiClientError> {
+  let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+  let errorCode: string | undefined;
+  let errBody: unknown;
+  try {
+    errBody = await response.json();
+    const errData = errBody as ApiErrorResponse & { code?: string };
+    if (errData.error || errData.message) {
+      errorMessage = errData.error || errData.message || errorMessage;
+    }
+    if (errData.code) {
+      errorCode = errData.code;
+    }
+  } catch {
+    // Body was not JSON
+  }
+  return new ApiClientError(errorMessage, response.status, errorCode, errBody);
+}
+
+async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetchWithAuth(url, options);
+  if (!response.ok) {
+    throw await parseErrorResponse(response);
+  }
   return response.json() as Promise<T>;
+}
+
+async function requestBlob(url: string, options: RequestInit = {}): Promise<Blob> {
+  const response = await fetchWithAuth(url, options);
+  if (!response.ok) {
+    throw await parseErrorResponse(response);
+  }
+  return response.blob();
 }
 
 export const api = {
@@ -141,6 +170,8 @@ export const api = {
     }
   },
 
+  fetchBlob: (url: string, options: RequestInit = {}): Promise<Blob> => requestBlob(url, options),
+
   getAdminStats: (): Promise<StatsResponse> => request<StatsResponse>('/api/admin/stats'),
 
   getAdminReceipts: (
@@ -164,7 +195,7 @@ export const api = {
     receiptId: string,
     payload: ReceiptActionPayload
   ): Promise<{ success: boolean }> =>
-    request<{ success: boolean }>(`/api/admin/receipts/${receiptId}/action`, {
+    request<{ success: boolean }>(`/api/admin/receipts/${encodeURIComponent(receiptId)}/action`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
@@ -288,29 +319,29 @@ export const api = {
     }),
 
   updateAdminPanel: (panelId: string, payload: UpdatePanelPayload): Promise<{ success: boolean }> =>
-    request<{ success: boolean }>(`/api/admin/panels/${panelId}`, {
+    request<{ success: boolean }>(`/api/admin/panels/${encodeURIComponent(panelId)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
   toggleAdminPanel: (panelId: string, enabled: boolean): Promise<TogglePanelResponse> =>
-    request<TogglePanelResponse>(`/api/admin/panels/${panelId}/toggle`, {
+    request<TogglePanelResponse>(`/api/admin/panels/${encodeURIComponent(panelId)}/toggle`, {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
 
   setDefaultAdminPanel: (panelId: string): Promise<{ success: boolean }> =>
-    request<{ success: boolean }>(`/api/admin/panels/${panelId}/default`, {
+    request<{ success: boolean }>(`/api/admin/panels/${encodeURIComponent(panelId)}/default`, {
       method: 'POST',
     }),
 
   deleteAdminPanel: (panelId: string): Promise<{ success: boolean }> =>
-    request<{ success: boolean }>(`/api/admin/panels/${panelId}`, {
+    request<{ success: boolean }>(`/api/admin/panels/${encodeURIComponent(panelId)}`, {
       method: 'DELETE',
     }),
 
   testAdminPanel: (panelId: string): Promise<TestPanelResponse> =>
-    request<TestPanelResponse>(`/api/admin/panels/${panelId}/test`, {
+    request<TestPanelResponse>(`/api/admin/panels/${encodeURIComponent(panelId)}/test`, {
       method: 'POST',
     }),
 
@@ -323,7 +354,7 @@ export const api = {
     panelId: string,
     payload: AddPanelServicePayload
   ): Promise<{ success: boolean }> =>
-    request<{ success: boolean }>(`/api/admin/panels/${panelId}/services`, {
+    request<{ success: boolean }>(`/api/admin/panels/${encodeURIComponent(panelId)}/services`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
@@ -332,25 +363,31 @@ export const api = {
     panelId: string,
     serviceId: number
   ): Promise<{ success: boolean }> =>
-    request<{ success: boolean }>(`/api/admin/panels/${panelId}/services/${serviceId}/default`, {
-      method: 'POST',
-    }),
+    request<{ success: boolean }>(
+      `/api/admin/panels/${encodeURIComponent(panelId)}/services/${serviceId}/default`,
+      {
+        method: 'POST',
+      }
+    ),
 
   setCustomTargetAdminPanelService: (
     panelId: string,
     serviceId: number
   ): Promise<{ success: boolean }> =>
     request<{ success: boolean }>(
-      `/api/admin/panels/${panelId}/services/${serviceId}/custom-target`,
+      `/api/admin/panels/${encodeURIComponent(panelId)}/services/${serviceId}/custom-target`,
       {
         method: 'POST',
       }
     ),
 
   deleteAdminPanelService: (panelId: string, serviceId: number): Promise<{ success: boolean }> =>
-    request<{ success: boolean }>(`/api/admin/panels/${panelId}/services/${serviceId}`, {
-      method: 'DELETE',
-    }),
+    request<{ success: boolean }>(
+      `/api/admin/panels/${encodeURIComponent(panelId)}/services/${serviceId}`,
+      {
+        method: 'DELETE',
+      }
+    ),
 
   // User Portal API
   getUserProfile: (): Promise<UserProfileResponse> =>

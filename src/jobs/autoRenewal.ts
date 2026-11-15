@@ -26,6 +26,7 @@ import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/
 import {
   PostgresNotificationDeliveryStore,
   assessNotificationConditions,
+  positiveFinite,
   type ConfigNotificationRecipient,
   type NotificationDeliveryStore,
 } from './notifier.js';
@@ -146,8 +147,12 @@ export async function runAutoRenewalSweep(
   now = new Date()
 ): Promise<AutoRenewalSweepSummary> {
   const configs = await candidateStore.listEnabledConfigs();
-  const thresholdGb = translationService.getSettingNum('low_traffic_threshold_gb', 2);
-  const expiryWarningDays = translationService.getSettingNum('expiry_warning_days', 3);
+  const thresholdGb = positiveFinite(
+    translationService.getSettingNum('low_traffic_threshold_gb', 2)
+  );
+  const expiryWarningDays = positiveFinite(
+    translationService.getSettingNum('expiry_warning_days', 3)
+  );
   const summary: AutoRenewalSweepSummary = { checked: 0, renewed: 0, skipped: 0 };
   const downPanels = new Set<string>();
 
@@ -167,7 +172,14 @@ export async function runAutoRenewalSweep(
         expiryWarningDays,
         now,
       });
-      if (!assessment.renewable || (!assessment.lowTraffic && !assessment.nearExpiry)) {
+      const isExpiredOrExhausted =
+        apiUser.status === 'expired' ||
+        apiUser.status === 'limited' ||
+        (assessment.secondsToExpiry !== null && assessment.secondsToExpiry <= 0);
+      if (
+        !assessment.renewable ||
+        (!assessment.lowTraffic && !assessment.nearExpiry && !isExpiredOrExhausted)
+      ) {
         await deliveryStore.deactivate(config, 'auto_renew_low_balance', now);
         await deliveryStore.deactivate(config, 'auto_renew_package_missing', now);
         summary.skipped += 1;
@@ -192,10 +204,12 @@ export async function runAutoRenewalSweep(
         }
       }
 
+      const ceilingPrice = config.autoRenewPrice;
       const isPriceExceeded =
         Boolean(selectedPackage) &&
-        (config.autoRenewPrice === null ||
-          (config.autoRenewPrice !== undefined && selectedPackage!.price > config.autoRenewPrice));
+        (typeof ceilingPrice !== 'number' ||
+          !Number.isFinite(ceilingPrice) ||
+          selectedPackage!.price > ceilingPrice);
 
       if (!selectedPackage || isPriceExceeded) {
         const reserved = await deliveryStore.reserve(config, 'auto_renew_package_missing', now);
@@ -233,16 +247,24 @@ export async function runAutoRenewalSweep(
                 ),
               }
             );
-            if (candidateStore.disableAutoRenew) {
-              await candidateStore.disableAutoRenew(config);
-            }
           } catch (err) {
-            await deliveryStore.release(config, ['auto_renew_package_missing'], new Date());
+            await deliveryStore.release(config, ['auto_renew_package_missing'], now);
             logger.warn(
               { err, configUsername: config.configUsername },
               'Auto-renewal missing package notice delivery failed'
             );
           }
+        }
+        // Disable auto-renew unconditionally once the package is unavailable or
+        // exceeds the approved price ceiling, even if notice delivery was
+        // skipped (deduped) or blocked by the user.
+        if (candidateStore.disableAutoRenew) {
+          await candidateStore.disableAutoRenew(config).catch((disableErr) => {
+            logger.warn(
+              { err: disableErr, configUsername: config.configUsername },
+              'Failed to disable auto-renew after package/price check'
+            );
+          });
         }
         summary.skipped += 1;
         continue;
@@ -295,7 +317,7 @@ export async function runAutoRenewalSweep(
               }
             );
           } catch (err) {
-            await deliveryStore.release(config, ['auto_renew_low_balance'], new Date());
+            await deliveryStore.release(config, ['auto_renew_low_balance'], now);
             logger.warn(
               { err, configUsername: config.configUsername },
               'Auto-renewal low-balance notice delivery failed'

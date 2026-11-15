@@ -94,6 +94,28 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
   );
 };
 
+export function enqueueToast(
+  current: ToastItem[],
+  message: string,
+  type: 'success' | 'error' | 'warning' = 'success',
+  id?: string
+): { toasts: ToastItem[]; id: string; added: boolean } {
+  const existing = current.find((t) => t.message === message && t.type === type);
+  if (existing) {
+    return { toasts: current, id: existing.id, added: false };
+  }
+  const nextId = id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    toasts: [...current, { id: nextId, message, type }],
+    id: nextId,
+    added: true,
+  };
+}
+
+export function dequeueToast(current: ToastItem[], id: string): ToastItem[] {
+  return current.filter((t) => t.id !== id);
+}
+
 export function useToastQueue(defaultTimeout = 3500) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastsRef = useRef<ToastItem[]>([]);
@@ -105,7 +127,7 @@ export function useToastQueue(defaultTimeout = 3500) {
       clearTimeout(timer);
       timersRef.current.delete(id);
     }
-    toastsRef.current = toastsRef.current.filter((t) => t.id !== id);
+    toastsRef.current = dequeueToast(toastsRef.current, id);
     setToasts(toastsRef.current);
   }, []);
 
@@ -115,22 +137,20 @@ export function useToastQueue(defaultTimeout = 3500) {
       type: 'success' | 'error' | 'warning' = 'success',
       timeout = defaultTimeout
     ) => {
-      const existing = toastsRef.current.find((t) => t.message === message && t.type === type);
-      if (existing) {
-        return existing.id;
+      const result = enqueueToast(toastsRef.current, message, type);
+      if (!result.added) {
+        return result.id;
       }
 
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const newToast: ToastItem = { id, message, type };
-      toastsRef.current = [...toastsRef.current, newToast];
+      toastsRef.current = result.toasts;
       setToasts(toastsRef.current);
 
       const timer = setTimeout(() => {
-        removeToast(id);
+        removeToast(result.id);
       }, timeout);
-      timersRef.current.set(id, timer);
+      timersRef.current.set(result.id, timer);
 
-      return id;
+      return result.id;
     },
     [defaultTimeout, removeToast]
   );

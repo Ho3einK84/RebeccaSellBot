@@ -73,6 +73,8 @@ export class RefundOutcomePendingError extends Error {
 
 /** Delete-on-panel + wallet refund saga for never-used paid subscriptions. */
 export class RefundService {
+  private readonly invalidationHooks: Array<(telegramId: number) => void> = [];
+
   constructor(
     panels: RebeccaPanelRegistry | RebeccaService,
     private readonly translationService: TranslationService
@@ -81,6 +83,17 @@ export class RefundService {
   }
 
   private readonly panels: NormalizedRebeccaPanelAccess;
+
+  /** Register a callback invoked post-commit whenever a refund credits a user's wallet. */
+  registerInvalidationHook(hook: (telegramId: number) => void): void {
+    this.invalidationHooks.push(hook);
+  }
+
+  private notifyInvalidation(telegramId: number): void {
+    for (const hook of this.invalidationHooks) {
+      hook(telegramId);
+    }
+  }
 
   async quote(telegramId: number, configId: string): Promise<RefundQuote> {
     const db = getDb();
@@ -207,18 +220,21 @@ export class RefundService {
     if (!quote.eligible) return quote;
 
     return withConfigLock(quote.panelId, quote.configUsername, async () => {
-      const refundId = await this.acquireRefundIntent(telegramId, quote);
-      if (!refundId) return { eligible: false, reason: 'refund_in_progress' };
+      const acquired = await this.acquireRefundIntent(telegramId, quote);
+      if (acquired.status !== 'acquired') {
+        return { eligible: false, reason: acquired.reason };
+      }
+      const { refundId, authoritativeQuote } = acquired;
 
       // Usage can change between rendering the confirmation button and the user
       // pressing it. Re-check immediately before the destructive call so a
       // service that started carrying traffic is never auto-refunded from a
       // stale quote. A 404 is already the desired deleted state.
       let deleteRequired: boolean;
-      const rebeccaService = this.panels.getService(quote.panelId);
+      const rebeccaService = this.panels.getService(authoritativeQuote.panelId);
       try {
         await this.refreshLease(refundId);
-        const latest = await rebeccaService.getUser(quote.configUsername);
+        const latest = await rebeccaService.getUser(authoritativeQuote.configUsername);
         if (latest.used_traffic > 0 || latest.lifetime_used_traffic > 0) {
           await this.failIntent(refundId, 'Refund rejected: traffic appeared before deletion');
           return { eligible: false, reason: 'already_used' };
@@ -226,11 +242,21 @@ export class RefundService {
         const [localConfig] = await db
           .select()
           .from(userConfigs)
-          .where(eq(userConfigs.id, quote.configId))
+          .where(eq(userConfigs.id, authoritativeQuote.configId))
           .limit(1);
         if (!localConfig) {
           await this.failIntent(refundId, 'Refund rejected: local config binding disappeared');
           return { eligible: false, reason: 'config_not_found' };
+        }
+        if (
+          latest.note?.startsWith('rsbot:') &&
+          !remoteMatchesOwnershipMarker(
+            latest,
+            purchaseOwnershipMarker(authoritativeQuote.purchaseIntentId)
+          )
+        ) {
+          await this.failIntent(refundId, 'Refund rejected: remote ownership marker mismatch');
+          return { eligible: false, reason: 'ownership_mismatch' };
         }
         try {
           await verifyOrEstablishConfigIncarnation(localConfig, latest);
@@ -257,7 +283,7 @@ export class RefundService {
       try {
         if (deleteRequired) {
           await this.refreshLease(refundId);
-          await rebeccaService.deleteUser(quote.configUsername);
+          await rebeccaService.deleteUser(authoritativeQuote.configUsername);
         }
       } catch (err) {
         if (err instanceof RebeccaApiError && err.status === 404) {
@@ -287,60 +313,108 @@ export class RefundService {
         ).catch(() => undefined);
         throw new RefundOutcomePendingError(refundId, { cause: err });
       }
-      return quote;
+      this.notifyInvalidation(telegramId);
+      return authoritativeQuote;
     });
   }
 
   private async acquireRefundIntent(
     telegramId: number,
     quote: Extract<RefundQuote, { eligible: true }>
-  ): Promise<string | undefined> {
+  ): Promise<
+    | {
+        status: 'acquired';
+        refundId: string;
+        authoritativeQuote: Extract<RefundQuote, { eligible: true }>;
+      }
+    | { status: 'rejected'; reason: RefundIneligibilityReason }
+  > {
     const db = getDb();
     const freshId = `ri_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
-    try {
-      const [inserted] = await db
+
+    return db.transaction(async (tx) => {
+      // Serialize against ReferralService.processCompletedPurchase via FOR UPDATE
+      // on the purchase intent row so rewards cannot slip in after quote().
+      const [lockedPurchase] = await tx
+        .select()
+        .from(purchaseIntents)
+        .where(eq(purchaseIntents.id, quote.purchaseIntentId))
+        .for('update')
+        .limit(1);
+      if (!lockedPurchase || lockedPurchase.refundedAt || lockedPurchase.status === 'refunded') {
+        return { status: 'rejected' as const, reason: 'already_refunded' as const };
+      }
+
+      const [referralReward] = await tx
+        .select({ id: walletTransactions.id })
+        .from(walletTransactions)
+        .where(eq(walletTransactions.referenceId, `ref_bonus_${quote.purchaseIntentId}`))
+        .limit(1);
+      if (referralReward) {
+        return { status: 'rejected' as const, reason: 'referral_reward_attached' as const };
+      }
+
+      const [cashback] = await tx
+        .select({ amount: walletTransactions.amount })
+        .from(walletTransactions)
+        .where(eq(walletTransactions.referenceId, `cashback_${quote.purchaseIntentId}`))
+        .limit(1);
+      const cashbackWithheld = Math.max(0, cashback?.amount ?? 0);
+      const refundAmount = Math.max(0, lockedPurchase.amount - cashbackWithheld);
+      const authoritativeQuote: Extract<RefundQuote, { eligible: true }> = {
+        ...quote,
+        grossAmount: lockedPurchase.amount,
+        cashbackWithheld,
+        refundAmount,
+      };
+
+      const [inserted] = await tx
         .insert(refundIntents)
         .values({
           id: freshId,
-          purchaseIntentId: quote.purchaseIntentId,
+          purchaseIntentId: authoritativeQuote.purchaseIntentId,
           telegramId,
-          panelId: quote.panelId,
-          configUsername: quote.configUsername,
-          grossAmount: quote.grossAmount,
-          cashbackWithheld: quote.cashbackWithheld,
-          refundAmount: quote.refundAmount,
+          panelId: authoritativeQuote.panelId,
+          configUsername: authoritativeQuote.configUsername,
+          grossAmount: authoritativeQuote.grossAmount,
+          cashbackWithheld: authoritativeQuote.cashbackWithheld,
+          refundAmount: authoritativeQuote.refundAmount,
           status: 'pending',
           operationStartedAt: new Date(),
           leaseExpiresAt: new Date(Date.now() + REFUND_OPERATION_LEASE_MS),
         })
+        .onConflictDoNothing()
         .returning({ id: refundIntents.id });
-      return inserted?.id;
-    } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
-    }
+      if (inserted?.id) {
+        return { status: 'acquired' as const, refundId: inserted.id, authoritativeQuote };
+      }
 
-    // A known remote failure is retryable. Re-arm the same durable intent
-    // atomically; only one concurrent retry can transition failed -> pending.
-    const [retried] = await db
-      .update(refundIntents)
-      .set({
-        status: 'pending',
-        errorMessage: null,
-        grossAmount: quote.grossAmount,
-        cashbackWithheld: quote.cashbackWithheld,
-        refundAmount: quote.refundAmount,
-        operationStartedAt: new Date(),
-        leaseExpiresAt: new Date(Date.now() + REFUND_OPERATION_LEASE_MS),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(refundIntents.purchaseIntentId, quote.purchaseIntentId),
-          eq(refundIntents.status, 'failed')
+      // A known remote failure is retryable. Re-arm the same durable intent
+      // atomically; only one concurrent retry can transition failed -> pending.
+      const [retried] = await tx
+        .update(refundIntents)
+        .set({
+          status: 'pending',
+          errorMessage: null,
+          grossAmount: authoritativeQuote.grossAmount,
+          cashbackWithheld: authoritativeQuote.cashbackWithheld,
+          refundAmount: authoritativeQuote.refundAmount,
+          operationStartedAt: new Date(),
+          leaseExpiresAt: new Date(Date.now() + REFUND_OPERATION_LEASE_MS),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(refundIntents.purchaseIntentId, authoritativeQuote.purchaseIntentId),
+            eq(refundIntents.status, 'failed')
+          )
         )
-      )
-      .returning({ id: refundIntents.id });
-    return retried?.id;
+        .returning({ id: refundIntents.id });
+      if (retried?.id) {
+        return { status: 'acquired' as const, refundId: retried.id, authoritativeQuote };
+      }
+      return { status: 'rejected' as const, reason: 'refund_in_progress' as const };
+    });
   }
 
   async reconcilePendingRefunds(): Promise<number> {
@@ -383,6 +457,7 @@ export class RefundService {
         } else {
           const completed = await completeRefundIntent(intent.id, intent.telegramId);
           if (!completed) continue;
+          this.notifyInvalidation(intent.telegramId);
         }
         resolved += 1;
       } catch (err) {
@@ -565,17 +640,6 @@ async function completeRefundIntent(refundId: string, telegramId: number): Promi
     });
     return true;
   });
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) return false;
-  const target = (err as { cause?: object }).cause ?? err;
-  return (
-    typeof target === 'object' &&
-    target !== null &&
-    'code' in target &&
-    (target as { code?: unknown }).code === '23505'
-  );
 }
 
 function errorMessage(err: unknown): string {

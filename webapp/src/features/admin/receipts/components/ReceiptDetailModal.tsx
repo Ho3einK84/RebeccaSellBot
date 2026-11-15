@@ -49,7 +49,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   const isRejected = receipt.status === 'rejected';
 
   const userDisplayName =
-    [receipt.user?.firstName, receipt.user?.lastName].filter(Boolean).join('') ||
+    [receipt.user?.firstName, receipt.user?.lastName].filter(Boolean).join(' ') ||
     receipt.user?.username ||
     `ID: ${receipt.telegramId}`;
 

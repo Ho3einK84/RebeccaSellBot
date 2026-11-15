@@ -1,7 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { closeDatabase, getDb, getPool, initDatabase } from '../../src/infra/db.js';
-import { autoMigrate } from '../../src/infra/migrate.js';
+import { getDb } from '../../src/infra/db.js';
 import {
   botAdmins,
   broadcastJobs,
@@ -19,56 +18,17 @@ import { ConfigService } from '../../src/domain/services/ConfigService.js';
 import { RefundService } from '../../src/domain/services/RefundService.js';
 import { ConfigReconciliationService } from '../../src/domain/services/ConfigReconciliationService.js';
 import { BroadcastService } from '../../src/domain/services/BroadcastService.js';
-import type {
-  RebeccaService,
-  RebeccaUserDetail,
-} from '../../src/domain/services/RebeccaService.js';
+import type { RebeccaService } from '../../src/domain/services/RebeccaService.js';
 import { RebeccaApiError } from '../../src/domain/services/RebeccaService.js';
 import type { TranslationService } from '../../src/domain/services/TranslationService.js';
+import {
+  describeIntegration,
+  registerIntegrationLifecycleHooks,
+  remoteUser,
+} from './_helpers/dbHarness.js';
 
-const databaseUrl = process.env.TEST_DATABASE_URL;
-const integration = databaseUrl ? describe : describe.skip;
-
-function remoteUser(username: string): RebeccaUserDetail {
-  return {
-    username,
-    status: 'active',
-    used_traffic: 0,
-    lifetime_used_traffic: 0,
-    data_limit: 10 * 1024 ** 3,
-    expire: Math.floor(Date.now() / 1000) + 30 * 86_400,
-    created_at: new Date().toISOString(),
-    subscription_url: `https://rebecca.example/sub/${username}`,
-    subscription_urls: {},
-    links: [],
-    proxies: {},
-    inbounds: {},
-    note: null,
-    telegram_id: null,
-    sub_updated_at: null,
-    online_at: null,
-    ip_limit: 0,
-    service_id: 1,
-    service_name: null,
-    admin_username: null,
-  };
-}
-
-integration('subscription lifecycle management', () => {
-  beforeAll(async () => {
-    initDatabase(databaseUrl!);
-    await autoMigrate(getDb());
-  });
-
-  beforeEach(async () => {
-    await getPool().query(
-      'TRUNCATE TABLE bot_admins, broadcast_jobs, config_reconciliation_issues, refund_intents, users CASCADE'
-    );
-  });
-
-  afterAll(async () => {
-    if (databaseUrl) await closeDatabase();
-  });
+describeIntegration('subscription lifecycle management', () => {
+  registerIntegrationLifecycleHooks();
 
   it('keeps the database admin registry authoritative after bootstrap', async () => {
     const admins = new AdminService();

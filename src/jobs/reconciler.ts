@@ -35,10 +35,8 @@ import type { RefundService } from '../domain/services/RefundService.js';
 import type { ConfigReconciliationService } from '../domain/services/ConfigReconciliationService.js';
 import type { PurchaseCheckoutService } from '../domain/services/PurchaseCheckoutService.js';
 import type { RebeccaPanelRegistry } from '../domain/services/RebeccaPanelRegistry.js';
-import {
-  getRebeccaService,
-  isRebeccaPanelRegistryAccess,
-} from '../domain/services/RebeccaPanelAccess.js';
+import { getRebeccaService } from '../domain/services/RebeccaPanelAccess.js';
+import { PARTIAL_RENEWAL_REVIEW_MESSAGE } from '../domain/services/WalletContracts.js';
 import {
   purchaseOwnershipMarker,
   remoteFingerprint,
@@ -96,29 +94,26 @@ export async function reconcilePendingIntents(
   let resolvedCount = 0;
   for (const intent of stuckIntents) {
     try {
-      if (isRebeccaPanelRegistryAccess(panels)) {
-        const [claimed] = await db
-          .update(purchaseIntents)
-          .set({
-            leaseExpiresAt: new Date(Date.now() + RECONCILIATION_LEASE_MS),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(purchaseIntents.id, intent.id),
-              inArray(purchaseIntents.status, NON_TERMINAL_INTENT_STATUSES),
-              or(isNull(purchaseIntents.leaseExpiresAt), lte(purchaseIntents.leaseExpiresAt, now))
-            )
+      const [claimed] = await db
+        .update(purchaseIntents)
+        .set({
+          leaseExpiresAt: new Date(Date.now() + RECONCILIATION_LEASE_MS),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(purchaseIntents.id, intent.id),
+            inArray(purchaseIntents.status, NON_TERMINAL_INTENT_STATUSES),
+            or(isNull(purchaseIntents.leaseExpiresAt), lte(purchaseIntents.leaseExpiresAt, now))
           )
-          .returning({ id: purchaseIntents.id });
-        if (!claimed) continue;
-      }
+        )
+        .returning({ id: purchaseIntents.id });
+      if (!claimed) continue;
+
       const rebeccaService = getRebeccaService(panels, intent.panelId);
       const remote = await lookupRemoteUser(rebeccaService, intent);
       if (remote.kind === 'unknown') {
-        if (isRebeccaPanelRegistryAccess(panels)) {
-          await releaseReconciliationLease(db, intent.id);
-        }
+        await releaseReconciliationLease(db, intent.id);
         continue;
       }
 
@@ -143,7 +138,7 @@ export async function reconcilePendingIntents(
             intent,
             remote.user,
             services.promoService,
-            isRebeccaPanelRegistryAccess(panels)
+            true
           );
           if (completed) {
             await settleRecoveredBonuses(services.referralService, intent);
@@ -178,7 +173,7 @@ export async function reconcilePendingIntents(
           intent,
           remote.user!,
           services.promoService,
-          isRebeccaPanelRegistryAccess(panels)
+          true
         );
         if (completed) {
           await settleRecoveredBonuses(services.referralService, intent);
@@ -203,11 +198,12 @@ export async function reconcilePendingIntents(
           );
         }
       } else {
-        await keepIntentPending(
-          db,
-          intent.id,
-          'Reconciliation deferred: renewal state is ambiguous on Rebecca'
-        );
+        // Never overwrite a partial traffic-reset marker; losing it would make
+        // the next sweep misclassify the unchanged snapshot as `not_applied`.
+        const pendingMessage = hasPartialRenewalMarker(intent.errorMessage)
+          ? intent.errorMessage!
+          : 'Reconciliation deferred: renewal state is ambiguous on Rebecca';
+        await keepIntentPending(db, intent.id, pendingMessage);
         logger.warn(
           { intentId: intent.id, configUsername: intent.configUsername },
           'Reconciliation retained ambiguous renewal reservation'
@@ -237,6 +233,7 @@ export async function syncSubscriptionStatuses(
   const db = getDb();
   const safePageSize = Math.max(1, Math.min(Math.floor(pageSize), 1_000));
   const affectedOwners = new Set<number>();
+  const downPanels = new Set<string>();
   let synced = 0;
   let cursor: string | undefined;
 
@@ -250,6 +247,8 @@ export async function syncSubscriptionStatuses(
     if (configs.length === 0) break;
 
     await forEachConcurrent(configs, 8, async (config) => {
+      const panelKey = config.panelId ?? 'legacy';
+      if (downPanels.has(panelKey)) return;
       try {
         const remote = await getRebeccaService(panels, config.panelId).getUser(
           config.configUsername
@@ -272,6 +271,12 @@ export async function syncSubscriptionStatuses(
             .where(eq(userConfigs.id, config.id));
           affectedOwners.add(config.telegramId);
           synced += 1;
+        } else if (err instanceof RebeccaOriginDownError) {
+          downPanels.add(panelKey);
+          logger.warn(
+            { panelId: panelKey, configUsername: config.configUsername },
+            'Subscription lifecycle sync deferred: Rebecca panel origin down'
+          );
         } else {
           logger.warn(
             { err, configUsername: config.configUsername },
@@ -366,15 +371,20 @@ function determineRenewalOutcome(
   // Status can legitimately become limited/expired soon after an otherwise
   // successful update, so changed target limits/expiry are sufficient proof.
   if (matchesTarget) return 'applied';
-  if (
-    matchesPrevious &&
-    !intent.errorMessage?.startsWith(
-      'Traffic reset applied but renewal update outcome is unresolved'
-    )
-  ) {
+  if (matchesPrevious && !hasPartialRenewalMarker(intent.errorMessage)) {
     return 'not_applied';
   }
   return 'ambiguous';
+}
+
+const PARTIAL_RENEWAL_PREFIX = 'Traffic reset applied but renewal update outcome is unresolved';
+
+function hasPartialRenewalMarker(errorMessage: string | null | undefined): boolean {
+  if (!errorMessage) return false;
+  return (
+    errorMessage === PARTIAL_RENEWAL_REVIEW_MESSAGE ||
+    errorMessage.startsWith(PARTIAL_RENEWAL_PREFIX)
+  );
 }
 
 async function completePendingIntent(
@@ -622,6 +632,49 @@ async function reconcileDeferredBonuses(
 
 let reconciliationTimer: NodeJS.Timeout | null = null;
 let lastOrphanScanAt = 0;
+
+async function runReconciliationStep(step: string, fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    logger.error({ err, step }, 'Reconciliation sweep step failed');
+  }
+}
+
+export async function runReconciliationCycle(
+  panels: Pick<RebeccaPanelRegistry, 'getService'> | RebeccaService,
+  services: ReconciliationServices = {}
+): Promise<void> {
+  await runReconciliationStep('reconcile_pending_intents', () =>
+    reconcilePendingIntents(panels, services)
+  );
+  if (services.purchaseCheckoutService) {
+    await runReconciliationStep('reconcile_stale_checkouts', () =>
+      services.purchaseCheckoutService!.reconcileStaleProcessing()
+    );
+  }
+  await runReconciliationStep('sync_subscription_statuses', () => syncSubscriptionStatuses(panels));
+  if (services.refundService) {
+    await runReconciliationStep('reconcile_pending_refunds', () =>
+      services.refundService!.reconcilePendingRefunds()
+    );
+  }
+  if (
+    services.configReconciliationService &&
+    Date.now() - lastOrphanScanAt >= ORPHAN_SCAN_INTERVAL_MS
+  ) {
+    await runReconciliationStep('orphan_scan', async () => {
+      await services.configReconciliationService!.scan();
+      lastOrphanScanAt = Date.now();
+    });
+  }
+  if (services.trialService) {
+    await runReconciliationStep('reconcile_trial_claims', () =>
+      services.trialService!.reconcilePendingClaims()
+    );
+  }
+}
+
 export function startReconciliationCron(
   panels: RebeccaPanelRegistry,
   servicesOrInterval: ReconciliationServices | number = {},
@@ -637,20 +690,7 @@ export function startReconciliationCron(
   const run = async (): Promise<void> => {
     try {
       await jobRunner.run('reconciliation', async () => {
-        await reconcilePendingIntents(panels, services);
-        if (services.purchaseCheckoutService) {
-          await services.purchaseCheckoutService.reconcileStaleProcessing();
-        }
-        await syncSubscriptionStatuses(panels);
-        if (services.refundService) await services.refundService.reconcilePendingRefunds();
-        if (
-          services.configReconciliationService &&
-          Date.now() - lastOrphanScanAt >= ORPHAN_SCAN_INTERVAL_MS
-        ) {
-          await services.configReconciliationService.scan();
-          lastOrphanScanAt = Date.now();
-        }
-        if (services.trialService) await services.trialService.reconcilePendingClaims();
+        await runReconciliationCycle(panels, services);
       });
     } catch (err) {
       logger.error({ err }, 'Error in reconciliation cron worker');

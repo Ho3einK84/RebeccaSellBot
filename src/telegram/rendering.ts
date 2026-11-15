@@ -84,6 +84,14 @@ export function safeFormattingTransformer(): Transformer {
   };
 }
 
+function isEscapedAt(text: string, index: number): boolean {
+  let backslashes = 0;
+  for (let i = index - 1; i >= 0 && text[i] === '\\'; i--) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
+}
+
 /**
  * Validate Telegram Markdown v1 syntax before persisting template changes.
  */
@@ -97,26 +105,27 @@ export function validateTelegramMarkdown(text: string): { valid: boolean; error?
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    const prevChar = i > 0 ? text[i - 1] : '';
 
     if (char === '`') {
-      inBacktick = !inBacktick;
+      if (inBacktick || !isEscapedAt(text, i)) {
+        inBacktick = !inBacktick;
+      }
       continue;
     }
 
     if (inBacktick) continue;
 
     if (char === '*') {
-      if (!inAsterisk && prevChar === '\\') continue;
+      if (!inAsterisk && isEscapedAt(text, i)) continue;
       inAsterisk = !inAsterisk;
     } else if (char === '_') {
-      if (!inUnderscore && prevChar === '\\') continue;
+      if (!inUnderscore && isEscapedAt(text, i)) continue;
       inUnderscore = !inUnderscore;
     } else if (char === '[') {
-      if (prevChar === '\\') continue;
+      if (isEscapedAt(text, i)) continue;
       inLinkText = true;
     } else if (char === ']') {
-      if (prevChar === '\\') continue;
+      if (isEscapedAt(text, i)) continue;
       inLinkText = false;
     }
   }

@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
-import { InlineKeyboard, type Api } from 'grammy';
+import { and, eq } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
 import { userConfigs, users } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
@@ -9,9 +8,23 @@ import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { WalletService } from './WalletService.js';
 import type { PricingService } from './PricingService.js';
 import type { ConfigReconciliationService } from './ConfigReconciliationService.js';
-import { buildScreen } from '../../telegram/designSystem.js';
-import { tForLocale } from '../../telegram/locale.js';
-import { escapeTelegramMarkdown } from '../../telegram/rendering.js';
+import { escapeTelegramMarkdown, formatWebhookAlertScreen } from './TelegramFormatting.js';
+
+export interface WebhookInlineButton {
+  text: string;
+  callback_data: string;
+}
+
+export interface WebhookTelegramSender {
+  sendMessage(
+    chatId: number | string,
+    text: string,
+    options?: {
+      parse_mode?: string;
+      reply_markup?: { inline_keyboard: WebhookInlineButton[][] };
+    }
+  ): Promise<unknown>;
+}
 
 export type RebeccaWebhookAction =
   | 'user_created'
@@ -26,6 +39,8 @@ export type RebeccaWebhookAction =
 export interface RebeccaWebhookPayload {
   username: string;
   action: RebeccaWebhookAction;
+  panelId?: string;
+  panel_id?: string;
   enqueued_at?: number;
   tries?: number;
   send_at?: number;
@@ -38,7 +53,7 @@ export interface RebeccaWebhookPayload {
 export interface RebeccaWebhookServiceOptions {
   panels: RebeccaPanelRegistry;
   translationService: TranslationService;
-  telegramApi: Api;
+  telegramApi: WebhookTelegramSender;
   walletService?: WalletService;
   pricingService?: PricingService;
   configReconciliationService?: ConfigReconciliationService;
@@ -56,16 +71,19 @@ export interface RebeccaWebhookResult {
 
 const DEFAULT_DEDUPE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
+const MAX_DEDUPE_CACHE_SIZE = 2000;
+
 export class RebeccaWebhookService {
   private readonly panels: RebeccaPanelRegistry;
   private readonly translationService: TranslationService;
-  private readonly telegramApi: Api;
+  private readonly telegramApi: WebhookTelegramSender;
   private readonly walletService?: WalletService;
   private readonly pricingService?: PricingService;
   private readonly configReconciliationService?: ConfigReconciliationService;
   private readonly secret?: string;
   private readonly dedupeWindowMs: number;
   private readonly recentAlertTimestamps = new Map<string, number>();
+  private scanInFlight: Promise<unknown> | null = null;
 
   constructor(options: RebeccaWebhookServiceOptions) {
     this.panels = options.panels;
@@ -95,19 +113,41 @@ export class RebeccaWebhookService {
 
   private isDuplicate(key: string, now: number): boolean {
     const lastSent = this.recentAlertTimestamps.get(key);
-    if (lastSent && now - lastSent < this.dedupeWindowMs) {
-      return true;
-    }
+    return lastSent !== undefined && now - lastSent < this.dedupeWindowMs;
+  }
+
+  private markAlertSent(key: string, now: number): void {
+    // Refresh insertion order so eviction always removes the oldest timestamp.
+    this.recentAlertTimestamps.delete(key);
     this.recentAlertTimestamps.set(key, now);
-    if (this.recentAlertTimestamps.size > 2000) {
+    if (this.recentAlertTimestamps.size > MAX_DEDUPE_CACHE_SIZE) {
       const cutoff = now - this.dedupeWindowMs;
       for (const [k, timestamp] of this.recentAlertTimestamps) {
         if (timestamp < cutoff) {
           this.recentAlertTimestamps.delete(k);
         }
       }
+      while (this.recentAlertTimestamps.size > MAX_DEDUPE_CACHE_SIZE) {
+        const oldestKey = this.recentAlertTimestamps.keys().next().value;
+        if (oldestKey === undefined) break;
+        this.recentAlertTimestamps.delete(oldestKey);
+      }
     }
-    return false;
+  }
+
+  private triggerReconciliationScan(): void {
+    if (!this.configReconciliationService || this.scanInFlight) return;
+    const scanPromise = this.configReconciliationService
+      .scan()
+      .catch((err) => {
+        logger.warn({ err }, 'Deferred reconciliation scan failed after webhook deletion');
+      })
+      .finally(() => {
+        if (this.scanInFlight === scanPromise) {
+          this.scanInFlight = null;
+        }
+      });
+    this.scanInFlight = scanPromise;
   }
 
   async handleWebhook(
@@ -163,7 +203,17 @@ export class RebeccaWebhookService {
     now: number
   ): Promise<{ matched: number; actions: string[] }> {
     const { username, action } = payload;
-    logger.info({ username, action }, 'Processing Rebecca panel webhook event');
+    const rawPanelId =
+      typeof payload.panelId === 'string'
+        ? payload.panelId
+        : typeof payload.panel_id === 'string'
+          ? payload.panel_id
+          : '';
+    const panelId = rawPanelId.trim() || undefined;
+    logger.info(
+      { username, action, ...(panelId ? { panelId } : {}) },
+      'Processing Rebecca panel webhook event'
+    );
 
     const matchingConfigs = await getDb()
       .select({
@@ -179,7 +229,11 @@ export class RebeccaWebhookService {
       })
       .from(userConfigs)
       .innerJoin(users, eq(userConfigs.telegramId, users.telegramId))
-      .where(eq(userConfigs.configUsername, username));
+      .where(
+        panelId
+          ? and(eq(userConfigs.configUsername, username), eq(userConfigs.panelId, panelId))
+          : eq(userConfigs.configUsername, username)
+      );
 
     if (matchingConfigs.length === 0) {
       logger.info({ username, action }, 'Rebecca webhook received for unknown or untracked config');
@@ -187,6 +241,7 @@ export class RebeccaWebhookService {
     }
 
     const actionsPerformed: string[] = [];
+    let shouldScanDeleted = false;
 
     for (const cfg of matchingConfigs) {
       const locale: SupportedLocale =
@@ -195,7 +250,7 @@ export class RebeccaWebhookService {
           : this.translationService.resolveLocale();
 
       if (action === 'user_limited' || action === 'user_expired') {
-        const dedupeKey = `${cfg.telegramId}:${cfg.configUsername}:${action}`;
+        const dedupeKey = `${cfg.panelId}:${cfg.telegramId}:${cfg.configUsername}:${action}`;
         if (this.isDuplicate(dedupeKey, now)) {
           logger.debug({ dedupeKey }, 'Duplicate Rebecca webhook event suppressed');
           continue;
@@ -205,27 +260,34 @@ export class RebeccaWebhookService {
         const titleKey = isLimited ? 'webhook_alert_limited_title' : 'webhook_alert_expired_title';
         const bodyKey = isLimited ? 'webhook_alert_limited_body' : 'webhook_alert_expired_body';
 
-        const screen = buildScreen({
+        const screen = formatWebhookAlertScreen({
           emoji: isLimited ? '⚠️' : '⏳',
-          title: tForLocale(this.translationService, locale, titleKey),
-          subtitle: tForLocale(this.translationService, locale, bodyKey),
+          title: this.translationService.get(titleKey, locale),
+          subtitle: this.translationService.get(bodyKey, locale),
           primary: {
             emoji: '📱',
-            label: tForLocale(this.translationService, locale, 'webhook_service_label'),
+            label: this.translationService.get('webhook_service_label', locale),
             value: `\`${escapeTelegramMarkdown(cfg.configUsername)}\``,
           },
         });
 
-        const keyboard = new InlineKeyboard().text(
-          tForLocale(this.translationService, locale, 'webhook_renew_button'),
-          `sub:detail:${cfg.configId}`
-        );
+        const replyMarkup = {
+          inline_keyboard: [
+            [
+              {
+                text: this.translationService.get('webhook_renew_button', locale),
+                callback_data: `sub:detail:${cfg.configId}`,
+              },
+            ],
+          ],
+        };
 
         try {
           await this.telegramApi.sendMessage(cfg.telegramId, screen, {
             parse_mode: 'Markdown',
-            reply_markup: keyboard,
+            reply_markup: replyMarkup,
           });
+          this.markAlertSent(dedupeKey, now);
           actionsPerformed.push(`notified_user_${action}:${cfg.configId}`);
         } catch (sendErr) {
           logger.warn(
@@ -239,14 +301,14 @@ export class RebeccaWebhookService {
           { configUsername: cfg.configUsername, panelId: cfg.panelId },
           'Rebecca webhook reported config deletion'
         );
-        if (this.configReconciliationService) {
-          void this.configReconciliationService.scan().catch((err) => {
-            logger.warn({ err }, 'Deferred reconciliation scan failed after webhook deletion');
-          });
-        }
+        shouldScanDeleted = true;
       } else {
         actionsPerformed.push(`logged_action_${action}:${cfg.configId}`);
       }
+    }
+
+    if (shouldScanDeleted) {
+      this.triggerReconciliationScan();
     }
 
     // Reference optional services to preserve extensible lifecycle access

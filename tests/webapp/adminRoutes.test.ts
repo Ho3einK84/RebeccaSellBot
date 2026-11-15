@@ -1,349 +1,32 @@
-import crypto from 'node:crypto';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createWebAppServer } from '../../src/webapp/server/server.js';
-import type { Config } from '../../src/infra/config.js';
-import type { BotServices } from '../../src/telegram/types.js';
+import { RebeccaOriginDownError } from '../../src/domain/services/RebeccaService.js';
+import {
+  TEST_BOT_TOKEN,
+  createMockAdminServices,
+  createTestConfig,
+} from './helpers/webappTestHarness.js';
 
 describe('WebApp Server & Admin Routes', () => {
   let app: FastifyInstance;
-
-  const mockAdminService = {
-    adminIds: [12345],
-    isAdmin: vi.fn((id: number) => id === 12345),
-  };
-
-  const mockWalletService = {
-    getDashboardStats: vi.fn(async () => ({
-      totalUsers: 100,
-      totalSales: 500_000,
-      dailyRevenue: 50_000,
-      weeklyRevenue: 200_000,
-      monthlyRevenue: 400_000,
-      totalReferralBonus: 10_000,
-      totalCashback: 5_000,
-      activeSubscriptions: 80,
-      inactiveSubscriptions: 20,
-      pendingReceipts: 2,
-    })),
-    listPendingTopupsPage: vi.fn(async (page = 1, _limit = 10) => ({
-      items: [
-        {
-          id: 'rec_1001',
-          telegramId: 55555,
-          amount: 100_000,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-      total: 1,
-      page,
-      totalPages: 1,
-    })),
-    approveTopup: vi.fn(async (id: string, _adminId: number) => {
-      if (id === 'rec_1001') return { telegramId: 55555, amount: 100_000 };
-      return null;
-    }),
-    rejectTopup: vi.fn(async (id: string, _adminId: number) => {
-      if (id === 'rec_1001') return { telegramId: 55555 };
-      return null;
-    }),
-    getPendingTopup: vi.fn(async (id: string) => {
-      if (id === 'rec_1001')
-        return { id: 'rec_1001', telegramId: 55555, photoFileId: 'file_abc', status: 'pending' };
-      return undefined;
-    }),
-    getTopupById: vi.fn(async (id: string) => {
-      if (id === 'rec_1001')
-        return { id: 'rec_1001', telegramId: 55555, photoFileId: 'file_abc', status: 'pending' };
-      if (id === 'rec_approved')
-        return {
-          id: 'rec_approved',
-          telegramId: 55555,
-          photoFileId: 'file_approved',
-          status: 'approved',
-        };
-      return undefined;
-    }),
-    listTopupsPage: vi.fn(async (options?: any) => ({
-      items: [
-        {
-          id: 'rec_1001',
-          telegramId: 55555,
-          amount: 100_000,
-          status: options?.status === 'all' ? 'pending' : (options?.status ?? 'pending'),
-          createdAt: new Date().toISOString(),
-          user: {
-            telegramId: 55555,
-            username: 'testuser',
-            firstName: 'User',
-            lastName: null,
-            balance: 50_000,
-          },
-        },
-      ],
-      total: 1,
-      page: options?.page ?? 1,
-      totalPages: 1,
-      pendingCount: 1,
-    })),
-    batchApproveTopups: vi.fn(async (ids: string[], _adminId: number) => ({
-      succeeded: ids,
-      failed: [],
-    })),
-    adjustBalanceAdmin: vi.fn(async () => 150_000),
-    getBalance: vi.fn(async () => 50_000),
-  };
-
-  const mockUserService = {
-    listUsers: vi.fn(async (page = 1) => ({
-      users: [
-        {
-          telegramId: 55555,
-          username: 'testuser',
-          firstName: 'User',
-          lastName: null,
-          balance: 50_000,
-          totalSpend: 100_000,
-          activeSubscriptionCount: 1,
-          createdAt: new Date(),
-        },
-      ],
-      total: 1,
-      page,
-      totalPages: 1,
-    })),
-    searchProfiles: vi.fn(async () => [
-      {
-        telegramId: 55555,
-        username: 'testuser',
-        firstName: 'User',
-        lastName: null,
-        balance: 50_000,
-        totalSpend: 100_000,
-        activeSubscriptionCount: 1,
-        createdAt: new Date(),
-      },
-    ]),
-    getUserReportSummary: vi.fn(async (telegramId: number) => {
-      if (telegramId !== 55555) return null;
-      return {
-        user: {
-          telegramId: 55555,
-          username: 'testuser',
-          firstName: 'User',
-          lastName: null,
-          balance: 50_000,
-          totalSpend: 100_000,
-          activeSubscriptionCount: 1,
-          createdAt: new Date(),
-        },
-        totalDeposit: 150_000,
-        totalSpend: 100_000,
-        totalRefund: 0,
-        totalCashback: 5_000,
-        totalReferralBonus: 0,
-        totalLuckyWheel: 0,
-        totalTransactions: 3,
-        activeConfigsCount: 1,
-        totalConfigsCount: 1,
-        totalOrdersCount: 1,
-        receiptsApprovedCount: 1,
-        receiptsRejectedCount: 0,
-        receiptsPendingCount: 0,
-        totalReceiptsCount: 1,
-        auditEventsCount: 2,
-      };
-    }),
-    listOrdersForUser: vi.fn(async () => ({ orders: [], total: 0, totalPages: 1, page: 1 })),
-    listReceiptsForUser: vi.fn(async () => ({ receipts: [], total: 0, totalPages: 1, page: 1 })),
-    listTransactionsForUser: vi.fn(async () => ({
-      transactions: [],
-      total: 0,
-      totalPages: 1,
-      page: 1,
-    })),
-    setBanned: vi.fn(async () => true),
-    recordAdminAction: vi.fn(async () => {}),
-    getLocale: vi.fn(async (telegramId: number) => (telegramId === 55555 ? 'en' : undefined)),
-    updateLocale: vi.fn(async () => {}),
-  };
-
-  const mockConfigStore: Record<string, string> = {
-    receipt_notify_enabled: 'true',
-    receipt_notify_mode: 'full',
-    receipt_notify_admins: '',
-  };
-
-  const mockTranslationService = {
-    getDefaultLocale: vi.fn(() => 'fa' as const),
-    getSetting: vi.fn((key: string, defaultValue?: string) => mockConfigStore[key] ?? defaultValue),
-    getSettingBool: vi.fn((key: string, defaultValue = false) => {
-      if (key in mockConfigStore) return mockConfigStore[key] === 'true';
-      if (key === 'language_selection_enabled') return true;
-      return defaultValue;
-    }),
-    updateSetting: vi.fn(async (key: string, value: string) => {
-      mockConfigStore[key] = value;
-    }),
-    updateSettings: vi.fn(async () => {}),
-  };
-
-  const mockPricingService = {
-    getPackages: vi.fn(() => [{ id: 'pkg_1' }]),
-    getCustomVolumeTarget: vi.fn(() => ({ panelId: 'panel_1', serviceId: 1 })),
-  };
-
-  const mockPanelRegistry = {
-    healthSummary: vi.fn(async () => ({ configured: 2, healthy: 2 })),
-    getPanel: vi.fn((id: string) => ({
-      id,
-      name: id === 'panel_1' ? 'Main Germany Panel' : 'Secondary Panel',
-      baseUrl: 'https://panel.example.com',
-      enabled: true,
-      isDefault: id === 'panel_1',
-      credentialConfigured: true,
-      credentialMode: 'api_key' as const,
-      services: [{ serviceId: 1, name: 'V2Ray Service', isDefault: true }],
-    })),
-    listPanels: vi.fn(() => [
-      {
-        id: 'panel_1',
-        name: 'Main Germany Panel',
-        baseUrl: 'https://panel.example.com',
-        enabled: true,
-        isDefault: true,
-        credentialConfigured: true,
-        credentialMode: 'api_key' as const,
-        services: [{ serviceId: 1, name: 'V2Ray Service', isDefault: true }],
-      },
-      {
-        id: 'panel_2',
-        name: 'Secondary Panel',
-        baseUrl: 'https://panel2.example.com',
-        enabled: true,
-        isDefault: false,
-        credentialConfigured: true,
-        credentialMode: 'api_key' as const,
-        services: [{ serviceId: 1, name: 'Primary Service', isDefault: true }],
-      },
-    ]),
-    getPanelUsage: vi.fn(async () => ({ activeConfigsCount: 5 })),
-    getService: vi.fn(() => ({ checkHealth: vi.fn(async () => true) })),
-    testConnection: vi.fn(async () => ({ ok: true, latencyMs: 25 })),
-    createPanel: vi.fn(
-      async (input: {
-        name: string;
-        baseUrl: string;
-        apiKey?: string;
-        serviceId?: number;
-        serviceName?: string;
-      }) => ({
-        id: 'panel_new',
-        name: input.name,
-        baseUrl: input.baseUrl,
-        enabled: true,
-        isDefault: false,
-        credentialConfigured: Boolean(input.apiKey),
-        credentialMode: input.apiKey ? ('api_key' as const) : ('none' as const),
-        services: [
-          {
-            serviceId: input.serviceId || 1,
-            name: input.serviceName || 'Default',
-            isDefault: true,
-          },
-        ],
-      })
-    ),
-    updatePanel: vi.fn(async () => {}),
-    setPanelEnabled: vi.fn(async () => {}),
-    setDefaultPanel: vi.fn(async () => {}),
-    deletePanel: vi.fn(async () => {}),
-    addService: vi.fn(async () => {}),
-    setDefaultService: vi.fn(async () => {}),
-    deleteService: vi.fn(async () => {}),
-    resolveTarget: vi.fn(async () => ({ panelId: 'panel_1', serviceId: 1 })),
-  };
-
-  const mockConfigService = {
-    listConfigsForOwner: vi.fn(async () => [
-      {
-        id: 'uc_101',
-        panelId: 'panel_1',
-        serviceId: 1,
-        configUsername: 'cfg_test',
-        subUrl: 'https://sub.example.com/token',
-        panelStatus: 'active',
-        panelDataLimit: 50 * 1024 * 1024 * 1024,
-        panelUsedTraffic: 10 * 1024 * 1024 * 1024,
-        panelExpire: Math.floor(Date.now() / 1000) + 86400 * 30,
-        autoRenewEnabled: false,
-        isClaimed: true,
-        createdAt: new Date(),
-      },
-    ]),
-    isOwnedBy: vi.fn(async () => true),
-    toggleConfig: vi.fn(async () => 'disabled'),
-    resetUsage: vi.fn(async () => {}),
-    revokeSubscription: vi.fn(async () => 'https://sub.example.com/new-token'),
-    getOwnedConfigByUsername: vi.fn(async () => ({
-      id: 'uc_101',
-      panelId: 'panel_1',
-      configUsername: 'cfg_test',
-    })),
-    getRemoteConfigDetail: vi.fn(async () => ({
-      username: 'cfg_test',
-      status: 'active',
-      data_limit: 50 * 1024 * 1024 * 1024,
-      used_traffic: 10 * 1024 * 1024 * 1024,
-      expire: Math.floor(Date.now() / 1000) + 86400 * 30,
-    })),
-  };
-
-  const mockConfig = {
-    NODE_ENV: 'test',
-    BOT_TOKEN: '123456:test_token',
-    ADMIN_IDS: [12345],
-    DATABASE_URL: 'postgres://localhost/test',
-    DATABASE_POOL_SIZE: 10,
-    HEALTH_CHECK_PORT: 3001,
-    DEFAULT_LOCALE: 'fa',
-    INSTANCE_NAME: 'test',
-    BOT_DELIVERY_MODE: 'polling',
-    WEBHOOK_PORT: 3000,
-    WEBHOOK_HOST: '0.0.0.0',
-    WEBHOOK_PATH: '/webhook',
-    REBECCA_SERVICE_ID: 1,
-    REBECCA_ADMIN_USERNAME: 'admin',
-    WEBAPP_URL: 'https://app.example.com',
-    WEBAPP_PORT: 3002,
-    WEBAPP_HOST: '0.0.0.0',
-    ADMIN_SESSION_SECRET: 'test_session_secret_at_least_32_characters_long!!',
-  } as unknown as Config;
-
-  const mockConfigurationService = {
-    get: vi.fn(async (key: string) => mockConfigStore[key] ?? null),
-    set: vi.fn(async (key: string, value: string) => {
-      mockConfigStore[key] = value;
-    }),
-  };
-
-  const mockServices = {
-    adminService: mockAdminService,
-    walletService: mockWalletService,
-    userService: mockUserService,
-    configService: mockConfigService,
-    configurationService: mockConfigurationService,
-    pricingService: mockPricingService,
-    translationService: mockTranslationService,
-    panelRegistry: mockPanelRegistry,
-  } as unknown as BotServices;
+  const {
+    mockServices,
+    mockAdminService,
+    mockWalletService,
+    mockUserService,
+    mockConfigService,
+    mockTranslationService,
+    mockPanelRegistry,
+  } = createMockAdminServices();
+  const mockConfig = createTestConfig();
 
   beforeEach(async () => {
     app = await createWebAppServer(mockConfig, mockServices);
   });
 
   afterEach(async () => {
+    vi.unstubAllGlobals();
     if (app) await app.close();
   });
 
@@ -765,162 +448,6 @@ describe('WebApp Server & Admin Routes', () => {
     });
   });
 
-  describe('Auth Endpoint (POST /api/auth/telegram-validate)', () => {
-    function createSignedInitData(userId: number): string {
-      const now = Math.floor(Date.now() / 1000);
-      const fields: Record<string, string> = {
-        auth_date: String(now),
-        user: JSON.stringify({ id: userId, first_name: 'Test' }),
-      };
-      const secretKey = crypto
-        .createHmac('sha256', 'WebAppData')
-        .update(mockConfig.BOT_TOKEN)
-        .digest();
-      const sortedKeys = Object.keys(fields).sort();
-      const dataCheckString = sortedKeys.map((k) => `${k}=${fields[k]}`).join('\n');
-      const hash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-      const params = new URLSearchParams(fields);
-      params.set('hash', hash);
-      return params.toString();
-    }
-
-    it('authenticates admin user, sets session cookie, and returns Bearer token', async () => {
-      const initData = createSignedInitData(12345);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/auth/telegram-validate',
-        payload: { initData },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = response.json();
-      expect(body.role).toBe('admin');
-      expect(body.user.id).toBe(12345);
-      expect(typeof body.token).toBe('string');
-      expect(body.token.length).toBeGreaterThan(10);
-      expect(response.cookies.some((c) => c.name === 'session')).toBe(true);
-
-      // Bearer token can authenticate requests without cookies
-      const statsResponse = await app.inject({
-        method: 'GET',
-        url: '/api/admin/stats',
-        headers: {
-          authorization: `Bearer ${body.token}`,
-        },
-      });
-      expect(statsResponse.statusCode).toBe(200);
-      expect(statsResponse.json().stats.totalUsers).toBe(100);
-    });
-
-    it('authenticates regular user with user role, returning token, locale and settings', async () => {
-      const initData = createSignedInitData(55555);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/auth/telegram-validate',
-        payload: { initData },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = response.json();
-      expect(body.role).toBe('user');
-      expect(body.user.id).toBe(55555);
-      expect(typeof body.token).toBe('string');
-      expect(body.token.length).toBeGreaterThan(10);
-      expect(body.locale).toBe('en');
-      expect(body.languageSelectionEnabled).toBe(true);
-      expect(response.cookies.some((c) => c.name === 'session')).toBe(true);
-    });
-
-    it('falls back to default locale if user has no stored locale', async () => {
-      const initData = createSignedInitData(99999);
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/auth/telegram-validate',
-        payload: { initData },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = response.json();
-      expect(body.locale).toBe('fa');
-      expect(body.languageSelectionEnabled).toBe(true);
-    });
-
-    it('rejects invalid or tampered initData with 401', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/auth/telegram-validate',
-        payload: { initData: 'auth_date=123&user={}&hash=fakehash' },
-      });
-
-      expect(response.statusCode).toBe(401);
-    });
-  });
-
-  describe('POST /api/user/locale', () => {
-    it('returns 401 for unauthenticated request', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/user/locale',
-        payload: { locale: 'en' },
-      });
-
-      expect(response.statusCode).toBe(401);
-    });
-
-    it('returns 400 for invalid locale value', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/user/locale',
-        headers: {
-          authorization: `Bearer ${getUserToken()}`,
-        },
-        payload: { locale: 'invalid' },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it('updates user locale when language_selection_enabled is true', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/user/locale',
-        headers: {
-          authorization: `Bearer ${getUserToken()}`,
-        },
-        payload: { locale: 'en' },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = response.json();
-      expect(body.success).toBe(true);
-      expect(body.locale).toBe('en');
-      expect(mockUserService.updateLocale).toHaveBeenCalledWith(55555, 'en');
-    });
-
-    it('returns 403 when language_selection_enabled is false', async () => {
-      mockTranslationService.getSettingBool.mockImplementationOnce((key: string) => {
-        if (key === 'language_selection_enabled') return false;
-        return true;
-      });
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/user/locale',
-        headers: {
-          authorization: `Bearer ${getUserToken()}`,
-        },
-        payload: { locale: 'en' },
-      });
-
-      expect(response.statusCode).toBe(403);
-      const body = response.json();
-      expect(body.error).toContain('disabled');
-    });
-  });
-
   describe('GET /api/admin/panels', () => {
     it('returns enriched panels list with fleetSummary, health and usage', async () => {
       const res = await app.inject({
@@ -1170,41 +697,294 @@ describe('WebApp Server & Admin Routes', () => {
     });
   });
 
-  describe('GET /api/caddy-check (Caddy on-demand TLS validation)', () => {
-    it('returns 400 when domain parameter is missing', async () => {
+  describe('Regression Tests — Photo Proxy, Validation, Batching & Audit Redaction', () => {
+    it('GET /api/admin/receipts/:id/photo securely streams JPEG inline without BOT_TOKEN leak or redirect', async () => {
+      const fetchMock = vi.fn(async (input: string | URL) => {
+        const url = String(input);
+        if (url.includes('/getFile')) {
+          return new Response(
+            JSON.stringify({ ok: true, result: { file_path: 'photos/receipt_1.jpg' } }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]), {
+          status: 200,
+          headers: { 'content-type': 'image/jpeg' },
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
       const res = await app.inject({
         method: 'GET',
-        url: '/api/caddy-check',
-      });
-      expect(res.statusCode).toBe(400);
-    });
-
-    it('returns 200 when domain matches configured webapp url', async () => {
-      mockTranslationService.getSetting.mockImplementationOnce((key: string) => {
-        if (key === 'webapp_url') return 'https://rs.netiva.ir';
-        return undefined;
+        url: '/api/admin/receipts/rec_1001/photo',
+        cookies: { session: getAdminToken() },
       });
 
-      const res = await app.inject({
-        method: 'GET',
-        url: '/api/caddy-check?domain=rs.netiva.ir',
-      });
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ allowed: true, domain: 'rs.netiva.ir' });
+      expect(res.headers.location).toBeUndefined();
+      expect(res.headers['content-type']).toBe('image/jpeg');
+      expect(res.headers['content-disposition']).toBe('inline; filename="receipt-rec_1001.jpg"');
+      expect(res.headers['cache-control']).toBe('private, no-store');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.rawPayload.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+      expect(res.body).not.toContain(TEST_BOT_TOKEN);
+      expect(JSON.stringify(res.headers)).not.toContain(TEST_BOT_TOKEN);
     });
 
-    it('returns 403 when domain is unauthorized', async () => {
-      mockTranslationService.getSetting.mockImplementationOnce((key: string) => {
-        if (key === 'webapp_url') return 'https://rs.netiva.ir';
-        return undefined;
+    it('GET /api/admin/receipts/:id/photo?download=1 sets attachment disposition and returns 502 on upstream failure', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string | URL) => {
+          if (String(input).includes('/getFile')) {
+            return new Response(
+              JSON.stringify({ ok: true, result: { file_path: 'photos/receipt_2.png' } }),
+              { status: 200, headers: { 'content-type': 'application/json' } }
+            );
+          }
+          return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+          });
+        })
+      );
+
+      const downloadRes = await app.inject({
+        method: 'GET',
+        url: '/api/admin/receipts/rec_1001/photo?download=1',
+        cookies: { session: getAdminToken() },
+      });
+      expect(downloadRes.statusCode).toBe(200);
+      expect(downloadRes.headers['content-type']).toBe('image/png');
+      expect(downloadRes.headers['content-disposition']).toBe(
+        'attachment; filename="receipt-rec_1001.jpg"'
+      );
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('Upstream Error', { status: 500 }))
+      );
+      const errorRes = await app.inject({
+        method: 'GET',
+        url: '/api/admin/receipts/rec_1001/photo',
+        cookies: { session: getAdminToken() },
+      });
+      expect(errorRes.statusCode).toBe(502);
+    });
+
+    it('POST /api/admin/receipts/batch-action deduplicates IDs and rejects > 100 unique IDs', async () => {
+      mockWalletService.approveTopup.mockClear();
+
+      const dedupRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/receipts/batch-action',
+        cookies: { session: getAdminToken() },
+        payload: { action: 'approve', ids: [' rec_1001 ', 'rec_1001', '   '] },
+      });
+      expect(dedupRes.statusCode).toBe(200);
+      expect(dedupRes.json().approvedCount).toBe(1);
+      expect(mockWalletService.approveTopup).toHaveBeenCalledTimes(1);
+
+      const tooManyIds = Array.from({ length: 101 }, (_, idx) => `rec_${idx + 1}`);
+      const capRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/receipts/batch-action',
+        cookies: { session: getAdminToken() },
+        payload: { action: 'approve', ids: tooManyIds },
+      });
+      expect(capRes.statusCode).toBe(400);
+      expect(capRes.json().error).toContain('100');
+    });
+
+    it('POST /api/admin/receipts/:id/action returns 404 on USER_NOT_FOUND reject and tolerates notification failures', async () => {
+      mockWalletService.rejectTopup.mockRejectedValueOnce(new Error('USER_NOT_FOUND'));
+      const missingUserRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/receipts/rec_1001/action',
+        cookies: { session: getAdminToken() },
+        payload: { action: 'reject', reason: 'Blurry image' },
+      });
+      expect(missingUserRes.statusCode).toBe(404);
+      expect(missingUserRes.json().error).toBe('Receipt owner not found');
+
+      (mockTranslationService as unknown as { t?: (k: string) => string }).t = vi.fn(
+        (k: string) => k
+      );
+      (mockServices as unknown as { botApi?: unknown }).botApi = {
+        sendMessage: vi.fn().mockRejectedValueOnce(new Error('Telegram timeout')),
+      };
+      try {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/admin/receipts/rec_1001/action',
+          cookies: { session: getAdminToken() },
+          payload: { action: 'reject', reason: 'Blurry image' },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ success: true });
+      } finally {
+        (mockServices as unknown as { botApi?: unknown }).botApi = undefined;
+      }
+    });
+
+    it('GET /api/admin/users expands search cap for filters/sorts/pages and guards invalid pagination', async () => {
+      mockUserService.searchProfiles.mockResolvedValueOnce([
+        {
+          telegramId: 111,
+          username: 'alpha_inactive',
+          firstName: 'A',
+          lastName: null,
+          balance: 100_000,
+          totalSpend: 10_000,
+          activeSubscriptionCount: 0,
+          createdAt: new Date(),
+        },
+        {
+          telegramId: 222,
+          username: 'beta_low',
+          firstName: 'B',
+          lastName: null,
+          balance: 20_000,
+          totalSpend: 50_000,
+          activeSubscriptionCount: 2,
+          createdAt: new Date(),
+        },
+        {
+          telegramId: 333,
+          username: 'gamma_high',
+          firstName: 'C',
+          lastName: null,
+          balance: 900_000,
+          totalSpend: 500_000,
+          activeSubscriptionCount: 1,
+          createdAt: new Date(),
+        },
+      ]);
+
+      const filteredRes = await app.inject({
+        method: 'GET',
+        url: '/api/admin/users?search=test&filter=active_subs&sort=balance_desc&page=2&limit=1',
+        cookies: { session: getAdminToken() },
       });
 
-      const res = await app.inject({
-        method: 'GET',
-        url: '/api/caddy-check?domain=malicious.com',
+      expect(filteredRes.statusCode).toBe(200);
+      expect(mockUserService.searchProfiles).toHaveBeenCalledWith('test', 200);
+      expect(filteredRes.json()).toMatchObject({
+        total: 2,
+        page: 2,
+        totalPages: 2,
       });
-      expect(res.statusCode).toBe(403);
-      expect(res.json()).toEqual({ allowed: false, domain: 'malicious.com' });
+      expect(filteredRes.json().users[0].telegramId).toBe(222);
+
+      mockUserService.listUsers.mockClear();
+      const clampedRes = await app.inject({
+        method: 'GET',
+        url: '/api/admin/users?page=0&limit=-5',
+        cookies: { session: getAdminToken() },
+      });
+      expect(clampedRes.statusCode).toBe(200);
+      expect(mockUserService.listUsers).toHaveBeenCalledWith(1, 10, {
+        filter: undefined,
+        sort: undefined,
+      });
+    });
+
+    it('rejects non-positive/invalid :id (400) and maps RebeccaOriginDownError (503) on user config endpoints', async () => {
+      const actions = ['toggle', 'reset-usage', 'revoke', 'sync'] as const;
+
+      for (const action of actions) {
+        const badIdRes = await app.inject({
+          method: 'POST',
+          url: `/api/admin/users/0/configs/cfg_test/${action}`,
+          cookies: { session: getAdminToken() },
+          payload: { panelId: 'panel_1' },
+        });
+        expect(badIdRes.statusCode).toBe(400);
+        expect(badIdRes.json().error).toBe('Invalid user ID');
+      }
+
+      mockConfigService.toggleConfig.mockRejectedValueOnce(new RebeccaOriginDownError('down'));
+      mockConfigService.resetUsage.mockRejectedValueOnce(new RebeccaOriginDownError('down'));
+      mockConfigService.revokeSubscription.mockRejectedValueOnce(
+        new RebeccaOriginDownError('down')
+      );
+      mockConfigService.getRemoteConfigDetail.mockRejectedValueOnce(
+        new RebeccaOriginDownError('down')
+      );
+
+      for (const action of actions) {
+        const downRes = await app.inject({
+          method: 'POST',
+          url: `/api/admin/users/55555/configs/cfg_test/${action}`,
+          cookies: { session: getAdminToken() },
+          payload: { panelId: 'panel_1' },
+        });
+        expect(downRes.statusCode).toBe(503);
+        expect(downRes.json().code).toBe('PANEL_DOWN');
+      }
+    });
+
+    it('validates panel POST fields and redacts apiKey in PATCH audit logs', async () => {
+      const zeroServiceRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels',
+        headers: { authorization: `Bearer ${getAdminToken()}` },
+        payload: {
+          name: 'Panel A',
+          baseUrl: 'https://panel-a.example.com',
+          serviceId: 0,
+        },
+      });
+      expect(zeroServiceRes.statusCode).toBe(400);
+
+      const nonStringKeyRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/panels',
+        headers: { authorization: `Bearer ${getAdminToken()}` },
+        payload: {
+          name: 'Panel A',
+          baseUrl: 'https://panel-a.example.com',
+          apiKey: { secret: true },
+        },
+      });
+      expect(nonStringKeyRes.statusCode).toBe(400);
+
+      const badPatchKeyRes = await app.inject({
+        method: 'PATCH',
+        url: '/api/admin/panels/panel_1',
+        headers: { authorization: `Bearer ${getAdminToken()}` },
+        payload: { apiKey: 12345 },
+      });
+      expect(badPatchKeyRes.statusCode).toBe(400);
+
+      mockUserService.recordAdminAction.mockClear();
+      const secretPatchRes = await app.inject({
+        method: 'PATCH',
+        url: '/api/admin/panels/panel_1',
+        headers: { authorization: `Bearer ${getAdminToken()}` },
+        payload: { apiKey: 'super-secret-value' },
+      });
+      expect(secretPatchRes.statusCode).toBe(200);
+      expect(mockUserService.recordAdminAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'admin_update_panel',
+          metadata: expect.objectContaining({ apiKey: '[REDACTED]' }),
+        })
+      );
+
+      mockUserService.recordAdminAction.mockClear();
+      const clearedPatchRes = await app.inject({
+        method: 'PATCH',
+        url: '/api/admin/panels/panel_1',
+        headers: { authorization: `Bearer ${getAdminToken()}` },
+        payload: { apiKey: null },
+      });
+      expect(clearedPatchRes.statusCode).toBe(200);
+      expect(mockUserService.recordAdminAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'admin_update_panel',
+          metadata: expect.objectContaining({ apiKey: '[CLEARED]' }),
+        })
+      );
     });
   });
 });

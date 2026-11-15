@@ -101,6 +101,14 @@ for (const absolutePath of sourceFiles) {
     failures.push(`${relativePath} accesses database infrastructure instead of a domain service.`);
   }
   if (
+    relativePath.startsWith('src/domain/') &&
+    /\bfrom\s+['"](?:[^'"]*telegram\/|grammy(?:\/[^'"]*)?['"])/.test(source)
+  ) {
+    failures.push(
+      `${relativePath} depends on Telegram/grammY transport directly; inject transport adapters from src/index.ts instead.`
+    );
+  }
+  if (
     relativePath.startsWith('src/telegram/') &&
     /\bpanelRegistry\s*\.\s*getService\s*\(/.test(source)
   ) {

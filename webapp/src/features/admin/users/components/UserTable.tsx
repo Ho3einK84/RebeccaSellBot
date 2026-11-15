@@ -72,7 +72,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                 </td>
                 <td className={`py-3 px-4 font-medium ${textPrimary}`}>
                   <div className="flex items-center gap-2">
-                    <span>{[u.firstName, u.lastName].filter(Boolean).join('') || '—'}</span>
+                    <span>{[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}</span>
                     {u.isBanned && (
                       <Badge variant="error" className="text-[10px] shrink-0">
                         {t('admin.users.bannedBadge')}
@@ -81,8 +81,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                   </div>
                 </td>
                 <td className={`py-3 px-4 font-bold tnum text-ok`}>
-                  {formatMoney(u.balance)}
-                  {''}
+                  {formatMoney(u.balance)}{' '}
                   <span className="text-[10px] font-normal text-ink-muted">
                     {t('common.currency')}
                   </span>

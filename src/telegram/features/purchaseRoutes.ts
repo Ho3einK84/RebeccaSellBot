@@ -145,10 +145,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       },
     });
     try {
-      await renderScreen(ctx, successText, { parse_mode: 'Markdown' });
-      if (ctx.callbackQuery?.message) {
-        rememberArtifactMessage(ctx.session, ctx.callbackQuery.message.message_id);
-      }
+      await renderScreen(ctx, successText, { parse_mode: 'Markdown', role: 'artifact' });
     } catch (err) {
       logger.warn(
         { errorName: err instanceof Error ? err.name : typeof err, checkoutId: checkout.id },

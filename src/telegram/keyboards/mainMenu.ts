@@ -222,7 +222,7 @@ function buildPurchaseCheckoutScreen(
           {
             emoji: '💳',
             label: t(ctx, 'checkout_unit_price_label'),
-            value: `${localizedNumber(Math.round(amount / pkg.gbAmount), ctx)} ${t(ctx, 'currency_toman')}`,
+            value: `${localizedNumber(pkg.gbAmount > 0 ? Math.round(amount / pkg.gbAmount) : amount, ctx)} ${t(ctx, 'currency_toman')}`,
           },
         ],
       },
@@ -370,7 +370,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         ),
         ctx.services.referralService.getReferralStats(telegramId),
       ]);
-      const botUsername = ctx.me?.username ?? 'RebeccaSellBot';
+      const botUsername = ctx.services?.botUsername ?? ctx.me?.username ?? 'RebeccaSellBot';
       const refLink = `https://t.me/${botUsername}?start=${u.referralCode}`;
       const bonus = ctx.services.translationService.getSettingNum('referral_bonus_toman', 10_000);
       const cashbackPercent = ctx.services.translationService.getSettingNum('cashback_percent', 0);
@@ -389,7 +389,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           primary: {
             emoji: '🔗',
             label: t(ctx, 'referral_link_label'),
-            value: `\`${refLink}\``,
+            value: `\`${sanitizeTelegramInlineCode(refLink)}\``,
           },
           sections: [
             {
@@ -677,7 +677,10 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           (c) => t(c, 'shop_all_categories_button'),
           async (c) => {
             c.session.activeShopCategory = undefined;
-            await renderScreen(c, await renderShopMenuText(c), { parse_mode: 'Markdown' });
+            await renderScreen(c, await renderShopMenuText(c), {
+              parse_mode: 'Markdown',
+              reply_markup: shopMenu,
+            });
           }
         )
         .row();
@@ -689,7 +692,10 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
         range
           .text(label, async (c) => {
             c.session.activeShopCategory = cat.id;
-            await renderScreen(c, await renderShopMenuText(c), { parse_mode: 'Markdown' });
+            await renderScreen(c, await renderShopMenuText(c), {
+              parse_mode: 'Markdown',
+              reply_markup: shopMenu,
+            });
           })
           .row();
       }
@@ -729,7 +735,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           (c) => `${t(c, 'shop_clear_promo_button')} (${c.session.pendingPromo?.code})`,
           async (c) => {
             delete c.session.pendingPromo;
-            await c.answerCallbackQuery({ text: t(c, 'promo_no_longer_usable') });
+            await c.answerCallbackQuery({ text: t(c, 'button_refreshed') });
             await renderScreen(c, await renderShopMenuText(c), {
               parse_mode: 'Markdown',
               reply_markup: shopMenu,
@@ -835,7 +841,7 @@ export async function renderWalletStatementScreen(
       const icon = typeIcon(tx.type, tx.amount);
       const sign = tx.amount > 0 ? '+' : '';
       const typeKey = TRANSACTION_TYPE_MAP[tx.type];
-      const typeLabel = typeKey ? t(ctx, typeKey) : tx.type;
+      const typeLabel = typeKey ? t(ctx, typeKey) : escapeTelegramMarkdown(tx.type);
       return {
         emoji: icon,
         title: `${typeLabel} · ${localizedDate(new Date(tx.createdAt), ctx)}`,

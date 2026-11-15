@@ -1,5 +1,17 @@
 import { toPersianDigits } from './formatters.js';
 
+export type TransactionTypeTranslationKey =
+  | 'user.wallet.typeRenewal'
+  | 'user.wallet.typePurchase'
+  | 'user.wallet.typeTopup'
+  | 'user.wallet.typeRefund'
+  | 'user.wallet.typeCashback'
+  | 'user.wallet.typeReferral'
+  | 'user.wallet.typeAdminAdjustment'
+  | 'user.wallet.typeTransferSent'
+  | 'user.wallet.typeTransferReceived'
+  | 'user.wallet.typeOther';
+
 /**
  * Returns a human-friendly title for a transaction type.
  * Accurately detects renewal purchases vs new config purchases.
@@ -7,7 +19,7 @@ import { toPersianDigits } from './formatters.js';
 export function getTransactionTypeLabel(
   type: string,
   description: string = '',
-  t: (key: string) => string
+  t: (key: TransactionTypeTranslationKey) => string
 ): string {
   const descLower = description.toLowerCase();
   if (type === 'purchase') {

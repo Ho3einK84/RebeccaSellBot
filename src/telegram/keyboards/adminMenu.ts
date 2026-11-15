@@ -172,6 +172,7 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
       await showPromoCenter(ctx);
     }
   )
+  .row()
   .text(
     (ctx) => t(ctx, 'admin_sales_referral_button'),
     async (ctx) => {
@@ -286,11 +287,12 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
         latency: Math.max(0, Math.round(performance.now() - databaseStartedAt)),
       }));
       const panelStartedAt = performance.now();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
       const panelPromise = Promise.race([
         ctx.services.panelRegistry.healthSummary(),
-        new Promise<{ configured: number; healthy: number }>((_, reject) =>
-          setTimeout(() => reject(new Error('HEALTH_CHECK_TIMEOUT')), 4_000)
-        ),
+        new Promise<{ configured: number; healthy: number }>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('HEALTH_CHECK_TIMEOUT')), 4_000);
+        }),
       ])
         .then(({ configured, healthy }) => ({
           healthy: configured > 0 && healthy === configured,
@@ -301,7 +303,10 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
           healthy: false,
           configured: 0,
           latency: Math.max(0, Math.round(performance.now() - panelStartedAt)),
-        }));
+        }))
+        .finally(() => {
+          if (timeoutId !== undefined) clearTimeout(timeoutId);
+        });
       const [{ stats, latency: databaseLatency }, panel] = await Promise.all([
         statsPromise,
         panelPromise,

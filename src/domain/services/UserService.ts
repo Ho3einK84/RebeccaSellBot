@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { getDb } from '../../infra/db.js';
 import {
@@ -80,7 +80,8 @@ export class UserService {
     const query = cleanUserSearchQuery(rawQuery);
     if (!query) return null;
     const parsedTelegramId = /^\d+$/.test(query) ? Number(query) : Number.NaN;
-    const telegramId = Number.isSafeInteger(parsedTelegramId) ? parsedTelegramId : null;
+    const telegramId =
+      Number.isSafeInteger(parsedTelegramId) && parsedTelegramId > 0 ? parsedTelegramId : null;
     const normalizedUuid = isUuid(query) ? query.toLowerCase() : undefined;
 
     // 1. Direct search on users table by ID, UUID, or exact username
@@ -343,8 +344,85 @@ export class UserService {
     if (candidateIds.length === 0) return [];
 
     const selectedIds = candidateIds.slice(0, limit);
-    const enrichedList = await Promise.all(selectedIds.map((id) => this.findProfile(String(id))));
-    return enrichedList.filter((p): p is LocalUserProfile => p !== null);
+    return this.loadProfilesByIds(selectedIds);
+  }
+
+  private async loadProfilesByIds(telegramIds: number[]): Promise<LocalUserProfile[]> {
+    if (telegramIds.length === 0) return [];
+    if (telegramIds.length === 1) {
+      const single = await this.findProfile(String(telegramIds[0]));
+      return single ? [single] : [];
+    }
+
+    const db = getDb();
+    const [userRows, txCounts, refCounts, refBonusSums, cashbackSums] = await Promise.all([
+      db.select().from(users).where(inArray(users.telegramId, telegramIds)),
+      db
+        .select({
+          telegramId: walletTransactions.telegramId,
+          value: sql<number>`COUNT(*)`,
+        })
+        .from(walletTransactions)
+        .where(inArray(walletTransactions.telegramId, telegramIds))
+        .groupBy(walletTransactions.telegramId),
+      db
+        .select({
+          referrerId: users.referrerId,
+          value: sql<number>`COUNT(*)`,
+        })
+        .from(users)
+        .where(inArray(users.referrerId, telegramIds))
+        .groupBy(users.referrerId),
+      db
+        .select({
+          telegramId: walletTransactions.telegramId,
+          value: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)`,
+        })
+        .from(walletTransactions)
+        .where(
+          and(
+            inArray(walletTransactions.telegramId, telegramIds),
+            eq(walletTransactions.type, 'referral_bonus')
+          )
+        )
+        .groupBy(walletTransactions.telegramId),
+      db
+        .select({
+          telegramId: walletTransactions.telegramId,
+          value: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)`,
+        })
+        .from(walletTransactions)
+        .where(
+          and(
+            inArray(walletTransactions.telegramId, telegramIds),
+            eq(walletTransactions.type, 'cashback')
+          )
+        )
+        .groupBy(walletTransactions.telegramId),
+    ]);
+
+    const userById = new Map(userRows.map((u) => [u.telegramId, u]));
+    const txMap = new Map(txCounts.map((r) => [r.telegramId, r.value]));
+    const refMap = new Map(refCounts.map((r) => [r.referrerId, r.value]));
+    const bonusMap = new Map(refBonusSums.map((r) => [r.telegramId, r.value]));
+    const cashbackMap = new Map(cashbackSums.map((r) => [r.telegramId, r.value]));
+
+    const profiles: LocalUserProfile[] = [];
+    for (const id of telegramIds) {
+      const user = userById.get(id);
+      if (!user) continue;
+      profiles.push({
+        ...user,
+        transactionCount: dbIntegerToSafeNumber(txMap.get(id) ?? 0, 'profile_transaction_count'),
+        referredUserCount: dbIntegerToSafeNumber(
+          refMap.get(id) ?? 0,
+          'profile_referred_user_count'
+        ),
+        referralBonusEarned: dbIntegerToSafeNumber(bonusMap.get(id) ?? 0, 'profile_referral_bonus'),
+        cashbackEarned: dbIntegerToSafeNumber(cashbackMap.get(id) ?? 0, 'profile_cashback'),
+      });
+    }
+    return profiles;
   }
 
   async setBanned(
@@ -386,6 +464,7 @@ export class UserService {
     targetTelegramId?: number;
     metadata?: Record<string, unknown>;
   }): Promise<void> {
+    const safeMetadata = params.metadata ? redactSensitiveMetadata(params.metadata) : null;
     await getDb()
       .insert(auditLogs)
       .values({
@@ -395,7 +474,7 @@ export class UserService {
         entityType: params.entityType.slice(0, 100),
         entityId: params.entityId.slice(0, 200),
         targetTelegramId: params.targetTelegramId,
-        metadata: params.metadata ? JSON.stringify(params.metadata).slice(0, 4_000) : null,
+        metadata: safeMetadata ? JSON.stringify(safeMetadata).slice(0, 4_000) : null,
       });
   }
 
@@ -522,20 +601,20 @@ export class UserService {
     page: number;
   }> {
     const db = getDb();
+    const safePageSize = clampPageSize(pageSize, 5);
     const [countRes] = await db
       .select({ count: count() })
       .from(auditLogs)
       .where(eq(auditLogs.targetTelegramId, telegramId));
     const total = Number(countRes?.count ?? 0);
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const { safePage, totalPages } = resolvePageBounds(page, safePageSize, total);
     const rows = await db
       .select()
       .from(auditLogs)
       .where(eq(auditLogs.targetTelegramId, telegramId))
       .orderBy(desc(auditLogs.createdAt))
-      .limit(pageSize)
-      .offset((safePage - 1) * pageSize);
+      .limit(safePageSize)
+      .offset((safePage - 1) * safePageSize);
     return { logs: rows, total, totalPages, page: safePage };
   }
 
@@ -550,20 +629,20 @@ export class UserService {
     page: number;
   }> {
     const db = getDb();
+    const safePageSize = clampPageSize(pageSize, 5);
     const [countRes] = await db
       .select({ count: count() })
       .from(topupReceipts)
       .where(eq(topupReceipts.telegramId, telegramId));
     const total = Number(countRes?.count ?? 0);
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const { safePage, totalPages } = resolvePageBounds(page, safePageSize, total);
     const rows = await db
       .select()
       .from(topupReceipts)
       .where(eq(topupReceipts.telegramId, telegramId))
       .orderBy(desc(topupReceipts.createdAt))
-      .limit(pageSize)
-      .offset((safePage - 1) * pageSize);
+      .limit(safePageSize)
+      .offset((safePage - 1) * safePageSize);
     return { receipts: rows, total, totalPages, page: safePage };
   }
 
@@ -578,20 +657,20 @@ export class UserService {
     page: number;
   }> {
     const db = getDb();
+    const safePageSize = clampPageSize(pageSize, 5);
     const [countRes] = await db
       .select({ count: count() })
       .from(purchaseIntents)
       .where(eq(purchaseIntents.telegramId, telegramId));
     const total = Number(countRes?.count ?? 0);
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const { safePage, totalPages } = resolvePageBounds(page, safePageSize, total);
     const rows = await db
       .select()
       .from(purchaseIntents)
       .where(eq(purchaseIntents.telegramId, telegramId))
       .orderBy(desc(purchaseIntents.createdAt))
-      .limit(pageSize)
-      .offset((safePage - 1) * pageSize);
+      .limit(safePageSize)
+      .offset((safePage - 1) * safePageSize);
     return { orders: rows, total, totalPages, page: safePage };
   }
 
@@ -668,20 +747,20 @@ export class UserService {
     page: number;
   }> {
     const db = getDb();
+    const safePageSize = clampPageSize(pageSize, 15);
     const [countRes] = await db
       .select({ count: count() })
       .from(walletTransactions)
       .where(eq(walletTransactions.telegramId, telegramId));
     const total = Number(countRes?.count ?? 0);
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const safePage = Math.min(Math.max(1, Math.trunc(page)), totalPages);
+    const { safePage, totalPages } = resolvePageBounds(page, safePageSize, total);
     const rows = await db
       .select()
       .from(walletTransactions)
       .where(eq(walletTransactions.telegramId, telegramId))
       .orderBy(desc(walletTransactions.createdAt))
-      .limit(pageSize)
-      .offset((safePage - 1) * pageSize);
+      .limit(safePageSize)
+      .offset((safePage - 1) * safePageSize);
     return { transactions: rows, total, totalPages, page: safePage };
   }
 
@@ -751,6 +830,43 @@ function isUuid(value: string): boolean {
 
 function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/gu, '\\$&');
+}
+
+const SENSITIVE_METADATA_KEY_RE =
+  /(?:api[_-]?key|pass(?:word|phrase)?|secret|token|auth(?:orization)?|cookie|credential)/iu;
+
+function redactSensitiveValue(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveValue(item, depth + 1));
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    result[key] = SENSITIVE_METADATA_KEY_RE.test(key)
+      ? '[REDACTED]'
+      : redactSensitiveValue(nested, depth + 1);
+  }
+  return result;
+}
+
+function redactSensitiveMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  return redactSensitiveValue(metadata) as Record<string, unknown>;
+}
+
+function clampPageSize(pageSize: number, fallback: number): number {
+  const truncated = Math.trunc(pageSize);
+  return Number.isFinite(pageSize) && truncated > 0 ? Math.min(truncated, 50) : fallback;
+}
+
+function resolvePageBounds(
+  page: number,
+  safePageSize: number,
+  total: number
+): { safePage: number; totalPages: number } {
+  const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+  const requestedPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1;
+  return { safePage: Math.min(requestedPage, totalPages), totalPages };
 }
 
 export function cleanUserSearchQuery(rawQuery: string): string {

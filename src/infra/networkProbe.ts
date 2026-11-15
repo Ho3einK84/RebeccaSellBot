@@ -1,3 +1,4 @@
+import { isIPv4 } from 'node:net';
 import { logger } from './logger.js';
 
 let cachedPublicIp: { ip: string; expiresAt: number } | null = null;
@@ -26,6 +27,7 @@ export async function fetchServerPublicIp(): Promise<string | null> {
   if (cachedPublicIp && cachedPublicIp.expiresAt > now) {
     return cachedPublicIp.ip;
   }
+  cachedPublicIp = null;
 
   for (const serviceUrl of PUBLIC_IP_SERVICES) {
     try {
@@ -35,18 +37,19 @@ export async function fetchServerPublicIp(): Promise<string | null> {
       });
       if (res.ok) {
         const text = (await res.text()).trim();
-        // Validate basic IPv4 format
-        if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(text)) {
+        if (isIPv4(text)) {
           cachedPublicIp = { ip: text, expiresAt: now + CACHE_TTL_MS };
           return text;
         }
+      } else {
+        await res.body?.cancel?.().catch(() => {});
       }
     } catch (err) {
       logger.debug({ err, serviceUrl }, 'Failed to fetch public IP from provider');
     }
   }
 
-  return cachedPublicIp?.ip ?? null;
+  return null;
 }
 
 export interface DomainHealthProbeResult {
@@ -71,6 +74,7 @@ export async function probeDomainHealth(
     });
 
     if (!res.ok) {
+      await res.body?.cancel?.().catch(() => {});
       return {
         ok: false,
         status: res.status,
