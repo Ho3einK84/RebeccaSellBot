@@ -9,7 +9,7 @@ interface RevenueGridProps {
   stats: DashboardStats;
 }
 
-/** Revenue / subscription breakdown — same StatCard shell as the overview KPIs. */
+/** Revenue, subscription, and reward breakdown through uniform StatCards. */
 export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber } = useFormatters();
@@ -19,7 +19,6 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
       <StatCard
         label={t('admin.overview.weeklyRevenue')}
         value={formatMoney(stats.weeklyRevenue)}
-        className="col-span-2 lg:col-span-1"
         unit={t('common.currency')}
         hint={t('admin.overview.weeklyRevenueSub')}
         icon={<CalendarDays className="h-4.5 w-4.5" />}
@@ -29,7 +28,6 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
       <StatCard
         label={t('admin.overview.monthlyRevenue')}
         value={formatMoney(stats.monthlyRevenue)}
-        className="col-span-2 lg:col-span-1"
         unit={t('common.currency')}
         hint={t('admin.overview.monthlyRevenueSub')}
         icon={<CalendarRange className="h-4.5 w-4.5" />}
@@ -55,7 +53,6 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
       <StatCard
         label={t('admin.overview.referralBonus')}
         value={formatMoney(stats.totalReferralBonus)}
-        className="col-span-2 lg:col-span-1"
         unit={t('common.currency')}
         hint={t('admin.overview.referralBonusSub')}
         icon={<Gift className="h-4.5 w-4.5" />}
@@ -65,7 +62,6 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
       <StatCard
         label={t('admin.overview.cashback')}
         value={formatMoney(stats.totalCashback)}
-        className="col-span-2 lg:col-span-1"
         unit={t('common.currency')}
         hint={t('admin.overview.cashbackSub')}
         icon={<Coins className="h-4.5 w-4.5" />}

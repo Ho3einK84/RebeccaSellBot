@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { ShieldX, AlertTriangle, ExternalLink, X } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Button } from '@/shared/components/ui/Button.js';
 
 interface AuthErrorScreenProps {
@@ -10,7 +11,6 @@ interface AuthErrorScreenProps {
 
 export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
   const { t, isRtl } = useLanguage();
-  const { textPrimary, textSecondary } = useThemeTokens();
 
   const handleClose = () => {
     if (window.Telegram?.WebApp?.close) {
@@ -21,96 +21,64 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
   };
 
   const isTelegramOnly = error === 'telegramOnly' || error?.includes('ربات');
-  const message =
-    error === 'telegramOnly'
-      ? t('auth.telegramOnly')
-      : error === 'authFailed'
-        ? t('auth.authFailed')
-        : error || t('auth.authFailed');
-
-  const [botUsername, setBotUsername] = useState<string | null>(null);
+  const displayError = isTelegramOnly
+    ? t('auth.telegramOnly')
+    : error === 'authFailed'
+      ? t('auth.authFailed')
+      : error || t('auth.authFailed');
 
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/auth/bot-info')
-      .then((res) => {
-        if (!res.ok) throw new Error('bot-info unavailable');
-        return res.json();
-      })
-      .then((data: { username: string }) => {
-        if (!cancelled) setBotUsername(data.username);
-      })
-      .catch(() => {
-        if (!cancelled) setBotUsername(null);
-      });
+    const tg = window.Telegram?.WebApp;
+    if (!tg?.BackButton) return;
+    tg.BackButton.show();
+    tg.BackButton.onClick(handleClose);
     return () => {
-      cancelled = true;
+      tg.BackButton?.offClick(handleClose);
+      tg.BackButton?.hide();
     };
   }, []);
 
-  // t.me deep link when we have the username; otherwise open Telegram app generically
+  const botUsername = import.meta.env.VITE_BOT_USERNAME as string | undefined;
   const openInTelegramUrl = botUsername ? `https://t.me/${botUsername}` : 'tg://';
 
   return (
     <div
-      className="fixed inset-0 w-screen"
+      className="fixed inset-0 w-screen flex items-center justify-center p-4 bg-canvas text-ink"
       style={{ height: '100dvh' }}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="flex items-center justify-center w-full h-full p-4">
-        <div
-          className={`p-6 sm:p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border shadow-lg bg-surface/90 border-line/10 shadow-black/40 backdrop-blur-xl shadow-slate-200/60`}
-        >
-          {/* Brand Logo / Shield Icon */}
-          <div
-            className={`w-16 h-16 rounded-2xl flex items-center justify-center border ${
-              isTelegramOnly
-                ? 'bg-brand/10 border-brand/20 text-brand'
-                : 'bg-warn/10 border-warn/20 text-warn'
-            }`}
-          >
-            {isTelegramOnly ? (
-              <ShieldX className="w-8 h-8" />
-            ) : (
-              <AlertTriangle className="w-8 h-8" />
-            )}
-          </div>
+      <Card
+        padding="lg"
+        className="w-full max-w-sm flex flex-col items-center text-center gap-4 anim-rise"
+      >
+        <IconTile tone={isTelegramOnly ? 'warn' : 'danger'} size="lg">
+          {isTelegramOnly ? <AlertTriangle className="w-5 h-5" /> : <ShieldX className="w-5 h-5" />}
+        </IconTile>
 
-          {/* Heading */}
-          <h2 className={`text-lg font-bold tracking-tight ${textPrimary}`}>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold text-ink leading-[1.4] m-0">
             {t('auth.authErrorTitle')}
           </h2>
-
-          {/* Message */}
-          <p className={`text-sm leading-relaxed ${textSecondary}`}>{message}</p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col gap-2.5 w-full mt-1">
-            {/* Primary: Open in Telegram */}
-            <a
-              href={openInTelegramUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`h-11 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 no-underline bg-brand hover:bg-brand text-brand-ink shadow-lg shadow-brand/20 shadow-slate-900/10`}
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>{t('auth.openInTelegram')}</span>
-            </a>
-
-            {/* Secondary: Close Window */}
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="h-11 w-full"
-              onClick={handleClose}
-            >
-              <X className="w-4 h-4" />
-              <span>{t('auth.closeWindow')}</span>
-            </Button>
-          </div>
+          <p className="text-xs text-ink-soft leading-relaxed m-0 max-w-xs">{displayError}</p>
         </div>
-      </div>
+
+        <div className="w-full flex flex-col gap-2 pt-2 border-t border-line">
+          <a
+            href={openInTelegramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-ctl bg-brand hover:bg-brand-hover text-brand-ink text-[13px] font-medium rs-focus press no-underline"
+          >
+            <ExternalLink className="w-4 h-4 shrink-0" />
+            <span>{t('auth.openInTelegram')}</span>
+          </a>
+
+          <Button type="button" variant="secondary" block onClick={handleClose}>
+            <X className="w-4 h-4 shrink-0" />
+            <span>{t('auth.closeWindow')}</span>
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 };

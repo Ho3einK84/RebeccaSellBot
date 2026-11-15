@@ -1,60 +1,51 @@
 import React from 'react';
-import { Sun, Moon, Globe } from 'lucide-react';
+import { Sun, Moon, Globe, Shield } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
-import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { useTheme } from '@/shared/theme/ThemeContext.js';
+import { TopBar } from '@/shared/components/layout/TopBar.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { IconButton } from '@/shared/components/ui/IconButton.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 
 export const UserHeader: React.FC = () => {
   const { t, locale, languageSelectionEnabled, setLocale } = useLanguage();
-  const { isDark, toggleTheme } = useThemeTokens();
-  const { triggerHaptic } = useHaptic();
+  const { isDark, toggleTheme } = useTheme();
 
-  const handleToggleLanguage = () => {
-    triggerHaptic('selection');
-    void setLocale(locale === 'fa' ? 'en' : 'fa');
-  };
-
-  const handleToggleTheme = () => {
-    triggerHaptic('light');
-    toggleTheme();
+  const toggleLanguage = () => {
+    setLocale(locale === 'fa' ? 'en' : 'fa');
   };
 
   return (
-    <header className="w-full max-w-md mx-auto flex items-center justify-between px-4 pt-3.5 pb-1 relative z-10 shrink-0">
-      {/* Online status indicator */}
-      <Badge variant="success" dot pulse size="sm">
-        {t('user.serviceOnlineStatus')}
-      </Badge>
-
-      {/* Right utility buttons: Theme switch & Language */}
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          className={`inline-flex items-center justify-center w-8 h-8 rounded-full border transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 hover:bg-surface/10 text-ink-muted shadow-sm`}
-          onClick={handleToggleTheme}
-          aria-label={t('common.themeToggle')}
-          title={isDark ? t('common.themeLight') : t('common.themeDark')}
-        >
-          {isDark ? (
-            <Sun className="w-4 h-4 text-warn" />
-          ) : (
-            <Moon className="w-4 h-4 text-ink-soft" />
-          )}
-        </button>
-
-        {languageSelectionEnabled && (
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1.5 px-3 py-1 h-8 rounded-full border text-[11px] font-medium transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 hover:bg-surface/10 text-ink-muted shadow-sm`}
-            onClick={handleToggleLanguage}
-            aria-label={t('common.switchLang')}
+    <TopBar
+      icon={
+        <IconTile tone="brand" size="md">
+          <Shield />
+        </IconTile>
+      }
+      title={t('user.userPortalBadge')}
+      badge={
+        <Badge variant="success" size="xs" dot>
+          {t('user.serviceOnlineStatus')}
+        </Badge>
+      }
+      actions={
+        <>
+          <IconButton
+            size="sm"
+            label={t('common.themeToggle')}
+            title={isDark ? t('common.themeLight') : t('common.themeDark')}
+            onClick={toggleTheme}
           >
-            <Globe className="w-3.5 h-3.5 opacity-70" />
-            <span>{t('common.switchLang')}</span>
-          </button>
-        )}
-      </div>
-    </header>
+            {isDark ? <Sun /> : <Moon />}
+          </IconButton>
+
+          {languageSelectionEnabled ? (
+            <IconButton size="sm" label={t('common.switchLang')} onClick={toggleLanguage}>
+              <Globe />
+            </IconButton>
+          ) : null}
+        </>
+      }
+    />
   );
 };

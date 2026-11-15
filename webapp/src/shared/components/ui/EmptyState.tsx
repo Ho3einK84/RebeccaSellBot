@@ -19,17 +19,17 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   className = '',
 }) => (
   <div
-    className={`flex flex-col items-center justify-center text-center gap-2.5 rounded-card border border-dashed border-line px-5 py-9 anim-fade ${className}`}
+    className={`rounded-card border border-line bg-surface p-6 sm:p-8 text-center flex flex-col items-center justify-center gap-2.5 shadow-[var(--shadow-card)] ${className}`}
   >
     {icon ? (
       <IconTile tone={tone} size="lg">
         {icon}
       </IconTile>
     ) : null}
-    <p className="text-sm font-semibold text-ink">{title}</p>
+    <h3 className="text-sm font-semibold text-ink leading-[1.4] m-0 mt-1">{title}</h3>
     {description ? (
-      <p className="text-xs leading-relaxed text-ink-muted max-w-[34ch]">{description}</p>
+      <p className="text-xs text-ink-muted max-w-xs leading-relaxed m-0">{description}</p>
     ) : null}
-    {action ? <div className="mt-1.5">{action}</div> : null}
+    {action ? <div className="mt-2">{action}</div> : null}
   </div>
 );

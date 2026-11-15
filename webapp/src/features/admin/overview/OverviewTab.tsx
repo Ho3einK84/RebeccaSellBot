@@ -2,6 +2,7 @@ import React from 'react';
 import { Clock, Users, TrendingUp, Wallet } from 'lucide-react';
 import { useAdminStats } from './hooks/useAdminStats.js';
 import { HealthBanner } from './components/HealthBanner.js';
+import { OverviewAnalytics } from './components/OverviewAnalytics.js';
 import { RevenueGrid } from './components/RevenueGrid.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -16,13 +17,6 @@ interface OverviewTabProps {
   onSwitchTab: (tab: TabType) => void;
 }
 
-/**
- * Admin overview.
- * KPI cards all go through <StatCard/> so icon slot, value size, label weight and
- * padding never drift between cards again (the previous hand-rolled markup had the
- * health card mirrored, a smaller value font on the first card and two duplicate
- * calendar icons).
- */
 export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
   const { t } = useLanguage();
   const { stats, panelHealth, isLoading, error, refetch } = useAdminStats();
@@ -51,11 +45,11 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
   if (!stats) return null;
 
   return (
-    <div className="space-y-4">
-      {/* Health first: the most urgent signal used to be card #4 of 6. */}
+    <div className="space-y-5 pb-6">
       <HealthBanner panelHealth={panelHealth} onSwitchToPanels={() => onSwitchTab('panels')} />
 
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+      {/* Primary KPI Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label={t('admin.overview.pendingReceipts')}
           value={formatNumber(stats.pendingReceipts)}
@@ -81,7 +75,6 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
           hint={t('admin.overview.totalSalesSub')}
           icon={<TrendingUp className="h-5 w-5" />}
           tone="ok"
-          className="col-span-2 lg:col-span-1"
           index={2}
         />
         <StatCard
@@ -91,14 +84,19 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
           hint={t('admin.overview.dailyRevenueSub')}
           icon={<Wallet className="h-5 w-5" />}
           tone="ok"
-          className="col-span-2 lg:col-span-1"
           index={3}
         />
       </div>
 
-      <SectionHeader title={t('admin.overview.revenueBreakdown')} />
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
-        <RevenueGrid stats={stats} />
+      {/* Live Visual Analytics */}
+      <OverviewAnalytics stats={stats} />
+
+      {/* Granular Metrics Breakdown */}
+      <div className="space-y-3">
+        <SectionHeader title={t('admin.overview.revenueBreakdown')} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <RevenueGrid stats={stats} />
+        </div>
       </div>
     </div>
   );

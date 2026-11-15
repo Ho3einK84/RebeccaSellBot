@@ -1,6 +1,6 @@
 import React, { type ReactNode } from 'react';
 import { Card } from './Card.js';
-import { IconTile, type TileTone } from './IconTile.js';
+import type { TileTone } from './IconTile.js';
 
 interface StatCardProps {
   label: string;
@@ -9,71 +9,82 @@ interface StatCardProps {
   hint?: ReactNode;
   icon?: ReactNode;
   tone?: TileTone;
-  /** Rendered at the far end of the title row (badge, live dot, …). */
+  /** Rendered at the far end of the title row. */
   aside?: ReactNode;
   /** Trailing action rendered at the bottom of the card. */
   action?: ReactNode;
-  /** Stagger index for `anim-stagger` containers. */
-  index?: number;
-  /** Makes the whole card a tappable surface (drill-down to a tab). */
+  /** Optional click handler making the whole stat card interactive. */
   onClick?: () => void;
+  /** Stagger index kept for compatibility. */
+  index?: number;
   className?: string;
 }
 
-const valueTone: Record<TileTone, string> = {
-  brand: 'text-ink',
-  neutral: 'text-ink',
-  ok: 'text-ok',
-  warn: 'text-warn',
-  danger: 'text-danger',
-  info: 'text-info',
+const iconToneClasses: Record<TileTone, string> = {
+  brand: 'text-brand-fg',
+  ok: 'text-ok-fg',
+  warn: 'text-warn-fg',
+  danger: 'text-danger-fg',
+  info: 'text-info-fg',
+  neutral: 'text-ink-muted',
 };
 
-/**
- * The one KPI card used everywhere (admin overview + user dashboard).
- * Fixes the old drift: text column was top-aligned with dead space below,
- * title→value→hint spacing was inconsistent, and the icon floated.
- */
 export const StatCard: React.FC<StatCardProps> = ({
   label,
   value,
   unit,
   hint,
   icon,
-  tone = 'brand',
+  tone = 'neutral',
   aside,
   action,
-  index,
   onClick,
   className = '',
-}) => (
-  <Card
-    interactive={Boolean(onClick)}
-    onClick={onClick}
-    className={`p-4 anim-rise ${className}`}
-    style={index === undefined ? undefined : ({ '--i': index } as React.CSSProperties)}
-  >
-    <div className="flex items-start gap-3">
-      {icon ? <IconTile tone={tone}>{icon}</IconTile> : null}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[13px] font-medium leading-snug text-ink-soft">{label}</span>
-          {aside}
+}) => {
+  const cardNode = (
+    <Card
+      padding="md"
+      interactive={Boolean(onClick)}
+      className={`flex flex-col justify-between gap-2.5 ${onClick ? 'h-full' : ''} ${className}`}
+    >
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {icon ? (
+            <span
+              aria-hidden="true"
+              className={`inline-flex items-center justify-center shrink-0 [&>svg]:w-4 [&>svg]:h-4 ${iconToneClasses[tone]}`}
+            >
+              {icon}
+            </span>
+          ) : null}
+          <span className="truncate text-xs font-medium text-ink-muted">{label}</span>
         </div>
-        <div className="mt-1.5 flex min-w-0 items-baseline gap-1.5">
-          <span
-            className={`min-w-0 truncate text-[24px] leading-none font-bold tnum ${valueTone[tone]}`}
-            title={
-              typeof value === 'string' || typeof value === 'number' ? String(value) : undefined
-            }
-          >
-            {value}
-          </span>
-          {unit ? <span className="shrink-0 pb-0.5 text-[11px] text-ink-muted">{unit}</span> : null}
-        </div>
-        {hint ? <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">{hint}</p> : null}
+        {aside ? <div className="shrink-0">{aside}</div> : null}
       </div>
-    </div>
-    {action ? <div className="mt-3">{action}</div> : null}
-  </Card>
-);
+
+      <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
+        <span className="tnum text-xl sm:text-2xl font-semibold text-ink leading-tight">
+          {value}
+        </span>
+        {unit ? <span className="text-xs font-normal text-ink-muted">{unit}</span> : null}
+      </div>
+
+      {hint ? <div className="text-xs text-ink-soft leading-relaxed">{hint}</div> : null}
+      {action ? <div className="pt-1">{action}</div> : null}
+    </Card>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full h-full text-start cursor-pointer press rs-focus rounded-card"
+      >
+        {cardNode}
+      </button>
+    );
+  }
+
+  return cardNode;
+};

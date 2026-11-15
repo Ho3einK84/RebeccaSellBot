@@ -1,14 +1,14 @@
 import React from 'react';
-import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 
 export interface BottomNavItem<T extends string> {
   id: T;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  /** Numeric badge (e.g. pending receipts). */
+  /** Numeric badge (e.g. pending receipts or service count). */
   count?: number;
-  /** Dot badge for "something needs attention" without a count. */
+  /** Dot badge for quiet attention state without a count. */
   dot?: boolean;
 }
 
@@ -17,87 +17,90 @@ interface BottomNavProps<T extends string> {
   activeId: T;
   onSelect: (id: T) => void;
   ariaLabel: string;
-  /** Show on small screens only (default) or always. */
+  /** Optional accent colour override kept subtle for unread counts. */
+  badgeTone?: 'brand' | 'danger';
   className?: string;
 }
 
 /**
- * The single bottom navigation used by the admin panel and the user portal.
- *
- * Fixes the drift the two previous copies had:
- *  - one sliding active pill instead of "pill + filled icon + extra dot";
- *  - badges keep a canvas-coloured ring so they no longer merge into the bar;
- *  - every item is a 52px touch target, evenly sized by the grid;
- *  - safe-area inset is honoured, and the bar's height is matched by
- *    `nav-inset` on the scroll container so content never hides behind it.
+ * Shared fixed bottom bar (`< md`) styled as an opaque instrument dock with
+ * clean top edge rail and zero idle looping dot animations.
  */
 export function BottomNav<T extends string>({
   items,
   activeId,
   onSelect,
   ariaLabel,
+  badgeTone = 'brand',
   className = '',
 }: BottomNavProps<T>) {
+  const { locale } = useLanguage();
   const { formatNumber } = useFormatters();
-  const { triggerHaptic } = useHaptic();
-  const activeIndex = Math.max(
-    0,
-    items.findIndex((item) => item.id === activeId)
-  );
-  const share = 100 / items.length;
+  const badgeBg = badgeTone === 'danger' ? 'bg-danger text-white' : 'bg-brand text-brand-ink';
 
   return (
     <nav
       aria-label={ariaLabel}
-      className={`md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-line bg-canvas/85 backdrop-blur-2xl shadow-[0_-8px_28px_rgba(0,0,0,0.28)] ${className}`}
+      className={`fixed inset-x-0 bottom-0 z-40 md:hidden border-t border-line bg-surface shadow-[var(--shadow-popover)] safe-bottom ${className}`}
     >
-      <div
-        className="relative mx-auto grid max-w-md"
-        style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
-      >
-        {/* sliding active pill */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute top-1.5 h-7 transition-[inset-inline-start] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-          style={{ insetInlineStart: `${activeIndex * share}%`, width: `${share}%` }}
-        >
-          <span className="mx-auto block h-7 w-11 rounded-full bg-brand-soft ring-1 ring-brand/25 anim-pop" />
-        </span>
-
+      <div className="mx-auto grid h-16 max-w-lg grid-flow-col auto-cols-fr items-stretch px-1.5">
         {items.map((item) => {
-          const isActive = item.id === activeId;
           const Icon = item.icon;
+          const active = item.id === activeId;
+          const countStr =
+            item.count !== undefined && item.count > 0
+              ? item.count > 99
+                ? locale === 'fa'
+                  ? '۹۹+'
+                  : '99+'
+                : formatNumber(item.count)
+              : null;
 
           return (
             <button
               key={item.id}
               type="button"
-              aria-label={item.label}
-              aria-current={isActive ? 'page' : undefined}
-              onClick={() => {
-                triggerHaptic('selection');
-                onSelect(item.id);
-              }}
-              className="press relative flex min-h-[52px] w-full min-w-0 flex-col items-center justify-start px-0.5 pt-1.5 pb-[max(env(safe-area-inset-bottom,0px),0.62rem)] cursor-pointer select-none"
+              aria-current={active ? 'page' : undefined}
+              onClick={() => onSelect(item.id)}
+              className={`relative flex flex-col items-center justify-center gap-1 min-w-0 min-h-11 px-1 rs-focus press cursor-pointer select-none ${
+                active ? 'text-brand-fg' : 'text-ink-muted hover:text-ink-soft'
+              }`}
             >
-              <span className="relative flex h-7 w-7 items-center justify-center">
+              {active ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-0 inset-x-4 h-0.5 rounded-b-full bg-brand"
+                />
+              ) : null}
+
+              <span className="relative flex h-7 w-11 items-center justify-center rounded-ctl">
+                {active ? (
+                  <span aria-hidden="true" className="absolute inset-0 rounded-ctl bg-brand-soft" />
+                ) : null}
+
                 <Icon
-                  className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                    isActive ? 'text-brand' : 'text-ink-muted'
+                  className={`relative w-[18px] h-[18px] transition-transform duration-150 ${
+                    active ? 'stroke-[2.2]' : 'stroke-[1.75]'
                   }`}
                 />
-                {item.count !== undefined && item.count > 0 ? (
-                  <span className="absolute -top-1.5 -end-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-brand text-brand-ink font-bold text-[10px] leading-none flex items-center justify-center tnum ring-2 ring-canvas">
-                    {formatNumber(item.count)}
+
+                {countStr !== null ? (
+                  <span
+                    className={`tnum absolute -top-0.5 -end-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none ${badgeBg}`}
+                  >
+                    {countStr}
                   </span>
-                ) : null}
-                {item.dot ? (
-                  <span className="absolute -top-1 -end-1 h-[9px] w-[9px] rounded-full bg-warn ring-2 ring-canvas anim-breathe" />
+                ) : item.dot ? (
+                  <span
+                    className="absolute top-1 end-2 w-1.5 h-1.5 rounded-full bg-warn"
+                    aria-hidden="true"
+                  />
                 ) : null}
               </span>
+
               <span
-                className={`mt-0.5 w-full max-w-full truncate text-center text-[10px] leading-tight transition-colors duration-200 ${
-                  isActive ? 'text-ink font-semibold' : 'text-ink-muted font-medium'
+                className={`truncate max-w-full text-[11px] leading-tight ${
+                  active ? 'font-semibold' : 'font-medium'
                 }`}
               >
                 {item.label}

@@ -1,20 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ShoppingBag,
-  Zap,
-  Sparkles,
-  Sliders,
-  Plus,
-  Minus,
-  Send,
-  ShieldCheck,
-  Package,
-} from 'lucide-react';
+import { ShoppingBag, Zap, Sliders, Plus, Minus, Send, ShieldCheck, Package } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { Button } from '@/shared/components/ui/Button.js';
+import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { EmptyState } from '@/shared/components/ui/EmptyState.js';
+import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import { openTelegramLinkAndMinimize } from '@/shared/lib/telegramNavigation.js';
 import { api } from '@/shared/lib/api.js';
@@ -38,8 +32,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   onSelectPackage,
 }) => {
   const { t } = useLanguage();
-  const { cardClass } = useThemeTokens();
-  const { formatToman } = useFormatters();
+  const { formatToman, formatNumber } = useFormatters();
   const { triggerHaptic } = useHaptic();
 
   const currency = propCurrency || t('common.currency');
@@ -72,11 +65,9 @@ export const ShopTab: React.FC<ShopTabProps> = ({
     });
   }, [minGb, maxGb]);
 
-  // Linear calculation fallback
   const linearPrice = Math.max(0, customGb * pricePerGb + customDays * pricePerDay);
   const customPrice = serverQuote !== null ? serverQuote : linearPrice;
 
-  // Debounced server-side quote fetcher
   useEffect(() => {
     if (!isCustomEnabled) return;
     let isCancelled = false;
@@ -159,247 +150,241 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   const validPresets = PRESET_GB_OPTIONS.filter((val) => val >= minGb && val <= maxGb);
 
   return (
-    <div className="w-full flex flex-col gap-4 pb-6">
-      {/* Shop Header Banner */}
-      <div className="flex flex-col text-start px-1 gap-1">
-        <h2 className={`text-sm sm:text-base font-bold flex items-center gap-2 text-ink`}>
-          <ShoppingBag className="w-4 h-4 text-brand" />
-          <span>{t('user.shop.title')}</span>
-        </h2>
+    <div className="w-full flex flex-col gap-5 pb-6">
+      {/* Header */}
+      <div className="flex flex-col text-start gap-1">
+        <SectionHeader icon={<ShoppingBag />} title={t('user.shop.title')} />
         <p className="text-xs text-ink-muted m-0">{t('user.shop.desc')}</p>
       </div>
 
-      {/* Custom Volume Calculator Section */}
-      {isCustomEnabled && (
-        <section
-          className={`rounded-2xl p-4 sm:p-5 border transition-all text-start relative overflow-hidden bg-gradient-to-br from-brand-soft via-surface to-brand-soft/50 dark:from-brand/35 dark:via-surface dark:to-brand/20 border-brand/25 shadow-lg shadow-brand/15 shadow-sm`}
-        >
-          {/* Header pill & badge */}
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <div
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-brand/15 border-brand/25 text-brand`}
-              >
-                <Sliders className="w-4 h-4" />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Custom Volume Builder */}
+        {isCustomEnabled && (
+          <Card
+            padding="lg"
+            className="lg:col-span-5 lg:sticky lg:top-20 flex flex-col gap-4 text-start"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <IconTile tone="brand" size="md">
+                  <Sliders />
+                </IconTile>
+                <div className="flex flex-col min-w-0">
+                  <h3 className="text-sm font-semibold truncate text-ink m-0">
+                    {t('user.shop.customVolumeTitle')}
+                  </h3>
+                  <span className="text-xs text-ink-muted truncate">
+                    {t('user.shop.customVolumeSubtitle')}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col min-w-0">
-                <h3 className={`text-xs sm:text-sm font-bold truncate text-ink`}>
-                  {t('user.shop.customVolumeTitle')}
-                </h3>
-                <span className="text-[11px] text-ink-muted truncate">
-                  {t('user.shop.customVolumeSubtitle')}
-                </span>
-              </div>
+
+              <Badge variant="primary" size="xs" className="shrink-0">
+                {t('user.shop.customVolumeBadge')}
+              </Badge>
             </div>
 
-            <Badge variant="primary" size="xs">
-              <Sparkles className="w-2.5 h-2.5" />
-              <span>{t('user.shop.customVolumeBadge')}</span>
-            </Badge>
-          </div>
+            {validPresets.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {validPresets.map((val) => {
+                  const isSelected = customGb === val;
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        handleCustomGbChange(val);
+                      }}
+                      className={`h-9 px-2 rounded-ctl text-xs font-medium border press rs-focus cursor-pointer flex items-center justify-center tnum ${
+                        isSelected
+                          ? 'bg-brand border-brand text-brand-ink'
+                          : 'bg-surface-2 border-line hover:border-line-strong hover:bg-surface-3 text-ink-soft'
+                      }`}
+                    >
+                      <bdi dir="ltr">{formatNumber(val)} GB</bdi>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-          {/* Quick preset chips */}
-          {validPresets.length > 0 && (
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 my-3">
-              {validPresets.map((val) => {
-                const isSelected = customGb === val;
-                return (
+            {/* Slider & Stepper Box */}
+            <Card subCard padding="md" className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-ink-soft font-medium">
+                  {t('user.shop.customVolumeGbLabel')}
+                </span>
+                <div className="flex items-center gap-1.5">
                   <button
-                    key={val}
                     type="button"
+                    disabled={customGb <= minGb}
                     onClick={() => {
-                      triggerHaptic('selection');
-                      handleCustomGbChange(val);
+                      triggerHaptic('light');
+                      handleCustomGbChange(customGb - 5);
                     }}
-                    className={`py-1.5 px-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 cursor-pointer flex items-center justify-center ${isSelected ? 'bg-brand border-brand text-brand-ink shadow-xs' : 'bg-surface-2 border-line hover:bg-surface-3 text-ink-soft shadow-2xs'}`}
+                    className="w-9 h-9 rounded-ctl border flex items-center justify-center press rs-focus disabled:opacity-40 cursor-pointer disabled:pointer-events-none bg-surface border-line-strong text-ink-soft hover:bg-surface-3 hover:text-ink"
+                    aria-label="Decrease GB"
                   >
-                    {val} GB
+                    <Minus className="w-4 h-4" />
                   </button>
-                );
-              })}
+
+                  <div className="flex items-baseline gap-1 min-w-[78px] justify-center px-1">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      dir="ltr"
+                      value={typedGb}
+                      onChange={handleTypedGbChange}
+                      onBlur={handleTypedGbBlur}
+                      className="w-12 text-center tnum font-semibold text-base sm:text-lg text-brand-fg bg-transparent border-b border-line-strong focus:border-brand focus:outline-hidden py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <span className="text-xs text-ink-muted">GB</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={customGb >= maxGb}
+                    onClick={() => {
+                      triggerHaptic('light');
+                      handleCustomGbChange(customGb + 5);
+                    }}
+                    className="w-9 h-9 rounded-ctl border flex items-center justify-center press rs-focus disabled:opacity-40 cursor-pointer disabled:pointer-events-none bg-surface border-line-strong text-ink-soft hover:bg-surface-3 hover:text-ink"
+                    aria-label="Increase GB"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <input
+                type="range"
+                min={minGb}
+                max={maxGb}
+                step={1}
+                value={customGb}
+                onChange={(e) => handleCustomGbChange(Number(e.target.value))}
+                className="rs-range w-full cursor-pointer"
+              />
+
+              <div className="flex items-center justify-between text-[11px] text-ink-muted tnum">
+                <bdi dir="ltr">{formatNumber(minGb)} GB</bdi>
+                <span>{t('user.shop.daysUnit').replace('{days}', formatNumber(customDays))}</span>
+                <bdi dir="ltr">{formatNumber(maxGb)} GB</bdi>
+              </div>
+            </Card>
+
+            {/* Price & Order CTAs */}
+            <div className="flex flex-col gap-3 pt-3 border-t border-line">
+              <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                <div className="flex items-baseline gap-1.5">
+                  <bdi dir="ltr" className="text-xl tnum font-semibold text-ink">
+                    {formatToman(customPrice)}
+                  </bdi>
+                  <span className="text-xs text-ink-muted">{currency}</span>
+                </div>
+                <span className="text-[11px] text-ink-muted tnum">
+                  {t('user.shop.customVolumePricePerGb').replace(
+                    '{price}',
+                    `${formatToman(pricePerGb)} ${currency}`
+                  )}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {botUsername && (
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    onClick={handleOpenBotCustom}
+                    title={t('user.shop.customVolumeOrderBotButton')}
+                    aria-label={t('user.shop.customVolumeOrderBotButton')}
+                  >
+                    <Send className="w-4 h-4 rtl:rotate-180 shrink-0" />
+                    <span className="hidden sm:inline">
+                      {t('user.shop.customVolumeOrderBotButton')}
+                    </span>
+                  </Button>
+                )}
+
+                <Button size="md" variant="primary" onClick={handleOrderCustom} className="flex-1">
+                  <Zap className="w-4 h-4 shrink-0" />
+                  <span>{t('user.shop.customVolumeOrderButton')}</span>
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Pre-configured Packages Grid */}
+        <div className={isCustomEnabled ? 'lg:col-span-7' : 'lg:col-span-12'}>
+          {packages.length === 0 ? (
+            <EmptyState
+              icon={<Package />}
+              tone="neutral"
+              title={t('user.shop.emptyPackages')}
+              description={t('user.shop.emptyPackagesDesc')}
+            />
+          ) : (
+            <div
+              className={`grid grid-cols-1 sm:grid-cols-2 ${
+                isCustomEnabled ? '' : 'lg:grid-cols-3'
+              } gap-3.5`}
+            >
+              {packages.map((pkg) => (
+                <Card
+                  key={pkg.id}
+                  padding="md"
+                  className="flex flex-col justify-between gap-4 text-start hover:border-line-strong"
+                >
+                  <div className="flex flex-col gap-2.5">
+                    <h3 className="text-sm sm:text-[15px] font-semibold truncate text-ink m-0">
+                      {pkg.name}
+                    </h3>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge variant="primary" size="xs">
+                        <Zap className="w-3 h-3" />
+                        <span>
+                          {t('user.shop.trafficUnit').replace('{gb}', formatNumber(pkg.gbAmount))}
+                        </span>
+                      </Badge>
+
+                      <Badge variant="neutral" size="xs">
+                        {t('user.shop.daysUnit').replace('{days}', formatNumber(pkg.durationDays))}
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 mt-1 text-xs text-ink-muted">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-ok-fg shrink-0" />
+                        <span>{t('user.shop.fastConnectionFeature')}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-ok-fg shrink-0" />
+                        <span>{t('user.shop.allPlatformsFeature')}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-line gap-2">
+                    <div className="flex items-baseline gap-1 min-w-0">
+                      <bdi dir="ltr" className="text-base sm:text-lg tnum font-semibold text-ink">
+                        {formatToman(pkg.price)}
+                      </bdi>
+                      <span className="text-xs text-ink-muted">{currency}</span>
+                    </div>
+
+                    <Button size="sm" variant="primary" onClick={() => handleSelect(pkg)}>
+                      {t('user.shop.selectPlan')}
+                    </Button>
+                  </div>
+                </Card>
+              ))}
             </div>
           )}
-
-          {/* Interactive GB Slider & Stepper */}
-          <div
-            className={`p-3.5 rounded-xl border flex flex-col gap-3 my-3 bg-surface-2/70 dark:bg-black/25 border-line`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-ink-soft font-medium">
-                {t('user.shop.customVolumeGbLabel')}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  disabled={customGb <= minGb}
-                  onClick={() => {
-                    triggerHaptic('light');
-                    handleCustomGbChange(customGb - 5);
-                  }}
-                  className="w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-surface-3 border-line text-ink-muted hover:bg-surface hover:text-ink"
-                  aria-label="Decrease GB"
-                >
-                  <Minus className="w-3.5 h-3.5" />
-                </button>
-
-                <div className="flex items-center gap-1 min-w-[75px] justify-center px-1">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={typedGb}
-                    onChange={handleTypedGbChange}
-                    onBlur={handleTypedGbBlur}
-                    className="w-12 text-center tnum font-bold text-base sm:text-lg text-brand bg-transparent border-b border-brand/30 focus:border-brand focus:outline-hidden py-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                  <span className="text-xs font-normal text-ink-muted">GB</span>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={customGb >= maxGb}
-                  onClick={() => {
-                    triggerHaptic('light');
-                    handleCustomGbChange(customGb + 5);
-                  }}
-                  className="w-7 h-7 rounded-lg border flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-surface-3 border-line text-ink-muted hover:bg-surface hover:text-ink"
-                  aria-label="Increase GB"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Range Slider */}
-            <input
-              type="range"
-              min={minGb}
-              max={maxGb}
-              step={1}
-              value={customGb}
-              onChange={(e) => handleCustomGbChange(Number(e.target.value))}
-              className="range range-indigo range-xs w-full accent-brand cursor-pointer"
-            />
-
-            <div className="flex items-center justify-between text-[11px] text-ink-muted tnum">
-              <span>{minGb} GB</span>
-              <span>{t('user.shop.daysUnit').replace('{days}', String(customDays))}</span>
-              <span>{maxGb} GB</span>
-            </div>
-          </div>
-
-          {/* Pricing summary & Action Buttons */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-line/60">
-            <div className="flex flex-col">
-              <div className="flex items-baseline gap-1.5">
-                <span className={`text-lg sm:text-xl tnum font-extrabold text-ink`}>
-                  {formatToman(customPrice)}
-                </span>
-                <span className="text-xs text-ink-muted">{currency}</span>
-              </div>
-              <span className="text-[10px] text-ink-muted">
-                {t('user.shop.customVolumePricePerGb').replace(
-                  '{price}',
-                  `${formatToman(pricePerGb)} ${currency}`
-                )}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {botUsername && (
-                <button
-                  type="button"
-                  onClick={handleOpenBotCustom}
-                  className="min-h-[42px] px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer bg-surface-2 border-line hover:bg-surface-3 text-ink-soft"
-                  title={t('user.shop.customVolumeOrderBotButton')}
-                  aria-label={t('user.shop.customVolumeOrderBotButton')}
-                >
-                  <Send className="w-3.5 h-3.5 rtl:rotate-180" />
-                  <span className="hidden sm:inline">
-                    {t('user.shop.customVolumeOrderBotButton')}
-                  </span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={handleOrderCustom}
-                className="flex-1 sm:flex-initial min-h-[42px] py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md bg-brand hover:bg-brand text-brand-ink"
-              >
-                <Zap className="w-4 h-4" />
-                <span>{t('user.shop.customVolumeOrderButton')}</span>
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Pre-configured Packages Grid */}
-      {packages.length === 0 ? (
-        <div
-          className={`p-8 rounded-2xl border text-center my-4 flex flex-col items-center justify-center gap-2.5 bg-surface/[0.02] border-line/[0.07] text-ink-muted`}
-        >
-          <Package className="w-10 h-10 text-ink-muted opacity-60" />
-          <h3 className={`text-sm font-bold m-0 text-ink-soft`}>{t('user.shop.emptyPackages')}</h3>
-          <p className="text-xs text-ink-muted max-w-xs m-0">{t('user.shop.emptyPackagesDesc')}</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          {packages.map((pkg) => (
-            <div
-              key={pkg.id}
-              className={`relative rounded-2xl p-4 sm:p-5 border transition-all flex flex-col justify-between gap-4 text-start ${cardClass} hover:border-brand/30`}
-            >
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <h3 className={`text-sm sm:text-base font-bold truncate text-ink`}>{pkg.name}</h3>
-                </div>
-
-                {/* Badges: Traffic & Duration */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <Badge variant="primary" size="xs">
-                    <Zap className="w-3 h-3 text-brand" />
-                    <span>{t('user.shop.trafficUnit').replace('{gb}', String(pkg.gbAmount))}</span>
-                  </Badge>
-
-                  <Badge variant="neutral" size="xs">
-                    {t('user.shop.daysUnit').replace('{days}', String(pkg.durationDays))}
-                  </Badge>
-                </div>
-
-                {/* Feature bullet points */}
-                <div className="flex flex-col gap-1 mt-1 text-[11px] text-ink-muted">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-ok shrink-0" />
-                    <span>{t('user.shop.fastConnectionFeature')}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-ok shrink-0" />
-                    <span>{t('user.shop.allPlatformsFeature')}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Price and CTA */}
-              <div className="flex items-center justify-between pt-3 border-t border-line/60 gap-2">
-                <div className="flex items-baseline gap-1">
-                  <span className={`text-base sm:text-lg tnum font-extrabold text-ink`}>
-                    {formatToman(pkg.price)}
-                  </span>
-                  <span className="text-[11px] text-ink-muted">{currency}</span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelect(pkg)}
-                  className="py-2 px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm bg-brand hover:bg-brand text-brand-ink"
-                >
-                  <span>{t('user.shop.selectPlan')}</span>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 };

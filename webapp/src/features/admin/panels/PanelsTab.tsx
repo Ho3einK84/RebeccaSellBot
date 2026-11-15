@@ -19,6 +19,9 @@ import { ManageServicesModal } from './components/ManageServicesModal.js';
 import { DeletePanelModal } from './components/DeletePanelModal.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { EmptyState } from '@/shared/components/ui/EmptyState.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -270,17 +273,12 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
   return (
     <div className="space-y-4">
       {/* Top Header & Fleet Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border bg-brand/10 border-brand/20 text-brand shadow-xs`}
-          >
-            <Server className="w-4 h-4" />
-          </div>
-          <h2 className={`text-base font-bold m-0 tracking-tight truncate ${textPrimary}`}>
-            {t('admin.panels.fleetTitle')}
-          </h2>
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <SectionHeader
+          icon={<Server />}
+          title={t('admin.panels.fleetTitle')}
+          count={totalPanels > 0 ? <bdi dir="ltr">{formatNumber(totalPanels)}</bdi> : undefined}
+        />
 
         <div className="flex items-center gap-2 flex-wrap self-end sm:self-center">
           {/* Add Panel Button */}
@@ -299,20 +297,21 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
             onClick={handleTestAll}
             title={t('admin.panels.testAllBtn')}
           >
-            <Zap className="w-3.5 h-3.5 text-warn" />
+            <Zap className="w-3.5 h-3.5 text-warn-fg" />
             <span>{t('admin.panels.testAllBtn')}</span>
           </Button>
 
           {/* Refresh Button */}
-          <button
+          <Button
             type="button"
-            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium transition-all active:scale-95 cursor-pointer bg-surface/[0.04] border-line/10 hover:bg-surface/[0.08] text-ink-muted shadow-xs`}
+            size="sm"
+            variant="secondary"
             onClick={() => refetch()}
             title={t('common.refresh')}
           >
             <RotateCw className="w-3.5 h-3.5" />
             <span>{t('common.refresh')}</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -320,49 +319,34 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
 
       {/* Error State */}
       {isError && panels.length === 0 && (
-        <Card className="p-8 text-center flex flex-col items-center justify-center gap-3 border-danger/20">
-          <div className="w-12 h-12 rounded-2xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center">
-            <XCircle className="w-6 h-6" />
-          </div>
-          <div className="space-y-1">
-            <h3 className={`text-base font-bold m-0 ${textPrimary}`}>{t('common.error')}</h3>
-            <p className={`text-xs m-0 ${textSecondary}`}>
-              {error instanceof Error ? error.message : t('common.networkError')}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-medium cursor-pointer transition-all active:scale-95 bg-brand hover:bg-brand text-brand-ink border-brand shadow-xs"
-            onClick={() => refetch()}
-          >
-            <span>{t('common.refresh')}</span>
-          </button>
-        </Card>
+        <EmptyState
+          tone="danger"
+          icon={<XCircle />}
+          title={t('common.error')}
+          description={error instanceof Error ? error.message : t('common.networkError')}
+          className="border-danger/25"
+          action={
+            <Button type="button" size="sm" variant="primary" onClick={() => refetch()}>
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>{t('common.refresh')}</span>
+            </Button>
+          }
+        />
       )}
 
       {/* Fleet Status Summary & KPIs */}
       {!isLoading && !isError && panels.length > 0 && (
-        <Card className="p-4 sm:p-5 space-y-4">
+        <Card padding="md" className="space-y-4">
           {/* Main Health Status Strip */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div
-                className={`w-11 h-11 rounded-2xl flex items-center justify-center border shrink-0 transition-colors ${
-                  allHealthy
-                    ? 'bg-ok/15 text-ok border-ok/25'
-                    : 'bg-danger/15 text-danger border-danger/25'
-                }`}
-              >
-                <Activity className="w-5 h-5" />
-              </div>
+              <IconTile tone={allHealthy ? 'ok' : 'danger'} size="md">
+                <Activity />
+              </IconTile>
               <div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      allHealthy ? 'bg-ok status-pulse' : 'bg-danger'
-                    }`}
-                  />
-                  <h3 className={`text-sm font-bold m-0 tracking-tight ${textPrimary}`}>
+                  <span className={`w-2 h-2 rounded-full ${allHealthy ? 'bg-ok' : 'bg-danger'}`} />
+                  <h3 className={`text-sm font-semibold m-0 ${textPrimary}`}>
                     {allHealthy
                       ? t('admin.panels.fleetStatusOk')
                       : t('admin.panels.fleetStatusWarning')}
@@ -381,48 +365,48 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
           {/* 4 Quick Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
             {/* Healthy Panels */}
-            <div className={`p-3 rounded-xl border space-y-1 bg-surface/[0.02] border-line/[0.06]`}>
-              <div className="flex items-center gap-1.5 text-[11px] text-ok font-medium">
+            <Card subCard padding="sm" className="space-y-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-ok-fg font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>{t('admin.panels.fleetMetricHealthy')}</span>
               </div>
-              <div className="text-lg font-extrabold tnum text-ok">
-                {formatNumber(healthyCount)}
+              <div className="text-lg font-semibold tnum text-ok-fg">
+                <bdi dir="ltr">{formatNumber(healthyCount)}</bdi>
               </div>
-            </div>
+            </Card>
 
             {/* Issues or Disabled */}
-            <div className={`p-3 rounded-xl border space-y-1 bg-surface/[0.02] border-line/[0.06]`}>
+            <Card subCard padding="sm" className="space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
-                <AlertCircle className="w-3.5 h-3.5 text-warn" />
+                <AlertCircle className="w-3.5 h-3.5 text-warn-fg" />
                 <span>{t('admin.panels.fleetMetricIssues')}</span>
               </div>
-              <div className="text-lg font-extrabold tnum text-warn">
-                {formatNumber(issuesCount)}
+              <div className="text-lg font-semibold tnum text-warn-fg">
+                <bdi dir="ltr">{formatNumber(issuesCount)}</bdi>
               </div>
-            </div>
+            </Card>
 
             {/* Fleet Total Active Configs */}
-            <div className={`p-3 rounded-xl border space-y-1 bg-surface/[0.02] border-line/[0.06]`}>
+            <Card subCard padding="sm" className="space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
-                <Users className="w-3.5 h-3.5 text-brand" />
+                <Users className="w-3.5 h-3.5 text-brand-fg" />
                 <span>{t('admin.panels.fleetMetricConfigs')}</span>
               </div>
-              <div className="text-lg font-extrabold tnum text-brand">
-                {formatNumber(totalActiveConfigs)}
+              <div className="text-lg font-semibold tnum text-brand-fg">
+                <bdi dir="ltr">{formatNumber(totalActiveConfigs)}</bdi>
               </div>
-            </div>
+            </Card>
 
             {/* Fleet Total Services */}
-            <div className={`p-3 rounded-xl border space-y-1 bg-surface/[0.02] border-line/[0.06]`}>
+            <Card subCard padding="sm" className="space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
-                <Layers className="w-3.5 h-3.5 text-brand" />
+                <Layers className="w-3.5 h-3.5 text-brand-fg" />
                 <span>{t('admin.panels.fleetMetricServices')}</span>
               </div>
-              <div className="text-lg font-extrabold tnum text-brand">
-                {formatNumber(totalServices)}
+              <div className="text-lg font-semibold tnum text-brand-fg">
+                <bdi dir="ltr">{formatNumber(totalServices)}</bdi>
               </div>
-            </div>
+            </Card>
           </div>
         </Card>
       )}
@@ -432,85 +416,73 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <button
             type="button"
-            className={`h-7 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            className={`h-8 px-3 rounded-ctl border text-xs transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
               filter === 'all'
-                ? 'bg-brand text-brand-ink shadow-xs'
-                : 'bg-surface/[0.04] text-ink-soft hover:bg-surface/[0.08] border border-line'
+                ? 'bg-brand border-brand text-brand-ink font-semibold'
+                : 'bg-surface border-line text-ink-soft hover:bg-surface-2 font-medium'
             }`}
             onClick={() => setFilter('all')}
           >
-            {t('admin.panels.filterAll')} ({formatNumber(panels.length)})
+            <span>{t('admin.panels.filterAll')}</span>
+            <bdi dir="ltr">({formatNumber(panels.length)})</bdi>
           </button>
 
           <button
             type="button"
-            className={`h-7 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            className={`h-8 px-3 rounded-ctl border text-xs transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
               filter === 'online'
-                ? 'bg-ok text-ink shadow-xs'
-                : 'bg-surface/[0.04] text-ink-soft hover:bg-surface/[0.08] border border-line'
+                ? 'bg-ok-soft border-ok/30 text-ok-fg font-semibold'
+                : 'bg-surface border-line text-ink-soft hover:bg-surface-2 font-medium'
             }`}
             onClick={() => setFilter('online')}
           >
-            {t('admin.panels.filterOnline')} ({formatNumber(healthyCount)})
+            <span>{t('admin.panels.filterOnline')}</span>
+            <bdi dir="ltr">({formatNumber(healthyCount)})</bdi>
           </button>
 
           <button
             type="button"
-            className={`h-7 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            className={`h-8 px-3 rounded-ctl border text-xs transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
               filter === 'issues'
-                ? 'bg-warn text-ink shadow-xs'
-                : 'bg-surface/[0.04] text-ink-soft hover:bg-surface/[0.08] border border-line'
+                ? 'bg-warn-soft border-warn/30 text-warn-fg font-semibold'
+                : 'bg-surface border-line text-ink-soft hover:bg-surface-2 font-medium'
             }`}
             onClick={() => setFilter('issues')}
           >
-            {t('admin.panels.filterIssues')} ({formatNumber(issuesCount)})
+            <span>{t('admin.panels.filterIssues')}</span>
+            <bdi dir="ltr">({formatNumber(issuesCount)})</bdi>
           </button>
         </div>
       )}
 
       {/* Empty State */}
       {!isLoading && !isError && panels.length === 0 && (
-        <Card className="p-8 text-center space-y-3">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center">
-            <Server className="w-6 h-6" />
-          </div>
-          <div className="space-y-1">
-            <h3 className={`text-base font-bold m-0 ${textPrimary}`}>{t('admin.panels.empty')}</h3>
-            <p className={`text-xs m-0 ${textSecondary}`}>{t('admin.panels.emptyHint')}</p>
-          </div>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => setIsAddModalOpen(true)}
-            className="mx-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{t('admin.panels.addPanelBtn')}</span>
-          </Button>
-        </Card>
+        <EmptyState
+          tone="brand"
+          icon={<Server />}
+          title={t('admin.panels.empty')}
+          description={t('admin.panels.emptyHint')}
+          action={
+            <Button type="button" variant="primary" onClick={() => setIsAddModalOpen(true)}>
+              <Plus className="w-4 h-4" />
+              <span>{t('admin.panels.addPanelBtn')}</span>
+            </Button>
+          }
+        />
       )}
 
       {/* Filtered Empty State */}
       {!isLoading && !isError && panels.length > 0 && filteredPanels.length === 0 && (
-        <Card className="p-8 text-center space-y-3">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center">
-            <Server className="w-6 h-6" />
-          </div>
-          <div className="space-y-1">
-            <h3 className={`text-base font-bold m-0 ${textPrimary}`}>
-              {t('admin.panels.emptyFiltered')}
-            </h3>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setFilter('all')}
-            className="mx-auto"
-          >
-            <span>{t('admin.panels.filterAll')}</span>
-          </Button>
-        </Card>
+        <EmptyState
+          tone="neutral"
+          icon={<Server />}
+          title={t('admin.panels.emptyFiltered')}
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={() => setFilter('all')}>
+              <span>{t('admin.panels.filterAll')}</span>
+            </Button>
+          }
+        />
       )}
 
       {/* Panels List */}

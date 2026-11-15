@@ -6,11 +6,10 @@ import {
   Users,
   CreditCard,
   MessageCircle,
-  Sparkles,
   ChevronLeft,
-  ChevronRight,
   ShieldCheck,
   Activity,
+  History,
   Copy,
   Check,
 } from 'lucide-react';
@@ -32,6 +31,11 @@ import {
   ServiceTrafficBar,
 } from '@/features/user-portal/components/ServiceStatusTraffic.js';
 import { TransactionItem } from '@/features/user-portal/components/TransactionItem.js';
+import { Button } from '@/shared/components/ui/Button.js';
+import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
+import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 
 interface DashboardTabProps {
   profile: UserPortalProfile | null;
@@ -48,9 +52,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   transactions,
   onSwitchTab,
 }) => {
-  const { t, isRtl } = useLanguage();
+  const { t } = useLanguage();
   const { triggerHaptic } = useHaptic();
-  const { formatToman } = useFormatters();
+  const { formatToman, formatNumber } = useFormatters();
   const { copy, isCopied } = useCopy();
 
   const currency = settings?.currency || t('common.currency');
@@ -92,267 +96,255 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     }
   };
 
-  const ArrowIcon = isRtl ? ChevronLeft : ChevronRight;
-
   return (
-    <div className="w-full flex flex-col gap-4 pb-6">
-      {/* Digital Wallet Card */}
-      <section className="relative overflow-hidden rounded-3xl p-5 sm:p-6 text-brand-ink shadow-xl shadow-brand/20 transition-all bg-gradient-to-br from-brand via-brand to-brand border border-brand-ink/10">
-        {/* Decorative background glow circles */}
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-brand-ink/10 blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-10 -left-10 w-36 h-36 rounded-full bg-brand/20 blur-xl pointer-events-none" />
+    <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start pb-6">
+      {/* Left column: Anodized Balance Instrument, Quick Actions, Support */}
+      <div className="lg:col-span-7 flex flex-col gap-4">
+        <section
+          aria-label={t('user.dashboard.walletBalance')}
+          className="relative overflow-hidden rounded-card border border-[#283142] bg-[#151a23] text-[#eef1f6] p-5 sm:p-6 shadow-[var(--shadow-float)]"
+        >
+          {/* Technical hairline corner mark — crisp vector precision, no blur glow */}
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 120 120"
+            className="pointer-events-none absolute -bottom-5 -end-5 w-36 h-36 text-white/[0.04]"
+            fill="none"
+          >
+            <circle cx="60" cy="60" r="54" stroke="currentColor" strokeWidth="1" />
+            <circle cx="60" cy="60" r="36" stroke="currentColor" strokeWidth="1" />
+            <path d="M6 60h108M60 6v108" stroke="currentColor" strokeWidth="1" />
+          </svg>
 
-        <div className="relative z-10 flex flex-col justify-between min-h-[140px]">
-          {/* Card Top: Chip & Label */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-6 rounded-md bg-warn/80 border border-warn/40 flex items-center justify-center shadow-xs">
-                <CreditCard className="w-4 h-4 text-brand-ink opacity-80" />
+          <div className="relative z-10 flex flex-col justify-between min-h-[144px]">
+            {/* Top row */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-6 rounded-md bg-white/[0.08] border border-white/15 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-3.5 h-3.5 text-white/80" aria-hidden="true" />
+                </span>
+                <span className="text-xs font-medium text-white/75">
+                  {t('user.dashboard.walletBalance')}
+                </span>
               </div>
-              <span className="text-xs font-semibold text-brand-ink/80 tracking-wide">
-                {t('user.dashboard.walletBalance')}
+
+              <span className="inline-flex items-center px-2 py-0.5 rounded-ctl bg-white/[0.08] border border-white/15 text-[11px] font-medium text-white/80">
+                {t('user.betaBadge')}
               </span>
             </div>
 
-            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-brand-ink/10 border border-brand-ink/15 text-[10px] font-medium backdrop-blur-md">
-              <Sparkles className="w-3 h-3 text-warn" />
-              <span>{t('user.betaBadge')}</span>
+            {/* Balance Figure */}
+            <div className="my-4 text-start">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <bdi dir="ltr" className="text-2xl sm:text-3xl font-semibold tnum text-white">
+                  {formatToman(availableBalance)}
+                </bdi>
+                <span className="text-xs sm:text-sm font-medium text-white/65">{currency}</span>
+              </div>
             </div>
-          </div>
 
-          {/* Card Center: Balance Amount */}
-          <div className="my-3 text-start">
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-2xl sm:text-3xl font-extrabold tnum tracking-tight text-brand-ink drop-shadow-sm">
-                {formatToman(availableBalance)}
-              </span>
-              <span className="text-xs sm:text-sm font-medium text-brand-ink/80">{currency}</span>
-            </div>
-          </div>
-
-          {/* Card Bottom: Referral Code & Topup CTA */}
-          <div className="flex items-center justify-between gap-3 pt-2.5 mt-2 border-t border-brand-ink/15">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
+            {/* Bottom Toolbar: Referral Code & Top-up */}
+            <div className="flex items-center justify-between gap-3 pt-3.5 border-t border-white/10 flex-wrap">
               <div className="flex flex-col min-w-0 text-start">
-                <span className="text-[10px] text-brand-ink/70 leading-tight mb-0.5">
+                <span className="text-[11px] text-white/60 leading-tight mb-1">
                   {t('user.referral.yourCode')}
                 </span>
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span
+                  <bdi
                     dir="ltr"
-                    className="text-xs tnum font-bold tracking-tight text-brand-ink/95 truncate"
+                    className="text-xs font-mono tnum font-medium text-white/90 truncate"
                     title={profile?.referralCode || ''}
                   >
                     {formatShortRefCode(profile?.referralCode)}
-                  </span>
+                  </bdi>
                   {profile?.referralCode && (
                     <button
                       type="button"
                       onClick={handleCopyReferral}
-                      className="p-1 rounded-lg bg-brand-ink/15 hover:bg-brand-ink/25 active:scale-90 transition-all text-brand-ink shrink-0 cursor-pointer"
+                      className="w-7 h-7 rounded-ctl bg-white/10 hover:bg-white/15 flex items-center justify-center press rs-focus text-white/85 shrink-0 cursor-pointer"
                       title={t('common.copy')}
                       aria-label={t('common.copy')}
                     >
                       {isCopied('dashboard-ref-code') ? (
-                        <Check className="w-3 h-3 text-ok" />
+                        <Check className="w-3.5 h-3.5 text-ok" />
                       ) : (
-                        <Copy className="w-3 h-3 text-brand-ink/90" />
+                        <Copy className="w-3.5 h-3.5" />
                       )}
                     </button>
                   )}
                 </div>
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={() => handleAction('wallet')}
-              className="shrink-0 px-3.5 py-1.5 rounded-xl bg-brand-ink text-brand hover:bg-brand-ink/90 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-md cursor-pointer whitespace-nowrap"
-            >
-              <Wallet className="w-3.5 h-3.5 text-brand shrink-0" />
-              <span>{t('user.dashboard.quickTopup')}</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Quick Action Grid (4 Buttons) */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <button
-          type="button"
-          onClick={() => handleAction('shop')}
-          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface border-line hover:border-brand/30 hover:bg-surface-2 text-ink shadow-2xs`}
-        >
-          <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center border border-brand/15">
-            <ShoppingBag className="w-5 h-5" />
-          </div>
-          <span className="text-xs font-semibold">{t('user.dashboard.buyService')}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleAction('services')}
-          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface border-line hover:border-brand/30 hover:bg-surface-2 text-ink shadow-2xs`}
-        >
-          <div className="w-10 h-10 rounded-xl bg-ok/10 text-ok flex items-center justify-center border border-ok/15">
-            <Wifi className="w-5 h-5" />
-          </div>
-          <span className="text-xs font-semibold">{t('user.dashboard.myConfigs')}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleAction('wallet')}
-          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface border-line hover:border-brand/30 hover:bg-surface-2 text-ink shadow-2xs`}
-        >
-          <div className="w-10 h-10 rounded-xl bg-warn/10 text-warn flex items-center justify-center border border-warn/15">
-            <Wallet className="w-5 h-5" />
-          </div>
-          <span className="text-xs font-semibold">{t('user.tabs.wallet')}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleAction('referral')}
-          className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-95 cursor-pointer bg-surface border-line hover:border-brand/30 hover:bg-surface-2 text-ink shadow-2xs`}
-        >
-          <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center border border-brand/15">
-            <Users className="w-5 h-5" />
-          </div>
-          <span className="text-xs font-semibold">{t('user.dashboard.inviteEarn')}</span>
-        </button>
-      </section>
-
-      {/* Active Subscriptions Overview */}
-      <section className="w-full">
-        <div className="flex items-center justify-between mb-2 px-1">
-          <h3
-            className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-ink-soft`}
-          >
-            <Activity className="w-3.5 h-3.5 text-brand" />
-            <span>{t('user.dashboard.activeServices')}</span>
-            <span className="text-[11px] tnum font-bold text-brand">({activeConfigs.length})</span>
-          </h3>
-
-          {configs.length > 0 && (
-            <button
-              type="button"
-              onClick={() => handleAction('services')}
-              className="text-xs font-medium text-brand hover:text-brand flex items-center gap-0.5 cursor-pointer"
-            >
-              <span>{t('common.all')}</span>
-              <ArrowIcon className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        {activeConfigs.length === 0 ? (
-          <div
-            className={`p-4 rounded-2xl border text-center flex flex-col items-center gap-2 bg-surface border-line`}
-          >
-            <ShieldCheck className="w-8 h-8 text-brand/60 mt-1" />
-            <span className={`text-xs font-bold text-ink-soft`}>
-              {t('user.services.emptyTitle')}
-            </span>
-            <p className="text-[11px] text-ink-muted max-w-xs m-0">
-              {t('user.services.emptyDesc')}
-            </p>
-            <button
-              type="button"
-              onClick={() => handleAction('shop')}
-              className="mt-1 px-4 py-2 rounded-xl bg-brand hover:bg-brand text-brand-ink text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm"
-            >
-              {t('user.services.buyFirst')}
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {activeConfigs.slice(0, 2).map((cfg) => (
-              <button
-                type="button"
-                key={cfg.id}
-                onClick={() => handleAction('services')}
-                className={`w-full p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 text-start bg-surface border-line hover:border-brand/30 shadow-2xs`}
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => handleAction('wallet')}
+                className="shrink-0"
               >
-                <div className="flex items-center justify-between w-full gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <ServiceStatusDot status={cfg.panelStatus} />
-                    <span className={`text-xs tnum font-bold truncate text-ink`}>
-                      {cfg.configUsername}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <ServiceAutoRenewBadge enabled={cfg.autoRenewEnabled} />
-                    <ServiceStatusBadge status={cfg.panelStatus} />
-                  </div>
-                </div>
-
-                <ServiceTrafficBar
-                  dataLimit={cfg.panelDataLimit}
-                  usedTraffic={cfg.panelUsedTraffic}
-                  compact
-                />
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Support Card */}
-      {settings?.supportEnabled !== false && Boolean(settings?.supportUsername) && (
-        <button
-          type="button"
-          onClick={handleSupportClick}
-          className={`w-full p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-start transition-all cursor-pointer bg-brand-soft border-brand/25 hover:bg-brand/15`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand/15 text-brand flex items-center justify-center shrink-0 border border-brand/20">
-              <MessageCircle className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[12.5px] font-bold text-ink">
-                {t('user.dashboard.supportHelp')}
-              </span>
-              <span className="mt-0.5 text-[11px] leading-snug text-ink-muted">
-                {t('user.dashboard.supportSub')}
-              </span>
+                <Wallet className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('user.dashboard.quickTopup')}</span>
+              </Button>
             </div>
           </div>
-          <ChevronLeft className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-        </button>
-      )}
+        </section>
 
-      {/* Recent Transactions Preview */}
-      <section className="w-full">
-        <div className="flex items-center justify-between mb-2 px-1">
-          <h3 className={`text-xs font-bold uppercase tracking-wider text-ink-muted`}>
-            {t('user.dashboard.recentActivity')}
-          </h3>
-          {transactions.length > 0 && (
-            <button
-              type="button"
-              onClick={() => handleAction('wallet')}
-              className="text-xs font-medium text-brand hover:text-brand cursor-pointer"
-            >
-              {t('common.all')}
-            </button>
-          )}
-        </div>
-
-        {transactions.length === 0 ? (
-          <div
-            className={`p-3.5 rounded-2xl border text-center text-[11px] bg-surface border-line text-ink-muted`}
+        {/* Quick Action Grid */}
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <button
+            type="button"
+            onClick={() => handleAction('shop')}
+            className="rounded-tile border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
-            {t('user.dashboard.noRecentActivity')}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {transactions.slice(0, 3).map((tx) => (
-              <TransactionItem key={tx.id} tx={tx} currency={currency} />
-            ))}
-          </div>
+            <IconTile tone="brand" size="md">
+              <ShoppingBag />
+            </IconTile>
+            <span className="text-xs font-medium text-ink">{t('user.dashboard.buyService')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleAction('services')}
+            className="rounded-tile border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+          >
+            <IconTile tone="ok" size="md">
+              <Wifi />
+            </IconTile>
+            <span className="text-xs font-medium text-ink">{t('user.dashboard.myConfigs')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleAction('wallet')}
+            className="rounded-tile border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+          >
+            <IconTile tone="warn" size="md">
+              <Wallet />
+            </IconTile>
+            <span className="text-xs font-medium text-ink">{t('user.tabs.wallet')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleAction('referral')}
+            className="rounded-tile border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+          >
+            <IconTile tone="neutral" size="md">
+              <Users />
+            </IconTile>
+            <span className="text-xs font-medium text-ink">{t('user.dashboard.inviteEarn')}</span>
+          </button>
+        </section>
+
+        {/* Support Card */}
+        {settings?.supportEnabled !== false && Boolean(settings?.supportUsername) && (
+          <button
+            type="button"
+            onClick={handleSupportClick}
+            className="w-full rounded-tile border border-brand/25 bg-brand-soft hover:bg-brand/15 p-3.5 flex items-center justify-between gap-3 text-start press rs-focus cursor-pointer"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <IconTile tone="brand" size="md">
+                <MessageCircle />
+              </IconTile>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-semibold text-ink">
+                  {t('user.dashboard.supportHelp')}
+                </span>
+                <span className="mt-0.5 text-xs leading-snug text-ink-muted">
+                  {t('user.dashboard.supportSub')}
+                </span>
+              </div>
+            </div>
+            <ChevronLeft
+              className="w-4 h-4 shrink-0 text-brand-fg ltr:rotate-180"
+              aria-hidden="true"
+            />
+          </button>
         )}
-      </section>
+      </div>
+
+      {/* Right column: Active Services + Recent Activity Ledger */}
+      <div className="lg:col-span-5 flex flex-col gap-5">
+        <section className="w-full">
+          <SectionHeader
+            icon={<Activity />}
+            title={t('user.dashboard.activeServices')}
+            count={formatNumber(activeConfigs.length)}
+            actionLabel={configs.length > 0 ? t('common.all') : undefined}
+            onAction={configs.length > 0 ? () => handleAction('services') : undefined}
+            className="mb-2.5"
+          />
+
+          {activeConfigs.length === 0 ? (
+            <EmptyState
+              icon={<ShieldCheck />}
+              tone="brand"
+              title={t('user.services.emptyTitle')}
+              description={t('user.services.emptyDesc')}
+              action={
+                <Button size="sm" onClick={() => handleAction('shop')}>
+                  {t('user.services.buyFirst')}
+                </Button>
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {activeConfigs.slice(0, 2).map((cfg) => (
+                <button
+                  type="button"
+                  key={cfg.id}
+                  onClick={() => handleAction('services')}
+                  className="w-full rounded-card border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col gap-2.5 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+                >
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ServiceStatusDot status={cfg.panelStatus} />
+                      <bdi
+                        dir="ltr"
+                        className="text-[13px] font-mono tnum font-medium truncate text-ink"
+                      >
+                        {cfg.configUsername}
+                      </bdi>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <ServiceAutoRenewBadge enabled={cfg.autoRenewEnabled} />
+                      <ServiceStatusBadge status={cfg.panelStatus} />
+                    </div>
+                  </div>
+
+                  <ServiceTrafficBar
+                    dataLimit={cfg.panelDataLimit}
+                    usedTraffic={cfg.panelUsedTraffic}
+                    compact
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="w-full">
+          <SectionHeader
+            icon={<History />}
+            title={t('user.dashboard.recentActivity')}
+            actionLabel={transactions.length > 0 ? t('common.all') : undefined}
+            onAction={transactions.length > 0 ? () => handleAction('wallet') : undefined}
+            className="mb-2.5"
+          />
+
+          {transactions.length === 0 ? (
+            <Card padding="md" className="text-center text-xs text-ink-muted">
+              {t('user.dashboard.noRecentActivity')}
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {transactions.slice(0, 3).map((tx) => (
+                <TransactionItem key={tx.id} tx={tx} currency={currency} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 };

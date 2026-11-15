@@ -4,6 +4,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { Card } from '@/shared/components/ui/Card.js';
 import { useReceiptSettings } from '../hooks/useAdminReceipts.js';
 
 interface ReceiptSettingsModalProps {
@@ -18,7 +19,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
   onNotify,
 }) => {
   const { t } = useLanguage();
-  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { textPrimary, textSecondary, textMuted } = useThemeTokens();
   const { settings, isLoading, updateSettings, isUpdating } = useReceiptSettings(isOpen);
 
   const [enabled, setEnabled] = useState(true);
@@ -79,21 +80,18 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.receipts.settingsModalTitle')}
-      icon={<Bell className="w-5 h-5 text-brand" />}
+      icon={<Bell className="w-5 h-5 text-brand-fg" />}
       maxWidth="md"
     >
       <div className="space-y-4">
         {isLoading ? (
           <div className="py-12 flex flex-col items-center justify-center gap-2">
-            <RotateCw className="w-6 h-6 animate-spin text-brand" />
+            <RotateCw className="w-6 h-6 animate-spin text-brand-fg" />
             <span className={`text-xs ${textMuted}`}>{t('common.loading')}</span>
           </div>
         ) : (
           <>
-            {/* Toggle: Notify Enabled */}
-            <div
-              className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${subCardClass}`}
-            >
+            <Card subCard padding="md" className="flex items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <span className={`text-xs font-semibold block ${textPrimary}`}>
                   {t('admin.receipts.settingsNotifyEnabled')}
@@ -104,62 +102,73 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
               </div>
               <input
                 type="checkbox"
-                className="toggle toggle-primary toggle-sm cursor-pointer"
+                className="rs-switch cursor-pointer shrink-0"
                 checked={enabled}
                 onChange={(e) => setEnabled(e.target.checked)}
+                aria-label={t('admin.receipts.settingsNotifyEnabled')}
               />
-            </div>
+            </Card>
 
-            {/* Notification Mode Selection */}
-            <div className={`p-3.5 rounded-xl border space-y-2.5 ${subCardClass}`}>
+            <Card subCard padding="md" className="space-y-2.5">
               <span className={`text-xs font-semibold block ${textPrimary}`}>
                 {t('admin.receipts.settingsModeTitle')}
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
-                  className={`p-3 rounded-xl border text-start transition-all cursor-pointer flex flex-col gap-1 ${mode === 'full' ? 'bg-brand/20 border-brand/50 text-brand' : 'bg-surface/[0.02] border-line/10 text-ink-muted hover:bg-surface/[0.05]'}`}
+                  className={`p-3 rounded-tile border text-start cursor-pointer flex flex-col gap-1 rs-focus ${
+                    mode === 'full'
+                      ? 'bg-brand-soft border-brand/35 text-brand-fg'
+                      : 'bg-surface border-line text-ink-soft hover:border-line-strong'
+                  }`}
                   onClick={() => setMode('full')}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold">
+                    <span className="text-xs font-semibold">
                       {t('admin.receipts.settingsModeFullTitle')}
                     </span>
                     {mode === 'full' && <Check className="w-3.5 h-3.5" />}
                   </div>
-                  <span className="text-[10px] opacity-80">
+                  <span className="text-[11px] opacity-80">
                     {t('admin.receipts.settingsModeFull')}
                   </span>
                 </button>
 
                 <button
                   type="button"
-                  className={`p-3 rounded-xl border text-start transition-all cursor-pointer flex flex-col gap-1 ${mode === 'simple' ? 'bg-brand/20 border-brand/50 text-brand' : 'bg-surface/[0.02] border-line/10 text-ink-muted hover:bg-surface/[0.05]'}`}
+                  className={`p-3 rounded-tile border text-start cursor-pointer flex flex-col gap-1 rs-focus ${
+                    mode === 'simple'
+                      ? 'bg-brand-soft border-brand/35 text-brand-fg'
+                      : 'bg-surface border-line text-ink-soft hover:border-line-strong'
+                  }`}
                   onClick={() => setMode('simple')}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold">
+                    <span className="text-xs font-semibold">
                       {t('admin.receipts.settingsModeSimpleTitle')}
                     </span>
                     {mode === 'simple' && <Check className="w-3.5 h-3.5" />}
                   </div>
-                  <span className="text-[10px] opacity-80">
+                  <span className="text-[11px] opacity-80">
                     {t('admin.receipts.settingsModeSimple')}
                   </span>
                 </button>
               </div>
-            </div>
+            </Card>
 
-            {/* Recipient Admins Selection */}
-            <div className={`p-3.5 rounded-xl border space-y-2.5 ${subCardClass}`}>
-              <div className="flex items-center justify-between">
+            <Card subCard padding="md" className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
                 <span className={`text-xs font-semibold flex items-center gap-1.5 ${textPrimary}`}>
-                  <Users className="w-3.5 h-3.5 text-brand" />
+                  <Users className="w-3.5 h-3.5 text-brand-fg" />
                   <span>{t('admin.receipts.settingsAdminsTitle')}</span>
                 </span>
                 <button
                   type="button"
-                  className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${isAllAdmins ? 'bg-brand/20 border-brand/40 text-brand' : 'bg-surface/[0.04] border-line/10 text-ink-muted'}`}
+                  className={`inline-flex items-center gap-1.5 h-8 text-xs font-medium px-2.5 rounded-ctl border cursor-pointer rs-focus ${
+                    isAllAdmins
+                      ? 'bg-brand-soft border-brand/35 text-brand-fg font-semibold'
+                      : 'bg-surface border-line text-ink-soft hover:border-line-strong'
+                  }`}
                   onClick={() => {
                     setIsAllAdmins(true);
                     setSelectedAdmins([]);
@@ -170,31 +179,38 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                 </button>
               </div>
 
-              {/* Admin checklist */}
               <div className="space-y-1.5 pt-1">
                 {allAdmins.map((adminId) => {
                   const isChecked = !isAllAdmins && selectedAdmins.includes(adminId);
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={adminId}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all cursor-pointer ${isChecked ? 'bg-brand/10 border-brand/25 text-brand' : 'bg-surface/[0.02] border-line/5 text-ink-muted'}`}
+                      className={`w-full p-2.5 rounded-tile border flex items-center justify-between text-xs cursor-pointer rs-focus ${
+                        isChecked
+                          ? 'bg-brand-soft border-brand/30 text-brand-fg font-semibold'
+                          : 'bg-surface border-line text-ink-soft hover:border-line-strong'
+                      }`}
                       onClick={() => handleToggleAdmin(adminId)}
                     >
-                      <span dir="ltr" className="tnum text-xs">
+                      <bdi dir="ltr" className="tnum font-mono text-xs">
                         {adminId}
-                      </span>
-                      <div
-                        className={`w-4 h-4 rounded-md border flex items-center justify-center ${isChecked ? 'bg-brand border-brand text-brand-ink' : 'border-line/20'}`}
+                      </bdi>
+                      <span
+                        className={`w-4 h-4 rounded-xs border flex items-center justify-center ${
+                          isChecked
+                            ? 'bg-brand border-brand text-brand-ink'
+                            : 'border-line-strong bg-surface-2'
+                        }`}
                       >
                         {isChecked && <Check className="w-3 h-3" />}
-                      </div>
-                    </div>
+                      </span>
+                    </button>
                   );
                 })}
               </div>
-            </div>
+            </Card>
 
-            {/* Modal Actions */}
             <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
               <Button
                 type="button"

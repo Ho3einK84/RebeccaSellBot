@@ -22,6 +22,11 @@ import {
   formatServiceCreatedDate,
   isAutoRenewActive,
 } from '../../webapp/src/features/user-portal/components/ServiceStatusTraffic.js';
+import {
+  computeRevenueBarMetrics,
+  computeSubscriptionSplit,
+} from '../../webapp/src/features/admin/overview/components/OverviewAnalytics.js';
+import type { DashboardStats } from '../../webapp/src/shared/types/admin.js';
 import { fa } from '../../webapp/src/shared/i18n/locales/fa.js';
 import { en } from '../../webapp/src/shared/i18n/locales/en.js';
 
@@ -313,8 +318,8 @@ describe('Traffic Normalization & ServiceStatusTraffic', () => {
       const activeFa = getServiceStatusInfo('active', tFa);
       expect(activeFa.type).toBe('active');
       expect(activeFa.label).toBe('فعال');
-      expect(activeFa.isPulsing).toBe(true);
-      expect(activeFa.dotClass).toContain('animate-pulse');
+      expect(activeFa.isPulsing).toBe(false);
+      expect(activeFa.dotClass).not.toContain('animate-pulse');
       expect(activeFa.dotClass).toContain('bg-ok');
       expect(activeFa.badgeClass).toContain('bg-ok');
       expect(getServiceStatusInfo('active', tEn).label).toBe('Active');
@@ -350,7 +355,7 @@ describe('Traffic Normalization & ServiceStatusTraffic', () => {
       expect(getServiceStatusInfo(undefined, tEn).label).toBe('Unknown');
       expect(getServiceStatusInfo('some_random_status', tEn).label).toBe('Unknown');
 
-      expect(getServiceStatusInfo('  ACTIVE  ', tFa).isPulsing).toBe(true);
+      expect(getServiceStatusInfo('  ACTIVE  ', tFa).isPulsing).toBe(false);
       expect(getServiceStatusInfo('LIMITED', tEn).type).toBe('limited');
     });
   });
@@ -448,6 +453,67 @@ describe('Traffic Normalization & ServiceStatusTraffic', () => {
       expect(formatServiceCreatedDate(sampleDate, 'fa', tFa)).toContain('تاریخ ایجاد:');
       expect(formatServiceCreatedDate(sampleDate, 'en', tEn)).toContain('Created:');
       expect(formatServiceCreatedDate(null, 'fa', tFa)).toBe('—');
+    });
+  });
+
+  describe('Overview Analytics Pure Calculators (OverviewAnalytics.tsx)', () => {
+    const baseStats: DashboardStats = {
+      totalUsers: 100,
+      totalSales: 50,
+      dailyRevenue: 0,
+      weeklyRevenue: 0,
+      monthlyRevenue: 0,
+      totalReferralBonus: 0,
+      totalCashback: 0,
+      activeSubscriptions: 0,
+      inactiveSubscriptions: 0,
+      pendingReceipts: 0,
+    };
+
+    it('clamps zero and tiny revenue ratios safely while scaling proportional bars accurately', () => {
+      const zeroBars = computeRevenueBarMetrics(baseStats);
+      expect(zeroBars.map((b) => [b.id, b.ratio])).toEqual([
+        ['daily', 0.06],
+        ['weekly', 0.06],
+        ['monthly', 0.06],
+      ]);
+
+      const scaled = computeRevenueBarMetrics({
+        ...baseStats,
+        dailyRevenue: 10_000,
+        weeklyRevenue: 500_000,
+        monthlyRevenue: 1_000_000,
+      });
+      expect(scaled[0]).toMatchObject({ id: 'daily', value: 10_000, ratio: 0.06 });
+      expect(scaled[1]).toMatchObject({ id: 'weekly', value: 500_000, ratio: 0.5 });
+      expect(scaled[2]).toMatchObject({ id: 'monthly', value: 1_000_000, ratio: 1 });
+    });
+
+    it('handles zero totals, negative clamps, exact percentage rounding, and dash offset', () => {
+      const zeroSplit = computeSubscriptionSplit(baseStats, 44);
+      expect(zeroSplit.total).toBe(0);
+      expect(zeroSplit.activePercent).toBe(0);
+      expect(zeroSplit.circumference).toBeCloseTo(2 * Math.PI * 44, 6);
+      expect(zeroSplit.dashOffset).toBeCloseTo(zeroSplit.circumference, 6);
+
+      const negSplit = computeSubscriptionSplit({
+        ...baseStats,
+        activeSubscriptions: -5,
+        inactiveSubscriptions: 4,
+      });
+      expect(negSplit.active).toBe(0);
+      expect(negSplit.inactive).toBe(4);
+      expect(negSplit.total).toBe(4);
+      expect(negSplit.activePercent).toBe(0);
+
+      const ratioSplit = computeSubscriptionSplit({
+        ...baseStats,
+        activeSubscriptions: 2,
+        inactiveSubscriptions: 1,
+      });
+      expect(ratioSplit.total).toBe(3);
+      expect(ratioSplit.activePercent).toBe(67);
+      expect(ratioSplit.dashOffset).toBeCloseTo(ratioSplit.circumference * (1 / 3), 6);
     });
   });
 });

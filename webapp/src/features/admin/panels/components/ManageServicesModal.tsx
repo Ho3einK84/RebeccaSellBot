@@ -5,6 +5,7 @@ import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { PanelSummary } from '@/shared/types/admin.js';
 import type { AddPanelServicePayload } from '@/shared/types/api.js';
@@ -31,6 +32,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
   loading,
 }) => {
   const { t } = useLanguage();
+  const { formatNumber } = useFormatters();
   const { subCardClass, textPrimary, textMuted } = useThemeTokens();
 
   const [newServiceId, setNewServiceId] = useState('');
@@ -104,12 +106,12 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={`${t('admin.panels.manageServicesTitle')} — ${panel.name}`}
-      icon={<Layers className="w-5 h-5 text-brand" />}
+      icon={<Layers className="w-5 h-5 text-brand-fg" />}
       maxWidth="lg"
     >
       <div className="space-y-5">
         {error && (
-          <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-medium">
+          <div className="p-3 rounded-xl bg-danger-soft border border-danger/25 text-danger-fg text-xs font-medium">
             {error}
           </div>
         )}
@@ -117,7 +119,8 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
         {/* Services List */}
         <div className="space-y-2 text-start">
           <span className={`block text-xs font-semibold ${textPrimary}`}>
-            {t('admin.panels.connectedServices')} <span dir="ltr">({panel.services.length})</span>
+            {t('admin.panels.connectedServices')}{' '}
+            <bdi dir="ltr">({formatNumber(panel.services.length)})</bdi>
           </span>
 
           <div className="space-y-2 max-h-60 overflow-y-auto pe-1">
@@ -127,22 +130,20 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
                 className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${subCardClass}`}
               >
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <span
-                    className={`w-7 h-7 rounded-lg border flex items-center justify-center tnum text-xs font-bold bg-surface/[0.04] border-line/10 text-brand`}
-                  >
-                    {service.serviceId}
+                  <span className="w-7 h-7 rounded-lg border flex items-center justify-center tnum text-xs font-semibold bg-surface border-line text-brand-fg">
+                    <bdi dir="ltr">{service.serviceId}</bdi>
                   </span>
                   <span className={`text-sm font-semibold ${textPrimary}`}>{service.name}</span>
 
                   {service.isDefault && (
-                    <Badge variant="warning" className="text-[10px]">
+                    <Badge variant="warning" size="xs">
                       <Star className="w-3 h-3 fill-current" />
                       <span>{t('admin.panels.defaultService')}</span>
                     </Badge>
                   )}
 
                   {service.isCustomTarget && (
-                    <Badge variant="info" className="text-[10px]">
+                    <Badge variant="info" size="xs">
                       <Target className="w-3 h-3" />
                       <span>{t('admin.panels.customTargetBadge')}</span>
                     </Badge>
@@ -223,13 +224,10 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
         </div>
 
         {/* Add New Service Form */}
-        <form
-          onSubmit={handleAdd}
-          className={`p-3.5 rounded-xl border space-y-3 bg-surface/[0.02] border-line/[0.08]`}
-        >
+        <form onSubmit={handleAdd} className={`p-3.5 rounded-xl border space-y-3 ${subCardClass}`}>
           <div className="flex items-center gap-2">
-            <Plus className="w-4 h-4 text-brand" />
-            <span className={`text-xs font-bold ${textPrimary}`}>
+            <Plus className="w-4 h-4 text-brand-fg" />
+            <span className={`text-xs font-semibold ${textPrimary}`}>
               {t('admin.panels.addServiceTitle')}
             </span>
           </div>
@@ -237,7 +235,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div className="space-y-1 text-start">
               <label className={`block text-[11px] font-medium ${textMuted}`}>
-                {t('admin.panels.serviceIdLabel')} <span className="text-danger">*</span>
+                {t('admin.panels.serviceIdLabel')} <span className="text-danger-fg">*</span>
               </label>
               <Input
                 type="number"
@@ -252,7 +250,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
 
             <div className="space-y-1 text-start sm:col-span-2">
               <label className={`block text-[11px] font-medium ${textMuted}`}>
-                {t('admin.panels.serviceNameField')} <span className="text-danger">*</span>
+                {t('admin.panels.serviceNameField')} <span className="text-danger-fg">*</span>
               </label>
               <div className="flex items-center gap-2">
                 <Input
@@ -277,7 +275,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
           </div>
         </form>
 
-        <div className="flex items-center justify-end pt-2 border-t border-line/60">
+        <div className="flex items-center justify-end pt-2 border-t border-line">
           <Button type="button" variant="secondary" onClick={onClose}>
             {t('common.close')}
           </Button>

@@ -24,8 +24,6 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [reason, setReason] = useState<string>('');
 
-  // Reset state whenever a different receipt is opened: the parent closes
-  // the modal via setRejectTarget(null) which bypasses handleClose.
   useEffect(() => {
     setSelectedPreset('');
     setReason('');
@@ -68,7 +66,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
       onClose={handleClose}
       maxWidth="md"
       title={t('admin.modals.rejectTitle')}
-      icon={<XCircle className="w-5 h-5 text-danger" />}
+      icon={<XCircle className="w-5 h-5 text-danger-fg" />}
     >
       <div className="space-y-4">
         <p className={`text-xs m-0 ${textSecondary}`}>
@@ -78,7 +76,6 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
           })}
         </p>
 
-        {/* Presets Chips */}
         <div className="space-y-2">
           <label className={`text-xs font-semibold block ${textPrimary}`}>
             {t('admin.modals.rejectReasonLabel')}
@@ -90,7 +87,11 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
                 <button
                   key={preset.key}
                   type="button"
-                  className={`px-3 py-1.5 rounded-xl text-xs transition-all active:scale-95 cursor-pointer border ${isSelected ? 'bg-danger/20 border-danger/40 text-danger font-semibold shadow-xs' : 'bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08]'}`}
+                  className={`px-3 py-1.5 rounded-ctl text-xs press rs-focus cursor-pointer border ${
+                    isSelected
+                      ? 'bg-danger-soft border-danger/35 text-danger-fg font-semibold'
+                      : 'bg-surface-2 border-line text-ink-soft hover:border-line-strong hover:bg-surface-3'
+                  }`}
                   onClick={() => handleSelectPreset(preset.key)}
                 >
                   {preset.label}
@@ -101,7 +102,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
         </div>
 
         <textarea
-          className={`w-full p-3 text-xs sm:text-sm rounded-xl border outline-none resize-none transition-all ${inputClass}`}
+          className={`w-full p-3 text-xs sm:text-sm rounded-tile border outline-none resize-none rs-focus ${inputClass}`}
           rows={2}
           placeholder={t('admin.modals.rejectReasonPlaceholder')}
           value={reason}

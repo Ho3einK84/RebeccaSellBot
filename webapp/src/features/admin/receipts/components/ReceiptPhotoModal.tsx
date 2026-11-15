@@ -123,49 +123,49 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           <span>{t('admin.receipts.photoModalTitle')}</span>
           {receiptId && (
-            <span dir="ltr" className="tnum text-xs text-brand font-normal">
+            <bdi dir="ltr" className="tnum font-mono text-xs text-brand-fg font-normal">
               #{receiptId.slice(-8)}
-            </span>
+            </bdi>
           )}
         </div>
       }
-      icon={<ImageIcon className="w-4 h-4 text-brand" />}
+      icon={<ImageIcon className="w-4 h-4 text-brand-fg" />}
       maxWidth="lg"
     >
-      <div className="flex items-center justify-between gap-2 mb-3">
-        {/* Receipt ID badge with click-to-copy */}
+      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
         <div className="flex items-center gap-1.5 min-w-0">
           {receiptId && (
             <button
               type="button"
               onClick={() => copy(receiptId, `receipt-photo-${receiptId}`)}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] tnum transition-all cursor-pointer bg-surface/[0.04] border-line/10 hover:bg-surface/[0.08] text-ink-soft`}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-ctl border text-xs tnum cursor-pointer bg-surface-2 border-line hover:border-line-strong text-ink-soft rs-focus"
               title={isCopied(`receipt-photo-${receiptId}`) ? t('common.copied') : t('common.copy')}
             >
               {isCopied(`receipt-photo-${receiptId}`) ? (
-                <Check className="w-3 h-3 text-ok" />
+                <Check className="w-3.5 h-3.5 text-ok-fg shrink-0" />
               ) : (
-                <Copy className="w-3 h-3 opacity-60" />
+                <Copy className="w-3.5 h-3.5 opacity-60 shrink-0" />
               )}
-              <span dir="ltr">#{receiptId.slice(-8)}</span>
+              <bdi dir="ltr" className="font-mono">
+                #{receiptId.slice(-8)}
+              </bdi>
             </button>
           )}
           {mediaType === 'document' && (
-            <span className="text-[10px] text-warn font-medium shrink-0">
+            <span className="text-xs text-warn-fg font-medium shrink-0">
               {t('admin.receipts.documentFile')}
             </span>
           )}
         </div>
 
-        {/* Action buttons: Zoom & Download */}
         <div className="flex items-center gap-1.5 shrink-0">
           {!hasError && (
             <button
               type="button"
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all active:scale-95 cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-ctl border text-xs font-medium press rs-focus cursor-pointer ${
                 isZoomed
-                  ? 'bg-warn/20 border-warn/40 text-warn'
-                  : 'bg-surface/[0.04] border-line/10 hover:bg-surface/[0.08] text-ink-soft'
+                  ? 'bg-warn-soft border-warn/35 text-warn-fg'
+                  : 'bg-surface-2 border-line hover:border-line-strong text-ink-soft'
               }`}
               onClick={() => setIsZoomed(!isZoomed)}
               title={isZoomed ? t('admin.receipts.zoomReset') : t('admin.receipts.zoomIn')}
@@ -179,7 +179,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
             type="button"
             disabled={isDownloading}
             onClick={handleDownload}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all active:scale-95 cursor-pointer disabled:opacity-50 bg-brand/20 border-brand/40 hover:bg-brand/30 text-brand`}
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer disabled:opacity-50 bg-brand-soft border-brand/30 hover:bg-brand/15 text-brand-fg"
             title={t('admin.receipts.downloadReceipt')}
           >
             {isDownloading ? (
@@ -193,9 +193,9 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       </div>
 
       <div
-        className={`rounded-2xl overflow-auto border flex items-center justify-center p-2 transition-all relative select-none ${
+        className={`rounded-card overflow-auto border flex items-center justify-center p-2 relative select-none ${
           isZoomed ? 'min-h-[380px] max-h-[75vh]' : 'min-h-[260px] max-h-[60vh]'
-        } bg-black/70 border-line/10`}
+        } bg-[#0e1218] border-line`}
         style={{
           touchAction: isZoomed ? 'pan-x pan-y' : 'auto',
           WebkitOverflowScrolling: 'touch',
@@ -203,38 +203,31 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       >
         {hasError ? (
           <div className="p-8 text-center flex flex-col items-center justify-center gap-3">
-            <ImageIcon className="w-10 h-10 text-ink-muted opacity-40" />
+            <ImageIcon className="w-10 h-10 text-ink-muted opacity-50" />
             <p className="text-xs text-ink-muted m-0">{t('admin.receipts.noPhoto')}</p>
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="primary"
               disabled={isDownloading}
+              loading={isDownloading}
               onClick={handleDownload}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold text-brand-ink bg-brand hover:bg-brand cursor-pointer disabled:opacity-50"
             >
-              {isDownloading ? (
-                <RotateCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Download className="w-3.5 h-3.5" />
-              )}
+              <Download className="w-3.5 h-3.5" />
               <span>{t('admin.receipts.downloadReceipt')}</span>
-            </button>
+            </Button>
           </div>
         ) : isLoadingPhoto || !previewSrc ? (
-          <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-brand text-xs">
+          <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-brand-fg text-xs">
             <Loader2 className="w-6 h-6 animate-spin" />
             <span>{t('common.loading')}</span>
           </div>
         ) : (
-          <div
-            className={`transition-all duration-200 ${
-              isZoomed ? 'w-[220%] max-w-none flex-shrink-0' : 'w-auto max-w-full'
-            }`}
-          >
+          <div className={isZoomed ? 'w-[220%] max-w-none flex-shrink-0' : 'w-auto max-w-full'}>
             <img
               key={previewSrc}
               src={previewSrc}
               alt="Receipt proof"
-              className={`rounded-xl shadow-md transition-all mx-auto select-none ${
+              className={`rounded-tile mx-auto select-none ${
                 isZoomed
                   ? 'w-full h-auto cursor-zoom-out'
                   : 'max-h-[55vh] w-auto max-w-full object-contain cursor-zoom-in'
@@ -250,17 +243,11 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       </div>
 
       <div className="modal-action mt-4 flex items-center justify-between gap-3">
-        <span className="text-[11px] text-ink-muted">
+        <span className="text-xs text-ink-muted">
           {!hasError &&
             (isZoomed ? t('admin.receipts.zoomHintActive') : t('admin.receipts.zoomHint'))}
         </span>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="h-9 px-4"
-          onClick={handleModalClose}
-        >
+        <Button type="button" variant="secondary" size="sm" onClick={handleModalClose}>
           {t('common.close')}
         </Button>
       </div>

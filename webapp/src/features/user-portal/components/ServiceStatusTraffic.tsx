@@ -52,9 +52,9 @@ export function getServiceStatusInfo(
       return {
         type: 'active',
         label: t('user.services.statusActive'),
-        badgeClass: 'bg-ok/10 text-ok border-ok/20',
-        dotClass: 'bg-ok animate-pulse',
-        isPulsing: true,
+        badgeClass: 'bg-ok/10 text-ok-fg border-ok/20',
+        dotClass: 'bg-ok',
+        isPulsing: false,
       };
     case 'limited':
       return {

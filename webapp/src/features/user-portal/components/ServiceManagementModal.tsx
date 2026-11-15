@@ -211,11 +211,9 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
       >
         <div className="flex flex-col gap-4 text-start">
           {/* Status & Timing Overview */}
-          <div
-            className={`p-3.5 rounded-2xl border flex flex-col gap-2.5 bg-surface/[0.02] border-line/10`}
-          >
+          <div className="p-3.5 rounded-card border flex flex-col gap-2.5 bg-surface-2 border-line">
             <div className="flex items-center justify-between gap-2">
-              <span className={`text-xs font-semibold ${textSecondary}`}>
+              <span className={`text-xs font-medium ${textSecondary}`}>
                 {t('user.services.trafficUsed')}
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -229,9 +227,9 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
               usedTraffic={config.panelUsedTraffic}
             />
 
-            <div className="flex items-center justify-between text-[11px] text-ink-muted pt-1 border-t border-line/60 gap-2 flex-wrap">
+            <div className="flex items-center justify-between text-[11px] text-ink-muted pt-2 border-t border-line gap-2 flex-wrap">
               <ServiceExpiryView expireTimestampSec={config.panelExpire} />
-              <span className="text-[10px] text-ink-muted tnum">
+              <span className="text-[11px] text-ink-muted tnum">
                 {formatServiceCreatedDate(config.createdAt, locale, t)}
               </span>
             </div>
@@ -239,7 +237,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
 
           {/* Quick Actions: Copy Link, QR, Refresh Status */}
           <div className="flex flex-col gap-2">
-            <h4 className={`text-xs font-bold uppercase tracking-wider px-1 ${textSecondary}`}>
+            <h4 className={`text-xs font-semibold px-1 m-0 ${textSecondary}`}>
               {t('user.services.quickActionsTitle')}
             </h4>
 
@@ -249,16 +247,20 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   <button
                     type="button"
                     onClick={handleCopySub}
-                    className={`min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border ${isSubCopied ? 'bg-ok text-ink border-ok' : 'bg-surface/[0.06] hover:bg-surface/10 text-ink border-line/10'}`}
+                    className={`min-h-11 py-2 px-3 rounded-ctl font-medium text-xs flex items-center justify-center gap-2 press rs-focus cursor-pointer border ${
+                      isSubCopied
+                        ? 'bg-ok-soft text-ok-fg border-ok/30'
+                        : 'bg-surface-2 hover:bg-surface-3 text-ink border-line-strong'
+                    }`}
                   >
                     {isSubCopied ? (
                       <>
-                        <Check className="w-4 h-4" />
+                        <Check className="w-4 h-4 shrink-0" />
                         <span>{t('user.services.linkCopied')}</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-4 h-4 shrink-0" />
                         <span>{t('user.services.copyLink')}</span>
                       </>
                     )}
@@ -267,9 +269,9 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   <button
                     type="button"
                     onClick={handleOpenQr}
-                    className={`min-h-[44px] py-2 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border bg-brand/20 hover:bg-brand/30 text-brand border-brand/30`}
+                    className="min-h-11 py-2 px-3 rounded-ctl font-medium text-xs flex items-center justify-center gap-2 press rs-focus cursor-pointer border bg-brand-soft hover:bg-brand/20 text-brand-fg border-brand/25"
                   >
-                    <QrCode className="w-4 h-4" />
+                    <QrCode className="w-4 h-4 shrink-0" />
                     <span>{t('user.services.showQr')}</span>
                   </button>
                 </>
@@ -281,9 +283,9 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
               type="button"
               onClick={handleRefreshStats}
               disabled={isRefreshing}
-              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer border bg-surface/[0.04] hover:bg-surface/[0.08] text-ink border-line/10 shadow-2xs disabled:opacity-50`}
+              className="w-full min-h-11 py-2.5 px-3 rounded-ctl font-medium text-xs flex items-center justify-center gap-2 press rs-focus cursor-pointer border bg-surface-2 hover:bg-surface-3 text-ink border-line-strong disabled:opacity-50"
             >
-              <RotateCw className={`w-4 h-4 text-brand ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RotateCw className={`w-4 h-4 text-brand-fg ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>
                 {isRefreshing ? t('user.services.refreshing') : t('user.services.refresh')}
               </span>
@@ -292,32 +294,36 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
 
           {/* Service Controls: Auto-Renew Toggle, Status Toggle, Revoke Link */}
           <div className="flex flex-col gap-2">
-            <h4 className={`text-xs font-bold uppercase tracking-wider px-1 ${textSecondary}`}>
+            <h4 className={`text-xs font-semibold px-1 m-0 ${textSecondary}`}>
               {t('user.services.controlsTitle')}
             </h4>
 
             {/* Auto-Renew Switch Card */}
-            <div
-              className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 bg-surface/[0.02] border-line/10`}
-            >
+            <div className="p-3.5 rounded-tile border flex items-center justify-between gap-3 bg-surface-2 border-line">
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className={`text-xs font-bold ${textPrimary}`}>
+                <span className={`text-xs font-semibold ${textPrimary}`}>
                   {t('user.services.autoRenewToggle')}
                 </span>
-                <span className={`text-[11px] leading-tight ${textSecondary}`}>
+                <span className={`text-[11px] leading-relaxed ${textSecondary}`}>
                   {t('user.services.autoRenewHint')}
                 </span>
               </div>
 
               <button
                 type="button"
+                role="switch"
+                aria-checked={autoRenewOptimistic}
                 onClick={handleToggleAutoRenew}
                 disabled={isTogglingAutoRenew}
                 aria-label={t('user.services.autoRenewToggle')}
-                className={`w-12 h-7 min-h-[28px] p-0.5 rounded-full transition-colors duration-200 ease-in-out relative shrink-0 cursor-pointer ${autoRenewOptimistic ? 'bg-ok' : 'bg-surface/20'} disabled:opacity-50`}
+                className={`w-11 h-6 p-0.5 rounded-full border transition-colors duration-150 relative shrink-0 cursor-pointer rs-focus ${
+                  autoRenewOptimistic ? 'bg-ok border-ok' : 'bg-surface-3 border-line-strong'
+                } disabled:opacity-50`}
               >
                 <div
-                  className={`w-6 h-6 rounded-full bg-surface shadow-md transform transition-transform duration-200 ease-in-out ${autoRenewOptimistic ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0'}`}
+                  className={`w-[18px] h-[18px] rounded-full bg-white shadow-[var(--shadow-card)] transform transition-transform duration-150 ${
+                    autoRenewOptimistic ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0'
+                  }`}
                 />
               </button>
             </div>
@@ -362,8 +368,8 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
           </div>
 
           {/* Bot Hand-off Actions */}
-          <div className="flex flex-col gap-2 pt-1 border-t border-line/60">
-            <h4 className={`text-xs font-bold uppercase tracking-wider px-1 ${textSecondary}`}>
+          <div className="flex flex-col gap-2 pt-3 border-t border-line">
+            <h4 className={`text-xs font-semibold px-1 m-0 ${textSecondary}`}>
               {t('user.services.botActionsTitle')}
             </h4>
 
@@ -371,34 +377,36 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('renew')}
-              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer bg-brand/10 hover:bg-brand/20 text-ink border-brand/25`}
+              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/20 text-ink border-brand/25"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-brand/20 text-brand flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-ctl bg-brand/15 text-brand-fg flex items-center justify-center shrink-0">
                   <RotateCw className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col text-start min-w-0">
-                  <span className="text-xs font-bold">{t('user.services.renewService')}</span>
+                  <span className="text-xs font-semibold">{t('user.services.renewService')}</span>
                   <span className={`text-[11px] truncate ${textSecondary}`}>
                     {t('user.services.renewHint')}
                   </span>
                 </div>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-brand shrink-0" />
+              <ExternalLink className="w-3.5 h-3.5 text-brand-fg shrink-0" />
             </button>
 
             {/* Transfer in Bot */}
             <button
               type="button"
               onClick={() => handleOpenBotAction('transfer')}
-              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer bg-surface/[0.02] hover:bg-surface/[0.06] text-ink border-line/10 shadow-2xs`}
+              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between press rs-focus cursor-pointer bg-surface-2 hover:bg-surface-3 text-ink border-line"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-info/20 text-info flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-ctl bg-info-soft text-info-fg flex items-center justify-center shrink-0">
                   <Send className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col text-start min-w-0">
-                  <span className="text-xs font-bold">{t('user.services.transferService')}</span>
+                  <span className="text-xs font-semibold">
+                    {t('user.services.transferService')}
+                  </span>
                   <span className={`text-[11px] truncate ${textSecondary}`}>
                     {t('user.services.transferHint')}
                   </span>
@@ -411,20 +419,20 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('delete')}
-              className={`w-full min-h-[44px] p-3 rounded-xl border flex items-center justify-between transition-all active:scale-95 cursor-pointer bg-danger/5 hover:bg-danger/15 text-danger border-danger/20`}
+              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between press rs-focus cursor-pointer bg-danger-soft hover:bg-danger/20 text-danger-fg border-danger/25"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-danger/20 text-danger flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-ctl bg-danger/15 text-danger-fg flex items-center justify-center shrink-0">
                   <Trash2 className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col text-start min-w-0">
-                  <span className="text-xs font-bold">{t('user.services.deleteService')}</span>
+                  <span className="text-xs font-semibold">{t('user.services.deleteService')}</span>
                   <span className={`text-[11px] truncate ${textSecondary}`}>
                     {t('user.services.deleteHint')}
                   </span>
                 </div>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-danger shrink-0" />
+              <ExternalLink className="w-3.5 h-3.5 text-danger-fg shrink-0" />
             </button>
           </div>
         </div>

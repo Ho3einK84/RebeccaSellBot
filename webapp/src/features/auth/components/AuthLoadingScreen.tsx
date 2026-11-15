@@ -1,26 +1,34 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Shield } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 
 export const AuthLoadingScreen: React.FC = () => {
   const { t, isRtl } = useLanguage();
-  const { textSecondary } = useThemeTokens();
 
   return (
     <div
-      className="fixed inset-0 w-screen"
+      className="fixed inset-0 w-screen flex items-center justify-center p-4 bg-canvas text-ink"
       style={{ height: '100dvh' }}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="flex items-center justify-center w-full h-full p-4">
-        <div
-          className={`p-8 max-w-sm w-full text-center flex flex-col items-center gap-4 rounded-2xl border bg-surface/90 border-line/10 backdrop-blur-xl shadow-2xl shadow-lg`}
-        >
-          <Loader2 className={`w-10 h-10 animate-spin text-brand`} />
-          <p className={`text-sm font-medium ${textSecondary}`}>{t('auth.connecting')}</p>
+      <Card
+        padding="lg"
+        className="w-full max-w-xs flex flex-col items-center text-center gap-4 anim-rise"
+      >
+        <IconTile tone="brand" size="lg">
+          <Shield className="w-5 h-5" />
+        </IconTile>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-center gap-2 text-sm font-medium text-ink">
+            <Loader2 className="w-4 h-4 animate-spin text-brand-fg shrink-0" />
+            <span>{t('common.loading')}</span>
+          </div>
+          <p className="text-xs text-ink-muted m-0">{t('user.serviceOnlineStatus')}</p>
         </div>
-      </div>
+      </Card>
     </div>
   );
 };

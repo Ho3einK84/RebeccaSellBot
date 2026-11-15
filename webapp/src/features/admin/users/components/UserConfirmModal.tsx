@@ -3,6 +3,7 @@ import { AlertTriangle, Check } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Input } from '@/shared/components/ui/Input.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 
@@ -48,26 +49,24 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
     onClose();
   };
 
+  const tileTone = variant === 'danger' ? 'danger' : variant === 'warning' ? 'warn' : 'brand';
+
   return (
     <Modal isOpen={isOpen} onClose={handleClose} maxWidth="sm" closeOnBackdrop={!loading}>
       <div className="space-y-4">
-        {/* Header */}
         <div className="flex items-start gap-3">
-          <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${variant === 'danger' ? 'bg-danger/15 border-danger/25 text-danger' : variant === 'warning' ? 'bg-warn/15 border-warn/25 text-warn' : 'bg-brand/15 border-brand/25 text-brand'}`}
-          >
-            <AlertTriangle className="w-5 h-5" />
-          </div>
+          <IconTile tone={tileTone} size="md">
+            <AlertTriangle />
+          </IconTile>
           <div className="min-w-0 flex-1">
-            <h3 className={`font-bold text-sm sm:text-base m-0 ${textPrimary}`}>{title}</h3>
-            <p className={`text-xs mt-1 leading-relaxed ${textSecondary}`}>{description}</p>
+            <h3 className={`font-semibold text-sm sm:text-base m-0 ${textPrimary}`}>{title}</h3>
+            <p className={`text-xs mt-1 leading-relaxed m-0 ${textSecondary}`}>{description}</p>
           </div>
         </div>
 
-        {/* Reason Input if requested */}
         {showReasonInput && (
           <div className="space-y-1.5 pt-1">
-            <label className={`text-[11px] font-medium block ${textSecondary}`}>
+            <label className={`text-xs font-medium block ${textSecondary}`}>
               {t('admin.users.banReasonLabel')}
             </label>
             <Input
@@ -79,7 +78,6 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex items-center gap-2 pt-2 border-t border-line">
           <Button
             type="button"

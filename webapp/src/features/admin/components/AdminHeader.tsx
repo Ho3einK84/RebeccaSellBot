@@ -1,22 +1,12 @@
 import React from 'react';
-import {
-  ShieldCheck,
-  RotateCw,
-  Globe,
-  Check,
-  Copy,
-  Sun,
-  Moon,
-  LogOut,
-  FlaskConical,
-} from 'lucide-react';
+import { ShieldCheck, RotateCw, Globe, Check, Copy, Sun, Moon, LogOut, Eye } from 'lucide-react';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { IconButton } from '@/shared/components/ui/IconButton.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { TopBar } from '@/shared/components/layout/TopBar.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { useTheme } from '@/shared/theme/ThemeContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { toPersianDigits } from '@/shared/lib/formatters.js';
@@ -38,7 +28,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   onSwitchToUserPortal,
 }) => {
   const { t, locale, languageSelectionEnabled, setLocale } = useLanguage();
-  const { isDark, toggleTheme } = useThemeTokens();
+  const { isDark, toggleTheme } = useTheme();
   const { triggerHaptic } = useHaptic();
   const { copy, isCopied } = useCopy();
 
@@ -54,7 +44,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       }
       title={t('admin.title')}
       badge={
-        <Badge variant="warning" dot pulse size="xs" className="font-semibold">
+        <Badge variant="warning" dot size="xs" className="font-semibold">
           {t('admin.betaBadge')}
         </Badge>
       }
@@ -69,7 +59,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             }}
           >
             {isDark ? (
-              <Sun className="h-4 w-4 text-warn" />
+              <Sun className="h-4 w-4 text-warn-fg" />
             ) : (
               <Moon className="h-4 w-4 text-ink-soft" />
             )}
@@ -90,7 +80,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             >
               <span className="flex items-center gap-0.5">
                 <Globe className="h-3.5 w-3.5 opacity-70" />
-                <span className="text-[10px] font-bold uppercase leading-none">
+                <span className="text-[10px] font-semibold leading-none">
                   {locale === 'fa' ? 'EN' : 'FA'}
                 </span>
               </span>
@@ -113,11 +103,10 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
               circle
               className="shrink-0 ring-1 ring-line"
             />
-            <span className="min-w-0 truncate text-[11px] leading-tight text-ink-muted">
-              {t('common.welcome')}{' '}
-              <span className="text-xs font-semibold text-ink">{adminDisplayName}</span>
+            <span className="min-w-0 truncate text-xs font-semibold text-ink">
+              {adminDisplayName}
             </span>
-            <span className="hidden shrink-0 rounded-md border border-brand/25 bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand sm:inline-block">
+            <span className="hidden shrink-0 rounded-md border border-brand/25 bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand-fg sm:inline-block">
               {t('admin.role')}
             </span>
           </div>
@@ -126,16 +115,17 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             <button
               type="button"
               onClick={() => copy(String(user.id), 'header-id')}
-              className="press rs-focus inline-flex items-center gap-1 rounded-md border border-line bg-surface-2 px-1.5 py-0.5 tnum text-[11px] text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+              className="press rs-focus inline-flex h-7 items-center gap-1 rounded-md border border-line bg-surface-2 px-2 tnum text-[11px] text-ink-soft hover:border-line-strong hover:text-ink cursor-pointer"
               title={t('common.copy')}
               aria-label={t('common.copy')}
             >
-              <span className="text-[10px] opacity-50">#</span>
-              <span dir="ltr">{locale === 'fa' ? toPersianDigits(String(user.id)) : user.id}</span>
+              <bdi dir="ltr" className="font-mono">
+                #{locale === 'fa' ? toPersianDigits(String(user.id)) : user.id}
+              </bdi>
               {isCopied('header-id') ? (
-                <Check className="h-3 w-3 text-ok" />
+                <Check className="h-3 w-3 text-ok-fg shrink-0" />
               ) : (
-                <Copy className="h-2.5 w-2.5 opacity-50" />
+                <Copy className="h-3 w-3 opacity-60 shrink-0" />
               )}
             </button>
 
@@ -149,7 +139,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                   onSwitchToUserPortal();
                 }}
               >
-                <FlaskConical className="h-4 w-4" />
+                <Eye className="h-4 w-4" />
               </IconButton>
             ) : null}
 

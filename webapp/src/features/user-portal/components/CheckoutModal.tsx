@@ -345,20 +345,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 1: Loading Skeleton */}
         {step === 'loading' && (
           <div className="flex flex-col gap-4">
-            <div
-              className={`p-4 rounded-2xl border flex flex-col gap-3 bg-surface/[0.03] border-line/[0.08]`}
-            >
+            <div className="p-4 rounded-tile border flex flex-col gap-3 bg-surface-2 border-line">
               <div className="flex items-center justify-between">
-                <Skeleton className="h-5 w-36 rounded-lg" />
+                <Skeleton className="h-5 w-36 rounded-ctl" />
                 <Skeleton className="h-5 w-16 rounded-full" />
               </div>
-              <div className="pt-2 border-t border-line/50 flex items-center justify-between">
-                <Skeleton className="h-4 w-20 rounded-md" />
-                <Skeleton className="h-5 w-24 rounded-md" />
+              <div className="pt-2 border-t border-line flex items-center justify-between">
+                <Skeleton className="h-4 w-20 rounded-ctl" />
+                <Skeleton className="h-5 w-24 rounded-ctl" />
               </div>
             </div>
 
-            <div className="flex items-center justify-center py-6 gap-2 text-brand text-xs font-medium">
+            <div className="flex items-center justify-center py-6 gap-2 text-brand-fg text-xs font-medium">
               <Loader2 className="w-5 h-5 animate-spin" />
               <span>{t('common.loading')}</span>
             </div>
@@ -371,7 +369,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             {/* Expiry countdown banner */}
             <div className="flex items-center justify-between px-1">
               <span className="text-xs text-ink-muted">{t('user.shop.orderModalTitle')}</span>
-              <div className="flex items-center gap-1.5 text-xs text-warn tnum font-semibold px-2.5 py-1 rounded-lg bg-warn/10 border border-warn/20">
+              <div className="flex items-center gap-1.5 text-xs text-warn-fg tnum font-semibold px-2.5 py-1 rounded-ctl bg-warn-soft border border-warn/25">
                 <Clock className="w-3.5 h-3.5" />
                 <span>
                   {t('user.shop.expiresIn').replace('{time}', formatCountdown(remainingSeconds))}
@@ -380,21 +378,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {/* Server-confirmed package card */}
-            <div
-              className={`p-4 rounded-2xl border bg-surface/[0.03] border-line/[0.08] shadow-2xs`}
-            >
+            <div className="p-4 rounded-tile border bg-surface-2 border-line">
               <div className="flex items-center justify-between mb-2">
-                <span className={`font-bold text-sm sm:text-base text-ink`}>{checkout.name}</span>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand/10 text-brand border border-brand/20">
+                <span className="font-semibold text-sm sm:text-base text-ink">{checkout.name}</span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand-soft text-brand-fg border border-brand/25">
                   {t('user.shop.trafficUnit').replace('{gb}', formatNumber(checkout.gb))}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs text-ink-muted pt-2 border-t border-line/50">
+              <div className="flex items-center justify-between text-xs text-ink-muted pt-2 border-t border-line">
                 <span>
                   {t('user.shop.daysUnit').replace('{days}', formatNumber(checkout.days))}
                 </span>
-                <span className="font-bold text-sm text-brand">
+                <span className="font-semibold text-sm text-brand-fg tnum">
                   {formatToman(checkout.price)} {displayCurrency}
                 </span>
               </div>
@@ -403,24 +399,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             {/* Feature points */}
             <div className="flex flex-col gap-1.5 px-1 text-[11px] text-ink-muted">
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-ok shrink-0" />
+                <ShieldCheck className="w-3.5 h-3.5 text-ok-fg shrink-0" />
                 <span>{t('user.shop.fastConnectionFeature')}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-ok shrink-0" />
+                <ShieldCheck className="w-3.5 h-3.5 text-ok-fg shrink-0" />
                 <span>{t('user.shop.allPlatformsFeature')}</span>
               </div>
             </div>
 
             {/* Wallet Balance Status */}
-            <div
-              className={`p-3 rounded-xl border flex items-center justify-between text-xs bg-ok/10 border-ok/20 text-ok`}
-            >
+            <div className="p-3 rounded-tile border flex items-center justify-between text-xs bg-ok-soft border-ok/25 text-ok-fg">
               <div className="flex items-center gap-2">
                 <Wallet className="w-4 h-4 shrink-0" />
                 <span>{t('user.dashboard.availableBalance')}</span>
               </div>
-              <span className="tnum font-bold">
+              <span className="tnum font-semibold">
                 {formatToman(checkout.availableBalance)} {displayCurrency}
               </span>
             </div>
@@ -431,10 +425,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 type="button"
                 variant="primary"
                 size="md"
+                block
                 disabled={isProcessing}
                 loading={isProcessing}
                 onClick={handleConfirmCheckout}
-                className="w-full font-bold shadow-md"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>{t('user.shop.confirmOrder')}</span>
@@ -457,12 +451,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 3: Insufficient Balance */}
         {step === 'insufficient_balance' && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-warn/10 border border-warn/20 flex items-center justify-center text-warn">
+            <div className="w-12 h-12 rounded-tile bg-warn-soft border border-warn/25 flex items-center justify-center text-warn-fg">
               <AlertCircle className="w-6 h-6" />
             </div>
 
             <div className="flex flex-col gap-1">
-              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
+              <h3 className="text-sm sm:text-base font-semibold text-ink">
                 {t('user.shop.insufficientBalance')}
               </h3>
               <p className="text-xs text-ink-muted m-0">
@@ -471,49 +465,35 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {/* Breakdown card */}
-            <div
-              className={`w-full p-3.5 rounded-xl border flex flex-col gap-2 text-xs text-start bg-surface/[0.03] border-line/[0.08]`}
-            >
+            <div className="w-full p-3.5 rounded-tile border flex flex-col gap-2 text-xs text-start bg-surface-2 border-line">
               <div className="flex items-center justify-between">
                 <span className="text-ink-muted">{t('common.amount')}:</span>
-                <span className="tnum font-bold">
+                <span className="tnum font-semibold">
                   {formatToman(checkout?.price ?? pkg.price)} {displayCurrency}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-ink-muted">{t('user.dashboard.availableBalance')}:</span>
-                <span className="tnum font-bold">
+                <span className="tnum font-semibold">
                   {formatToman(checkout?.availableBalance ?? availableBalance)} {displayCurrency}
                 </span>
               </div>
-              <div className="flex items-center justify-between pt-1.5 border-t border-line/60 text-danger font-semibold">
+              <div className="flex items-center justify-between pt-2 border-t border-line text-danger-fg font-semibold">
                 <span>{t('user.shop.chargeNeeded').split(':')[0]}:</span>
-                <span className="tnum font-bold">
+                <span className="tnum font-semibold">
                   {formatToman(deficitAmount)} {displayCurrency}
                 </span>
               </div>
             </div>
 
             <div className="w-full flex flex-col gap-2 mt-1">
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={handleGoToWallet}
-                className="w-full font-bold shadow-md bg-warn hover:bg-warn text-slate-950 border-warn/30"
-              >
+              <Button type="button" variant="primary" size="md" block onClick={handleGoToWallet}>
                 <Wallet className="w-4 h-4" />
                 <span>{t('user.shop.goToWallet')}</span>
                 <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
               </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={handleClose}
-                className="w-full"
-              >
+              <Button type="button" variant="secondary" size="md" block onClick={handleClose}>
                 {t('common.cancel')}
               </Button>
             </div>
@@ -523,12 +503,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 4: Checkout Expired */}
         {step === 'expired' && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-warn/10 border border-warn/20 flex items-center justify-center text-warn">
+            <div className="w-12 h-12 rounded-tile bg-warn-soft border border-warn/25 flex items-center justify-center text-warn-fg">
               <Clock className="w-6 h-6" />
             </div>
 
             <div className="flex flex-col gap-1">
-              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
+              <h3 className="text-sm sm:text-base font-semibold text-ink">
                 {t('user.shop.checkoutExpiredTitle')}
               </h3>
               <p className="text-xs text-ink-muted m-0 max-w-xs">
@@ -541,23 +521,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 type="button"
                 variant="primary"
                 size="md"
+                block
                 onClick={() => {
                   triggerHaptic('medium');
                   void createCheckoutSession();
                 }}
-                className="w-full font-bold shadow-md"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>{t('user.shop.recreateCheckout')}</span>
               </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={handleClose}
-                className="w-full"
-              >
+              <Button type="button" variant="secondary" size="md" block onClick={handleClose}>
                 {t('common.cancel')}
               </Button>
             </div>
@@ -567,12 +541,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 5: Verifying Screen (Outcome Pending) */}
         {step === 'verifying' && (
           <div className="flex flex-col items-center text-center gap-4 py-3">
-            <div className="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand">
+            <div className="w-12 h-12 rounded-tile bg-brand-soft border border-brand/25 flex items-center justify-center text-brand-fg">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
 
             <div className="flex flex-col gap-1.5 max-w-sm">
-              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
+              <h3 className="text-sm sm:text-base font-semibold text-ink">
                 {t('user.shop.orderVerifyingTitle')}
               </h3>
               <p className="text-xs text-ink-muted m-0 leading-relaxed">
@@ -581,24 +555,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             <div className="w-full flex flex-col gap-2 mt-2">
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={handleGoToServices}
-                className="w-full font-bold shadow-md"
-              >
+              <Button type="button" variant="primary" size="md" block onClick={handleGoToServices}>
                 <span>{t('user.shop.goToServices')}</span>
                 <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
               </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={handleClose}
-                className="w-full"
-              >
+              <Button type="button" variant="secondary" size="md" block onClick={handleClose}>
                 {t('common.close')}
               </Button>
             </div>
@@ -608,12 +570,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 6: Creation Error or Confirm Error */}
         {(step === 'creation_error' || step === 'confirm_error') && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-danger/10 border border-danger/20 flex items-center justify-center text-danger">
+            <div className="w-12 h-12 rounded-tile bg-danger-soft border border-danger/25 flex items-center justify-center text-danger-fg">
               <AlertCircle className="w-6 h-6" />
             </div>
 
             <div className="flex flex-col gap-1 max-w-xs">
-              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
+              <h3 className="text-sm sm:text-base font-semibold text-ink">
                 {t('user.shop.checkoutErrorTitle')}
               </h3>
               <p className="text-xs text-ink-muted m-0">
@@ -626,6 +588,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 type="button"
                 variant="primary"
                 size="md"
+                block
                 onClick={() => {
                   triggerHaptic('medium');
                   const retryAction = resolveRetryAction();
@@ -633,19 +596,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     void createCheckoutSession();
                   }
                 }}
-                className="w-full font-bold shadow-md"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>{t('user.shop.retry')}</span>
               </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={handleClose}
-                className="w-full"
-              >
+              <Button type="button" variant="secondary" size="md" block onClick={handleClose}>
                 {t('common.cancel')}
               </Button>
             </div>
@@ -655,22 +611,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 7: Success Screen */}
         {step === 'success' && successData && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-ok/10 border border-ok/20 flex items-center justify-center text-ok">
+            <div className="w-12 h-12 rounded-tile bg-ok-soft border border-ok/25 flex items-center justify-center text-ok-fg">
               <CheckCircle2 className="w-6 h-6" />
             </div>
 
             <div className="flex flex-col gap-1">
-              <h3 className={`text-sm sm:text-base font-bold text-ink`}>
+              <h3 className="text-sm sm:text-base font-semibold text-ink">
                 {t('user.shop.orderSuccess')}
               </h3>
             </div>
 
             {/* Service Username */}
-            <div
-              className={`w-full p-3 rounded-xl border flex items-center justify-between text-xs bg-surface/[0.03] border-line/[0.08]`}
-            >
+            <div className="w-full p-3 rounded-tile border flex items-center justify-between text-xs bg-surface-2 border-line">
               <span className="text-ink-muted">{t('user.shop.configUsername')}:</span>
-              <span className="font-mono font-bold text-ink">{successData.configUsername}</span>
+              <bdi dir="ltr" className="font-mono font-semibold text-ink">
+                {successData.configUsername}
+              </bdi>
             </div>
 
             {/* Subscription URL with Copy feedback */}
@@ -680,8 +636,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
+                    dir="ltr"
                     value={successData.subUrl}
-                    className="flex-1 py-2 px-3 rounded-xl border text-xs font-mono bg-surface-2 border-line select-all truncate text-ink-soft"
+                    className="flex-1 h-10 px-3 rounded-ctl border text-xs font-mono bg-surface-2 border-line select-all truncate text-ink-soft"
                   />
                   <button
                     type="button"
@@ -689,7 +646,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       triggerHaptic('light');
                       copy(successData.subUrl!, 'checkout-sub-url');
                     }}
-                    className={`py-2 px-3.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${isCopied('checkout-sub-url') ? 'bg-ok text-brand-ink' : 'bg-brand hover:bg-brand text-brand-ink shadow-sm'}`}
+                    className={`h-10 px-3.5 rounded-ctl text-xs font-medium flex items-center gap-1.5 press rs-focus cursor-pointer shrink-0 ${
+                      isCopied('checkout-sub-url')
+                        ? 'bg-ok text-white'
+                        : 'bg-brand hover:bg-brand-hover text-brand-ink'
+                    }`}
                   >
                     {isCopied('checkout-sub-url') ? (
                       <>
@@ -707,9 +668,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
             )}
 
-            {/* QR Code */}
+            {/* High-contrast white QR Code frame */}
             {qrSrc ? (
-              <div className="bg-surface p-3 rounded-2xl shadow-sm border border-line flex items-center justify-center my-1">
+              <div className="bg-white p-3 rounded-card border border-line flex items-center justify-center my-1">
                 <img
                   src={qrSrc}
                   alt={t('user.services.qrTitle')}
@@ -717,31 +678,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 />
               </div>
             ) : successData.subUrl ? (
-              <div className="bg-surface p-3 rounded-2xl shadow-sm border border-line flex items-center justify-center my-1 w-[184px] h-[184px] sm:w-[204px] sm:h-[204px]">
+              <div className="bg-surface-2 p-3 rounded-card border border-line flex items-center justify-center my-1 w-[184px] h-[184px] sm:w-[204px] sm:h-[204px]">
                 <Loader2 className="w-6 h-6 animate-spin text-ink-muted" />
               </div>
             ) : null}
 
             {/* Action Button: Go to My Services */}
             <div className="w-full flex flex-col gap-2 mt-2">
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={handleGoToServices}
-                className="w-full font-bold shadow-md"
-              >
+              <Button type="button" variant="primary" size="md" block onClick={handleGoToServices}>
                 <span>{t('user.shop.goToServices')}</span>
                 <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
               </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={handleClose}
-                className="w-full"
-              >
+              <Button type="button" variant="secondary" size="md" block onClick={handleClose}>
                 {t('common.close')}
               </Button>
             </div>

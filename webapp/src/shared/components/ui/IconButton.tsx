@@ -5,7 +5,7 @@ export type IconButtonTone = 'neutral' | 'brand' | 'danger';
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   children: ReactNode;
-  /** Accessible label — required, these buttons are icon-only. */
+  /** Accessible label — required for icon-only actions. */
   label: string;
   tone?: IconButtonTone;
   size?: 'sm' | 'md';
@@ -13,24 +13,26 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
 }
 
 const toneClasses: Record<IconButtonTone, string> = {
-  neutral: 'bg-surface-2 border-line text-ink-soft hover:text-ink hover:border-line-strong',
-  brand: 'bg-brand-soft border-brand/30 text-brand hover:bg-brand/20',
-  danger: 'bg-danger-soft border-danger/30 text-danger hover:bg-danger/20',
+  neutral:
+    'bg-surface-2 border-line text-ink-soft hover:text-ink hover:border-line-strong hover:bg-surface-3',
+  brand: 'bg-brand-soft border-brand/25 text-brand-fg hover:bg-brand/20',
+  danger: 'bg-danger-soft border-danger/25 text-danger-fg hover:bg-danger/20',
 };
 
-/**
- * Icon-only control with a guaranteed 40/44px hit area, one border radius and
- * one active treatment — replaces the mix of circles, squircles and pills that
- * used to sit next to each other in the headers.
- */
+const sizeClasses = {
+  sm: 'w-9 h-9 rounded-ctl [&>svg]:w-4 [&>svg]:h-4',
+  md: 'w-11 h-11 rounded-ctl [&>svg]:w-[18px] [&>svg]:h-[18px]',
+} as const;
+
 export const IconButton: React.FC<IconButtonProps> = ({
   children,
   label,
   tone = 'neutral',
-  size = 'md',
+  size = 'sm',
   active = false,
   className = '',
   onClick,
+  disabled,
   ...props
 }) => {
   const { triggerHaptic } = useHaptic();
@@ -39,16 +41,16 @@ export const IconButton: React.FC<IconButtonProps> = ({
     <button
       type="button"
       aria-label={label}
-      title={label}
-      className={`press rs-focus inline-flex items-center justify-center shrink-0 border ${
-        size === 'md' ? 'w-11 h-11 rounded-tile' : 'w-9 h-9 rounded-ctl'
-      } ${toneClasses[tone]} ${
-        active ? '!border-brand/50 !text-brand !bg-brand-soft' : ''
-      } ${className}`}
+      title={props.title ?? label}
+      disabled={disabled}
       onClick={(e) => {
+        if (disabled) return;
         triggerHaptic('light');
         onClick?.(e);
       }}
+      className={`inline-flex items-center justify-center shrink-0 border rs-focus press cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${sizeClasses[size]} ${
+        active ? toneClasses.brand : toneClasses[tone]
+      } ${className}`}
       {...props}
     >
       {children}

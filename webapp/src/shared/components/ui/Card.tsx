@@ -5,7 +5,7 @@ export type CardTone = 'default' | 'subtle' | 'brand' | 'danger';
 export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  /** Rendered as a nested surface inside another card. */
+  /** Rendered as a nested surface inside another card (drops radius to match padding). */
   subCard?: boolean;
   interactive?: boolean;
   tone?: CardTone;
@@ -22,8 +22,8 @@ const paddingClasses: Record<CardPadding, string> = {
 const toneClasses: Record<CardTone, string> = {
   default: '',
   subtle: '!bg-surface-2',
-  brand: '!bg-brand-soft !border-brand/25',
-  danger: '!bg-danger-soft !border-danger/25',
+  brand: '!bg-brand-soft !border-brand/30',
+  danger: '!bg-danger-soft !border-danger/30',
 };
 
 export const Card: React.FC<CardProps> = ({
@@ -41,10 +41,8 @@ export const Card: React.FC<CardProps> = ({
     <div
       className={`${subCard ? 'rounded-tile' : 'rounded-card'} border ${
         subCard ? subCardClass : cardClass
-      } ${paddingClasses[padding]} ${toneClasses[tone]} ${
-        interactive
-          ? 'press rs-focus cursor-pointer hover:border-line-strong hover:bg-surface-3/40'
-          : ''
+      } ${toneClasses[tone]} ${paddingClasses[padding]} ${
+        interactive ? 'cursor-pointer press hover:border-line-strong hover:bg-surface-2' : ''
       } ${className}`}
       {...props}
     >

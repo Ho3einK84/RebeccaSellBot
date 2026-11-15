@@ -16,7 +16,7 @@ interface TransactionItemProps {
 
 export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }) => {
   const { t, locale, isRtl } = useLanguage();
-  const { isDark, subCardClass } = useThemeTokens();
+  const { subCardClass } = useThemeTokens();
   const { formatToman } = useFormatters();
 
   const isCredit = tx.amount > 0;
@@ -31,27 +31,25 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }
 
   return (
     <div
-      className={`p-3.5 rounded-2xl border flex items-center justify-between text-start gap-2.5 transition-all ${
-        isDark
-          ? `${subCardClass} hover:border-line/[0.12]`
-          : 'bg-surface border-line/80 shadow-2xs hover:border-line-strong'
-      }`}
+      className={`p-3.5 rounded-tile border flex items-center justify-between text-start gap-3 transition-colors ${subCardClass} hover:border-line-strong`}
     >
       <div className="flex items-center gap-3 min-w-0">
         <div
-          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+          className={`w-8 h-8 rounded-ctl flex items-center justify-center shrink-0 ${
             isCredit
-              ? 'bg-ok/10 text-ok border border-ok/20'
-              : 'bg-danger/10 text-danger border border-danger/20'
+              ? 'bg-ok-soft text-ok-fg border border-ok/20'
+              : 'bg-danger-soft text-danger-fg border border-danger/20'
           }`}
         >
           <Icon className="w-4 h-4" />
         </div>
 
         <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold truncate text-ink">{typeLabel}</span>
-            <span className="text-[10px] text-ink-muted tnum">{formattedCreatedAt}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs font-semibold truncate text-ink">{typeLabel}</span>
+            <bdi dir="ltr" className="text-[11px] text-ink-muted tnum shrink-0">
+              {formattedCreatedAt}
+            </bdi>
           </div>
           <span className="text-[11px] text-ink-muted truncate" title={friendlyDescription}>
             {friendlyDescription}
@@ -60,14 +58,14 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }
       </div>
 
       <div className="flex flex-col items-end shrink-0">
-        <span
+        <bdi
           dir="ltr"
-          className={`tnum font-bold text-xs sm:text-sm ${isCredit ? 'text-ok' : 'text-danger'}`}
+          className={`tnum font-semibold text-xs sm:text-sm ${isCredit ? 'text-ok-fg' : 'text-danger-fg'}`}
         >
           {isCredit ? '+' : ''}
           {formatToman(tx.amount)} {displayCurrency}
-        </span>
-        <span className="text-[10px] text-ink-muted tnum">
+        </bdi>
+        <span className="text-[11px] text-ink-muted tnum">
           {t('user.wallet.balanceAfterLabel').replace('{amount}', formatToman(tx.balanceAfter))}
         </span>
       </div>

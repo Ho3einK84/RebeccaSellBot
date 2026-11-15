@@ -22,7 +22,7 @@ export const AdminDesktopNav: React.FC<AdminDesktopNavProps> = ({
       items={tabs}
       activeId={activeTab}
       onSelect={onSelectTab}
-      ariaLabel={t('admin.navLabel')}
+      ariaLabel={t('admin.navAriaLabel')}
     />
   );
 };
