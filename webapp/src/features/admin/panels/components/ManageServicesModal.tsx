@@ -4,6 +4,7 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -105,9 +106,21 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${t('admin.panels.manageServicesTitle')} — ${panel.name}`}
-      icon={<Layers className="w-5 h-5 text-brand-fg" />}
+      title={t('admin.panels.manageServicesTitle')}
+      subtitle={panel.name}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <Layers />
+        </IconTile>
+      }
       maxWidth="lg"
+      footer={
+        <div className="flex items-center justify-end">
+          <Button type="button" variant="secondary" size="sm" onClick={onClose}>
+            {t('common.close')}
+          </Button>
+        </div>
+      }
     >
       <div className="space-y-5">
         {error && (
@@ -131,7 +144,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
               >
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="w-7 h-7 rounded-lg border flex items-center justify-center tnum text-xs font-semibold bg-surface border-line text-brand-fg">
-                    <bdi dir="ltr">{service.serviceId}</bdi>
+                    <bdi dir="ltr">{formatNumber(service.serviceId)}</bdi>
                   </span>
                   <span className={`text-sm font-semibold ${textPrimary}`}>{service.name}</span>
 
@@ -274,12 +287,6 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
             </div>
           </div>
         </form>
-
-        <div className="flex items-center justify-end pt-2 border-t border-line">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            {t('common.close')}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

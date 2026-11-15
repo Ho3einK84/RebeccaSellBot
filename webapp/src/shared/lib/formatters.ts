@@ -34,6 +34,12 @@ export function formatNumber(num: number, locale: string = 'fa'): string {
   return rounded.toLocaleString('en-US');
 }
 
+export function formatId(value: string | number | null | undefined, locale: string = 'fa'): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const raw = String(value);
+  return locale === 'fa' ? toPersianDigits(raw) : raw;
+}
+
 export function formatCardNumberSpaced(raw: string): string {
   const cleaned = normalizeInputDigits(raw).replace(/\D/g, '');
   return cleaned.replace(/(\d{4})/g, '$1 ').trim();

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { XCircle, X } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface RejectReceiptModalProps {
@@ -20,6 +22,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
+  const { formatId } = useFormatters();
   const { inputClass, textPrimary, textSecondary } = useThemeTokens();
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [reason, setReason] = useState<string>('');
@@ -65,14 +68,49 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
       isOpen={Boolean(receipt)}
       onClose={handleClose}
       maxWidth="md"
+      closeOnBackdrop={!loading}
       title={t('admin.modals.rejectTitle')}
-      icon={<XCircle className="w-5 h-5 text-danger-fg" />}
+      icon={
+        <IconTile tone="danger" size="sm">
+          <XCircle />
+        </IconTile>
+      }
+      footer={
+        <div className="flex items-center gap-2.5">
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-1"
+            onClick={handleClose}
+            disabled={loading}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            className="flex-1"
+            disabled={
+              loading ||
+              (!selectedPreset && !reason.trim()) ||
+              (selectedPreset === 'other' && !reason.trim())
+            }
+            loading={loading}
+            onClick={handleConfirm}
+          >
+            <X className="w-3.5 h-3.5" />
+            <span>
+              {loading ? t('admin.modals.rejectSubmitting') : t('admin.modals.rejectSubmit')}
+            </span>
+          </Button>
+        </div>
+      }
     >
       <div className="space-y-4">
-        <p className={`text-xs m-0 ${textSecondary}`}>
+        <p className={`text-xs m-0 leading-relaxed ${textSecondary}`}>
           {t('admin.modals.rejectConfirm', {
-            id: receipt.id,
-            userId: receipt.telegramId,
+            id: formatId(receipt.id),
+            userId: formatId(receipt.telegramId),
           })}
         </p>
 
@@ -108,35 +146,6 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
-
-        <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
-          <Button
-            type="button"
-            variant="secondary"
-            className="flex-1"
-            onClick={handleClose}
-            disabled={loading}
-          >
-            {t('common.cancel')}
-          </Button>
-          <Button
-            type="button"
-            variant="danger"
-            className="flex-1"
-            disabled={
-              loading ||
-              (!selectedPreset && !reason.trim()) ||
-              (selectedPreset === 'other' && !reason.trim())
-            }
-            loading={loading}
-            onClick={handleConfirm}
-          >
-            <X className="w-3.5 h-3.5" />
-            <span>
-              {loading ? t('admin.modals.rejectSubmitting') : t('admin.modals.rejectSubmit')}
-            </span>
-          </Button>
-        </div>
       </div>
     </Modal>
   );

@@ -27,7 +27,7 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
   inspecting = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatNumber, sanitizeDisplayName } = useFormatters();
+  const { formatMoney, formatNumber, formatId, sanitizeDisplayName } = useFormatters();
   const { textPrimary, textMuted } = useThemeTokens();
 
   const { displayName } = sanitizeDisplayName(user.firstName, user.lastName, t('user.guestUser'));
@@ -64,8 +64,8 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
           onClick={() => onCopyId(String(user.telegramId), `user-${user.telegramId}`)}
           title={t('common.copy')}
         >
-          <bdi dir="ltr" className="font-mono">
-            #{user.telegramId}
+          <bdi dir="ltr" className="tnum font-medium">
+            #{formatId(user.telegramId)}
           </bdi>
           {isCopied ? (
             <span className="text-[10px] text-ok-fg font-medium">{t('common.copied')}</span>

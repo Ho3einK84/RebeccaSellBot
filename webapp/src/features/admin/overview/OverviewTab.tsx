@@ -49,12 +49,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
       <HealthBanner panelHealth={panelHealth} onSwitchToPanels={() => onSwitchTab('panels')} />
 
       {/* Primary KPI Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label={t('admin.overview.pendingReceipts')}
           value={formatNumber(stats.pendingReceipts)}
           hint={t('admin.overview.pendingReceiptsSub')}
-          icon={<Clock className="h-5 w-5" />}
+          icon={<Clock className="h-4 w-4" />}
           tone="warn"
           onClick={() => onSwitchTab('receipts')}
           index={0}
@@ -63,7 +63,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
           label={t('admin.overview.totalUsers')}
           value={formatNumber(stats.totalUsers)}
           hint={t('admin.overview.totalUsersSub')}
-          icon={<Users className="h-5 w-5" />}
+          icon={<Users className="h-4 w-4" />}
           tone="brand"
           onClick={() => onSwitchTab('users')}
           index={1}
@@ -73,18 +73,20 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
           value={formatMoney(stats.totalSales)}
           unit={t('common.currency')}
           hint={t('admin.overview.totalSalesSub')}
-          icon={<TrendingUp className="h-5 w-5" />}
+          icon={<TrendingUp className="h-4 w-4" />}
           tone="ok"
           index={2}
+          className="col-span-2 sm:col-span-1"
         />
         <StatCard
           label={t('admin.overview.dailyRevenue')}
           value={formatMoney(stats.dailyRevenue)}
           unit={t('common.currency')}
           hint={t('admin.overview.dailyRevenueSub')}
-          icon={<Wallet className="h-5 w-5" />}
+          icon={<Wallet className="h-4 w-4" />}
           tone="ok"
           index={3}
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 

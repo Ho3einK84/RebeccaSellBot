@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { QrCode, Copy, Check, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -81,16 +82,18 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('user.services.qrTitle')}
-      icon={<QrCode className="w-5 h-5 text-brand" />}
+      subtitle={<bdi dir="ltr">{configUsername}</bdi>}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <QrCode />
+        </IconTile>
+      }
       maxWidth="sm"
     >
       <div className="flex flex-col items-center text-center gap-3.5 pt-1">
-        <div className="flex flex-col items-center">
-          <span className={`text-xs font-mono font-medium text-ink-soft`}>{configUsername}</span>
-          <p className="text-[11px] text-ink-muted mt-1 max-w-[240px]">
-            {t('user.services.qrHint')}
-          </p>
-        </div>
+        <p className="text-xs text-ink-muted m-0 max-w-[260px] leading-relaxed">
+          {t('user.services.qrHint')}
+        </p>
 
         {/* High-contrast light QR canvas for optical scan reliability in both themes */}
         <div className="bg-white p-3.5 rounded-card border border-line flex items-center justify-center min-w-[220px] min-h-[220px]">

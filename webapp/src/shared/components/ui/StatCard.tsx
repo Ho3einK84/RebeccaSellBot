@@ -1,6 +1,6 @@
 import React, { type ReactNode } from 'react';
 import { Card } from './Card.js';
-import type { TileTone } from './IconTile.js';
+import { IconTile, type TileTone } from './IconTile.js';
 
 interface StatCardProps {
   label: string;
@@ -20,15 +20,6 @@ interface StatCardProps {
   className?: string;
 }
 
-const iconToneClasses: Record<TileTone, string> = {
-  brand: 'text-brand-fg',
-  ok: 'text-ok-fg',
-  warn: 'text-warn-fg',
-  danger: 'text-danger-fg',
-  info: 'text-info-fg',
-  neutral: 'text-ink-muted',
-};
-
 export const StatCard: React.FC<StatCardProps> = ({
   label,
   value,
@@ -47,29 +38,27 @@ export const StatCard: React.FC<StatCardProps> = ({
       interactive={Boolean(onClick)}
       className={`flex flex-col justify-between gap-2.5 ${onClick ? 'h-full' : ''} ${className}`}
     >
-      <div className="flex items-center justify-between gap-2 min-w-0">
-        <div className="flex items-center gap-2 min-w-0">
-          {icon ? (
-            <span
-              aria-hidden="true"
-              className={`inline-flex items-center justify-center shrink-0 [&>svg]:w-4 [&>svg]:h-4 ${iconToneClasses[tone]}`}
-            >
-              {icon}
+      <div className="flex items-start justify-between gap-2 min-w-0">
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-medium text-ink-muted">{label}</span>
+          <div className="mt-1.5 flex items-baseline gap-1.5 flex-wrap min-w-0">
+            <span className="tnum text-lg sm:text-2xl font-bold text-ink leading-tight">
+              {value}
             </span>
-          ) : null}
-          <span className="truncate text-xs font-medium text-ink-muted">{label}</span>
+            {unit ? <span className="text-[11px] font-normal text-ink-muted">{unit}</span> : null}
+          </div>
         </div>
-        {aside ? <div className="shrink-0">{aside}</div> : null}
+
+        {aside ? (
+          <div className="shrink-0">{aside}</div>
+        ) : icon ? (
+          <IconTile tone={tone} size="sm" className="shrink-0">
+            {icon}
+          </IconTile>
+        ) : null}
       </div>
 
-      <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
-        <span className="tnum text-xl sm:text-2xl font-semibold text-ink leading-tight">
-          {value}
-        </span>
-        {unit ? <span className="text-xs font-normal text-ink-muted">{unit}</span> : null}
-      </div>
-
-      {hint ? <div className="text-xs text-ink-soft leading-relaxed">{hint}</div> : null}
+      {hint ? <div className="text-[11px] text-ink-soft leading-relaxed">{hint}</div> : null}
       {action ? <div className="pt-1">{action}</div> : null}
     </Card>
   );

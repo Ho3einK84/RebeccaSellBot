@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Save, Check, Users, RotateCw } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { useReceiptSettings } from '../hooks/useAdminReceipts.js';
 
 interface ReceiptSettingsModalProps {
@@ -19,6 +21,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
   onNotify,
 }) => {
   const { t } = useLanguage();
+  const { formatId } = useFormatters();
   const { textPrimary, textSecondary, textMuted } = useThemeTokens();
   const { settings, isLoading, updateSettings, isUpdating } = useReceiptSettings(isOpen);
 
@@ -80,8 +83,38 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.receipts.settingsModalTitle')}
-      icon={<Bell className="w-5 h-5 text-brand-fg" />}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <Bell />
+        </IconTile>
+      }
       maxWidth="md"
+      footer={
+        !isLoading ? (
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={onClose}
+              disabled={isUpdating}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              className="flex-1"
+              disabled={isUpdating}
+              loading={isUpdating}
+              onClick={handleSave}
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{t('admin.receipts.settingsSaveBtn')}</span>
+            </Button>
+          </div>
+        ) : undefined
+      }
     >
       <div className="space-y-4">
         {isLoading ? (
@@ -193,8 +226,8 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                       }`}
                       onClick={() => handleToggleAdmin(adminId)}
                     >
-                      <bdi dir="ltr" className="tnum font-mono text-xs">
-                        {adminId}
+                      <bdi dir="ltr" className="tnum font-medium text-xs">
+                        #{formatId(adminId)}
                       </bdi>
                       <span
                         className={`w-4 h-4 rounded-xs border flex items-center justify-center ${
@@ -210,29 +243,6 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                 })}
               </div>
             </Card>
-
-            <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
-              <Button
-                type="button"
-                variant="secondary"
-                className="flex-1"
-                onClick={onClose}
-                disabled={isUpdating}
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                className="flex-1"
-                disabled={isUpdating}
-                loading={isUpdating}
-                onClick={handleSave}
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{t('admin.receipts.settingsSaveBtn')}</span>
-              </Button>
-            </div>
           </>
         )}
       </div>

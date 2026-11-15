@@ -15,6 +15,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
@@ -203,11 +204,12 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
         title={
           <div className="flex items-center gap-2">
             <ServiceStatusDot status={config.panelStatus} />
-            <span className="tnum text-sm sm:text-base font-bold truncate">
+            <bdi dir="ltr" className="tnum text-sm sm:text-base font-bold truncate">
               {config.configUsername}
-            </span>
+            </bdi>
           </div>
         }
+        subtitle={t('user.services.manageTitle')}
       >
         <div className="flex flex-col gap-4 text-start">
           {/* Status & Timing Overview */}
@@ -445,38 +447,25 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
           onClose={() => setConfirmAction(null)}
           maxWidth="sm"
           closeOnBackdrop={!isTogglingStatus && !isRevoking}
-        >
-          <div className="flex flex-col gap-4 text-start">
-            <div className="flex items-start gap-3">
-              <div
-                className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${confirmAction === 'revoke' ? 'bg-danger/15 border-danger/25 text-danger' : confirmAction === 'disable' ? 'bg-warn/15 border-warn/25 text-warn' : 'bg-ok/15 border-ok/25 text-ok'}`}
-              >
-                {confirmAction === 'revoke' ? (
-                  <ShieldAlert className="w-5 h-5" />
-                ) : (
-                  <Power className="w-5 h-5" />
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <h3 className={`font-bold text-sm sm:text-base m-0 ${textPrimary}`}>
-                  {confirmAction === 'revoke'
-                    ? t('user.services.revokeTitle')
-                    : confirmAction === 'disable'
-                      ? t('user.services.disableServiceTitle')
-                      : t('user.services.enableServiceTitle')}
-                </h3>
-                <p className={`text-xs mt-1 leading-relaxed ${textSecondary}`}>
-                  {confirmAction === 'revoke'
-                    ? t('user.services.revokeWarning')
-                    : confirmAction === 'disable'
-                      ? t('user.services.disableServiceDesc')
-                      : t('user.services.enableServiceDesc')}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t border-line">
+          title={
+            confirmAction === 'revoke'
+              ? t('user.services.revokeTitle')
+              : confirmAction === 'disable'
+                ? t('user.services.disableServiceTitle')
+                : t('user.services.enableServiceTitle')
+          }
+          icon={
+            <IconTile
+              tone={
+                confirmAction === 'revoke' ? 'danger' : confirmAction === 'disable' ? 'warn' : 'ok'
+              }
+              size="sm"
+            >
+              {confirmAction === 'revoke' ? <ShieldAlert /> : <Power />}
+            </IconTile>
+          }
+          footer={
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="secondary"
@@ -512,7 +501,15 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 </span>
               </Button>
             </div>
-          </div>
+          }
+        >
+          <p className={`text-xs leading-relaxed m-0 ${textSecondary}`}>
+            {confirmAction === 'revoke'
+              ? t('user.services.revokeWarning')
+              : confirmAction === 'disable'
+                ? t('user.services.disableServiceDesc')
+                : t('user.services.enableServiceDesc')}
+          </p>
         </Modal>
       )}
     </>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X,
   Copy,
   Wallet,
   QrCode,
@@ -21,6 +20,7 @@ import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { Button } from '@/shared/components/ui/Button.js';
 import { UserConfigQrModal } from './UserConfigQrModal.js';
 import { UserConfirmModal } from './UserConfirmModal.js';
 import { ReceiptPhotoModal } from '@/features/admin/receipts/components/ReceiptPhotoModal.js';
@@ -67,7 +67,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   onSyncConfig,
 }) => {
   const { t, locale } = useLanguage();
-  const { formatMoney, formatNumber, formatIsoDate, formatBytes, sanitizeDisplayName } =
+  const { formatMoney, formatNumber, formatId, formatIsoDate, formatBytes, sanitizeDisplayName } =
     useFormatters();
   const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
@@ -166,166 +166,227 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     }
   };
 
+  const dossierHeader = (
+    <div className="flex items-center gap-3 min-w-0">
+      <Avatar
+        name={user.firstName}
+        username={user.username}
+        size="md"
+        className="shrink-0 ring-1 ring-line"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className={`text-sm sm:text-base font-semibold m-0 truncate ${textPrimary}`}>
+            {displayName}
+          </h3>
+          {user.isBanned ? (
+            <Badge variant="error" dot size="xs">
+              {t('admin.users.bannedBadge')}
+            </Badge>
+          ) : (
+            <Badge variant="success" dot size="xs">
+              {t('admin.users.activeBadge')}
+            </Badge>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 text-xs mt-1 flex-wrap">
+          <span className="text-brand-fg tnum">
+            {user.username ? (
+              <bdi dir="ltr" className="font-medium">
+                @{user.username}
+              </bdi>
+            ) : (
+              <span className={textMuted}>{t('admin.users.noUsername')}</span>
+            )}
+          </span>
+          <span className={textMuted}>·</span>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 tnum text-[11px] px-2 h-6 rounded-md border press rs-focus cursor-pointer bg-surface-2 border-line hover:border-line-strong text-ink-soft hover:text-ink"
+            onClick={() => onCopyId(String(user.telegramId), 'dossier-id')}
+            title={t('common.copy')}
+          >
+            <bdi dir="ltr" className="tnum font-medium">
+              #{formatId(user.telegramId)}
+            </bdi>
+            {isCopied('dossier-id') ? (
+              <Check className="w-3 h-3 text-ok-fg shrink-0" />
+            ) : (
+              <Copy className="w-3 h-3 opacity-60 shrink-0" />
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const dossierFooter = (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={() => onOpenBalanceModal(user)}
+          className="flex-1 sm:flex-initial"
+        >
+          <Wallet className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{t('admin.users.btnChangeBalance')}</span>
+        </Button>
+
+        {onBanUser && (
+          <Button
+            type="button"
+            variant={user.isBanned ? 'success' : 'danger'}
+            size="sm"
+            onClick={() =>
+              setConfirmModal({
+                type: user.isBanned ? 'unban' : 'ban',
+              })
+            }
+            className="flex-1 sm:flex-initial"
+          >
+            {user.isBanned ? (
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span className="truncate">
+              {user.isBanned ? t('admin.users.btnUnban') : t('admin.users.btnBan')}
+            </span>
+          </Button>
+        )}
+      </div>
+
+      <Button type="button" variant="secondary" size="sm" onClick={onClose} className="shrink-0">
+        {t('admin.users.btnCloseReport')}
+      </Button>
+    </div>
+  );
+
+  const tabItems = [
+    { id: 'finances' as const, label: t('admin.users.tabFinances'), count: null },
+    { id: 'configs' as const, label: t('admin.users.tabConfigs'), count: configs.length },
+    {
+      id: 'transactions' as const,
+      label: t('admin.users.tabTransactions'),
+      count: transactions.length,
+    },
+    { id: 'orders' as const, label: t('admin.users.tabOrders'), count: orders.length },
+    { id: 'receipts' as const, label: t('admin.users.tabReceipts'), count: receipts.length },
+  ];
+
   return (
     <>
-      <Modal isOpen={Boolean(dossier)} onClose={onClose} maxWidth="2xl">
-        <div className="space-y-4 max-h-[82dvh] overflow-y-auto">
-          {/* Executive Profile Header */}
-          <div className="flex items-start justify-between pb-4 border-b border-line">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <Avatar name={user.firstName} username={user.username} size="lg" />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className={`text-base sm:text-lg font-semibold m-0 truncate ${textPrimary}`}>
-                    {displayName}
-                  </h3>
-                  {user.isBanned ? (
-                    <Badge variant="error" dot size="xs">
-                      {t('admin.users.bannedBadge')}
-                    </Badge>
-                  ) : (
-                    <Badge variant="success" size="xs">
-                      {t('admin.users.activeBadge')}
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 text-xs mt-1 flex-wrap">
-                  <span className="text-brand-fg tnum">
-                    {user.username ? (
-                      <bdi dir="ltr" className="font-medium">
-                        @{user.username}
-                      </bdi>
-                    ) : (
-                      <span className={textMuted}>{t('admin.users.noUsername')}</span>
-                    )}
-                  </span>
-                  <span className={textMuted}>·</span>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 tnum text-xs px-2 h-7 rounded-ctl border press rs-focus cursor-pointer bg-surface-2 border-line hover:border-line-strong text-ink-soft"
-                    onClick={() => onCopyId(String(user.telegramId), 'dossier-id')}
-                    title={t('common.copy')}
-                  >
-                    <bdi dir="ltr" className="font-mono">
-                      #{user.telegramId}
-                    </bdi>
-                    {isCopied('dossier-id') ? (
-                      <Check className="w-3 h-3 text-ok-fg shrink-0" />
-                    ) : (
-                      <Copy className="w-3 h-3 opacity-60 shrink-0" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="w-8 h-8 flex items-center justify-center rounded-ctl text-ink-muted hover:text-ink hover:bg-surface-2 cursor-pointer shrink-0 rs-focus"
-              onClick={onClose}
-              aria-label={t('common.close')}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
+      <Modal
+        isOpen={Boolean(dossier)}
+        onClose={onClose}
+        maxWidth="2xl"
+        customHeader={dossierHeader}
+        footer={dossierFooter}
+      >
+        <div className="space-y-4">
           {/* Segmented Dossier Tabs */}
-          <div className="p-1 rounded-tile bg-surface-2 border border-line flex items-center gap-1 overflow-x-auto scrollbar-none">
-            <button
-              type="button"
-              className={`h-8 px-3 rounded-ctl text-xs font-medium cursor-pointer shrink-0 text-center rs-focus ${activeTab === 'finances' ? 'bg-surface border border-line-strong text-ink font-semibold' : 'border border-transparent text-ink-muted hover:text-ink'}`}
-              onClick={() => setActiveTab('finances')}
-            >
-              {t('admin.users.tabFinances')}
-            </button>
-
-            <button
-              type="button"
-              className={`h-8 px-3 rounded-ctl text-xs font-medium cursor-pointer shrink-0 text-center rs-focus ${activeTab === 'configs' ? 'bg-surface border border-line-strong text-ink font-semibold' : 'border border-transparent text-ink-muted hover:text-ink'}`}
-              onClick={() => setActiveTab('configs')}
-            >
-              {t('admin.users.tabConfigs')} ({formatNumber(configs.length)})
-            </button>
-
-            <button
-              type="button"
-              className={`h-8 px-3 rounded-ctl text-xs font-medium cursor-pointer shrink-0 text-center rs-focus ${activeTab === 'transactions' ? 'bg-surface border border-line-strong text-ink font-semibold' : 'border border-transparent text-ink-muted hover:text-ink'}`}
-              onClick={() => setActiveTab('transactions')}
-            >
-              {t('admin.users.tabTransactions')} ({formatNumber(transactions.length)})
-            </button>
-
-            <button
-              type="button"
-              className={`h-8 px-3 rounded-ctl text-xs font-medium cursor-pointer shrink-0 text-center rs-focus ${activeTab === 'orders' ? 'bg-surface border border-line-strong text-ink font-semibold' : 'border border-transparent text-ink-muted hover:text-ink'}`}
-              onClick={() => setActiveTab('orders')}
-            >
-              {t('admin.users.tabOrders')} ({formatNumber(orders.length)})
-            </button>
-
-            <button
-              type="button"
-              className={`h-8 px-3 rounded-ctl text-xs font-medium cursor-pointer shrink-0 text-center rs-focus ${activeTab === 'receipts' ? 'bg-surface border border-line-strong text-ink font-semibold' : 'border border-transparent text-ink-muted hover:text-ink'}`}
-              onClick={() => setActiveTab('receipts')}
-            >
-              {t('admin.users.tabReceipts')} ({formatNumber(receipts.length)})
-            </button>
+          <div className="p-1 rounded-tile bg-surface-2 border border-line flex items-center gap-1 overflow-x-auto no-scrollbar">
+            {tabItems.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`h-8 px-2.5 rounded-ctl text-xs cursor-pointer shrink-0 inline-flex items-center justify-center gap-1.5 rs-focus press transition-colors ${
+                    isActive
+                      ? 'bg-surface border border-line-strong text-ink font-semibold shadow-[var(--shadow-card)]'
+                      : 'border border-transparent text-ink-muted hover:text-ink font-medium'
+                  }`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <span>{tab.label}</span>
+                  {tab.count !== null ? (
+                    <span
+                      className={`tnum inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none ${
+                        isActive
+                          ? 'bg-brand-soft text-brand-fg font-semibold'
+                          : 'bg-surface-3 text-ink-muted'
+                      }`}
+                    >
+                      {formatNumber(tab.count)}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
 
           {/* Sub-tab 1: Finances Grid */}
           {activeTab === 'finances' && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-xs font-medium block ${textMuted}`}>
+                <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userCurBalance')}
                 </span>
-                <div className="text-base sm:text-lg font-semibold tnum mt-1 text-ok-fg">
-                  <bdi dir="ltr">{formatMoney(user.balance)}</bdi> {t('common.currency')}
+                <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
+                  <bdi dir="ltr" className="text-base sm:text-lg font-bold tnum text-ok-fg">
+                    {formatMoney(user.balance)}
+                  </bdi>
+                  <span className="text-[11px] font-normal text-ink-muted">
+                    {t('common.currency')}
+                  </span>
                 </div>
               </div>
 
               <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-xs font-medium block ${textMuted}`}>
+                <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userTotalDeposit')}
                 </span>
-                <div className={`text-base sm:text-lg font-semibold tnum mt-1 ${textPrimary}`}>
-                  <bdi dir="ltr">{formatMoney(summary.totalDeposit)}</bdi> {t('common.currency')}
+                <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
+                  <bdi dir="ltr" className={`text-base sm:text-lg font-bold tnum ${textPrimary}`}>
+                    {formatMoney(summary.totalDeposit)}
+                  </bdi>
+                  <span className="text-[11px] font-normal text-ink-muted">
+                    {t('common.currency')}
+                  </span>
                 </div>
               </div>
 
               <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-xs font-medium block ${textMuted}`}>
+                <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userTotalSpend')}
                 </span>
-                <div className={`text-base sm:text-lg font-semibold tnum mt-1 ${textPrimary}`}>
-                  <bdi dir="ltr">{formatMoney(summary.totalSpend)}</bdi> {t('common.currency')}
+                <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
+                  <bdi dir="ltr" className={`text-base sm:text-lg font-bold tnum ${textPrimary}`}>
+                    {formatMoney(summary.totalSpend)}
+                  </bdi>
+                  <span className="text-[11px] font-normal text-ink-muted">
+                    {t('common.currency')}
+                  </span>
                 </div>
               </div>
 
               <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-xs font-medium block ${textMuted}`}>
+                <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userActiveConfigs')}
                 </span>
-                <div className="text-base sm:text-lg font-semibold text-brand-fg tnum mt-1">
+                <div className="text-base sm:text-lg font-bold text-brand-fg tnum mt-1.5">
                   {formatNumber(summary.activeConfigsCount)}
                 </div>
               </div>
 
               <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-xs font-medium block ${textMuted}`}>
+                <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userApprovedReceipts')}
                 </span>
-                <div className="text-base sm:text-lg font-semibold tnum mt-1 text-ok-fg">
+                <div className="text-base sm:text-lg font-bold tnum mt-1.5 text-ok-fg">
                   {formatNumber(summary.receiptsApprovedCount)}
                 </div>
               </div>
 
               <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-xs font-medium block ${textMuted}`}>
+                <span className={`text-[11px] font-medium block ${textMuted}`}>
                   {t('admin.users.userAuditEvents')}
                 </span>
-                <div className={`text-base sm:text-lg font-semibold tnum mt-1 ${textSecondary}`}>
+                <div className={`text-base sm:text-lg font-bold tnum mt-1.5 ${textSecondary}`}>
                   {formatNumber(summary.auditEventsCount)}
                 </div>
               </div>
@@ -336,7 +397,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           {activeTab === 'configs' && (
             <div className="space-y-3">
               {configs.length === 0 ? (
-                <p className={`text-xs text-center py-8 ${textMuted}`}>
+                <p className={`text-xs text-center py-8 m-0 ${textMuted}`}>
                   {t('admin.users.noConfigs')}
                 </p>
               ) : (
@@ -360,14 +421,14 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   return (
                     <div
                       key={cfg.id}
-                      className={`p-3.5 sm:p-4 rounded-xl border space-y-3 transition-colors ${subCardClass}`}
+                      className={`p-3.5 sm:p-4 rounded-tile border space-y-3 transition-colors ${subCardClass}`}
                     >
                       {/* Config Title and Badges */}
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <bdi
                             dir="ltr"
-                            className={`font-mono tnum font-semibold text-xs sm:text-sm truncate ${textPrimary}`}
+                            className={`tnum font-semibold text-xs sm:text-sm truncate ${textPrimary}`}
                           >
                             {cfg.configUsername}
                           </bdi>
@@ -412,7 +473,13 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           {progressPct !== null && (
                             <div className="w-full h-1.5 rounded-full bg-surface-3 overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${progressPct > 90 ? 'bg-danger' : progressPct > 70 ? 'bg-warn' : 'bg-ok'}`}
+                                className={`h-full rounded-full ${
+                                  progressPct > 90
+                                    ? 'bg-danger'
+                                    : progressPct > 70
+                                      ? 'bg-warn'
+                                      : 'bg-ok'
+                                }`}
                                 style={{ width: `${progressPct}%` }}
                               />
                             </div>
@@ -441,7 +508,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             <button
                               type="button"
                               onClick={() => onCopyId(cfg.subUrl!, `sub-${cfg.id}`)}
-                              className={`h-8 px-2.5 rounded-ctl border text-xs font-medium flex items-center gap-1 press rs-focus cursor-pointer ${isCopied(`sub-${cfg.id}`) ? 'bg-ok-soft border-ok/30 text-ok-fg' : 'bg-surface border-line text-ink-soft hover:border-line-strong hover:text-ink'}`}
+                              className={`h-8 px-2.5 rounded-ctl border text-xs font-medium flex items-center gap-1 press rs-focus cursor-pointer ${
+                                isCopied(`sub-${cfg.id}`)
+                                  ? 'bg-ok-soft border-ok/30 text-ok-fg'
+                                  : 'bg-surface border-line text-ink-soft hover:border-line-strong hover:text-ink'
+                              }`}
                             >
                               {isCopied(`sub-${cfg.id}`) ? (
                                 <Check className="w-3 h-3 text-ok-fg" />
@@ -469,7 +540,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             type="button"
                             disabled={isToggling}
                             onClick={() => handleToggle(cfg)}
-                            className={`h-8 px-2.5 rounded-ctl border text-xs font-medium flex items-center gap-1 press rs-focus cursor-pointer ${cfg.panelStatus === 'disabled' ? 'bg-ok-soft border-ok/30 text-ok-fg hover:bg-ok/20' : 'bg-danger-soft border-danger/25 text-danger-fg hover:bg-danger/20'}`}
+                            className={`h-8 px-2.5 rounded-ctl border text-xs font-medium flex items-center gap-1 press rs-focus cursor-pointer ${
+                              cfg.panelStatus === 'disabled'
+                                ? 'bg-ok-soft border-ok/30 text-ok-fg hover:bg-ok/20'
+                                : 'bg-danger-soft border-danger/25 text-danger-fg hover:bg-danger/20'
+                            }`}
                           >
                             {isToggling ? (
                               <RotateCw className="w-3 h-3 animate-spin" />
@@ -531,7 +606,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           {activeTab === 'transactions' && (
             <div className="space-y-2">
               {transactions.length === 0 ? (
-                <p className={`text-xs text-center py-8 ${textMuted}`}>
+                <p className={`text-xs text-center py-8 m-0 ${textMuted}`}>
                   {t('admin.users.noTransactions')}
                 </p>
               ) : (
@@ -542,11 +617,15 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   return (
                     <div
                       key={tx.id}
-                      className={`p-3 sm:p-3.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${subCardClass}`}
+                      className={`p-3 sm:p-3.5 rounded-tile border flex items-center justify-between text-xs transition-colors ${subCardClass}`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${isCredit ? 'bg-ok/10 border-ok/20 text-ok' : 'bg-danger/10 border-danger/20 text-danger'}`}
+                          className={`w-7 h-7 rounded-ctl flex items-center justify-center shrink-0 border ${
+                            isCredit
+                              ? 'bg-ok-soft border-ok/25 text-ok-fg'
+                              : 'bg-danger-soft border-danger/25 text-danger-fg'
+                          }`}
                         >
                           {isCredit ? (
                             <ArrowDownLeft className="w-3.5 h-3.5 rtl:-scale-x-100" />
@@ -574,13 +653,17 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
                       <div className="text-end space-y-0.5 shrink-0">
                         <div
-                          className={`tnum font-semibold text-xs sm:text-sm ${isCredit ? 'text-ok-fg' : 'text-danger-fg'}`}
+                          className={`tnum font-semibold text-xs sm:text-sm ${
+                            isCredit ? 'text-ok-fg' : 'text-danger-fg'
+                          }`}
                         >
                           <bdi dir="ltr">
                             {isCredit ? '+' : ''}
                             {formatMoney(tx.amount)}
                           </bdi>{' '}
-                          <span className="font-normal text-xs">{t('common.currency')}</span>
+                          <span className="font-normal text-[11px] text-ink-muted">
+                            {t('common.currency')}
+                          </span>
                         </div>
                         <div className={`text-[11px] tnum ${textMuted}`}>
                           {t('admin.users.txBalanceAfter')}:{' '}
@@ -598,7 +681,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           {activeTab === 'orders' && (
             <div className="space-y-2">
               {orders.length === 0 ? (
-                <p className={`text-xs text-center py-8 ${textMuted}`}>
+                <p className={`text-xs text-center py-8 m-0 ${textMuted}`}>
                   {t('admin.users.noOrders')}
                 </p>
               ) : (
@@ -612,13 +695,15 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         {order.packageName || t('admin.users.orderPackage')}
                       </div>
                       <div className={`text-[11px] tnum ${textMuted}`}>
-                        {t('common.idLabel')} <bdi dir="ltr">{order.id}</bdi>
+                        {t('common.idLabel')} <bdi dir="ltr">#{formatId(order.id)}</bdi>
                       </div>
                     </div>
                     <div className="text-end space-y-0.5">
                       <div className="tnum font-semibold text-xs sm:text-sm text-ok-fg">
                         <bdi dir="ltr">{formatMoney(order.amount)}</bdi>{' '}
-                        <span className="font-normal text-xs">{t('common.currency')}</span>
+                        <span className="font-normal text-[11px] text-ink-muted">
+                          {t('common.currency')}
+                        </span>
                       </div>
                       <bdi dir="ltr" className={`block text-[11px] tnum ${textMuted}`}>
                         {formatIsoDate(order.createdAt)}
@@ -634,7 +719,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           {activeTab === 'receipts' && (
             <div className="space-y-2">
               {receipts.length === 0 ? (
-                <p className={`text-xs text-center py-8 ${textMuted}`}>
+                <p className={`text-xs text-center py-8 m-0 ${textMuted}`}>
                   {t('admin.users.noReceipts')}
                 </p>
               ) : (
@@ -645,17 +730,20 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   >
                     <div className="space-y-0.5">
                       <div className={`font-semibold tnum text-xs sm:text-sm ${textPrimary}`}>
-                        <bdi dir="ltr">{formatMoney(rec.amount)}</bdi> {t('common.currency')}
+                        <bdi dir="ltr">{formatMoney(rec.amount)}</bdi>{' '}
+                        <span className="font-normal text-[11px] text-ink-muted">
+                          {t('common.currency')}
+                        </span>
                       </div>
                       <div className={`text-[11px] tnum ${textMuted}`}>
-                        {t('common.idLabel')} <bdi dir="ltr">{rec.id}</bdi>
+                        {t('common.idLabel')} <bdi dir="ltr">#{formatId(rec.id)}</bdi>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {rec.photoFileId && (
                         <button
                           type="button"
-                          className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer bg-brand/10 border-brand/25 hover:bg-brand/20 text-brand`}
+                          className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-ctl border press rs-focus cursor-pointer bg-brand-soft border-brand/25 hover:bg-brand/20 text-brand-fg"
                           onClick={() => setPhotoReceiptId(rec.id)}
                           title={t('admin.receipts.viewPhoto')}
                         >
@@ -672,7 +760,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                               : 'warning'
                         }
                         dot
-                        className="text-[10px]"
+                        size="xs"
                       >
                         {rec.status === 'approved'
                           ? t('common.statusApproved')
@@ -680,7 +768,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             ? t('common.statusRejected')
                             : t('common.statusPending')}
                       </Badge>
-                      <span dir="ltr" className={`text-[10px] ${textMuted}`}>
+                      <span dir="ltr" className={`text-[10px] tnum ${textMuted}`}>
                         {formatIsoDate(rec.createdAt)}
                       </span>
                     </div>
@@ -689,53 +777,6 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               )}
             </div>
           )}
-
-          {/* Bottom Action Bar */}
-          <div className="modal-action flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-line">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="h-9 px-3.5 rounded-ctl font-semibold text-xs border press rs-focus cursor-pointer inline-flex items-center gap-1.5 bg-brand hover:bg-brand-hover text-brand-ink border-transparent"
-                onClick={() => {
-                  onOpenBalanceModal(user);
-                }}
-              >
-                <Wallet className="w-3.5 h-3.5" />
-                <span>{t('admin.users.btnChangeBalance')}</span>
-              </button>
-
-              {onBanUser && (
-                <button
-                  type="button"
-                  className={`h-9 px-3.5 rounded-ctl font-semibold text-xs border press rs-focus cursor-pointer inline-flex items-center gap-1.5 ${
-                    user.isBanned
-                      ? 'bg-ok-soft border-ok/30 text-ok-fg hover:bg-ok/20'
-                      : 'bg-danger-soft border-danger/30 text-danger-fg hover:bg-danger/20'
-                  }`}
-                  onClick={() =>
-                    setConfirmModal({
-                      type: user.isBanned ? 'unban' : 'ban',
-                    })
-                  }
-                >
-                  {user.isBanned ? (
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                  ) : (
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                  )}
-                  <span>{user.isBanned ? t('admin.users.btnUnban') : t('admin.users.btnBan')}</span>
-                </button>
-              )}
-            </div>
-
-            <button
-              type="button"
-              className="h-9 px-4 rounded-ctl text-xs font-medium border press rs-focus cursor-pointer flex items-center justify-center bg-surface-2 border-line text-ink-soft hover:border-line-strong hover:text-ink"
-              onClick={onClose}
-            >
-              {t('admin.users.btnCloseReport')}
-            </button>
-          </div>
         </div>
       </Modal>
 

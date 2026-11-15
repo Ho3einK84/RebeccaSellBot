@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { QrCode, Copy, Check, X } from 'lucide-react';
+import { QrCode, Copy, Check } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
@@ -22,7 +22,7 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
   isCopied,
 }) => {
   const { t } = useLanguage();
-  const { textPrimary, textMuted } = useThemeTokens();
+  const { textMuted } = useThemeTokens();
   const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,37 +55,26 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
   if (!config) return null;
 
   return (
-    <Modal isOpen={Boolean(config)} onClose={onClose} maxWidth="sm">
+    <Modal
+      isOpen={Boolean(config)}
+      onClose={onClose}
+      maxWidth="sm"
+      title={t('admin.users.qrModalTitle')}
+      subtitle={<bdi dir="ltr">{config.configUsername}</bdi>}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <QrCode />
+        </IconTile>
+      }
+      footer={
+        <Button type="button" variant="secondary" size="sm" block onClick={onClose}>
+          {t('common.close')}
+        </Button>
+      }
+    >
       <div className="space-y-4 text-center">
-        <div className="flex items-center justify-between pb-3 border-b border-line">
-          <div className="flex items-center gap-2.5 text-start min-w-0">
-            <IconTile tone="brand" size="sm">
-              <QrCode />
-            </IconTile>
-            <div className="min-w-0">
-              <h3 className={`font-semibold text-sm m-0 ${textPrimary}`}>
-                {t('admin.users.qrModalTitle')}
-              </h3>
-              <bdi
-                dir="ltr"
-                className={`text-xs font-mono block truncate max-w-[200px] text-start ${textMuted}`}
-              >
-                {config.configUsername}
-              </bdi>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="w-8 h-8 flex items-center justify-center rounded-ctl text-ink-muted hover:text-ink hover:bg-surface-2 cursor-pointer shrink-0 rs-focus"
-            onClick={onClose}
-            aria-label={t('common.close')}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
         {/* High-contrast white matte QR quiet-zone surface across both light & dark themes */}
-        <div className="flex justify-center items-center py-2">
+        <div className="flex justify-center items-center py-1">
           <div className="p-3 bg-white rounded-card border border-line inline-block">
             {qrUrl ? (
               <img
@@ -112,7 +101,7 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
                 readOnly
                 dir="ltr"
                 value={config.subUrl}
-                className="w-full h-9 px-3 text-xs font-mono rounded-ctl border outline-none truncate select-all bg-surface-2 border-line text-ink-soft"
+                className="w-full h-9 px-3 text-xs tnum rounded-ctl border outline-none truncate select-all bg-surface-2 border-line text-ink-soft"
               />
               <Button
                 type="button"
@@ -126,14 +115,8 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
             </div>
           </div>
         ) : (
-          <p className={`text-xs ${textMuted}`}>{t('admin.users.noSubUrl')}</p>
+          <p className={`text-xs m-0 ${textMuted}`}>{t('admin.users.noSubUrl')}</p>
         )}
-
-        <div className="pt-2">
-          <Button type="button" variant="secondary" size="sm" block onClick={onClose}>
-            {t('common.close')}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

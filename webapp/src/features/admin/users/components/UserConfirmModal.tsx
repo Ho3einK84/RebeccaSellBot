@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, Check, ShieldCheck } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Input } from '@/shared/components/ui/Input.js';
@@ -35,7 +35,7 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { textPrimary, textSecondary } = useThemeTokens();
+  const { textSecondary } = useThemeTokens();
   const [reason, setReason] = useState('');
 
   if (!isOpen) return null;
@@ -49,36 +49,22 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
     onClose();
   };
 
-  const tileTone = variant === 'danger' ? 'danger' : variant === 'warning' ? 'warn' : 'brand';
+  const tileTone = variant === 'danger' ? 'danger' : variant === 'warning' ? 'warn' : 'ok';
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} maxWidth="sm" closeOnBackdrop={!loading}>
-      <div className="space-y-4">
-        <div className="flex items-start gap-3">
-          <IconTile tone={tileTone} size="md">
-            <AlertTriangle />
-          </IconTile>
-          <div className="min-w-0 flex-1">
-            <h3 className={`font-semibold text-sm sm:text-base m-0 ${textPrimary}`}>{title}</h3>
-            <p className={`text-xs mt-1 leading-relaxed m-0 ${textSecondary}`}>{description}</p>
-          </div>
-        </div>
-
-        {showReasonInput && (
-          <div className="space-y-1.5 pt-1">
-            <label className={`text-xs font-medium block ${textSecondary}`}>
-              {t('admin.users.banReasonLabel')}
-            </label>
-            <Input
-              type="text"
-              placeholder={reasonPlaceholder || t('admin.users.banReasonPlaceholder')}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 pt-2 border-t border-line">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      maxWidth="sm"
+      closeOnBackdrop={!loading}
+      title={title}
+      icon={
+        <IconTile tone={tileTone} size="sm">
+          {variant === 'primary' ? <ShieldCheck /> : <AlertTriangle />}
+        </IconTile>
+      }
+      footer={
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="secondary"
@@ -100,6 +86,24 @@ export const UserConfirmModal: React.FC<UserConfirmModalProps> = ({
             <span>{confirmLabel}</span>
           </Button>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        <p className={`text-xs leading-relaxed m-0 ${textSecondary}`}>{description}</p>
+
+        {showReasonInput && (
+          <div className="space-y-1.5">
+            <label className={`text-xs font-medium block ${textSecondary}`}>
+              {t('admin.users.banReasonLabel')}
+            </label>
+            <Input
+              type="text"
+              placeholder={reasonPlaceholder || t('admin.users.banReasonPlaceholder')}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+        )}
       </div>
     </Modal>
   );

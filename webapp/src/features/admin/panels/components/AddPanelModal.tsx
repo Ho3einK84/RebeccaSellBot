@@ -3,6 +3,7 @@ import { Plus, Server } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { CreatePanelPayload } from '@/shared/types/api.js';
@@ -91,7 +92,11 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.panels.addModalTitle')}
-      icon={<Server className="w-5 h-5 text-brand-fg" />}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <Server />
+        </IconTile>
+      }
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">

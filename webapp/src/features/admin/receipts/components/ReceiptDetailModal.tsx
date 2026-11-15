@@ -18,6 +18,7 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface ReceiptDetailModalProps {
@@ -40,7 +41,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatIsoDate } = useFormatters();
+  const { formatMoney, formatId, formatIsoDate } = useFormatters();
   const { textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!receipt) return null;
@@ -52,22 +53,57 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   const userDisplayName =
     [receipt.user?.firstName, receipt.user?.lastName].filter(Boolean).join(' ') ||
     receipt.user?.username ||
-    `ID: ${receipt.telegramId}`;
+    `${t('common.idLabel')} ${formatId(receipt.telegramId)}`;
 
   return (
     <Modal
       isOpen={Boolean(receipt)}
       onClose={onClose}
-      title={
-        <div className="flex items-center gap-2 flex-wrap">
-          <span>{t('admin.receipts.detailModalTitle')}</span>
-          <bdi dir="ltr" className="tnum font-mono text-xs text-brand-fg font-normal">
-            #{receipt.id.slice(-8)}
-          </bdi>
-        </div>
+      title={t('admin.receipts.detailModalTitle')}
+      subtitle={
+        <bdi dir="ltr" className="tnum font-medium text-brand-fg">
+          #{formatId(receipt.id.slice(-8))}
+        </bdi>
       }
-      icon={<Receipt className="w-5 h-5 text-brand-fg" />}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <Receipt />
+        </IconTile>
+      }
       maxWidth="md"
+      footer={
+        isPending && onApprove && onReject ? (
+          <div className="flex gap-2.5">
+            <Button
+              type="button"
+              variant="danger"
+              size="md"
+              className="flex-1"
+              onClick={() => onReject(receipt)}
+              disabled={loading}
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>{t('admin.receipts.reject')}</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="success"
+              size="md"
+              className="flex-1"
+              onClick={() => onApprove(receipt)}
+              disabled={loading}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>{t('admin.receipts.approve')}</span>
+            </Button>
+          </div>
+        ) : (
+          <Button type="button" variant="secondary" size="sm" block onClick={onClose}>
+            {t('common.close')}
+          </Button>
+        )
+      }
     >
       <div className="space-y-4">
         {/* Top Summary Banner */}
@@ -82,12 +118,16 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
         >
           <div className="space-y-1">
             <span className={`text-xs block ${textMuted}`}>{t('common.amount')}</span>
-            <div
-              className={`text-xl sm:text-2xl font-semibold tnum ${
-                isApproved ? 'text-ok-fg' : isRejected ? 'text-danger-fg' : 'text-warn-fg'
-              }`}
-            >
-              <bdi dir="ltr">{formatMoney(receipt.amount)}</bdi> {t('common.currency')}
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <bdi
+                dir="ltr"
+                className={`text-xl sm:text-2xl font-bold tnum ${
+                  isApproved ? 'text-ok-fg' : isRejected ? 'text-danger-fg' : 'text-warn-fg'
+                }`}
+              >
+                {formatMoney(receipt.amount)}
+              </bdi>
+              <span className="text-xs font-normal text-ink-muted">{t('common.currency')}</span>
             </div>
           </div>
 
@@ -133,8 +173,8 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
             </div>
             <div>
               <span className={`block text-[11px] ${textMuted}`}>{t('admin.users.colId')}</span>
-              <bdi dir="ltr" className={`tnum font-mono ${textPrimary}`}>
-                {receipt.telegramId}
+              <bdi dir="ltr" className={`tnum font-semibold ${textPrimary}`}>
+                #{formatId(receipt.telegramId)}
               </bdi>
             </div>
             {receipt.user?.username && (
@@ -142,7 +182,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
                 <span className={`block text-[11px] ${textMuted}`}>
                   {t('admin.users.colUsername')}
                 </span>
-                <bdi dir="ltr" className="tnum text-brand-fg">
+                <bdi dir="ltr" className="tnum text-brand-fg font-medium">
                   @{receipt.user.username}
                 </bdi>
               </div>
@@ -153,7 +193,10 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
                   {t('admin.receipts.userBalance')}
                 </span>
                 <span className={`tnum font-semibold ${textPrimary}`}>
-                  <bdi dir="ltr">{formatMoney(receipt.user.balance)}</bdi> {t('common.currency')}
+                  <bdi dir="ltr">{formatMoney(receipt.user.balance)}</bdi>{' '}
+                  <span className="font-normal text-[11px] text-ink-muted">
+                    {t('common.currency')}
+                  </span>
                 </span>
               </div>
             )}
@@ -167,8 +210,8 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               <FileText className="w-3.5 h-3.5" />
               <span>{t('common.receiptCode')}</span>
             </span>
-            <bdi dir="ltr" className={`tnum font-mono ${textPrimary}`}>
-              {receipt.id}
+            <bdi dir="ltr" className={`tnum font-medium ${textPrimary}`}>
+              #{formatId(receipt.id)}
             </bdi>
           </div>
 
@@ -188,8 +231,8 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
                 <ShieldCheck className="w-3.5 h-3.5 text-ok-fg" />
                 <span>{t('admin.receipts.reviewedBy')}</span>
               </span>
-              <bdi dir="ltr" className={`tnum font-mono ${textPrimary}`}>
-                {receipt.reviewedBy}
+              <bdi dir="ltr" className={`tnum font-medium ${textPrimary}`}>
+                #{formatId(receipt.reviewedBy)}
               </bdi>
             </div>
           )}
@@ -232,46 +275,6 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
             <span>{t('admin.receipts.viewPhoto')}</span>
           </Button>
         )}
-
-        <div className="modal-action mt-5 flex gap-2.5">
-          {isPending && onApprove && onReject ? (
-            <>
-              <Button
-                type="button"
-                variant="danger"
-                size="md"
-                className="flex-1"
-                onClick={() => onReject(receipt)}
-                disabled={loading}
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                <span>{t('admin.receipts.reject')}</span>
-              </Button>
-
-              <Button
-                type="button"
-                variant="success"
-                size="md"
-                className="flex-1"
-                onClick={() => onApprove(receipt)}
-                disabled={loading}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{t('admin.receipts.approve')}</span>
-              </Button>
-            </>
-          ) : (
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              className="w-full"
-              onClick={onClose}
-            >
-              {t('common.close')}
-            </Button>
-          )}
-        </div>
       </div>
     </Modal>
   );

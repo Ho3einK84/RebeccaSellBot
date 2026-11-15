@@ -10,9 +10,11 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { api } from '@/shared/lib/api.js';
 
 export function appendDownloadQuery(photoUrl: string): string {
@@ -35,6 +37,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
   onErrorNotify,
 }) => {
   const { t } = useLanguage();
+  const { formatId } = useFormatters();
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
@@ -119,18 +122,31 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
     <Modal
       isOpen={Boolean(photoUrl)}
       onClose={handleModalClose}
-      title={
-        <div className="flex items-center gap-2 flex-wrap">
-          <span>{t('admin.receipts.photoModalTitle')}</span>
-          {receiptId && (
-            <bdi dir="ltr" className="tnum font-mono text-xs text-brand-fg font-normal">
-              #{receiptId.slice(-8)}
-            </bdi>
-          )}
+      title={t('admin.receipts.photoModalTitle')}
+      subtitle={
+        receiptId ? (
+          <bdi dir="ltr" className="tnum font-medium text-brand-fg">
+            #{formatId(receiptId.slice(-8))}
+          </bdi>
+        ) : undefined
+      }
+      icon={
+        <IconTile tone="brand" size="sm">
+          <ImageIcon />
+        </IconTile>
+      }
+      maxWidth="lg"
+      footer={
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-ink-muted">
+            {!hasError &&
+              (isZoomed ? t('admin.receipts.zoomHintActive') : t('admin.receipts.zoomHint'))}
+          </span>
+          <Button type="button" variant="secondary" size="sm" onClick={handleModalClose}>
+            {t('common.close')}
+          </Button>
         </div>
       }
-      icon={<ImageIcon className="w-4 h-4 text-brand-fg" />}
-      maxWidth="lg"
     >
       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -146,8 +162,8 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
               ) : (
                 <Copy className="w-3.5 h-3.5 opacity-60 shrink-0" />
               )}
-              <bdi dir="ltr" className="font-mono">
-                #{receiptId.slice(-8)}
+              <bdi dir="ltr" className="tnum font-medium">
+                #{formatId(receiptId.slice(-8))}
               </bdi>
             </button>
           )}
@@ -240,16 +256,6 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
             />
           </div>
         )}
-      </div>
-
-      <div className="modal-action mt-4 flex items-center justify-between gap-3">
-        <span className="text-xs text-ink-muted">
-          {!hasError &&
-            (isZoomed ? t('admin.receipts.zoomHintActive') : t('admin.receipts.zoomHint'))}
-        </span>
-        <Button type="button" variant="secondary" size="sm" onClick={handleModalClose}>
-          {t('common.close')}
-        </Button>
       </div>
     </Modal>
   );

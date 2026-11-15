@@ -24,7 +24,7 @@ export const UserTable: React.FC<UserTableProps> = ({
   inspectingId,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatNumber } = useFormatters();
+  const { formatMoney, formatNumber, formatId } = useFormatters();
   const { textMuted, textPrimary } = useThemeTokens();
 
   return (
@@ -52,8 +52,8 @@ export const UserTable: React.FC<UserTableProps> = ({
                     onClick={() => onCopyId(String(u.telegramId), `table-user-${u.telegramId}`)}
                     title={t('common.copy')}
                   >
-                    <bdi dir="ltr" className="font-mono">
-                      {u.telegramId}
+                    <bdi dir="ltr" className="tnum font-medium">
+                      #{formatId(u.telegramId)}
                     </bdi>
                     <Copy className={`w-3 h-3 ${textMuted}`} />
                   </button>

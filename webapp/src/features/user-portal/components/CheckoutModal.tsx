@@ -17,6 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Skeleton } from '@/shared/components/ui/Skeleton.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -331,11 +332,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       onClose={handleClose}
       title={step === 'success' ? t('user.shop.orderSuccess') : t('user.shop.orderModalTitle')}
       icon={
-        step === 'success' ? (
-          <CheckCircle2 className="w-5 h-5 text-ok" />
-        ) : (
-          <ShoppingCart className="w-5 h-5 text-brand" />
-        )
+        <IconTile tone={step === 'success' ? 'ok' : 'brand'} size="sm">
+          {step === 'success' ? <CheckCircle2 /> : <ShoppingCart />}
+        </IconTile>
       }
       maxWidth="md"
       closeOnBackdrop={!isProcessing}
