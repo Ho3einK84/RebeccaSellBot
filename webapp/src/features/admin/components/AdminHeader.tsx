@@ -90,37 +90,39 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       }
       footer={
         <>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <Avatar
               name={adminDisplayName}
               username={user.username}
               photoUrl={user.photo_url}
-              size="xs"
+              size="sm"
               circle
               className="shrink-0 ring-1 ring-line"
             />
-            <span className="min-w-0 truncate text-xs font-semibold text-ink">
-              {adminDisplayName}
-            </span>
-            <button
-              type="button"
-              onClick={() => copy(String(user.id), 'header-id')}
-              className="press rs-focus inline-flex h-7 items-center gap-1 rounded-ctl border border-line bg-surface-2 px-2 tnum text-[11px] font-medium text-ink-soft hover:border-line-strong hover:text-ink cursor-pointer shrink-0"
-              title={t('common.copy')}
-              aria-label={t('common.copy')}
-            >
-              <bdi dir="ltr" className="tnum">
-                #{formatId(user.id)}
-              </bdi>
-              {isCopied('header-id') ? (
-                <Check className="h-3 w-3 text-ok-fg shrink-0" />
-              ) : (
-                <Copy className="h-3 w-3 opacity-60 shrink-0" />
-              )}
-            </button>
+            <div className="flex min-w-0 flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+              <span className="max-w-full truncate text-xs font-semibold text-ink leading-tight">
+                {adminDisplayName}
+              </span>
+              <button
+                type="button"
+                onClick={() => copy(String(user.id), 'header-id')}
+                className="press rs-focus inline-flex h-6 sm:h-7 items-center gap-1 rounded-ctl border border-line bg-surface-2 px-1.5 sm:px-2 tnum text-[11px] font-medium text-ink-soft hover:border-line-strong hover:text-ink cursor-pointer shrink-0"
+                title={t('common.copy')}
+                aria-label={t('common.copy')}
+              >
+                <bdi dir="ltr" className="tnum">
+                  #{formatId(user.id)}
+                </bdi>
+                {isCopied('header-id') ? (
+                  <Check className="h-3 w-3 text-ok-fg shrink-0" />
+                ) : (
+                  <Copy className="h-3 w-3 opacity-60 shrink-0" />
+                )}
+              </button>
+            </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="ms-auto flex shrink-0 items-center gap-1.5">
             {onSwitchToUserPortal ? (
               <button
                 type="button"
@@ -129,14 +131,20 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                   onSwitchToUserPortal();
                 }}
                 title={t('admin.enterUserBeta')}
-                className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-brand/30 bg-brand-soft px-2.5 text-xs font-medium text-brand-fg hover:bg-brand/20 rs-focus press cursor-pointer shrink-0"
+                className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-brand/30 bg-brand-soft px-2 sm:px-2.5 text-xs font-medium text-brand-fg hover:bg-brand/20 rs-focus press cursor-pointer shrink-0"
               >
                 <Eye className="h-3.5 w-3.5 shrink-0" />
                 <span>{t('admin.enterUserBeta')}</span>
               </button>
             ) : null}
 
-            <IconButton size="sm" tone="danger" label={t('admin.exit')} onClick={onClose}>
+            <IconButton
+              size="sm"
+              tone="danger"
+              label={t('admin.exit')}
+              onClick={onClose}
+              className="!h-8 !w-8"
+            >
               <LogOut className="h-4 w-4 rtl:-scale-x-100" />
             </IconButton>
           </div>

@@ -109,7 +109,7 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
       }
       footer={
         <>
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"
               onClick={() => copy(String(user.id), 'beta-header-id')}
@@ -117,7 +117,7 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
               title={t('common.copy')}
               aria-label={t('common.copy')}
             >
-              <span className="text-ink-muted">{t('common.idLabel')}</span>
+              <span className="hidden sm:inline text-ink-muted">{t('common.idLabel')}</span>
               <bdi dir="ltr" className="tnum text-ink">
                 #{formatId(user.id)}
               </bdi>
@@ -140,7 +140,7 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="ms-auto flex items-center gap-1.5 shrink-0">
             {isAdminPreview && onSwitchToAdmin ? (
               <button
                 type="button"
@@ -155,7 +155,13 @@ export const BetaHeader: React.FC<BetaHeaderProps> = ({
                 <span>{exitLabel}</span>
               </button>
             ) : (
-              <IconButton size="sm" tone="danger" label={exitLabel} onClick={onExitBeta}>
+              <IconButton
+                size="sm"
+                tone="danger"
+                label={exitLabel}
+                onClick={onExitBeta}
+                className="!h-8 !w-8"
+              >
                 <LogOut className="h-4 w-4 rtl:-scale-x-100" />
               </IconButton>
             )}
