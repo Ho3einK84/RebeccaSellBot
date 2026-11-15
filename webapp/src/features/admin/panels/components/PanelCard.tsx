@@ -5,6 +5,7 @@ import {
   Settings,
   Layers,
   Star,
+  Target,
   Power,
   Trash2,
   Copy,
@@ -48,7 +49,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
-  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { textPrimary, textSecondary, textMuted } = useThemeTokens();
   const { copy, isCopied } = useCopy();
 
   const isHealthy = panel.healthy !== false;
@@ -65,43 +66,38 @@ export const PanelCard: React.FC<PanelCardProps> = ({
 
   return (
     <Card
-      className={`p-4 sm:p-5 space-y-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong group ${!isEnabled ? 'opacity-85' : ''}`}
+      padding="md"
+      className={`space-y-4 hover:border-line-strong text-start ${!isEnabled ? 'opacity-85' : ''}`}
     >
-      {/* Top Header: Name, Status Badges, Test & Edit Buttons */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <h3 className={`text-base font-bold m-0 tracking-tight ${textPrimary}`}>{panel.name}</h3>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className={`text-base font-semibold m-0 ${textPrimary}`}>{panel.name}</h3>
 
           {panel.isDefault && (
-            <Badge variant="warning" className="text-[10px]">
+            <Badge variant="warning" size="xs">
               <Star className="w-3 h-3 fill-current" />
               <span>{t('admin.panels.default')}</span>
             </Badge>
           )}
 
           {!isEnabled ? (
-            <Badge variant="neutral" className="text-[10px]">
+            <Badge variant="neutral" size="xs">
               {t('admin.panels.disabledBadge')}
             </Badge>
           ) : (
-            <Badge
-              variant={isHealthy ? 'success' : 'error'}
-              dot
-              pulse={isHealthy}
-              className="text-[10px]"
-            >
+            <Badge variant={isHealthy ? 'success' : 'error'} dot size="xs">
               {isHealthy ? t('admin.panels.online') : t('admin.panels.offline')}
             </Badge>
           )}
 
           {isEnabled && panel.latencyMs !== undefined && (
-            <Badge variant={latencyVariant} className="text-[10px] tnum">
+            <Badge variant={latencyVariant} size="xs" className="tnum">
               {t('admin.panels.latency', { ms: formatNumber(panel.latencyMs) })}
             </Badge>
           )}
         </div>
 
-        {/* Header Action Buttons */}
         <div className="flex items-center gap-2 self-end sm:self-center">
           <Button
             type="button"
@@ -129,10 +125,9 @@ export const PanelCard: React.FC<PanelCardProps> = ({
         </div>
       </div>
 
-      {/* Grid: Endpoint URL & Credentials + Metrics */}
+      {/* Endpoint & Auth */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-        {/* Endpoint URL */}
-        <div className={`p-3 rounded-xl border space-y-1 sm:col-span-2 ${subCardClass}`}>
+        <Card subCard padding="sm" className="space-y-1 sm:col-span-2">
           <div className="flex items-center justify-between">
             <span className={`block text-[11px] font-medium ${textMuted}`}>
               {t('admin.panels.address')}
@@ -140,74 +135,68 @@ export const PanelCard: React.FC<PanelCardProps> = ({
             {panel.baseUrl && (
               <button
                 type="button"
-                className="p-1 rounded-lg hover:bg-surface-3/60 text-ink-muted hover:text-ink-soft transition-colors cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded-ctl hover:bg-surface-3 text-ink-muted hover:text-ink cursor-pointer rs-focus"
                 onClick={() => copy(panel.baseUrl || '', `panel-url-${panel.id}`)}
                 title={t('common.copy')}
+                aria-label={t('common.copy')}
               >
                 {isCopied(`panel-url-${panel.id}`) ? (
-                  <Check className="w-3 h-3 text-ok" />
+                  <Check className="w-3.5 h-3.5 text-ok-fg" />
                 ) : (
-                  <Copy className="w-3 h-3" />
+                  <Copy className="w-3.5 h-3.5" />
                 )}
               </button>
             )}
           </div>
-          <code dir="ltr" className="break-all tnum text-[11px] text-brand block text-start">
+          <code dir="ltr" className="break-all tnum text-xs text-brand-fg block text-start">
             {panel.baseUrl || '—'}
           </code>
-        </div>
+        </Card>
 
-        {/* Auth & Credential Mode */}
-        <div className={`p-3 rounded-xl border space-y-1 ${subCardClass}`}>
+        <Card subCard padding="sm" className="space-y-1">
           <span className={`block text-[11px] font-medium ${textMuted}`}>
             {t('admin.panels.authMode')}
           </span>
           <div className="flex items-center gap-1.5 tnum">
-            <KeyRound className="w-3.5 h-3.5 text-brand shrink-0" />
-            <span dir="ltr" className={textPrimary}>
+            <KeyRound className="w-3.5 h-3.5 text-brand-fg shrink-0" />
+            <bdi dir="ltr" className={`font-mono ${textPrimary}`}>
               {panel.credentialMode}
-            </span>
+            </bdi>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* KPI Stats Strip */}
       <div className="grid grid-cols-3 gap-2">
-        <div
-          className={`p-2.5 rounded-xl border text-center space-y-0.5 bg-surface/[0.02] border-line/[0.06]`}
-        >
+        <Card subCard padding="sm" className="text-center space-y-0.5">
           <div className="flex items-center justify-center gap-1 text-[11px] text-ink-muted">
-            <Users className="w-3 h-3 text-ok" />
+            <Users className="w-3 h-3 text-ok-fg" />
             <span>{t('admin.panels.configsCountLabel')}</span>
           </div>
-          <div className="text-sm font-bold tnum text-ok">
+          <div className="text-sm font-semibold tnum text-ok-fg">
             {formatNumber(panel.activeConfigsCount ?? 0)}
           </div>
-        </div>
+        </Card>
 
-        <div
-          className={`p-2.5 rounded-xl border text-center space-y-0.5 bg-surface/[0.02] border-line/[0.06]`}
-        >
+        <Card subCard padding="sm" className="text-center space-y-0.5">
           <div className="flex items-center justify-center gap-1 text-[11px] text-ink-muted">
-            <Package className="w-3 h-3 text-brand" />
+            <Package className="w-3 h-3 text-brand-fg" />
             <span>{t('admin.panels.packagesCountLabel')}</span>
           </div>
-          <div className="text-sm font-bold tnum text-brand">
+          <div className="text-sm font-semibold tnum text-brand-fg">
             {formatNumber(panel.packagesCount ?? 0)}
           </div>
-        </div>
+        </Card>
 
-        <div
-          className={`p-2.5 rounded-xl border text-center space-y-0.5 bg-surface/[0.02] border-line/[0.06]`}
-        >
+        <Card subCard padding="sm" className="text-center space-y-0.5">
           <div className="flex items-center justify-center gap-1 text-[11px] text-ink-muted">
-            <Layers className="w-3 h-3 text-brand" />
+            <Layers className="w-3 h-3 text-brand-fg" />
             <span>{t('admin.panels.servicesCountLabel')}</span>
           </div>
-          <div className="text-sm font-bold tnum text-brand">
+          <div className="text-sm font-semibold tnum text-brand-fg">
             {formatNumber(panel.services.length)}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Services Section */}
@@ -218,7 +207,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
           </span>
           <button
             type="button"
-            className="text-[11px] font-semibold text-brand hover:text-brand cursor-pointer flex items-center gap-1"
+            className="text-xs font-medium text-brand-fg hover:underline cursor-pointer flex items-center gap-1 rs-focus rounded-ctl px-1.5 py-0.5"
             onClick={() => onManageServices(panel)}
           >
             <Layers className="w-3 h-3" />
@@ -231,26 +220,26 @@ export const PanelCard: React.FC<PanelCardProps> = ({
             {panel.services.map((s) => (
               <span
                 key={s.serviceId}
-                className={`inline-flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-lg border tnum bg-surface/[0.03] border-line/10 text-ink-soft`}
+                className="inline-flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-ctl border tnum bg-surface-2 border-line text-ink-soft"
               >
-                <span className="font-sans font-medium">{s.name}</span>
-                <span dir="ltr" className="text-[10px] text-ink-muted tnum">
+                <span className="font-medium text-ink">{s.name}</span>
+                <bdi dir="ltr" className="text-[11px] font-mono text-ink-muted tnum">
                   ({s.serviceId})
-                </span>
+                </bdi>
                 {s.isDefault && (
                   <span
-                    className="inline-flex items-center text-[10px] text-warn font-sans"
+                    className="inline-flex items-center text-warn-fg"
                     title={t('admin.panels.defaultService')}
                   >
-                    ⭐
+                    <Star className="w-3 h-3 fill-current" aria-hidden="true" />
                   </span>
                 )}
                 {s.isCustomTarget && (
                   <span
-                    className="inline-flex items-center text-[10px] text-info font-sans"
+                    className="inline-flex items-center text-info-fg"
                     title={t('admin.panels.customTargetBadge')}
                   >
-                    🎯
+                    <Target className="w-3 h-3" aria-hidden="true" />
                   </span>
                 )}
               </span>
@@ -261,10 +250,9 @@ export const PanelCard: React.FC<PanelCardProps> = ({
         )}
       </div>
 
-      {/* Bottom Action Bar: Toggle, Set Default, Delete */}
-      <div className="flex items-center justify-between gap-2 pt-2 border-t border-line/60 flex-wrap">
+      {/* Bottom Action Bar */}
+      <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-line flex-wrap">
         <div className="flex items-center gap-2">
-          {/* Enable / Disable Toggle */}
           <Button
             type="button"
             size="xs"
@@ -277,7 +265,6 @@ export const PanelCard: React.FC<PanelCardProps> = ({
             <span>{isEnabled ? t('admin.panels.disableBtn') : t('admin.panels.enableBtn')}</span>
           </Button>
 
-          {/* Set Default Panel */}
           {!panel.isDefault && isEnabled && (
             <Button
               type="button"
@@ -293,7 +280,6 @@ export const PanelCard: React.FC<PanelCardProps> = ({
           )}
         </div>
 
-        {/* Delete Panel */}
         {!panel.isDefault && (
           <Button
             type="button"

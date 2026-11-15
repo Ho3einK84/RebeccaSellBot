@@ -13,7 +13,6 @@ import { ToastContainer, useToastQueue } from '@/shared/components/ui/Toast.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Skeleton, SkeletonCard, SkeletonList } from '@/shared/components/ui/Skeleton.js';
-import { AmbientBackground } from '@/shared/components/layout/AmbientBackground.js';
 import { AppShell } from '@/shared/components/layout/AppShell.js';
 import { DesktopNav } from '@/shared/components/layout/DesktopNav.js';
 import { useUserNavItems } from './hooks/useUserNavItems.js';
@@ -41,7 +40,7 @@ const UserPortalSkeleton: React.FC = () => (
   <div className="flex w-full flex-col gap-3">
     {/* Header skeleton */}
     <div className="mb-1 flex w-full items-center justify-between gap-2">
-      <Skeleton className="h-[68px] flex-1 rounded-card" />
+      <Skeleton className="h-16 flex-1 rounded-card" />
       <div className="flex items-center gap-1.5">
         <Skeleton className="h-9 w-9 rounded-ctl" />
         <Skeleton className="h-9 w-9 rounded-ctl" />
@@ -68,9 +67,9 @@ const SectionErrorCard: React.FC<{
   const { t } = useLanguage();
   return (
     <div className="anim-fade my-4 flex flex-col items-center gap-3 rounded-card border border-danger/25 bg-danger-soft p-5 text-center text-ink">
-      <AlertCircle className="h-8 w-8 shrink-0 text-danger" />
+      <AlertCircle className="h-8 w-8 shrink-0 text-danger-fg" />
       <div className="flex flex-col gap-1 max-w-sm">
-        <h4 className="font-bold text-sm m-0">{title || t('common.networkError')}</h4>
+        <h4 className="font-semibold text-sm m-0">{title || t('common.networkError')}</h4>
         <p className="text-xs opacity-80 leading-relaxed m-0">{message || t('common.error')}</p>
       </div>
       <Button
@@ -96,7 +95,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { triggerHaptic } = useHaptic();
-  const { toasts, addToast, removeToast } = useToastQueue();
+  const { toasts, showToast, dismissToast } = useToastQueue();
 
   const [activeTab, setActiveTab] = useState<UserTabType>('dashboard');
   const [tabHistory, setTabHistory] = useState<UserTabType[]>(['dashboard']);
@@ -158,7 +157,7 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
   );
 
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
-    addToast(message, type);
+    showToast(message, type);
     triggerHaptic(type === 'success' ? 'success' : 'error');
   };
 
@@ -247,33 +246,24 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
   if (is401) {
     return (
       <div className="safe-top relative flex min-h-[100dvh] w-full flex-col items-center justify-center bg-canvas p-4 text-ink">
-        <AmbientBackground />
-        <div className="anim-rise relative z-10 flex w-full max-w-sm flex-col items-center gap-4 rounded-card border border-line bg-surface p-6 text-center shadow-e3">
+        <div className="anim-rise relative z-10 flex w-full max-w-sm flex-col items-center gap-4 rounded-card border border-line bg-surface p-6 text-center shadow-[var(--shadow-card)]">
           <IconTile tone="warn" size="lg">
             <LogOut />
           </IconTile>
           <div className="flex flex-col gap-1.5">
-            <h2 className="m-0 text-base font-bold sm:text-lg">{t('user.sessionExpiredTitle')}</h2>
+            <h2 className="m-0 text-base font-semibold sm:text-lg leading-[1.4]">
+              {t('user.sessionExpiredTitle')}
+            </h2>
             <p className="m-0 text-xs leading-relaxed text-ink-muted">
               {t('user.sessionExpiredDesc')}
             </p>
           </div>
           <div className="w-full flex flex-col gap-2 mt-2">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => window.location.reload()}
-              className="w-full min-h-[44px] font-bold text-xs sm:text-sm"
-            >
+            <Button variant="primary" size="md" block onClick={() => window.location.reload()}>
               <RotateCw className="w-4 h-4" />
               <span>{t('user.reloadApp')}</span>
             </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={onExitBeta}
-              className="w-full min-h-[44px] font-semibold text-xs"
-            >
+            <Button variant="secondary" size="md" block onClick={onExitBeta}>
               <span>{t('common.back')}</span>
             </Button>
           </div>
@@ -287,13 +277,12 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
     const supportUsername = settings?.supportUsername || '';
     return (
       <div className="safe-top relative flex min-h-[100dvh] w-full flex-col items-center justify-center bg-canvas p-4 text-ink">
-        <AmbientBackground />
-        <div className="anim-rise relative z-10 flex w-full max-w-sm flex-col items-center gap-4 rounded-card border border-danger/25 bg-surface p-6 text-center shadow-e3">
+        <div className="anim-rise relative z-10 flex w-full max-w-sm flex-col items-center gap-4 rounded-card border border-danger/25 bg-surface p-6 text-center shadow-[var(--shadow-card)]">
           <IconTile tone="danger" size="lg">
             <ShieldAlert />
           </IconTile>
           <div className="flex flex-col gap-1.5">
-            <h2 className="m-0 text-base font-bold text-danger sm:text-lg">
+            <h2 className="m-0 text-base font-semibold text-danger-fg sm:text-lg leading-[1.4]">
               {t('user.accountBannedTitle')}
             </h2>
             <p className="m-0 text-xs leading-relaxed text-ink-muted">
@@ -306,17 +295,19 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
                 href={`https://t.me/${supportUsername.replace(/^@/, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="press rs-focus flex min-h-[44px] w-full items-center justify-center gap-2 rounded-ctl bg-brand px-4 py-2.5 text-xs font-bold text-brand-ink no-underline shadow-e2 sm:text-sm"
+                className="press rs-focus flex min-h-11 w-full items-center justify-center gap-2 rounded-ctl bg-brand hover:bg-brand-hover px-4 text-xs font-medium text-brand-ink no-underline sm:text-sm"
               >
                 <MessageCircle className="w-4 h-4" />
                 <span>
-                  {t('user.contactSupport')} (@{supportUsername.replace(/^@/, '')})
+                  {t('user.contactSupport')} (
+                  <bdi dir="ltr">@{supportUsername.replace(/^@/, '')}</bdi>)
                 </span>
               </a>
             )}
             <Button
               variant="secondary"
               size="md"
+              block
               onClick={() => {
                 if (window.Telegram?.WebApp?.close) {
                   window.Telegram.WebApp.close();
@@ -324,7 +315,6 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
                   window.close();
                 }
               }}
-              className="w-full min-h-[44px] font-semibold text-xs"
             >
               <Send className="w-3.5 h-3.5 rtl:rotate-180" />
               <span>{t('user.backToBot')}</span>
@@ -376,10 +366,10 @@ export const UserBetaPortal: React.FC<UserBetaPortalProps> = ({
           items={navItems}
           activeId={activeTab}
           onSelect={switchTab}
-          ariaLabel="ناوبری حساب کاربری"
+          ariaLabel={t('user.navAriaLabel')}
         />
       }
-      overlay={<ToastContainer toasts={toasts} onDismiss={removeToast} />}
+      overlay={<ToastContainer toasts={toasts} onDismiss={dismissToast} />}
       bottomNav={
         <BetaBottomNav
           activeTab={activeTab}

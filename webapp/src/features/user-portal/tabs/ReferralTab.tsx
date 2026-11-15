@@ -5,6 +5,9 @@ import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import type { UserPortalProfile, UserPortalSettings } from '@/shared/types/userPortal.js';
+import { Button } from '@/shared/components/ui/Button.js';
+import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 
 interface ReferralTabProps {
   profile: UserPortalProfile | null;
@@ -60,78 +63,73 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
   };
 
   return (
-    <div className="w-full flex flex-col gap-4 pb-6 text-start">
-      {/* Referral Hero Banner */}
-      <section
-        className={`p-5 rounded-3xl border relative overflow-hidden flex flex-col gap-3 transition-all bg-gradient-to-br from-brand-soft via-surface to-brand-soft/50 dark:from-brand/35 dark:via-surface dark:to-brand/20 border-brand/20 shadow-lg shadow-brand/10 shadow-2xs`}
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-brand/15 text-brand flex items-center justify-center shrink-0 border border-brand/25">
-            <Gift className="w-5 h-5" />
-          </div>
-          <div className="flex flex-col">
-            <h2 className={`text-sm sm:text-base font-bold text-ink`}>
+    <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start pb-6 text-start">
+      {/* Left column: Program Summary + Metrics */}
+      <div className="lg:col-span-5 flex flex-col gap-3.5">
+        <Card padding="lg" className="flex items-start gap-3.5">
+          <IconTile tone="brand" size="lg">
+            <Gift />
+          </IconTile>
+          <div className="flex flex-col min-w-0">
+            <h2 className="text-sm sm:text-base font-semibold text-ink m-0">
               {t('user.referral.title')}
             </h2>
-            <span className="text-[11px] text-ink-muted">{t('user.referral.ruleDesc')}</span>
+            <p className="mt-1 text-xs text-ink-muted leading-relaxed m-0">
+              {t('user.referral.ruleDesc')}
+            </p>
           </div>
-        </div>
-      </section>
+        </Card>
 
-      {/* Referral Stats Cards */}
-      <section className="grid grid-cols-2 gap-3">
-        <div
-          className={`p-4 rounded-2xl border flex flex-col gap-1 text-center justify-center bg-surface border-line shadow-2xs`}
-        >
-          <div className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center mx-auto mb-1 border border-brand/15">
-            <Users className="w-4 h-4" />
-          </div>
-          <span className="text-[11px] text-ink-muted">{t('user.referral.statsInvited')}</span>
-          <span className={`tnum text-lg sm:text-xl font-extrabold text-ink`}>
-            {formatNumber(profile?.referredUserCount ?? 0)}
-          </span>
-        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Card padding="md" className="flex flex-col items-center text-center gap-1.5">
+            <IconTile tone="brand" size="sm">
+              <Users />
+            </IconTile>
+            <span className="text-xs text-ink-muted mt-0.5">{t('user.referral.statsInvited')}</span>
+            <span className="tnum text-lg sm:text-xl font-semibold text-ink">
+              {formatNumber(profile?.referredUserCount ?? 0)}
+            </span>
+          </Card>
 
-        <div
-          className={`p-4 rounded-2xl border flex flex-col gap-1 text-center justify-center bg-surface border-line shadow-2xs`}
-        >
-          <div className="w-8 h-8 rounded-xl bg-ok/10 text-ok flex items-center justify-center mx-auto mb-1 border border-ok/15">
-            <Award className="w-4 h-4" />
-          </div>
-          <span className="text-[11px] text-ink-muted">{t('user.referral.statsEarned')}</span>
-          <div
-            className={`flex items-center justify-center gap-1.5 tnum text-lg sm:text-xl font-extrabold text-ok`}
-          >
-            <span>{formatToman(profile?.referralBonusEarned ?? 0)}</span>
-            <span className="text-xs font-sans font-medium opacity-80">{currency}</span>
-          </div>
+          <Card padding="md" className="flex flex-col items-center text-center gap-1.5">
+            <IconTile tone="ok" size="sm">
+              <Award />
+            </IconTile>
+            <span className="text-xs text-ink-muted mt-0.5">{t('user.referral.statsEarned')}</span>
+            <div className="flex items-baseline justify-center gap-1 flex-wrap tnum text-lg sm:text-xl font-semibold text-ok-fg">
+              <bdi dir="ltr">{formatToman(profile?.referralBonusEarned ?? 0)}</bdi>
+              <span className="text-xs font-medium text-ink-muted">{currency}</span>
+            </div>
+          </Card>
         </div>
-      </section>
+      </div>
 
-      {/* Referral Code & Link Box */}
-      <section
-        className={`p-4 sm:p-5 rounded-3xl border flex flex-col gap-3.5 bg-surface border-line shadow-2xs`}
-      >
-        {/* Referral Code Box */}
+      {/* Right column: Code, Link & Share Controls */}
+      <Card padding="lg" className="lg:col-span-7 flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-ink-soft">{t('user.referral.yourCode')}</span>
+          <span className="text-xs font-medium text-ink-soft">{t('user.referral.yourCode')}</span>
           <button
             type="button"
             onClick={handleCopyCode}
-            className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer text-start bg-surface-2 border-line hover:border-line-strong`}
+            disabled={!referralCode}
+            className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3 flex items-center justify-between gap-2.5 press rs-focus cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-start"
           >
-            <span
+            <bdi
               dir="ltr"
-              className="font-mono font-bold text-xs sm:text-sm text-brand truncate flex-1 min-w-0 select-all"
+              className="font-mono font-medium text-xs sm:text-sm text-brand-fg truncate flex-1 min-w-0 select-all"
             >
               {referralCode || '—'}
-            </span>
+            </bdi>
             <span
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors ${isCopied('referral-code') ? 'bg-ok/15 text-ok border border-ok/25' : 'bg-surface-3 text-ink-soft border border-line shadow-2xs'}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 h-7 rounded-ctl text-xs font-medium shrink-0 border ${
+                isCopied('referral-code')
+                  ? 'bg-ok-soft text-ok-fg border-ok/25'
+                  : 'bg-surface text-ink-soft border-line'
+              }`}
             >
               {isCopied('referral-code') ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-ok" />
+                  <Check className="w-3.5 h-3.5" />
                   <span>{t('common.copied')}</span>
                 </>
               ) : (
@@ -144,26 +142,30 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           </button>
         </div>
 
-        {/* Link Box */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-bold text-ink-soft">{t('user.referral.yourLink')}</span>
+          <span className="text-xs font-medium text-ink-soft">{t('user.referral.yourLink')}</span>
           <button
             type="button"
             onClick={handleCopyLink}
-            className={`w-full p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] cursor-pointer text-start bg-surface-2 border-line hover:border-line-strong`}
+            disabled={!inviteLink}
+            className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3 flex items-center justify-between gap-2.5 press rs-focus cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-start"
           >
-            <span
+            <bdi
               dir="ltr"
               className="font-mono text-xs truncate flex-1 min-w-0 text-ink-soft select-all"
             >
               {inviteLink || '—'}
-            </span>
+            </bdi>
             <span
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-colors ${isCopied('referral-link') ? 'bg-ok/15 text-ok border border-ok/25' : 'bg-surface-3 text-ink-soft border border-line shadow-2xs'}`}
+              className={`inline-flex items-center gap-1.5 px-2.5 h-7 rounded-ctl text-xs font-medium shrink-0 border ${
+                isCopied('referral-link')
+                  ? 'bg-ok-soft text-ok-fg border-ok/25'
+                  : 'bg-surface text-ink-soft border-line'
+              }`}
             >
               {isCopied('referral-link') ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-ok" />
+                  <Check className="w-3.5 h-3.5" />
                   <span>{t('common.copied')}</span>
                 </>
               ) : (
@@ -176,36 +178,39 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           </button>
         </div>
 
-        {/* Action Buttons: Copy Link & Share */}
-        <div className="grid grid-cols-2 gap-2 mt-1">
-          <button
-            type="button"
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          <Button
+            size="md"
+            variant={isCopied('referral-link') ? 'success' : 'secondary'}
             onClick={handleCopyLink}
-            className={`py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${isCopied('referral-link') ? 'bg-ok text-white font-bold' : 'bg-surface-2 hover:bg-surface-3 text-ink-soft border border-line'}`}
+            disabled={!inviteLink}
+            block
           >
             {isCopied('referral-link') ? (
               <>
-                <Check className="w-3.5 h-3.5" />
+                <Check className="w-4 h-4 shrink-0" />
                 <span>{t('user.referral.linkCopied')}</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5" />
+                <Copy className="w-4 h-4 shrink-0" />
                 <span>{t('user.referral.copyLink')}</span>
               </>
             )}
-          </button>
+          </Button>
 
-          <button
-            type="button"
+          <Button
+            size="md"
+            variant="primary"
             onClick={handleShareTelegram}
-            className="py-2.5 px-3 rounded-xl bg-brand hover:bg-brand text-brand-ink font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md"
+            disabled={!inviteLink}
+            block
           >
-            <Share2 className="w-3.5 h-3.5" />
+            <Share2 className="w-4 h-4 shrink-0" />
             <span>{t('user.referral.shareTelegram')}</span>
-          </button>
+          </Button>
         </div>
-      </section>
+      </Card>
     </div>
   );
 };

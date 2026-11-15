@@ -92,8 +92,8 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
           </p>
         </div>
 
-        {/* QR Code Container with nice rounded white frame */}
-        <div className="bg-surface p-3.5 rounded-2xl shadow-md border border-line/80 flex items-center justify-center min-w-[220px] min-h-[220px]">
+        {/* High-contrast light QR canvas for optical scan reliability in both themes */}
+        <div className="bg-white p-3.5 rounded-card border border-line flex items-center justify-center min-w-[220px] min-h-[220px]">
           {hasError ? (
             <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex flex-col items-center justify-center gap-2 p-2">
               <AlertCircle className="w-7 h-7 text-danger" />

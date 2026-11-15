@@ -24,7 +24,7 @@ export const AdminBottomNav: React.FC<AdminBottomNavProps> = ({ tabs, activeTab,
       items={tabs}
       activeId={activeTab}
       onSelect={onSelectTab}
-      ariaLabel={t('admin.navLabel')}
+      ariaLabel={t('admin.navAriaLabel')}
     />
   );
 };

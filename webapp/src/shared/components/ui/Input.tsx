@@ -2,18 +2,16 @@ import { forwardRef, type InputHTMLAttributes } from 'react';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  error?: boolean;
+  className?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className = '', error = false, ...props }, ref) => {
+  ({ className = '', ...props }, ref) => {
     const { inputClass } = useThemeTokens();
-    const errorBorder = error ? '!border-danger/70 focus:!ring-danger/25' : '';
-
     return (
       <input
         ref={ref}
-        className={`w-full h-11 px-3.5 rounded-ctl border text-sm transition-[border-color,box-shadow,background-color] outline-none focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${inputClass} ${errorBorder} ${className}`}
+        className={`w-full h-11 px-3.5 text-sm rounded-ctl border outline-none rs-focus transition-colors duration-150 disabled:opacity-50 ${inputClass} ${className}`}
         {...props}
       />
     );

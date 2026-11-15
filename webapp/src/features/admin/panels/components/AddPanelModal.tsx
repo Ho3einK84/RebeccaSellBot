@@ -75,7 +75,6 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
         serviceId: parsedServiceId,
         serviceName: serviceName.trim() || undefined,
       });
-      // reset form on success
       setName('');
       setBaseUrl('');
       setApiKey('');
@@ -92,19 +91,19 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.panels.addModalTitle')}
-      icon={<Server className="w-5 h-5 text-brand" />}
+      icon={<Server className="w-5 h-5 text-brand-fg" />}
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {validationError && (
-          <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-medium">
+          <div className="p-3 rounded-tile bg-danger-soft border border-danger/25 text-danger-fg text-xs font-medium">
             {validationError}
           </div>
         )}
 
         <div className="space-y-1.5 text-start">
           <label className={`block text-xs font-semibold ${textPrimary}`}>
-            {t('admin.panels.nameField')} <span className="text-danger">*</span>
+            {t('admin.panels.nameField')} <span className="text-danger-fg">*</span>
           </label>
           <Input
             value={name}
@@ -118,7 +117,7 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
 
         <div className="space-y-1.5 text-start">
           <label className={`block text-xs font-semibold ${textPrimary}`}>
-            {t('admin.panels.urlField')} <span className="text-danger">*</span>
+            {t('admin.panels.urlField')} <span className="text-danger-fg">*</span>
           </label>
           <Input
             type="url"
@@ -175,7 +174,7 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-line/60">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-line">
           <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
             {t('common.cancel')}
           </Button>

@@ -5,6 +5,7 @@ import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { Card } from '@/shared/components/ui/Card.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface BatchApproveModalProps {
@@ -24,7 +25,7 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber } = useFormatters();
-  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!isOpen || receipts.length === 0) return null;
 
@@ -35,15 +36,12 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.receipts.batchApproveTitle')}
-      icon={<CheckCircle2 className="w-5 h-5 text-ok" />}
+      icon={<CheckCircle2 className="w-5 h-5 text-ok-fg" />}
       maxWidth="md"
       closeOnBackdrop={!loading}
     >
       <div className="space-y-4">
-        {/* Warning Banner */}
-        <div
-          className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs bg-warn/10 border-warn/20 text-warn`}
-        >
+        <div className="p-3.5 rounded-tile border flex items-start gap-2.5 text-xs bg-warn-soft border-warn/25 text-warn-fg">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <p className="m-0 leading-relaxed">
             {t('admin.receipts.batchApproveConfirmBody', {
@@ -53,37 +51,33 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
           </p>
         </div>
 
-        {/* Selected Receipts List */}
-        <div
-          className={`max-h-52 overflow-y-auto rounded-xl border p-2.5 space-y-1.5 text-xs ${subCardClass}`}
-        >
+        <Card subCard padding="sm" className="max-h-52 overflow-y-auto space-y-1.5 text-xs">
           {receipts.map((rec) => (
             <div
               key={rec.id}
-              className="flex items-center justify-between p-2 rounded-lg bg-black/5 tnum text-[11px]"
+              className="flex items-center justify-between p-2 rounded-ctl bg-surface border border-line tnum text-[11px]"
             >
               <div className="flex items-center gap-2">
-                <span dir="ltr" className={`tnum ${textMuted}`}>
+                <bdi dir="ltr" className={`font-mono tnum ${textMuted}`}>
                   #{rec.id.slice(-6)}
-                </span>
-                <span dir="ltr" className={`tnum ${textSecondary}`}>
+                </bdi>
+                <bdi dir="ltr" className={`tnum ${textSecondary}`}>
                   {t('common.idLabel')} {rec.telegramId}
-                </span>
+                </bdi>
               </div>
-              <span className={`font-bold text-ok`}>
-                {formatMoney(rec.amount)} {t('common.currency')}
+              <span className="font-semibold text-ok-fg">
+                <bdi dir="ltr">{formatMoney(rec.amount)}</bdi> {t('common.currency')}
               </span>
             </div>
           ))}
-        </div>
+        </Card>
 
-        {/* Total Summary */}
         <div className="flex items-center justify-between px-1 text-xs">
           <span className={textMuted}>
             {t('admin.receipts.batchSelectedCount', { count: formatNumber(receipts.length) })}
           </span>
-          <span className={`font-bold tnum text-sm ${textPrimary}`}>
-            {formatMoney(totalAmount)} {t('common.currency')}
+          <span className={`font-semibold tnum text-sm ${textPrimary}`}>
+            <bdi dir="ltr">{formatMoney(totalAmount)}</bdi> {t('common.currency')}
           </span>
         </div>
 

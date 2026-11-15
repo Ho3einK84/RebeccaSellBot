@@ -8,6 +8,9 @@ interface PaginationProps {
   totalPages: number;
   onPageChange: (newPage: number) => void;
   disabled?: boolean;
+  prevLabel?: string;
+  nextLabel?: string;
+  pageLabel?: string;
 }
 
 export const Pagination: React.FC<PaginationProps> = ({
@@ -15,14 +18,25 @@ export const Pagination: React.FC<PaginationProps> = ({
   totalPages,
   onPageChange,
   disabled = false,
+  prevLabel,
+  nextLabel,
+  pageLabel,
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
 
   if (totalPages <= 1) return null;
 
-  const prevIcon = <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-180 shrink-0" />;
-  const nextIcon = <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180 shrink-0" />;
+  const prevIcon = <ChevronLeft className="w-4 h-4 rtl:rotate-180 shrink-0" />;
+  const nextIcon = <ChevronRight className="w-4 h-4 rtl:rotate-180 shrink-0" />;
+  const resolvedPrev = prevLabel ?? t('admin.users.paginationPrev');
+  const resolvedNext = nextLabel ?? t('admin.users.paginationNext');
+  const resolvedPage =
+    pageLabel ??
+    t('admin.users.paginationPage', {
+      page: formatNumber(page),
+      totalPages: formatNumber(totalPages),
+    });
 
   return (
     <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-line">
@@ -30,28 +44,23 @@ export const Pagination: React.FC<PaginationProps> = ({
         type="button"
         disabled={disabled || page <= 1}
         onClick={() => onPageChange(page - 1)}
-        className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-medium cursor-pointer transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 border bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08] disabled:opacity-30 disabled:pointer-events-none shadow-xs`}
+        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-ctl text-xs font-medium cursor-pointer border bg-surface-2 border-line-strong text-ink hover:bg-surface-3 rs-focus press disabled:opacity-40 disabled:pointer-events-none"
       >
         {prevIcon}
-        <span>{t('admin.users.paginationPrev')}</span>
+        <span>{resolvedPrev}</span>
       </button>
 
-      <span
-        className={`text-xs font-medium px-2.5 py-1 rounded-lg border bg-surface/[0.03] border-line/10 text-ink-muted`}
-      >
-        {t('admin.users.paginationPage', {
-          page: formatNumber(page),
-          totalPages: formatNumber(totalPages),
-        })}
+      <span className="tnum text-xs font-medium px-3 py-1.5 rounded-ctl border bg-surface border-line text-ink-soft">
+        {resolvedPage}
       </span>
 
       <button
         type="button"
         disabled={disabled || page >= totalPages}
         onClick={() => onPageChange(page + 1)}
-        className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-xs font-medium cursor-pointer transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 border bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08] disabled:opacity-30 disabled:pointer-events-none shadow-xs`}
+        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-ctl text-xs font-medium cursor-pointer border bg-surface-2 border-line-strong text-ink hover:bg-surface-3 rs-focus press disabled:opacity-40 disabled:pointer-events-none"
       >
-        <span>{t('admin.users.paginationNext')}</span>
+        <span>{resolvedNext}</span>
         {nextIcon}
       </button>
     </div>

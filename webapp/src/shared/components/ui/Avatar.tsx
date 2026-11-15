@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { User } from 'lucide-react';
 import { getAvatarChar } from '@/shared/lib/formatters.js';
 
 interface AvatarProps {
@@ -13,17 +14,9 @@ interface AvatarProps {
 const sizeClasses = {
   xs: 'w-7 h-7 text-xs',
   sm: 'w-8 h-8 text-xs',
-  md: 'w-10 h-10 text-sm font-bold',
-  lg: 'w-12 h-12 text-base font-bold',
-  xl: 'w-16 h-16 text-xl font-bold',
-} as const;
-
-const radiusClasses = {
-  xs: 'rounded-lg',
-  sm: 'rounded-ctl',
-  md: 'rounded-ctl',
-  lg: 'rounded-tile',
-  xl: 'rounded-tile',
+  md: 'w-10 h-10 text-sm',
+  lg: 'w-12 h-12 text-base',
+  xl: 'w-16 h-16 text-xl',
 } as const;
 
 export const Avatar: React.FC<AvatarProps> = ({
@@ -34,27 +27,27 @@ export const Avatar: React.FC<AvatarProps> = ({
   circle = false,
   className = '',
 }) => {
-  const [hasError, setHasError] = useState(false);
-  const radiusClass = circle ? 'rounded-full' : radiusClasses[size];
+  const [imgError, setImgError] = useState(false);
+  const char = getAvatarChar(name, username);
+  const isFallbackEmoji = char === '👤';
+  const radiusClass = circle ? 'rounded-full' : 'rounded-tile';
 
-  if (photoUrl && !hasError) {
+  if (photoUrl && !imgError) {
     return (
       <img
         src={photoUrl}
-        alt={name || username || 'User'}
-        className={`${radiusClass} shrink-0 border border-line object-cover shadow-e1 ${sizeClasses[size]} ${className}`}
-        onError={() => setHasError(true)}
+        alt={name || username || 'Avatar'}
+        onError={() => setImgError(true)}
+        className={`object-cover shrink-0 border border-line bg-surface-2 select-none ${radiusClass} ${sizeClasses[size]} ${className}`}
       />
     );
   }
 
-  const char = getAvatarChar(name, username);
-
   return (
     <div
-      className={`${radiusClass} flex shrink-0 select-none items-center justify-center border border-brand/25 bg-brand-soft text-brand select-none transition-colors shadow-e1 ${sizeClasses[size]} ${className}`}
+      className={`flex items-center justify-center shrink-0 font-semibold border border-line-strong bg-surface-2 text-ink-soft select-none ${radiusClass} ${sizeClasses[size]} ${className}`}
     >
-      <span>{char}</span>
+      {isFallbackEmoji ? <User className="w-[45%] h-[45%] text-ink-muted" /> : char}
     </div>
   );
 };

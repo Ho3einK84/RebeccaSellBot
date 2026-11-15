@@ -1,55 +1,76 @@
-import type { BottomNavItem } from './BottomNav.js';
+import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
+import type { BottomNavItem } from './BottomNav.js';
 
 interface DesktopNavProps<T extends string> {
   items: BottomNavItem<T>[];
   activeId: T;
   onSelect: (id: T) => void;
-  /** Accessible name for the tab rail. */
-  ariaLabel?: string;
-  className?: string;
+  ariaLabel: string;
 }
 
 /**
- * Desktop/tablet tab rail — the same information architecture and the same
- * active treatment as the mobile `BottomNav`, so both panels behave
- * identically whether the mini app is opened in Telegram desktop or on a phone.
+ * Clean tabbed instrument rail on `md+` screens aligned with the matte surface system.
+ * Uses a sharp bottom indicator rule instead of bulky pill buttons.
  */
 export function DesktopNav<T extends string>({
   items,
   activeId,
   onSelect,
-  ariaLabel = 'ناوبری',
-  className = '',
+  ariaLabel,
 }: DesktopNavProps<T>) {
+  const { locale } = useLanguage();
   const { formatNumber } = useFormatters();
+
   return (
     <nav
-      className={`hidden md:flex items-center gap-1 p-1 mb-5 rounded-card border border-line bg-surface/70 backdrop-blur-xl shadow-e1 ${className}`}
       aria-label={ariaLabel}
+      className="hidden md:flex items-center gap-1 border-b border-line px-1 overflow-x-auto no-scrollbar"
     >
       {items.map((item) => {
-        const isActive = item.id === activeId;
         const Icon = item.icon;
+        const active = item.id === activeId;
+        const countStr =
+          item.count !== undefined && item.count > 0
+            ? item.count > 99
+              ? locale === 'fa'
+                ? '۹۹+'
+                : '99+'
+              : formatNumber(item.count)
+            : null;
 
         return (
           <button
             key={item.id}
             type="button"
-            aria-current={isActive ? 'page' : undefined}
+            aria-current={active ? 'page' : undefined}
             onClick={() => onSelect(item.id)}
-            className={`press rs-focus inline-flex items-center gap-2 h-10 px-3.5 rounded-tile text-xs font-medium select-none cursor-pointer ${
-              isActive
-                ? 'bg-brand-soft text-ink border border-brand/25'
-                : 'text-ink-muted hover:text-ink hover:bg-surface-2 border border-transparent'
+            className={`relative inline-flex h-11 items-center gap-2 px-3.5 text-[13px] whitespace-nowrap rounded-t-ctl rs-focus cursor-pointer transition-colors duration-150 ${
+              active
+                ? 'font-semibold text-ink'
+                : 'font-medium text-ink-soft hover:text-ink hover:bg-surface-2'
             }`}
           >
-            <Icon className={`w-4 h-4 ${isActive ? 'text-brand' : 'opacity-70'}`} />
+            <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-brand-fg' : 'text-ink-muted'}`} />
             <span>{item.label}</span>
-            {item.count !== undefined && item.count > 0 ? (
-              <span className="px-1.5 h-5 inline-flex items-center rounded-full text-[10px] font-bold tnum bg-brand text-brand-ink">
-                {formatNumber(item.count)}
+            {countStr !== null ? (
+              <span
+                className={`tnum inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-medium ${
+                  active
+                    ? 'bg-brand-soft text-brand-fg'
+                    : 'bg-surface-2 text-ink-soft border border-line'
+                }`}
+              >
+                {countStr}
               </span>
+            ) : item.dot ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-warn shrink-0" aria-hidden="true" />
+            ) : null}
+            {active ? (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-2.5 bottom-0 h-0.5 rounded-t-full bg-brand"
+              />
             ) : null}
           </button>
         );

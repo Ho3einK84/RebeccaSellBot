@@ -57,7 +57,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // Update Telegram WebApp header/background colors if supported
     const tg = window.Telegram?.WebApp;
     if (tg) {
-      const bgColor = theme === 'dark' ? '#090a0f' : '#f8fafc';
+      const bgColor = theme === 'dark' ? '#0b0d11' : '#f4f5f7';
       if (tg.setHeaderColor) {
         tg.setHeaderColor(bgColor);
       }

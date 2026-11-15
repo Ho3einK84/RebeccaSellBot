@@ -107,6 +107,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
 
   return (
     <AppShell
+      width="wide"
       header={
         <AdminHeader
           user={user}

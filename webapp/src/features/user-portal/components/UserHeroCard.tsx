@@ -1,8 +1,9 @@
 import React from 'react';
-import { User, Star, Copy, Check, Sparkles } from 'lucide-react';
+import { Copy, Check, Star, User as UserIcon } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { Card } from '@/shared/components/ui/Card.js';
+import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
 
@@ -13,134 +14,78 @@ interface UserHeroCardProps {
 }
 
 export const UserHeroCard: React.FC<UserHeroCardProps> = ({ user, onCopyId, isCopied }) => {
-  const { t } = useLanguage();
-  const { sanitizeDisplayName } = useFormatters();
-  const { cardClass } = useThemeTokens();
+  const { t, locale } = useLanguage();
+  const { sanitizeDisplayName, toPersianDigits } = useFormatters();
 
-  const { displayName, initials } = sanitizeDisplayName(
-    user.first_name,
-    user.last_name,
-    t('user.guestUser')
-  );
+  const { displayName } = sanitizeDisplayName(user.first_name, user.last_name, t('user.guestUser'));
+
+  const formattedId = locale === 'fa' ? toPersianDigits(String(user.id)) : String(user.id);
 
   return (
-    <>
-      {/* User Identity Section */}
-      <section className="flex flex-col items-center pt-2 sm:pt-4 pb-5 text-center">
-        {/* Avatar */}
-        <div className="relative mb-3.5 cs-avatar-entrance">
-          <div
-            className={`absolute inset-0 rounded-full blur-xl cs-breathe bg-gradient-to-tr from-brand/25 via-brand/15 to-brand/20`}
-          />
-          <div
-            className={`relative w-[72px] h-[72px] sm:w-[78px] sm:h-[78px] rounded-full p-[2px] transition-colors bg-gradient-to-tr from-brand/40 via-brand/20 to-brand/30 shadow-lg`}
-          >
-            <div
-              className={`w-full h-full rounded-full overflow-hidden flex items-center justify-center border transition-colors bg-canvas border-line/10`}
-            >
-              {user.photo_url ? (
-                <img
-                  src={user.photo_url}
-                  alt={displayName}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : initials ? (
-                <span className={`text-lg sm:text-xl font-bold tnum tracking-wider text-ink`}>
-                  {initials}
-                </span>
-              ) : (
-                <User className={`w-7 h-7 text-ink-muted`} />
-              )}
+    <Card padding="lg" className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Avatar name={displayName} username={user.username} photoUrl={user.photo_url} size="lg" />
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base sm:text-lg font-semibold text-ink leading-[1.4] truncate m-0">
+                {displayName}
+              </h2>
+              {user.is_premium ? (
+                <Badge variant="info" size="xs">
+                  <Star className="w-3 h-3" />
+                  <span>{t('user.premiumUserBadge')}</span>
+                </Badge>
+              ) : null}
             </div>
+
+            {user.username ? (
+              <div className="mt-0.5 text-xs text-ink-muted">
+                <bdi dir="ltr" className="font-mono">
+                  @{user.username}
+                </bdi>
+              </div>
+            ) : null}
           </div>
-
-          {user.is_premium && (
-            <div
-              className="absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full bg-gradient-to-tr from-warn to-warn border-2 border-canvas flex items-center justify-center shadow-md shadow-warn/30"
-              title={t('user.premiumUserBadge')}
-            >
-              <Star className="w-3 h-3 text-slate-950 fill-slate-950" />
-            </div>
-          )}
         </div>
 
-        {/* User greeting */}
-        <h1
-          className={`text-xl sm:text-2xl font-bold mb-2 tracking-tight flex items-center justify-center gap-1.5 flex-wrap cs-fade-in text-ink`}
+        <button
+          type="button"
+          onClick={onCopyId}
+          className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-line-strong bg-surface-2 hover:bg-surface-3 px-2.5 text-xs text-ink-soft hover:text-ink rs-focus press cursor-pointer shrink-0"
+          title={t('user.telegramId')}
         >
-          <span>{t('user.greetingPrefix')}</span>
-          <bdi className="text-ink font-extrabold">{displayName}</bdi>
-          <span className="animate-wave select-none text-lg">👋</span>
-        </h1>
-
-        {/* User chips: ID, username, premium */}
-        <div className="flex flex-wrap items-center justify-center gap-1.5 cs-fade-in-delay-1">
-          <button
-            type="button"
-            onClick={onCopyId}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-all active:scale-[0.97] cursor-pointer select-none group border bg-surface-2 hover:bg-surface-3 border-line text-ink-muted shadow-xs`}
-            title={t('common.copy')}
-          >
-            <span className={`text-[11px] text-ink-muted`}>{t('user.telegramId')}</span>
-            <code dir="ltr" className={`tnum font-semibold text-xs text-ink-soft`}>
-              {user.id}
-            </code>
-            {isCopied ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ok">
-                <Check className="w-3 h-3 text-ok" />
-                <span>{t('user.copiedId')}</span>
-              </span>
-            ) : (
-              <Copy className={`w-3 h-3 transition-colors text-ink-muted group-hover:text-ink`} />
-            )}
-          </button>
-
-          {user.username && (
-            <div
-              dir="ltr"
-              className={`inline-flex items-center gap-0.5 border px-2.5 py-1 rounded-full text-[11px] tnum select-none bg-surface-2 border-line text-ink-soft shadow-xs`}
-            >
-              <span className={'text-ink-muted'}>@</span>
-              <span>{user.username}</span>
-            </div>
+          <span className="text-[11px] text-ink-muted">{t('user.telegramId')}</span>
+          <bdi dir="ltr" className="tnum font-mono font-medium text-ink">
+            {formattedId}
+          </bdi>
+          {isCopied ? (
+            <Check className="w-3.5 h-3.5 text-ok-fg shrink-0" />
+          ) : (
+            <Copy className="w-3.5 h-3.5 text-ink-muted shrink-0" />
           )}
+        </button>
+      </div>
 
-          {user.is_premium && (
-            <Badge variant="warning" size="xs">
-              <Star className="w-2.5 h-2.5 fill-warn text-warn" />
-              <span>{t('user.premiumUserBadge')}</span>
-            </Badge>
-          )}
-        </div>
-      </section>
-
-      {/* Hero Card: Coming Soon announcement */}
-      <section
-        className={`w-full rounded-2xl p-4 sm:p-5 mb-4 relative overflow-hidden border backdrop-blur-md cs-fade-in-delay-2 text-start transition-colors ${cardClass}`}
-      >
-        <div
-          className={`absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-brand/25 to-transparent`}
-        />
-
-        <div className="flex items-center gap-2 mb-2.5">
+      <div className="pt-3.5 border-t border-line space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="neutral" size="xs">
-            <Sparkles className={`w-3 h-3 text-ink-soft`} />
+            <UserIcon className="w-3 h-3" />
             <span>{t('user.userPortalBadge')}</span>
           </Badge>
-          <Badge variant="warning" dot pulse size="xs">
-            <span>{t('user.inDevelopmentStatus')}</span>
+          <Badge variant="warning" size="xs" dot>
+            {t('user.inDevelopmentStatus')}
           </Badge>
         </div>
 
-        <h2 className={`text-base sm:text-[17px] font-bold mb-1.5 leading-snug text-ink`}>
+        <h3 className="text-sm sm:text-base font-semibold text-ink leading-[1.45] m-0 pt-1">
           {t('user.portalTitle')}
-        </h2>
-
-        <p className={`text-xs sm:text-[13px] leading-relaxed m-0 text-ink-muted`}>
+        </h3>
+        <p className="text-xs sm:text-[13px] text-ink-soft leading-relaxed m-0">
           {t('user.portalDesc')}
         </p>
-      </section>
-    </>
+      </div>
+    </Card>
   );
 };

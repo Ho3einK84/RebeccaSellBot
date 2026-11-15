@@ -346,7 +346,8 @@ describe('Toast Queue Helpers & Component SSR', () => {
     );
     expect(successHtml).toContain('role="status"');
     expect(successHtml).toContain('Action completed');
-    expect(successHtml).toContain('bg-ok/40');
+    expect(successHtml).toContain('border-s-ok');
+    expect(successHtml).toContain('bg-ok-soft');
     expect(successHtml).not.toContain('aria-label="Dismiss"');
 
     const errorHtml = renderToStaticMarkup(
@@ -357,7 +358,8 @@ describe('Toast Queue Helpers & Component SSR', () => {
       })
     );
     expect(errorHtml).toContain('Operation failed');
-    expect(errorHtml).toContain('bg-danger/40');
+    expect(errorHtml).toContain('border-s-danger');
+    expect(errorHtml).toContain('bg-danger-soft');
     expect(errorHtml).toContain('aria-label="Dismiss"');
   });
 });

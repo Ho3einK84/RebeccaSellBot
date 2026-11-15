@@ -28,106 +28,94 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber, sanitizeDisplayName } = useFormatters();
-  const { subCardClass, textPrimary, textMuted } = useThemeTokens();
+  const { textPrimary, textMuted } = useThemeTokens();
 
   const { displayName } = sanitizeDisplayName(user.firstName, user.lastName, t('user.guestUser'));
 
   return (
-    <Card className="p-3.5 sm:p-4 space-y-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong group">
-      {/* User Info Header */}
+    <Card padding="md" className="space-y-3 hover:border-line-strong text-start">
       <div className="flex justify-between items-start gap-2">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <Avatar name={user.firstName} username={user.username} size="md" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`font-bold text-sm tracking-tight truncate ${textPrimary}`}>
-                {displayName}
-              </span>
+              <span className={`font-semibold text-sm truncate ${textPrimary}`}>{displayName}</span>
               {user.isBanned && (
-                <Badge variant="error" className="text-[10px] shrink-0">
+                <Badge variant="error" size="xs" className="shrink-0">
                   {t('admin.users.bannedBadge')}
                 </Badge>
               )}
             </div>
             <div className="text-xs tnum mt-0.5">
               {user.username ? (
-                <span dir="ltr" className="inline-block unicode-isolate font-medium text-brand">
+                <bdi dir="ltr" className="font-medium text-brand-fg">
                   @{user.username}
-                </span>
+                </bdi>
               ) : (
-                <span className={`font-sans ${textMuted}`}>{t('admin.users.noUsername')}</span>
+                <span className={textMuted}>{t('admin.users.noUsername')}</span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Telegram ID Chip */}
         <button
           type="button"
-          className={`inline-flex items-center gap-1.5 text-xs tnum px-2 py-0.5 rounded-lg border transition-all active:scale-95 shrink-0 cursor-pointer bg-surface/[0.04] border-line/10 hover:border-line/20 text-ink-soft shadow-xs`}
+          className="inline-flex items-center gap-1.5 h-7 text-xs tnum px-2 rounded-ctl border press rs-focus shrink-0 cursor-pointer bg-surface-2 border-line hover:border-line-strong text-ink-soft"
           onClick={() => onCopyId(String(user.telegramId), `user-${user.telegramId}`)}
           title={t('common.copy')}
         >
-          <span className="text-[10px] opacity-50">#</span>
-          <span dir="ltr">{user.telegramId}</span>
+          <bdi dir="ltr" className="font-mono">
+            #{user.telegramId}
+          </bdi>
           {isCopied ? (
-            <span className="text-[10px] text-ok font-sans font-medium">{t('common.copied')}</span>
+            <span className="text-[10px] text-ok-fg font-medium">{t('common.copied')}</span>
           ) : (
-            <Copy className={`w-2.5 h-2.5 ${textMuted}`} />
+            <Copy className={`w-3 h-3 ${textMuted}`} />
           )}
         </button>
       </div>
 
-      {/* Financial & Status Metrics */}
-      <div
-        className={`flex items-center justify-between py-2 px-3 rounded-xl border text-xs ${subCardClass}`}
-      >
+      <Card subCard padding="sm" className="flex items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-1.5">
-          <Wallet className={`w-3.5 h-3.5 text-ok`} />
-          <span className={`font-bold text-sm tnum text-ok`}>{formatMoney(user.balance)}</span>
-          <span className={`text-[11px] ${textMuted}`}>{t('common.currency')}</span>
+          <Wallet className="w-4 h-4 text-ok-fg shrink-0" />
+          <bdi dir="ltr" className="font-semibold text-sm tnum text-ok-fg">
+            {formatMoney(user.balance)}
+          </bdi>
+          <span className={`text-xs ${textMuted}`}>{t('common.currency')}</span>
         </div>
 
         <div>
           {user.activeSubscriptionCount > 0 ? (
-            <Badge variant="success" dot pulse className="text-[10px]">
+            <Badge variant="success" dot size="xs">
               {t('admin.users.activeSubsCount', {
                 count: formatNumber(user.activeSubscriptionCount),
               })}
             </Badge>
           ) : (
-            <Badge variant="neutral" className="text-[10px]">
+            <Badge variant="neutral" size="xs">
               {t('common.zeroActive')}
             </Badge>
           )}
         </div>
-      </div>
+      </Card>
 
-      {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-2 pt-0.5">
         <Button
           type="button"
           variant="secondary"
           size="sm"
-          className="h-8.5"
           disabled={inspecting}
           onClick={() => onInspect(user.telegramId)}
         >
           {inspecting ? (
-            <RotateCw className="w-3.5 h-3.5 animate-spin text-brand" />
+            <RotateCw className="w-3.5 h-3.5 animate-spin text-brand-fg" />
           ) : (
             <Eye className={`w-3.5 h-3.5 ${textMuted}`} />
           )}
           <span>{t('admin.users.btnDetails')}</span>
         </Button>
 
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          className="h-8.5"
-          onClick={() => onOpenBalanceModal(user)}
-        >
+        <Button type="button" variant="primary" size="sm" onClick={() => onOpenBalanceModal(user)}>
           <Wallet className="w-3.5 h-3.5" />
           <span>{t('admin.users.btnChangeBalance')}</span>
         </Button>

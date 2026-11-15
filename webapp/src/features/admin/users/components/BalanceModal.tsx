@@ -6,6 +6,8 @@ import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import type { UserProfile, BalanceOperation } from '@/shared/types/admin.js';
 
 interface BalanceModalProps {
@@ -23,21 +25,18 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber } = useFormatters();
-  const { subCardClass, inputClass, textPrimary, textSecondary } = useThemeTokens();
+  const { inputClass, textPrimary, textSecondary } = useThemeTokens();
 
   const [operation, setOperation] = useState<BalanceOperation>('add');
   const [amountStr, setAmountStr] = useState<string>('');
   const [reason, setReason] = useState<string>('');
 
-  // Reset form whenever a different user is opened: the parent closes via
-  // setBalanceModalUser(null) which bypasses handleClose.
   useEffect(() => {
     setOperation('add');
     setAmountStr('');
     setReason('');
   }, [user?.telegramId]);
 
-  // Strict integer parsing: require safe integer, allowing 0 only when operation is 'set'.
   const numAmount = Number(amountStr);
   const isValidAmount =
     amountStr.trim() !== '' &&
@@ -77,29 +76,28 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
   return (
     <Modal isOpen={Boolean(user)} onClose={handleClose} maxWidth="md" closeOnBackdrop={!loading}>
       <div className="space-y-4">
-        {/* Modal Header with User Context */}
-        <div className="flex items-center justify-between pb-3 border-b border-line/60">
+        <div className="flex items-center justify-between pb-3 border-b border-line">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 shadow-xs bg-brand/15 border-brand/25 text-brand`}
-            >
-              <Wallet className="w-4.5 h-4.5" />
-            </div>
+            <IconTile tone="brand" size="md">
+              <Wallet />
+            </IconTile>
             <div className="min-w-0">
-              <h3 className={`font-bold text-sm sm:text-base m-0 tracking-tight ${textPrimary}`}>
+              <h3 className={`font-semibold text-sm sm:text-base m-0 ${textPrimary}`}>
                 {t('admin.modals.balanceTitle')}
               </h3>
-              <div className="text-[11px] tnum text-brand truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <div className="text-xs tnum text-brand-fg truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
                 <span>{[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}</span>
-                {user.username && <span dir="ltr">(@{user.username})</span>}
+                {user.username && <bdi dir="ltr">(@{user.username})</bdi>}
                 <span className="opacity-40">·</span>
-                <span dir="ltr">#{user.telegramId}</span>
+                <bdi dir="ltr" className="font-mono">
+                  #{user.telegramId}
+                </bdi>
               </div>
             </div>
           </div>
           <button
             type="button"
-            className="p-1.5 rounded-xl text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer shrink-0"
+            className="w-8 h-8 flex items-center justify-center rounded-ctl text-ink-muted hover:text-ink hover:bg-surface-2 cursor-pointer shrink-0 rs-focus"
             onClick={handleClose}
             aria-label={t('common.close')}
           >
@@ -108,53 +106,55 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
         </div>
 
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          {/* Current Balance Card */}
-          <div
-            className={`p-3 rounded-xl border flex items-center justify-between text-xs ${subCardClass}`}
-          >
+          <Card subCard padding="sm" className="flex items-center justify-between text-xs">
             <span className={textSecondary}>{t('admin.users.balanceCurLabel')}</span>
-            <span className={`font-bold tnum text-sm sm:text-base ${textPrimary}`}>
-              {formatMoney(user.balance)}
-              {''}
+            <span className={`font-semibold tnum text-sm sm:text-base ${textPrimary}`}>
+              <bdi dir="ltr">{formatMoney(user.balance)}</bdi>{' '}
               <span className="text-xs font-normal text-ink-muted">{t('common.currency')}</span>
             </span>
-          </div>
+          </Card>
 
-          {/* Segmented Operation Selector */}
-          <div className="space-y-1.5">
-            <div
-              className={`grid grid-cols-3 gap-1 p-1 rounded-xl border text-xs bg-surface/[0.03] border-line/[0.08]`}
+          <div className="grid grid-cols-3 gap-1 p-1 rounded-tile border text-xs bg-surface-2 border-line">
+            <button
+              type="button"
+              className={`h-9 rounded-ctl font-medium flex items-center justify-center gap-1.5 cursor-pointer select-none rs-focus ${
+                operation === 'add'
+                  ? 'bg-ok-soft text-ok-fg font-semibold border border-ok/30'
+                  : 'text-ink-muted hover:text-ink border border-transparent'
+              }`}
+              onClick={() => setOperation('add')}
             >
-              <button
-                type="button"
-                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${operation === 'add' ? 'bg-ok/20 text-ok font-semibold border border-ok/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
-                onClick={() => setOperation('add')}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>{t('admin.modals.balanceOpAdd')}</span>
-              </button>
+              <Plus className="w-3.5 h-3.5" />
+              <span>{t('admin.modals.balanceOpAdd')}</span>
+            </button>
 
-              <button
-                type="button"
-                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${operation === 'deduct' ? 'bg-danger/20 text-danger font-semibold border border-danger/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
-                onClick={() => setOperation('deduct')}
-              >
-                <Minus className="w-3.5 h-3.5" />
-                <span>{t('admin.modals.balanceOpDeduct')}</span>
-              </button>
+            <button
+              type="button"
+              className={`h-9 rounded-ctl font-medium flex items-center justify-center gap-1.5 cursor-pointer select-none rs-focus ${
+                operation === 'deduct'
+                  ? 'bg-danger-soft text-danger-fg font-semibold border border-danger/30'
+                  : 'text-ink-muted hover:text-ink border border-transparent'
+              }`}
+              onClick={() => setOperation('deduct')}
+            >
+              <Minus className="w-3.5 h-3.5" />
+              <span>{t('admin.modals.balanceOpDeduct')}</span>
+            </button>
 
-              <button
-                type="button"
-                className={`h-8.5 rounded-lg font-medium transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer select-none ${operation === 'set' ? 'bg-brand/20 text-brand font-semibold border border-brand/30 shadow-xs' : 'text-ink-muted hover:text-ink-soft'}`}
-                onClick={() => setOperation('set')}
-              >
-                <Settings2 className="w-3.5 h-3.5" />
-                <span>{t('admin.modals.balanceOpSet')}</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className={`h-9 rounded-ctl font-medium flex items-center justify-center gap-1.5 cursor-pointer select-none rs-focus ${
+                operation === 'set'
+                  ? 'bg-brand-soft text-brand-fg font-semibold border border-brand/30'
+                  : 'text-ink-muted hover:text-ink border border-transparent'
+              }`}
+              onClick={() => setOperation('set')}
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              <span>{t('admin.modals.balanceOpSet')}</span>
+            </button>
           </div>
 
-          {/* Amount Input & Grid Chips */}
           <div className="space-y-2">
             <label className={`text-xs font-semibold block ${textPrimary}`}>
               {t('admin.modals.balanceAmountLabel')}
@@ -164,7 +164,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
               inputMode="numeric"
               dir="ltr"
               required
-              className={`w-full h-10 px-3.5 text-sm tnum rounded-xl border outline-none transition-all ${inputClass}`}
+              className={`w-full h-11 px-3.5 text-sm tnum rounded-tile border outline-none rs-focus ${inputClass}`}
               placeholder={t('admin.modals.balanceAmountPlaceholder')}
               value={amountStr}
               onChange={(e) => {
@@ -173,8 +173,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
               }}
             />
 
-            {/* Quick Amount Chips in Equal Columns */}
-            <div className="grid grid-cols-5 gap-1 sm:gap-1.5 pt-0.5">
+            <div className="grid grid-cols-5 gap-1.5 pt-0.5">
               {quickAmounts.map((quickAmt) => {
                 const isSelected = numAmount === quickAmt;
                 const label =
@@ -190,7 +189,11 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
                   <button
                     key={quickAmt}
                     type="button"
-                    className={`h-8 px-1 rounded-lg text-[11px] sm:text-xs font-medium transition-all active:scale-95 cursor-pointer border flex items-center justify-center select-none ${isSelected ? 'bg-brand/25 border-brand/40 text-brand font-bold shadow-xs' : 'bg-surface/[0.04] border-line/10 text-ink-soft hover:bg-surface/[0.08]'}`}
+                    className={`h-8 px-1 rounded-ctl text-xs press rs-focus cursor-pointer border flex items-center justify-center select-none tnum ${
+                      isSelected
+                        ? 'bg-brand-soft border-brand/35 text-brand-fg font-semibold'
+                        : 'bg-surface-2 border-line text-ink-soft hover:border-line-strong font-medium'
+                    }`}
                     onClick={() => setAmountStr(String(quickAmt))}
                   >
                     {label}
@@ -200,23 +203,18 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
             </div>
           </div>
 
-          {/* Calculated Balance Preview Card */}
           {isValidAmount && (
-            <div
-              className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-colors bg-brand/10 border-brand/20`}
-            >
-              <span className={'text-brand font-medium'}>
+            <div className="p-3 rounded-tile border flex items-center justify-between text-xs bg-brand-soft border-brand/25">
+              <span className="text-brand-fg font-medium">
                 {t('admin.users.balancePreviewLabel')}
               </span>
-              <span className={`font-bold tnum text-sm sm:text-base ${textPrimary}`}>
-                {formatMoney(previewNewBalance)}
-                {''}
-                <span className="text-xs font-normal opacity-70">{t('common.currency')}</span>
+              <span className={`font-semibold tnum text-sm sm:text-base ${textPrimary}`}>
+                <bdi dir="ltr">{formatMoney(previewNewBalance)}</bdi>{' '}
+                <span className="text-xs font-normal text-ink-muted">{t('common.currency')}</span>
               </span>
             </div>
           )}
 
-          {/* Reason Input & Quick Chips */}
           <div className="space-y-2">
             <label className={`text-xs font-semibold block ${textPrimary}`}>
               {t('admin.modals.balanceReasonLabel')}
@@ -224,7 +222,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
             <input
               type="text"
               required
-              className={`w-full h-10 px-3.5 text-xs sm:text-sm rounded-xl border outline-none transition-all ${inputClass}`}
+              className={`w-full h-11 px-3.5 text-xs sm:text-sm rounded-tile border outline-none rs-focus ${inputClass}`}
               placeholder={t('admin.modals.balanceReasonPlaceholder')}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -237,7 +235,11 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
                   <button
                     key={quickReason}
                     type="button"
-                    className={`h-8 px-2.5 rounded-lg text-xs transition-all active:scale-95 cursor-pointer border select-none ${isSelected ? 'bg-brand/25 border-brand/40 text-brand font-semibold shadow-xs' : 'bg-surface/[0.04] border-line/10 text-ink-muted hover:bg-surface/[0.08]'}`}
+                    className={`h-8 px-3 rounded-ctl text-xs press rs-focus cursor-pointer border select-none ${
+                      isSelected
+                        ? 'bg-brand-soft border-brand/35 text-brand-fg font-semibold'
+                        : 'bg-surface-2 border-line text-ink-muted hover:border-line-strong hover:text-ink'
+                    }`}
                     onClick={() => setReason(quickReason)}
                   >
                     {quickReason}
@@ -247,7 +249,6 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
             </div>
           </div>
 
-          {/* Modal Action Buttons */}
           <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
             <Button
               type="button"

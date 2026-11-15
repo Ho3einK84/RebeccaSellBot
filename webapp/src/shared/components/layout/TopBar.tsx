@@ -5,21 +5,18 @@ export interface TopBarProps {
   icon?: ReactNode;
   title: string;
   badge?: ReactNode;
-  /** Secondary line under the title (role, welcome name, …). */
+  /** Secondary line under the title (role, username, status). */
   subtitle?: ReactNode;
   /** Utility icon buttons rendered on the trailing edge. */
   actions?: ReactNode;
-  /** Identity strip rendered under a hairline (avatar, chips, id, balance). */
+  /** Identity strip rendered under a clean hairline divider. */
   footer?: ReactNode;
   className?: string;
 }
 
 /**
- * The single header used by the admin panel and the user portal.
- *
- * Before this existed each panel had its own header markup (one card, one
- * bare block), its own radius scale and its own button sizes, which is what
- * made the two halves of the mini app feel like different apps.
+ * Unified top chrome shared by Coming-Soon, User Portal, and Admin Panel.
+ * Uses flat matte surface depth and crisp 1px structural borders with zero glassmorphism.
  */
 export const TopBar: React.FC<TopBarProps> = ({
   icon,
@@ -31,29 +28,29 @@ export const TopBar: React.FC<TopBarProps> = ({
   className = '',
 }) => (
   <header
-    className={`relative z-10 mb-3 rounded-card border border-line bg-surface/85 p-3 shadow-e2 backdrop-blur-xl ${className}`}
+    className={`rounded-card border border-line bg-surface px-4 py-3 shadow-[var(--shadow-card)] ${className}`}
   >
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-2.5">
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         {icon}
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <h1 className="m-0 truncate text-sm font-bold tracking-tight text-ink sm:text-[15px]">
-              {title}
-            </h1>
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="truncate font-semibold text-base text-ink leading-[1.4] m-0">{title}</h1>
             {badge}
           </div>
           {subtitle ? (
-            <div className="mt-0.5 truncate text-[11px] text-ink-muted">{subtitle}</div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
+              {subtitle}
+            </div>
           ) : null}
         </div>
       </div>
 
-      {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+      {actions ? <div className="flex items-center gap-1.5 shrink-0">{actions}</div> : null}
     </div>
 
     {footer ? (
-      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-line pt-2.5">
+      <div className="mt-3 pt-3 border-t border-line flex flex-wrap items-center justify-between gap-2.5 text-xs">
         {footer}
       </div>
     ) : null}

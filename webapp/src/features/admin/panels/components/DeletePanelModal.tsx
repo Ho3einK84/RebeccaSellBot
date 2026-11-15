@@ -40,21 +40,21 @@ export const DeletePanelModal: React.FC<DeletePanelModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('admin.panels.deleteModalTitle')}
-      icon={<AlertTriangle className="w-5 h-5 text-danger" />}
+      icon={<AlertTriangle className="w-5 h-5 text-danger-fg" />}
       maxWidth="sm"
       closeOnBackdrop={!loading}
     >
       <div className="space-y-4 text-start">
-        <p className={`text-sm ${textPrimary}`}>
+        <p className={`text-sm m-0 ${textPrimary}`}>
           {t('admin.panels.deleteConfirmPrompt', { name: panel.name })}
         </p>
 
-        <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-xs text-danger space-y-1">
+        <div className="p-3 rounded-tile bg-danger-soft border border-danger/25 text-xs text-danger-fg space-y-1">
           <p className="font-semibold m-0">{t('admin.panels.deleteWarningTitle')}</p>
-          <p className="m-0 text-[11px] leading-relaxed">{t('admin.panels.deleteWarningDesc')}</p>
+          <p className="m-0 text-xs leading-relaxed">{t('admin.panels.deleteWarningDesc')}</p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-line/60">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
           <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
             {t('common.cancel')}
           </Button>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Users } from 'lucide-react';
 import { useAdminUsers } from './hooks/useAdminUsers.js';
 import { UserSearchBar } from './components/UserSearchBar.js';
 import { UserMobileCard } from './components/UserMobileCard.js';
@@ -6,12 +7,11 @@ import { UserTable } from './components/UserTable.js';
 import { UserDossierModal } from './components/UserDossierModal.js';
 import { BalanceModal } from './components/BalanceModal.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
-import { Card } from '@/shared/components/ui/Card.js';
+import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { UserProfile, BalanceOperation } from '@/shared/types/admin.js';
 
 interface UsersTabProps {
@@ -27,7 +27,6 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney } = useFormatters();
-  const { textSecondary, textPrimary } = useThemeTokens();
   const { copy, isCopied } = useCopy();
 
   const {
@@ -60,7 +59,6 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     syncConfigMutation,
   } = useAdminUsers();
 
-  // If parent passed an external inspected user ID (e.g. from receipts tab), inspect it
   React.useEffect(() => {
     if (inspectedUserId && inspectedUserId !== inspectingId) {
       inspectUser(inspectedUserId);
@@ -125,7 +123,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       <UserSearchBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -141,13 +139,14 @@ export const UsersTab: React.FC<UsersTabProps> = ({
       {isLoading && <SkeletonList count={4} />}
 
       {!isLoading && users.length === 0 && (
-        <Card className="p-10 text-center flex flex-col items-center justify-center gap-2">
-          <p className={`text-sm font-semibold m-0 ${textPrimary}`}>{t('admin.users.notFound')}</p>
-          <p className={`text-xs m-0 ${textSecondary}`}>{t('admin.users.searchPlaceholder')}</p>
-        </Card>
+        <EmptyState
+          icon={<Users />}
+          tone="neutral"
+          title={t('admin.users.notFound')}
+          description={t('admin.users.searchPlaceholder')}
+        />
       )}
 
-      {/* Mobile Card List (< md) */}
       {!isLoading && users.length > 0 && (
         <div className="grid grid-cols-1 gap-3 md:hidden">
           {users.map((u) => (
@@ -164,7 +163,6 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         </div>
       )}
 
-      {/* Desktop Table (>= md) */}
       {!isLoading && users.length > 0 && (
         <UserTable
           users={users}
@@ -175,7 +173,6 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         />
       )}
 
-      {/* Pagination Controls */}
       {!isLoading && totalPages > 1 && (
         <Pagination
           page={page}
@@ -185,7 +182,6 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         />
       )}
 
-      {/* User Dossier Modal */}
       <UserDossierModal
         dossier={dossier}
         onClose={closeDossier}
@@ -200,7 +196,6 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         onSyncConfig={handleSyncConfig}
       />
 
-      {/* Balance Adjustment Modal */}
       <BalanceModal
         user={balanceModalUser}
         onClose={() => setBalanceModalUser(null)}

@@ -15,33 +15,31 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /**
- * Token-driven sizing scale (shared by both panels):
- * xs 32 · sm 36 · md 44 · lg 48 — `md`/`lg` meet the 44px touch target.
+ * Token-driven control scale on 4px grid:
+ * xs 32px · sm 36px · md 44px · lg 48px (`md` & `lg` meet 44px touch target minimum).
  */
 const sizeClasses: Record<ButtonSize, string> = {
-  xs: 'text-[11px] px-2.5 h-8 rounded-ctl gap-1',
-  sm: 'text-xs px-3.5 h-9 rounded-ctl gap-1.5',
-  md: 'text-sm px-4 h-11 rounded-ctl gap-2',
-  lg: 'text-[15px] px-5 h-12 rounded-hero gap-2.5',
+  xs: 'text-xs px-2.5 h-8 rounded-ctl gap-1.5',
+  sm: 'text-xs px-3 h-9 rounded-ctl gap-1.5',
+  md: 'text-[13px] px-4 h-11 rounded-ctl gap-2',
+  lg: 'text-sm px-5 h-12 rounded-tile gap-2',
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary:
-    'border border-brand/40 bg-brand text-brand-ink shadow-e1 hover:brightness-110 focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--rs-brand)_35%,transparent)]',
-  secondary:
-    'border border-line bg-surface-2 text-ink shadow-e1 hover:bg-surface-3 hover:border-line-strong',
-  outline: 'border border-line-strong bg-transparent text-ink hover:bg-surface-2',
-  ghost: 'border border-transparent bg-transparent text-ink-soft hover:bg-surface-2 hover:text-ink',
-  danger: 'border border-danger/30 bg-danger-soft text-danger hover:bg-danger/20',
-  success: 'border border-ok/30 bg-ok-soft text-ok hover:bg-ok/20',
+  primary: 'bg-brand hover:bg-brand-hover text-brand-ink border border-transparent',
+  secondary: 'bg-surface-2 hover:bg-surface-3 border border-line-strong text-ink',
+  outline: 'bg-transparent hover:bg-surface-2 border border-line-strong text-ink',
+  ghost: 'bg-transparent hover:bg-surface-2 border border-transparent text-ink-soft hover:text-ink',
+  danger: 'bg-danger-soft hover:bg-danger/20 border border-danger/25 text-danger-fg',
+  success: 'bg-ok hover:bg-ok/90 border border-transparent text-white',
 };
 
 export const Button: React.FC<ButtonProps> = ({
   children,
-  variant = 'secondary',
-  size = 'sm',
+  variant = 'primary',
+  size = 'md',
   loading = false,
-  disabled = false,
+  disabled,
   haptic = 'light',
   block = false,
   className = '',
@@ -51,21 +49,19 @@ export const Button: React.FC<ButtonProps> = ({
   const { triggerHaptic } = useHaptic();
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled || loading) return;
-    if (haptic) triggerHaptic(haptic);
+    if (loading || disabled) return;
+    triggerHaptic(haptic);
     onClick?.(e);
   };
 
   return (
     <button
-      className={`press rs-focus font-medium inline-flex items-center justify-center whitespace-nowrap select-none disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed ${
-        block ? 'w-full' : ''
-      } ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
       disabled={disabled || loading}
       onClick={handleClick}
+      className={`inline-flex items-center justify-center font-medium whitespace-nowrap select-none cursor-pointer press rs-focus disabled:opacity-45 disabled:pointer-events-none ${block ? 'w-full' : ''} ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
       {...props}
     >
-      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-current shrink-0" /> : null}
+      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : null}
       {children}
     </button>
   );

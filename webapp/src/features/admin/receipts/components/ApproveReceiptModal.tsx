@@ -5,6 +5,8 @@ import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { Card } from '@/shared/components/ui/Card.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface ApproveReceiptModalProps {
@@ -22,7 +24,7 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney } = useFormatters();
-  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
+  const { textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!receipt) return null;
 
@@ -30,12 +32,10 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
     <Modal isOpen={Boolean(receipt)} onClose={onClose} maxWidth="sm">
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 bg-ok/10 border-ok/20 text-ok`}
-          >
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <h3 className={`font-bold text-base m-0 ${textPrimary}`}>
+          <IconTile tone="ok" size="md">
+            <CheckCircle2 />
+          </IconTile>
+          <h3 className={`font-semibold text-base m-0 ${textPrimary}`}>
             {t('admin.receipts.approveConfirmTitle')}
           </h3>
         </div>
@@ -46,20 +46,20 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
           })}
         </p>
 
-        <div className={`p-3 rounded-xl border text-xs space-y-1 tnum ${subCardClass}`}>
-          <div className="flex justify-between">
-            <span className={`font-sans ${textMuted}`}>{t('common.userCode')}</span>
-            <span dir="ltr" className={textPrimary}>
+        <Card subCard padding="sm" className="text-xs space-y-1.5 tnum">
+          <div className="flex justify-between gap-2">
+            <span className={textMuted}>{t('common.userCode')}</span>
+            <bdi dir="ltr" className={`font-mono ${textPrimary}`}>
               {receipt.telegramId}
-            </span>
+            </bdi>
           </div>
-          <div className="flex justify-between">
-            <span className={`font-sans ${textMuted}`}>{t('common.receiptCode')}</span>
-            <span dir="ltr" className={textPrimary}>
+          <div className="flex justify-between gap-2">
+            <span className={textMuted}>{t('common.receiptCode')}</span>
+            <bdi dir="ltr" className={`font-mono truncate ${textPrimary}`}>
               {receipt.id}
-            </span>
+            </bdi>
           </div>
-        </div>
+        </Card>
 
         <div className="flex items-center gap-2.5 pt-3 mt-4 border-t border-line">
           <Button

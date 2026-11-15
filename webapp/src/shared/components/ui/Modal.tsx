@@ -1,21 +1,7 @@
 import React, { useEffect, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
-import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
-
-// Global stack for escape key handling across stacked modals
-const escapeHandlers: (() => void)[] = [];
-let openModalsCount = 0;
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && escapeHandlers.length > 0) {
-      const topHandler = escapeHandlers[escapeHandlers.length - 1];
-      topHandler?.();
-    }
-  });
-}
+import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 
 interface ModalProps {
   isOpen: boolean;
@@ -28,101 +14,100 @@ interface ModalProps {
   hideCloseButton?: boolean;
 }
 
+const maxWidthClasses = {
+  sm: 'sm:max-w-sm',
+  md: 'sm:max-w-md',
+  lg: 'sm:max-w-lg',
+  xl: 'sm:max-w-xl',
+  '2xl': 'sm:max-w-2xl',
+  '4xl': 'sm:max-w-4xl',
+} as const;
+
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   title,
   icon,
   children,
-  maxWidth = 'lg',
+  maxWidth = 'md',
   closeOnBackdrop = true,
   hideCloseButton = false,
 }) => {
-  const { modalBoxClass, textPrimary } = useThemeTokens();
+  const { modalBoxClass } = useThemeTokens();
+  const { t } = useLanguage();
 
-  // Telegram back button integration: closes modal when user taps Back
-  useTelegramBackButton(onClose, isOpen);
-
-  // Robust body scroll lock ref-counted across all open modals
   useEffect(() => {
-    if (!isOpen) return;
-    openModalsCount++;
-    if (openModalsCount === 1) {
-      document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      openModalsCount = Math.max(0, openModalsCount - 1);
-      if (openModalsCount === 0) {
-        document.body.style.overflow = '';
+    if (!isOpen || typeof document === 'undefined') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && closeOnBackdrop) {
+        onClose();
       }
     };
-  }, [isOpen]);
 
-  // Keyboard Escape listener using LIFO stack (only top modal closes)
-  useEffect(() => {
-    if (!isOpen) return;
-    escapeHandlers.push(onClose);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
-      const idx = escapeHandlers.lastIndexOf(onClose);
-      if (idx !== -1) escapeHandlers.splice(idx, 1);
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, closeOnBackdrop, onClose]);
 
   if (!isOpen) return null;
 
-  const maxWidthClass = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-xl',
-    '2xl': 'max-w-2xl',
-    '4xl': 'max-w-4xl',
-  }[maxWidth];
-
-  const modal = (
+  return (
     <div
-      className="fixed inset-0 w-screen z-[9999] flex items-center justify-center p-3 sm:p-4"
-      style={{ height: '100dvh' }}
       role="dialog"
       aria-modal="true"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
     >
-      {/* Backdrop — covers full viewport regardless of ancestor transforms */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-modal-backdrop"
-        onClick={closeOnBackdrop ? onClose : undefined}
+        className="fixed inset-0 bg-black/60 anim-fade"
+        onClick={() => {
+          if (closeOnBackdrop) onClose();
+        }}
         aria-hidden="true"
       />
 
-      {/* Modal content */}
       <div
-        className={`${maxWidthClass} w-full p-5 sm:p-6 rounded-2xl sm:rounded-3xl border ${modalBoxClass} relative animate-modal-in max-h-[90dvh] overflow-y-auto z-10`}
+        className={`relative z-10 w-full ${maxWidthClasses[maxWidth]} max-h-[92dvh] flex flex-col border rounded-t-sheet sm:rounded-card anim-sheet sm:anim-modal safe-bottom ${modalBoxClass}`}
       >
-        {(title || icon) && (
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-line">
-            <h3
-              className={`font-bold text-sm sm:text-base flex items-center gap-2.5 ${textPrimary}`}
-            >
-              {icon}
-              <span className="tracking-tight">{title}</span>
-            </h3>
-            {!hideCloseButton && (
+        <div className="flex sm:hidden justify-center pt-2.5 pb-1 shrink-0" aria-hidden="true">
+          <div className="w-9 h-1 rounded-full bg-surface-3" />
+        </div>
+
+        {(title || !hideCloseButton) && (
+          <div
+            className={`flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 shrink-0 ${
+              title ? 'border-b border-line' : ''
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              {icon ? <span className="shrink-0">{icon}</span> : null}
+              {title ? (
+                <h3 className="font-semibold text-sm sm:text-base text-ink leading-[1.4] m-0 truncate">
+                  {title}
+                </h3>
+              ) : null}
+            </div>
+
+            {!hideCloseButton ? (
               <button
                 type="button"
-                className="p-1.5 rounded-xl text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={onClose}
-                aria-label="Close modal"
+                aria-label={t('common.close')}
+                className="w-8 h-8 rounded-ctl inline-flex items-center justify-center text-ink-muted hover:text-ink hover:bg-surface-2 rs-focus press cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
-            )}
+            ) : null}
           </div>
         )}
-        {children}
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4">{children}</div>
       </div>
     </div>
   );
-
-  // Portal to document.body to escape any ancestor transform/filter/perspective
-  // that would break position:fixed
-  return createPortal(modal, document.body);
 };

@@ -2,6 +2,7 @@ import React from 'react';
 import { Activity, ChevronLeft } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import type { PanelHealth } from '@/shared/types/admin.js';
 
 interface HealthBannerProps {
@@ -9,11 +10,7 @@ interface HealthBannerProps {
   onSwitchToPanels: () => void;
 }
 
-/**
- * Compact alert strip. Previously a full card with an unlabeled link-sized
- * "پنل‌ها" chip (below the 44px tap target) — now the whole strip is the target
- * and the trailing affordance is a chevron, not a fake link.
- */
+/** Compact matte health status bar that links directly to the Panels view. */
 export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitchToPanels }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
@@ -23,45 +20,34 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
   const isUnconfigured = panelHealth.configured === 0;
   const isHealthOk = !isUnconfigured && panelHealth.healthy === panelHealth.configured;
 
+  const tone = isUnconfigured ? 'neutral' : isHealthOk ? 'ok' : 'danger';
+
   return (
     <button
       type="button"
       onClick={onSwitchToPanels}
-      className={`press rs-focus flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-start transition-colors ${
+      className={`press rs-focus flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-start cursor-pointer shadow-[var(--shadow-card)] ${
         isUnconfigured || isHealthOk
-          ? 'border-line bg-surface/70 hover:border-line-strong'
+          ? 'border-line bg-surface hover:border-line-strong hover:bg-surface-2'
           : 'border-danger/30 bg-danger-soft hover:border-danger/50'
       }`}
       aria-label={t('admin.overview.panelHealthTitle')}
     >
-      <span
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-tile border ${
-          isUnconfigured
-            ? 'border-line bg-surface-2 text-ink-muted'
-            : isHealthOk
-              ? 'border-ok/25 bg-ok-soft text-ok'
-              : 'border-danger/30 bg-danger-soft text-danger'
-        }`}
-        aria-hidden="true"
-      >
-        <Activity className="h-4.5 w-4.5" />
-      </span>
+      <IconTile tone={tone} size="md">
+        <Activity />
+      </IconTile>
 
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-2">
           <span
-            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-              isUnconfigured
-                ? 'bg-ink-muted'
-                : isHealthOk
-                  ? 'bg-ok status-pulse'
-                  : 'bg-danger anim-breathe'
+            className={`h-2 w-2 shrink-0 rounded-full ${
+              isUnconfigured ? 'bg-ink-muted' : isHealthOk ? 'bg-ok' : 'bg-danger'
             }`}
             aria-hidden="true"
           />
           <span
-            className={`truncate text-[12.5px] font-semibold ${
-              isUnconfigured ? 'text-ink-soft' : isHealthOk ? 'text-ink' : 'text-danger'
+            className={`truncate text-[13px] font-semibold ${
+              isUnconfigured ? 'text-ink-soft' : isHealthOk ? 'text-ink' : 'text-danger-fg'
             }`}
           >
             {isUnconfigured
@@ -71,7 +57,7 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
                 : t('admin.overview.panelHealthError')}
           </span>
         </span>
-        <span className="mt-0.5 block truncate text-[11px] text-ink-muted">
+        <span className="mt-0.5 block truncate text-xs text-ink-muted tnum">
           {t('admin.overview.panelHealthSub', {
             healthy: formatNumber(panelHealth.healthy),
             configured: formatNumber(panelHealth.configured),
