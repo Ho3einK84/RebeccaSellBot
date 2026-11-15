@@ -8,6 +8,10 @@ export const queryKeys = {
     ['admin', 'users', { page, search, filter, sort }] as const,
   userDossier: (telegramId: number) => ['admin', 'userDossier', telegramId] as const,
   panels: ['admin', 'panels'] as const,
+  packages: (filters?: { includeDisabled?: boolean; categoryId?: string; panelId?: string }) =>
+    filters ? (['admin', 'packages', filters] as const) : (['admin', 'packages'] as const),
+  categories: (includeDisabled = true) => ['admin', 'categories', { includeDisabled }] as const,
+  customPricing: ['admin', 'pricing', 'custom'] as const,
   user: {
     profile: ['user', 'profile'] as const,
     configs: ['user', 'configs'] as const,

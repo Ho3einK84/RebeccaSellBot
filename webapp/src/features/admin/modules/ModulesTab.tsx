@@ -8,17 +8,30 @@ import {
   Compass,
   Layers,
   Timer,
+  ChevronRight,
 } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import type { TabType } from '@/shared/types/admin.js';
 
-export const ModulesTab: React.FC = () => {
+interface ModulesTabProps {
+  onSwitchTab?: (tab: TabType) => void;
+}
+
+export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
   const { t } = useLanguage();
 
-  const modules = [
+  const modules: Array<{
+    id: string;
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    desc: string;
+    category: string;
+    targetTab?: TabType;
+  }> = [
     {
       id: 'broadcast',
       icon: Radio,
@@ -32,6 +45,7 @@ export const ModulesTab: React.FC = () => {
       title: t('admin.modules.plans'),
       desc: t('admin.modules.plansSub'),
       category: t('admin.modules.categoryBilling'),
+      targetTab: 'packages',
     },
     {
       id: 'promo',
@@ -80,19 +94,22 @@ export const ModulesTab: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
         {modules.map((mod) => {
           const Icon = mod.icon;
-          return (
+          const isLive = Boolean(mod.targetTab && onSwitchTab);
+          const cardContent = (
             <Card
-              key={mod.id}
               padding="md"
-              className="flex flex-col justify-between gap-3.5 hover:border-line-strong text-start"
+              interactive={isLive}
+              className={`h-full flex flex-col justify-between gap-3.5 text-start ${
+                isLive ? 'border-brand/40 hover:border-brand' : 'hover:border-line-strong'
+              }`}
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <IconTile tone="brand" size="md">
+                  <IconTile tone={isLive ? 'ok' : 'brand'} size="md">
                     <Icon />
                   </IconTile>
 
-                  <Badge variant="neutral" size="xs">
+                  <Badge variant={isLive ? 'success' : 'neutral'} size="xs">
                     {mod.category}
                   </Badge>
                 </div>
@@ -104,14 +121,50 @@ export const ModulesTab: React.FC = () => {
               </div>
 
               <div className="pt-2.5 border-t border-line flex items-center justify-between text-[11px]">
-                <span className="text-ink-muted">{t('admin.modules.corePlanned')}</span>
-                <span className="inline-flex items-center gap-1.5 font-medium text-brand-fg">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0" aria-hidden="true" />
-                  <span>{t('admin.modules.tagComingSoon')}</span>
-                </span>
+                {isLive ? (
+                  <>
+                    <span className="inline-flex items-center gap-1.5 font-medium text-ok-fg">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-ok shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>{t('admin.modules.tagActive')}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 font-semibold text-brand-fg">
+                      <span>{t('admin.modules.openModule')}</span>
+                      <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180" />
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-ink-muted">{t('admin.modules.corePlanned')}</span>
+                    <span className="inline-flex items-center gap-1.5 font-medium text-brand-fg">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-brand shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span>{t('admin.modules.tagComingSoon')}</span>
+                    </span>
+                  </>
+                )}
               </div>
             </Card>
           );
+
+          if (isLive && mod.targetTab && onSwitchTab) {
+            return (
+              <button
+                key={mod.id}
+                type="button"
+                onClick={() => onSwitchTab(mod.targetTab!)}
+                className="text-start w-full h-full rounded-card rs-focus"
+              >
+                {cardContent}
+              </button>
+            );
+          }
+
+          return <React.Fragment key={mod.id}>{cardContent}</React.Fragment>;
         })}
       </div>
     </div>

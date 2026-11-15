@@ -2,9 +2,12 @@ import { InlineKeyboard } from 'grammy';
 import type { PackageOption } from '../../../../domain/services/PricingService.js';
 import type { PackageCategory } from '../../../../domain/services/PackageCategoryService.js';
 import {
+  generatePackageId,
+  hasDuplicatePackageName,
   MAX_PACKAGE_COUNT,
   parsePackageOptionsJson,
 } from '../../../../domain/services/PricingService.js';
+export { generatePackageId };
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import {
   formatPackageButtonLabel,
@@ -601,23 +604,6 @@ export function buildPackageManagerKeyboard(
   return keyboard;
 }
 
-export function generatePackageId(name: string, packages: readonly PackageOption[]): string {
-  const slug =
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/gu, '_')
-      .replace(/^_+|_+$/gu, '')
-      .slice(0, 32) || 'package';
-  const base = `pkg_${slug}`;
-  const ids = new Set(packages.map((pkg) => pkg.id));
-  if (!ids.has(base)) return base;
-  for (let suffix = 2; suffix <= 999; suffix++) {
-    const candidate = `${base.slice(0, 50 - String(suffix).length)}_${suffix}`;
-    if (!ids.has(candidate)) return candidate;
-  }
-  throw new Error('PACKAGE_ID_SPACE_EXHAUSTED');
-}
-
 function togglePackageEnabled(
   packages: readonly PackageOption[],
   pkgId: string
@@ -1140,18 +1126,6 @@ function currentPackages(ctx: ConversationContext): PackageOption[] {
     ctx.services.translationService.getSetting('packages_json')
   );
   return (packages ?? ctx.services.pricingService.getPackages()).map((pkg) => ({ ...pkg }));
-}
-
-function hasDuplicatePackageName(
-  packages: readonly PackageOption[],
-  name: string,
-  ignoredIndex = -1
-): boolean {
-  const normalized = name.trim().toLocaleLowerCase('en-US');
-  return packages.some(
-    (pkg, index) =>
-      index !== ignoredIndex && pkg.name.trim().toLocaleLowerCase('en-US') === normalized
-  );
 }
 
 function parsePackageIndex(data: string, prefix: string): number | undefined {

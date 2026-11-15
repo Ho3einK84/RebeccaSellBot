@@ -45,7 +45,7 @@ export interface CustomPriceOverride {
   pricePerDay?: number;
 }
 
-const FALLBACK_PACKAGES: readonly PackageOption[] = [
+export const FALLBACK_PACKAGES: readonly PackageOption[] = [
   {
     id: 'pkg_10gb_30d',
     name: '10 GB - 30 Days',
@@ -80,12 +80,52 @@ const FALLBACK_PACKAGES: readonly PackageOption[] = [
   },
 ];
 
-const PACKAGE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
+export const PACKAGE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
+export const PANEL_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{1,39}$/iu;
 export const MAX_PACKAGE_COUNT = 50;
-const MAX_GB_AMOUNT = 10_000;
-const MAX_DURATION_DAYS = 3_650;
-const MAX_PRICE_RULES = 100;
-const MAX_PRICE = Number.MAX_SAFE_INTEGER;
+export const MAX_PACKAGE_NAME_LENGTH = 120;
+export const MAX_CATEGORY_ID_LENGTH = 64;
+export const MAX_SERVICE_ID = 2_147_483_647;
+export const MAX_GB_AMOUNT = 10_000;
+export const MAX_DURATION_DAYS = 3_650;
+export const MAX_WEB_CUSTOM_DAYS = 365;
+export const MAX_PRICE_RULES = 100;
+export const MAX_PRICE = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Generates a unique URL/slug-safe package ID matching `PACKAGE_ID_PATTERN`.
+ */
+export function generatePackageId(name: string, packages: readonly PackageOption[]): string {
+  const slug =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, '_')
+      .replace(/^_+|_+$/gu, '')
+      .slice(0, 32) || 'package';
+  const base = `pkg_${slug}`;
+  const ids = new Set(packages.map((pkg) => pkg.id));
+  if (!ids.has(base)) return base;
+  for (let suffix = 2; suffix <= 999; suffix++) {
+    const candidate = `${base.slice(0, 50 - String(suffix).length)}_${suffix}`;
+    if (!ids.has(candidate)) return candidate;
+  }
+  throw new Error('PACKAGE_ID_SPACE_EXHAUSTED');
+}
+
+/**
+ * Checks whether a package name duplicates another package case-insensitively.
+ */
+export function hasDuplicatePackageName(
+  packages: readonly PackageOption[],
+  name: string,
+  ignoredIndex = -1
+): boolean {
+  const normalized = name.trim().toLocaleLowerCase('en-US');
+  return packages.some(
+    (pkg, index) =>
+      index !== ignoredIndex && pkg.name.trim().toLocaleLowerCase('en-US') === normalized
+  );
+}
 
 export class PricingService {
   constructor(private readonly translationService: TranslationService) {}
@@ -252,9 +292,15 @@ export function parseVolumePricingTiersJson(rawJson: string): VolumePricingTier[
   try {
     const value: unknown = JSON.parse(rawJson);
     if (!Array.isArray(value) || value.length > MAX_PRICE_RULES) return undefined;
-    const tiers = value.map(parseVolumeTier);
-    if (tiers.some((tier) => !tier)) return undefined;
-    return (tiers as VolumePricingTier[]).sort((a, b) => b.minGb - a.minGb);
+    const seenIds = new Set<string>();
+    const tiers: VolumePricingTier[] = [];
+    for (const item of value) {
+      const tier = parseVolumeTier(item);
+      if (!tier || seenIds.has(tier.id)) return undefined;
+      seenIds.add(tier.id);
+      tiers.push(tier);
+    }
+    return tiers.sort((a, b) => b.minGb - a.minGb);
   } catch {
     return undefined;
   }
@@ -269,10 +315,15 @@ export function parseCustomPriceOverridesJson(rawJson: string): CustomPriceOverr
   try {
     const value: unknown = JSON.parse(rawJson);
     if (!Array.isArray(value) || value.length > MAX_PRICE_RULES) return undefined;
-    const overrides = value.map(parsePriceOverride);
-    return overrides.some((override) => !override)
-      ? undefined
-      : (overrides as CustomPriceOverride[]);
+    const seenIds = new Set<string>();
+    const overrides: CustomPriceOverride[] = [];
+    for (const item of value) {
+      const override = parsePriceOverride(item);
+      if (!override || seenIds.has(override.id)) return undefined;
+      seenIds.add(override.id);
+      overrides.push(override);
+    }
+    return overrides;
   } catch {
     return undefined;
   }
@@ -299,16 +350,16 @@ function parsePackages(value: unknown): PackageOption[] | undefined {
     if (
       !PACKAGE_ID_PATTERN.test(id) ||
       !name ||
-      name.length > 120 ||
+      name.length > MAX_PACKAGE_NAME_LENGTH ||
       !positiveSafeInteger(item.gbAmount, MAX_GB_AMOUNT) ||
       !positiveSafeInteger(item.durationDays, MAX_DURATION_DAYS) ||
       !positiveSafeInteger(item.price, MAX_PRICE) ||
       (item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
       seenIds.has(id) ||
-      (panelId !== undefined && !/^[a-z0-9][a-z0-9_-]{1,39}$/iu.test(panelId)) ||
-      (serviceId !== undefined && !positiveSafeInteger(serviceId, 2_147_483_647)) ||
+      (panelId !== undefined && !PANEL_ID_PATTERN.test(panelId)) ||
+      (serviceId !== undefined && !positiveSafeInteger(serviceId, MAX_SERVICE_ID)) ||
       (panelId === undefined) !== (serviceId === undefined) ||
-      (categoryId !== undefined && categoryId.length > 64)
+      (categoryId !== undefined && categoryId.length > MAX_CATEGORY_ID_LENGTH)
     ) {
       return undefined;
     }

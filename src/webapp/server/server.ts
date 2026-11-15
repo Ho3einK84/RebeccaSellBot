@@ -12,9 +12,12 @@ import fastifyCors from '@fastify/cors';
 import type { Config } from '../../infra/config.js';
 import type { BotServices } from '../../telegram/types.js';
 import { DomainRegistryService } from '../../domain/services/DomainRegistryService.js';
+import { PackageCategoryService } from '../../domain/services/PackageCategoryService.js';
+import { PricingService } from '../../domain/services/PricingService.js';
 import { logger } from '../../infra/logger.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
 import { registerAdminRoutes } from './routes/adminRoutes.js';
+import { registerAdminPackageRoutes } from './routes/adminPackageRoutes.js';
 import { registerUserRoutes } from './routes/userRoutes.js';
 
 export interface WebAppServerHandle {
@@ -429,6 +432,28 @@ export async function createWebAppServer(
     adminIds: services.adminIds,
     botApi: services.botApi,
     translationService: services.translationService,
+  });
+
+  const hasTranslationService =
+    Boolean(services.translationService) &&
+    typeof services.translationService?.getSetting === 'function';
+  const resolvedPricingService =
+    services.pricingService ??
+    (hasTranslationService ? new PricingService(services.translationService) : undefined);
+  const resolvedCategoryService =
+    typeof services.packageCategoryService?.listCategories === 'function'
+      ? services.packageCategoryService
+      : hasTranslationService
+        ? new PackageCategoryService(services.translationService)
+        : undefined;
+
+  registerAdminPackageRoutes(app, {
+    pricingService: resolvedPricingService,
+    packageCategoryService: resolvedCategoryService,
+    translationService: services.translationService,
+    panelRegistry: services.panelRegistry,
+    userService: services.userService,
+    adminService: services.adminService,
   });
 
   registerUserRoutes(app, {

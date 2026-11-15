@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LayoutDashboard, Receipt, Users, Server, Layers } from 'lucide-react';
+import { LayoutDashboard, Receipt, Users, Server, Package, Layers } from 'lucide-react';
 import { OverviewTab } from './overview/OverviewTab.js';
 import { ReceiptsTab } from './receipts/ReceiptsTab.js';
 import { UsersTab } from './users/UsersTab.js';
 import { PanelsTab } from './panels/PanelsTab.js';
+import { PackagesTab } from './packages/PackagesTab.js';
 import { ModulesTab } from './modules/ModulesTab.js';
 import { AdminHeader } from './components/AdminHeader.js';
 import { AdminDesktopNav } from './components/AdminDesktopNav.js';
@@ -90,19 +91,51 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
     if (activeTab === 'receipts') refetchReceipts();
     if (activeTab === 'panels') refetchPanels();
     if (activeTab === 'users') void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    if (activeTab === 'packages') {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'packages'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'categories'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'pricing', 'custom'] });
+    }
   };
 
   const tabsConfig = [
-    { id: 'overview' as const, label: t('admin.tabs.overview'), icon: LayoutDashboard },
+    {
+      id: 'overview' as const,
+      label: t('admin.tabs.overview'),
+      mobileLabel: t('admin.tabs.overviewShort'),
+      icon: LayoutDashboard,
+    },
     {
       id: 'receipts' as const,
       label: t('admin.tabs.receipts'),
+      mobileLabel: t('admin.tabs.receiptsShort'),
       icon: Receipt,
       count: pendingCount,
     },
-    { id: 'users' as const, label: t('admin.tabs.users'), icon: Users },
-    { id: 'panels' as const, label: t('admin.tabs.panels'), icon: Server },
-    { id: 'coming-soon' as const, label: t('admin.tabs.comingSoon'), icon: Layers },
+    {
+      id: 'users' as const,
+      label: t('admin.tabs.users'),
+      mobileLabel: t('admin.tabs.usersShort'),
+      icon: Users,
+    },
+    {
+      id: 'panels' as const,
+      label: t('admin.tabs.panels'),
+      mobileLabel: t('admin.tabs.panelsShort'),
+      icon: Server,
+    },
+    {
+      id: 'packages' as const,
+      label: t('admin.tabs.packages'),
+      mobileLabel: t('admin.tabs.packagesShort'),
+      icon: Package,
+    },
+    {
+      id: 'coming-soon' as const,
+      label: t('admin.tabs.comingSoon'),
+      mobileLabel: t('admin.tabs.comingSoonShort'),
+      icon: Layers,
+    },
   ];
 
   return (
@@ -152,7 +185,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
         />
       )}
       {activeTab === 'panels' && <PanelsTab onNotify={notify} />}
-      {activeTab === 'coming-soon' && <ModulesTab />}
+      {activeTab === 'packages' && <PackagesTab onNotify={notify} />}
+      {activeTab === 'coming-soon' && <ModulesTab onSwitchTab={switchTab} />}
     </AppShell>
   );
 };

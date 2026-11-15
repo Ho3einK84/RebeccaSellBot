@@ -17,9 +17,16 @@ export const AdminDesktopNav: React.FC<AdminDesktopNavProps> = ({
   onSelectTab,
 }) => {
   const { t } = useLanguage();
+  const desktopItems = tabs.map(({ id, label, icon, count }) => ({
+    id,
+    label,
+    icon,
+    count,
+  }));
+
   return (
     <DesktopNav
-      items={tabs}
+      items={desktopItems}
       activeId={activeTab}
       onSelect={onSelectTab}
       ariaLabel={t('admin.navAriaLabel')}

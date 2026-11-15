@@ -23,7 +23,36 @@ import type {
   RevokeSubUrlResponse,
   BatchReceiptActionPayload,
 } from '@/shared/types/api.js';
-import type { UserFilterType, UserSortType, ReceiptSettings } from '@/shared/types/admin.js';
+import type {
+  UserFilterType,
+  UserSortType,
+  ReceiptSettings,
+  AdminPackagesResponse,
+  CreateAdminPackagePayload,
+  UpdateAdminPackagePayload,
+  AdminPackageMutationResponse,
+  AdminPackageReorderResponse,
+  AdminPackageDeleteResponse,
+  AdminPackagePoliciesDto,
+  AdminCategoriesResponse,
+  AdminCategoryDto,
+  CreateAdminCategoryPayload,
+  UpdateAdminCategoryPayload,
+  AdminCategoryMutationResponse,
+  AdminCategoryDeleteResponse,
+  AdminCustomPricingResponse,
+  CustomPricingSettingsDto,
+  UpdateCustomPricingSettingsPayload,
+  CreateVolumeTierPayload,
+  UpdateVolumeTierPayload,
+  VolumeTierMutationResponse,
+  VolumePricingTierDto,
+  CreatePriceOverridePayload,
+  UpdatePriceOverridePayload,
+  PriceOverrideMutationResponse,
+  CustomPriceOverrideDto,
+  AdminPricingQuoteResponse,
+} from '@/shared/types/admin.js';
 import type {
   UserProfileResponse,
   UserConfigsResponse,
@@ -388,6 +417,203 @@ export const api = {
         method: 'DELETE',
       }
     ),
+
+  // Admin Packages, Categories & Custom Pricing API
+  getAdminPackages: (params?: {
+    includeDisabled?: boolean;
+    categoryId?: string;
+    panelId?: string;
+  }): Promise<AdminPackagesResponse> => {
+    const search = new URLSearchParams();
+    if (params?.includeDisabled !== undefined) {
+      search.set('includeDisabled', String(params.includeDisabled));
+    }
+    if (params?.categoryId) {
+      search.set('categoryId', params.categoryId);
+    }
+    if (params?.panelId) {
+      search.set('panelId', params.panelId);
+    }
+    const qs = search.toString();
+    return request<AdminPackagesResponse>(`/api/admin/packages${qs ? `?${qs}` : ''}`);
+  },
+
+  createAdminPackage: (payload: CreateAdminPackagePayload): Promise<AdminPackageMutationResponse> =>
+    request<AdminPackageMutationResponse>('/api/admin/packages', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateAdminPackage: (
+    id: string,
+    payload: UpdateAdminPackagePayload
+  ): Promise<AdminPackageMutationResponse> =>
+    request<AdminPackageMutationResponse>(`/api/admin/packages/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  toggleAdminPackage: (id: string, enabled?: boolean): Promise<AdminPackageMutationResponse> =>
+    request<AdminPackageMutationResponse>(`/api/admin/packages/${encodeURIComponent(id)}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify(enabled === undefined ? {} : { enabled }),
+    }),
+
+  cloneAdminPackage: (id: string, name?: string): Promise<AdminPackageMutationResponse> =>
+    request<AdminPackageMutationResponse>(`/api/admin/packages/${encodeURIComponent(id)}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(name ? { name } : {}),
+    }),
+
+  reorderAdminPackages: (orderedIds: string[]): Promise<AdminPackageReorderResponse> =>
+    request<AdminPackageReorderResponse>('/api/admin/packages/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ orderedIds }),
+    }),
+
+  deleteAdminPackage: (id: string): Promise<AdminPackageDeleteResponse> =>
+    request<AdminPackageDeleteResponse>(`/api/admin/packages/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  updateAdminPackagePolicies: (
+    payload: Partial<AdminPackagePoliciesDto>
+  ): Promise<{ policies: AdminPackagePoliciesDto }> =>
+    request<{ policies: AdminPackagePoliciesDto }>('/api/admin/packages/policies', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  getAdminCategories: (includeDisabled = true): Promise<AdminCategoriesResponse> =>
+    request<AdminCategoriesResponse>(
+      `/api/admin/categories?includeDisabled=${String(includeDisabled)}`
+    ),
+
+  createAdminCategory: (
+    payload: CreateAdminCategoryPayload
+  ): Promise<AdminCategoryMutationResponse> =>
+    request<AdminCategoryMutationResponse>('/api/admin/categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateAdminCategory: (
+    id: string,
+    payload: UpdateAdminCategoryPayload
+  ): Promise<AdminCategoryMutationResponse> =>
+    request<AdminCategoryMutationResponse>(`/api/admin/categories/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  toggleAdminCategory: (id: string, enabled?: boolean): Promise<AdminCategoryMutationResponse> =>
+    request<AdminCategoryMutationResponse>(
+      `/api/admin/categories/${encodeURIComponent(id)}/toggle`,
+      {
+        method: 'POST',
+        body: JSON.stringify(enabled === undefined ? {} : { enabled }),
+      }
+    ),
+
+  reorderAdminCategories: (orderedIds: string[]): Promise<{ categories: AdminCategoryDto[] }> =>
+    request<{ categories: AdminCategoryDto[] }>('/api/admin/categories/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ orderedIds }),
+    }),
+
+  deleteAdminCategory: (id: string): Promise<AdminCategoryDeleteResponse> =>
+    request<AdminCategoryDeleteResponse>(`/api/admin/categories/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  getAdminCustomPricing: (): Promise<AdminCustomPricingResponse> =>
+    request<AdminCustomPricingResponse>('/api/admin/pricing/custom'),
+
+  updateAdminCustomPricingSettings: (
+    payload: UpdateCustomPricingSettingsPayload
+  ): Promise<{ settings: CustomPricingSettingsDto }> =>
+    request<{ settings: CustomPricingSettingsDto }>('/api/admin/pricing/custom/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  createAdminVolumeTier: (payload: CreateVolumeTierPayload): Promise<VolumeTierMutationResponse> =>
+    request<VolumeTierMutationResponse>('/api/admin/pricing/custom/tiers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateAdminVolumeTier: (
+    id: string,
+    payload: UpdateVolumeTierPayload
+  ): Promise<VolumeTierMutationResponse> =>
+    request<VolumeTierMutationResponse>(
+      `/api/admin/pricing/custom/tiers/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  deleteAdminVolumeTier: (
+    id: string
+  ): Promise<{ deletedId: string; tiers: VolumePricingTierDto[] }> =>
+    request<{ deletedId: string; tiers: VolumePricingTierDto[] }>(
+      `/api/admin/pricing/custom/tiers/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+      }
+    ),
+
+  createAdminPriceOverride: (
+    payload: CreatePriceOverridePayload
+  ): Promise<PriceOverrideMutationResponse> =>
+    request<PriceOverrideMutationResponse>('/api/admin/pricing/custom/overrides', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  reorderAdminPriceOverrides: (
+    orderedIds: string[]
+  ): Promise<{ overrides: CustomPriceOverrideDto[] }> =>
+    request<{ overrides: CustomPriceOverrideDto[] }>(
+      '/api/admin/pricing/custom/overrides/reorder',
+      {
+        method: 'POST',
+        body: JSON.stringify({ orderedIds }),
+      }
+    ),
+
+  updateAdminPriceOverride: (
+    id: string,
+    payload: UpdatePriceOverridePayload
+  ): Promise<PriceOverrideMutationResponse> =>
+    request<PriceOverrideMutationResponse>(
+      `/api/admin/pricing/custom/overrides/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  deleteAdminPriceOverride: (
+    id: string
+  ): Promise<{ deletedId: string; overrides: CustomPriceOverrideDto[] }> =>
+    request<{ deletedId: string; overrides: CustomPriceOverrideDto[] }>(
+      `/api/admin/pricing/custom/overrides/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+      }
+    ),
+
+  simulateAdminCustomQuote: (
+    gbAmount: number,
+    durationDays: number
+  ): Promise<AdminPricingQuoteResponse> =>
+    request<AdminPricingQuoteResponse>('/api/admin/pricing/custom/quote', {
+      method: 'POST',
+      body: JSON.stringify({ gbAmount, durationDays }),
+    }),
 
   // User Portal API
   getUserProfile: (): Promise<UserProfileResponse> =>
