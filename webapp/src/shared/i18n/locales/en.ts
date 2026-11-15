@@ -262,7 +262,6 @@ export const en: DeepPartial<TranslationSchema> = {
       pendingReceiptAmountLabel: 'Receipt Amount',
       pendingReceiptStatusLabel: 'Review Status',
       topupMinMaxHint: 'Min deposit: {min} Toman | Max: {max} Toman',
-      quickAmounts: 'Preset Amounts',
       step1Title: 'Transfer Funds',
       step1Desc: 'Transfer your desired amount to the bank card above.',
       step2Title: 'Send Slip',

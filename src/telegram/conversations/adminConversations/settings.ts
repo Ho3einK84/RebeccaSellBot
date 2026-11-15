@@ -2,7 +2,11 @@
 
 export { adminEditSettingsConversation } from './settings/conversation.js';
 export { adminBackupSettingsConversation } from './settings/backup.js';
-export { adminWebAppSettingsConversation } from './settings/webapp.js';
+export {
+  adminWebAppSettingsConversation,
+  buildWebAppSettingsKeyboard,
+  buildWebAppSettingsScreen,
+} from './settings/webapp.js';
 export { adminManagePackagesConversation } from './settings/packageManager.js';
 export { adminCustomVolumeConversation } from './settings/customVolume.js';
 export { adminReferralSettingsConversation } from './settings/referral.js';
@@ -36,6 +40,8 @@ export {
   type SelectionItem,
 } from './settings/presentation.js';
 export {
+  buildPackageDetailKeyboard,
+  buildPackageDetailScreen,
   buildPackageManagerKeyboard,
   generatePackageId,
   managePackages,

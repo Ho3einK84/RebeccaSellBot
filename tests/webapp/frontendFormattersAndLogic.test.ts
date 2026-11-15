@@ -516,4 +516,13 @@ describe('Traffic Normalization & ServiceStatusTraffic', () => {
       expect(ratioSplit.dashOffset).toBeCloseTo(ratioSplit.circumference * (1 / 3), 6);
     });
   });
+
+  describe('User Wallet Top-up Presets Removal', () => {
+    it('omits preset top-up amount chips and obsolete quickAmounts key from user wallet dictionary', () => {
+      expect('quickAmounts' in fa.user.wallet).toBe(false);
+      expect('quickAmounts' in en.user.wallet).toBe(false);
+      expect(fa.user.wallet.topupMinMaxHint).toContain('{min}');
+      expect(en.user.wallet.topupMinMaxHint).toContain('{min}');
+    });
+  });
 });

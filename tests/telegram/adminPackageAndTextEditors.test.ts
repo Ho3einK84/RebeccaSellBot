@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { MAX_PACKAGE_COUNT, type PackageOption } from '../../src/domain/services/PricingService.js';
 import { EN_TEXTS } from '../../src/domain/services/TranslationCatalog.en.js';
 import { FA_TEXTS } from '../../src/domain/services/TranslationCatalog.fa.js';
+import { TranslationService } from '../../src/domain/services/TranslationService.js';
 import { logger } from '../../src/infra/logger.js';
 import {
   buildCategoryKeyboard,
+  buildPackageDetailKeyboard,
+  buildPackageDetailScreen,
   buildPackageManagerKeyboard,
   buildSettingsGroupKeyboard,
   buildSettingsInGroupKeyboard,
@@ -18,6 +21,7 @@ import {
   adminEditTextsConversation,
   ESSENTIAL_USER_TEXTS,
 } from '../../src/telegram/conversations/adminConversations/texts.js';
+import { validateTelegramMarkdown } from '../../src/telegram/rendering.js';
 import type { ConversationContext, MyConversation, SessionData } from '../../src/telegram/types.js';
 import { extractCallbackDataList } from './helpers/botHarness.js';
 
@@ -331,11 +335,17 @@ describe('Admin package manager & policy editor', () => {
 
     const previewHarness = createPackageHarness({}, []);
     const toggleCb = extractCallbackDataList(
-      buildPackageManagerKeyboard(previewHarness.ctx, [starterPackage()])
+      buildPackageDetailKeyboard(previewHarness.ctx, starterPackage(), 0, 2)
     ).find((c) => c.startsWith('pkg-toggle:'))!;
+    expect(toggleCb).toBe('pkg-toggle:starter');
     const toggleHarness = createPackageHarness(
       { packages_json: JSON.stringify([starterPackage()]) },
-      [{ callback: toggleCb }, { callback: 'pkg-back' }],
+      [
+        { callback: 'pkg-edit:starter' },
+        { callback: toggleCb },
+        { callback: 'pkg-detail-back' },
+        { callback: 'pkg-back' },
+      ],
       { packages: [starterPackage()] }
     );
     await expect(managePackages(toggleHarness.conversation, toggleHarness.ctx)).resolves.toBe(
@@ -344,11 +354,17 @@ describe('Admin package manager & policy editor', () => {
     expect(JSON.parse(toggleHarness.updateSetting.mock.calls[0]![1]!)[0]?.enabled).toBe(false);
 
     const cloneCb = extractCallbackDataList(
-      buildPackageManagerKeyboard(previewHarness.ctx, [starterPackage()])
+      buildPackageDetailKeyboard(previewHarness.ctx, starterPackage(), 0, 2)
     ).find((c) => c.startsWith('pkg-clone:'))!;
+    expect(cloneCb).toBe('pkg-clone:starter');
     const cloneHarness = createPackageHarness(
       { packages_json: JSON.stringify([starterPackage()]) },
-      [{ callback: cloneCb }, { callback: 'pkg-back' }],
+      [
+        { callback: 'pkg-edit:starter' },
+        { callback: cloneCb },
+        { callback: 'pkg-detail-back' },
+        { callback: 'pkg-back' },
+      ],
       { packages: [starterPackage()] }
     );
     await expect(managePackages(cloneHarness.conversation, cloneHarness.ctx)).resolves.toBe('back');
@@ -427,12 +443,126 @@ describe('Admin package manager & policy editor', () => {
       buildSettingsGroupKeyboard(policyHarness.ctx),
       ...SETTING_GROUPS.map((group) => buildSettingsInGroupKeyboard(policyHarness.ctx, group)),
       buildPackageManagerKeyboard(policyHarness.ctx, longPackages),
+      buildPackageDetailKeyboard(policyHarness.ctx, longPackages[0]!, 0, MAX_PACKAGE_COUNT),
     ];
     for (const button of keyboards.flatMap((keyboard) => keyboard.inline_keyboard.flat())) {
       expect(Buffer.byteLength(button.callback_data ?? '', 'utf8')).toBeLessThanOrEqual(64);
       expect([...button.text].length).toBeLessThanOrEqual(60);
     }
     expect(getSettingGroup('pricing')?.settings).toContain('packages_json');
+
+    const realTs = new TranslationService();
+    const realCtx = {
+      from: { id: 42, language_code: 'fa' },
+      userLocale: 'fa',
+      services: { translationService: realTs },
+    } as unknown as ConversationContext;
+    const detailScreen = buildPackageDetailScreen(realCtx, longPackages[0]!, {
+      index: 0,
+      total: MAX_PACKAGE_COUNT,
+      categoryLabel: 'VIP_Plan*',
+      targetLabel: 'Primary [Node]',
+    });
+    expect(validateTelegramMarkdown(detailScreen).valid).toBe(true);
+    expect(detailScreen).toContain('VIP\\_Plan\\*');
+  });
+
+  it('supports single-field quick edits in package detail and category detail management', async () => {
+    const quickHarness = createPackageHarness(
+      { packages_json: JSON.stringify([starterPackage()]) },
+      [
+        { callback: 'pkg-edit:starter' },
+        { callback: 'pkg-q:p:starter' },
+        { text: '۹۵٬۰۰۰' },
+        { callback: 'pkg-q:n:starter' },
+        { text: 'Pro Gold' },
+        { callback: 'pkg-detail-back' },
+        { callback: 'pkg-back' },
+      ],
+      { packages: [starterPackage()] }
+    );
+    await expect(managePackages(quickHarness.conversation, quickHarness.ctx)).resolves.toBe('back');
+    expect(quickHarness.updateSetting).toHaveBeenCalledTimes(2);
+    const updatedAfterPriceAndName = JSON.parse(
+      quickHarness.updateSetting.mock.calls[1]![1]!
+    ) as PackageOption[];
+    expect(updatedAfterPriceAndName[0]).toMatchObject({
+      id: 'starter',
+      name: 'Pro Gold',
+      price: 95_000,
+      gbAmount: 10,
+      durationDays: 30,
+    });
+
+    const categories: Array<{
+      id: string;
+      name: string;
+      icon?: string;
+      description?: string;
+      displayOrder: number;
+      enabled: boolean;
+    }> = [];
+    const catHarness = createPackageHarness(
+      { packages_json: JSON.stringify([starterPackage()]) },
+      [
+        { callback: 'pkg-categories' },
+        { callback: 'cat:add' },
+        { text: 'Europe VIP' },
+        { text: '🌍' },
+        { callback: 'cat:edit:cat_1' },
+        { callback: 'cat:edit-desc:cat_1' },
+        { text: 'Low latency routes' },
+        { callback: 'cat:edit-back' },
+        { callback: 'cat:back' },
+        { callback: 'pkg-back' },
+      ],
+      { packages: [starterPackage()] }
+    );
+    catHarness.ctx.services!.packageCategoryService = {
+      listCategories: vi.fn(async () => [...categories]),
+      getCategoryById: vi.fn(async (id: string) => categories.find((c) => c.id === id) ?? null),
+      createCategory: vi.fn(async (input: { name: string; icon?: string }) => {
+        const created = {
+          id: `cat_${categories.length + 1}`,
+          name: input.name,
+          icon: input.icon,
+          displayOrder: categories.length,
+          enabled: true,
+        };
+        categories.push(created);
+        return created;
+      }),
+      updateCategory: vi.fn(async (id: string, patch: Record<string, unknown>) => {
+        const idx = categories.findIndex((c) => c.id === id);
+        if (idx === -1) return null;
+        categories[idx] = { ...categories[idx]!, ...patch };
+        return categories[idx]!;
+      }),
+      reorderCategories: vi.fn(async () => {}),
+      deleteCategory: vi.fn(async () => true),
+    } as never;
+
+    await expect(managePackages(catHarness.conversation, catHarness.ctx)).resolves.toBe('back');
+    expect(categories[0]).toMatchObject({
+      id: 'cat_1',
+      name: 'Europe VIP',
+      icon: '🌍',
+      description: 'Low latency routes',
+    });
+    const detailReplyCall = catHarness.reply.mock.calls.find((call) =>
+      extractCallbackDataList((call[1] as { reply_markup?: unknown })?.reply_markup).includes(
+        'cat:edit-icon:cat_1'
+      )
+    );
+    expect(detailReplyCall).toBeDefined();
+    const iconBtn = (
+      detailReplyCall![1] as {
+        reply_markup: { inline_keyboard: Array<Array<{ text: string; callback_data?: string }>> };
+      }
+    ).reply_markup.inline_keyboard
+      .flat()
+      .find((b) => b.callback_data === 'cat:edit-icon:cat_1');
+    expect(iconBtn?.text).toBe('admin_category_edit_icon_btn');
   });
 });
 
@@ -642,5 +772,6 @@ describe('Admin text editor & translation catalog coverage', () => {
     );
     expect(uncoveredFa).toEqual([]);
     expect(uncoveredEn).toEqual([]);
+    expect(new Set(Object.keys(FA_TEXTS))).toEqual(new Set(Object.keys(EN_TEXTS)));
   });
 });

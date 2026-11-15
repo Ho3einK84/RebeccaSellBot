@@ -403,9 +403,19 @@ export function buildNamingDashboardScreen(
 export function buildPackageManagerScreen(
   ctx: ConversationContext,
   packages: readonly PackageOption[],
-  options: { totalCount?: number; page?: number; totalPages?: number } = {}
+  options: {
+    totalCount?: number;
+    activeCount?: number;
+    inactiveCount?: number;
+    categoryNamesById?: ReadonlyMap<string, string>;
+    displayMode?: 'specs' | 'name';
+    page?: number;
+    totalPages?: number;
+  } = {}
 ): string {
   const totalCount = options.totalCount ?? packages.length;
+  const activeCount = options.activeCount ?? packages.filter((pkg) => pkg.enabled !== false).length;
+  const inactiveCount = options.inactiveCount ?? Math.max(0, totalCount - activeCount);
   const pageStatus =
     options.page !== undefined && options.totalPages !== undefined && options.totalPages > 1
       ? t(ctx, 'admin_pkg_page_status', {
@@ -413,6 +423,19 @@ export function buildPackageManagerScreen(
           total: localizedNumber(options.totalPages, ctx),
         })
       : undefined;
+
+  const modeLabel = options.displayMode
+    ? options.displayMode === 'name'
+      ? t(ctx, 'admin_pkg_display_mode_name')
+      : t(ctx, 'admin_pkg_display_mode_specs')
+    : undefined;
+
+  const footerParts = [
+    modeLabel ? `📺 ${t(ctx, 'admin_pkg_display_mode_label')}: ${modeLabel}` : undefined,
+    pageStatus ? `📄 ${pageStatus}` : undefined,
+    `ℹ️ ${t(ctx, 'admin_home_hint')}`,
+  ].filter(Boolean);
+
   return buildScreen({
     emoji: '📦',
     title: t(ctx, 'admin_package_manager_title'),
@@ -420,24 +443,37 @@ export function buildPackageManagerScreen(
     primary: {
       emoji: '📦',
       label: t(ctx, 'admin_pkg_total_label'),
-      value: localizedNumber(totalCount, ctx),
+      value: t(ctx, 'admin_pkg_summary_value', {
+        total: localizedNumber(totalCount, ctx),
+        active: localizedNumber(activeCount, ctx),
+        inactive: localizedNumber(inactiveCount, ctx),
+      }),
     },
     sections: [
       {
         emoji: '🛍️',
         title: t(ctx, 'admin_pkg_manager_prompt'),
-        fields: packages.map((pkg) => {
-          const isEnabled = pkg.enabled !== false;
-          const statusPrefix = isEnabled ? '🟢 ' : '⚪️ ';
-          const statusSuffix = isEnabled ? '' : ` (${t(ctx, 'admin_pkg_inactive_badge')})`;
-          return {
-            label: `${statusPrefix}${escapeTelegramMarkdown(pkg.name)}${statusSuffix}`,
-            value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')} · ${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')} · ${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
-          };
-        }),
+        fields:
+          packages.length === 0
+            ? [{ label: '—', value: t(ctx, 'admin_pkg_empty_list_hint') }]
+            : packages.map((pkg) => {
+                const isEnabled = pkg.enabled !== false;
+                const statusPrefix = isEnabled ? '🟢 ' : '⚪️ ';
+                const statusSuffix = isEnabled ? '' : ` (${t(ctx, 'admin_pkg_inactive_badge')})`;
+                const categoryName = pkg.categoryId
+                  ? options.categoryNamesById?.get(pkg.categoryId)
+                  : undefined;
+                const categorySuffix = categoryName
+                  ? ` · 🏷️ ${escapeTelegramMarkdown(categoryName)}`
+                  : '';
+                return {
+                  label: `${statusPrefix}${escapeTelegramMarkdown(pkg.name)}${statusSuffix}`,
+                  value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')} · ${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')} · ${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}${categorySuffix}`,
+                };
+              }),
       },
     ],
-    ...(pageStatus ? { footer: pageStatus } : {}),
+    footer: footerParts.join('\n'),
   });
 }
 

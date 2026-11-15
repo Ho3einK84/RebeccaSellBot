@@ -102,47 +102,153 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
   });
 }
 
+function formatShopPromoBadge(
+  ctx: MenuContext,
+  pendingPromo: NonNullable<MenuContext['session']['pendingPromo']>
+): string {
+  const safeCode = `\`${sanitizeTelegramInlineCode(pendingPromo.code)}\``;
+  if (pendingPromo.type === 'discount_percent' && pendingPromo.value > 0) {
+    return `${safeCode} ${t(ctx, 'shop_promo_discount_suffix', {
+      percent: localizedNumber(pendingPromo.value, ctx),
+    })}`;
+  }
+  if (pendingPromo.type === 'discount_fixed' && pendingPromo.value > 0) {
+    return `${safeCode} ${t(ctx, 'shop_promo_fixed_suffix', {
+      amount: localizedNumber(pendingPromo.value, ctx),
+    })}`;
+  }
+  return safeCode;
+}
+
 /**
- * Render shop header text including active promo code if set in session.
+ * Render shop header text with live catalog summary, active category, and promo code if set.
  */
 export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
-  const promoCode = ctx.session.pendingPromo?.code;
+  const pendingPromo = ctx.session.pendingPromo;
+  const packages = ctx.services?.pricingService?.getPackages?.() ?? [];
+  const categories = (await ctx.services?.packageCategoryService?.listCategories?.(false)) ?? [];
+  const isCustomEnabled = ctx.services?.translationService
+    ? customVolumeEnabled(ctx.services.translationService)
+    : false;
+  const customPricePerGb = ctx.services?.translationService?.getSettingNum('price_per_gb', 5000);
+
   if (ctx.session.activeShopCategory && ctx.services) {
-    const category = await ctx.services.packageCategoryService.getCategoryById(
+    const category = await ctx.services.packageCategoryService?.getCategoryById(
       ctx.session.activeShopCategory
     );
     if (category) {
+      const catPackages =
+        ctx.services.pricingService?.getPackages?.(
+          undefined,
+          undefined,
+          false,
+          ctx.session.activeShopCategory
+        ) ?? [];
       return buildScreen({
         emoji: category.icon || '📦',
-        title: category.name,
-        subtitle: category.description || t(ctx, 'shop_subtitle'),
-        ...(promoCode
+        title: escapeTelegramMarkdown(category.name),
+        subtitle: escapeTelegramMarkdown(category.description || t(ctx, 'shop_category_subtitle')),
+        ...(pendingPromo
           ? {
               primary: {
                 emoji: '🎟️',
                 label: t(ctx, 'shop_promo_section'),
-                value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
+                value: formatShopPromoBadge(ctx, pendingPromo),
               },
             }
           : {}),
+        sections: [
+          {
+            emoji: '✨',
+            title: t(ctx, 'shop_catalog_section'),
+            fields: [
+              {
+                emoji: '📦',
+                label: t(ctx, 'shop_available_plans_label'),
+                value:
+                  catPackages.length > 0
+                    ? t(ctx, 'shop_available_plans_plain', {
+                        packages: localizedNumber(catPackages.length, ctx),
+                      })
+                    : t(ctx, 'shop_category_empty'),
+              },
+              {
+                emoji: '⚡',
+                label: t(ctx, 'shop_instant_delivery_label'),
+                value: t(ctx, 'shop_instant_delivery_value'),
+              },
+            ],
+          },
+        ],
         footer: `ℹ️ ${t(ctx, 'shop_hint')}`,
       });
     }
   }
 
+  if (packages.length === 0 && !isCustomEnabled) {
+    return buildEmptyState('🛍️', t(ctx, 'shop_title'), t(ctx, 'shop_empty_message'));
+  }
+
+  const nonEmptyCategoryCount = categories.filter((cat) =>
+    packages.some((pkg) => pkg.categoryId === cat.id)
+  ).length;
+
+  const catalogFields = [
+    ...(packages.length > 0
+      ? [
+          {
+            emoji: '📦',
+            label: t(ctx, 'shop_available_plans_label'),
+            value:
+              nonEmptyCategoryCount > 0
+                ? t(ctx, 'shop_available_plans_value', {
+                    packages: localizedNumber(packages.length, ctx),
+                    categories: localizedNumber(nonEmptyCategoryCount, ctx),
+                  })
+                : t(ctx, 'shop_available_plans_plain', {
+                    packages: localizedNumber(packages.length, ctx),
+                  }),
+          },
+        ]
+      : []),
+    ...(isCustomEnabled && customPricePerGb !== undefined
+      ? [
+          {
+            emoji: '✏️',
+            label: t(ctx, 'shop_custom_volume_label'),
+            value: t(ctx, 'shop_custom_volume_value', {
+              price: localizedNumber(customPricePerGb, ctx),
+            }),
+          },
+        ]
+      : []),
+    {
+      emoji: '⚡',
+      label: t(ctx, 'shop_instant_delivery_label'),
+      value: t(ctx, 'shop_instant_delivery_value'),
+    },
+  ];
+
   return buildScreen({
     emoji: '🛍️',
     title: t(ctx, 'shop_title'),
     subtitle: t(ctx, 'shop_subtitle'),
-    ...(promoCode
+    ...(pendingPromo
       ? {
           primary: {
             emoji: '🎟️',
             label: t(ctx, 'shop_promo_section'),
-            value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
+            value: formatShopPromoBadge(ctx, pendingPromo),
           },
         }
       : {}),
+    sections: [
+      {
+        emoji: '✨',
+        title: t(ctx, 'shop_catalog_section'),
+        fields: catalogFields,
+      },
+    ],
     footer: `ℹ️ ${t(ctx, 'shop_hint')}`,
   });
 }
@@ -188,7 +294,8 @@ function buildPurchaseCheckoutScreen(
   ctx: MenuContext,
   pkg: { name: string; gbAmount: number; durationDays: number; price: number; id: string },
   amount: number,
-  promoCode?: string
+  promoCode?: string,
+  walletBalance?: number
 ): string {
   return buildScreen({
     emoji: '🛒',
@@ -206,7 +313,7 @@ function buildPurchaseCheckoutScreen(
         fields: [
           {
             emoji: '📦',
-            label: t(ctx, 'renewal_success_package_label'),
+            label: t(ctx, 'checkout_package_label'),
             value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
           },
           {
@@ -226,6 +333,26 @@ function buildPurchaseCheckoutScreen(
           },
         ],
       },
+      ...(walletBalance !== undefined
+        ? [
+            {
+              emoji: '👛',
+              title: t(ctx, 'checkout_wallet_section'),
+              fields: [
+                {
+                  emoji: '💵',
+                  label: t(ctx, 'checkout_wallet_balance_label'),
+                  value: `${localizedNumber(walletBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  emoji: '✅',
+                  label: t(ctx, 'checkout_remaining_balance_label'),
+                  value: `${localizedNumber(Math.max(0, walletBalance - amount), ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+              ],
+            },
+          ]
+        : []),
       ...(promoCode
         ? [
             {
@@ -637,7 +764,7 @@ function renderPackageButtons(
 
           await renderScreen(
             c,
-            buildPurchaseCheckoutScreen(c, pkg, displayedPrice, pendingPromo.quote?.code),
+            buildPurchaseCheckoutScreen(c, pkg, displayedPrice, pendingPromo.quote?.code, balance),
             {
               parse_mode: 'Markdown',
               reply_markup: confirmKeyboard,
@@ -685,10 +812,15 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
         )
         .row();
     } else {
-      const categories = await ctx.services.packageCategoryService.listCategories(false);
+      const categories = (await ctx.services.packageCategoryService?.listCategories(false)) ?? [];
+      const allPackages = ctx.services.pricingService.getPackages();
+      const nonEmptyCategories = categories.filter((cat) =>
+        allPackages.some((pkg) => pkg.categoryId === cat.id)
+      );
 
-      for (const cat of categories) {
-        const label = `${cat.icon ? cat.icon + ' ' : '📦 '}${cat.name}`;
+      for (const cat of nonEmptyCategories) {
+        const count = allPackages.filter((pkg) => pkg.categoryId === cat.id).length;
+        const label = `${cat.icon ? `${cat.icon} ` : '📦 '}${cat.name} (${localizedNumber(count, ctx)})`;
         range
           .text(label, async (c) => {
             c.session.activeShopCategory = cat.id;
@@ -701,9 +833,9 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
       }
 
       const uncategorizedPackages =
-        categories.length > 0
+        nonEmptyCategories.length > 0
           ? ctx.services.pricingService.getPackages(undefined, undefined, false, null)
-          : ctx.services.pricingService.getPackages();
+          : allPackages;
 
       renderPackageButtons(range, uncategorizedPackages);
 

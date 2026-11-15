@@ -5,10 +5,13 @@ import { registerCoreRoutes } from '../../src/telegram/features/coreRoutes.js';
 import { renderHomeDashboard as renderStandaloneHomeDashboard } from '../../src/telegram/keyboards/homeDashboard.js';
 import {
   renderHomeDashboard,
+  renderShopMenuText,
   renderWalletDashboard,
   renderWalletStatementScreen,
   resolveSupportInfo,
 } from '../../src/telegram/keyboards/mainMenu.js';
+import { TranslationService } from '../../src/domain/services/TranslationService.js';
+import { validateTelegramMarkdown } from '../../src/telegram/rendering.js';
 import { localizedNumber } from '../../src/telegram/locale.js';
 import type { BotServices, MenuContext } from '../../src/telegram/types.js';
 import { createBotHarness, createMockServices } from './helpers/botHarness.js';
@@ -428,5 +431,77 @@ describe('/start onboarding, deep links & core route fallbacks', () => {
     const answer = harness.callsFor('answerCallbackQuery')[0]?.payload;
     expect(answer?.text).toBe('button_expired');
     expect(answer?.show_alert).toBe(true);
+  });
+
+  it('renders shop overview cleanly with categories, custom volume, promo badge, and valid Markdown', async () => {
+    const ts = new TranslationService();
+    const packages = [
+      { id: 'p1', name: 'Plan 1', gbAmount: 20, durationDays: 30, price: 50_000, categoryId: 'c1' },
+      {
+        id: 'p2',
+        name: 'Plan 2',
+        gbAmount: 50,
+        durationDays: 30,
+        price: 100_000,
+        categoryId: 'c1',
+      },
+    ];
+    const categories = [
+      {
+        id: 'c1',
+        name: 'Europe_DE*',
+        icon: '🇩🇪',
+        description: 'Fast_[Route]',
+        displayOrder: 0,
+        enabled: true,
+      },
+    ];
+
+    const ctx = {
+      from: { id: 99, language_code: 'fa' },
+      userLocale: 'fa',
+      session: {
+        pendingPromo: {
+          code: 'OFF20',
+          type: 'discount_percent',
+          value: 20,
+        },
+      },
+      services: {
+        ...createMockServices({
+          pricingService: {
+            getPackages: vi.fn((_p?: string, _s?: number, _inc?: boolean, catId?: string | null) =>
+              catId === 'c1' ? packages : catId === null ? [] : packages
+            ),
+          },
+          packageCategoryService: {
+            listCategories: vi.fn(async () => categories),
+            getCategoryById: vi.fn(
+              async (id: string) => categories.find((c) => c.id === id) ?? null
+            ),
+          },
+        }),
+        translationService: ts as unknown as BotServices['translationService'],
+      },
+    } as unknown as MenuContext;
+
+    vi.spyOn(ts, 'getSettingBool').mockImplementation((k: string, fb = false) =>
+      k === 'custom_volume_enabled' ? true : fb
+    );
+    vi.spyOn(ts, 'getSettingNum').mockImplementation((k: string, fb = 0) =>
+      k === 'price_per_gb' ? 4500 : fb
+    );
+
+    const rootShop = await renderShopMenuText(ctx);
+    expect(validateTelegramMarkdown(rootShop).valid).toBe(true);
+    expect(rootShop).toContain('OFF20');
+    expect(rootShop).toContain('۴٬۵۰۰');
+    expect(rootShop).toContain('۲ بسته در ۱ دسته‌بندی');
+
+    ctx.session.activeShopCategory = 'c1';
+    const catShop = await renderShopMenuText(ctx);
+    expect(validateTelegramMarkdown(catShop).valid).toBe(true);
+    expect(catShop).toContain('Europe\\_DE\\*');
+    expect(catShop).toContain('Fast\\_\\[Route]');
   });
 });

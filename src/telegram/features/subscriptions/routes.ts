@@ -203,7 +203,10 @@ export async function renderRenewalSelection(
   ctx: MenuContext,
   config: UserConfigRecord
 ): Promise<void> {
+  const packages = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId);
+  const isCustom = customVolumeEnabled(ctx.services!.translationService);
   const keyboard = buildRenewalSelectionKeyboard(ctx, config.id, config.panelId, config.serviceId);
+  const hasChoices = packages.length > 0 || isCustom;
   await renderSubscriptionScreen(
     ctx,
     buildScreen({
@@ -215,7 +218,9 @@ export async function renderRenewalSelection(
         label: t(ctx, 'renewal_selection_service_label'),
         value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
       },
-      footer: `ℹ️ ${t(ctx, 'renewal_selection_hint')}`,
+      footer: hasChoices
+        ? `ℹ️ ${t(ctx, 'renewal_selection_hint')}`
+        : `⚠️ ${t(ctx, 'renewal_selection_empty')}`,
     }),
     keyboard
   );
@@ -234,7 +239,8 @@ async function renderAutoRenewSelection(ctx: MenuContext, config: UserConfigReco
       )
       .row();
   }
-  if (customVolumeEnabled(ctx.services.translationService)) {
+  const isCustom = customVolumeEnabled(ctx.services.translationService);
+  if (isCustom) {
     const pricePerGb = ctx.services.translationService.getSettingNum('price_per_gb', 5_000);
     keyboard
       .text(
@@ -243,6 +249,7 @@ async function renderAutoRenewSelection(ctx: MenuContext, config: UserConfigReco
       )
       .row();
   }
+  const hasChoices = packages.length > 0 || isCustom;
   keyboard.text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id));
   await renderSubscriptionScreen(
     ctx,
@@ -255,7 +262,9 @@ async function renderAutoRenewSelection(ctx: MenuContext, config: UserConfigReco
         label: t(ctx, 'renewal_selection_service_label'),
         value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
       },
-      footer: `ℹ️ ${t(ctx, 'auto_renew_selection_hint')}`,
+      footer: hasChoices
+        ? `ℹ️ ${t(ctx, 'auto_renew_selection_hint')}`
+        : `⚠️ ${t(ctx, 'renewal_selection_empty')}`,
     }),
     keyboard
   );

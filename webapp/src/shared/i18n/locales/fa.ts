@@ -261,7 +261,6 @@ export const fa = {
       pendingReceiptAmountLabel: 'مبلغ رسید',
       pendingReceiptStatusLabel: 'وضعیت بررسی',
       topupMinMaxHint: 'حداقل شارژ: {min} تومان | حداکثر: {max} تومان',
-      quickAmounts: 'مبالغ پیش‌فرض',
       step1Title: 'واریز وجه',
       step1Desc: 'مبلغ دلخواه را به شماره کارت بالا منتقل نمایید.',
       step2Title: 'ارسال فیش',

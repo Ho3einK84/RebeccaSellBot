@@ -41,8 +41,6 @@ interface WalletTabProps {
   onNotify: (message: string) => void;
 }
 
-const PRESET_AMOUNTS = [50_000, 100_000, 200_000, 500_000, 1_000_000];
-
 export const WalletTab: React.FC<WalletTabProps> = ({
   profile,
   settings,
@@ -55,7 +53,6 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
 
-  const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [page, setPage] = useState<number>(1);
 
   const { data: txQueryData, isFetching: isFetchingTx } = useUserTransactions(page, 10);
@@ -77,11 +74,6 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     if (ok) {
       onNotify(t('user.wallet.cardCopied'));
     }
-  };
-
-  const handleSelectPreset = (amount: number) => {
-    triggerHaptic('selection');
-    setSelectedPreset((prev) => (prev === amount ? null : amount));
   };
 
   const handleOpenBotForReceipt = (payload = 'receipt') => {
@@ -275,32 +267,6 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                       </>
                     )}
                   </button>
-                </div>
-              </div>
-
-              {/* Quick Preset Chips */}
-              <div className="flex flex-col gap-2">
-                <span className="text-xs text-ink-muted font-medium">
-                  {t('user.wallet.quickAmounts')}
-                </span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {PRESET_AMOUNTS.map((amt) => {
-                    const isSelected = selectedPreset === amt;
-                    return (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => handleSelectPreset(amt)}
-                        className={`h-10 px-3 rounded-ctl text-xs font-medium tnum border press rs-focus cursor-pointer inline-flex items-center justify-center ${
-                          isSelected
-                            ? 'bg-brand border-brand text-brand-ink'
-                            : 'bg-surface-2 border-line hover:border-line-strong hover:bg-surface-3 text-ink-soft'
-                        }`}
-                      >
-                        <bdi dir="ltr">{formatToman(amt)}</bdi>&nbsp;{currency}
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
 

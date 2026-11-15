@@ -12,6 +12,7 @@ import {
   adminEditSettingsConversation,
   adminNamingSettingsConversation,
   adminTrialSettingsConversation,
+  adminWebAppSettingsConversation,
   buildBooleanSettingKeyboard,
   buildCustomNamingTemplatePrompt,
   buildEditorNavigationKeyboard,
@@ -19,6 +20,8 @@ import {
   buildSelectionKeyboard,
   buildSettingsGroupKeyboard,
   buildSettingsGroupPrompt,
+  buildWebAppSettingsKeyboard,
+  buildWebAppSettingsScreen,
   displayAdminSettingValue,
   isValidNamingTemplate,
   manageNamingSettings,
@@ -721,5 +724,78 @@ describe('Admin settings, trial, naming, lucky wheel & payment conversations', (
     const renderedPayScreen = replyTexts(payHarness.reply)[0];
     expect(renderedPayScreen).toBeDefined();
     expect(validateTelegramMarkdown(renderedPayScreen!).valid).toBe(true);
+  });
+
+  it('renders localized WebApp settings without Beta labels and supports live preview and disable flow', async () => {
+    const faHarness = createSettingsHarness(
+      { webapp_enabled: 'true', webapp_url: 'https://app.example.com' },
+      [],
+      { useRealTranslations: true }
+    );
+    (faHarness.ctx as { userLocale: string }).userLocale = 'fa';
+    (faHarness.ctx.from as { language_code?: string }).language_code = 'fa';
+
+    const faScreen = buildWebAppSettingsScreen(faHarness.ctx, {
+      enabled: true,
+      webAppUrl: 'https://app.example.com',
+      port: 3002,
+      isRunning: true,
+      serverIp: '85.17.142.160',
+    });
+    expect(validateTelegramMarkdown(faScreen).valid).toBe(true);
+    expect(faScreen).toContain('در حال اجرا');
+    expect(faScreen).not.toContain('Beta');
+    expect(faScreen).not.toContain('بتا');
+    expect(faScreen).not.toContain('Reverse Proxy Port');
+    expect(faScreen).not.toContain('🟢 Running');
+
+    const enHarness = createSettingsHarness(
+      { webapp_enabled: 'true', webapp_url: 'https://app.example.com' },
+      [],
+      { useRealTranslations: true }
+    );
+    const enScreen = buildWebAppSettingsScreen(enHarness.ctx, {
+      enabled: true,
+      webAppUrl: 'https://app.example.com',
+      port: 3002,
+      isRunning: false,
+      serverIp: '',
+    });
+    expect(validateTelegramMarkdown(enScreen).valid).toBe(true);
+    expect(enScreen).toContain('⚪ Stopped');
+
+    const activeKb = buildWebAppSettingsKeyboard(faHarness.ctx, {
+      enabled: true,
+      webAppUrl: 'https://app.example.com',
+    });
+    const flatButtons = activeKb.inline_keyboard.flat() as Array<{
+      text: string;
+      callback_data?: string;
+      web_app?: { url: string };
+    }>;
+    expect(flatButtons[0]?.web_app?.url).toBe('https://app.example.com');
+    expect(flatButtons.some((b) => b.callback_data === 'webapp:check:dns')).toBe(true);
+
+    const inactiveKb = buildWebAppSettingsKeyboard(faHarness.ctx, {
+      enabled: false,
+      webAppUrl: '',
+    });
+    expect(inactiveKb.inline_keyboard.flat().some((b) => 'web_app' in b)).toBe(false);
+
+    const disableWebApp = vi.fn(async () => {});
+    const flowHarness = createSettingsHarness(
+      { webapp_enabled: 'true', webapp_url: 'https://app.example.com' },
+      [{ callback: 'webapp:toggle:enabled' }, { callback: 'conversation:cancel' }],
+      { useRealTranslations: true }
+    );
+    (flowHarness.ctx.services as Record<string, unknown>).webAppUrl = 'https://app.example.com';
+    (flowHarness.ctx.services as Record<string, unknown>).disableWebApp = disableWebApp;
+    (flowHarness.ctx.services as Record<string, unknown>).isWebAppRunning = () => true;
+
+    await adminWebAppSettingsConversation(flowHarness.conversation, flowHarness.ctx);
+    expect(disableWebApp).toHaveBeenCalledOnce();
+    expect(
+      replyTexts(flowHarness.reply).some((msg) => msg.includes('Mini App has been disabled'))
+    ).toBe(true);
   });
 });
