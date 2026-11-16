@@ -5,7 +5,6 @@ import { renderHomeDashboard } from '../../src/telegram/keyboards/mainMenu.js';
 import { validateTelegramMarkdown } from '../../src/telegram/rendering.js';
 import type { ConversationContext, MenuContext, MyConversation } from '../../src/telegram/types.js';
 import {
-  USER_DIVIDER,
   backKeyboard,
   buildConfirmationKeyboard,
   buildHeader,
@@ -562,11 +561,12 @@ describe('Conversation input, escape navigation, and home/subscription UI primit
     expect(renderSleekProgressBar(0, 0)).toBe('');
 
     const faHeader = buildUserHeader('🏠', 'نمای کلی حساب', 'وضعیت اعتبار و سرویس‌ها');
-    expect(faHeader).toBe(`🏠 *نمای کلی حساب*\nوضعیت اعتبار و سرویس‌ها\n${USER_DIVIDER}`);
+    expect(faHeader).toBe('🏠 *نمای کلی حساب*\nوضعیت اعتبار و سرویس‌ها');
+    expect(faHeader).not.toContain('───');
     expect(validateTelegramMarkdown(faHeader).valid).toBe(true);
 
     const underscoreHeader = buildUserHeader('🔑', 'تمدید', 'my\\_config\\_01');
-    expect(underscoreHeader).toBe(`🔑 *تمدید*\nmy\\_config\\_01\n${USER_DIVIDER}`);
+    expect(underscoreHeader).toBe('🔑 *تمدید*\nmy\\_config\\_01');
     expect(validateTelegramMarkdown(underscoreHeader).valid).toBe(true);
 
     expect(
@@ -598,10 +598,10 @@ describe('Conversation input, escape navigation, and home/subscription UI primit
       ],
       footer: 'Instant delivery after confirmation.',
     });
-    expect(userScreen).toContain(USER_DIVIDER);
+    expect(userScreen).not.toContain('───');
     expect(userScreen).toContain('*Total Payable*\n*120,000 Toman*');
     expect(userScreen).toContain('• *Service:* `usr_01`');
-    expect(userScreen).toContain(`${USER_DIVIDER}\nInstant delivery after confirmation.`);
+    expect(userScreen).toContain('\n\nInstant delivery after confirmation.');
     expect(validateTelegramMarkdown(userScreen).valid).toBe(true);
 
     const empty = buildUserEmptyState(
@@ -621,8 +621,10 @@ describe('Conversation input, escape navigation, and home/subscription UI primit
       'کد تخفیف را وارد کنید.',
       'اعمال کد روی خرید'
     );
-    expect(prompt).toContain(`\u200f🎟️ *کد تخفیف*\n\u200fاعمال کد روی خرید\n\u200f${USER_DIVIDER}`);
-    expect(prompt).toContain('کد تخفیف را وارد کنید.');
+    expect(prompt).toBe(
+      '\u200f🎟️ *کد تخفیف*\n\u200fاعمال کد روی خرید\n\n\u200fکد تخفیف را وارد کنید.'
+    );
+    expect(prompt).not.toContain('───');
     expect(validateTelegramMarkdown(prompt).valid).toBe(true);
 
     const faDashboardScreen = buildUserScreen({

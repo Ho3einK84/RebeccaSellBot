@@ -462,15 +462,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         emoji: '✅',
         title: t(ctx, 'renewal_success_title'),
         subtitle: t(ctx, 'renewal_success_subtitle'),
-        primary: {
-          label: t(ctx, 'renewal_success_service_label'),
-          value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
-          inline: true,
-        },
         sections: [
           {
-            title: t(ctx, 'checkout_package_section'),
+            bullet: '',
             fields: [
+              {
+                label: t(ctx, 'renewal_success_service_label'),
+                value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
+              },
               {
                 label: t(ctx, 'renewal_success_package_label'),
                 value: escapeTelegramMarkdown(
@@ -1485,10 +1484,10 @@ function buildDeleteResultScreen(
       ? {
           sections: [
             {
-              title: t(ctx, 'config_delete_service_label'),
+              bullet: '',
               fields: [
                 {
-                  label: t(ctx, 'checkout_service_label'),
+                  label: t(ctx, 'config_delete_service_label'),
                   value: `\`${sanitizeTelegramInlineCode(username)}\``,
                 },
               ],

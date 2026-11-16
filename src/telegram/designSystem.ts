@@ -47,14 +47,10 @@ export type UserScreenDefinition = {
   };
   sections?: UserScreenSection[];
   footer?: string;
-  footerDivider?: boolean;
   direction?: 'rtl' | 'ltr' | 'auto';
 };
 
 export { EMOJI_PREFIX_REGEX };
-
-/** Compact hairline divider that renders cleanly on narrow mobile Telegram screens. */
-export const USER_DIVIDER = '─────────────';
 
 /**
  * Render a visual progress bar with emojis.
@@ -143,7 +139,7 @@ export function buildHeader(emoji: string, title: string, subtitle?: string): st
 }
 
 /**
- * Format a clean, modern user-facing header with a plain muted subtitle and hairline divider.
+ * Format a clean, modern user-facing header with a plain subtitle.
  * Avoids italic wrappers that distort Persian typography and break on underscores.
  */
 export function buildUserHeader(emoji: string, title: string, subtitle?: string): string {
@@ -153,9 +149,9 @@ export function buildUserHeader(emoji: string, title: string, subtitle?: string)
     : `*${unstarredTitle}*`;
   const trimmedSubtitle = subtitle?.trim();
   if (!trimmedSubtitle) {
-    return `${headerLine}\n${USER_DIVIDER}`;
+    return headerLine;
   }
-  return `${headerLine}\n${trimmedSubtitle}\n${USER_DIVIDER}`;
+  return `${headerLine}\n${trimmedSubtitle}`;
 }
 
 function hasOddTrailingBackslashes(value: string, index: number): boolean {
@@ -383,9 +379,7 @@ export function buildUserScreen(definition: UserScreenDefinition): string {
     buildUserHeader(definition.emoji, definition.title, definition.subtitle),
   ];
 
-  let hasBodyContent = false;
   if (definition.primary) {
-    hasBodyContent = true;
     const rawValue = String(definition.primary.value);
     const repeatsPrimaryEmoji = definition.primary.emoji
       ? rawValue.trimStart().startsWith(definition.primary.emoji)
@@ -403,15 +397,13 @@ export function buildUserScreen(definition: UserScreenDefinition): string {
   for (const section of definition.sections ?? []) {
     const rendered = buildUserSection(section);
     if (rendered) {
-      hasBodyContent = true;
       blocks.push(rendered);
     }
   }
 
   const trimmedFooter = definition.footer?.trim();
   if (trimmedFooter) {
-    const showDivider = hasBodyContent && definition.footerDivider !== false;
-    blocks.push(showDivider ? `${USER_DIVIDER}\n${trimmedFooter}` : trimmedFooter);
+    blocks.push(trimmedFooter);
   }
 
   const content = blocks.join('\n\n');
@@ -434,7 +426,6 @@ export function buildUserEmptyState(
     emoji,
     title,
     footer: [cleanBody, cleanHint].filter(Boolean).join('\n\n'),
-    footerDivider: false,
     direction,
   });
 }
@@ -452,7 +443,6 @@ export function buildUserPromptScreen(
     title,
     subtitle,
     footer: body,
-    footerDivider: false,
     direction,
   });
 }

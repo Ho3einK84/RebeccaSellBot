@@ -731,15 +731,14 @@ export async function renewConfigConversation(
     emoji: '✅',
     title: t(ctx, 'renewal_success_title'),
     subtitle: t(ctx, 'renewal_success_subtitle'),
-    primary: {
-      label: t(ctx, 'renewal_success_service_label'),
-      value: `\`${sanitizeTelegramInlineCode(res.configUsername)}\``,
-      inline: true,
-    },
     sections: [
       {
-        title: t(ctx, 'checkout_package_section'),
+        bullet: '',
         fields: [
+          {
+            label: t(ctx, 'renewal_success_service_label'),
+            value: `\`${sanitizeTelegramInlineCode(res.configUsername)}\``,
+          },
           {
             label: t(ctx, 'renewal_success_package_label'),
             value: customPackageName(ctx, gbAmount, durationDays),

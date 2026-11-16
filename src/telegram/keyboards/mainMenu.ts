@@ -154,7 +154,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           : {}),
         sections: [
           {
-            title: t(ctx, 'shop_catalog_section'),
+            bullet: '',
             fields: [
               {
                 label: t(ctx, 'shop_available_plans_label'),
@@ -164,10 +164,6 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
                         packages: localizedNumber(catPackages.length, ctx),
                       })
                     : t(ctx, 'shop_category_empty'),
-              },
-              {
-                label: t(ctx, 'shop_instant_delivery_label'),
-                value: t(ctx, 'shop_instant_delivery_value'),
               },
             ],
           },
@@ -212,10 +208,6 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           },
         ]
       : []),
-    {
-      label: t(ctx, 'shop_instant_delivery_label'),
-      value: t(ctx, 'shop_instant_delivery_value'),
-    },
   ];
 
   return buildUserScreen({
@@ -429,15 +421,14 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         emoji: '🎁',
         title: t(ctx, 'trial_preview_heading'),
         subtitle: t(ctx, 'trial_preview_subtitle'),
-        primary: {
-          label: t(ctx, 'trial_traffic_label'),
-          value: `${localizedNumber(trialGb, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
-          emphasizeValue: true,
-        },
         sections: [
           {
-            title: t(ctx, 'trial_terms_label'),
+            bullet: '',
             fields: [
+              {
+                label: t(ctx, 'trial_traffic_label'),
+                value: `${localizedNumber(trialGb, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+              },
               {
                 label: t(ctx, 'trial_duration_label'),
                 value: `${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')}`,
