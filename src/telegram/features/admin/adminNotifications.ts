@@ -2,7 +2,7 @@ import { InlineKeyboard, type Api } from 'grammy';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import { logger } from '../../../infra/logger.js';
-import { buildScreen } from '../../designSystem.js';
+import { buildUserScreen } from '../../designSystem.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 import { tForLocale, localizedNumberForLocale, resolveServiceLocale } from '../../locale.js';
 
@@ -35,7 +35,7 @@ export async function sendReceiptApprovalNotification(
 
     await api.sendMessage(
       params.telegramId,
-      buildScreen({
+      buildUserScreen({
         emoji: '✅',
         title: tForLocale(services.translationService, locale, 'receipt_result_approved_title'),
         subtitle: tForLocale(
@@ -44,9 +44,9 @@ export async function sendReceiptApprovalNotification(
           'receipt_result_approved_subtitle'
         ),
         primary: {
-          emoji: '💰',
           label: tForLocale(services.translationService, locale, 'receipt_result_amount_label'),
           value: `${localizedNumberForLocale(params.amount, locale)} ${tForLocale(services.translationService, locale, 'currency_toman')}`,
+          emphasizeValue: true,
         },
         footer: tForLocale(services.translationService, locale, 'receipt_result_next_hint'),
       }),
@@ -90,7 +90,7 @@ export async function sendReceiptRejectionNotification(
 
     await api.sendMessage(
       params.telegramId,
-      buildScreen({
+      buildUserScreen({
         emoji: '⚠️',
         title: tForLocale(services.translationService, locale, 'receipt_result_rejected_title'),
         subtitle: tForLocale(
@@ -101,7 +101,6 @@ export async function sendReceiptRejectionNotification(
         ...(reasonDetail
           ? {
               primary: {
-                emoji: '⚠️',
                 label: tForLocale(
                   services.translationService,
                   locale,
@@ -144,20 +143,20 @@ export async function sendBalanceAdjustmentNotification(
 
     await api.sendMessage(
       params.telegramId,
-      buildScreen({
+      buildUserScreen({
         emoji: '💳',
         title: tForLocale(services.translationService, locale, 'wallet_dashboard_title'),
         subtitle: tForLocale(services.translationService, locale, 'balance_adjusted_notification', {
           balance: localizedNumberForLocale(params.newBalance, locale),
         }),
         primary: {
-          emoji: '💰',
           label: tForLocale(services.translationService, locale, 'wallet_available_balance'),
           value: `${localizedNumberForLocale(params.newBalance, locale)} ${tForLocale(
             services.translationService,
             locale,
             'currency_toman'
           )}`,
+          emphasizeValue: true,
         },
       }),
       {

@@ -20,7 +20,7 @@ import {
 } from '../domain/services/WalletService.js';
 import type { PricingService } from '../domain/services/PricingService.js';
 import type { SupportedLocale, TranslationService } from '../domain/services/TranslationService.js';
-import { buildScreen } from '../telegram/designSystem.js';
+import { buildUserScreen } from '../telegram/designSystem.js';
 import { tForLocale } from '../telegram/locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
 import {
@@ -228,16 +228,16 @@ export async function runAutoRenewalSweep(
 
             await telegramApi.sendMessage(
               config.telegramId,
-              buildScreen({
+              buildUserScreen({
                 emoji: '⚠️',
                 title: tForLocale(translationService, locale, titleKey),
                 subtitle: tForLocale(translationService, locale, subtitleKey),
                 primary: {
-                  emoji: '📱',
                   label: tForLocale(translationService, locale, 'auto_renew_service_label'),
                   value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+                  inline: true,
                 },
-                footer: `ℹ️ ${tForLocale(translationService, locale, footerKey)}`,
+                footer: tForLocale(translationService, locale, footerKey),
               }),
               {
                 parse_mode: 'Markdown',
@@ -278,23 +278,21 @@ export async function runAutoRenewalSweep(
             const locale = config.locale ?? translationService.resolveLocale();
             await telegramApi.sendMessage(
               config.telegramId,
-              buildScreen({
+              buildUserScreen({
                 emoji: '💳',
                 title: tForLocale(translationService, locale, 'auto_renew_low_balance_title'),
                 subtitle: tForLocale(translationService, locale, 'auto_renew_low_balance_subtitle'),
                 primary: {
-                  emoji: '♻️',
                   label: tForLocale(translationService, locale, 'auto_renew_required_label'),
                   value: formatAutoRenewalCurrency(
                     selectedPackage.price,
                     translationService,
                     locale
                   ),
+                  emphasizeValue: true,
                 },
                 sections: [
                   {
-                    emoji: '📱',
-                    title: tForLocale(translationService, locale, 'auto_renew_service_label'),
                     fields: [
                       {
                         label: tForLocale(translationService, locale, 'auto_renew_service_label'),
@@ -360,19 +358,17 @@ export async function runAutoRenewalSweep(
         const expireAt = new Date(now.getTime() + selectedPackage.durationDays * 86_400_000);
         await telegramApi.sendMessage(
           config.telegramId,
-          buildScreen({
+          buildUserScreen({
             emoji: '✅',
             title: tForLocale(translationService, locale, 'auto_renew_success_title'),
             subtitle: tForLocale(translationService, locale, 'auto_renew_success_subtitle'),
             primary: {
-              emoji: '📱',
               label: tForLocale(translationService, locale, 'auto_renew_service_label'),
               value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+              inline: true,
             },
             sections: [
               {
-                emoji: '📦',
-                title: tForLocale(translationService, locale, 'auto_renew_package_label'),
                 fields: [
                   {
                     label: tForLocale(translationService, locale, 'auto_renew_package_label'),

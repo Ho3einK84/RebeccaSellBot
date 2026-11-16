@@ -8,8 +8,8 @@ import { purchaseFailureMessage } from '../purchaseFeedback.js';
 import { formatSubscriptionLink, resolveContextLocale, t } from '../locale.js';
 import {
   backKeyboard,
-  buildEmptyState,
-  buildScreen,
+  buildUserEmptyState,
+  buildUserScreen,
   rememberArtifactMessage,
   renderScreen,
 } from '../ui.js';
@@ -44,7 +44,11 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
       await renderScreen(
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'insufficient_balance_title'), t(ctx, 'insufficient_balance')),
+        buildUserEmptyState(
+          '💳',
+          t(ctx, 'insufficient_balance_title'),
+          t(ctx, 'insufficient_balance')
+        ),
         {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard()
@@ -59,14 +63,14 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     await renderScreen(
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '⏳',
         title: t(ctx, 'purchase_issuing_title'),
         subtitle: t(ctx, 'purchase_issuing_subtitle'),
         primary: {
-          emoji: '📦',
           label: t(ctx, 'purchase_issuing_package_label'),
           value: escapeTelegramMarkdown(checkout.packageName),
+          inline: true,
         },
         ...(checkout.promoCode
           ? {
@@ -76,7 +80,6 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
                   title: t(ctx, 'checkout_promo_section'),
                   fields: [
                     {
-                      emoji: '🎟️',
                       label: t(ctx, 'shop_promo_section'),
                       value: `\`${sanitizeTelegramInlineCode(checkout.promoCode)}\``,
                     },
@@ -120,7 +123,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       if (checkout.promoCode) clearPendingPromo(ctx);
       await renderScreen(
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'purchase_failed_title'),
           purchaseFailureMessage(services.translationService, error, resolveContextLocale(ctx))
@@ -134,7 +137,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
     if (checkout.promoCode) clearPendingPromo(ctx);
     trackFunnelEvent('purchase_confirm');
 
-    const successText = buildScreen({
+    const successText = buildUserScreen({
       emoji: '🎉',
       title: t(ctx, 'purchase_success_title'),
       subtitle: t(ctx, 'purchase_success_subtitle'),
@@ -155,7 +158,10 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       rememberArtifactMessage(ctx.session, artifact.message_id);
     }
     await ctx.reply(t(ctx, 'navigation_continue_hint'), {
-      reply_markup: backKeyboard(ctx, 'main'),
+      reply_markup: new InlineKeyboard()
+        .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
+        .row()
+        .text(t(ctx, 'menu_back_main'), 'nav:main'),
     });
   });
 

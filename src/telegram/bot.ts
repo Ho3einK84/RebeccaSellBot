@@ -6,7 +6,7 @@ import type { BotServices, MenuContext } from './types.js';
 import { configureBotRuntime } from './botRuntime.js';
 import { registerCoreRoutes } from './features/coreRoutes.js';
 import { t } from './locale.js';
-import { backKeyboard, buildEmptyState } from './ui.js';
+import { backKeyboard, buildUserEmptyState } from './ui.js';
 import { extractBotErrorDiagnostics } from './telegramLogging.js';
 import { RebeccaOriginDownError } from '../domain/services/RebeccaService.js';
 import {
@@ -49,7 +49,7 @@ export function setupBot(config: Config, services: BotServices): Bot<MenuContext
         .catch(() => undefined);
     } else if (err.ctx.chat?.type === 'private') {
       await err.ctx
-        .reply(buildEmptyState('⚠️', replyMessage, replyMessage), {
+        .reply(buildUserEmptyState('⚠️', t(err.ctx, 'ui_status_error'), replyMessage), {
           parse_mode: 'Markdown',
           reply_markup: backKeyboard(err.ctx, 'main'),
         })

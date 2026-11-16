@@ -7,8 +7,8 @@ import { logger } from '../../infra/logger.js';
 import { localizedNumber, observedContextLocale, t, tm } from '../locale.js';
 import {
   backKeyboard,
-  buildEmptyState,
-  buildScreen,
+  buildUserEmptyState,
+  buildUserScreen,
   deleteConsumedInputMessage,
   renderScreen,
 } from '../ui.js';
@@ -38,16 +38,16 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
       await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
       await renderConfigScreen(
         ctx,
-        buildScreen({
+        buildUserScreen({
           emoji: '🔑',
           title: t(ctx, 'subscription_revoke_title'),
           subtitle: t(ctx, 'subscription_revoke_subtitle'),
           primary: {
-            emoji: '📱',
             label: t(ctx, 'subscription_connection_section'),
             value: `\`${sanitizeTelegramInlineCode(localConfig.configUsername)}\``,
+            inline: true,
           },
-          footer: t(ctx, 'subscription_revoke_consequence'),
+          footer: `⚠️ ${t(ctx, 'subscription_revoke_consequence')}`,
         }),
         new InlineKeyboard()
           .text(
@@ -84,7 +84,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
       if (step === '_cancel') {
         await renderConfigScreen(
           ctx,
-          buildEmptyState('↩️', t(ctx, 'config_delete_button'), t(ctx, 'operation_cancelled')),
+          buildUserEmptyState('↩️', t(ctx, 'config_delete_button'), t(ctx, 'operation_cancelled')),
           backKeyboard(ctx, 'main')
         );
         return;
@@ -127,13 +127,13 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
         .text(t(ctx, 'menu_back_main'), 'nav:main');
       await renderConfigScreen(
         ctx,
-        buildScreen({
+        buildUserScreen({
           emoji: '⚠️',
           title: t(ctx, 'config_delete_button'),
           primary: {
-            emoji: '📱',
             label: t(ctx, 'subscription_connection_section'),
             value: `\`${sanitizeTelegramInlineCode(configUsername)}\``,
+            inline: true,
           },
           footer: tm(ctx, 'config_delete_warning', { username: configUsername }),
         }),
@@ -179,17 +179,17 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
       await renderConfigScreen(
         ctx,
         removed
-          ? buildScreen({
+          ? buildUserScreen({
               emoji: '✅',
               title: t(ctx, 'config_delete_button'),
               primary: {
-                emoji: '📱',
                 label: t(ctx, 'subscription_connection_section'),
                 value: `\`${sanitizeTelegramInlineCode(configUsername)}\``,
+                inline: true,
               },
               footer: tm(ctx, 'config_deleted', { username: configUsername }),
             })
-          : buildEmptyState(
+          : buildUserEmptyState(
               '⚠️',
               t(ctx, 'config_delete_button'),
               tm(ctx, 'config_delete_not_found', { username: configUsername })
@@ -200,7 +200,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
       logger.warn({ err, telegramId, configUsername }, 'Config permanent delete failed');
       await renderConfigScreen(
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'config_delete_button'), t(ctx, 'config_action_failed')),
+        buildUserEmptyState('⚠️', t(ctx, 'config_delete_button'), t(ctx, 'config_action_failed')),
         backKeyboard(ctx)
       );
     }
@@ -241,13 +241,13 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
             : backKeyboard(ctx, 'main');
           await renderScreen(
             ctx,
-            buildScreen({
+            buildUserScreen({
               emoji: '✅',
               title: t(ctx, 'subscription_list_title'),
               primary: {
-                emoji: '📱',
                 label: t(ctx, 'subscription_connection_section'),
                 value: `\`${sanitizeTelegramInlineCode(res.username)}\``,
+                inline: true,
               },
               footer: t(ctx, res.messageKey),
             }),
@@ -256,7 +256,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
         } else {
           await renderScreen(
             ctx,
-            buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, res.messageKey)),
+            buildUserEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, res.messageKey)),
             { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
           );
         }
@@ -271,7 +271,7 @@ export function registerConfigRoutes(bot: Bot<MenuContext>, services: BotService
             : 'claim_handler_failed';
         await renderScreen(
           ctx,
-          buildEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, messageKey)),
+          buildUserEmptyState('⚠️', t(ctx, 'subscription_list_title'), t(ctx, messageKey)),
           { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
         );
       }

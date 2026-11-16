@@ -17,7 +17,7 @@ import {
   t,
 } from '../locale.js';
 import type { PackageOption } from '../../domain/services/PricingService.js';
-import { backKeyboard, buildEmptyState, buildScreen, renderScreen } from '../ui.js';
+import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
 import { renderAdminHome } from './adminMenu.js';
@@ -51,22 +51,20 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
     ctx.services.walletService.getPendingReceiptForUser?.(telegramId) ?? Promise.resolve(null),
   ]);
 
-  return buildScreen({
-    emoji: '👛',
+  return buildUserScreen({
+    emoji: '💳',
     title: t(ctx, 'wallet_dashboard_title'),
     subtitle: t(ctx, 'wallet_dashboard_subtitle'),
     primary: {
-      emoji: '💰',
       label: t(ctx, 'wallet_available_balance'),
       value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+      emphasizeValue: true,
     },
     sections: [
       {
-        emoji: '👤',
         title: t(ctx, 'wallet_user_info_section'),
         fields: [
           {
-            emoji: '🆔',
             label: t(ctx, 'wallet_user_id_label'),
             value: `\`${telegramId}\``,
           },
@@ -79,17 +77,14 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
               title: t(ctx, 'wallet_pending_section'),
               fields: [
                 {
-                  emoji: '💰',
                   label: t(ctx, 'wallet_pending_amount'),
                   value: `${localizedNumber(pendingReceipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
                 },
                 {
-                  emoji: '📅',
                   label: t(ctx, 'wallet_pending_submitted'),
                   value: localizedDate(pendingReceipt.createdAt, ctx),
                 },
                 {
-                  emoji: '⏳',
                   label: t(ctx, 'wallet_pending_status'),
                   value: t(ctx, 'wallet_pending_status_detail'),
                 },
@@ -98,7 +93,7 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
           ]
         : []),
     ],
-    footer: pendingReceipt ? undefined : `ℹ️ ${t(ctx, 'wallet_dashboard_empty_hint')}`,
+    footer: pendingReceipt ? undefined : t(ctx, 'wallet_dashboard_empty_hint'),
   });
 }
 
@@ -144,7 +139,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           false,
           ctx.session.activeShopCategory
         ) ?? [];
-      return buildScreen({
+      return buildUserScreen({
         emoji: category.icon || '📦',
         title: escapeTelegramMarkdown(category.name),
         subtitle: escapeTelegramMarkdown(category.description || t(ctx, 'shop_category_subtitle')),
@@ -159,11 +154,9 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           : {}),
         sections: [
           {
-            emoji: '✨',
             title: t(ctx, 'shop_catalog_section'),
             fields: [
               {
-                emoji: '📦',
                 label: t(ctx, 'shop_available_plans_label'),
                 value:
                   catPackages.length > 0
@@ -173,20 +166,19 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
                     : t(ctx, 'shop_category_empty'),
               },
               {
-                emoji: '⚡',
                 label: t(ctx, 'shop_instant_delivery_label'),
                 value: t(ctx, 'shop_instant_delivery_value'),
               },
             ],
           },
         ],
-        footer: `ℹ️ ${t(ctx, 'shop_hint')}`,
+        footer: t(ctx, 'shop_hint'),
       });
     }
   }
 
   if (packages.length === 0 && !isCustomEnabled) {
-    return buildEmptyState('🛍️', t(ctx, 'shop_title'), t(ctx, 'shop_empty_message'));
+    return buildUserEmptyState('🛍️', t(ctx, 'shop_title'), t(ctx, 'shop_empty_message'));
   }
 
   const nonEmptyCategoryCount = categories.filter((cat) =>
@@ -197,7 +189,6 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
     ...(packages.length > 0
       ? [
           {
-            emoji: '📦',
             label: t(ctx, 'shop_available_plans_label'),
             value:
               nonEmptyCategoryCount > 0
@@ -214,7 +205,6 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
     ...(isCustomEnabled && customPricePerGb !== undefined
       ? [
           {
-            emoji: '✏️',
             label: t(ctx, 'shop_custom_volume_label'),
             value: t(ctx, 'shop_custom_volume_value', {
               price: localizedNumber(customPricePerGb, ctx),
@@ -223,13 +213,12 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
         ]
       : []),
     {
-      emoji: '⚡',
       label: t(ctx, 'shop_instant_delivery_label'),
       value: t(ctx, 'shop_instant_delivery_value'),
     },
   ];
 
-  return buildScreen({
+  return buildUserScreen({
     emoji: '🛍️',
     title: t(ctx, 'shop_title'),
     subtitle: t(ctx, 'shop_subtitle'),
@@ -244,12 +233,11 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
       : {}),
     sections: [
       {
-        emoji: '✨',
         title: t(ctx, 'shop_catalog_section'),
         fields: catalogFields,
       },
     ],
-    footer: `ℹ️ ${t(ctx, 'shop_hint')}`,
+    footer: t(ctx, 'shop_hint'),
   });
 }
 
@@ -259,34 +247,32 @@ function buildInsufficientBalanceScreen(
   balance: number
 ): string {
   const deficit = packagePrice - balance;
-  return buildScreen({
-    emoji: '👛',
+  return buildUserScreen({
+    emoji: '💳',
     title: t(ctx, 'insufficient_balance_title'),
     subtitle: t(ctx, 'insufficient_balance_subtitle'),
     primary: {
-      emoji: '📉',
+      emoji: '🔻',
       label: t(ctx, 'insufficient_balance_deficit_label'),
       value: `${localizedNumber(deficit, ctx)} ${t(ctx, 'currency_toman')}`,
+      emphasizeValue: true,
     },
     sections: [
       {
-        emoji: '💰',
         title: t(ctx, 'insufficient_balance_wallet_section'),
         fields: [
           {
-            emoji: '🛍️',
             label: t(ctx, 'insufficient_balance_price_label'),
             value: `${localizedNumber(packagePrice, ctx)} ${t(ctx, 'currency_toman')}`,
           },
           {
-            emoji: '👛',
             label: t(ctx, 'insufficient_balance_balance_label'),
             value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
           },
         ],
       },
     ],
-    footer: `ℹ️ ${t(ctx, 'insufficient_balance_hint')}`,
+    footer: t(ctx, 'insufficient_balance_hint'),
   });
 }
 
@@ -297,37 +283,32 @@ function buildPurchaseCheckoutScreen(
   promoCode?: string,
   walletBalance?: number
 ): string {
-  return buildScreen({
-    emoji: '🛒',
+  return buildUserScreen({
+    emoji: '🧾',
     title: t(ctx, 'purchase_review_title'),
     subtitle: t(ctx, 'purchase_review_subtitle'),
     primary: {
-      emoji: '💰',
       label: t(ctx, 'checkout_total_label'),
       value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      emphasizeValue: true,
     },
     sections: [
       {
-        emoji: '📦',
         title: t(ctx, 'checkout_package_section'),
         fields: [
           {
-            emoji: '📦',
             label: t(ctx, 'checkout_package_label'),
             value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
           },
           {
-            emoji: '📊',
             label: t(ctx, 'checkout_traffic_label'),
             value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
           },
           {
-            emoji: '⏳',
             label: t(ctx, 'checkout_duration_label'),
             value: `${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
           },
           {
-            emoji: '💳',
             label: t(ctx, 'checkout_unit_price_label'),
             value: `${localizedNumber(pkg.gbAmount > 0 ? Math.round(amount / pkg.gbAmount) : amount, ctx)} ${t(ctx, 'currency_toman')}`,
           },
@@ -336,16 +317,13 @@ function buildPurchaseCheckoutScreen(
       ...(walletBalance !== undefined
         ? [
             {
-              emoji: '👛',
               title: t(ctx, 'checkout_wallet_section'),
               fields: [
                 {
-                  emoji: '💵',
                   label: t(ctx, 'checkout_wallet_balance_label'),
                   value: `${localizedNumber(walletBalance, ctx)} ${t(ctx, 'currency_toman')}`,
                 },
                 {
-                  emoji: '✅',
                   label: t(ctx, 'checkout_remaining_balance_label'),
                   value: `${localizedNumber(Math.max(0, walletBalance - amount), ctx)} ${t(ctx, 'currency_toman')}`,
                 },
@@ -360,14 +338,12 @@ function buildPurchaseCheckoutScreen(
               title: t(ctx, 'checkout_promo_section'),
               fields: [
                 {
-                  emoji: '🎟️',
                   label: t(ctx, 'shop_promo_section'),
                   value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
                 },
                 ...(pkg.price > amount
                   ? [
                       {
-                        emoji: '🏷️',
                         label: t(ctx, 'checkout_discount_label'),
                         value: `${localizedNumber(pkg.price - amount, ctx)} ${t(ctx, 'currency_toman')}`,
                       },
@@ -378,7 +354,7 @@ function buildPurchaseCheckoutScreen(
           ]
         : []),
     ],
-    footer: `ℹ️ ${t(ctx, 'purchase_confirmation_hint')}`,
+    footer: t(ctx, 'purchase_confirmation_hint'),
   });
 }
 
@@ -449,29 +425,27 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         .row()
         .text(t(ctx, 'menu_back_main'), 'nav:main');
 
-      const previewText = buildScreen({
+      const previewText = buildUserScreen({
         emoji: '🎁',
         title: t(ctx, 'trial_preview_heading'),
         subtitle: t(ctx, 'trial_preview_subtitle'),
         primary: {
-          emoji: '📊',
           label: t(ctx, 'trial_traffic_label'),
           value: `${localizedNumber(trialGb, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+          emphasizeValue: true,
         },
         sections: [
           {
-            emoji: '⏳',
             title: t(ctx, 'trial_terms_label'),
             fields: [
               {
-                emoji: '📅',
                 label: t(ctx, 'trial_duration_label'),
                 value: `${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')}`,
               },
             ],
           },
         ],
-        footer: `ℹ️ ${t(ctx, 'trial_terms')}`,
+        footer: t(ctx, 'trial_terms'),
       });
 
       await renderScreen(ctx, previewText, {
@@ -509,8 +483,8 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
 
       await renderScreen(
         ctx,
-        buildScreen({
-          emoji: '👥',
+        buildUserScreen({
+          emoji: '🎁',
           title: t(ctx, 'referral_title'),
           subtitle: t(ctx, 'referral_subtitle'),
           primary: {
@@ -520,18 +494,15 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           },
           sections: [
             {
-              emoji: '🎁',
               title: t(ctx, 'referral_terms_section'),
               fields: [
                 {
-                  emoji: '💰',
                   label: t(ctx, 'referral_reward_label'),
                   value: `${localizedNumber(bonus, ctx)} ${t(ctx, 'currency_toman')}`,
                 },
                 ...(cashbackPercent > 0
                   ? [
                       {
-                        emoji: '💸',
                         label: t(ctx, 'referral_cashback_label'),
                         value: `${localizedNumber(cashbackPercent, ctx)}%`,
                       },
@@ -540,28 +511,24 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
               ],
             },
             {
-              emoji: '📊',
               title: t(ctx, 'referral_stats_section'),
               fields: [
                 {
-                  emoji: '👥',
                   label: t(ctx, 'referral_total_invited_label'),
                   value: `${localizedNumber(stats.totalInvited, ctx)} ${t(ctx, 'user_unit')}`,
                 },
                 {
-                  emoji: '🛍️',
                   label: t(ctx, 'referral_active_buyers_label'),
                   value: `${localizedNumber(stats.activeBuyers, ctx)} ${t(ctx, 'user_unit')}`,
                 },
                 {
-                  emoji: '💰',
                   label: t(ctx, 'referral_total_earned_label'),
                   value: `${localizedNumber(stats.totalReferralBonus, ctx)} ${t(ctx, 'currency_toman')}`,
                 },
               ],
             },
           ],
-          footer: `ℹ️ ${t(ctx, 'referral_hint')}`,
+          footer: t(ctx, 'referral_hint'),
         }),
         { parse_mode: 'Markdown', reply_markup: refKeyboard }
       );
@@ -583,13 +550,15 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
   .dynamic((ctx, range) => {
     const languageSelectionEnabled =
       ctx.services?.translationService.getSettingBool('language_selection_enabled', true) ?? true;
+    const supportEnabled =
+      ctx.services?.translationService.getSettingBool('support_enabled', true) ?? true;
     if (languageSelectionEnabled || (ctx.from?.id && ctx.services?.isAdmin(ctx.from.id))) {
       range.text(
         (c) => t(c, 'menu_language'),
         async (c) => {
           await renderScreen(
             c,
-            buildScreen({
+            buildUserScreen({
               emoji: '🌐',
               title: t(c, 'language_selection_title'),
               subtitle: t(c, 'language_selection_subtitle'),
@@ -599,11 +568,6 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         }
       );
     }
-  })
-  .row()
-  .dynamic((ctx, range) => {
-    const supportEnabled =
-      ctx.services?.translationService.getSettingBool('support_enabled', true) ?? true;
     if (supportEnabled) {
       range.text(
         (c) => t(c, 'menu_support'),
@@ -617,7 +581,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           keyboard.text(t(c, 'menu_back_main'), 'nav:main');
           await renderScreen(
             c,
-            buildScreen({
+            buildUserScreen({
               emoji: '💬',
               title: t(c, 'support_title'),
               subtitle: t(c, 'support_subtitle'),
@@ -704,7 +668,11 @@ function renderPackageButtons(
           if (pendingPromo.messageKey) {
             await renderScreen(
               c,
-              buildEmptyState('⚠️', t(c, 'purchase_review_title'), t(c, pendingPromo.messageKey)),
+              buildUserEmptyState(
+                '⚠️',
+                t(c, 'purchase_review_title'),
+                t(c, pendingPromo.messageKey)
+              ),
               { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
             );
             return;
@@ -737,7 +705,7 @@ function renderPackageButtons(
           } catch {
             await renderScreen(
               c,
-              buildEmptyState(
+              buildUserEmptyState(
                 '⚠️',
                 t(c, 'purchase_review_title'),
                 t(c, 'purchase_target_unavailable')
@@ -820,7 +788,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
 
       for (const cat of nonEmptyCategories) {
         const count = allPackages.filter((pkg) => pkg.categoryId === cat.id).length;
-        const label = `${cat.icon ? `${cat.icon} ` : '📦 '}${cat.name} (${localizedNumber(count, ctx)})`;
+        const label = `${cat.icon ? `${cat.icon} ` : '📦 '}${cat.name} · ${localizedNumber(count, ctx)}`;
         range
           .text(label, async (c) => {
             c.session.activeShopCategory = cat.id;
@@ -864,7 +832,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
     if (ctx.session.pendingPromo) {
       range
         .text(
-          (c) => `${t(c, 'shop_clear_promo_button')} (${c.session.pendingPromo?.code})`,
+          (c) => `${t(c, 'shop_clear_promo_button')} · ${c.session.pendingPromo?.code}`,
           async (c) => {
             delete c.session.pendingPromo;
             await c.answerCallbackQuery({ text: t(c, 'button_refreshed') });
@@ -904,7 +872,7 @@ export async function renderWalletStatementScreen(
   if (result.transactions.length === 0) {
     await renderScreen(
       ctx,
-      buildEmptyState('📜', t(ctx, 'wallet_history_title'), t(ctx, 'wallet_history_empty')),
+      buildUserEmptyState('📜', t(ctx, 'wallet_history_title'), t(ctx, 'wallet_history_empty')),
       { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'wallet') }
     );
     return;
@@ -965,32 +933,26 @@ export async function renderWalletStatementScreen(
     lucky_wheel: 'tx_type_lucky_wheel',
   };
 
-  const screen = buildScreen({
+  const screen = buildUserScreen({
     emoji: '📜',
     title: t(ctx, 'wallet_history_title'),
     subtitle: t(ctx, 'wallet_dashboard_subtitle'),
-    sections: result.transactions.map((tx) => {
-      const icon = typeIcon(tx.type, tx.amount);
-      const sign = tx.amount > 0 ? '+' : '';
-      const typeKey = TRANSACTION_TYPE_MAP[tx.type];
-      const typeLabel = typeKey ? t(ctx, typeKey) : escapeTelegramMarkdown(tx.type);
-      return {
-        emoji: icon,
-        title: `${typeLabel} · ${localizedDate(new Date(tx.createdAt), ctx)}`,
-        fields: [
-          {
-            emoji: '💰',
-            label: t(ctx, 'wallet_pending_amount'),
-            value: `${sign}${localizedNumber(tx.amount, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-          {
-            emoji: '👛',
-            label: t(ctx, 'wallet_available_balance'),
-            value: `${localizedNumber(tx.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-        ],
-      };
-    }),
+    sections: [
+      {
+        fields: result.transactions.map((tx) => {
+          const icon = typeIcon(tx.type, tx.amount);
+          const sign = tx.amount > 0 ? '+' : '';
+          const typeKey = TRANSACTION_TYPE_MAP[tx.type];
+          const typeLabel = typeKey ? t(ctx, typeKey) : escapeTelegramMarkdown(tx.type);
+          const amountText = `${sign}${localizedNumber(tx.amount, ctx)} ${t(ctx, 'currency_toman')}`;
+          const balanceAfterText = `${localizedNumber(tx.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`;
+          return {
+            emoji: icon,
+            value: `*${typeLabel}* · ${localizedDate(new Date(tx.createdAt), ctx)}\n  *${amountText}* · ${t(ctx, 'wallet_available_balance')}: ${balanceAfterText}`,
+          };
+        }),
+      },
+    ],
     footer: t(ctx, 'subscription_list_page', {
       page: localizedNumber(result.page, ctx),
       total_pages: localizedNumber(result.totalPages, ctx),

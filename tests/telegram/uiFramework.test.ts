@@ -5,12 +5,18 @@ import { renderHomeDashboard } from '../../src/telegram/keyboards/mainMenu.js';
 import { validateTelegramMarkdown } from '../../src/telegram/rendering.js';
 import type { ConversationContext, MenuContext, MyConversation } from '../../src/telegram/types.js';
 import {
+  USER_DIVIDER,
   backKeyboard,
   buildConfirmationKeyboard,
   buildHeader,
   buildScreen,
   buildSectionCard,
   buildStatusBadge,
+  buildUserEmptyState,
+  buildUserHeader,
+  buildUserPromptScreen,
+  buildUserScreen,
+  buildUserSection,
   cleanChatUiMiddleware,
   dismissKeyboard,
   ensureEnglishLineDirection,
@@ -24,6 +30,7 @@ import {
   rememberArtifactMessage,
   rememberUiMessage,
   renderProgressBar,
+  renderSleekProgressBar,
   renderUiScreen,
   safelyDeleteMessage,
   waitForCallbackInput,
@@ -526,20 +533,120 @@ describe('Conversation input, escape navigation, and home/subscription UI primit
       'config:view:c1'
     );
 
-    const detailCallbacks = buildSubscriptionActionKeyboard(ctx, 'c1', 'active', false, true)
-      .inline_keyboard.flat()
-      .map((b) => (b as { callback_data?: string }).callback_data);
-    expect(detailCallbacks).toEqual(
-      expect.arrayContaining([
-        'renew:open:c1',
-        'config:qr:c1',
-        'config:refresh:c1',
-        'autorenew:on:c1',
-        'config:set:off:c1',
-        'config:revoke_prompt:c1',
-        'config:transfer:c1',
-        'config:delete_prompt:c1',
-      ])
+    const detailRows = buildSubscriptionActionKeyboard(
+      ctx,
+      'c1',
+      'active',
+      false,
+      true
+    ).inline_keyboard;
+    expect(detailRows).toHaveLength(5);
+    expect(
+      detailRows.map((row) => row.map((b) => (b as { callback_data?: string }).callback_data))
+    ).toEqual([
+      ['renew:open:c1', 'config:qr:c1'],
+      ['config:refresh:c1', 'autorenew:on:c1'],
+      ['config:set:off:c1', 'config:revoke_prompt:c1'],
+      ['config:transfer:c1', 'config:delete_prompt:c1'],
+      ['subs:page:1'],
+    ]);
+  });
+
+  it('builds unified sleek user-facing screens, dividers, empty states, prompts, and progress bars without emoji duplication', () => {
+    expect(renderSleekProgressBar(50, 100, { barLength: 8, locale: 'en' })).toBe(
+      '🟩🟩🟩🟩⬜️⬜️⬜️⬜️ · 50%'
     );
+    expect(renderSleekProgressBar(3, 6, { barLength: 4, theme: 'time', locale: 'fa' })).toBe(
+      '🟪🟪⬜️⬜️ · ۵۰٪'
+    );
+    expect(renderSleekProgressBar(0, 0)).toBe('');
+
+    const faHeader = buildUserHeader('🏠', 'نمای کلی حساب', 'وضعیت اعتبار و سرویس‌ها');
+    expect(faHeader).toBe(`🏠 *نمای کلی حساب*\nوضعیت اعتبار و سرویس‌ها\n${USER_DIVIDER}`);
+    expect(validateTelegramMarkdown(faHeader).valid).toBe(true);
+
+    const underscoreHeader = buildUserHeader('🔑', 'تمدید', 'my\\_config\\_01');
+    expect(underscoreHeader).toBe(`🔑 *تمدید*\nmy\\_config\\_01\n${USER_DIVIDER}`);
+    expect(validateTelegramMarkdown(underscoreHeader).valid).toBe(true);
+
+    expect(
+      buildUserSection({
+        title: 'جزئیات سفارش',
+        fields: [
+          { label: 'حجم', value: '۵۰ گیگابایت' },
+          { label: 'وضعیت', value: '🟢 فعال', emoji: '🟢' },
+        ],
+      })
+    ).toBe('*جزئیات سفارش*\n• *حجم:* ۵۰ گیگابایت\n*وضعیت:* 🟢 فعال');
+
+    const userScreen = buildUserScreen({
+      emoji: '🧾',
+      title: 'Order Summary',
+      subtitle: 'Review details before confirming',
+      primary: {
+        label: 'Total Payable',
+        value: '120,000 Toman',
+        emphasizeValue: true,
+      },
+      sections: [
+        {
+          fields: [
+            { label: 'Service', value: '`usr_01`' },
+            { label: 'Data', value: '50 GB' },
+          ],
+        },
+      ],
+      footer: 'Instant delivery after confirmation.',
+    });
+    expect(userScreen).toContain(USER_DIVIDER);
+    expect(userScreen).toContain('*Total Payable*\n*120,000 Toman*');
+    expect(userScreen).toContain('• *Service:* `usr_01`');
+    expect(userScreen).toContain(`${USER_DIVIDER}\nInstant delivery after confirmation.`);
+    expect(validateTelegramMarkdown(userScreen).valid).toBe(true);
+
+    const empty = buildUserEmptyState(
+      '⚠️',
+      'انتقال موجودی',
+      '⚠️ موجودی قابل انتقال کافی نیست.',
+      'ابتدا کیف پول خود را شارژ کنید.'
+    );
+    expect(empty).toContain('⚠️ *انتقال موجودی*');
+    expect(empty).not.toContain('⚠️ موجودی قابل انتقال');
+    expect(empty).toContain('موجودی قابل انتقال کافی نیست.');
+    expect(validateTelegramMarkdown(empty).valid).toBe(true);
+
+    const prompt = buildUserPromptScreen(
+      '🎟️',
+      'کد تخفیف',
+      'کد تخفیف را وارد کنید.',
+      'اعمال کد روی خرید'
+    );
+    expect(prompt).toContain(`\u200f🎟️ *کد تخفیف*\n\u200fاعمال کد روی خرید\n\u200f${USER_DIVIDER}`);
+    expect(prompt).toContain('کد تخفیف را وارد کنید.');
+    expect(validateTelegramMarkdown(prompt).valid).toBe(true);
+
+    const faDashboardScreen = buildUserScreen({
+      emoji: '🏠',
+      title: 'نمای کلی حساب',
+      subtitle: 'وضعیت اعتبار و سرویس‌ها',
+      primary: { label: 'موجودی کیف پول', value: '۱۰۰٬۰۰۰ تومان', emphasizeValue: true },
+      sections: [
+        {
+          title: 'وضعیت سرویس‌ها',
+          fields: [{ emoji: '🟢', label: 'سرویس‌های فعال', value: '🟢 ۱ سرویس' }],
+        },
+      ],
+      footer: 'آمادهٔ استفاده',
+    });
+    expect(faDashboardScreen).toContain('*سرویس‌های فعال:* 🟢 ۱ سرویس');
+    expect(faDashboardScreen).not.toContain('🟢 *سرویس‌های فعال:*');
+    expect(validateTelegramMarkdown(faDashboardScreen).valid).toBe(true);
+    expect(
+      isPersianScreen({
+        emoji: '🧾',
+        title: 'سفارش',
+        sections: [{ fields: [{ label: 'مبلغ', value: '۱۰٬۰۰۰' }] }],
+      })
+    ).toBe(true);
   });
 });

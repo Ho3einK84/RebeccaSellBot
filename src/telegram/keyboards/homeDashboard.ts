@@ -1,6 +1,6 @@
 import type { MenuContext } from '../types.js';
 import { localizedNumber, t, tm } from '../locale.js';
-import { buildScreen, buildStatusBadge } from '../ui.js';
+import { buildStatusBadge, buildUserScreen } from '../ui.js';
 
 /** Render the personalized, failure-aware home dashboard. */
 export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
@@ -65,18 +65,19 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
     );
   }
 
-  return buildScreen({
+  return buildUserScreen({
     emoji: '🏠',
     title: t(ctx, 'home_title'),
     subtitle: t(ctx, 'home_subtitle'),
     primary: {
-      emoji: '👛',
+      emoji: '💳',
       label: t(ctx, 'home_balance'),
       value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+      emphasizeValue: true,
     },
     sections: [
       {
-        emoji: '📱',
+        emoji: '📡',
         title: t(ctx, 'home_service_overview'),
         fields: [
           {

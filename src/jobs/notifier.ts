@@ -19,7 +19,7 @@ import type { SupportedLocale, TranslationService } from '../domain/services/Tra
 import { getDb } from '../infra/db.js';
 import { notificationDeliveries, userConfigs, users } from '../infra/schema.js';
 import { logger } from '../infra/logger.js';
-import { buildScreen } from '../telegram/designSystem.js';
+import { buildUserScreen } from '../telegram/designSystem.js';
 import { tForLocale } from '../telegram/locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
 import { jobRunner } from './workerRuntime.js';
@@ -263,18 +263,17 @@ export async function runNotifierSweep(
         );
         await telegramApi.sendMessage(
           cfg.telegramId,
-          buildScreen({
+          buildUserScreen({
             emoji: '⚠️',
             title: tForLocale(translationService, locale, 'renewal_notification_title'),
             subtitle: tForLocale(translationService, locale, 'renewal_notification_subtitle'),
             primary: {
-              emoji: '📱',
               label: tForLocale(translationService, locale, 'renewal_service_label'),
               value: `\`${sanitizeTelegramInlineCode(cfg.configUsername)}\``,
+              inline: true,
             },
             sections: [
               {
-                emoji: '⚠️',
                 title: tForLocale(translationService, locale, 'renewal_attention_section'),
                 fields: [
                   {

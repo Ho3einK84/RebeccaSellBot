@@ -6,7 +6,7 @@ import { InlineKeyboard } from 'grammy';
 import type { Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
 import { localizedNumber, t } from '../locale.js';
-import { buildScreen, renderScreen } from '../ui.js';
+import { buildUserScreen, renderScreen } from '../ui.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { logger } from '../../infra/logger.js';
 
@@ -76,13 +76,12 @@ export async function renderLuckyWheelScreen(ctx: MenuContext): Promise<void> {
     footer = `🚫 ${t(ctx, 'access_denied')}`;
   }
 
-  const screenText = buildScreen({
+  const screenText = buildUserScreen({
     emoji: '🎡',
     title: t(ctx, 'wheel_title'),
     subtitle: t(ctx, 'wheel_subtitle'),
     sections: [
       {
-        emoji: '📊',
         title: t(ctx, 'wheel_status_section'),
         fields,
       },
@@ -149,16 +148,16 @@ export function registerLuckyWheelRoutes(bot: Bot<MenuContext>, services: BotSer
     // 5-Frame Text Slot Machine Animation (~2.7-3.0s total)
     if (chatId && messageId) {
       const slotFrames = [
-        { reel: '[ 🍉 | 🍋 | 🍒 ]', delay: 500 },
-        { reel: '[ 🍇 | 🔔 | 💎 ]', delay: 500 },
-        { reel: '[ 🍋 | 🍓 | 🍉 ]', delay: 500 },
+        { reel: '[ 💎 | ✨ | 🌟 ]', delay: 500 },
+        { reel: '[ 🌟 | 👑 | 💎 ]', delay: 500 },
+        { reel: '[ ✨ | 🎁 | 🌟 ]', delay: 500 },
         { reel: '[ 💎 | 🎁 | 💎 ]', delay: 550 },
         { reel: '[ 🎁 | 🎁 | 🎁 ]', delay: 600 },
       ];
 
       for (const frame of slotFrames) {
         try {
-          const frameScreen = buildScreen({
+          const frameScreen = buildUserScreen({
             emoji: '🎰',
             title: t(ctx, 'wheel_title'),
             footer: `🎰  *${frame.reel}*`,
@@ -174,27 +173,25 @@ export function registerLuckyWheelRoutes(bot: Bot<MenuContext>, services: BotSer
     }
 
     // Final Prize Screen
-    const winScreen = buildScreen({
+    const winScreen = buildUserScreen({
       emoji: '🎁',
       title: t(ctx, 'wheel_win_title'),
       subtitle: t(ctx, 'wheel_win_subtitle'),
       primary: {
-        emoji: '💰',
+        emoji: '🎁',
         label: t(ctx, 'wheel_prize_label'),
         value: `+${localizedNumber(result.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+        emphasizeValue: true,
       },
       sections: [
         {
-          emoji: '👛',
           title: t(ctx, 'wallet_dashboard_title'),
           fields: [
             {
-              emoji: '💰',
               label: t(ctx, 'wallet_available_balance'),
               value: `${localizedNumber(result.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
             },
             {
-              emoji: '🎯',
               label: t(ctx, 'wheel_spins_left_label'),
               value: `${localizedNumber(result.spinsRemaining, ctx)}`,
             },

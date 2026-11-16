@@ -22,7 +22,39 @@ export type ScreenDefinition = {
   direction?: 'rtl' | 'ltr' | 'auto';
 };
 
+export type UserScreenField = {
+  label?: string;
+  value: string | number;
+  emoji?: string;
+  bullet?: string;
+};
+export type UserScreenSection = {
+  title?: string;
+  emoji?: string;
+  bullet?: string;
+  fields: UserScreenField[];
+};
+export type UserScreenDefinition = {
+  emoji: string;
+  title: string;
+  subtitle?: string;
+  primary?: {
+    label: string;
+    value: string | number;
+    emoji?: string;
+    inline?: boolean;
+    emphasizeValue?: boolean;
+  };
+  sections?: UserScreenSection[];
+  footer?: string;
+  footerDivider?: boolean;
+  direction?: 'rtl' | 'ltr' | 'auto';
+};
+
 export { EMOJI_PREFIX_REGEX };
+
+/** Compact hairline divider that renders cleanly on narrow mobile Telegram screens. */
+export const USER_DIVIDER = '─────────────';
 
 /**
  * Render a visual progress bar with emojis.
@@ -44,17 +76,37 @@ export function renderProgressBar(
 }
 
 /**
+ * Render a sleek, bracket-free progress bar for user-facing subscription cards.
+ */
+export function renderSleekProgressBar(
+  used: number,
+  total: number,
+  options: { barLength?: number; theme?: 'traffic' | 'time'; locale?: 'fa' | 'en' } = {}
+): string {
+  const { barLength = 8, theme = 'traffic', locale = 'fa' } = options;
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(used) || used < 0) return '';
+  const ratio = Math.max(0, Math.min(1, used / total));
+  const percent = Math.round(ratio * 100);
+  const filledCount = Math.round(ratio * barLength);
+  const emptyCount = Math.max(0, barLength - filledCount);
+  const fillIcon = theme === 'time' ? '🟪' : percent > 85 ? '🟥' : percent > 60 ? '🟨' : '🟩';
+  const emptyIcon = '⬜️';
+  const percentText =
+    locale === 'fa' ? `${percent.toLocaleString('fa-IR')}٪` : `${percent.toLocaleString('en-US')}%`;
+  return `${fillIcon.repeat(filledCount)}${emptyIcon.repeat(emptyCount)} · ${percentText}`;
+}
+
+/**
  * Strips leading emoji characters and following whitespace from a string.
  */
 export function stripLeadingEmoji(text: string): string {
   return text.replace(EMOJI_PREFIX_REGEX, '').trimStart();
 }
 
-/**
- * Format a unified header with an emoji and title, and optional italic subtitle.
- * Prevents emoji duplication if the title string already contains a leading emoji.
- */
-export function buildHeader(emoji: string, title: string, subtitle?: string): string {
+function resolveHeadingParts(
+  emoji: string,
+  title: string
+): { effectiveEmoji: string; unstarredTitle: string } {
   const cleanTitle = title.trim();
   const titleWithoutEmoji = stripLeadingEmoji(cleanTitle);
   const effectiveEmoji =
@@ -63,6 +115,15 @@ export function buildHeader(emoji: string, title: string, subtitle?: string): st
       ? cleanTitle.slice(0, cleanTitle.length - titleWithoutEmoji.length).trim()
       : '');
   const unstarredTitle = titleWithoutEmoji.replace(/^\*+|\*+$/g, '').trim();
+  return { effectiveEmoji, unstarredTitle };
+}
+
+/**
+ * Format a unified header with an emoji and title, and optional italic subtitle.
+ * Prevents emoji duplication if the title string already contains a leading emoji.
+ */
+export function buildHeader(emoji: string, title: string, subtitle?: string): string {
+  const { effectiveEmoji, unstarredTitle } = resolveHeadingParts(emoji, title);
   const headerLine = effectiveEmoji
     ? `${effectiveEmoji} *${unstarredTitle}*`
     : `*${unstarredTitle}*`;
@@ -79,6 +140,22 @@ export function buildHeader(emoji: string, title: string, subtitle?: string): st
     return `${headerLine}\n${trimmedSubtitle}\n`;
   }
   return `${headerLine}\n_${trimmedSubtitle}_\n`;
+}
+
+/**
+ * Format a clean, modern user-facing header with a plain muted subtitle and hairline divider.
+ * Avoids italic wrappers that distort Persian typography and break on underscores.
+ */
+export function buildUserHeader(emoji: string, title: string, subtitle?: string): string {
+  const { effectiveEmoji, unstarredTitle } = resolveHeadingParts(emoji, title);
+  const headerLine = effectiveEmoji
+    ? `${effectiveEmoji} *${unstarredTitle}*`
+    : `*${unstarredTitle}*`;
+  const trimmedSubtitle = subtitle?.trim();
+  if (!trimmedSubtitle) {
+    return `${headerLine}\n${USER_DIVIDER}`;
+  }
+  return `${headerLine}\n${trimmedSubtitle}\n${USER_DIVIDER}`;
 }
 
 function hasOddTrailingBackslashes(value: string, index: number): boolean {
@@ -173,14 +250,7 @@ export function buildSectionCard(
     }
     return `${prefix}*${cleanLabel}:* ${renderedValue}`;
   });
-  const cleanTitle = title.trim();
-  const titleWithoutEmoji = stripLeadingEmoji(cleanTitle);
-  const effectiveEmoji =
-    sectionEmoji ||
-    (cleanTitle !== titleWithoutEmoji
-      ? cleanTitle.slice(0, cleanTitle.length - titleWithoutEmoji.length).trim()
-      : '');
-  const unstarredTitle = titleWithoutEmoji.replace(/^\*+|\*+$/g, '').trim();
+  const { effectiveEmoji, unstarredTitle } = resolveHeadingParts(sectionEmoji, title);
   const heading = effectiveEmoji ? `${effectiveEmoji} *${unstarredTitle}*` : `*${unstarredTitle}*`;
   return `${heading}\n\n${lines.join('\n')}`;
 }
@@ -188,14 +258,20 @@ export function buildSectionCard(
 /**
  * Determine whether a screen definition represents a Persian (RTL) or English (LTR) screen.
  */
-export function isPersianScreen(definition: ScreenDefinition): boolean {
+export function isPersianScreen(definition: ScreenDefinition | UserScreenDefinition): boolean {
   if (definition.direction === 'rtl') return true;
   if (definition.direction === 'ltr') return false;
   if (/[\u0600-\u06ff]/u.test(definition.title)) return true;
   if (definition.primary?.label && /[\u0600-\u06ff]/u.test(String(definition.primary.label))) {
     return true;
   }
-  if (definition.sections?.some((s) => /[\u0600-\u06ff]/u.test(s.title))) {
+  if (
+    definition.sections?.some(
+      (s) =>
+        (s.title && /[\u0600-\u06ff]/u.test(s.title)) ||
+        (!s.title && s.fields.some((f) => f.label && /[\u0600-\u06ff]/u.test(f.label)))
+    )
+  ) {
     return true;
   }
   if (definition.footer && /[\u0600-\u06ff]/u.test(definition.footer)) {
@@ -255,4 +331,128 @@ export function buildPromptScreen(
   direction?: 'rtl' | 'ltr' | 'auto'
 ): string {
   return buildScreen({ emoji, title, subtitle, footer: body, direction });
+}
+
+/** Format a sleek, minimal user-facing section with tight spacing and crisp bullets. */
+export function buildUserSection(section: UserScreenSection): string {
+  const defaultBullet = section.bullet ?? '•';
+  const lines = section.fields
+    .filter((field) => String(field.value).length > 0)
+    .map(({ label, value, emoji, bullet }) => {
+      const renderedValue = String(value);
+      const cleanLabel = label?.trim() ?? '';
+      const hasSameStatusPrefix = emoji ? renderedValue.trimStart().startsWith(emoji) : false;
+      const effectiveBullet = bullet ?? defaultBullet;
+      const prefix =
+        emoji && !hasSameStatusPrefix
+          ? `${emoji} `
+          : !emoji && effectiveBullet
+            ? `${effectiveBullet} `
+            : '';
+      if (!cleanLabel || cleanLabel === '—') {
+        return `${prefix}${renderedValue}`;
+      }
+      return `${prefix}*${cleanLabel}:* ${renderedValue}`;
+    });
+
+  const body = lines.join('\n');
+  if (!section.title) return body;
+
+  const { effectiveEmoji, unstarredTitle } = resolveHeadingParts(
+    section.emoji ?? '',
+    section.title
+  );
+  const heading = effectiveEmoji ? `${effectiveEmoji} *${unstarredTitle}*` : `*${unstarredTitle}*`;
+  return body ? `${heading}\n${body}` : heading;
+}
+
+function formatPrimaryHeroValue(rawValue: string, emphasizeValue?: boolean): string {
+  if (!emphasizeValue) return rawValue;
+  const trimmed = rawValue.trim();
+  if (!trimmed || /[*_`[\]()]/u.test(trimmed) || EMOJI_PREFIX_REGEX.test(trimmed)) {
+    return rawValue;
+  }
+  return `*${trimmed}*`;
+}
+
+/**
+ * Compose a unified, refined, minimal user-facing Telegram screen.
+ */
+export function buildUserScreen(definition: UserScreenDefinition): string {
+  const blocks: string[] = [
+    buildUserHeader(definition.emoji, definition.title, definition.subtitle),
+  ];
+
+  let hasBodyContent = false;
+  if (definition.primary) {
+    hasBodyContent = true;
+    const rawValue = String(definition.primary.value);
+    const repeatsPrimaryEmoji = definition.primary.emoji
+      ? rawValue.trimStart().startsWith(definition.primary.emoji)
+      : false;
+    const icon =
+      definition.primary.emoji && !repeatsPrimaryEmoji ? `${definition.primary.emoji} ` : '';
+    const displayValue = formatPrimaryHeroValue(rawValue, definition.primary.emphasizeValue);
+    if (definition.primary.inline) {
+      blocks.push(`${icon}*${definition.primary.label}:* ${displayValue}`);
+    } else {
+      blocks.push(`${icon}*${definition.primary.label}*\n${displayValue}`);
+    }
+  }
+
+  for (const section of definition.sections ?? []) {
+    const rendered = buildUserSection(section);
+    if (rendered) {
+      hasBodyContent = true;
+      blocks.push(rendered);
+    }
+  }
+
+  const trimmedFooter = definition.footer?.trim();
+  if (trimmedFooter) {
+    const showDivider = hasBodyContent && definition.footerDivider !== false;
+    blocks.push(showDivider ? `${USER_DIVIDER}\n${trimmedFooter}` : trimmedFooter);
+  }
+
+  const content = blocks.join('\n\n');
+  return isPersianScreen(definition)
+    ? formatPersianScreen(content)
+    : ensureEnglishLineDirection(content);
+}
+
+/** Clean user-facing empty/error state without duplicate header-body emoji clutter. */
+export function buildUserEmptyState(
+  emoji: string,
+  title: string,
+  body: string,
+  actionHint?: string,
+  direction?: 'rtl' | 'ltr' | 'auto'
+): string {
+  const cleanBody = emoji ? stripLeadingEmoji(body) : body;
+  const cleanHint = actionHint?.trim();
+  return buildUserScreen({
+    emoji,
+    title,
+    footer: [cleanBody, cleanHint].filter(Boolean).join('\n\n'),
+    footerDivider: false,
+    direction,
+  });
+}
+
+/** Clean user-facing conversational prompt step. */
+export function buildUserPromptScreen(
+  emoji: string,
+  title: string,
+  body: string,
+  subtitle?: string,
+  direction?: 'rtl' | 'ltr' | 'auto'
+): string {
+  return buildUserScreen({
+    emoji,
+    title,
+    subtitle,
+    footer: body,
+    footerDivider: false,
+    direction,
+  });
 }

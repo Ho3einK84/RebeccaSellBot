@@ -19,8 +19,8 @@ import { formatSubscriptionLink, localizedNumber, resolveServiceLocale, t } from
 import { renderRenewalSelection, buildDeleteReviewScreen } from './subscriptions/routes.js';
 import {
   backKeyboard,
-  buildEmptyState,
-  buildScreen,
+  buildUserEmptyState,
+  buildUserScreen,
   clearTransientConversationSession,
   forgetUiMessage,
   guardAdminCallbacks,
@@ -109,7 +109,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       if (!config) {
         await renderScreen(
           ctx,
-          buildEmptyState('⚠️', t(ctx, 'renewal_selection_title'), t(ctx, 'config_not_owned')),
+          buildUserEmptyState('⚠️', t(ctx, 'renewal_selection_title'), t(ctx, 'config_not_owned')),
           { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
         );
         return;
@@ -124,7 +124,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       if (!config) {
         await renderScreen(
           ctx,
-          buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'config_not_owned')),
+          buildUserEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'config_not_owned')),
           { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
         );
         return;
@@ -141,7 +141,11 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       if (!config) {
         await renderScreen(
           ctx,
-          buildEmptyState('⚠️', t(ctx, 'config_delete_review_title'), t(ctx, 'config_not_owned')),
+          buildUserEmptyState(
+            '⚠️',
+            t(ctx, 'config_delete_review_title'),
+            t(ctx, 'config_not_owned')
+          ),
           { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
         );
         return;
@@ -186,7 +190,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     if (!telegramId || !services.isAdmin(telegramId)) {
       await renderScreen(
         ctx,
-        buildEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
+        buildUserEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
         { parse_mode: 'Markdown', reply_markup: mainMenu }
       );
       return;
@@ -228,7 +232,11 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       );
       await renderScreen(
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'language_selection_title'), t(ctx, 'language_update_failed')),
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'language_selection_title'),
+          t(ctx, 'language_update_failed')
+        ),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
       );
     }
@@ -243,7 +251,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     if (showAdmin && !services.isAdmin(telegramId)) {
       await renderScreen(
         ctx,
-        buildEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
+        buildUserEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
         { parse_mode: 'Markdown', reply_markup: mainMenu }
       );
       return;
@@ -341,38 +349,34 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     if (!result.success) {
       await renderScreen(
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'trial_preview_heading'), t(ctx, result.messageKey)),
+        buildUserEmptyState('⚠️', t(ctx, 'trial_preview_heading'), t(ctx, result.messageKey)),
         { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
       );
       return;
     }
 
     const trialMessage = await ctx.reply(
-      buildScreen({
+      buildUserScreen({
         emoji: '🎉',
         title: t(ctx, 'trial_preview_heading'),
         subtitle: t(ctx, 'trial_success'),
-        sections: [
-          {
-            emoji: '🔗',
-            title: t(ctx, 'subscription_link_label'),
-            fields: [
-              {
-                label: t(ctx, 'subscription_link_label'),
-                value: result.subUrl
-                  ? formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable'))
-                  : t(ctx, 'subscription_link_unavailable'),
-              },
-            ],
-          },
-        ],
+        primary: {
+          emoji: '🔗',
+          label: t(ctx, 'subscription_link_label'),
+          value: result.subUrl
+            ? formatSubscriptionLink(result.subUrl, t(ctx, 'subscription_link_unavailable'))
+            : t(ctx, 'subscription_link_unavailable'),
+        },
         footer: t(ctx, 'trial_terms'),
       }),
       { parse_mode: 'Markdown' }
     );
     rememberArtifactMessage(ctx.session, trialMessage.message_id);
     await ctx.reply(t(ctx, 'navigation_continue_hint'), {
-      reply_markup: backKeyboard(ctx, 'main'),
+      reply_markup: new InlineKeyboard()
+        .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
+        .row()
+        .text(t(ctx, 'menu_back_main'), 'nav:main'),
     });
   });
 
@@ -426,10 +430,9 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.callbackQuery('conversation:cancel', async (ctx) => {
     clearTransientConversationSession(ctx.session);
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
-    await renderScreen(
-      ctx,
-      buildEmptyState('↩️', t(ctx, 'operation_cancelled'), t(ctx, 'operation_cancelled')),
-      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx) }
-    );
+    await renderScreen(ctx, buildUserEmptyState('↩️', t(ctx, 'operation_cancelled'), ''), {
+      parse_mode: 'Markdown',
+      reply_markup: backKeyboard(ctx),
+    });
   });
 }

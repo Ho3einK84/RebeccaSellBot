@@ -21,8 +21,9 @@ import {
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import {
   backKeyboard,
-  buildEmptyState,
-  buildScreen,
+  buildUserEmptyState,
+  buildUserPromptScreen,
+  buildUserScreen,
   promptInConversation,
   rememberArtifactMessage,
   replyInConversation,
@@ -74,12 +75,12 @@ function customPackageName(
 }
 
 function buildCustomVolumeInputScreen(ctx: ConversationContext): string {
-  return buildScreen({
-    emoji: '✏️',
-    title: t(ctx, 'custom_volume_title'),
-    subtitle: t(ctx, 'custom_volume_subtitle'),
-    footer: `ℹ️ ${t(ctx, 'custom_volume_input_hint')}`,
-  });
+  return buildUserPromptScreen(
+    '✏️',
+    t(ctx, 'custom_volume_title'),
+    t(ctx, 'custom_volume_input_hint'),
+    t(ctx, 'custom_volume_subtitle')
+  );
 }
 
 function buildCustomCheckoutScreen(
@@ -95,52 +96,40 @@ function buildCustomCheckoutScreen(
   }
 ): string {
   const renewal = input.mode === 'renewal';
-  return buildScreen({
-    emoji: renewal ? '🔄' : '🛒',
+  return buildUserScreen({
+    emoji: renewal ? '🔄' : '🧾',
     title: t(ctx, renewal ? 'renewal_review_title' : 'purchase_review_title'),
     subtitle: t(ctx, renewal ? 'renewal_review_subtitle' : 'purchase_review_subtitle'),
     primary: {
-      emoji: '💰',
       label: t(ctx, 'checkout_total_label'),
       value: `${localizedNumber(input.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      emphasizeValue: true,
     },
     sections: [
-      ...(input.username
-        ? [
-            {
-              emoji: '📱',
-              title: t(ctx, 'checkout_service_label'),
-              fields: [
+      {
+        title: t(ctx, 'checkout_package_section'),
+        fields: [
+          ...(input.username
+            ? [
                 {
-                  emoji: '🆔',
                   label: t(ctx, 'checkout_service_label'),
                   value: `\`${sanitizeTelegramInlineCode(input.username)}\``,
                 },
-              ],
-            },
-          ]
-        : []),
-      {
-        emoji: '📦',
-        title: t(ctx, 'checkout_package_section'),
-        fields: [
+              ]
+            : []),
           {
-            emoji: '📦',
             label: t(ctx, 'renewal_success_package_label'),
             value: customPackageName(ctx, input.gbAmount, input.durationDays),
           },
           {
-            emoji: '📊',
             label: t(ctx, 'checkout_traffic_label'),
             value: `${localizedNumber(input.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
           },
           {
-            emoji: '⏳',
             label: t(ctx, 'checkout_duration_label'),
             value: `${localizedNumber(input.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
           },
           {
-            emoji: '💳',
             label: t(ctx, 'checkout_unit_price_label'),
             value: `${localizedNumber(input.pricePerGb, ctx)} ${t(ctx, 'currency_toman')}`,
           },
@@ -153,7 +142,6 @@ function buildCustomCheckoutScreen(
               title: t(ctx, 'checkout_promo_section'),
               fields: [
                 {
-                  emoji: '🎟️',
                   label: t(ctx, 'shop_promo_section'),
                   value: `\`${sanitizeTelegramInlineCode(input.promoCode)}\``,
                 },
@@ -162,7 +150,7 @@ function buildCustomCheckoutScreen(
           ]
         : []),
     ],
-    footer: `ℹ️ ${t(ctx, renewal ? 'checkout_confirmation_hint' : 'purchase_confirmation_hint')}`,
+    footer: t(ctx, renewal ? 'checkout_confirmation_hint' : 'purchase_confirmation_hint'),
   });
 }
 
@@ -279,14 +267,14 @@ async function executePurchaseFlow(
   const progressMessage = await replyInConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildUserScreen({
       emoji: '⏳',
       title: t(ctx, 'purchase_issuing_title'),
       subtitle: t(ctx, 'purchase_issuing_subtitle'),
       primary: {
-        emoji: '📦',
         label: t(ctx, 'purchase_issuing_package_label'),
         value: escapeTelegramMarkdown(packageNameStr),
+        inline: true,
       },
     }),
     {
@@ -326,7 +314,7 @@ async function executePurchaseFlow(
     await conversation.external((outsideCtx) =>
       recordCheckoutFailed(outsideCtx.services!.purchaseCheckoutService, checkout.id)
     );
-    const failureText = buildEmptyState(
+    const failureText = buildUserEmptyState(
       '⚠️',
       t(ctx, 'purchase_failed_title'),
       purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
@@ -355,7 +343,7 @@ async function executePurchaseFlow(
     await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
   }
 
-  const successText = buildScreen({
+  const successText = buildUserScreen({
     emoji: '🎉',
     title: t(ctx, 'purchase_success_title'),
     subtitle: t(ctx, 'purchase_success_subtitle'),
@@ -412,7 +400,7 @@ export async function buyConfigConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+        buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -422,7 +410,7 @@ export async function buyConfigConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'custom_volume_title'),
           t(ctx, 'custom_gb_invalid_range', {
@@ -462,7 +450,7 @@ export async function customAmountConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+        buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -472,7 +460,7 @@ export async function customAmountConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'custom_volume_title'),
           t(ctx, 'custom_gb_invalid_range', {
@@ -537,7 +525,7 @@ export async function renewConfigConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+        buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -547,7 +535,7 @@ export async function renewConfigConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'custom_volume_title'),
           t(ctx, 'custom_gb_invalid_range', {
@@ -660,14 +648,14 @@ export async function renewConfigConversation(
   const progressMessage = await replyInConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildUserScreen({
       emoji: '⏳',
       title: t(ctx, 'renewal_processing_title'),
       subtitle: t(ctx, 'renewal_processing_subtitle'),
       primary: {
-        emoji: '📱',
         label: t(ctx, 'renewal_selection_service_label'),
         value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+        inline: true,
       },
     }),
     {
@@ -710,7 +698,7 @@ export async function renewConfigConversation(
     await conversation.external((outsideCtx) =>
       recordCheckoutFailed(outsideCtx.services!.purchaseCheckoutService, checkout.id)
     );
-    const failureText = buildEmptyState(
+    const failureText = buildUserEmptyState(
       '⚠️',
       t(ctx, 'renewal_failed_title'),
       purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
@@ -739,18 +727,17 @@ export async function renewConfigConversation(
     await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
   }
 
-  const renewalSuccessText = buildScreen({
+  const renewalSuccessText = buildUserScreen({
     emoji: '✅',
     title: t(ctx, 'renewal_success_title'),
     subtitle: t(ctx, 'renewal_success_subtitle'),
     primary: {
-      emoji: '📱',
       label: t(ctx, 'renewal_success_service_label'),
       value: `\`${sanitizeTelegramInlineCode(res.configUsername)}\``,
+      inline: true,
     },
     sections: [
       {
-        emoji: '📦',
         title: t(ctx, 'checkout_package_section'),
         fields: [
           {
@@ -825,7 +812,7 @@ export async function autoRenewCustomConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+        buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -835,7 +822,7 @@ export async function autoRenewCustomConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'custom_volume_title'),
           t(ctx, 'custom_gb_invalid_range', {
@@ -860,40 +847,31 @@ export async function autoRenewCustomConversation(
   await promptInConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildUserScreen({
       emoji: '♻️',
       title: t(ctx, 'auto_renew_review_title'),
       subtitle: t(ctx, 'auto_renew_review_subtitle'),
       primary: {
-        emoji: '💰',
         label: t(ctx, 'auto_renew_charge_label'),
         value: `${localizedNumber(approvedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
+        emphasizeValue: true,
       },
       sections: [
         {
-          emoji: '📱',
           title: t(ctx, 'renewal_selection_service_label'),
           fields: [
             {
-              emoji: '🆔',
               label: t(ctx, 'checkout_service_label'),
               value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
             },
-          ],
-        },
-        {
-          emoji: '📦',
-          title: t(ctx, 'checkout_package_section'),
-          fields: [
             {
-              emoji: '📦',
               label: t(ctx, 'renewal_success_package_label'),
               value: customPackageName(ctx, gbAmount, durationDays),
             },
           ],
         },
       ],
-      footer: `ℹ️ ${t(ctx, 'auto_renew_review_hint')}`,
+      footer: t(ctx, 'auto_renew_review_hint'),
     }),
     {
       parse_mode: 'Markdown',
@@ -926,14 +904,14 @@ export async function autoRenewCustomConversation(
   await replyInConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildUserScreen({
       emoji: '✅',
       title: t(ctx, 'auto_renew_enabled_title'),
       subtitle: t(ctx, 'auto_renew_enabled_subtitle'),
       primary: {
-        emoji: '📱',
         label: t(ctx, 'renewal_selection_service_label'),
         value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+        inline: true,
       },
     }),
     { parse_mode: 'Markdown', reply_markup: backKeyboard }
@@ -955,12 +933,12 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
   await promptInConversation(
     conversation,
     ctx,
-    buildScreen({
-      emoji: '🎟️',
-      title: t(ctx, 'promo_title'),
-      subtitle: t(ctx, 'promo_subtitle'),
-      footer: `ℹ️ ${t(ctx, 'promo_input_hint')}`,
-    }),
+    buildUserPromptScreen(
+      '🎟️',
+      t(ctx, 'promo_title'),
+      t(ctx, 'promo_input_hint'),
+      t(ctx, 'promo_subtitle')
+    ),
     { parse_mode: 'Markdown' }
   );
   const codeInput = await waitForTextInput(conversation, returnDestination);
@@ -990,7 +968,7 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
     await replyInConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '✅',
         title: t(ctx, 'promo_applied_title'),
         subtitle: t(ctx, 'promo_applied_subtitle'),
@@ -998,6 +976,7 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
           emoji: '🎟️',
           label: t(ctx, 'checkout_promo_section'),
           value: `\`${sanitizeTelegramInlineCode(res.code)}\``,
+          inline: true,
         },
         footer: text,
       }),
@@ -1010,12 +989,12 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
     conversation,
     ctx,
     res.success
-      ? buildScreen({
+      ? buildUserScreen({
           emoji: '✅',
           title: t(ctx, 'promo_title'),
           subtitle: text,
         })
-      : buildEmptyState('⚠️', t(ctx, 'promo_title'), text),
+      : buildUserEmptyState('⚠️', t(ctx, 'promo_title'), text),
     { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, returnDestination) }
   );
   await finishPromoFlow();
@@ -1053,7 +1032,7 @@ export async function transferConfigConversation(
     await replyInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_config_missing')),
+      buildUserEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_config_missing')),
       { parse_mode: 'Markdown' }
     );
     return;
@@ -1063,7 +1042,7 @@ export async function transferConfigConversation(
     await replyInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'admin_access_denied')),
+      buildUserEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'admin_access_denied')),
       { parse_mode: 'Markdown' }
     );
     return;
@@ -1074,12 +1053,12 @@ export async function transferConfigConversation(
     await promptInConversation(
       conversation,
       ctx,
-      buildScreen({
-        emoji: '🔁',
-        title: t(ctx, 'transfer_title'),
-        subtitle: t(ctx, 'transfer_subtitle'),
-        footer: `ℹ️ ${t(ctx, 'transfer_target_hint')}`,
-      }),
+      buildUserPromptScreen(
+        '⇄',
+        t(ctx, 'transfer_title'),
+        t(ctx, 'transfer_target_hint'),
+        t(ctx, 'transfer_subtitle')
+      ),
       { parse_mode: 'Markdown' }
     );
     const targetInput = await waitForTextInput(conversation);
@@ -1091,7 +1070,7 @@ export async function transferConfigConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_not_found')),
+        buildUserEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_not_found')),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -1100,7 +1079,7 @@ export async function transferConfigConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_same_user')),
+        buildUserEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_same_user')),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -1109,7 +1088,7 @@ export async function transferConfigConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_banned')),
+        buildUserEmptyState('⚠️', t(ctx, 'transfer_title'), t(ctx, 'transfer_target_banned')),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -1124,24 +1103,20 @@ export async function transferConfigConversation(
   await promptInConversation(
     conversation,
     ctx,
-    buildScreen({
-      emoji: '🔁',
+    buildUserScreen({
+      emoji: '⇄',
       title: t(ctx, 'transfer_review_title'),
       subtitle: t(ctx, 'transfer_review_subtitle'),
-      primary: {
-        emoji: '👤',
-        label: t(ctx, 'transfer_recipient_label'),
-        value: target.username
-          ? `@${escapeTelegramMarkdown(target.username)}`
-          : `\`${target.telegramId}\``,
-      },
       sections: [
         {
-          emoji: '🆔',
-          title: t(ctx, 'transfer_recipient_label'),
           fields: [
             {
-              emoji: '🆔',
+              label: t(ctx, 'transfer_recipient_label'),
+              value: target.username
+                ? `@${escapeTelegramMarkdown(target.username)}`
+                : `\`${target.telegramId}\``,
+            },
+            {
               label: t(ctx, 'transfer_recipient_id_label'),
               value: `\`${target.telegramId}\``,
             },
@@ -1168,22 +1143,25 @@ export async function transferConfigConversation(
     await replyInConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '✅',
         title: t(ctx, 'transfer_success_title'),
         subtitle: t(ctx, 'transfer_success_subtitle'),
         primary: {
-          emoji: '📱',
           label: t(ctx, 'transfer_service_label'),
           value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
+          inline: true,
         },
         sections: [
           {
-            emoji: '👤',
-            title: t(ctx, 'transfer_recipient_label'),
             fields: [
               {
-                emoji: '🆔',
+                label: t(ctx, 'transfer_recipient_label'),
+                value: target.username
+                  ? `@${escapeTelegramMarkdown(target.username)}`
+                  : `\`${target.telegramId}\``,
+              },
+              {
                 label: t(ctx, 'transfer_recipient_id_label'),
                 value: `\`${target.telegramId}\``,
               },
@@ -1203,7 +1181,7 @@ export async function transferConfigConversation(
       await conversation.external(() =>
         ctx.api.sendMessage(
           target.telegramId,
-          buildScreen({
+          buildUserScreen({
             emoji: '🎁',
             title: tForLocale(
               ctx.services!.translationService,
@@ -1216,29 +1194,22 @@ export async function transferConfigConversation(
               'transfer_recipient_notice_subtitle'
             ),
             primary: {
-              emoji: '📱',
               label: tForLocale(
                 ctx.services!.translationService,
                 recipientLocale,
                 'transfer_service_label'
               ),
               value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
+              inline: true,
             },
             sections: [
               {
-                emoji: '👤',
-                title: tForLocale(
-                  ctx.services!.translationService,
-                  recipientLocale,
-                  'transfer_sender_label'
-                ),
                 fields: [
                   {
-                    emoji: '🆔',
                     label: tForLocale(
                       ctx.services!.translationService,
                       recipientLocale,
-                      'transfer_recipient_id_label'
+                      'transfer_sender_label'
                     ),
                     value: `\`${result.fromTelegramId}\``,
                   },
@@ -1266,7 +1237,7 @@ export async function transferConfigConversation(
     await replyInConversation(
       conversation,
       ctx,
-      buildEmptyState(
+      buildUserEmptyState(
         '⚠️',
         t(ctx, 'transfer_title'),
         t(
@@ -1296,7 +1267,11 @@ export async function transferBalanceConversation(
     await replyInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'wallet_transfer_disabled')),
+      buildUserEmptyState(
+        '⚠️',
+        t(ctx, 'wallet_transfer_title'),
+        t(ctx, 'wallet_transfer_disabled')
+      ),
       { parse_mode: 'Markdown' }
     );
     return;
@@ -1317,8 +1292,8 @@ export async function transferBalanceConversation(
     await replyInConversation(
       conversation,
       ctx,
-      buildEmptyState(
-        '👛',
+      buildUserEmptyState(
+        '💳',
         t(ctx, 'wallet_transfer_title'),
         t(ctx, 'wallet_transfer_insufficient_balance')
       ),
@@ -1333,12 +1308,12 @@ export async function transferBalanceConversation(
     await promptInConversation(
       conversation,
       ctx,
-      buildScreen({
-        emoji: '💸',
-        title: t(ctx, 'wallet_transfer_title'),
-        subtitle: t(ctx, 'wallet_transfer_subtitle'),
-        footer: `ℹ️ ${t(ctx, 'wallet_transfer_target_hint')}`,
-      }),
+      buildUserPromptScreen(
+        '💸',
+        t(ctx, 'wallet_transfer_title'),
+        t(ctx, 'wallet_transfer_target_hint'),
+        t(ctx, 'wallet_transfer_subtitle')
+      ),
       { parse_mode: 'Markdown' }
     );
 
@@ -1352,7 +1327,11 @@ export async function transferBalanceConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'transfer_target_not_found')),
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'wallet_transfer_title'),
+          t(ctx, 'transfer_target_not_found')
+        ),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -1362,7 +1341,7 @@ export async function transferBalanceConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'wallet_transfer_title'),
           t(ctx, 'wallet_transfer_self_error')
@@ -1376,7 +1355,11 @@ export async function transferBalanceConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, 'transfer_target_banned')),
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'wallet_transfer_title'),
+          t(ctx, 'transfer_target_banned')
+        ),
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -1391,31 +1374,28 @@ export async function transferBalanceConversation(
     await promptInConversation(
       conversation,
       ctx,
-      buildScreen({
-        emoji: '💰',
+      buildUserScreen({
+        emoji: '💳',
         title: t(ctx, 'wallet_transfer_title'),
         subtitle: t(ctx, 'wallet_transfer_amount_prompt'),
         primary: {
-          emoji: '👤',
-          label: t(ctx, 'wallet_transfer_recipient_label'),
-          value: target.username
-            ? `@${escapeTelegramMarkdown(target.username)}`
-            : `\`${target.telegramId}\``,
+          label: t(ctx, 'wallet_available_balance'),
+          value: `${localizedNumber(senderBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+          emphasizeValue: true,
         },
         sections: [
           {
-            emoji: '👛',
-            title: t(ctx, 'wallet_available_balance'),
             fields: [
               {
-                emoji: '💰',
-                label: t(ctx, 'wallet_available_balance'),
-                value: `${localizedNumber(senderBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+                label: t(ctx, 'wallet_transfer_recipient_label'),
+                value: target.username
+                  ? `@${escapeTelegramMarkdown(target.username)}`
+                  : `\`${target.telegramId}\``,
               },
             ],
           },
         ],
-        footer: `ℹ️ ${t(ctx, 'wallet_transfer_min_amount_hint', { min: localizedNumber(minAmount, ctx) })}`,
+        footer: t(ctx, 'wallet_transfer_min_amount_hint', { min: localizedNumber(minAmount, ctx) }),
       }),
       { parse_mode: 'Markdown' }
     );
@@ -1430,7 +1410,7 @@ export async function transferBalanceConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'wallet_transfer_title'),
           t(ctx, 'wallet_transfer_invalid_amount')
@@ -1444,7 +1424,7 @@ export async function transferBalanceConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'wallet_transfer_title'),
           t(ctx, 'wallet_transfer_below_min', { min: localizedNumber(minAmount, ctx) })
@@ -1458,7 +1438,7 @@ export async function transferBalanceConversation(
       await promptInConversation(
         conversation,
         ctx,
-        buildEmptyState(
+        buildUserEmptyState(
           '⚠️',
           t(ctx, 'wallet_transfer_title'),
           t(ctx, 'wallet_transfer_insufficient_balance')
@@ -1481,40 +1461,29 @@ export async function transferBalanceConversation(
   await promptInConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildUserScreen({
       emoji: '💸',
       title: t(ctx, 'wallet_transfer_review_title'),
       subtitle: t(ctx, 'wallet_transfer_review_subtitle'),
       primary: {
-        emoji: '💰',
         label: t(ctx, 'wallet_transfer_amount_label'),
         value: `${localizedNumber(parsedAmount, ctx)} ${t(ctx, 'currency_toman')}`,
+        emphasizeValue: true,
       },
       sections: [
         {
-          emoji: '👤',
-          title: t(ctx, 'wallet_transfer_recipient_label'),
           fields: [
             {
-              emoji: '👤',
               label: t(ctx, 'wallet_transfer_recipient_label'),
               value: target.username
                 ? `@${escapeTelegramMarkdown(target.username)}`
                 : `\`${target.telegramId}\``,
             },
             {
-              emoji: '🆔',
               label: t(ctx, 'transfer_recipient_id_label'),
               value: `\`${target.telegramId}\``,
             },
-          ],
-        },
-        {
-          emoji: '👛',
-          title: t(ctx, 'wallet_transfer_balance_after_label'),
-          fields: [
             {
-              emoji: '💳',
               label: t(ctx, 'wallet_transfer_balance_after_label'),
               value: `${localizedNumber(balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
             },
@@ -1542,35 +1511,27 @@ export async function transferBalanceConversation(
     await replyInConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '✅',
         title: t(ctx, 'wallet_transfer_success_title'),
         subtitle: t(ctx, 'wallet_transfer_success_subtitle'),
         primary: {
-          emoji: '💰',
           label: t(ctx, 'wallet_transfer_amount_label'),
           value: `${localizedNumber(result.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+          emphasizeValue: true,
         },
         sections: [
           {
-            emoji: '👤',
-            title: t(ctx, 'wallet_transfer_recipient_label'),
             fields: [
               {
-                emoji: '🆔',
+                label: t(ctx, 'wallet_transfer_recipient_label'),
+                value: target.username
+                  ? `@${escapeTelegramMarkdown(target.username)}`
+                  : `\`${target.telegramId}\``,
+              },
+              {
                 label: t(ctx, 'transfer_recipient_id_label'),
                 value: `\`${target.telegramId}\``,
-              },
-            ],
-          },
-          {
-            emoji: '👛',
-            title: t(ctx, 'wallet_available_balance'),
-            fields: [
-              {
-                emoji: '💳',
-                label: t(ctx, 'wallet_available_balance'),
-                value: `${localizedNumber(result.fromBalanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
               },
             ],
           },
@@ -1593,7 +1554,7 @@ export async function transferBalanceConversation(
       await conversation.external(() =>
         ctx.api.sendMessage(
           target.telegramId,
-          buildScreen({
+          buildUserScreen({
             emoji: '🎁',
             title: tForLocale(
               ctx.services!.translationService,
@@ -1606,44 +1567,26 @@ export async function transferBalanceConversation(
               'wallet_transfer_recipient_notice_subtitle'
             ),
             primary: {
-              emoji: '💰',
               label: tForLocale(
                 ctx.services!.translationService,
                 recipientLocale,
                 'wallet_transfer_amount_label'
               ),
               value: `${localizedNumberForLocale(result.amount, recipientLocale)} ${tForLocale(ctx.services!.translationService, recipientLocale, 'currency_toman')}`,
+              emphasizeValue: true,
             },
             sections: [
               {
-                emoji: '👤',
-                title: tForLocale(
-                  ctx.services!.translationService,
-                  recipientLocale,
-                  'wallet_transfer_sender_label'
-                ),
                 fields: [
                   {
-                    emoji: '🆔',
                     label: tForLocale(
                       ctx.services!.translationService,
                       recipientLocale,
-                      'transfer_recipient_id_label'
+                      'wallet_transfer_sender_label'
                     ),
                     value: `\`${senderTelegramId}\``,
                   },
-                ],
-              },
-              {
-                emoji: '👛',
-                title: tForLocale(
-                  ctx.services!.translationService,
-                  recipientLocale,
-                  'wallet_available_balance'
-                ),
-                fields: [
                   {
-                    emoji: '💳',
                     label: tForLocale(
                       ctx.services!.translationService,
                       recipientLocale,
@@ -1677,7 +1620,7 @@ export async function transferBalanceConversation(
     await replyInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, errorKey)),
+      buildUserEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, errorKey)),
       { parse_mode: 'Markdown' }
     );
   }

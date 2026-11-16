@@ -2,7 +2,7 @@
 
 import type { Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
-import { backKeyboard, buildEmptyState, buildScreen, renderScreen } from '../ui.js';
+import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from '../ui.js';
 import { t } from '../locale.js';
 import { mainMenu } from '../keyboards/mainMenu.js';
 import { registerPromoAdminRoutes } from './admin/promoRoutes.js';
@@ -37,7 +37,7 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.on('message:text', async (ctx) => {
     await renderScreen(
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '🏠',
         title: t(ctx, 'home_title'),
         subtitle: t(ctx, 'home_subtitle'),
@@ -53,7 +53,7 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_expired'), show_alert: true });
     await renderScreen(
       ctx,
-      buildEmptyState('⌛️', t(ctx, 'button_expired'), t(ctx, 'button_expired_help')),
+      buildUserEmptyState('⌛️', t(ctx, 'button_expired'), t(ctx, 'button_expired_help')),
       { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
     );
   });

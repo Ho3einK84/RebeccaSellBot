@@ -19,6 +19,8 @@ import {
   buildEmptyState,
   buildScreen,
   buildStatusBadge,
+  buildUserEmptyState,
+  buildUserScreen,
   conversationOwnerId,
   deleteConsumedInputMessage,
   forwardConversationNavigation,
@@ -70,16 +72,16 @@ function buildPaymentInfoCard(
   amountToman?: number,
   options: { title?: string; subtitle?: string; footer?: string } = {}
 ): string {
-  return buildScreen({
+  return buildUserScreen({
     emoji: '💳',
     title: options.title ?? t(ctx, 'topup_title'),
     subtitle: options.subtitle ?? t(ctx, 'topup_subtitle'),
     ...(amountToman !== undefined
       ? {
           primary: {
-            emoji: '💰',
             label: t(ctx, 'topup_selected_amount_label'),
             value: `${localizedNumber(amountToman, ctx)} ${t(ctx, 'currency_toman')}`,
+            emphasizeValue: true,
           },
         }
       : {}),
@@ -89,12 +91,10 @@ function buildPaymentInfoCard(
         title: t(ctx, 'topup_payment_section'),
         fields: [
           {
-            emoji: '💳',
             label: t(ctx, 'topup_card_number_label'),
             value: `\`${sanitizeTelegramInlineCode(formatCardNumberGrouped(cardNumber))}\``,
           },
           {
-            emoji: '👤',
             label: t(ctx, 'topup_card_holder_label'),
             value: escapeTelegramMarkdown(cardHolder),
           },
@@ -160,14 +160,14 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     await replyInConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '⏳',
         title: t(ctx, 'topup_pending_title'),
         subtitle: t(ctx, 'topup_pending_subtitle'),
         primary: {
-          emoji: '💰',
           label: t(ctx, 'topup_selected_amount_label'),
           value: `${localizedNumber(pendingReceipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+          emphasizeValue: true,
         },
       }),
       { parse_mode: 'Markdown' }
@@ -206,7 +206,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     conversation,
     ctx,
     buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
-      footer: `ℹ️ ${t(ctx, 'topup_choose_amount_hint')}`,
+      footer: t(ctx, 'topup_choose_amount_hint'),
     }),
     { parse_mode: 'Markdown', reply_markup: presetKeyboard }
   );
@@ -322,14 +322,14 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     await sendArtifactInConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '✅',
         title: t(ctx, 'topup_success_title'),
         subtitle: t(ctx, 'topup_success_subtitle'),
         primary: {
-          emoji: '🆔',
           label: t(ctx, 'topup_receipt_id_label'),
           value: `\`${receiptId}\``,
+          inline: true,
         },
       }),
       { parse_mode: 'Markdown' }
@@ -345,7 +345,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       await replyInConversation(
         conversation,
         ctx,
-        buildEmptyState('⏳', t(ctx, 'topup_pending_title'), t(ctx, 'topup_pending_subtitle')),
+        buildUserEmptyState('⏳', t(ctx, 'topup_pending_title'), t(ctx, 'topup_pending_subtitle')),
         { parse_mode: 'Markdown' }
       );
       return;
@@ -354,7 +354,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     await replyInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'topup_receipt_title'), t(ctx, 'topup_failed')),
+      buildUserEmptyState('⚠️', t(ctx, 'topup_receipt_title'), t(ctx, 'topup_failed')),
       { parse_mode: 'Markdown' }
     );
   }

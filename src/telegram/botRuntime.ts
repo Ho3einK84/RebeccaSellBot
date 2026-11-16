@@ -43,7 +43,12 @@ import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { registerAdminAlertHook } from '../domain/services/RebeccaService.js';
 import { logger } from '../infra/logger.js';
 import { resolveServiceLocale, t, tForLocale } from './locale.js';
-import { buildScreen, cleanChatUiMiddleware, uiMessageTrackingTransformer } from './ui.js';
+import {
+  buildScreen,
+  buildUserScreen,
+  cleanChatUiMiddleware,
+  uiMessageTrackingTransformer,
+} from './ui.js';
 import {
   escapeTelegramMarkdown,
   safeFormattingTransformer,
@@ -225,7 +230,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
           show_alert: true,
         });
       } else {
-        const maintenanceScreen = buildScreen({
+        const maintenanceScreen = buildUserScreen({
           emoji: '🛠️',
           title: t(ctx, 'bot_maintenance_title'),
           subtitle: t(ctx, 'bot_maintenance_subtitle'),

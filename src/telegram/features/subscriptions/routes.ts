@@ -15,13 +15,13 @@ import {
 import {
   backKeyboard,
   backToKeyboard,
-  buildEmptyState,
-  buildScreen,
   buildStatusBadge,
+  buildUserEmptyState,
+  buildUserScreen,
   dismissKeyboard,
   rememberArtifactMessage,
-  renderProgressBar,
   renderScreen,
+  renderSleekProgressBar,
   type StatusType,
 } from '../../ui.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
@@ -103,11 +103,11 @@ export async function showUserSubscriptions(
   if (configs.length === 0) {
     await renderSubscriptionScreen(
       ctx,
-      buildEmptyState(
+      buildUserEmptyState(
         '📭',
         t(ctx, 'subscription_list_empty_title'),
         t(ctx, 'subscription_list_empty_body'),
-        `🛍️ ${t(ctx, 'subscription_list_empty_action')}`
+        t(ctx, 'subscription_list_empty_action')
       ),
       new InlineKeyboard()
         .text(t(ctx, 'menu_buy_subscription'), 'nav:shop')
@@ -152,14 +152,15 @@ export async function showUserSubscriptions(
   navigation.text(t(ctx, 'menu_back_main'), 'nav:main');
   await renderSubscriptionScreen(
     ctx,
-    buildScreen({
-      emoji: '📱',
+    buildUserScreen({
+      emoji: '📡',
       title: t(ctx, 'subscription_list_title'),
       subtitle: t(ctx, 'subscription_list_subtitle'),
       primary: {
-        emoji: '📦',
         label: t(ctx, 'subscription_list_total_label'),
-        value: localizedNumber(configs.length, ctx),
+        value: `${localizedNumber(configs.length, ctx)} ${t(ctx, 'service_unit')}`,
+        inline: true,
+        emphasizeValue: true,
       },
       sections: pageConfigs.map((config, index) => {
         const card = cards[index]!;
@@ -168,12 +169,11 @@ export async function showUserSubscriptions(
           title: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
           fields: [
             {
-              emoji: '⚡',
               label: t(ctx, 'subscription_status_label'),
-              value: buildStatusBadge(ctx, statusBadgeType(card.status), card.statusLabel),
+              value: card.statusLabel,
             },
-            { emoji: '📊', label: t(ctx, 'remaining'), value: card.remaining },
-            { emoji: '⏳', label: t(ctx, 'expiry'), value: card.expiryInfo },
+            { label: t(ctx, 'remaining'), value: card.remaining },
+            { label: t(ctx, 'expiry'), value: card.expiryInfo },
           ],
         };
       }),
@@ -209,17 +209,17 @@ export async function renderRenewalSelection(
   const hasChoices = packages.length > 0 || isCustom;
   await renderSubscriptionScreen(
     ctx,
-    buildScreen({
+    buildUserScreen({
       emoji: '🔄',
       title: t(ctx, 'renewal_selection_title'),
       subtitle: t(ctx, 'renewal_selection_subtitle'),
       primary: {
-        emoji: '📱',
         label: t(ctx, 'renewal_selection_service_label'),
         value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+        inline: true,
       },
       footer: hasChoices
-        ? `ℹ️ ${t(ctx, 'renewal_selection_hint')}`
+        ? t(ctx, 'renewal_selection_hint')
         : `⚠️ ${t(ctx, 'renewal_selection_empty')}`,
     }),
     keyboard
@@ -253,17 +253,17 @@ async function renderAutoRenewSelection(ctx: MenuContext, config: UserConfigReco
   keyboard.text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id));
   await renderSubscriptionScreen(
     ctx,
-    buildScreen({
+    buildUserScreen({
       emoji: '♻️',
       title: t(ctx, 'auto_renew_selection_title'),
       subtitle: t(ctx, 'auto_renew_selection_subtitle'),
       primary: {
-        emoji: '📱',
         label: t(ctx, 'renewal_selection_service_label'),
         value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+        inline: true,
       },
       footer: hasChoices
-        ? `ℹ️ ${t(ctx, 'auto_renew_selection_hint')}`
+        ? t(ctx, 'auto_renew_selection_hint')
         : `⚠️ ${t(ctx, 'renewal_selection_empty')}`,
     }),
     keyboard
@@ -316,7 +316,11 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable'), show_alert: true });
         await renderSubscriptionScreen(
           ctx,
-          buildEmptyState('⚠️', t(ctx, 'renewal_selection_title'), t(ctx, pendingPromo.messageKey)),
+          buildUserEmptyState(
+            '⚠️',
+            t(ctx, 'renewal_selection_title'),
+            t(ctx, pendingPromo.messageKey)
+          ),
           backKeyboard(ctx)
         );
         return;
@@ -326,14 +330,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
         await renderSubscriptionScreen(
           ctx,
-          buildEmptyState(
+          buildUserEmptyState(
             '💳',
             t(ctx, 'insufficient_balance_title'),
             t(ctx, 'insufficient_balance'),
             t(ctx, 'insufficient_balance_hint')
           ),
           new InlineKeyboard()
-            .text(t(ctx, 'topup_title'), 'topup:direct')
+            .text(t(ctx, 'direct_topup_button'), 'topup:direct')
             .row()
             .text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id))
         );
@@ -454,18 +458,17 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         : backKeyboard(ctx, 'main');
     await renderSubscriptionScreen(
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '✅',
         title: t(ctx, 'renewal_success_title'),
         subtitle: t(ctx, 'renewal_success_subtitle'),
         primary: {
-          emoji: '📱',
           label: t(ctx, 'renewal_success_service_label'),
           value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
+          inline: true,
         },
         sections: [
           {
-            emoji: '📦',
             title: t(ctx, 'checkout_package_section'),
             fields: [
               {
@@ -521,14 +524,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       delete ctx.session.pendingAutoRenew;
       await renderSubscriptionScreen(
         ctx,
-        buildScreen({
+        buildUserScreen({
           emoji: '♻️',
           title: t(ctx, 'auto_renew_disable_title'),
           subtitle: t(ctx, 'auto_renew_disable_subtitle'),
           primary: {
-            emoji: '📱',
             label: t(ctx, 'renewal_selection_service_label'),
             value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+            inline: true,
           },
           footer: `⚠️ ${t(ctx, 'auto_renew_disable_consequence')}`,
         }),
@@ -580,40 +583,31 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       await ctx.answerCallbackQuery();
       await renderSubscriptionScreen(
         ctx,
-        buildScreen({
+        buildUserScreen({
           emoji: '♻️',
           title: t(ctx, 'auto_renew_review_title'),
           subtitle: t(ctx, 'auto_renew_review_subtitle'),
           primary: {
-            emoji: '💰',
             label: t(ctx, 'auto_renew_charge_label'),
             value: `${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
+            emphasizeValue: true,
           },
           sections: [
             {
-              emoji: '📱',
               title: t(ctx, 'renewal_selection_service_label'),
               fields: [
                 {
-                  emoji: '🆔',
                   label: t(ctx, 'checkout_service_label'),
                   value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
                 },
-              ],
-            },
-            {
-              emoji: '📦',
-              title: t(ctx, 'checkout_package_section'),
-              fields: [
                 {
-                  emoji: '📦',
                   label: t(ctx, 'renewal_success_package_label'),
                   value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
                 },
               ],
             },
           ],
-          footer: `ℹ️ ${t(ctx, 'auto_renew_review_hint')}`,
+          footer: t(ctx, 'auto_renew_review_hint'),
         }),
         new InlineKeyboard()
           .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'confirm', config.id))
@@ -666,14 +660,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     );
     await renderSubscriptionScreen(
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '✅',
         title: t(ctx, 'auto_renew_enabled_title'),
         subtitle: t(ctx, 'auto_renew_enabled_subtitle'),
         primary: {
-          emoji: '📱',
           label: t(ctx, 'renewal_selection_service_label'),
           value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+          inline: true,
         },
       }),
       new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
@@ -693,14 +687,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       await ctx.services!.configService.setAutoRenew(config.telegramId, config.id, false);
       await renderSubscriptionScreen(
         ctx,
-        buildScreen({
+        buildUserScreen({
           emoji: '✅',
           title: t(ctx, 'auto_renew_disabled_title'),
           subtitle: t(ctx, 'auto_renew_disabled_subtitle'),
           primary: {
-            emoji: '📱',
             label: t(ctx, 'renewal_selection_service_label'),
             value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+            inline: true,
           },
         }),
         new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
@@ -732,7 +726,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           : t(ctx, 'config_action_failed');
       await renderSubscriptionScreen(
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'subscription_status_label'), message),
+        buildUserEmptyState('⚠️', t(ctx, 'subscription_status_label'), message),
         backKeyboard(ctx)
       );
     }
@@ -751,14 +745,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     await ctx.answerCallbackQuery();
     await renderSubscriptionScreen(
       ctx,
-      buildScreen({
+      buildUserScreen({
         emoji: '🔄',
         title: t(ctx, 'subscription_revoke_title'),
         subtitle: t(ctx, 'subscription_revoke_subtitle'),
         primary: {
-          emoji: '📱',
           label: t(ctx, 'renewal_selection_service_label'),
           value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+          inline: true,
         },
         footer: `⚠️ ${t(ctx, 'subscription_revoke_consequence')}`,
       }),
@@ -786,7 +780,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         );
         await renderSubscriptionScreen(
           ctx,
-          buildScreen({
+          buildUserScreen({
             emoji: '✅',
             title: t(ctx, 'subscription_revoke_success_title'),
             subtitle: t(ctx, 'subscription_revoke_success_subtitle'),
@@ -797,11 +791,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
             },
             sections: [
               {
-                emoji: '📱',
                 title: t(ctx, 'renewal_selection_service_label'),
                 fields: [
                   {
-                    emoji: '🆔',
                     label: t(ctx, 'checkout_service_label'),
                     value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
                   },
@@ -825,7 +817,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
             : t(ctx, 'config_action_failed');
         await renderSubscriptionScreen(
           ctx,
-          buildEmptyState('⚠️', t(ctx, 'subscription_revoke_title'), message),
+          buildUserEmptyState('⚠️', t(ctx, 'subscription_revoke_title'), message),
           backKeyboard(ctx)
         );
       }
@@ -877,7 +869,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         if (!result.eligible) {
           await renderSubscriptionScreen(
             ctx,
-            buildScreen({
+            buildUserScreen({
               emoji: '⚠️',
               title: t(ctx, 'config_delete_review_title'),
               subtitle: t(ctx, 'config_delete_no_refund_subtitle'),
@@ -899,7 +891,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       } catch (err) {
         await renderSubscriptionScreen(
           ctx,
-          buildEmptyState(
+          buildUserEmptyState(
             err instanceof RefundOutcomePendingError ? '⏳' : '⚠️',
             t(ctx, 'config_delete_review_title'),
             t(
@@ -934,7 +926,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           ctx,
           deleted
             ? buildDeleteResultScreen(ctx, config.configUsername, undefined, false)
-            : buildEmptyState(
+            : buildUserEmptyState(
                 '⚠️',
                 t(ctx, 'config_delete_review_title'),
                 tm(ctx, 'config_delete_not_found', { username: config.configUsername })
@@ -944,7 +936,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       } catch {
         await renderSubscriptionScreen(
           ctx,
-          buildEmptyState(
+          buildUserEmptyState(
             '⚠️',
             t(ctx, 'config_delete_review_title'),
             t(ctx, 'config_action_failed')
@@ -978,14 +970,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         errorCorrectionLevel: 'M',
       });
       const photo = await ctx.replyWithPhoto(new InputFile(image, `${config.configUsername}.png`), {
-        caption: buildScreen({
+        caption: buildUserScreen({
           emoji: '📷',
           title: t(ctx, 'subscription_qr_title'),
           subtitle: t(ctx, 'subscription_qr_subtitle'),
           primary: {
-            emoji: '📱',
             label: t(ctx, 'subscription_qr_service_label'),
             value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+            inline: true,
           },
         }),
         parse_mode: 'Markdown',
@@ -995,7 +987,11 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     } catch {
       await renderSubscriptionScreen(
         ctx,
-        buildEmptyState('⚠️', t(ctx, 'subscription_qr_title'), t(ctx, 'subscription_qr_failed')),
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'subscription_qr_title'),
+          t(ctx, 'subscription_qr_failed')
+        ),
         new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
       );
     }
@@ -1044,21 +1040,21 @@ async function buildSubscriptionCard(
 
   if (!isDetailView) {
     return {
-      text: buildScreen({
+      text: buildUserScreen({
         emoji: '📱',
         title: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
         primary: {
           emoji: statusEmoji(snapshot.status),
           label: t(ctx, 'subscription_status_label'),
           value: buildStatusBadge(ctx, statusBadgeType(snapshot.status), snapshot.statusLabel),
+          inline: true,
         },
         sections: [
           {
-            emoji: '📊',
             title: t(ctx, 'subscription_usage_section'),
             fields: [
-              { emoji: '📶', label: t(ctx, 'remaining'), value: snapshot.remaining },
-              { emoji: '⏳', label: t(ctx, 'expiry'), value: snapshot.expiryInfo },
+              { label: t(ctx, 'remaining'), value: snapshot.remaining },
+              { label: t(ctx, 'expiry'), value: snapshot.expiryInfo },
             ],
           },
         ],
@@ -1069,7 +1065,7 @@ async function buildSubscriptionCard(
   }
 
   return {
-    text: buildScreen({
+    text: buildUserScreen({
       emoji: '📱',
       title: tm(ctx, 'subscription_detail_heading', { username: config.configUsername }),
       subtitle: t(
@@ -1082,32 +1078,28 @@ async function buildSubscriptionCard(
         emoji: statusEmoji(snapshot.status),
         label: t(ctx, 'subscription_status_label'),
         value: buildStatusBadge(ctx, statusBadgeType(snapshot.status), snapshot.statusLabel),
+        inline: true,
       },
       sections: [
         {
-          emoji: '📊',
           title: t(ctx, 'subscription_usage_section'),
           fields: [
-            { emoji: '📶', label: t(ctx, 'remaining'), value: snapshot.remaining },
-            { emoji: '⏳', label: t(ctx, 'expiry'), value: snapshot.expiryInfo },
+            { label: t(ctx, 'remaining'), value: snapshot.remaining },
+            { label: t(ctx, 'expiry'), value: snapshot.expiryInfo },
           ],
         },
         {
-          emoji: '🔗',
           title: t(ctx, 'subscription_connection_section'),
           fields: [
             {
-              emoji: '🌐',
               label: t(ctx, 'subscription_last_connection_label'),
               value: snapshot.onlineInfo,
             },
             {
-              emoji: '📅',
               label: t(ctx, 'subscription_created_label'),
               value: snapshot.createdInfo,
             },
             {
-              emoji: '🔗',
               label: t(ctx, 'subscription_link_label'),
               value: formatSubscriptionLink(
                 snapshot.subUrl,
@@ -1117,15 +1109,13 @@ async function buildSubscriptionCard(
           ],
         },
         {
-          emoji: '♻️',
           title: t(ctx, 'subscription_automation_section'),
           fields: [
             {
-              emoji: config.autoRenewEnabled ? '🟢' : '⚪️',
               label: t(ctx, 'subscription_auto_renew_label'),
               value: config.autoRenewEnabled
-                ? `${t(ctx, 'ui_status_active')} · ${snapshot.autoRenewPackageName ?? t(ctx, 'auto_renew_package_unavailable')}`
-                : t(ctx, 'ui_status_inactive'),
+                ? `🟢 ${t(ctx, 'ui_status_active')} · ${snapshot.autoRenewPackageName ?? t(ctx, 'auto_renew_package_unavailable')}`
+                : `⚪️ ${t(ctx, 'ui_status_inactive')}`,
             },
           ],
         },
@@ -1171,9 +1161,10 @@ async function buildSubscriptionSnapshot(
       traffic.dataLimit > 0 &&
       traffic.usedTraffic != null
     ) {
-      const bar = renderProgressBar(traffic.usedTraffic, traffic.dataLimit, {
+      const bar = renderSleekProgressBar(traffic.usedTraffic, traffic.dataLimit, {
         barLength: 8,
         theme: 'traffic',
+        locale: resolveContextLocale(ctx),
       });
       if (bar) {
         remaining = `${remaining}\n${bar}`;
@@ -1189,7 +1180,11 @@ async function buildSubscriptionSnapshot(
     const totalMs = expireMs - createdAtMs;
     const elapsedMs = Date.now() - createdAtMs;
     if (totalMs > 0 && elapsedMs >= 0) {
-      const timeBar = renderProgressBar(elapsedMs, totalMs, { barLength: 8, theme: 'time' });
+      const timeBar = renderSleekProgressBar(elapsedMs, totalMs, {
+        barLength: 8,
+        theme: 'time',
+        locale: resolveContextLocale(ctx),
+      });
       if (timeBar) {
         expiryInfo = `${expiryInfo}\n${timeBar}`;
       }
@@ -1252,7 +1247,7 @@ export function buildSubscriptionActionKeyboard(
     )
     .row();
 
-  // Advanced Actions Section
+  // Row 3: Service control & link actions
   keyboard
     .text(
       status === 'disabled'
@@ -1261,15 +1256,16 @@ export function buildSubscriptionActionKeyboard(
       callbackData('config', 'set', status === 'disabled' ? 'on' : 'off', configId)
     )
     .text(t(ctx, 'subscription_revoke_button'), callbackData('config', 'revoke_prompt', configId))
-    .row()
-    .text(t(ctx, 'subscription_transfer_button'), callbackData('config', 'transfer', configId))
     .row();
 
-  // Danger Zone Actions
+  // Row 4: Ownership & danger zone actions
   keyboard
+    .text(t(ctx, 'subscription_transfer_button'), callbackData('config', 'transfer', configId))
     .text(t(ctx, 'config_delete_button'), callbackData('config', 'delete_prompt', configId))
-    .row()
-    .text(t(ctx, 'menu_back'), backCallback ?? 'subs:page:1');
+    .row();
+
+  // Row 5: Navigation back
+  keyboard.text(t(ctx, 'menu_back'), backCallback ?? 'subs:page:1');
 
   return keyboard;
 }
@@ -1338,43 +1334,37 @@ function buildRenewalCheckoutScreen(
     promoCode?: string;
   }
 ): string {
-  return buildScreen({
-    emoji: '🔄',
+  return buildUserScreen({
+    emoji: '🧾',
     title: t(ctx, 'renewal_review_title'),
     subtitle: t(ctx, 'renewal_review_subtitle'),
     primary: {
-      emoji: '💰',
       label: t(ctx, 'checkout_total_label'),
       value: `${localizedNumber(input.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      emphasizeValue: true,
     },
     sections: [
       {
-        emoji: '📱',
         title: t(ctx, 'renewal_selection_service_label'),
         fields: [
           {
-            emoji: '🆔',
             label: t(ctx, 'checkout_service_label'),
             value: `\`${sanitizeTelegramInlineCode(input.username)}\``,
           },
         ],
       },
       {
-        emoji: '📦',
         title: t(ctx, 'checkout_package_section'),
         fields: [
           {
-            emoji: '📊',
             label: t(ctx, 'checkout_traffic_label'),
             value: `${localizedNumber(input.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
           },
           {
-            emoji: '⏳',
             label: t(ctx, 'checkout_duration_label'),
             value: `${localizedNumber(input.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
           },
           {
-            emoji: '💳',
             label: t(ctx, 'checkout_unit_price_label'),
             value: `${localizedNumber(input.pricePerGb, ctx)} ${t(ctx, 'currency_toman')}`,
           },
@@ -1387,7 +1377,6 @@ function buildRenewalCheckoutScreen(
               title: t(ctx, 'checkout_promo_section'),
               fields: [
                 {
-                  emoji: '🎟️',
                   label: t(ctx, 'shop_promo_section'),
                   value: `\`${sanitizeTelegramInlineCode(input.promoCode)}\``,
                 },
@@ -1396,7 +1385,7 @@ function buildRenewalCheckoutScreen(
           ]
         : []),
     ],
-    footer: `ℹ️ ${t(ctx, 'checkout_confirmation_hint')}`,
+    footer: t(ctx, 'checkout_confirmation_hint'),
   });
 }
 
@@ -1408,7 +1397,7 @@ export function buildDeleteReviewScreen(
   const refundValue = quote.eligible
     ? `${localizedNumber(quote.refundAmount, ctx)} ${t(ctx, 'currency_toman')}`
     : undefined;
-  return buildScreen({
+  return buildUserScreen({
     emoji: '🗑️',
     title: t(ctx, 'config_delete_review_title'),
     subtitle: t(
@@ -1420,6 +1409,7 @@ export function buildDeleteReviewScreen(
           emoji: '💸',
           label: t(ctx, 'config_delete_refund_label'),
           value: refundValue!,
+          emphasizeValue: true,
         }
       : {
           emoji: '⚠️',
@@ -1428,11 +1418,9 @@ export function buildDeleteReviewScreen(
         },
     sections: [
       {
-        emoji: '📱',
         title: t(ctx, 'config_delete_service_label'),
         fields: [
           {
-            emoji: '🆔',
             label: t(ctx, 'checkout_service_label'),
             value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
           },
@@ -1441,21 +1429,17 @@ export function buildDeleteReviewScreen(
       ...(quote.eligible
         ? [
             {
-              emoji: '💰',
               title: t(ctx, 'config_delete_refund_label'),
               fields: [
                 {
-                  emoji: '💳',
                   label: t(ctx, 'config_delete_original_charge_label'),
                   value: `${localizedNumber(quote.grossAmount, ctx)} ${t(ctx, 'currency_toman')}`,
                 },
                 {
-                  emoji: '🎁',
                   label: t(ctx, 'config_delete_cashback_label'),
                   value: `${localizedNumber(quote.cashbackWithheld, ctx)} ${t(ctx, 'currency_toman')}`,
                 },
                 {
-                  emoji: '💸',
                   label: t(ctx, 'config_delete_refund_label'),
                   value: refundValue!,
                 },
@@ -1476,7 +1460,7 @@ function buildDeleteResultScreen(
   refundAmount: number | undefined,
   refunded: boolean
 ): string {
-  return buildScreen({
+  return buildUserScreen({
     emoji: '✅',
     title: t(ctx, 'config_delete_success_title'),
     subtitle: t(
@@ -1490,21 +1474,20 @@ function buildDeleteResultScreen(
           emoji: '💸',
           label: t(ctx, 'config_delete_refund_label'),
           value: `${localizedNumber(refundAmount ?? 0, ctx)} ${t(ctx, 'currency_toman')}`,
+          emphasizeValue: true,
         }
       : {
-          emoji: '🗑️',
           label: t(ctx, 'config_delete_service_label'),
           value: `\`${sanitizeTelegramInlineCode(username)}\``,
+          inline: true,
         },
     ...(refunded
       ? {
           sections: [
             {
-              emoji: '📱',
               title: t(ctx, 'config_delete_service_label'),
               fields: [
                 {
-                  emoji: '🆔',
                   label: t(ctx, 'checkout_service_label'),
                   value: `\`${sanitizeTelegramInlineCode(username)}\``,
                 },
