@@ -58,6 +58,11 @@ export interface SessionData {
   transferConfigId?: string;
   transferConfigOwnerTelegramId?: number;
   orphanAssignIssueId?: string;
+  adminOrphanView?: {
+    filter: 'all' | 'remote' | 'local' | 'ignored';
+    page: number;
+    search?: string;
+  };
   renewConfigId?: string;
   /** Package terms awaiting the user's explicit auto-renew confirmation. */
   pendingAutoRenew?: { configId: string; packageId: string; price: number };

@@ -3,7 +3,12 @@ import { InlineKeyboard } from 'grammy';
 import { describe, expect, it, vi } from 'vitest';
 import { TranslationService } from '../../src/domain/services/TranslationService.js';
 import { buildAdminPanelOutageScreen } from '../../src/telegram/botRuntime.js';
-import { renderAdminRegistry } from '../../src/telegram/features/admin/maintenanceRoutes.js';
+import {
+  extractCandidateTelegramId,
+  registerAdminMaintenanceRoutes,
+  renderAdminRegistry,
+  renderOrphanIssues,
+} from '../../src/telegram/features/admin/maintenanceRoutes.js';
 import {
   buildPanelDetailKeyboard,
   buildPanelServicesKeyboard,
@@ -289,5 +294,165 @@ describe('Admin menu hierarchy & Markdown-safe admin registry', () => {
     expect(callbacks).not.toContain('admin:admins:remove:6698253699');
     expect(callbacks).toContain('admin:admins:add');
     expect(callbacks).toContain('nav:admin');
+  });
+
+  it('renders minimal orphan queue with filter tabs, owner badges, live detail snapshot, and 1-tap quick assign', async () => {
+    expect(extractCandidateTelegramId('h_6698253699_75')).toBe(6698253699);
+    expect(extractCandidateTelegramId('Tanaz', 'Owner ID: 455713813')).toBe(455713813);
+    expect(extractCandidateTelegramId('bTEwij')).toBeNull();
+
+    const issueRemoteId = '11111111-2222-4333-8444-555555555555';
+    const issueLocalId = '22222222-3333-4444-8555-666666666666';
+
+    const assignRemoteUnbound = vi.fn(async () => ({
+      configId: 'uc_new',
+      configUsername: 'h_6698253699_75',
+    }));
+
+    const services = createMockServices({
+      adminIds: [1],
+      isAdmin: vi.fn((id) => id === 1),
+      panelRegistry: {
+        getPanel: vi.fn(() => ({ id: 'legacy', name: 'Main Panel', enabled: true })),
+      },
+      userService: {
+        findProfile: vi.fn(async (query: string) => {
+          if (query === '6698253699') {
+            return {
+              telegramId: 6698253699,
+              username: 'Ho3einK84',
+              firstName: 'Hossein',
+              isBanned: false,
+            };
+          }
+          if (query === '455713813') {
+            return {
+              telegramId: 455713813,
+              username: 'mahdikarimi2002',
+              firstName: 'Mahdi',
+              isBanned: false,
+            };
+          }
+          return null;
+        }),
+      },
+      configReconciliationService: {
+        getQueueSummary: vi.fn(async () => ({
+          openTotal: 2,
+          remoteUnbound: 1,
+          localMissingRemote: 1,
+          ignored: 15,
+        })),
+        listIssues: vi.fn(async () => ({
+          issues: [
+            {
+              id: issueRemoteId,
+              panelId: 'legacy',
+              kind: 'remote_unbound',
+              configUsername: 'h_6698253699_75',
+              localOwnerTelegramId: null,
+              status: 'open',
+              firstSeenAt: new Date('2026-11-20T00:00:00Z'),
+            },
+            {
+              id: issueLocalId,
+              panelId: 'legacy',
+              kind: 'local_missing_remote',
+              configUsername: 'h_455713813_61',
+              localOwnerTelegramId: 455713813,
+              status: 'open',
+              firstSeenAt: new Date('2026-11-20T00:00:00Z'),
+            },
+          ],
+          total: 2,
+          page: 1,
+          totalPages: 1,
+        })),
+        getIssue: vi.fn(async (id: string) => {
+          if (id === issueRemoteId) {
+            return {
+              id: issueRemoteId,
+              panelId: 'legacy',
+              kind: 'remote_unbound',
+              configUsername: 'h_6698253699_75',
+              localOwnerTelegramId: null,
+              status: 'open',
+              firstSeenAt: new Date('2026-11-20T00:00:00Z'),
+            };
+          }
+          return undefined;
+        }),
+        getRemoteServiceSnapshot: vi.fn(async () => ({
+          status: 'active',
+          usedTraffic: 12 * 1024 ** 3,
+          dataLimit: 50 * 1024 ** 3,
+          expire: 1_800_000_000,
+          onlineAt: new Date().toISOString(),
+          createdAt: '2026-11-01T00:00:00Z',
+          note: 'VIP Service',
+          serviceId: 1,
+        })),
+        assignRemoteUnbound,
+      },
+    });
+    services.translationService = new TranslationService();
+
+    const harness = createBotHarness({ services });
+    registerAdminMaintenanceRoutes(harness.bot);
+
+    let queueText = '';
+    let queueKeyboard: unknown = null;
+    const ctx = {
+      from: { id: 1 },
+      session: {},
+      editMessageText: vi.fn(async (text: string, options?: { reply_markup?: unknown }) => {
+        queueText = text;
+        queueKeyboard = options?.reply_markup;
+        return { message_id: 202 };
+      }),
+      callbackQuery: { message: { message_id: 202 } },
+      services,
+    } as unknown as MenuContext;
+
+    await renderOrphanIssues(ctx, 1);
+    expect(validateTelegramMarkdown(queueText).valid).toBe(true);
+    expect(queueText).toContain('Mahdi');
+    expect(queueText).toContain('Hossein');
+    const queueCbs = extractCallbackDataList(queueKeyboard);
+    expect(queueCbs).toEqual(
+      expect.arrayContaining([
+        'admin:orphans:tab:remote',
+        'admin:orphans:tab:local',
+        'admin:orphans:tab:all',
+        'admin:orphans:tab:ignored',
+        `admin:orphan:view:${issueRemoteId}`,
+        `admin:orphan:view:${issueLocalId}`,
+        'admin:orphans:clean_local',
+        'admin:orphans:baseline',
+        'admin:orphans:scan',
+        'admin:orphans:search',
+      ])
+    );
+
+    // View detail of remote_unbound issue -> verifies live telemetry + quick assign button
+    await harness.sendCallback(`admin:orphan:view:${issueRemoteId}`, { userId: 1 });
+    const detailEdit = harness.callsFor('editMessageText').at(-1)?.payload;
+    const detailText = String(detailEdit?.text ?? '');
+    expect(validateTelegramMarkdown(detailText).valid).toBe(true);
+    expect(detailText).toContain('Main Panel');
+    expect(detailText).toContain('VIP Service');
+    expect(detailText).toContain('@Ho3einK84');
+    const detailCbs = extractCallbackDataList(detailEdit?.reply_markup);
+    expect(detailCbs).toContain(`admin:orphan:qa:${issueRemoteId}`);
+
+    // Execute 1-tap quick assign
+    harness.clearCalls();
+    await harness.sendCallback(`admin:orphan:qa:${issueRemoteId}`, { userId: 1 });
+    expect(assignRemoteUnbound).toHaveBeenCalledWith(issueRemoteId, 6698253699, 1);
+    const assignedEdit = harness.callsFor('editMessageText').at(-1)?.payload;
+    expect(String(assignedEdit?.text ?? '')).toContain('6698253699');
+    expect(extractCallbackDataList(assignedEdit?.reply_markup)).toContain(
+      'admin:user:view:6698253699'
+    );
   });
 });

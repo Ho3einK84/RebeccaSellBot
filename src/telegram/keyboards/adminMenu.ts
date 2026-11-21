@@ -211,8 +211,18 @@ export const adminPanelsMenu = new Menu<MenuContext>('admin-panels-menu')
     }
   )
   .text(
-    (ctx) => t(ctx, 'admin_menu_orphans'),
     async (ctx) => {
+      const baseLabel = t(ctx, 'admin_menu_orphans');
+      const summary = await ctx.services?.configReconciliationService
+        ?.getQueueSummary?.()
+        .catch(() => null);
+      if (summary && summary.openTotal > 0) {
+        return `${baseLabel} (⚠️ ${localizedNumber(summary.openTotal, ctx)})`;
+      }
+      return baseLabel;
+    },
+    async (ctx) => {
+      delete ctx.session.adminOrphanView;
       await renderOrphanIssues(ctx, 1);
     }
   )

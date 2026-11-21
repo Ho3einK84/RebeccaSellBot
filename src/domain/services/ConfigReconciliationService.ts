@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, asc, count, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, lt, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
 import {
   auditLogs,
@@ -30,6 +30,26 @@ import {
 import { logger } from '../../infra/logger.js';
 
 export type ConfigReconciliationIssue = typeof configReconciliationIssues.$inferSelect;
+
+export type OrphanIssueFilter = 'all' | 'remote' | 'local' | 'ignored';
+
+export type OrphanQueueSummary = {
+  openTotal: number;
+  remoteUnbound: number;
+  localMissingRemote: number;
+  ignored: number;
+};
+
+export type RemoteOrphanSnapshot = {
+  status: string;
+  usedTraffic: number;
+  dataLimit: number | null;
+  expire: number | null;
+  onlineAt: string | null;
+  createdAt: string | null;
+  note: string | null;
+  serviceId: number | null;
+};
 
 /** Detect and administratively repair drift between Rebecca and local ownership. */
 export class ConfigReconciliationService {
@@ -86,9 +106,41 @@ export class ConfigReconciliationService {
     return { localMissingRemote, remoteUnbound, remoteIgnored, failedPanels };
   }
 
+  async getQueueSummary(): Promise<OrphanQueueSummary> {
+    const rows = await getDb()
+      .select({
+        kind: configReconciliationIssues.kind,
+        status: configReconciliationIssues.status,
+        value: count(),
+      })
+      .from(configReconciliationIssues)
+      .where(sql`${configReconciliationIssues.status} IN ('open', 'ignored')`)
+      .groupBy(configReconciliationIssues.kind, configReconciliationIssues.status);
+
+    let remoteUnbound = 0;
+    let localMissingRemote = 0;
+    let ignored = 0;
+    for (const row of rows) {
+      const num = Number(row.value) || 0;
+      if (row.status === 'ignored') {
+        ignored += num;
+      } else if (row.status === 'open') {
+        if (row.kind === 'remote_unbound') remoteUnbound += num;
+        else if (row.kind === 'local_missing_remote') localMissingRemote += num;
+      }
+    }
+    return {
+      openTotal: remoteUnbound + localMissingRemote,
+      remoteUnbound,
+      localMissingRemote,
+      ignored,
+    };
+  }
+
   async listIssues(
     requestedPage = 1,
-    pageSize = 8
+    pageSize = 8,
+    options?: { filter?: OrphanIssueFilter; search?: string }
   ): Promise<{
     issues: ConfigReconciliationIssue[];
     total: number;
@@ -97,11 +149,9 @@ export class ConfigReconciliationService {
   }> {
     const db = getDb();
     const safeSize = Math.max(1, Math.min(Math.floor(pageSize), 25));
+    const whereClause = this.buildListIssuesWhere(options);
     const [[totalRow]] = await Promise.all([
-      db
-        .select({ value: count() })
-        .from(configReconciliationIssues)
-        .where(eq(configReconciliationIssues.status, 'open')),
+      db.select({ value: count() }).from(configReconciliationIssues).where(whereClause),
     ]);
     const total = totalRow?.value ?? 0;
     const totalPages = Math.max(1, Math.ceil(total / safeSize));
@@ -109,11 +159,76 @@ export class ConfigReconciliationService {
     const issues = await db
       .select()
       .from(configReconciliationIssues)
-      .where(eq(configReconciliationIssues.status, 'open'))
+      .where(whereClause)
       .orderBy(asc(configReconciliationIssues.firstSeenAt))
       .limit(safeSize)
       .offset((page - 1) * safeSize);
     return { issues, total, page, totalPages };
+  }
+
+  private buildListIssuesWhere(options?: {
+    filter?: OrphanIssueFilter;
+    search?: string;
+  }): SQL | undefined {
+    const filter = options?.filter ?? 'all';
+    const rawSearch = options?.search?.trim() ?? '';
+    const conditions: SQL[] = [];
+
+    if (filter === 'remote') {
+      conditions.push(eq(configReconciliationIssues.status, 'open'));
+      conditions.push(eq(configReconciliationIssues.kind, 'remote_unbound'));
+    } else if (filter === 'local') {
+      conditions.push(eq(configReconciliationIssues.status, 'open'));
+      conditions.push(eq(configReconciliationIssues.kind, 'local_missing_remote'));
+    } else if (filter === 'ignored') {
+      conditions.push(eq(configReconciliationIssues.status, 'ignored'));
+    } else if (rawSearch.length > 0) {
+      conditions.push(sql`${configReconciliationIssues.status} IN ('open', 'ignored')`);
+    } else {
+      conditions.push(eq(configReconciliationIssues.status, 'open'));
+    }
+
+    if (rawSearch.length > 0) {
+      const escaped = rawSearch.replace(/[\\%_]/g, '\\$&');
+      const numericId =
+        /^[1-9]\d{4,14}$/u.test(rawSearch) && Number.isSafeInteger(Number(rawSearch))
+          ? Number(rawSearch)
+          : undefined;
+      if (numericId !== undefined) {
+        conditions.push(
+          or(
+            ilike(configReconciliationIssues.configUsername, `%${escaped}%`),
+            eq(configReconciliationIssues.localOwnerTelegramId, numericId)
+          )!
+        );
+      } else {
+        conditions.push(ilike(configReconciliationIssues.configUsername, `%${escaped}%`));
+      }
+    }
+
+    return conditions.length === 1 ? conditions[0] : and(...conditions);
+  }
+
+  async getRemoteServiceSnapshot(
+    panelId: string,
+    configUsername: string
+  ): Promise<RemoteOrphanSnapshot | null> {
+    try {
+      const remote = await this.panels.getService(panelId).getUser(configUsername);
+      if (!remote || remote.status === 'deleted') return null;
+      return {
+        status: remote.status,
+        usedTraffic: remote.used_traffic ?? 0,
+        dataLimit: remote.data_limit ?? null,
+        expire: remote.expire ?? null,
+        onlineAt: remote.online_at ?? null,
+        createdAt: remote.created_at ?? null,
+        note: remote.note?.trim() ? remote.note.trim() : null,
+        serviceId: remote.service_id ?? null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   async getIssue(issueId: string): Promise<ConfigReconciliationIssue | undefined> {
@@ -259,7 +374,7 @@ export class ConfigReconciliationService {
         and(
           eq(configReconciliationIssues.id, issueId),
           eq(configReconciliationIssues.kind, 'remote_unbound'),
-          eq(configReconciliationIssues.status, 'open')
+          sql`${configReconciliationIssues.status} IN ('open', 'ignored')`
         )
       )
       .limit(1);
@@ -365,6 +480,65 @@ export class ConfigReconciliationService {
         metadata: JSON.stringify({ configUsername: updated.configUsername }),
       });
     return true;
+  }
+
+  async unignoreIssue(issueId: string, actorTelegramId: number): Promise<boolean> {
+    const [updated] = await getDb()
+      .update(configReconciliationIssues)
+      .set({ status: 'open', resolvedAt: null, lastSeenAt: new Date() })
+      .where(
+        and(
+          eq(configReconciliationIssues.id, issueId),
+          eq(configReconciliationIssues.status, 'ignored')
+        )
+      )
+      .returning({ configUsername: configReconciliationIssues.configUsername });
+    if (!updated) return false;
+    await getDb()
+      .insert(auditLogs)
+      .values({
+        id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        actorTelegramId,
+        action: 'orphan_issue_reopened',
+        entityType: 'config_reconciliation_issue',
+        entityId: issueId,
+        metadata: JSON.stringify({ configUsername: updated.configUsername }),
+      });
+    return true;
+  }
+
+  async removeAllLocalMissing(actorTelegramId: number): Promise<{
+    removed: number;
+    reappeared: number;
+    failed: number;
+  }> {
+    const openLocalIssues = await getDb()
+      .select({ id: configReconciliationIssues.id })
+      .from(configReconciliationIssues)
+      .where(
+        and(
+          eq(configReconciliationIssues.kind, 'local_missing_remote'),
+          eq(configReconciliationIssues.status, 'open')
+        )
+      )
+      .orderBy(asc(configReconciliationIssues.firstSeenAt));
+
+    let removed = 0;
+    let reappeared = 0;
+    let failed = 0;
+    for (const row of openLocalIssues) {
+      try {
+        const ok = await this.removeLocalMissing(row.id, actorTelegramId);
+        if (ok) removed += 1;
+      } catch (err) {
+        if (err instanceof Error && err.message === 'ORPHAN_REMOTE_REAPPEARED') {
+          reappeared += 1;
+        } else {
+          failed += 1;
+        }
+      }
+    }
+    return { removed, reappeared, failed };
   }
 
   /**

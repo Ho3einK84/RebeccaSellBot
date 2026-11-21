@@ -1,6 +1,6 @@
 import { InlineKeyboard } from 'grammy';
-import type { ConversationContext, MyConversation } from '../../types.js';
-import { t } from '../../locale.js';
+import type { ConversationContext, MenuContext, MyConversation } from '../../types.js';
+import { normalizeInputDigits, t } from '../../locale.js';
 import {
   buildEmptyState,
   buildPromptScreen,
@@ -10,6 +10,14 @@ import {
   replyInAdminConversation,
   waitForAdminTextInput,
 } from '../../ui.js';
+import { callbackData } from '../../callbackData.js';
+import {
+  buildOrphanAssignedKeyboard,
+  buildOrphanAssignedScreen,
+  renderOrphanIssues,
+  resolveOrphanAssignErrorKey,
+  type OrphanIssue,
+} from '../../features/admin/maintenanceRoutes.js';
 import { parsePositiveSafeInteger, requireAdmin } from './shared.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
@@ -101,6 +109,12 @@ export async function adminAssignOrphanConversation(
     outsideCtx.session.orphanAssignIssueId = undefined;
     return selected;
   });
+
+  const backToListKeyboard = new InlineKeyboard().text(
+    t(ctx, 'admin_orphan_back_to_list'),
+    'admin:orphans:back'
+  );
+
   if (!issueId) {
     await replyInAdminConversation(
       conversation,
@@ -110,35 +124,101 @@ export async function adminAssignOrphanConversation(
         t(ctx, 'admin_orphan_detail_title'),
         t(ctx, 'admin_orphan_issue_missing')
       ),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: backToListKeyboard }
     );
     return;
   }
+
+  if (issueId === '__search__') {
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildPromptScreen(
+        '🔍',
+        t(ctx, 'admin_orphan_search_title'),
+        t(ctx, 'admin_orphan_search_prompt'),
+        t(ctx, 'admin_orphan_queue_subtitle')
+      ),
+      { parse_mode: 'Markdown', reply_markup: cancelKeyboard(ctx) }
+    );
+    const rawSearch = await waitForAdminTextInput(conversation);
+    if (rawSearch === undefined) return;
+    const normalizedSearch = normalizeInputDigits(rawSearch).trim();
+    await conversation.external(async (outsideCtx) => {
+      await renderOrphanIssues(outsideCtx as MenuContext, 1, {
+        search: normalizedSearch || undefined,
+      });
+    });
+    return;
+  }
+
+  const issue = await conversation.external(
+    (outsideCtx) =>
+      outsideCtx.services?.configReconciliationService.getIssue(issueId) as
+        Promise<OrphanIssue | undefined> | undefined
+  );
+  if (!issue || issue.status === 'resolved') {
+    await replyInAdminConversation(
+      conversation,
+      ctx,
+      buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_orphan_detail_title'),
+        t(ctx, 'admin_orphan_issue_missing')
+      ),
+      { parse_mode: 'Markdown', reply_markup: backToListKeyboard }
+    );
+    return;
+  }
+
   await promptInConversation(
     conversation,
     ctx,
-    buildPromptScreen(
-      '👤',
-      t(ctx, 'admin_orphan_detail_title'),
-      t(ctx, 'admin_orphan_assign_prompt'),
-      t(ctx, 'admin_orphan_queue_subtitle')
-    ),
-    { parse_mode: 'Markdown' }
+    buildScreen({
+      emoji: '👤',
+      title: t(ctx, 'admin_orphan_detail_title'),
+      subtitle: t(ctx, 'admin_orphan_queue_subtitle'),
+      primary: {
+        emoji: '🔗',
+        label: t(ctx, 'admin_orphan_service_label'),
+        value: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\``,
+      },
+      footer: t(ctx, 'admin_orphan_assign_prompt'),
+    }),
+    { parse_mode: 'Markdown', reply_markup: cancelKeyboard(ctx) }
   );
-  const query = await waitForAdminTextInput(conversation);
-  if (query === undefined) return;
-  const target = await conversation.external((outsideCtx) =>
-    outsideCtx.services!.userService.findProfile(query)
-  );
+  const rawQuery = await waitForAdminTextInput(conversation);
+  if (rawQuery === undefined) return;
+  const query = normalizeInputDigits(rawQuery).trim();
+
+  const target = await conversation.external(async (outsideCtx) => {
+    const userSvc = outsideCtx.services!.userService;
+    const direct = await userSvc.findProfile(query);
+    if (direct) return direct;
+    if (typeof userSvc.searchProfiles === 'function') {
+      const candidates = await userSvc.searchProfiles(query, 2);
+      if (candidates.length === 1) return candidates[0] ?? null;
+    }
+    return null;
+  });
+
+  const retryKeyboard = new InlineKeyboard()
+    .text(t(ctx, 'admin_orphan_assign_button'), callbackData('admin', 'orphan', 'assign', issueId))
+    .row()
+    .text(t(ctx, 'menu_back'), callbackData('admin', 'orphan', 'view', issueId))
+    .row()
+    .text(t(ctx, 'admin_orphan_back_to_list'), 'admin:orphans:back');
+
   if (!target) {
     await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState('⚠️', t(ctx, 'admin_orphan_detail_title'), t(ctx, 'admin_user_not_found')),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: retryKeyboard }
     );
     return;
   }
+
   try {
     const result = await conversation.external((outsideCtx) =>
       outsideCtx.services!.configReconciliationService.assignRemoteUnbound(
@@ -151,48 +231,29 @@ export async function adminAssignOrphanConversation(
       conversation,
       ctx,
       result
-        ? buildScreen({
-            emoji: '✅',
-            title: t(ctx, 'admin_orphan_detail_title'),
-            primary: {
-              emoji: '🧩',
-              label: t(ctx, 'admin_orphan_service_label'),
-              value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
-            },
-            sections: [
-              {
-                emoji: '👤',
-                title: t(ctx, 'admin_registry_section'),
-                fields: [
-                  {
-                    label: t(ctx, 'admin_orphan_owner_label'),
-                    value: `\`${target.telegramId}\``,
-                  },
-                ],
-              },
-            ],
-            footer: t(ctx, 'admin_orphan_assigned', {
-              username: escapeTelegramMarkdown(result.configUsername),
-              telegram_id: target.telegramId,
-            }),
-          })
+        ? buildOrphanAssignedScreen(ctx, result.configUsername, target)
         : buildEmptyState(
             '⚠️',
             t(ctx, 'admin_orphan_detail_title'),
             t(ctx, 'admin_orphan_issue_missing')
           ),
-      { parse_mode: 'Markdown' }
+      {
+        parse_mode: 'Markdown',
+        reply_markup: result
+          ? buildOrphanAssignedKeyboard(ctx, target.telegramId)
+          : backToListKeyboard,
+      }
     );
-  } catch {
+  } catch (err) {
     await replyInAdminConversation(
       conversation,
       ctx,
       buildEmptyState(
         '⚠️',
         t(ctx, 'admin_orphan_detail_title'),
-        t(ctx, 'admin_orphan_assign_failed')
+        t(ctx, resolveOrphanAssignErrorKey(err))
       ),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: retryKeyboard }
     );
   }
 }

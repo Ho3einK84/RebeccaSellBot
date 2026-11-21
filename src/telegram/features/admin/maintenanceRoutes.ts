@@ -1,25 +1,36 @@
 import { InlineKeyboard, type Bot } from 'grammy';
 import { LastAdminRemovalError } from '../../../domain/services/AdminService.js';
-import type { MenuContext } from '../../types.js';
-import { localizedDate, localizedNumber, t } from '../../locale.js';
+import type {
+  OrphanIssueFilter,
+  OrphanQueueSummary,
+  RemoteOrphanSnapshot,
+} from '../../../domain/services/ConfigReconciliationService.js';
+import type { LocalUserProfile } from '../../../domain/services/UserService.js';
+import type { ConversationContext, MenuContext } from '../../types.js';
+import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
 import {
   buildEmptyState,
   buildScreen,
   buildStatusBadge,
   guardAdminCallbacks,
   renderScreen,
+  type ScreenField,
+  type ScreenSection,
 } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 const ORPHAN_PAGE_SIZE = 6;
 const UUID_CAPTURE = '([0-9a-fA-F-]{36})';
+const BYTES_PER_GB = 1024 ** 3;
 
-type OrphanIssue = {
+export type OrphanIssue = {
   id: string;
+  panelId?: string;
   kind: 'local_missing_remote' | 'remote_unbound';
   configUsername: string;
   localOwnerTelegramId: number | null;
+  status?: string;
   firstSeenAt: Date;
 };
 
@@ -29,6 +40,85 @@ type OrphanIssuePage = {
   totalPages: number;
   total: number;
 };
+
+type EnrichedOrphanIssue = {
+  issue: OrphanIssue;
+  ownerProfile: LocalUserProfile | null;
+  suggestedOwner: LocalUserProfile | null;
+};
+
+export interface RenderOrphanIssuesOptions {
+  filter?: OrphanIssueFilter;
+  search?: string;
+  banner?: string;
+}
+
+/** Extract a candidate Telegram ID embedded in a config username (e.g., h_6698253699_75) or panel note. */
+export function extractCandidateTelegramId(
+  configUsername: string,
+  note?: string | null
+): number | null {
+  const sources = [configUsername, note ?? ''];
+  for (const source of sources) {
+    if (!source) continue;
+    const match = /(?:^|[^0-9])([1-9]\d{5,14})(?:[^0-9]|$)/u.exec(source);
+    if (match?.[1]) {
+      const parsed = Number(match[1]);
+      if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
+    }
+  }
+  return null;
+}
+
+function formatUserDisplay(profile: LocalUserProfile | null, fallbackId?: number | null): string {
+  if (profile) {
+    const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
+    const handle = profile.username ? `@${escapeTelegramMarkdown(profile.username)}` : '';
+    const nameAndHandle = [
+      fullName ? escapeTelegramMarkdown(fullName) : '',
+      handle ? (fullName ? `(${handle})` : handle) : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return nameAndHandle
+      ? `${nameAndHandle} · \`${profile.telegramId}\``
+      : `\`${profile.telegramId}\``;
+  }
+  if (fallbackId !== null && fallbackId !== undefined) {
+    return `\`${fallbackId}\``;
+  }
+  return '—';
+}
+
+function formatUserShortBadge(
+  profile: LocalUserProfile | null,
+  fallbackId?: number | null
+): string {
+  if (profile?.firstName?.trim()) {
+    return profile.firstName.trim().slice(0, 14);
+  }
+  if (profile?.username?.trim()) {
+    return `@${profile.username.trim().slice(0, 13)}`;
+  }
+  if (fallbackId) {
+    return String(fallbackId);
+  }
+  return '';
+}
+
+export function resolveOrphanAssignErrorKey(err: unknown): string {
+  const code = err instanceof Error ? err.message : '';
+  switch (code) {
+    case 'ORPHAN_TARGET_BANNED':
+      return 'admin_orphan_assign_target_banned';
+    case 'ORPHAN_REMOTE_DELETED':
+      return 'admin_orphan_assign_remote_deleted';
+    case 'ORPHAN_ALREADY_BOUND':
+      return 'admin_orphan_assign_already_bound';
+    default:
+      return 'admin_orphan_assign_failed';
+  }
+}
 
 export async function renderAdminRegistry(ctx: MenuContext): Promise<void> {
   if (!ctx.services) return;
@@ -105,29 +195,82 @@ export async function renderAdminRegistry(ctx: MenuContext): Promise<void> {
   await renderMaintenanceScreen(ctx, text, keyboard);
 }
 
-export async function renderOrphanIssues(ctx: MenuContext, requestedPage = 1): Promise<void> {
+export async function renderOrphanIssues(
+  ctx: MenuContext,
+  requestedPage?: number,
+  options?: RenderOrphanIssuesOptions
+): Promise<void> {
   if (!ctx.services) return;
+  const savedView = ctx.session?.adminOrphanView;
+  const filter: OrphanIssueFilter = options?.filter ?? savedView?.filter ?? 'all';
+  const search =
+    options && 'search' in options
+      ? options.search?.trim() || undefined
+      : savedView?.search?.trim() || undefined;
+  const targetPage = requestedPage ?? savedView?.page ?? 1;
+
   const result = (await ctx.services.configReconciliationService.listIssues(
-    requestedPage,
-    ORPHAN_PAGE_SIZE
+    targetPage,
+    ORPHAN_PAGE_SIZE,
+    { filter, search }
   )) as OrphanIssuePage;
-  if (result.issues.length === 0) {
-    await renderMaintenanceScreen(
-      ctx,
-      buildEmptyState(
-        '✅',
-        t(ctx, 'admin_orphan_queue_empty_title'),
-        t(ctx, 'admin_orphan_queue_empty_body')
-      ),
-      buildOrphanQueueActions(ctx)
-    );
-    return;
+
+  const rawSummary = await ctx.services.configReconciliationService
+    .getQueueSummary?.()
+    .catch(() => null);
+  const summary: OrphanQueueSummary = rawSummary ?? {
+    openTotal: filter === 'ignored' ? 0 : result.total,
+    remoteUnbound: result.issues.filter((i) => i.kind === 'remote_unbound').length,
+    localMissingRemote: result.issues.filter((i) => i.kind === 'local_missing_remote').length,
+    ignored: filter === 'ignored' ? result.total : 0,
+  };
+
+  if (ctx.session) {
+    ctx.session.adminOrphanView = {
+      filter,
+      page: result.page,
+      ...(search ? { search } : {}),
+    };
   }
+
+  const enrichedIssues = await enrichOrphanIssuesPage(ctx, result.issues);
 
   await renderMaintenanceScreen(
     ctx,
-    buildOrphanQueueScreen(ctx, result),
-    buildOrphanQueueKeyboard(ctx, result)
+    buildOrphanQueueScreen(ctx, result, enrichedIssues, summary, {
+      filter,
+      search,
+      banner: options?.banner,
+    }),
+    buildOrphanQueueKeyboard(ctx, result, enrichedIssues, summary, { filter, search })
+  );
+}
+
+async function enrichOrphanIssuesPage(
+  ctx: MenuContext,
+  issues: OrphanIssue[]
+): Promise<EnrichedOrphanIssue[]> {
+  return Promise.all(
+    issues.map(async (issue) => {
+      if (issue.kind === 'local_missing_remote' && issue.localOwnerTelegramId) {
+        const ownerProfile =
+          (await ctx.services?.userService
+            ?.findProfile?.(String(issue.localOwnerTelegramId))
+            .catch(() => null)) ?? null;
+        return { issue, ownerProfile, suggestedOwner: null };
+      }
+      const candidateId = extractCandidateTelegramId(issue.configUsername);
+      const suggestedOwner = candidateId
+        ? ((await ctx.services?.userService
+            ?.findProfile?.(String(candidateId))
+            .catch(() => null)) ?? null)
+        : null;
+      return {
+        issue,
+        ownerProfile: null,
+        suggestedOwner: suggestedOwner && !suggestedOwner.isBanned ? suggestedOwner : null,
+      };
+    })
   );
 }
 
@@ -309,24 +452,37 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
     await renderOrphanIssues(ctx, Number(ctx.match[1]) || 1);
   });
   adminCallback('admin:orphans:open', async (ctx) => {
+    delete ctx.session.adminOrphanView;
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
-    await renderOrphanIssues(ctx, 1);
+    await renderOrphanIssues(ctx, 1, { filter: 'all', search: undefined });
+  });
+  adminCallback('admin:orphans:back', async (ctx) => {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await renderOrphanIssues(ctx);
+  });
+  adminCallback(/^admin:orphans:tab:(all|remote|local|ignored)$/u, async (ctx) => {
+    const filter = ctx.match[1] as OrphanIssueFilter;
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await renderOrphanIssues(ctx, 1, { filter });
+  });
+  adminCallback('admin:orphans:search', async (ctx) => {
+    ctx.session.orphanAssignIssueId = '__search__';
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminAssignOrphanConversation');
+  });
+  adminCallback('admin:orphans:clear_search', async (ctx) => {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await renderOrphanIssues(ctx, 1, { search: undefined });
   });
   adminCallback(new RegExp(`^admin:orphan:view:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const issue = (await ctx.services.configReconciliationService.getIssue(ctx.match[1]!)) as
       OrphanIssue | undefined;
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
-    if (!issue) {
-      await renderMaintenanceScreen(
-        ctx,
-        buildEmptyState(
-          '⚠️',
-          t(ctx, 'admin_orphan_queue_title'),
-          t(ctx, 'admin_orphan_issue_missing')
-        ),
-        new InlineKeyboard().text(t(ctx, 'menu_back'), 'admin:orphans:open')
-      );
+    if (!issue || issue.status === 'resolved') {
+      await renderOrphanIssues(ctx, undefined, {
+        banner: t(ctx, 'admin_orphan_issue_missing'),
+      });
       return;
     }
     await renderOrphanIssueDetail(ctx, issue);
@@ -337,49 +493,21 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
     try {
       const result = await ctx.services.configReconciliationService.scan();
       const healthy = result.failedPanels.length === 0;
-      await renderMaintenanceScreen(
-        ctx,
-        buildScreen({
-          emoji: healthy ? '✅' : '⚠️',
-          title: t(ctx, 'admin_orphan_scan_result_title'),
-          primary: {
-            emoji: healthy ? '🟢' : '⚠️',
-            label: t(ctx, 'admin_orphan_queue_pending_label'),
-            value: buildStatusBadge(ctx, healthy ? 'healthy' : 'warning'),
-          },
-          sections: [
-            {
-              emoji: '🧩',
-              title: t(ctx, 'admin_orphan_queue_section'),
-              fields: [
-                {
-                  label: t(ctx, 'admin_orphan_local_missing_label'),
-                  value: localizedNumber(result.localMissingRemote, ctx),
-                },
-                {
-                  label: t(ctx, 'admin_orphan_remote_unbound_label'),
-                  value: localizedNumber(result.remoteUnbound, ctx),
-                },
-                {
-                  label: t(ctx, 'admin_orphan_ignored_label'),
-                  value: localizedNumber(result.remoteIgnored, ctx),
-                },
-                {
-                  label: t(ctx, 'admin_orphan_failed_panels_label'),
-                  value: localizedNumber(result.failedPanels.length, ctx),
-                },
-              ],
-            },
-          ],
-          footer: t(ctx, healthy ? 'admin_orphan_scan_done' : 'admin_orphan_scan_partial', {
-            local: localizedNumber(result.localMissingRemote, ctx),
-            remote: localizedNumber(result.remoteUnbound, ctx),
-            ignored: localizedNumber(result.remoteIgnored, ctx),
-            failed: localizedNumber(result.failedPanels.length, ctx),
-          }),
-        }),
-        buildOrphanQueueActions(ctx)
-      );
+      const banner = t(ctx, healthy ? 'admin_orphan_scan_done' : 'admin_orphan_scan_partial', {
+        local: localizedNumber(result.localMissingRemote, ctx),
+        remote: localizedNumber(result.remoteUnbound, ctx),
+        ignored: localizedNumber(result.remoteIgnored, ctx),
+        failed: localizedNumber(result.failedPanels.length, ctx),
+      });
+      await renderOrphanIssues(ctx, 1, {
+        filter:
+          result.remoteUnbound > 0 && result.localMissingRemote === 0
+            ? 'remote'
+            : result.localMissingRemote > 0 && result.remoteUnbound === 0
+              ? 'local'
+              : 'all',
+        banner,
+      });
     } catch {
       await renderMaintenanceScreen(
         ctx,
@@ -388,7 +516,10 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
           t(ctx, 'admin_orphan_scan_result_title'),
           t(ctx, 'admin_orphan_scan_failed')
         ),
-        buildOrphanQueueActions(ctx)
+        new InlineKeyboard()
+          .text(t(ctx, 'admin_orphan_scan_button'), 'admin:orphans:scan')
+          .row()
+          .text(t(ctx, 'admin_orphan_back_to_list'), 'admin:orphans:back')
       );
     }
   });
@@ -405,7 +536,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
       new InlineKeyboard()
         .text(t(ctx, 'admin_orphan_baseline_confirm_button'), 'admin:orphans:baseline_confirm')
         .row()
-        .text(t(ctx, 'menu_cancel'), 'admin:orphans:open')
+        .text(t(ctx, 'menu_cancel'), 'admin:orphans:back')
     );
   });
   adminCallback('admin:orphans:baseline_confirm', async (ctx) => {
@@ -428,7 +559,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
           sections: [
             {
               emoji: '🧩',
-              title: t(ctx, 'admin_orphan_queue_section'),
+              title: t(ctx, 'admin_orphan_overview_section'),
               fields: [
                 {
                   label: t(ctx, 'admin_orphan_remote_total_label'),
@@ -446,7 +577,7 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
             },
           ],
         }),
-        buildOrphanQueueActions(ctx)
+        new InlineKeyboard().text(t(ctx, 'admin_orphan_back_to_list'), 'admin:orphans:back')
       );
     } catch {
       await renderMaintenanceScreen(
@@ -456,14 +587,108 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
           t(ctx, 'admin_orphan_baseline_title'),
           t(ctx, 'admin_orphan_baseline_failed')
         ),
-        buildOrphanQueueActions(ctx)
+        new InlineKeyboard().text(t(ctx, 'admin_orphan_back_to_list'), 'admin:orphans:back')
       );
     }
+  });
+  adminCallback('admin:orphans:clean_local', async (ctx) => {
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    const summary = await ctx.services?.configReconciliationService
+      ?.getQueueSummary?.()
+      .catch(() => null);
+    const localCount = summary?.localMissingRemote ?? 0;
+    await renderMaintenanceScreen(
+      ctx,
+      buildScreen({
+        emoji: '🧹',
+        title: t(ctx, 'admin_orphan_clean_local_title'),
+        subtitle: t(ctx, 'admin_orphan_clean_local_subtitle'),
+        primary: {
+          emoji: '📉',
+          label: t(ctx, 'admin_orphan_local_missing_label'),
+          value: localizedNumber(localCount, ctx),
+        },
+        footer: t(ctx, 'admin_orphan_remove_consequence'),
+      }),
+      new InlineKeyboard()
+        .text(t(ctx, 'admin_orphan_clean_local_confirm_button'), 'admin:orphans:clean_local_ok')
+        .row()
+        .text(t(ctx, 'menu_cancel'), 'admin:orphans:back')
+    );
+  });
+  adminCallback('admin:orphans:clean_local_ok', async (ctx) => {
+    if (!ctx.services) return;
+    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
+    const result = await ctx.services.configReconciliationService.removeAllLocalMissing(
+      ctx.from.id
+    );
+    const banner = t(ctx, 'admin_orphan_clean_local_done', {
+      count: localizedNumber(result.removed, ctx),
+    });
+    await renderOrphanIssues(ctx, 1, { filter: 'all', banner });
   });
   adminCallback(new RegExp(`^admin:orphan:assign:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     ctx.session.orphanAssignIssueId = ctx.match[1];
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminAssignOrphanConversation');
+  });
+  adminCallback(new RegExp(`^admin:orphan:qa:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+    if (!ctx.services) return;
+    const issueId = ctx.match[1]!;
+    const issue = (await ctx.services.configReconciliationService.getIssue(issueId)) as
+      OrphanIssue | undefined;
+    if (!issue) {
+      await ctx.answerCallbackQuery({
+        text: t(ctx, 'admin_orphan_issue_missing'),
+        show_alert: true,
+      });
+      await renderOrphanIssues(ctx);
+      return;
+    }
+    const candidateId = extractCandidateTelegramId(issue.configUsername);
+    const target = candidateId
+      ? await ctx.services.userService.findProfile(String(candidateId))
+      : null;
+    if (!target) {
+      await ctx.answerCallbackQuery({
+        text: t(ctx, 'admin_user_not_found'),
+        show_alert: true,
+      });
+      await renderOrphanIssueDetail(ctx, issue);
+      return;
+    }
+    try {
+      const assigned = await ctx.services.configReconciliationService.assignRemoteUnbound(
+        issueId,
+        target.telegramId,
+        ctx.from.id
+      );
+      if (!assigned) {
+        await ctx.answerCallbackQuery({
+          text: t(ctx, 'admin_orphan_issue_missing'),
+          show_alert: true,
+        });
+        await renderOrphanIssues(ctx);
+        return;
+      }
+      await ctx.answerCallbackQuery({
+        text: tm(ctx, 'admin_orphan_assigned', {
+          username: assigned.configUsername,
+          telegram_id: target.telegramId,
+        }),
+      });
+      await renderMaintenanceScreen(
+        ctx,
+        buildOrphanAssignedScreen(ctx, assigned.configUsername, target),
+        buildOrphanAssignedKeyboard(ctx, target.telegramId)
+      );
+    } catch (err) {
+      await ctx.answerCallbackQuery({
+        text: t(ctx, resolveOrphanAssignErrorKey(err)),
+        show_alert: true,
+      });
+      await renderOrphanIssueDetail(ctx, issue);
+    }
   });
   adminCallback(new RegExp(`^admin:orphan:remove:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
@@ -476,6 +701,11 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
       });
       return;
     }
+    const ownerProfile = issue.localOwnerTelegramId
+      ? await ctx.services.userService
+          .findProfile(String(issue.localOwnerTelegramId))
+          .catch(() => null)
+      : null;
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
     await renderMaintenanceScreen(
       ctx,
@@ -484,10 +714,24 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
         title: t(ctx, 'admin_orphan_remove_title'),
         subtitle: t(ctx, 'admin_orphan_remove_subtitle'),
         primary: {
-          emoji: '🧩',
+          emoji: '📉',
           label: t(ctx, 'admin_orphan_service_label'),
           value: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\``,
         },
+        sections: issue.localOwnerTelegramId
+          ? [
+              {
+                emoji: '👤',
+                title: t(ctx, 'admin_orphan_overview_section'),
+                fields: [
+                  {
+                    label: t(ctx, 'admin_orphan_owner_label'),
+                    value: formatUserDisplay(ownerProfile, issue.localOwnerTelegramId),
+                  },
+                ],
+              },
+            ]
+          : undefined,
         footer: t(ctx, 'admin_orphan_remove_consequence'),
       }),
       new InlineKeyboard()
@@ -501,47 +745,21 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
   });
   adminCallback(new RegExp(`^admin:orphan:remove_confirm:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
-    await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
     try {
       const removed = await ctx.services.configReconciliationService.removeLocalMissing(
         ctx.match[1]!,
         ctx.from.id
       );
-      await renderMaintenanceScreen(
-        ctx,
-        removed
-          ? buildScreen({
-              emoji: '✅',
-              title: t(ctx, 'admin_orphan_remove_title'),
-              primary: {
-                emoji: '✅',
-                label: t(ctx, 'ui_status_active'),
-                value: buildStatusBadge(ctx, 'active'),
-              },
-              footer: t(ctx, 'admin_orphan_removed'),
-            })
-          : buildEmptyState(
-              '⚠️',
-              t(ctx, 'admin_orphan_queue_title'),
-              t(ctx, 'admin_orphan_issue_missing')
-            ),
-        buildOrphanQueueActions(ctx)
-      );
+      const bannerKey = removed ? 'admin_orphan_removed' : 'admin_orphan_issue_missing';
+      await ctx.answerCallbackQuery({ text: t(ctx, bannerKey) });
+      await renderOrphanIssues(ctx, undefined, { banner: t(ctx, bannerKey) });
     } catch (err) {
-      await renderMaintenanceScreen(
-        ctx,
-        buildEmptyState(
-          '⚠️',
-          t(ctx, 'admin_orphan_remove_title'),
-          t(
-            ctx,
-            err instanceof Error && err.message === 'ORPHAN_REMOTE_REAPPEARED'
-              ? 'admin_orphan_remote_reappeared'
-              : 'admin_orphan_remove_failed'
-          )
-        ),
-        buildOrphanQueueActions(ctx)
-      );
+      const errKey =
+        err instanceof Error && err.message === 'ORPHAN_REMOTE_REAPPEARED'
+          ? 'admin_orphan_remote_reappeared'
+          : 'admin_orphan_remove_failed';
+      await ctx.answerCallbackQuery({ text: t(ctx, errKey), show_alert: true });
+      await renderOrphanIssues(ctx, undefined, { banner: t(ctx, errKey) });
     }
   });
   adminCallback(new RegExp(`^admin:orphan:ignore:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
@@ -550,47 +768,228 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
       ctx.match[1]!,
       ctx.from.id
     );
-    await ctx.answerCallbackQuery({
-      text: t(ctx, ignored ? 'admin_orphan_ignored' : 'admin_orphan_issue_missing'),
-    });
-    await renderOrphanIssues(ctx, 1);
+    const msgKey = ignored ? 'admin_orphan_ignored' : 'admin_orphan_issue_missing';
+    await ctx.answerCallbackQuery({ text: t(ctx, msgKey) });
+    await renderOrphanIssues(ctx, undefined, { banner: t(ctx, msgKey) });
+  });
+  adminCallback(new RegExp(`^admin:orphan:reopen:${UUID_CAPTURE}$`, 'u'), async (ctx) => {
+    if (!ctx.services) return;
+    const reopened = await ctx.services.configReconciliationService.unignoreIssue(
+      ctx.match[1]!,
+      ctx.from.id
+    );
+    const msgKey = reopened ? 'admin_orphan_reopened' : 'admin_orphan_issue_missing';
+    await ctx.answerCallbackQuery({ text: t(ctx, msgKey) });
+    await renderOrphanIssues(ctx, undefined, { banner: t(ctx, msgKey) });
   });
 }
 
-function buildOrphanQueueScreen(ctx: MenuContext, result: OrphanIssuePage): string {
+export function buildOrphanAssignedScreen(
+  ctx: ConversationContext,
+  configUsername: string,
+  target: LocalUserProfile
+): string {
+  return buildScreen({
+    emoji: '✅',
+    title: t(ctx, 'admin_orphan_detail_title'),
+    primary: {
+      emoji: '🧩',
+      label: t(ctx, 'admin_orphan_service_label'),
+      value: `\`${sanitizeTelegramInlineCode(configUsername)}\``,
+    },
+    sections: [
+      {
+        emoji: '👤',
+        title: t(ctx, 'admin_orphan_overview_section'),
+        fields: [
+          {
+            label: t(ctx, 'admin_orphan_owner_label'),
+            value: formatUserDisplay(target, target.telegramId),
+          },
+        ],
+      },
+    ],
+    footer: t(ctx, 'admin_orphan_assigned', {
+      username: escapeTelegramMarkdown(configUsername),
+      telegram_id: target.telegramId,
+    }),
+  });
+}
+
+export function buildOrphanAssignedKeyboard(
+  ctx: ConversationContext,
+  targetTelegramId: number
+): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(t(ctx, 'admin_orphan_view_owner_button'), `admin:user:view:${targetTelegramId}`)
+    .row()
+    .text(t(ctx, 'admin_orphan_back_to_list'), 'admin:orphans:back');
+}
+
+function buildOrphanQueueScreen(
+  ctx: MenuContext,
+  result: OrphanIssuePage,
+  enrichedIssues: EnrichedOrphanIssue[],
+  summary: OrphanQueueSummary,
+  options: { filter: OrphanIssueFilter; search?: string; banner?: string }
+): string {
+  const hasOpen = summary.openTotal > 0;
+  const overviewFields: ScreenField[] = [
+    {
+      emoji: '🔗',
+      label: t(ctx, 'admin_orphan_remote_unbound_label'),
+      value: localizedNumber(summary.remoteUnbound, ctx),
+    },
+    {
+      emoji: '📉',
+      label: t(ctx, 'admin_orphan_local_missing_label'),
+      value: localizedNumber(summary.localMissingRemote, ctx),
+    },
+    {
+      emoji: '🙈',
+      label: t(ctx, 'admin_orphan_ignored_label'),
+      value: localizedNumber(summary.ignored, ctx),
+    },
+  ];
+  if (options.search) {
+    overviewFields.push({
+      emoji: '🔍',
+      label: t(ctx, 'admin_orphan_search_active_label'),
+      value: `\`${sanitizeTelegramInlineCode(options.search)}\` (${localizedNumber(result.total, ctx)})`,
+    });
+  }
+
+  const sections: ScreenSection[] = [
+    {
+      emoji: '📊',
+      title: t(ctx, 'admin_orphan_overview_section'),
+      fields: overviewFields,
+    },
+  ];
+
+  if (enrichedIssues.length > 0) {
+    sections.push({
+      emoji: '📋',
+      title: t(ctx, 'admin_orphan_queue_section'),
+      fields: enrichedIssues.map(({ issue, ownerProfile, suggestedOwner }) => {
+        const isLocal = issue.kind === 'local_missing_remote';
+        const isIgnored = issue.status === 'ignored';
+        const emoji = isIgnored ? '🙈' : isLocal ? '📉' : '🔗';
+        let detail = t(ctx, isLocal ? 'admin_orphan_kind_local' : 'admin_orphan_kind_remote');
+        if (isLocal && (ownerProfile || issue.localOwnerTelegramId)) {
+          const shortOwner = formatUserShortBadge(ownerProfile, issue.localOwnerTelegramId);
+          if (shortOwner) detail += ` · 👤 ${escapeTelegramMarkdown(shortOwner)}`;
+        } else if (!isLocal && suggestedOwner) {
+          const shortSuggested = formatUserShortBadge(suggestedOwner, suggestedOwner.telegramId);
+          if (shortSuggested) detail += ` · 💡 ${escapeTelegramMarkdown(shortSuggested)}`;
+        }
+        return {
+          emoji,
+          label: '',
+          value: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\` · ${detail}`,
+        };
+      }),
+    });
+  }
+
+  const footerParts: string[] = [];
+  if (options.banner) {
+    footerParts.push(options.banner);
+  }
+  if (enrichedIssues.length === 0) {
+    const emptyMsg = options.search
+      ? t(ctx, 'admin_orphan_search_empty_body', {
+          search: escapeTelegramMarkdown(options.search),
+        })
+      : `${t(ctx, 'admin_orphan_queue_empty_title')} — ${t(ctx, 'admin_orphan_queue_empty_body')}`;
+    footerParts.push(`✨ ${emptyMsg}`);
+  } else if (result.totalPages > 1) {
+    footerParts.push(
+      `${localizedNumber(result.page, ctx)} / ${localizedNumber(result.totalPages, ctx)}`
+    );
+  }
+
   return buildScreen({
     emoji: '🧩',
     title: t(ctx, 'admin_orphan_queue_title'),
     subtitle: t(ctx, 'admin_orphan_queue_subtitle'),
     primary: {
-      emoji: '⚠️',
+      emoji: hasOpen ? '⚠️' : '🟢',
       label: t(ctx, 'admin_orphan_queue_pending_label'),
-      value: `${buildStatusBadge(ctx, 'warning')} · ${localizedNumber(result.total, ctx)}`,
+      value: hasOpen
+        ? `${buildStatusBadge(ctx, 'warning')} · ${localizedNumber(summary.openTotal, ctx)}`
+        : buildStatusBadge(ctx, 'healthy', t(ctx, 'admin_orphan_status_synced')),
     },
-    sections: [
-      {
-        emoji: '📋',
-        title: t(ctx, 'admin_orphan_queue_section'),
-        fields: result.issues.map((issue) => ({
-          emoji: issue.kind === 'local_missing_remote' ? '📉' : '🔗',
-          label: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\``,
-          value: `${t(ctx, issue.kind === 'local_missing_remote' ? 'admin_orphan_kind_local' : 'admin_orphan_kind_remote')} · ${localizedDate(issue.firstSeenAt, ctx)}`,
-        })),
-      },
-    ],
+    sections,
+    footer: footerParts.length > 0 ? footerParts.join('\n\n') : undefined,
   });
 }
 
-function buildOrphanQueueKeyboard(ctx: MenuContext, result: OrphanIssuePage): InlineKeyboard {
+function buildOrphanQueueKeyboard(
+  ctx: MenuContext,
+  result: OrphanIssuePage,
+  enrichedIssues: EnrichedOrphanIssue[],
+  summary: OrphanQueueSummary,
+  options: { filter: OrphanIssueFilter; search?: string }
+): InlineKeyboard {
   const keyboard = new InlineKeyboard();
-  for (const issue of result.issues) {
-    keyboard
-      .text(
-        `${issue.kind === 'local_missing_remote' ? '📉' : '🔗'} ${issue.configUsername}`,
-        callbackData('admin', 'orphan', 'view', issue.id)
-      )
-      .row();
+  const { filter, search } = options;
+
+  const tabLabel = (
+    tab: OrphanIssueFilter,
+    icon: string,
+    key: string,
+    countVal: number
+  ): string => {
+    const activePrefix = filter === tab ? '• ' : '';
+    return `${activePrefix}${icon} ${t(ctx, key)} (${localizedNumber(countVal, ctx)})`;
+  };
+
+  keyboard
+    .text(
+      tabLabel('remote', '🔗', 'admin_orphan_tab_remote', summary.remoteUnbound),
+      'admin:orphans:tab:remote'
+    )
+    .text(
+      tabLabel('local', '📉', 'admin_orphan_tab_local', summary.localMissingRemote),
+      'admin:orphans:tab:local'
+    )
+    .row()
+    .text(tabLabel('all', '📋', 'admin_orphan_tab_all', summary.openTotal), 'admin:orphans:tab:all')
+    .text(
+      tabLabel('ignored', '🙈', 'admin_orphan_tab_ignored', summary.ignored),
+      'admin:orphans:tab:ignored'
+    )
+    .row();
+
+  const itemButtons = enrichedIssues.map(({ issue, ownerProfile }) => {
+    const isLocal = issue.kind === 'local_missing_remote';
+    const isIgnored = issue.status === 'ignored';
+    const icon = isIgnored ? '🙈' : isLocal ? '📉' : '🔗';
+    const ownerShort = isLocal
+      ? formatUserShortBadge(ownerProfile, issue.localOwnerTelegramId)
+      : '';
+    const text = ownerShort
+      ? `${icon} ${issue.configUsername} · ${ownerShort}`
+      : `${icon} ${issue.configUsername}`;
+    return {
+      text,
+      data: callbackData('admin', 'orphan', 'view', issue.id),
+      compact: !ownerShort && issue.configUsername.length <= 18,
+    };
+  });
+
+  for (let i = 0; i < itemButtons.length; i += 1) {
+    const current = itemButtons[i]!;
+    const next = itemButtons[i + 1];
+    if (current.compact && next?.compact) {
+      keyboard.text(current.text, current.data).text(next.text, next.data).row();
+      i += 1;
+    } else {
+      keyboard.text(current.text, current.data).row();
+    }
   }
+
   if (result.totalPages > 1) {
     if (result.page > 1) {
       keyboard.text(
@@ -610,25 +1009,158 @@ function buildOrphanQueueKeyboard(ctx: MenuContext, result: OrphanIssuePage): In
     }
     keyboard.row();
   }
-  return appendOrphanQueueActions(ctx, keyboard);
+
+  return appendOrphanQueueActions(ctx, keyboard, summary, filter, search);
 }
 
-function buildOrphanQueueActions(ctx: MenuContext): InlineKeyboard {
-  return appendOrphanQueueActions(ctx, new InlineKeyboard());
-}
+function appendOrphanQueueActions(
+  ctx: MenuContext,
+  keyboard: InlineKeyboard,
+  summary: OrphanQueueSummary,
+  filter: OrphanIssueFilter,
+  search?: string
+): InlineKeyboard {
+  const showCleanLocal = (filter === 'all' || filter === 'local') && summary.localMissingRemote > 0;
+  const showBaseline = (filter === 'all' || filter === 'remote') && summary.remoteUnbound > 0;
 
-function appendOrphanQueueActions(ctx: MenuContext, keyboard: InlineKeyboard): InlineKeyboard {
-  return keyboard
+  if (showCleanLocal && showBaseline) {
+    keyboard
+      .text(
+        t(ctx, 'admin_orphan_clean_local_button', {
+          count: localizedNumber(summary.localMissingRemote, ctx),
+        }),
+        'admin:orphans:clean_local'
+      )
+      .text(t(ctx, 'admin_orphan_baseline_button'), 'admin:orphans:baseline')
+      .row();
+  } else if (showCleanLocal) {
+    keyboard
+      .text(
+        t(ctx, 'admin_orphan_clean_local_button', {
+          count: localizedNumber(summary.localMissingRemote, ctx),
+        }),
+        'admin:orphans:clean_local'
+      )
+      .row();
+  } else if (showBaseline) {
+    keyboard.text(t(ctx, 'admin_orphan_baseline_button'), 'admin:orphans:baseline').row();
+  }
+
+  keyboard
     .text(t(ctx, 'admin_orphan_scan_button'), 'admin:orphans:scan')
-    .row()
-    .text(t(ctx, 'admin_orphan_baseline_button'), 'admin:orphans:baseline')
-    .row()
-    .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
+    .text(t(ctx, 'admin_orphan_search_button'), 'admin:orphans:search')
+    .row();
+
+  if (search) {
+    keyboard.text(t(ctx, 'admin_orphan_clear_search_button'), 'admin:orphans:clear_search').row();
+  }
+
+  return keyboard.text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
+}
+
+function formatRemoteSnapshotFields(
+  ctx: MenuContext,
+  snapshot: RemoteOrphanSnapshot | null
+): ScreenField[] {
+  if (!snapshot) return [];
+  const fields: ScreenField[] = [];
+
+  const statusType =
+    snapshot.status === 'active'
+      ? 'active'
+      : snapshot.status === 'disabled' || snapshot.status === 'on_hold'
+        ? 'inactive'
+        : snapshot.status === 'expired'
+          ? 'expired'
+          : 'warning';
+  const isRecentlyOnline =
+    snapshot.onlineAt !== null &&
+    Number.isFinite(Date.parse(snapshot.onlineAt)) &&
+    Date.now() - Date.parse(snapshot.onlineAt) <= 5 * 60 * 1000;
+  const onlineSuffix = isRecentlyOnline ? ` · ${t(ctx, 'admin_orphan_online_badge')}` : '';
+
+  fields.push({
+    emoji: '📡',
+    label: t(ctx, 'admin_orphan_remote_status_label'),
+    value: `${buildStatusBadge(ctx, statusType)}${onlineSuffix}`,
+  });
+
+  const usedGb = Number((Math.max(0, snapshot.usedTraffic) / BYTES_PER_GB).toFixed(2));
+  const trafficDisplay =
+    snapshot.dataLimit && snapshot.dataLimit > 0
+      ? `${localizedNumber(usedGb, ctx)} / ${localizedNumber(Number((snapshot.dataLimit / BYTES_PER_GB).toFixed(1)), ctx)} GB`
+      : `${localizedNumber(usedGb, ctx)} GB (${t(ctx, 'admin_orphan_unlimited_value')})`;
+
+  fields.push({
+    emoji: '📊',
+    label: t(ctx, 'admin_orphan_traffic_label'),
+    value: trafficDisplay,
+  });
+
+  const expiryDisplay =
+    snapshot.expire && snapshot.expire > 0
+      ? localizedDate(new Date(snapshot.expire * 1000), ctx)
+      : t(ctx, 'admin_orphan_unlimited_value');
+
+  fields.push({
+    emoji: '⏳',
+    label: t(ctx, 'admin_orphan_expiry_label'),
+    value: expiryDisplay,
+  });
+
+  if (snapshot.note) {
+    fields.push({
+      emoji: '📝',
+      label: t(ctx, 'admin_orphan_note_label'),
+      value: escapeTelegramMarkdown(snapshot.note.slice(0, 120)),
+    });
+  }
+
+  return fields;
 }
 
 async function renderOrphanIssueDetail(ctx: MenuContext, issue: OrphanIssue): Promise<void> {
   const localMissing = issue.kind === 'local_missing_remote';
+  const isIgnored = issue.status === 'ignored';
+  const panelId = issue.panelId ?? 'legacy';
+  const panelSummary = ctx.services?.panelRegistry?.getPanel?.(panelId);
+  const panelName = panelSummary?.name ?? panelId;
+
+  const [ownerProfile, remoteSnapshot] = await Promise.all([
+    localMissing && issue.localOwnerTelegramId
+      ? (ctx.services?.userService
+          ?.findProfile?.(String(issue.localOwnerTelegramId))
+          .catch(() => null) ?? null)
+      : Promise.resolve(null),
+    !localMissing
+      ? (ctx.services?.configReconciliationService
+          ?.getRemoteServiceSnapshot?.(panelId, issue.configUsername)
+          .catch(() => null) ?? null)
+      : Promise.resolve(null),
+  ]);
+
+  const candidateId = !localMissing
+    ? extractCandidateTelegramId(issue.configUsername, remoteSnapshot?.note)
+    : null;
+  const rawSuggestedOwner = candidateId
+    ? await ctx.services?.userService?.findProfile?.(String(candidateId)).catch(() => null)
+    : null;
+  const suggestedOwner =
+    rawSuggestedOwner && !rawSuggestedOwner.isBanned ? rawSuggestedOwner : null;
+
   const keyboard = new InlineKeyboard();
+  if (!localMissing && suggestedOwner) {
+    const shortName =
+      formatUserShortBadge(suggestedOwner, suggestedOwner.telegramId) ||
+      String(suggestedOwner.telegramId);
+    keyboard
+      .text(
+        t(ctx, 'admin_orphan_quick_assign_button', { name: shortName }),
+        callbackData('admin', 'orphan', 'qa', issue.id)
+      )
+      .row();
+  }
+
   if (localMissing) {
     keyboard.text(
       t(ctx, 'admin_orphan_remove_local_button'),
@@ -640,43 +1172,86 @@ async function renderOrphanIssueDetail(ctx: MenuContext, issue: OrphanIssue): Pr
       callbackData('admin', 'orphan', 'assign', issue.id)
     );
   }
-  keyboard
-    .text(t(ctx, 'admin_orphan_ignore_button'), callbackData('admin', 'orphan', 'ignore', issue.id))
-    .row()
-    .text(t(ctx, 'menu_back'), 'admin:orphans:open');
+
+  if (isIgnored) {
+    keyboard.text(
+      t(ctx, 'admin_orphan_reopen_button'),
+      callbackData('admin', 'orphan', 'reopen', issue.id)
+    );
+  } else {
+    keyboard.text(
+      t(ctx, 'admin_orphan_ignore_button'),
+      callbackData('admin', 'orphan', 'ignore', issue.id)
+    );
+  }
+  keyboard.row();
+
+  if (localMissing && issue.localOwnerTelegramId) {
+    keyboard
+      .text(
+        t(ctx, 'admin_orphan_view_owner_button'),
+        `admin:user:view:${issue.localOwnerTelegramId}`
+      )
+      .row();
+  }
+
+  keyboard.text(t(ctx, 'admin_orphan_back_to_list'), 'admin:orphans:back');
+
+  const detailFields: ScreenField[] = [
+    {
+      emoji: '⚠️',
+      label: t(ctx, 'admin_orphan_kind_label'),
+      value: buildStatusBadge(
+        ctx,
+        isIgnored ? 'inactive' : 'warning',
+        t(ctx, localMissing ? 'admin_orphan_kind_local' : 'admin_orphan_kind_remote')
+      ),
+    },
+    {
+      emoji: '🖥️',
+      label: t(ctx, 'admin_orphan_panel_label'),
+      value: escapeTelegramMarkdown(panelName),
+    },
+  ];
+
+  if (localMissing) {
+    detailFields.push({
+      emoji: '👤',
+      label: t(ctx, 'admin_orphan_owner_label'),
+      value: formatUserDisplay(ownerProfile, issue.localOwnerTelegramId),
+    });
+  } else {
+    detailFields.push(...formatRemoteSnapshotFields(ctx, remoteSnapshot));
+    if (suggestedOwner) {
+      detailFields.push({
+        emoji: '💡',
+        label: t(ctx, 'admin_orphan_suggested_owner_label'),
+        value: formatUserDisplay(suggestedOwner, suggestedOwner.telegramId),
+      });
+    }
+  }
+
+  detailFields.push({
+    emoji: '📅',
+    label: t(ctx, 'admin_orphan_first_seen_label'),
+    value: localizedDate(issue.firstSeenAt, ctx),
+  });
+
   await renderMaintenanceScreen(
     ctx,
     buildScreen({
       emoji: '🧩',
       title: t(ctx, 'admin_orphan_detail_title'),
       primary: {
-        emoji: '⚠️',
-        label: t(ctx, 'admin_orphan_kind_label'),
-        value: buildStatusBadge(
-          ctx,
-          'warning',
-          t(ctx, localMissing ? 'admin_orphan_kind_local' : 'admin_orphan_kind_remote')
-        ),
+        emoji: localMissing ? '📉' : '🔗',
+        label: t(ctx, 'admin_orphan_service_label'),
+        value: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\``,
       },
       sections: [
         {
           emoji: '🔎',
-          title: t(ctx, 'admin_orphan_queue_section'),
-          fields: [
-            {
-              label: t(ctx, 'admin_orphan_service_label'),
-              value: `\`${sanitizeTelegramInlineCode(issue.configUsername)}\``,
-            },
-            {
-              label: t(ctx, 'admin_orphan_owner_label'),
-              value:
-                issue.localOwnerTelegramId === null ? '—' : `\`${issue.localOwnerTelegramId}\``,
-            },
-            {
-              label: t(ctx, 'admin_orphan_first_seen_label'),
-              value: localizedDate(issue.firstSeenAt, ctx),
-            },
-          ],
+          title: t(ctx, 'admin_orphan_overview_section'),
+          fields: detailFields,
         },
       ],
     }),

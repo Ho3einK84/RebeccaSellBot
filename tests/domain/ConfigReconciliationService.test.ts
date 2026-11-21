@@ -214,4 +214,80 @@ describe('ConfigReconciliationService', () => {
       ])
     );
   });
+
+  it('aggregates queue summary, fetches live remote snapshot, unignores issues, and bulk-cleans missing local records', async () => {
+    const summaryDb = createMockDb({
+      selectResults: [
+        [
+          { kind: 'remote_unbound', status: 'open', value: 4 },
+          { kind: 'local_missing_remote', status: 'open', value: 7 },
+          { kind: 'remote_unbound', status: 'ignored', value: 120 },
+        ],
+      ],
+    });
+    getDbMock.mockReturnValue(summaryDb.db as never);
+    await expect(service.getQueueSummary()).resolves.toEqual({
+      openTotal: 11,
+      remoteUnbound: 4,
+      localMissingRemote: 7,
+      ignored: 120,
+    });
+
+    panelAService.getUser.mockResolvedValueOnce({
+      username: 'orphan_live',
+      status: 'active',
+      used_traffic: 5 * 1024 ** 3,
+      data_limit: 50 * 1024 ** 3,
+      expire: 1_800_000_000,
+      online_at: '2026-11-21T13:50:00Z',
+      created_at: '2026-11-01T00:00:00Z',
+      note: 'VIP customer 6698253699',
+      service_id: 2,
+    });
+    await expect(service.getRemoteServiceSnapshot('panel_a', 'orphan_live')).resolves.toEqual({
+      status: 'active',
+      usedTraffic: 5 * 1024 ** 3,
+      dataLimit: 50 * 1024 ** 3,
+      expire: 1_800_000_000,
+      onlineAt: '2026-11-21T13:50:00Z',
+      createdAt: '2026-11-01T00:00:00Z',
+      note: 'VIP customer 6698253699',
+      serviceId: 2,
+    });
+
+    const reopenDb = createMockDb({
+      returningResults: [[{ configUsername: 'orphan_live' }]],
+    });
+    getDbMock.mockReturnValue(reopenDb.db as never);
+    await expect(service.unignoreIssue('cri_ignored', 999)).resolves.toBe(true);
+    expect(reopenDb.state.insertCalls[0]?.values).toMatchObject({
+      action: 'orphan_issue_reopened',
+      entityId: 'cri_ignored',
+    });
+
+    const bulkDb = createMockDb({
+      selectResults: [
+        [{ id: 'cri_m1' }],
+        [
+          {
+            id: 'cri_m1',
+            panelId: 'panel_a',
+            kind: 'local_missing_remote',
+            configUsername: 'gone_1',
+            localConfigId: 'uc_g1',
+            localOwnerTelegramId: 501,
+            status: 'open',
+          },
+        ],
+      ],
+      returningResults: [[{ id: 'uc_g1' }], [{ id: 'cri_m1' }]],
+    });
+    getDbMock.mockReturnValue(bulkDb.db as never);
+    panelAService.getUser.mockRejectedValueOnce(new RebeccaApiError(404, '/api/user/gone_1', ''));
+    await expect(service.removeAllLocalMissing(999)).resolves.toEqual({
+      removed: 1,
+      reappeared: 0,
+      failed: 0,
+    });
+  });
 });
