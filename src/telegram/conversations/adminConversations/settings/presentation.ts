@@ -1,6 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import type { PackageOption } from '../../../../domain/services/PricingService.js';
 import { parsePackageOptionsJson } from '../../../../domain/services/PricingService.js';
+import { parseBankCardsJson } from '../../../../domain/services/PaymentService.js';
 import { previewConfigName } from '../../../../domain/services/ConfigService.js';
 import type { ConversationContext } from '../../../types.js';
 import { localizedNumber, t, tm } from '../../../locale.js';
@@ -326,11 +327,19 @@ export function displayAdminSettingValue(ctx: ConversationContext, key: string):
     );
   }
   if (key === 'bank_cards_json') {
+    const raw = ctx.services.translationService.getSetting(key, '[]');
     try {
-      const parsed: unknown = JSON.parse(ctx.services.translationService.getSetting(key, '[]'));
-      return Array.isArray(parsed)
-        ? localizedNumber(parsed.length, ctx)
-        : t(ctx, 'admin_setting_invalid');
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return t(ctx, 'admin_setting_invalid');
+      const cards = parseBankCardsJson(raw);
+      if (cards.length === 0) {
+        return t(ctx, 'admin_bank_cards_summary_fallback');
+      }
+      const activeCount = cards.filter((card) => card.enabled).length;
+      return t(ctx, 'admin_bank_cards_summary_counts', {
+        active: localizedNumber(activeCount, ctx),
+        total: localizedNumber(cards.length, ctx),
+      });
     } catch {
       return t(ctx, 'admin_setting_invalid');
     }

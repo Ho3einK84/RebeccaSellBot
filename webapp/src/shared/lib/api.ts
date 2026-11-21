@@ -52,6 +52,10 @@ import type {
   PriceOverrideMutationResponse,
   CustomPriceOverrideDto,
   AdminPricingQuoteResponse,
+  AdminBankCardsResponse,
+  CreateAdminBankCardPayload,
+  UpdateAdminBankCardPayload,
+  UpdateAdminBankCardSettingsPayload,
 } from '@/shared/types/admin.js';
 import type {
   UserProfileResponse,
@@ -251,6 +255,55 @@ export const api = {
     request<{ success: boolean }>('/api/admin/receipts/settings', {
       method: 'PUT',
       body: JSON.stringify(payload),
+    }),
+
+  // Admin Bank Cards API
+  getAdminBankCards: (): Promise<AdminBankCardsResponse> =>
+    request<AdminBankCardsResponse>('/api/admin/bank-cards'),
+
+  createAdminBankCard: (payload: CreateAdminBankCardPayload): Promise<AdminBankCardsResponse> =>
+    request<AdminBankCardsResponse>('/api/admin/bank-cards', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateAdminBankCard: (
+    id: string,
+    payload: UpdateAdminBankCardPayload
+  ): Promise<AdminBankCardsResponse> =>
+    request<AdminBankCardsResponse>(`/api/admin/bank-cards/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  toggleAdminBankCard: (id: string, enabled?: boolean): Promise<AdminBankCardsResponse> =>
+    request<AdminBankCardsResponse>(`/api/admin/bank-cards/${encodeURIComponent(id)}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify(enabled === undefined ? {} : { enabled }),
+    }),
+
+  reorderAdminBankCards: (orderedIds: string[]): Promise<AdminBankCardsResponse> =>
+    request<AdminBankCardsResponse>('/api/admin/bank-cards/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ orderedIds }),
+    }),
+
+  importLegacyAdminBankCard: (): Promise<AdminBankCardsResponse> =>
+    request<AdminBankCardsResponse>('/api/admin/bank-cards/import-legacy', {
+      method: 'POST',
+    }),
+
+  updateAdminBankCardSettings: (
+    payload: UpdateAdminBankCardSettingsPayload
+  ): Promise<AdminBankCardsResponse> =>
+    request<AdminBankCardsResponse>('/api/admin/bank-cards/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteAdminBankCard: (id: string): Promise<AdminBankCardsResponse> =>
+    request<AdminBankCardsResponse>(`/api/admin/bank-cards/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     }),
 
   getAdminUsers: (

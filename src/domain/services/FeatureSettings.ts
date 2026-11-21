@@ -114,6 +114,16 @@ export function receiptDuplicatePolicy(settings: SettingReader): ReceiptDuplicat
 }
 
 /**
+ * Whether manual card-to-card top-ups allocate a unique slightly-offset
+ * payable amount (e.g. -1..-999 Toman) to ease receipt matching.
+ * Disabled by default for backwards compatibility.
+ */
+export function uniqueTopupAmountEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('unique_topup_amount_enabled', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
+/**
  * Whether users must verify their phone number (stored only as HMAC-SHA256
  * hash) before claiming a free trial. Disabled by default.
  */

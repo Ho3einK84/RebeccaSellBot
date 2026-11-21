@@ -5,6 +5,7 @@ import { countConfigsApproachingCleanup } from '../../../../jobs/expiredConfigCl
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { t, tm } from '../../../locale.js';
 import { callbackData } from '../../../callbackData.js';
+import { sanitizeTelegramInlineCode } from '../../../rendering.js';
 import { buildEmptyState, promptInConversation } from '../../../ui.js';
 import { requireAdmin } from '../shared.js';
 import {
@@ -34,6 +35,7 @@ import {
   readSettingBool,
 } from './presentation.js';
 import { managePackages } from './packageManager.js';
+import { manageBankCards } from './bankCards.js';
 import { manageNamingSettings } from './naming.js';
 import { waitForSettingsInput } from './navigation.js';
 import { settingValidationMessage, validateAdminSetting } from './validation.js';
@@ -112,6 +114,12 @@ export async function adminEditSettingsConversation(
 
     if (choice.definition.editor.type === 'packages') {
       const outcome = await managePackages(conversation, activeCtx);
+      if (outcome === 'cancel') return;
+      continue;
+    }
+
+    if (choice.definition.editor.type === 'bank_cards_json') {
+      const outcome = await manageBankCards(conversation, activeCtx);
       if (outcome === 'cancel') return;
       continue;
     }
@@ -220,6 +228,8 @@ export async function editSetting(
       return editReceiptDuplicatePolicy(conversation, ctx, definition);
     case 'naming_mode':
       return editNamingMode(conversation, ctx, definition);
+    case 'bank_cards_json':
+      return manageBankCards(conversation, ctx);
     case 'support':
       return editSupportSetting(conversation, ctx, definition);
     default:
@@ -435,10 +445,15 @@ async function editTextSetting(
           ? t(ctx, 'admin_setting_support_destination_prompt')
           : definition.key === 'backup_target_chat_id'
             ? t(ctx, 'admin_backup_target_chat_prompt')
-            : tm(ctx, 'admin_setting_value_prompt', {
-                setting: t(ctx, definition.labelKey),
-                current_value: current,
-              });
+            : tm(
+                ctx,
+                'admin_setting_value_prompt',
+                {
+                  setting: t(ctx, definition.labelKey),
+                  current_value: sanitizeTelegramInlineCode(current),
+                },
+                ['current_value']
+              );
   await promptInConversation(
     conversation,
     ctx,

@@ -19,9 +19,10 @@ import type { TabType } from '@/shared/types/admin.js';
 
 interface ModulesTabProps {
   onSwitchTab?: (tab: TabType) => void;
+  onOpenBankCards?: () => void;
 }
 
-export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
+export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab, onOpenBankCards }) => {
   const { t } = useLanguage();
 
   const modules: Array<{
@@ -32,6 +33,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
     desc: string;
     category: string;
     targetTab?: TabType;
+    onOpen?: () => void;
   }> = [
     {
       id: 'broadcast',
@@ -65,6 +67,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
       title: t('admin.modules.gateways'),
       desc: t('admin.modules.gatewaysSub'),
       category: t('admin.modules.categoryPayments'),
+      onOpen: onOpenBankCards,
     },
     {
       id: 'backups',
@@ -102,7 +105,10 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 anim-stagger">
         {modules.map((mod) => {
           const Icon = mod.icon;
-          const isLive = Boolean(mod.targetTab && onSwitchTab);
+          const handleOpen =
+            mod.onOpen ??
+            (mod.targetTab && onSwitchTab ? () => onSwitchTab(mod.targetTab!) : undefined);
+          const isLive = Boolean(handleOpen);
           const cardContent = (
             <Card
               padding="md"
@@ -160,12 +166,12 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
             </Card>
           );
 
-          if (isLive && mod.targetTab && onSwitchTab) {
+          if (isLive && handleOpen) {
             return (
               <button
                 key={mod.id}
                 type="button"
-                onClick={() => onSwitchTab(mod.targetTab!)}
+                onClick={handleOpen}
                 className="group press rs-focus cursor-pointer text-start w-full h-full rounded-card"
               >
                 {cardContent}

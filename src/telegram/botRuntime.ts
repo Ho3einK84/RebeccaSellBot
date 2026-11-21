@@ -33,6 +33,7 @@ import {
   adminCustomVolumeConversation,
   adminReferralSettingsConversation,
   adminPaymentSettingsConversation,
+  adminBankCardsConversation,
   adminLuckyWheelSettingsConversation,
   adminTrialSettingsConversation,
   adminNamingSettingsConversation,
@@ -281,6 +282,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     createConversation(adminReferralSettingsConversation, 'adminReferralSettingsConversation')
   );
   bot.use(createConversation(adminPaymentSettingsConversation, 'adminPaymentSettingsConversation'));
+  bot.use(createConversation(adminBankCardsConversation, 'adminBankCardsConversation'));
   bot.use(
     createConversation(adminLuckyWheelSettingsConversation, 'adminLuckyWheelSettingsConversation')
   );
@@ -320,6 +322,7 @@ export function isAdminCallbackData(data: string): boolean {
     data.startsWith('cv:') ||
     data.startsWith('ref:') ||
     data.startsWith('pay:') ||
+    data.startsWith('bc:') ||
     data.startsWith('pp:') ||
     data.startsWith('text-') ||
     data.startsWith('text:') ||

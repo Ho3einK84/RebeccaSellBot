@@ -7,6 +7,7 @@ import { UsersTab } from './users/UsersTab.js';
 import { PanelsTab } from './panels/PanelsTab.js';
 import { PackagesTab } from './packages/PackagesTab.js';
 import { ModulesTab } from './modules/ModulesTab.js';
+import { BankCardsModal } from './bankCards/BankCardsModal.js';
 import { AdminHeader } from './components/AdminHeader.js';
 import { AdminDesktopNav } from './components/AdminDesktopNav.js';
 import { AdminBottomNav, type TabConfig } from './components/AdminBottomNav.js';
@@ -35,6 +36,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [tabHistory, setTabHistory] = useState<TabType[]>(['overview']);
   const [inspectingUserId, setInspectingUserId] = useState<number | null>(null);
+  const [isBankCardsModalOpen, setIsBankCardsModalOpen] = useState(false);
 
   // Queries for badge count and refresh handling
   const { pendingCount, refetch: refetchReceipts } = useAdminReceipts();
@@ -186,7 +188,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
       {activeTab === 'packages' && (
         <PackagesTab onNotify={(msg, type) => notify(msg, type ?? 'success')} />
       )}
-      {activeTab === 'coming-soon' && <ModulesTab onSwitchTab={switchTab} />}
+      {activeTab === 'coming-soon' && (
+        <ModulesTab onSwitchTab={switchTab} onOpenBankCards={() => setIsBankCardsModalOpen(true)} />
+      )}
+      <BankCardsModal
+        isOpen={isBankCardsModalOpen}
+        onClose={() => setIsBankCardsModalOpen(false)}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
     </AppShell>
   );
 };

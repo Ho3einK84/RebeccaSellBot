@@ -94,6 +94,8 @@ export interface SessionData {
   pendingCustomNamePurchase?: { packageId: string };
   /** Post-verification destination so users can smoothly continue after phone verification. */
   phoneVerifyReturnAction?: 'trial' | 'shop' | 'custom_amount' | 'main';
+  /** Return screen when exiting standalone bank cards manager conversation. */
+  bankCardsReturnTo?: 'sales' | 'receipts';
   [key: string]: unknown;
 }
 

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq, gte } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, or } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
 import { topupReceipts } from '../../infra/schema.js';
 import type { TranslationService } from './TranslationService.js';
@@ -9,6 +9,9 @@ import { walletTransferEnabled, walletTransferMinAmount } from './FeatureSetting
 
 export type PaymentMethodType = 'manual' | 'automated';
 
+export const MAX_BANK_CARDS = 20;
+export const LEGACY_BANK_CARD_ID = 'legacy_default';
+
 export interface BankCardConfig {
   id: string;
   cardNumber: string;
@@ -16,6 +19,14 @@ export interface BankCardConfig {
   enabled: boolean;
   dailyCapToman?: number | null;
   bankName?: string;
+}
+
+export interface BankCardStatus extends BankCardConfig {
+  dailyUsageToman: number;
+  remainingCapToman: number | null;
+  isCapReached: boolean;
+  detectedBankName?: string;
+  luhnValid: boolean;
 }
 
 export interface SelectCardOptions {
@@ -75,11 +86,69 @@ export interface PaymentProvider {
   getInstructions(params: { amount: number; telegramId: number }): Promise<PaymentInstructions>;
 }
 
-const LEGACY_CARD_ID = 'legacy_default';
+const LEGACY_CARD_ID = LEGACY_BANK_CARD_ID;
 const DEFAULT_UNIQUE_MIN_OFFSET = 1;
 const DEFAULT_UNIQUE_MAX_OFFSET = 999;
 const DEFAULT_UNIQUE_STEP = 1;
 const DEFAULT_PENDING_LOOKBACK_HOURS = 24;
+const IRAN_TZ_OFFSET_MS = 3.5 * 60 * 60 * 1000;
+
+interface IranianBankBinEntry {
+  prefix: string;
+  fa: string;
+  en: string;
+}
+
+/**
+ * Iranian Shetab BIN prefix directory.
+ * Ordered with 8-digit sub-brands (e.g. Blu Bank) before 6-digit parent BINs.
+ */
+const IRANIAN_BANK_BINS: readonly IranianBankBinEntry[] = [
+  { prefix: '62198619', fa: 'بلوبانک (سامان)', en: 'Blu Bank (Saman)' },
+  { prefix: '603799', fa: 'بانک ملی', en: 'Bank Melli' },
+  { prefix: '603769', fa: 'بانک صادرات', en: 'Bank Saderat' },
+  { prefix: '610433', fa: 'بانک ملت', en: 'Bank Mellat' },
+  { prefix: '991975', fa: 'بانک ملت', en: 'Bank Mellat' },
+  { prefix: '621986', fa: 'بانک سامان', en: 'Saman Bank' },
+  { prefix: '502229', fa: 'بانک پاسارگاد', en: 'Pasargad Bank' },
+  { prefix: '639347', fa: 'بانک پاسارگاد', en: 'Pasargad Bank' },
+  { prefix: '589210', fa: 'بانک سپه', en: 'Bank Sepah' },
+  { prefix: '603770', fa: 'بانک کشاورزی', en: 'Keshavarzi Bank' },
+  { prefix: '639217', fa: 'بانک کشاورزی', en: 'Keshavarzi Bank' },
+  { prefix: '628023', fa: 'بانک مسکن', en: 'Bank Maskan' },
+  { prefix: '589463', fa: 'بانک رفاه', en: 'Refah Bank' },
+  { prefix: '627353', fa: 'بانک تجارت', en: 'Tejarat Bank' },
+  { prefix: '585983', fa: 'بانک تجارت', en: 'Tejarat Bank' },
+  { prefix: '627412', fa: 'بانک اقتصاد نوین', en: 'EN Bank' },
+  { prefix: '622106', fa: 'بانک پارسیان', en: 'Parsian Bank' },
+  { prefix: '639194', fa: 'بانک پارسیان', en: 'Parsian Bank' },
+  { prefix: '627884', fa: 'بانک پارسیان', en: 'Parsian Bank' },
+  { prefix: '627488', fa: 'بانک کارآفرین', en: 'Karafarin Bank' },
+  { prefix: '502910', fa: 'بانک کارآفرین', en: 'Karafarin Bank' },
+  { prefix: '639346', fa: 'بانک سینا', en: 'Sina Bank' },
+  { prefix: '639607', fa: 'بانک سرمایه', en: 'Sarmayeh Bank' },
+  { prefix: '636214', fa: 'بانک آینده', en: 'Ayandeh Bank' },
+  { prefix: '502806', fa: 'بانک شهر', en: 'Shahr Bank' },
+  { prefix: '504706', fa: 'بانک شهر', en: 'Shahr Bank' },
+  { prefix: '502938', fa: 'بانک دی', en: 'Day Bank' },
+  { prefix: '502908', fa: 'بانک توسعه تعاون', en: 'Tosee Taavon Bank' },
+  { prefix: '627648', fa: 'بانک توسعه صادرات', en: 'Export Development Bank' },
+  { prefix: '207177', fa: 'بانک توسعه صادرات', en: 'Export Development Bank' },
+  { prefix: '627961', fa: 'بانک صنعت و معدن', en: 'Bank of Industry & Mine' },
+  { prefix: '627760', fa: 'پست بانک', en: 'Post Bank' },
+  { prefix: '606373', fa: 'بانک مهر ایران', en: 'Mehr Iran Bank' },
+  { prefix: '504172', fa: 'بانک رسالت', en: 'Resalat Bank' },
+  { prefix: '505416', fa: 'بانک گردشگری', en: 'Tourism Bank' },
+  { prefix: '505785', fa: 'بانک ایران زمین', en: 'Iran Zamin Bank' },
+  { prefix: '585947', fa: 'بانک خاورمیانه', en: 'Middle East Bank' },
+  { prefix: '606256', fa: 'مؤسسه اعتباری ملل', en: 'Melal Credit' },
+  { prefix: '628157', fa: 'مؤسسه اعتباری توسعه', en: 'Tosee Credit' },
+  { prefix: '639599', fa: 'بانک قوامین', en: 'Ghavamin Bank' },
+  { prefix: '627381', fa: 'بانک انصار', en: 'Ansar Bank' },
+  { prefix: '636949', fa: 'بانک حکمت ایرانیان', en: 'Hekmat Bank' },
+  { prefix: '505801', fa: 'مؤسسه کوثر', en: 'Kosar Credit' },
+  { prefix: '636795', fa: 'بانک مرکزی', en: 'Central Bank' },
+];
 
 function normalizeDigits(value: string): string {
   return value
@@ -87,8 +156,85 @@ function normalizeDigits(value: string): string {
     .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660));
 }
 
+/**
+ * Normalize a raw bank card number by converting Persian/Arabic numerals,
+ * stripping BiDi/zero-width marks (e.g. LRM copied from Telegram), spaces,
+ * and common separators (`-`, `–`, `—`, `−`, `_`, `.`).
+ */
 export function normalizeCardNumber(raw: string): string {
-  return normalizeDigits(raw).trim();
+  return normalizeDigits(raw)
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/gu, '')
+    .replace(/[\s\-–—−_.]/gu, '')
+    .trim();
+}
+
+export function isValidBankCardNumber(raw: string): boolean {
+  const normalized = normalizeCardNumber(raw);
+  return /^\d{12,24}$/u.test(normalized);
+}
+
+/** Standard Mod-10 (Luhn) checksum verification for bank card numbers. */
+export function isValidLuhnCardNumber(raw: string): boolean {
+  const digits = normalizeCardNumber(raw);
+  if (!/^\d{12,24}$/u.test(digits)) return false;
+
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    let n = digits.charCodeAt(i) - 48;
+    if (shouldDouble) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    shouldDouble = !shouldDouble;
+  }
+  return sum % 10 === 0;
+}
+
+/** Auto-detect Iranian Shetab bank name from card BIN prefix. */
+export function detectIranianBankName(
+  rawCardNumber: string,
+  locale: 'fa' | 'en' = 'fa'
+): string | undefined {
+  const digits = normalizeCardNumber(rawCardNumber);
+  if (digits.length < 6) return undefined;
+  for (const entry of IRANIAN_BANK_BINS) {
+    if (digits.startsWith(entry.prefix)) {
+      return locale === 'en' ? entry.en : entry.fa;
+    }
+  }
+  return undefined;
+}
+
+/** Return a compact masked label such as `•••• 6846` for buttons and audit rows. */
+export function maskCardNumberShort(rawCardNumber: string): string {
+  const digits = normalizeCardNumber(rawCardNumber);
+  if (digits.length >= 4) {
+    return `•••• ${digits.slice(-4)}`;
+  }
+  return digits || '—';
+}
+
+export function generateBankCardId(existingCards: readonly Pick<BankCardConfig, 'id'>[]): string {
+  const existingIds = new Set(existingCards.map((c) => c.id));
+  for (let i = 1; i <= 999; i += 1) {
+    const candidate = `card_${i}`;
+    if (!existingIds.has(candidate)) return candidate;
+  }
+  return `c_${crypto.randomBytes(4).toString('hex')}`;
+}
+
+export function hasDuplicateCardNumber(
+  cards: readonly BankCardConfig[],
+  cardNumber: string,
+  excludeCardId?: string
+): boolean {
+  const target = normalizeCardNumber(cardNumber);
+  if (!target) return false;
+  return cards.some(
+    (card) => card.id !== excludeCardId && normalizeCardNumber(card.cardNumber) === target
+  );
 }
 
 export function parseBankCardsJson(raw: string | null | undefined): BankCardConfig[] {
@@ -130,7 +276,11 @@ export function parseBankCardsJson(raw: string | null | undefined): BankCardConf
         typeof record.dailyCapToman === 'number'
           ? record.dailyCapToman
           : typeof record.dailyCapToman === 'string'
-            ? Number(normalizeDigits(record.dailyCapToman).trim())
+            ? Number(
+                normalizeDigits(record.dailyCapToman)
+                  .replace(/[,_،٬\s]/gu, '')
+                  .trim()
+              )
             : Number.NaN;
       if (Number.isSafeInteger(capNum) && capNum > 0) {
         dailyCapToman = capNum;
@@ -278,7 +428,6 @@ export function computeUniquePayableAmount(
 }
 
 function resolveTehranDayKey(now: Date): string {
-  const IRAN_TZ_OFFSET_MS = 3.5 * 60 * 60 * 1000;
   const tehran = new Date(now.getTime() + IRAN_TZ_OFFSET_MS);
   const year = tehran.getUTCFullYear();
   const month = String(tehran.getUTCMonth() + 1).padStart(2, '0');
@@ -286,16 +435,34 @@ function resolveTehranDayKey(now: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export function resolveTehranDayStartUtc(now: Date = new Date()): Date {
+  const tehran = new Date(now.getTime() + IRAN_TZ_OFFSET_MS);
+  const midnightTehranAsUtcMs = Date.UTC(
+    tehran.getUTCFullYear(),
+    tehran.getUTCMonth(),
+    tehran.getUTCDate(),
+    0,
+    0,
+    0,
+    0
+  );
+  return new Date(midnightTehranAsUtcMs - IRAN_TZ_OFFSET_MS);
+}
+
 function readCardUsage(
   usageSource: ReadonlyMap<string, number> | Record<string, number> | undefined,
-  card: BankCardConfig
+  card: Pick<BankCardConfig, 'id' | 'cardNumber'>
 ): number {
   if (!usageSource) return 0;
   if (usageSource instanceof Map) {
-    return usageSource.get(card.id) ?? usageSource.get(card.cardNumber) ?? 0;
+    const byId = usageSource.get(card.id) ?? 0;
+    const byNum = usageSource.get(card.cardNumber) ?? 0;
+    return Math.max(byId, byNum);
   }
   const record = usageSource as Record<string, number>;
-  return record[card.id] ?? record[card.cardNumber] ?? 0;
+  const byId = record[card.id] ?? 0;
+  const byNum = record[card.cardNumber] ?? 0;
+  return Math.max(byId, byNum);
 }
 
 export class CardToCardPaymentProvider implements PaymentProvider {
@@ -314,7 +481,7 @@ export class CardToCardPaymentProvider implements PaymentProvider {
     if (configured.some((card) => card.enabled)) {
       return true;
     }
-    const cardNumber = this.translationService.getSetting('card_number', '').trim();
+    const cardNumber = normalizeCardNumber(this.translationService.getSetting('card_number', ''));
     return cardNumber.length > 0;
   }
 
@@ -343,7 +510,7 @@ export class CardToCardPaymentProvider implements PaymentProvider {
       };
     }
 
-    const cardNumber = this.translationService.getSetting('card_number', '').trim();
+    const cardNumber = normalizeCardNumber(this.translationService.getSetting('card_number', ''));
     const cardHolder = this.translationService.getSetting('card_holder', '').trim();
 
     return {
@@ -436,6 +603,25 @@ export class PaymentService {
     return parseBankCardsJson(this.translationService.getSetting('bank_cards_json', '[]'));
   }
 
+  /** Return legacy fallback card from `card_number` / `card_holder` if configured. */
+  getLegacyDefaultCard(locale: 'fa' | 'en' = 'fa'): BankCardConfig | null {
+    const legacyCardNumber = normalizeCardNumber(
+      this.translationService.getSetting('card_number', '')
+    );
+    if (!legacyCardNumber) {
+      return null;
+    }
+    const detectedBank = detectIranianBankName(legacyCardNumber, locale);
+    return {
+      id: LEGACY_CARD_ID,
+      cardNumber: legacyCardNumber,
+      cardHolder: this.translationService.getSetting('card_holder', '').trim(),
+      enabled: true,
+      dailyCapToman: null,
+      ...(detectedBank ? { bankName: detectedBank } : {}),
+    };
+  }
+
   /**
    * Return active bank cards, falling back to legacy `card_number` / `card_holder`
    * when `bank_cards_json` is empty or contains no enabled cards.
@@ -486,6 +672,103 @@ export class PaymentService {
   }
 
   /**
+   * Load today's (Tehran day) card volume from PostgreSQL (`pending` + `approved` receipts),
+   * merged with any in-memory tracked volume. Safe when DB is uninitialized in unit tests.
+   */
+  async getTodayCardUsageMap(now: Date = new Date()): Promise<Map<string, number>> {
+    this.ensureDailyUsageWindow(now);
+    const merged = new Map<string, number>(this.dailyUsageByCard);
+    const dayStartUtc = resolveTehranDayStartUtc(now);
+
+    try {
+      const db = getDb();
+      const rows = await db
+        .select({
+          cardId: topupReceipts.cardId,
+          cardNumber: topupReceipts.cardNumber,
+          amount: topupReceipts.amount,
+        })
+        .from(topupReceipts)
+        .where(
+          and(
+            inArray(topupReceipts.status, ['pending', 'approved']),
+            gte(topupReceipts.createdAt, dayStartUtc),
+            or(isNotNull(topupReceipts.cardId), isNotNull(topupReceipts.cardNumber))
+          )
+        );
+
+      const dbById = new Map<string, number>();
+      const dbByNumber = new Map<string, number>();
+
+      for (const row of rows) {
+        const amount = Number(row.amount);
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        const cid = row.cardId?.trim();
+        const cnum = row.cardNumber ? normalizeCardNumber(row.cardNumber) : '';
+        if (cid) {
+          dbById.set(cid, (dbById.get(cid) ?? 0) + amount);
+        }
+        if (cnum) {
+          dbByNumber.set(cnum, (dbByNumber.get(cnum) ?? 0) + amount);
+        }
+      }
+
+      for (const [key, total] of dbById) {
+        merged.set(key, Math.max(merged.get(key) ?? 0, total));
+      }
+      for (const [key, total] of dbByNumber) {
+        merged.set(key, Math.max(merged.get(key) ?? 0, total));
+      }
+    } catch (err) {
+      logger.debug({ err }, 'Could not query DB for today card usage; using in-memory usage map');
+    }
+
+    return merged;
+  }
+
+  /** Return all configured bank cards enriched with today's usage, remaining cap, and BIN metadata. */
+  async getBankCardsWithDailyUsage(
+    now: Date = new Date(),
+    locale: 'fa' | 'en' = 'fa'
+  ): Promise<BankCardStatus[]> {
+    const cards = this.getConfiguredBankCards();
+    const usageMap = await this.getTodayCardUsageMap(now);
+
+    return cards.map((card) => {
+      const dailyUsageToman = readCardUsage(usageMap, card);
+      const remainingCapToman =
+        card.dailyCapToman != null ? Math.max(0, card.dailyCapToman - dailyUsageToman) : null;
+      const isCapReached = card.dailyCapToman != null && dailyUsageToman >= card.dailyCapToman;
+      const detectedBankName = detectIranianBankName(card.cardNumber, locale);
+      return {
+        ...card,
+        dailyUsageToman,
+        remainingCapToman,
+        isCapReached,
+        ...(detectedBankName ? { detectedBankName } : {}),
+        luhnValid: isValidLuhnCardNumber(card.cardNumber),
+      };
+    });
+  }
+
+  /** Check whether a specific card still has remaining daily capacity for `amountToman`. */
+  canCardAcceptAmount(
+    card: BankCardConfig,
+    amountToman: number,
+    dailyUsageByCardId?: ReadonlyMap<string, number> | Record<string, number>,
+    now: Date = new Date()
+  ): boolean {
+    if (!card.enabled) return false;
+    if (card.dailyCapToman == null) return true;
+    this.ensureDailyUsageWindow(now);
+    const usageSource = dailyUsageByCardId ?? this.dailyUsageByCard;
+    const usedToday = readCardUsage(usageSource, card);
+    if (usedToday >= card.dailyCapToman) return false;
+    const requested = Number.isSafeInteger(amountToman) && amountToman > 0 ? amountToman : 0;
+    return usedToday + requested <= card.dailyCapToman;
+  }
+
+  /**
    * Select an enabled bank card for a top-up with optional daily-cap enforcement
    * and round-robin rotation. Falls back to legacy `card_number`/`card_holder`
    * when `bank_cards_json` is empty or has no enabled cards.
@@ -507,6 +790,7 @@ export class PaymentService {
     const eligibleCards = activeCards.filter((card) => {
       if (card.dailyCapToman == null) return true;
       const usedToday = readCardUsage(usageSource, card);
+      if (usedToday >= card.dailyCapToman) return false;
       return usedToday + requestedAmount <= card.dailyCapToman;
     });
 
@@ -518,6 +802,54 @@ export class PaymentService {
         : this.rotationCounter++;
 
     return eligibleCards[rawIndex % eligibleCards.length]!;
+  }
+
+  /**
+   * Async variant of `selectCardForTopup` that hydrates today's usage from PostgreSQL
+   * before evaluating `dailyCapToman`.
+   */
+  async selectCardForTopupWithDailyCaps(
+    options: SelectCardOptions = {}
+  ): Promise<BankCardConfig | null> {
+    if (options.dailyUsageByCardId !== undefined) {
+      return this.selectCardForTopup(options);
+    }
+    const now = options.now ?? new Date();
+    const usageMap = await this.getTodayCardUsageMap(now);
+    return this.selectCardForTopup({ ...options, dailyUsageByCardId: usageMap, now });
+  }
+
+  /** Resolve a concise human-readable card label for receipt reviews and admin alerts. */
+  resolveCardDisplayLabel(
+    params: { cardId?: string | null; cardNumber?: string | null },
+    locale: 'fa' | 'en' = 'fa'
+  ): string | null {
+    const configured = this.getConfiguredBankCards();
+    const matched =
+      (params.cardId ? configured.find((c) => c.id === params.cardId) : undefined) ??
+      (params.cardNumber
+        ? configured.find(
+            (c) => normalizeCardNumber(c.cardNumber) === normalizeCardNumber(params.cardNumber!)
+          )
+        : undefined);
+
+    const cardNumber =
+      matched?.cardNumber ?? (params.cardNumber ? normalizeCardNumber(params.cardNumber) : '');
+    if (!cardNumber) return null;
+
+    const bankName = matched?.bankName || detectIranianBankName(cardNumber, locale);
+    const holder =
+      matched?.cardHolder ||
+      (params.cardId === LEGACY_CARD_ID
+        ? this.translationService.getSetting('card_holder', '').trim()
+        : '');
+    const masked = maskCardNumberShort(cardNumber);
+
+    const parts: string[] = [];
+    if (bankName) parts.push(bankName);
+    parts.push(masked);
+    if (holder) parts.push(holder);
+    return parts.join(' · ');
   }
 
   /**

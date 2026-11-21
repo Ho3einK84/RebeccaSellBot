@@ -1,6 +1,6 @@
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { MenuContext } from '../../types.js';
-import { localizedDate, localizedNumber, t } from '../../locale.js';
+import { localizedDate, localizedNumber, resolveContextLocale, t } from '../../locale.js';
 import {
   buildEmptyState,
   buildScreen,
@@ -19,6 +19,7 @@ import {
   sendReceiptRejectionNotification,
   sendReceiptVoidedNotification,
 } from './adminNotifications.js';
+import { formatCardNumberGrouped } from '../../conversations/adminConversations/wallet.js';
 
 const RECEIPT_PAGE_SIZE = 4;
 const RECEIPT_ID_CAPTURE = '([a-zA-Z0-9_-]+)';
@@ -31,6 +32,8 @@ type PendingReceipt = {
   mediaType?: 'photo' | 'document';
   status?: string;
   duplicateOfReceiptId?: string | null;
+  cardId?: string | null;
+  cardNumber?: string | null;
   voidedAt?: Date | null;
   voidedBy?: number | null;
   voidReason?: string | null;
@@ -130,7 +133,12 @@ export function registerReceiptAdminRoutes(bot: Bot<MenuContext>): void {
   });
 
   adminCallback('rcpt:cards', async (ctx) => {
-    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await ctx.answerCallbackQuery();
+    if (typeof ctx.conversation?.enter === 'function') {
+      ctx.session.bankCardsReturnTo = 'receipts';
+      await ctx.conversation.enter('adminBankCardsConversation');
+      return;
+    }
     await showBankCardsSummary(ctx);
   });
 
@@ -716,7 +724,7 @@ async function showBankCardsSummary(ctx: MenuContext): Promise<void> {
       : [];
 
   const keyboard = new InlineKeyboard()
-    .text(t(ctx, 'admin_sales_bank_cards_add_button'), 'nav:admin:sales')
+    .text(t(ctx, 'admin_sales_bank_cards_add_button'), 'admin:sales:bank_cards')
     .row()
     .text(t(ctx, 'admin_receipt_queue_title'), 'receipt:page:1')
     .row()
@@ -748,11 +756,11 @@ async function showBankCardsSummary(ctx: MenuContext): Promise<void> {
       },
       sections: configuredCards.map((card) => ({
         emoji: card.enabled ? '🟢' : '⚪️',
-        title: `\`${sanitizeTelegramInlineCode(card.id)}\``,
+        title: escapeTelegramMarkdown(card.bankName || card.cardHolder || card.id),
         fields: [
           {
             label: t(ctx, 'topup_card_number_label'),
-            value: `\`${sanitizeTelegramInlineCode(card.cardNumber)}\``,
+            value: `\`${sanitizeTelegramInlineCode(formatCardNumberGrouped(card.cardNumber))}\``,
           },
           {
             label: t(ctx, 'topup_card_holder_label'),
@@ -978,6 +986,14 @@ function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): st
   const duplicateBanner = receipt.duplicateOfReceiptId
     ? formatReceiptDuplicateWarning(ctx, receipt.duplicateOfReceiptId)
     : undefined;
+  const locale = resolveContextLocale(ctx);
+  const cardLabel =
+    receipt.cardNumber || receipt.cardId
+      ? (ctx.services?.paymentService?.resolveCardDisplayLabel?.(
+          { cardId: receipt.cardId, cardNumber: receipt.cardNumber },
+          locale
+        ) ?? (receipt.cardNumber ? formatCardNumberGrouped(receipt.cardNumber) : null))
+      : null;
 
   return buildScreen({
     emoji: '🧾',
@@ -1003,6 +1019,15 @@ function buildReceiptReviewScreen(ctx: MenuContext, receipt: PendingReceipt): st
             label: t(ctx, 'admin_receipt_id_label'),
             value: `\`${receipt.id}\` (#${shortId})`,
           },
+          ...(cardLabel
+            ? [
+                {
+                  emoji: '🏦',
+                  label: t(ctx, 'admin_receipt_destination_card_label'),
+                  value: escapeTelegramMarkdown(cardLabel),
+                },
+              ]
+            : []),
           {
             emoji: '📅',
             label: t(ctx, 'admin_receipt_created_label'),

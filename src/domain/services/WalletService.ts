@@ -490,6 +490,8 @@ export class WalletService {
 
     const normalizedFileUniqueId = params.fileUniqueId?.trim() || null;
     const normalizedFileSha256 = params.fileSha256?.trim().toLowerCase() || null;
+    const normalizedCardId = params.cardId?.trim() || null;
+    const normalizedCardNumber = params.cardNumber?.trim() || null;
     const hasFingerprint = Boolean(normalizedFileUniqueId || normalizedFileSha256);
 
     const receiptId = `rec_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
@@ -560,6 +562,8 @@ export class WalletService {
         ...(normalizedFileUniqueId ? { fileUniqueId: normalizedFileUniqueId } : {}),
         ...(normalizedFileSha256 ? { fileSha256: normalizedFileSha256 } : {}),
         ...(matchedDuplicateId ? { duplicateOfReceiptId: matchedDuplicateId } : {}),
+        ...(normalizedCardId ? { cardId: normalizedCardId } : {}),
+        ...(normalizedCardNumber ? { cardNumber: normalizedCardNumber } : {}),
         status: 'pending',
       });
 
@@ -909,6 +913,8 @@ export class WalletService {
       fileUniqueId: string | null;
       fileSha256: string | null;
       duplicateOfReceiptId: string | null;
+      cardId: string | null;
+      cardNumber: string | null;
       status: string;
       reviewedBy: number | null;
       voidedAt: Date | null;
@@ -990,6 +996,8 @@ export class WalletService {
           fileUniqueId: topupReceipts.fileUniqueId,
           fileSha256: topupReceipts.fileSha256,
           duplicateOfReceiptId: topupReceipts.duplicateOfReceiptId,
+          cardId: topupReceipts.cardId,
+          cardNumber: topupReceipts.cardNumber,
           status: topupReceipts.status,
           reviewedBy: topupReceipts.reviewedBy,
           voidedAt: topupReceipts.voidedAt,
@@ -1050,6 +1058,8 @@ export class WalletService {
       fileUniqueId: r.fileUniqueId ?? null,
       fileSha256: r.fileSha256 ?? null,
       duplicateOfReceiptId: r.duplicateOfReceiptId ?? null,
+      cardId: r.cardId ?? null,
+      cardNumber: r.cardNumber ?? null,
       status: r.status,
       reviewedBy: r.reviewedBy,
       voidedAt: r.voidedAt ?? null,

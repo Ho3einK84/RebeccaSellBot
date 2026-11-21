@@ -8,6 +8,12 @@ import { normalizeCustomServiceName } from '../../../domain/services/ConfigServi
 import type { PricingService } from '../../../domain/services/PricingService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import {
+  detectIranianBankName,
+  normalizeCardNumber,
+  parseBankCardsJson,
+  type PaymentService,
+} from '../../../domain/services/PaymentService.js';
+import {
   type PurchaseCheckoutService,
   PurchaseCheckoutUnavailableError,
 } from '../../../domain/services/PurchaseCheckoutService.js';
@@ -86,6 +92,7 @@ export function registerUserRoutes(
     walletService: WalletService;
     configService?: ConfigService;
     pricingService?: PricingService;
+    paymentService?: PaymentService;
     translationService?: TranslationService;
     purchaseCheckoutService?: PurchaseCheckoutService;
     catalogDiscountService?: CatalogDiscountService;
@@ -170,8 +177,43 @@ export function registerUserRoutes(
         }
 
         const currency = options.translationService?.getSetting('currency', 'تومان') || 'تومان';
-        const cardNumber = options.translationService?.getSetting('card_number', '') || '';
-        const cardHolder = options.translationService?.getSetting('card_holder', '') || '';
+        let cardNumber = '';
+        let cardHolder = '';
+        let bankName = '';
+        let cardId = '';
+
+        if (options.paymentService) {
+          const selectedCard =
+            typeof options.paymentService.selectCardForTopupWithDailyCaps === 'function'
+              ? await options.paymentService.selectCardForTopupWithDailyCaps()
+              : typeof options.paymentService.selectCardForTopup === 'function'
+                ? options.paymentService.selectCardForTopup()
+                : null;
+          if (selectedCard) {
+            cardId = selectedCard.id;
+            cardNumber = selectedCard.cardNumber;
+            cardHolder = selectedCard.cardHolder;
+            bankName = selectedCard.bankName || detectIranianBankName(cardNumber) || '';
+          }
+        } else if (options.translationService) {
+          const configuredEnabled = parseBankCardsJson(
+            options.translationService.getSetting('bank_cards_json', '[]')
+          ).filter((card) => card.enabled);
+          if (configuredEnabled.length > 0) {
+            const picked = configuredEnabled[0]!;
+            cardId = picked.id;
+            cardNumber = picked.cardNumber;
+            cardHolder = picked.cardHolder;
+            bankName = picked.bankName || detectIranianBankName(cardNumber) || '';
+          } else {
+            cardNumber = normalizeCardNumber(
+              options.translationService.getSetting('card_number', '')
+            );
+            cardHolder = options.translationService.getSetting('card_holder', '').trim();
+            bankName = cardNumber ? (detectIranianBankName(cardNumber) ?? '') : '';
+          }
+        }
+
         const rawSupport = options.translationService?.getSetting('support_destination', '') || '';
         const supportUsername = normalizeSupportUsername(rawSupport);
         const supportEnabled =
@@ -250,6 +292,8 @@ export function registerUserRoutes(
             currency,
             cardNumber,
             cardHolder,
+            ...(bankName ? { bankName } : {}),
+            ...(cardId ? { cardId } : {}),
             supportUsername,
             supportEnabled,
             botUsername: options.botUsername || '',

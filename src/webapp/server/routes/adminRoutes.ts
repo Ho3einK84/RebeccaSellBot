@@ -6,6 +6,16 @@ import type { UserService } from '../../../domain/services/UserService.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
 import type { PricingService } from '../../../domain/services/PricingService.js';
 import {
+  detectIranianBankName,
+  generateBankCardId,
+  hasDuplicateCardNumber,
+  isValidBankCardNumber,
+  MAX_BANK_CARDS,
+  normalizeCardNumber,
+  PaymentService,
+  type BankCardConfig,
+} from '../../../domain/services/PaymentService.js';
+import {
   type RebeccaPanelRegistry,
   RebeccaPanelInUseError,
 } from '../../../domain/services/RebeccaPanelRegistry.js';
@@ -16,7 +26,10 @@ import {
   TopupVoidError,
   type AdminBalanceOperation,
 } from '../../../domain/services/WalletContracts.js';
-import { receiptDuplicatePolicy } from '../../../domain/services/FeatureSettings.js';
+import {
+  receiptDuplicatePolicy,
+  uniqueTopupAmountEnabled,
+} from '../../../domain/services/FeatureSettings.js';
 import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
 import { downloadTelegramFile } from '../../../infra/telegramFiles.js';
 import {
@@ -47,6 +60,7 @@ export function registerAdminRoutes(
     userService: UserService;
     configService?: ConfigService;
     pricingService?: PricingService;
+    paymentService?: PaymentService;
     panelRegistry: RebeccaPanelRegistry;
     botToken?: string;
     adminService?: Pick<AdminService, 'isAdmin'> & { adminIds?: number[] };
@@ -111,6 +125,8 @@ export function registerAdminRoutes(
           fileUniqueId?: string | null;
           fileSha256?: string | null;
           duplicateOfReceiptId?: string | null;
+          cardId?: string | null;
+          cardNumber?: string | null;
           voidedAt?: Date | string | null;
           voidedBy?: number | null;
           voidReason?: string | null;
@@ -134,11 +150,25 @@ export function registerAdminRoutes(
               : `⚠️ هشدار رسید تکراری (مشابه رسید #${shortId})`;
         }
 
+        const resolvedPaymentService =
+          services.paymentService ??
+          (ts && typeof ts.getSetting === 'function' ? new PaymentService(ts) : undefined);
+        const cardSummary =
+          record.cardId || record.cardNumber
+            ? (resolvedPaymentService?.resolveCardDisplayLabel(
+                { cardId: record.cardId, cardNumber: record.cardNumber },
+                defaultLocale === 'en' ? 'en' : 'fa'
+              ) ?? null)
+            : null;
+
         return {
           ...item,
           fileUniqueId: record.fileUniqueId ?? null,
           fileSha256: record.fileSha256 ?? null,
           duplicateOfReceiptId,
+          cardId: record.cardId ?? null,
+          cardNumber: record.cardNumber ?? null,
+          cardSummary,
           voidedAt: record.voidedAt ?? null,
           voidedBy: record.voidedBy ?? null,
           voidReason: record.voidReason ?? null,
@@ -1378,6 +1408,423 @@ export function registerAdminRoutes(
         const message = err instanceof Error ? err.message : 'Failed to delete service';
         return reply.code(400).send({ error: message });
       }
+    });
+
+    // ── Bank Cards Management API ──────────────────────────────────────────────
+
+    const resolvePaymentService = (): PaymentService | null => {
+      if (services.paymentService) return services.paymentService;
+      if (services.translationService) {
+        return new PaymentService(services.translationService);
+      }
+      return null;
+    };
+
+    const buildBankCardsPayload = async (ps: PaymentService) => {
+      const ts = services.translationService;
+      const defaultLocale =
+        typeof ts?.getDefaultLocale === 'function' && ts.getDefaultLocale() === 'en' ? 'en' : 'fa';
+      const cards = await ps.getBankCardsWithDailyUsage(new Date(), defaultLocale);
+      const legacyCard = ps.getLegacyDefaultCard(defaultLocale);
+      const activeCount = cards.filter((card) => card.enabled).length;
+      return {
+        cards,
+        legacyCard,
+        activeCount,
+        rotationActive: activeCount >= 2,
+        uniqueTopupAmountEnabled: ts ? uniqueTopupAmountEnabled(ts) : false,
+        bounds: { maxCards: MAX_BANK_CARDS },
+      };
+    };
+
+    // GET /api/admin/bank-cards
+    adminScope.get('/api/admin/bank-cards', async (_request, reply) => {
+      const ps = resolvePaymentService();
+      if (!ps) {
+        return reply.code(500).send({ error: 'Payment service unavailable' });
+      }
+      return reply.code(200).send(await buildBankCardsPayload(ps));
+    });
+
+    // POST /api/admin/bank-cards
+    adminScope.post<{
+      Body: {
+        cardNumber: string;
+        cardHolder: string;
+        bankName?: string | null;
+        dailyCapToman?: number | null;
+        enabled?: boolean;
+      };
+    }>(
+      '/api/admin/bank-cards',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            required: ['cardNumber', 'cardHolder'],
+            properties: {
+              cardNumber: { type: 'string', minLength: 12, maxLength: 40 },
+              cardHolder: { type: 'string', minLength: 1, maxLength: 120 },
+              bankName: { type: ['string', 'null'], maxLength: 60 },
+              dailyCapToman: { type: ['number', 'null'] },
+              enabled: { type: 'boolean' },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const ps = resolvePaymentService();
+        if (!ps) return reply.code(500).send({ error: 'Payment service unavailable' });
+
+        const existing = ps.getConfiguredBankCards();
+        if (existing.length >= MAX_BANK_CARDS) {
+          return reply
+            .code(400)
+            .send({ error: `Maximum bank cards (${MAX_BANK_CARDS}) reached`, code: 'MAX_CARDS' });
+        }
+
+        const normalizedNum = normalizeCardNumber(request.body.cardNumber);
+        if (!isValidBankCardNumber(normalizedNum)) {
+          return reply
+            .code(400)
+            .send({ error: 'Card number must contain 12-24 digits', code: 'INVALID_CARD_NUMBER' });
+        }
+        if (hasDuplicateCardNumber(existing, normalizedNum)) {
+          return reply
+            .code(409)
+            .send({ error: 'Card number already exists', code: 'DUPLICATE_CARD_NUMBER' });
+        }
+
+        const holder = request.body.cardHolder.trim();
+        if (!holder || holder.length > 120) {
+          return reply.code(400).send({ error: 'Invalid card holder name' });
+        }
+
+        let dailyCapToman: number | null = null;
+        if (request.body.dailyCapToman !== undefined && request.body.dailyCapToman !== null) {
+          const cap = Math.trunc(request.body.dailyCapToman);
+          if (!Number.isSafeInteger(cap) || cap < 0) {
+            return reply.code(400).send({ error: 'Invalid daily cap amount' });
+          }
+          dailyCapToman = cap > 0 ? cap : null;
+        }
+
+        const rawBank = request.body.bankName?.trim();
+        const bankName = rawBank || detectIranianBankName(normalizedNum, 'fa');
+
+        const created: BankCardConfig = {
+          id: generateBankCardId(existing),
+          cardNumber: normalizedNum,
+          cardHolder: holder,
+          enabled: request.body.enabled ?? true,
+          dailyCapToman,
+          ...(bankName ? { bankName } : {}),
+        };
+
+        await ps.updateBankCards([...existing, created]);
+        await services.userService.recordAdminAction({
+          actorTelegramId: request.userSession!.telegramId,
+          action: 'admin_add_bank_card',
+          entityType: 'bank_card',
+          entityId: created.id,
+        });
+
+        const payload = await buildBankCardsPayload(ps);
+        const createdStatus = payload.cards.find((c) => c.id === created.id) ?? created;
+        return reply.code(201).send({ card: createdStatus, ...payload });
+      }
+    );
+
+    // PATCH /api/admin/bank-cards/:id
+    adminScope.patch<{
+      Params: { id: string };
+      Body: {
+        cardNumber?: string;
+        cardHolder?: string;
+        bankName?: string | null;
+        dailyCapToman?: number | null;
+        enabled?: boolean;
+      };
+    }>(
+      '/api/admin/bank-cards/:id',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              cardNumber: { type: 'string', minLength: 12, maxLength: 40 },
+              cardHolder: { type: 'string', minLength: 1, maxLength: 120 },
+              bankName: { type: ['string', 'null'], maxLength: 60 },
+              dailyCapToman: { type: ['number', 'null'] },
+              enabled: { type: 'boolean' },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const ps = resolvePaymentService();
+        if (!ps) return reply.code(500).send({ error: 'Payment service unavailable' });
+
+        const existing = ps.getConfiguredBankCards();
+        const index = existing.findIndex((c) => c.id === request.params.id);
+        if (index === -1) {
+          return reply.code(404).send({ error: 'Bank card not found' });
+        }
+
+        const current = existing[index]!;
+        let nextNumber = current.cardNumber;
+        if (request.body.cardNumber !== undefined) {
+          const normalizedNum = normalizeCardNumber(request.body.cardNumber);
+          if (!isValidBankCardNumber(normalizedNum)) {
+            return reply.code(400).send({
+              error: 'Card number must contain 12-24 digits',
+              code: 'INVALID_CARD_NUMBER',
+            });
+          }
+          if (hasDuplicateCardNumber(existing, normalizedNum, current.id)) {
+            return reply
+              .code(409)
+              .send({ error: 'Card number already exists', code: 'DUPLICATE_CARD_NUMBER' });
+          }
+          nextNumber = normalizedNum;
+        }
+
+        let nextHolder = current.cardHolder;
+        if (request.body.cardHolder !== undefined) {
+          const trimmed = request.body.cardHolder.trim();
+          if (!trimmed || trimmed.length > 120) {
+            return reply.code(400).send({ error: 'Invalid card holder name' });
+          }
+          nextHolder = trimmed;
+        }
+
+        let nextBankName = current.bankName;
+        if (request.body.bankName !== undefined) {
+          const trimmed = request.body.bankName?.trim();
+          nextBankName = trimmed || undefined;
+        }
+
+        let nextCap = current.dailyCapToman ?? null;
+        if (request.body.dailyCapToman !== undefined) {
+          if (request.body.dailyCapToman === null) {
+            nextCap = null;
+          } else {
+            const cap = Math.trunc(request.body.dailyCapToman);
+            if (!Number.isSafeInteger(cap) || cap < 0) {
+              return reply.code(400).send({ error: 'Invalid daily cap amount' });
+            }
+            nextCap = cap > 0 ? cap : null;
+          }
+        }
+
+        const nextEnabled =
+          request.body.enabled !== undefined ? Boolean(request.body.enabled) : current.enabled;
+
+        const updated: BankCardConfig = {
+          id: current.id,
+          cardNumber: nextNumber,
+          cardHolder: nextHolder,
+          enabled: nextEnabled,
+          dailyCapToman: nextCap,
+          ...(nextBankName ? { bankName: nextBankName } : {}),
+        };
+
+        const nextCards = existing.map((c, i) => (i === index ? updated : c));
+        await ps.updateBankCards(nextCards);
+        await services.userService.recordAdminAction({
+          actorTelegramId: request.userSession!.telegramId,
+          action: 'admin_update_bank_card',
+          entityType: 'bank_card',
+          entityId: current.id,
+        });
+
+        const payload = await buildBankCardsPayload(ps);
+        const updatedStatus = payload.cards.find((c) => c.id === current.id) ?? updated;
+        return reply.code(200).send({ card: updatedStatus, ...payload });
+      }
+    );
+
+    // POST /api/admin/bank-cards/:id/toggle
+    adminScope.post<{
+      Params: { id: string };
+      Body?: { enabled?: boolean };
+    }>('/api/admin/bank-cards/:id/toggle', async (request, reply) => {
+      const ps = resolvePaymentService();
+      if (!ps) return reply.code(500).send({ error: 'Payment service unavailable' });
+
+      const existing = ps.getConfiguredBankCards();
+      const target = existing.find((c) => c.id === request.params.id);
+      if (!target) {
+        return reply.code(404).send({ error: 'Bank card not found' });
+      }
+
+      const nextEnabled =
+        typeof request.body?.enabled === 'boolean' ? request.body.enabled : !target.enabled;
+      const nextCards = existing.map((c) =>
+        c.id === target.id ? { ...c, enabled: nextEnabled } : c
+      );
+      await ps.updateBankCards(nextCards);
+      await services.userService.recordAdminAction({
+        actorTelegramId: request.userSession!.telegramId,
+        action: nextEnabled ? 'admin_enable_bank_card' : 'admin_disable_bank_card',
+        entityType: 'bank_card',
+        entityId: target.id,
+      });
+
+      return reply.code(200).send(await buildBankCardsPayload(ps));
+    });
+
+    // POST /api/admin/bank-cards/reorder
+    adminScope.post<{
+      Body: { orderedIds: string[] };
+    }>(
+      '/api/admin/bank-cards/reorder',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            required: ['orderedIds'],
+            properties: {
+              orderedIds: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const ps = resolvePaymentService();
+        if (!ps) return reply.code(500).send({ error: 'Payment service unavailable' });
+
+        const existing = ps.getConfiguredBankCards();
+        const byId = new Map(existing.map((card) => [card.id, card]));
+        const reordered: BankCardConfig[] = [];
+        const seen = new Set<string>();
+
+        for (const id of request.body.orderedIds) {
+          const card = byId.get(id);
+          if (card && !seen.has(id)) {
+            reordered.push(card);
+            seen.add(id);
+          }
+        }
+        for (const card of existing) {
+          if (!seen.has(card.id)) {
+            reordered.push(card);
+          }
+        }
+
+        await ps.updateBankCards(reordered);
+        return reply.code(200).send(await buildBankCardsPayload(ps));
+      }
+    );
+
+    // POST /api/admin/bank-cards/import-legacy
+    adminScope.post('/api/admin/bank-cards/import-legacy', async (request, reply) => {
+      const ps = resolvePaymentService();
+      if (!ps) return reply.code(500).send({ error: 'Payment service unavailable' });
+
+      const existing = ps.getConfiguredBankCards();
+      const legacy = ps.getLegacyDefaultCard('fa');
+      if (!legacy) {
+        return reply.code(400).send({ error: 'No legacy default card configured' });
+      }
+      if (hasDuplicateCardNumber(existing, legacy.cardNumber)) {
+        return reply.code(200).send(await buildBankCardsPayload(ps));
+      }
+      if (existing.length >= MAX_BANK_CARDS) {
+        return reply.code(400).send({ error: `Maximum bank cards (${MAX_BANK_CARDS}) reached` });
+      }
+
+      const imported: BankCardConfig = {
+        id: generateBankCardId(existing),
+        cardNumber: legacy.cardNumber,
+        cardHolder: legacy.cardHolder || '—',
+        enabled: true,
+        dailyCapToman: null,
+        ...(legacy.bankName ? { bankName: legacy.bankName } : {}),
+      };
+
+      await ps.updateBankCards([...existing, imported]);
+      await services.userService.recordAdminAction({
+        actorTelegramId: request.userSession!.telegramId,
+        action: 'admin_import_legacy_bank_card',
+        entityType: 'bank_card',
+        entityId: imported.id,
+      });
+
+      return reply.code(200).send(await buildBankCardsPayload(ps));
+    });
+
+    // PUT /api/admin/bank-cards/settings
+    adminScope.put<{
+      Body: {
+        uniqueTopupAmountEnabled?: boolean;
+        cardNumber?: string;
+        cardHolder?: string;
+      };
+    }>(
+      '/api/admin/bank-cards/settings',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              uniqueTopupAmountEnabled: { type: 'boolean' },
+              cardNumber: { type: 'string', maxLength: 40 },
+              cardHolder: { type: 'string', maxLength: 120 },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const ps = resolvePaymentService();
+        const ts = services.translationService;
+        if (!ps || !ts) return reply.code(500).send({ error: 'Payment service unavailable' });
+
+        const updates: Record<string, string> = {};
+        if (typeof request.body.uniqueTopupAmountEnabled === 'boolean') {
+          updates.unique_topup_amount_enabled = String(request.body.uniqueTopupAmountEnabled);
+        }
+        if (request.body.cardNumber !== undefined) {
+          const normalized = normalizeCardNumber(request.body.cardNumber);
+          if (normalized && !isValidBankCardNumber(normalized)) {
+            return reply.code(400).send({ error: 'Card number must contain 12-24 digits' });
+          }
+          updates.card_number = normalized;
+        }
+        if (request.body.cardHolder !== undefined) {
+          updates.card_holder = request.body.cardHolder.trim();
+        }
+        if (Object.keys(updates).length > 0) {
+          await ts.updateSettings(updates);
+        }
+
+        return reply.code(200).send(await buildBankCardsPayload(ps));
+      }
+    );
+
+    // DELETE /api/admin/bank-cards/:id
+    adminScope.delete<{
+      Params: { id: string };
+    }>('/api/admin/bank-cards/:id', async (request, reply) => {
+      const ps = resolvePaymentService();
+      if (!ps) return reply.code(500).send({ error: 'Payment service unavailable' });
+
+      const existing = ps.getConfiguredBankCards();
+      const target = existing.find((c) => c.id === request.params.id);
+      if (!target) {
+        return reply.code(404).send({ error: 'Bank card not found' });
+      }
+
+      const nextCards = existing.filter((c) => c.id !== target.id);
+      await ps.updateBankCards(nextCards);
+      await services.userService.recordAdminAction({
+        actorTelegramId: request.userSession!.telegramId,
+        action: 'admin_delete_bank_card',
+        entityType: 'bank_card',
+        entityId: target.id,
+      });
+
+      return reply.code(200).send({ deletedId: target.id, ...(await buildBankCardsPayload(ps)) });
     });
   });
 }

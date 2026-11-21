@@ -85,6 +85,13 @@
       "when": 1795273000000,
       "tag": "0011_receipt_security_discounts_phone_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795283000000,
+      "tag": "0012_add_topup_receipt_card_tracking",
+      "breakpoints": true
     }
   ]
 }

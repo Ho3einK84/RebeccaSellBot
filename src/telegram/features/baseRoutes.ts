@@ -343,6 +343,12 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     await ctx.conversation.enter('adminPaymentSettingsConversation');
   });
 
+  adminCallback('admin:sales:bank_cards', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    ctx.session.bankCardsReturnTo = 'sales';
+    await ctx.conversation.enter('adminBankCardsConversation');
+  });
+
   adminCallback('admin:sales:lucky_wheel', async (ctx) => {
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('adminLuckyWheelSettingsConversation');

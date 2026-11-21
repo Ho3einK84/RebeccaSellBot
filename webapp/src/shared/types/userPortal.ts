@@ -48,6 +48,8 @@ export interface UserPortalSettings {
   currency: string;
   cardNumber: string;
   cardHolder: string;
+  bankName?: string;
+  cardId?: string;
   supportUsername: string;
   supportEnabled: boolean;
   botUsername: string;

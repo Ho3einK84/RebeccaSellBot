@@ -859,6 +859,8 @@ export const topupReceipts = pgTable(
     fileUniqueId: text('file_unique_id'),
     fileSha256: text('file_sha256'),
     duplicateOfReceiptId: text('duplicate_of_receipt_id'),
+    cardId: text('card_id'),
+    cardNumber: text('card_number'),
     status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected', 'voided'
     reviewedBy: bigint('reviewed_by', { mode: 'number' }),
     voidedAt: timestamp('voided_at'),
@@ -889,6 +891,7 @@ export const topupReceipts = pgTable(
     index('topup_receipts_user_status_idx').on(table.telegramId, table.status),
     index('topup_receipts_file_unique_id_idx').on(table.fileUniqueId),
     index('topup_receipts_file_sha256_idx').on(table.fileSha256),
+    index('topup_receipts_card_created_idx').on(table.cardId, table.createdAt),
   ]
 );
 

@@ -1,6 +1,12 @@
 import { InlineKeyboard } from 'grammy';
+import {
+  detectIranianBankName,
+  normalizeCardNumber,
+  parseBankCardsJson,
+} from '../../../../domain/services/PaymentService.js';
+import { uniqueTopupAmountEnabled } from '../../../../domain/services/FeatureSettings.js';
 import type { ConversationContext, MyConversation } from '../../../types.js';
-import { localizedNumber, t } from '../../../locale.js';
+import { localizedNumber, resolveContextLocale, t } from '../../../locale.js';
 import { buildScreen } from '../../../ui.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../../rendering.js';
 import { requireAdmin } from '../shared.js';
@@ -10,6 +16,7 @@ import { getSettingDefinition } from './catalog.js';
 import { displayAdminSettingValue } from './presentation.js';
 import { renderSalesMenu } from '../../../keyboards/adminMenu.js';
 import { formatCardNumberGrouped } from '../wallet.js';
+import { manageBankCards } from './bankCards.js';
 
 export async function adminPaymentSettingsConversation(
   conversation: MyConversation,
@@ -23,9 +30,15 @@ export async function adminPaymentSettingsConversation(
     const state = await conversation.external((outsideCtx) => {
       const ts = (outsideCtx?.services ?? activeCtx.services)?.translationService;
       if (!ts) return undefined;
+      const configuredCards = parseBankCardsJson(ts.getSetting('bank_cards_json', '[]'));
+      const activeMultiCards = configuredCards.filter((card) => card.enabled);
+      const rawCardNumber = ts.getSetting('card_number', '—');
       return {
-        cardNumber: ts.getSetting('card_number', '—'),
+        cardNumber: rawCardNumber,
         cardHolder: ts.getSetting('card_holder', '—'),
+        configuredCardsCount: configuredCards.length,
+        activeCardsCount: activeMultiCards.length,
+        uniqueAmountEnabled: uniqueTopupAmountEnabled(ts),
         transferEnabled: ts.getSettingBool('wallet_transfer_enabled', true),
         transferMinAmount: ts.getSettingNum('wallet_transfer_min_amount', 5000),
         receiptNotifyEnabled: ts.getSettingBool('receipt_notify_enabled', true),
@@ -41,6 +54,9 @@ export async function adminPaymentSettingsConversation(
     const {
       cardNumber,
       cardHolder,
+      configuredCardsCount,
+      activeCardsCount,
+      uniqueAmountEnabled,
       transferEnabled,
       transferMinAmount,
       receiptNotifyEnabled,
@@ -56,6 +72,8 @@ export async function adminPaymentSettingsConversation(
       receiptDuplicatePolicy === 'block'
         ? t(activeCtx, 'admin_receipt_duplicate_policy_block')
         : t(activeCtx, 'admin_receipt_duplicate_policy_warn');
+    const locale = resolveContextLocale(activeCtx);
+    const detectedDefaultBank = detectIranianBankName(normalizeCardNumber(cardNumber), locale);
 
     const screenText = buildScreen({
       emoji: '💳',
@@ -67,16 +85,20 @@ export async function adminPaymentSettingsConversation(
           title: t(activeCtx, 'payment_method_card_to_card'),
           fields: [
             {
+              label: t(activeCtx, 'admin_setting_bank_cards_json'),
+              value: escapeTelegramMarkdown(displayAdminSettingValue(activeCtx, 'bank_cards_json')),
+            },
+            {
               label: t(activeCtx, 'admin_setting_card_number'),
-              value: `\`${sanitizeTelegramInlineCode(formatCardNumberGrouped(cardNumber))}\``,
+              value: `\`${sanitizeTelegramInlineCode(formatCardNumberGrouped(cardNumber))}\`${detectedDefaultBank ? ` (${escapeTelegramMarkdown(detectedDefaultBank)})` : ''}`,
             },
             {
               label: t(activeCtx, 'admin_setting_card_holder'),
               value: escapeTelegramMarkdown(cardHolder),
             },
             {
-              label: t(activeCtx, 'admin_setting_bank_cards_json'),
-              value: escapeTelegramMarkdown(displayAdminSettingValue(activeCtx, 'bank_cards_json')),
+              label: t(activeCtx, 'admin_setting_unique_topup_amount_enabled'),
+              value: uniqueAmountEnabled ? onBadge : offBadge,
             },
           ],
         },
@@ -125,15 +147,29 @@ export async function adminPaymentSettingsConversation(
           ],
         },
       ],
-      footer: `ℹ️ ${t(activeCtx, 'admin_home_hint')}`,
+      footer:
+        activeCardsCount >= 2
+          ? `${t(activeCtx, 'admin_bank_cards_rotation_active', { count: localizedNumber(activeCardsCount, activeCtx) })}\nℹ️ ${t(activeCtx, 'admin_home_hint')}`
+          : configuredCardsCount > 0 && activeCardsCount === 0
+            ? `${t(activeCtx, 'admin_bank_cards_all_disabled_warning')}\nℹ️ ${t(activeCtx, 'admin_home_hint')}`
+            : `ℹ️ ${t(activeCtx, 'admin_home_hint')}`,
     });
 
+    const cardsBtnBadge =
+      configuredCardsCount > 0
+        ? ` (${localizedNumber(activeCardsCount, activeCtx)}/${localizedNumber(configuredCardsCount, activeCtx)})`
+        : '';
+
     const keyboard = new InlineKeyboard()
-      .text(t(activeCtx, 'admin_setting_card_number'), 'pay:edit:card_number')
+      .text(`${t(activeCtx, 'admin_sales_bank_cards_button')}${cardsBtnBadge}`, 'pay:cards')
       .row()
+      .text(t(activeCtx, 'admin_setting_card_number'), 'pay:edit:card_number')
       .text(t(activeCtx, 'admin_setting_card_holder'), 'pay:edit:card_holder')
       .row()
-      .text(t(activeCtx, 'admin_setting_bank_cards_json'), 'pay:edit:bank_cards_json')
+      .text(
+        `${t(activeCtx, 'admin_setting_unique_topup_amount_enabled')}: ${uniqueAmountEnabled ? onBadge : offBadge}`,
+        'pay:toggle:unique_amount'
+      )
       .row()
       .text(
         `${t(activeCtx, 'admin_setting_wallet_transfer_enabled')}: ${transferEnabled ? onBadge : offBadge}`,
@@ -178,7 +214,7 @@ export async function adminPaymentSettingsConversation(
     await renderSettingsScreen(conversation, activeCtx, screenText, keyboard);
 
     const input = await waitForSettingsInput(conversation, {
-      callbackPrefixes: ['pay:edit:', 'pay:toggle:', 'pay:admins:'],
+      callbackPrefixes: ['pay:cards', 'pay:edit:', 'pay:toggle:', 'pay:admins:'],
       backCallbacks: ['pay:back'],
       retryKeyboard: keyboard,
     });
@@ -187,6 +223,24 @@ export async function adminPaymentSettingsConversation(
     if (input.type === 'back') break;
     if (input.type !== 'callback') continue;
     activeCtx = input.ctx;
+
+    if (input.data === 'pay:cards' || input.data === 'pay:edit:bank_cards_json') {
+      const outcome = await manageBankCards(conversation, activeCtx);
+      if (outcome === 'cancel') return;
+      continue;
+    }
+
+    if (input.data === 'pay:toggle:unique_amount') {
+      const nextVal = (!uniqueAmountEnabled).toString();
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting(
+          'unique_topup_amount_enabled',
+          nextVal
+        );
+      });
+      continue;
+    }
 
     if (input.data === 'pay:toggle:transfer') {
       const nextVal = (!transferEnabled).toString();
@@ -242,7 +296,8 @@ export async function adminPaymentSettingsConversation(
       const key = input.data.slice('pay:edit:'.length);
       const definition = getSettingDefinition(key);
       if (definition) {
-        await editSetting(conversation, activeCtx, definition);
+        const outcome = await editSetting(conversation, activeCtx, definition);
+        if (outcome === 'cancel') return;
       }
     }
   }

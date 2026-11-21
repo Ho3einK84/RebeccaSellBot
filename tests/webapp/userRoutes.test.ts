@@ -86,6 +86,7 @@ describe('WebApp User Routes (/api/user/*)', () => {
     expect(body.settings.currency).toBe('تومان');
     expect(body.settings.cardNumber).toBe('6037997911112222');
     expect(body.settings.cardHolder).toBe('حسین کمالی');
+    expect(body.settings.bankName).toBe('بانک ملی');
     expect(body.settings.supportUsername).toBe('RebeccaSupport');
     expect(body.settings.botUsername).toBe('RebeccaSellBot');
     expect(body.settings.customVolume).toBeDefined();

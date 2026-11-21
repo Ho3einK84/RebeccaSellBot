@@ -166,6 +166,7 @@ const ADMIN_SALES_PROMOS_PREFIXES = [
   'admin_package_',
   'admin_category_',
   'admin_sales_',
+  'admin_bank_cards_',
   'admin_stats_',
   'admin_promo_',
   'admin_invalid_promo_',
@@ -430,6 +431,18 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     sampleFa: '۱۵۰٬۰۰۰',
     sampleEn: '150,000',
   },
+  bank: {
+    fa: 'نام بانک',
+    en: 'Bank name',
+    sampleFa: 'بانک صادرات',
+    sampleEn: 'Bank Saderat',
+  },
+  card: {
+    fa: 'شماره کارت بانکی',
+    en: 'Bank card number',
+    sampleFa: '6037 6981 1130 6846',
+    sampleEn: '6037 6981 1130 6846',
+  },
   categories: {
     fa: 'تعداد دسته‌بندی‌های فعال',
     en: 'Active categories count',
@@ -621,6 +634,12 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     en: 'Traffic quota (GB)',
     sampleFa: '۵۰',
     sampleEn: '50',
+  },
+  holder: {
+    fa: 'نام صاحب کارت بانکی',
+    en: 'Bank card holder name',
+    sampleFa: 'حسین کریمی',
+    sampleEn: 'Hossein Karimi',
   },
   hours: {
     fa: 'تعداد ساعت',

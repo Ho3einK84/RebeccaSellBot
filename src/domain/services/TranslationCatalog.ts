@@ -56,6 +56,7 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   receipt_notify_admins: '',
   receipt_duplicate_policy: 'warn',
   bank_cards_json: '[]',
+  unique_topup_amount_enabled: 'false',
   support_message: 'برای پشتیبانی با مدیر در تماس باشید.',
   support_destination: '',
   support_enabled: 'true',

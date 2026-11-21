@@ -1,6 +1,7 @@
 import type { ConversationContext } from '../../../types.js';
 import { localizedNumber, normalizeInputDigits, t } from '../../../locale.js';
 import { parsePackageOptionsJson } from '../../../../domain/services/PricingService.js';
+import { normalizeCardNumber } from '../../../../domain/services/PaymentService.js';
 import { getSettingDefinition, type SettingKey } from './catalog.js';
 
 const NAMING_MODES = new Set([
@@ -68,7 +69,7 @@ export function validateAdminSetting(
     case 'locale':
       return value === 'fa' || value === 'en' ? value : undefined;
     case 'card_number': {
-      const normalized = normalizeInputDigits(value.replaceAll('-', ''));
+      const normalized = normalizeCardNumber(value);
       return /^\d{12,24}$/u.test(normalized) ? normalized : undefined;
     }
     case 'bank_cards_json':

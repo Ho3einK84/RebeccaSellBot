@@ -986,5 +986,123 @@ describe('WebApp Server & Admin Routes', () => {
         })
       );
     });
+
+    it('supports full Bank Cards CRUD, toggle, reorder, import-legacy, settings, and duplicate rejection via /api/admin/bank-cards', async () => {
+      const store = new Map<string, string>([
+        ['card_number', '6037698111306846'],
+        ['card_holder', 'Hossein Karimi'],
+        ['bank_cards_json', '[]'],
+        ['unique_topup_amount_enabled', 'false'],
+      ]);
+      mockTranslationService.getSetting.mockImplementation(
+        (key: string, fallback = '') => store.get(key) ?? fallback
+      );
+      mockTranslationService.updateSetting.mockImplementation(async (key: string, val: string) => {
+        store.set(key, val);
+      });
+      mockTranslationService.updateSettings = vi.fn(async (pairs: Record<string, string>) => {
+        for (const [k, v] of Object.entries(pairs)) store.set(k, v);
+      });
+
+      const headers = { authorization: `Bearer ${getAdminToken()}` };
+
+      // 1. GET initial empty state with legacy default card
+      const initialRes = await app.inject({ method: 'GET', url: '/api/admin/bank-cards', headers });
+      expect(initialRes.statusCode).toBe(200);
+      expect(initialRes.json().cards).toHaveLength(0);
+      expect(initialRes.json().legacyCard).toMatchObject({
+        cardNumber: '6037698111306846',
+        cardHolder: 'Hossein Karimi',
+        bankName: 'بانک صادرات',
+      });
+
+      // 2. Import legacy card
+      const importRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/bank-cards/import-legacy',
+        headers,
+      });
+      expect(importRes.statusCode).toBe(200);
+      expect(importRes.json().cards).toHaveLength(1);
+      const card1Id = importRes.json().cards[0].id as string;
+
+      // 3. Reject duplicate card number (even with Persian digits & dashes)
+      const dupRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/bank-cards',
+        headers,
+        payload: {
+          cardNumber: '۶۰۳۷-۶۹۸۱-۱۱۳۰-۶۸۴۶',
+          cardHolder: 'Duplicate',
+        },
+      });
+      expect(dupRes.statusCode).toBe(409);
+
+      // 4. Add second card with auto-detected Blu Bank & daily cap
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/bank-cards',
+        headers,
+        payload: {
+          cardNumber: '۶۲۱۹-۸۶۱۹-۱۱۱۱-۲۲۲۲',
+          cardHolder: 'Ali Rezaei',
+          dailyCapToman: 5_000_000,
+        },
+      });
+      expect(createRes.statusCode).toBe(201);
+      expect(createRes.json().cards).toHaveLength(2);
+      expect(createRes.json().rotationActive).toBe(true);
+      const card2Id = createRes.json().card.id as string;
+      expect(createRes.json().card.bankName).toBe('بلوبانک (سامان)');
+
+      // 5. Patch card 2 holder & toggle disabled
+      const patchRes = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/bank-cards/${card2Id}`,
+        headers,
+        payload: { cardHolder: 'Ali Updated', dailyCapToman: 10_000_000 },
+      });
+      expect(patchRes.statusCode).toBe(200);
+      expect(patchRes.json().card.cardHolder).toBe('Ali Updated');
+      expect(patchRes.json().card.dailyCapToman).toBe(10_000_000);
+
+      const toggleRes = await app.inject({
+        method: 'POST',
+        url: `/api/admin/bank-cards/${card2Id}/toggle`,
+        headers,
+        payload: { enabled: false },
+      });
+      expect(toggleRes.statusCode).toBe(200);
+      expect(toggleRes.json().activeCount).toBe(1);
+
+      // 6. Reorder
+      const reorderRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/bank-cards/reorder',
+        headers,
+        payload: { orderedIds: [card2Id, card1Id] },
+      });
+      expect(reorderRes.statusCode).toBe(200);
+      expect(reorderRes.json().cards[0].id).toBe(card2Id);
+
+      // 7. Settings toggle uniqueTopupAmountEnabled
+      const settingsRes = await app.inject({
+        method: 'PUT',
+        url: '/api/admin/bank-cards/settings',
+        headers,
+        payload: { uniqueTopupAmountEnabled: true },
+      });
+      expect(settingsRes.statusCode).toBe(200);
+      expect(settingsRes.json().uniqueTopupAmountEnabled).toBe(true);
+
+      // 8. Delete card 2
+      const deleteRes = await app.inject({
+        method: 'DELETE',
+        url: `/api/admin/bank-cards/${card2Id}`,
+        headers,
+      });
+      expect(deleteRes.statusCode).toBe(200);
+      expect(deleteRes.json().cards).toHaveLength(1);
+    });
   });
 });

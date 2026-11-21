@@ -18,6 +18,7 @@ export const SETTING_KEYS = [
   'card_number',
   'card_holder',
   'bank_cards_json',
+  'unique_topup_amount_enabled',
   'wallet_transfer_enabled',
   'wallet_transfer_min_amount',
   'receipt_notify_enabled',
@@ -205,6 +206,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'payment',
     labelKey: 'admin_setting_bank_cards_json',
     editor: { type: 'bank_cards_json' },
+  },
+  {
+    key: 'unique_topup_amount_enabled',
+    group: 'payment',
+    labelKey: 'admin_setting_unique_topup_amount_enabled',
+    editor: { type: 'boolean' },
   },
   {
     key: 'wallet_transfer_enabled',

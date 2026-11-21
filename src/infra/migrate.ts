@@ -63,6 +63,9 @@ EXCEPTION
 END $$;`,
   `CREATE INDEX IF NOT EXISTS "topup_receipts_file_unique_id_idx" ON "topup_receipts" USING btree ("file_unique_id");`,
   `CREATE INDEX IF NOT EXISTS "topup_receipts_file_sha256_idx" ON "topup_receipts" USING btree ("file_sha256");`,
+  `ALTER TABLE "topup_receipts" ADD COLUMN IF NOT EXISTS "card_id" text;`,
+  `ALTER TABLE "topup_receipts" ADD COLUMN IF NOT EXISTS "card_number" text;`,
+  `CREATE INDEX IF NOT EXISTS "topup_receipts_card_created_idx" ON "topup_receipts" USING btree ("card_id", "created_at");`,
   `DO $$
 DECLARE
   r record;

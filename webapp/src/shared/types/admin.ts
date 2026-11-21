@@ -29,6 +29,9 @@ export interface TopupReceipt {
   mediaType?: string;
   reviewedBy?: number | null;
   rejectReason?: string | null;
+  cardId?: string | null;
+  cardNumber?: string | null;
+  cardSummary?: string | null;
   user?: {
     username?: string | null;
     firstName?: string | null;
@@ -425,4 +428,58 @@ export interface AdminPricingQuoteResponse {
   gbAmount: number;
   durationDays: number;
   warnings: string[];
+}
+
+export interface AdminBankCardDto {
+  id: string;
+  cardNumber: string;
+  cardHolder: string;
+  enabled: boolean;
+  dailyCapToman: number | null;
+  bankName?: string;
+  dailyUsageToman: number;
+  remainingCapToman: number | null;
+  isCapReached: boolean;
+  detectedBankName?: string;
+  luhnValid: boolean;
+}
+
+export interface AdminLegacyBankCardDto {
+  id: string;
+  cardNumber: string;
+  cardHolder: string;
+  enabled: boolean;
+  dailyCapToman: number | null;
+  bankName?: string;
+}
+
+export interface AdminBankCardsResponse {
+  cards: AdminBankCardDto[];
+  legacyCard: AdminLegacyBankCardDto | null;
+  activeCount: number;
+  rotationActive: boolean;
+  uniqueTopupAmountEnabled: boolean;
+  bounds: { maxCards: number };
+}
+
+export interface CreateAdminBankCardPayload {
+  cardNumber: string;
+  cardHolder: string;
+  bankName?: string | null;
+  dailyCapToman?: number | null;
+  enabled?: boolean;
+}
+
+export interface UpdateAdminBankCardPayload {
+  cardNumber?: string;
+  cardHolder?: string;
+  bankName?: string | null;
+  dailyCapToman?: number | null;
+  enabled?: boolean;
+}
+
+export interface UpdateAdminBankCardSettingsPayload {
+  uniqueTopupAmountEnabled?: boolean;
+  cardNumber?: string;
+  cardHolder?: string;
 }

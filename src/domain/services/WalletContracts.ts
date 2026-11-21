@@ -75,6 +75,10 @@ export interface SubmitTopupReceiptParams extends TopupReceiptFingerprint {
   amount: number;
   photoFileId: string;
   mediaType?: 'photo' | 'document';
+  /** Optional bank card identifier assigned to this top-up session. */
+  cardId?: string | null;
+  /** Optional normalized bank card number snapshot assigned to this top-up session. */
+  cardNumber?: string | null;
 }
 
 export interface SubmitTopupReceiptResult {

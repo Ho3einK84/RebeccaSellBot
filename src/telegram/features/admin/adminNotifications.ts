@@ -51,6 +51,7 @@ export async function sendAdminNewReceiptNotification(
     photoFileId: string;
     mediaType?: 'photo' | 'document';
     duplicateOfReceiptId?: string | null;
+    cardSummary?: string | null;
     shortIdFormatter?: (receiptId: string) => string;
   }
 ): Promise<void> {
@@ -141,6 +142,15 @@ export async function sendAdminNewReceiptNotification(
                 label: tForLocale(ts, adminLocale, 'admin_receipt_id_label'),
                 value: `\`#${params.receiptId}\``,
               },
+              ...(params.cardSummary
+                ? [
+                    {
+                      emoji: '🏦',
+                      label: tForLocale(ts, adminLocale, 'admin_receipt_destination_card_label'),
+                      value: escapeTelegramMarkdown(params.cardSummary),
+                    },
+                  ]
+                : []),
               {
                 emoji: '📅',
                 label: tForLocale(ts, adminLocale, 'admin_receipt_created_label'),

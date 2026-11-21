@@ -11,6 +11,7 @@ import {
   Layers,
   CheckSquare,
   Square,
+  CreditCard,
 } from 'lucide-react';
 import { useAdminReceipts } from './hooks/useAdminReceipts.js';
 import { ReceiptCard } from './components/ReceiptCard.js';
@@ -20,6 +21,7 @@ import { RejectReceiptModal } from './components/RejectReceiptModal.js';
 import { ReceiptDetailModal } from './components/ReceiptDetailModal.js';
 import { BatchApproveModal } from './components/BatchApproveModal.js';
 import { ReceiptSettingsModal } from './components/ReceiptSettingsModal.js';
+import { BankCardsModal } from '../bankCards/BankCardsModal.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
@@ -87,6 +89,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
   const [detailTarget, setDetailTarget] = useState<TopupReceipt | null>(null);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isBankCardsModalOpen, setIsBankCardsModalOpen] = useState(false);
 
   const handlePhotoError = useCallback(() => {
     onNotify(t('admin.receipts.noPhoto'), 'error');
@@ -214,16 +217,27 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           className="flex-1 min-w-0"
         />
 
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => setIsSettingsModalOpen(true)}
-          title={t('admin.receipts.settingsBtn')}
-          className="shrink-0"
-        >
-          <Bell className="w-3.5 h-3.5 text-brand-fg shrink-0" />
-          <span className="hidden sm:inline">{t('admin.receipts.settingsBtn')}</span>
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setIsBankCardsModalOpen(true)}
+            title={t('admin.receipts.bankCardsBtn')}
+          >
+            <CreditCard className="w-3.5 h-3.5 text-warn-fg shrink-0" />
+            <span className="hidden sm:inline">{t('admin.receipts.bankCardsBtn')}</span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setIsSettingsModalOpen(true)}
+            title={t('admin.receipts.settingsBtn')}
+          >
+            <Bell className="w-3.5 h-3.5 text-brand-fg shrink-0" />
+            <span className="hidden sm:inline">{t('admin.receipts.settingsBtn')}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filter Tabs & Search Row */}
@@ -436,6 +450,12 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
       <ReceiptSettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        onNotify={onNotify}
+      />
+
+      <BankCardsModal
+        isOpen={isBankCardsModalOpen}
+        onClose={() => setIsBankCardsModalOpen(false)}
         onNotify={onNotify}
       />
     </div>

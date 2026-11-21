@@ -220,7 +220,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
                   <div className="flex items-center gap-1.5 text-xs font-medium text-white/80">
                     <ShieldCheck className="w-4 h-4 text-sky-400" />
-                    <span>{t('user.wallet.bankCard')}</span>
+                    <span>{settings?.bankName || t('user.wallet.bankCard')}</span>
                   </div>
                 </div>
 

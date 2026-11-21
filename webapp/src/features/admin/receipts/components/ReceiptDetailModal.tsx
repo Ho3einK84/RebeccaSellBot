@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   AlertCircle,
   FileText,
+  CreditCard,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -214,6 +215,18 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               #{formatId(receipt.id)}
             </bdi>
           </div>
+
+          {(receipt.cardSummary || receipt.cardNumber) && (
+            <div className="flex justify-between items-center text-[11px] gap-2">
+              <span className={`flex items-center gap-1.5 shrink-0 ${textMuted}`}>
+                <CreditCard className="w-3.5 h-3.5 text-warn-fg" />
+                <span>{t('admin.receipts.destinationCard')}</span>
+              </span>
+              <span className={`font-medium text-end truncate ${textPrimary}`}>
+                {receipt.cardSummary || receipt.cardNumber}
+              </span>
+            </div>
+          )}
 
           <div className="flex justify-between items-center text-[11px]">
             <span className={`flex items-center gap-1.5 ${textMuted}`}>
