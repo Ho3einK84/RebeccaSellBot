@@ -13,8 +13,8 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
+import { useToast } from '@/shared/components/ui/Toast.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
@@ -45,8 +45,8 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatId, formatIsoDate, sanitizeDisplayName } = useFormatters();
-  const { textPrimary, textMuted } = useThemeTokens();
   const { copy, isCopied } = useCopy();
+  const { notify } = useToast();
 
   const isPending = receipt.status === 'pending';
   const isApproved = receipt.status === 'approved';
@@ -69,11 +69,18 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
     receipt.user?.username || `${t('common.idLabel')} ${receipt.telegramId}`
   );
 
+  const handleCopyUserId = async () => {
+    const ok = await copy(String(receipt.telegramId), `receipt-user-${receipt.telegramId}`);
+    if (ok) {
+      notify(t('user.copiedId'), 'success');
+    }
+  };
+
   return (
     <Card
       padding="md"
       tone={isSelected ? 'brand' : 'default'}
-      className="flex flex-col justify-between gap-3 hover:border-line-strong text-start"
+      className="flex flex-col justify-between gap-3 hover:border-line-strong transition-colors text-start"
     >
       <div className="space-y-3">
         {/* User Info Header */}
@@ -105,7 +112,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             <div className="min-w-0 flex-1">
               <button
                 type="button"
-                className={`font-semibold text-sm truncate text-start hover:underline cursor-pointer block max-w-full ${textPrimary}`}
+                className="font-semibold text-sm truncate text-start hover:underline cursor-pointer block max-w-full text-ink"
                 onClick={() => onInspectUser(receipt.telegramId)}
                 title={t('admin.users.btnDetails')}
               >
@@ -117,7 +124,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
                     @{receipt.user.username}
                   </bdi>
                 ) : (
-                  <span className={textMuted}>{t('admin.users.noUsername')}</span>
+                  <span className="text-ink-muted">{t('admin.users.noUsername')}</span>
                 )}
               </div>
             </div>
@@ -126,7 +133,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
           <button
             type="button"
             className="inline-flex items-center gap-1 h-7 text-xs tnum px-2 rounded-ctl border press rs-focus shrink-0 cursor-pointer bg-surface-2 border-line hover:border-line-strong text-ink-soft"
-            onClick={() => copy(String(receipt.telegramId), `receipt-user-${receipt.telegramId}`)}
+            onClick={() => void handleCopyUserId()}
             title={t('common.copy')}
           >
             <bdi dir="ltr" className="tnum font-medium">
@@ -156,7 +163,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             >
               {formatMoney(receipt.amount)}
             </bdi>
-            <span className={`text-xs ${textMuted}`}>{t('common.currency')}</span>
+            <span className="text-xs text-ink-muted">{t('common.currency')}</span>
           </div>
 
           <Badge variant={badgeVariant} dot size="xs">
@@ -165,7 +172,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
         </Card>
 
         {/* Meta Footer */}
-        <div className={`pt-2 border-t border-line text-[11px] ${textMuted} flex flex-col gap-1.5`}>
+        <div className="pt-2 border-t border-line text-[11px] text-ink-muted flex flex-col gap-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <bdi dir="ltr" className="tnum font-medium">
               #{formatId(receipt.id.slice(0, 8))}
@@ -213,14 +220,14 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
               className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-ctl border text-xs font-medium press rs-focus cursor-pointer bg-surface-2 hover:bg-surface-3 border-line text-ink-soft"
               onClick={() => onViewDetails?.(receipt)}
             >
-              <Info className={`w-3.5 h-3.5 ${textMuted}`} />
+              <Info className="w-3.5 h-3.5 text-ink-muted" />
               <span>{t('admin.receipts.details')}</span>
             </button>
 
             {receipt.photoFileId && onViewPhoto ? (
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/20 border-brand/25 text-brand-fg"
+                className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/15 border-brand/25 text-brand-fg"
                 onClick={() => onViewPhoto(receipt)}
               >
                 <ImageIcon className="w-3.5 h-3.5" />
@@ -242,7 +249,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             {onReject && (
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer disabled:opacity-50 bg-danger-soft hover:bg-danger/20 border-danger/25 text-danger-fg"
+                className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer disabled:opacity-50 bg-danger-soft hover:bg-danger/15 border-danger/25 text-danger-fg"
                 disabled={disabled}
                 onClick={() => onReject(receipt)}
               >
@@ -254,7 +261,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             {onApprove && (
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer disabled:opacity-50 bg-ok-soft hover:bg-ok/20 border-ok/25 text-ok-fg"
+                className="flex items-center justify-center gap-1.5 h-10 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer disabled:opacity-50 bg-ok-soft hover:bg-ok/15 border-ok/25 text-ok-fg"
                 disabled={disabled}
                 onClick={() => onApprove(receipt)}
               >
@@ -271,14 +278,14 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-ctl border text-xs font-medium press rs-focus cursor-pointer bg-surface-2 hover:bg-surface-3 border-line text-ink-soft"
             onClick={() => onViewDetails?.(receipt)}
           >
-            <Info className={`w-3.5 h-3.5 ${textMuted}`} />
+            <Info className="w-3.5 h-3.5 text-ink-muted" />
             <span>{t('admin.receipts.details')}</span>
           </button>
 
           {receipt.photoFileId && onViewPhoto ? (
             <button
               type="button"
-              className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/20 border-brand/25 text-brand-fg"
+              className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/15 border-brand/25 text-brand-fg"
               onClick={() => onViewPhoto(receipt)}
             >
               <ImageIcon className="w-3.5 h-3.5" />
@@ -287,7 +294,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
           ) : (
             <button
               type="button"
-              className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/20 border-brand/25 text-brand-fg"
+              className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/15 border-brand/25 text-brand-fg"
               onClick={() => onInspectUser(receipt.telegramId)}
             >
               <Eye className="w-3.5 h-3.5" />

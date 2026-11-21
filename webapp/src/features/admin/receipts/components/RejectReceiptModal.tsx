@@ -6,6 +6,7 @@ import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { Textarea } from '@/shared/components/ui/Input.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface RejectReceiptModalProps {
@@ -23,7 +24,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatId } = useFormatters();
-  const { inputClass, textPrimary, textSecondary } = useThemeTokens();
+  const { textPrimary, textSecondary } = useThemeTokens();
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [reason, setReason] = useState<string>('');
 
@@ -139,8 +140,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
           </div>
         </div>
 
-        <textarea
-          className={`w-full p-3 text-xs sm:text-sm rounded-tile border outline-none resize-none rs-focus ${inputClass}`}
+        <Textarea
           rows={2}
           placeholder={t('admin.modals.rejectReasonPlaceholder')}
           value={reason}

@@ -5,9 +5,10 @@ import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import type { PanelSummary } from '@/shared/types/admin.js';
 import type { AddPanelServicePayload } from '@/shared/types/api.js';
 
@@ -34,7 +35,6 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
-  const { subCardClass, textPrimary, textMuted } = useThemeTokens();
 
   const [newServiceId, setNewServiceId] = useState('');
   const [newServiceName, setNewServiceName] = useState('');
@@ -54,7 +54,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
     e.preventDefault();
     setError(null);
 
-    const parsedId = Number(newServiceId);
+    const parsedId = Number(normalizeInputDigits(newServiceId));
     if (!Number.isSafeInteger(parsedId) || parsedId <= 0) {
       setError(t('admin.panels.validationServiceId'));
       return;
@@ -123,15 +123,11 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
       }
     >
       <div className="space-y-5">
-        {error && (
-          <div className="p-3 rounded-xl bg-danger-soft border border-danger/25 text-danger-fg text-xs font-medium">
-            {error}
-          </div>
-        )}
+        {error && <AlertBanner tone="danger">{error}</AlertBanner>}
 
         {/* Services List */}
         <div className="space-y-2 text-start">
-          <span className={`block text-xs font-semibold ${textPrimary}`}>
+          <span className="block text-xs font-semibold text-ink">
             {t('admin.panels.connectedServices')}{' '}
             <bdi dir="ltr">({formatNumber(panel.services.length)})</bdi>
           </span>
@@ -140,13 +136,13 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
             {panel.services.map((service) => (
               <div
                 key={service.serviceId}
-                className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${subCardClass}`}
+                className="p-3 rounded-tile border border-line bg-surface-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className="w-7 h-7 rounded-lg border flex items-center justify-center tnum text-xs font-semibold bg-surface border-line text-brand-fg">
+                  <span className="w-7 h-7 rounded-ctl border flex items-center justify-center tnum text-xs font-semibold bg-surface border-line text-brand-fg">
                     <bdi dir="ltr">{formatNumber(service.serviceId)}</bdi>
                   </span>
-                  <span className={`text-sm font-semibold ${textPrimary}`}>{service.name}</span>
+                  <span className="text-sm font-semibold text-ink">{service.name}</span>
 
                   {service.isDefault && (
                     <Badge variant="warning" size="xs">
@@ -169,7 +165,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
                       type="button"
                       size="xs"
                       variant="outline"
-                      onClick={() => handleSetDefault(service.serviceId)}
+                      onClick={() => void handleSetDefault(service.serviceId)}
                       disabled={loading}
                       title={t('admin.panels.makeDefaultServiceBtn')}
                     >
@@ -183,7 +179,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
                       type="button"
                       size="xs"
                       variant="outline"
-                      onClick={() => handleSetCustomTarget(service.serviceId)}
+                      onClick={() => void handleSetCustomTarget(service.serviceId)}
                       disabled={loading}
                       title={t('admin.panels.setCustomTargetBtn')}
                     >
@@ -202,7 +198,7 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
                           variant="danger"
                           onClick={() => {
                             setConfirmDeleteId(null);
-                            handleDelete(service.serviceId);
+                            void handleDelete(service.serviceId);
                           }}
                           disabled={loading}
                         >
@@ -237,32 +233,38 @@ export const ManageServicesModal: React.FC<ManageServicesModalProps> = ({
         </div>
 
         {/* Add New Service Form */}
-        <form onSubmit={handleAdd} className={`p-3.5 rounded-xl border space-y-3 ${subCardClass}`}>
+        <form
+          onSubmit={(e) => void handleAdd(e)}
+          className="p-3.5 rounded-tile border border-line bg-surface-2 space-y-3"
+        >
           <div className="flex items-center gap-2">
             <Plus className="w-4 h-4 text-brand-fg" />
-            <span className={`text-xs font-semibold ${textPrimary}`}>
+            <span className="text-xs font-semibold text-ink">
               {t('admin.panels.addServiceTitle')}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div className="space-y-1 text-start">
-              <label className={`block text-[11px] font-medium ${textMuted}`}>
+              <label className="block text-[11px] font-medium text-ink-muted">
                 {t('admin.panels.serviceIdLabel')} <span className="text-danger-fg">*</span>
               </label>
               <Input
-                type="number"
-                min="1"
+                type="text"
+                inputMode="numeric"
                 value={newServiceId}
-                onChange={(e) => setNewServiceId(e.target.value)}
+                onChange={(e) =>
+                  setNewServiceId(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
+                }
                 placeholder="2"
                 dir="ltr"
+                className="tnum"
                 disabled={loading}
               />
             </div>
 
             <div className="space-y-1 text-start sm:col-span-2">
-              <label className={`block text-[11px] font-medium ${textMuted}`}>
+              <label className="block text-[11px] font-medium text-ink-muted">
                 {t('admin.panels.serviceNameField')} <span className="text-danger-fg">*</span>
               </label>
               <div className="flex items-center gap-2">

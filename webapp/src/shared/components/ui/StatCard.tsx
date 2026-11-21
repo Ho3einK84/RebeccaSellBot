@@ -32,11 +32,16 @@ export const StatCard: React.FC<StatCardProps> = ({
   onClick,
   className = '',
 }) => {
+  const isClickable = Boolean(onClick);
+
   const cardNode = (
     <Card
       padding="md"
-      interactive={Boolean(onClick)}
-      className={`flex flex-col justify-between gap-2.5 ${onClick ? 'h-full' : ''} ${className}`}
+      className={`flex flex-col justify-between gap-2.5 ${
+        isClickable
+          ? 'h-full transition-colors group-hover:border-line-strong group-hover:bg-surface-2'
+          : ''
+      } ${className}`}
     >
       <div className="flex items-start justify-between gap-2 min-w-0">
         <div className="min-w-0 flex-1">
@@ -68,7 +73,7 @@ export const StatCard: React.FC<StatCardProps> = ({
       <button
         type="button"
         onClick={onClick}
-        className="block w-full h-full text-start cursor-pointer press rs-focus rounded-card"
+        className="group block w-full h-full text-start cursor-pointer press rs-focus rounded-card"
       >
         {cardNode}
       </button>

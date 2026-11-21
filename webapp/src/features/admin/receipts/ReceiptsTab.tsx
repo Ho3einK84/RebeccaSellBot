@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Receipt,
   CheckCircle2,
@@ -21,14 +21,13 @@ import { ReceiptDetailModal } from './components/ReceiptDetailModal.js';
 import { BatchApproveModal } from './components/BatchApproveModal.js';
 import { ReceiptSettingsModal } from './components/ReceiptSettingsModal.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
-import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
+import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/SegmentedControl.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
@@ -42,7 +41,6 @@ type ReceiptStatusFilter = 'pending' | 'approved' | 'rejected' | 'all';
 export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotify }) => {
   const { t } = useLanguage();
   const { formatNumber, formatMoney } = useFormatters();
-  const { textMuted, inputClass } = useThemeTokens();
 
   const [status, setStatus] = useState<ReceiptStatusFilter>('pending');
   const [search, setSearch] = useState('');
@@ -90,6 +88,10 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
+  const handlePhotoError = useCallback(() => {
+    onNotify(t('admin.receipts.noPhoto'), 'error');
+  }, [onNotify, t]);
+
   const handleToggleSelect = (receipt: TopupReceipt) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -120,6 +122,37 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
   const selectedTotalAmount = useMemo(
     () => selectedReceipts.reduce((sum, r) => sum + r.amount, 0),
     [selectedReceipts]
+  );
+
+  const statusFilterOptions: SegmentedOption<ReceiptStatusFilter>[] = useMemo(
+    () => [
+      {
+        id: 'pending',
+        label: t('admin.receipts.tabPending'),
+        icon: Clock,
+        count: pendingCount > 0 ? formatNumber(pendingCount) : null,
+        tone: 'warn',
+      },
+      {
+        id: 'approved',
+        label: t('admin.receipts.tabApproved'),
+        icon: CheckCircle2,
+        tone: 'ok',
+      },
+      {
+        id: 'rejected',
+        label: t('admin.receipts.tabRejected'),
+        icon: XCircle,
+        tone: 'danger',
+      },
+      {
+        id: 'all',
+        label: t('admin.receipts.tabAll'),
+        icon: Layers,
+        tone: 'brand',
+      },
+    ],
+    [t, pendingCount, formatNumber]
   );
 
   const handleConfirmApprove = async (receipt: TopupReceipt) => {
@@ -178,36 +211,28 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           icon={<Receipt />}
           title={t('admin.receipts.queueTitle')}
           count={formatNumber(status === 'pending' ? pendingCount : total)}
+          className="flex-1 min-w-0"
         />
 
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setIsSettingsModalOpen(true)}
-            title={t('admin.receipts.settingsBtn')}
-          >
-            <Bell className="w-3.5 h-3.5 text-brand-fg shrink-0" />
-            <span className="hidden sm:inline">{t('admin.receipts.settingsBtn')}</span>
-          </Button>
-
-          <Badge variant="neutral" size="sm" className="shrink-0">
-            {status === 'pending'
-              ? `${formatNumber(pendingCount)} ${t('admin.receipts.tabPending')}`
-              : `${formatNumber(total)} ${t('common.all')}`}
-          </Badge>
-        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => setIsSettingsModalOpen(true)}
+          title={t('admin.receipts.settingsBtn')}
+          className="shrink-0"
+        >
+          <Bell className="w-3.5 h-3.5 text-brand-fg shrink-0" />
+          <span className="hidden sm:inline">{t('admin.receipts.settingsBtn')}</span>
+        </Button>
       </div>
 
       {/* Filter Tabs & Search Row */}
       <div className="space-y-2.5">
         <div className="relative">
-          <Search
-            className={`w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3.5 pointer-events-none ${textMuted}`}
-          />
+          <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3.5 pointer-events-none text-ink-muted" />
           <input
             type="text"
-            className={`w-full h-11 ps-10 pe-10 rounded-tile border text-xs sm:text-sm outline-none rs-focus ${inputClass}`}
+            className="w-full h-11 ps-10 pe-10 rounded-tile border border-line bg-surface text-ink placeholder:text-ink-muted text-xs sm:text-sm outline-none rs-focus"
             placeholder={t('admin.receipts.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -215,7 +240,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           {search && (
             <button
               type="button"
-              className="absolute top-1/2 -translate-y-1/2 end-2 w-8 h-8 flex items-center justify-center rounded-ctl text-ink-muted hover:text-ink hover:bg-surface-2 cursor-pointer"
+              className="absolute top-1/2 -translate-y-1/2 end-2 w-8 h-8 flex items-center justify-center rounded-ctl text-ink-muted hover:text-ink hover:bg-surface-2 cursor-pointer rs-focus"
               onClick={() => setSearch('')}
               aria-label={t('common.clearSearch')}
             >
@@ -224,81 +249,16 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           )}
         </div>
 
-        {/* Status Filter Bar */}
-        <div className="p-1 rounded-tile bg-surface-2 border border-line flex items-center gap-1 overflow-x-auto scrollbar-none overscroll-x-contain touch-pan-x">
-          <button
-            type="button"
-            className={`flex-1 min-w-max h-9 px-3 rounded-ctl text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap rs-focus ${
-              status === 'pending'
-                ? 'bg-warn-soft text-warn-fg font-semibold border border-warn/30'
-                : 'text-ink-muted hover:text-ink border border-transparent'
-            }`}
-            onClick={() => {
-              setStatus('pending');
-              setPage(1);
-            }}
-          >
-            <Clock className="w-3.5 h-3.5 shrink-0" />
-            <span>{t('admin.receipts.tabPending')}</span>
-            {pendingCount > 0 && (
-              <span
-                className={`text-[11px] px-1.5 py-0.5 rounded-full tnum font-semibold shrink-0 ${
-                  status === 'pending' ? 'bg-warn text-black' : 'bg-warn-soft text-warn-fg'
-                }`}
-              >
-                {formatNumber(pendingCount)}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            className={`flex-1 min-w-max h-9 px-3 rounded-ctl text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap rs-focus ${
-              status === 'approved'
-                ? 'bg-ok-soft text-ok-fg font-semibold border border-ok/30'
-                : 'text-ink-muted hover:text-ink border border-transparent'
-            }`}
-            onClick={() => {
-              setStatus('approved');
-              setPage(1);
-            }}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-            <span>{t('admin.receipts.tabApproved')}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`flex-1 min-w-max h-9 px-3 rounded-ctl text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap rs-focus ${
-              status === 'rejected'
-                ? 'bg-danger-soft text-danger-fg font-semibold border border-danger/30'
-                : 'text-ink-muted hover:text-ink border border-transparent'
-            }`}
-            onClick={() => {
-              setStatus('rejected');
-              setPage(1);
-            }}
-          >
-            <XCircle className="w-3.5 h-3.5 shrink-0" />
-            <span>{t('admin.receipts.tabRejected')}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`flex-1 min-w-max h-9 px-3 rounded-ctl text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap rs-focus ${
-              status === 'all'
-                ? 'bg-brand-soft text-brand-fg font-semibold border border-brand/30'
-                : 'text-ink-muted hover:text-ink border border-transparent'
-            }`}
-            onClick={() => {
-              setStatus('all');
-              setPage(1);
-            }}
-          >
-            <Layers className="w-3.5 h-3.5 shrink-0" />
-            <span>{t('admin.receipts.tabAll')}</span>
-          </button>
-        </div>
+        {/* Unified Status Filter Bar */}
+        <SegmentedControl
+          options={statusFilterOptions}
+          value={status}
+          onChange={(nextStatus) => {
+            setStatus(nextStatus);
+            setPage(1);
+          }}
+          ariaLabel={t('admin.receipts.queueTitle')}
+        />
       </div>
 
       {/* Batch Actions Bar */}
@@ -364,7 +324,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           title={t('common.error')}
           description={error instanceof Error ? error.message : t('common.networkError')}
           action={
-            <Button size="sm" variant="primary" onClick={() => refetch()}>
+            <Button size="sm" variant="primary" onClick={() => void refetch()}>
               {t('common.refresh')}
             </Button>
           }
@@ -383,7 +343,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           action={
             debouncedSearch ? (
               <Button size="sm" variant="secondary" onClick={() => setSearch('')}>
-                {t('common.clear')} {t('common.search')}
+                {t('common.clearSearch')}
               </Button>
             ) : undefined
           }
@@ -424,21 +384,22 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
           photoTarget ? `/api/admin/receipts/${encodeURIComponent(photoTarget.id)}/photo` : null
         }
         receiptId={photoTarget?.id ?? null}
+        mediaType={photoTarget?.mediaType}
         onClose={() => setPhotoTarget(null)}
-        onErrorNotify={() => onNotify(t('admin.receipts.noPhoto'), 'error')}
+        onErrorNotify={handlePhotoError}
       />
 
       <ApproveReceiptModal
         receipt={approveTarget}
         onClose={() => setApproveTarget(null)}
-        onConfirm={handleConfirmApprove}
+        onConfirm={(r) => void handleConfirmApprove(r)}
         loading={isProcessingAction}
       />
 
       <RejectReceiptModal
         receipt={rejectTarget}
         onClose={() => setRejectTarget(null)}
-        onConfirm={handleConfirmReject}
+        onConfirm={(r, reason) => void handleConfirmReject(r, reason)}
         loading={isProcessingAction}
       />
 
@@ -468,7 +429,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
         receipts={selectedReceipts}
         isOpen={isBatchModalOpen}
         onClose={() => setIsBatchModalOpen(false)}
-        onConfirm={handleConfirmBatchApprove}
+        onConfirm={(items) => void handleConfirmBatchApprove(items)}
         loading={isProcessingAction}
       />
 

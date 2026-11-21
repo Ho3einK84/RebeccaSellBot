@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Info, Plus, Search, X, Package } from 'lucide-react';
+import { Plus, Search, X, Package } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button.js';
-import { Input } from '@/shared/components/ui/Input.js';
+import { Input, Select } from '@/shared/components/ui/Input.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type {
   AdminCategoryDto,
   AdminPackageDto,
@@ -55,7 +55,6 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
 }) => {
   const { t, locale } = useLanguage();
   const { formatNumber } = useFormatters();
-  const { inputClass } = useThemeTokens();
 
   const [criteria, setCriteria] = useState<PackageFilterCriteria>({
     search: '',
@@ -94,21 +93,17 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
   return (
     <div className="space-y-3">
       {isFallbackActive && (
-        <div className="p-3 rounded-card bg-info-soft border border-info/30 text-info text-xs flex items-start gap-2">
-          <Info className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{t('admin.packages.fallbackBanner')}</span>
-        </div>
+        <AlertBanner tone="info">{t('admin.packages.fallbackBanner')}</AlertBanner>
       )}
 
       {atLimit && (
-        <div className="p-3 rounded-card bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
-          <Info className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{t('admin.packages.maxCountBanner', { max: limit })}</span>
-        </div>
+        <AlertBanner tone="warn">
+          {t('admin.packages.maxCountBanner', { max: formatNumber(limit) })}
+        </AlertBanner>
       )}
 
       {/* Search & Filters Card */}
-      <div className="bg-surface border border-line rounded-card p-3 space-y-2.5">
+      <div className="bg-surface border border-line rounded-card p-3 space-y-2.5 shadow-[var(--shadow-card)]">
         <div className="relative">
           <Search className="w-4 h-4 text-ink-muted absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <Input
@@ -122,7 +117,7 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
               type="button"
               onClick={() => setCriteria((prev) => ({ ...prev, search: '' }))}
               aria-label={t('admin.packages.filters.clearSearch')}
-              className="absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+              className="absolute end-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-ctl text-ink-muted hover:text-ink hover:bg-surface-2 cursor-pointer rs-focus"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -130,7 +125,8 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <select
+          <Select
+            compact
             aria-label={t('admin.packages.filters.statusAll')}
             value={criteria.status}
             onChange={(e) =>
@@ -139,18 +135,17 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
                 status: e.target.value as PackageStatusFilter,
               }))
             }
-            className={`${inputClass} w-full rounded-ctl px-2.5 py-2 text-xs`}
           >
             <option value="all">{t('admin.packages.filters.statusAll')}</option>
             <option value="active">{t('admin.packages.filters.statusActive')}</option>
             <option value="inactive">{t('admin.packages.filters.statusInactive')}</option>
-          </select>
+          </Select>
 
-          <select
+          <Select
+            compact
             aria-label={t('admin.packages.filters.categoryAll')}
             value={criteria.categoryId}
             onChange={(e) => setCriteria((prev) => ({ ...prev, categoryId: e.target.value }))}
-            className={`${inputClass} w-full rounded-ctl px-2.5 py-2 text-xs`}
           >
             <option value="all">{t('admin.packages.filters.categoryAll')}</option>
             <option value="uncategorized">
@@ -162,13 +157,13 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
                 {formatBilingualPackageName(cat.name, locale).primary}
               </option>
             ))}
-          </select>
+          </Select>
 
-          <select
+          <Select
+            compact
             aria-label={t('admin.packages.filters.panelAll')}
             value={criteria.panelId}
             onChange={(e) => setCriteria((prev) => ({ ...prev, panelId: e.target.value }))}
-            className={`${inputClass} w-full rounded-ctl px-2.5 py-2 text-xs`}
           >
             <option value="all">{t('admin.packages.filters.panelAll')}</option>
             <option value="default">{t('admin.packages.filters.panelDefault')}</option>
@@ -177,7 +172,7 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
                 {panel.panelName}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5 text-[11px] text-ink-muted">
@@ -193,7 +188,7 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
               <button
                 type="button"
                 onClick={resetFilters}
-                className="text-brand-fg font-semibold hover:underline"
+                className="text-brand-fg font-semibold hover:underline cursor-pointer"
               >
                 {t('admin.packages.empty.resetFilters')}
               </button>
@@ -205,7 +200,8 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
       {/* Packages List or Empty States */}
       {packages.length === 0 ? (
         <EmptyState
-          icon={<Package className="w-6 h-6 text-brand" />}
+          tone="brand"
+          icon={<Package />}
           title={t('admin.packages.empty.title')}
           description={t('admin.packages.empty.desc')}
           action={
@@ -217,7 +213,8 @@ export const PackagesListSection: React.FC<PackagesListSectionProps> = ({
         />
       ) : filteredPackages.length === 0 ? (
         <EmptyState
-          icon={<Search className="w-6 h-6 text-ink-muted" />}
+          tone="neutral"
+          icon={<Search />}
           title={t('admin.packages.empty.filteredTitle')}
           description={t('admin.packages.empty.filteredDesc')}
           action={

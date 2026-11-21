@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Server,
-  RotateCw,
+  RefreshCw,
   Activity,
   Plus,
   Zap,
@@ -22,10 +22,10 @@ import { Button } from '@/shared/components/ui/Button.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
+import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/SegmentedControl.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { PanelSummary } from '@/shared/types/admin.js';
 import type {
   CreatePanelPayload,
@@ -48,6 +48,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     isLoading,
     isError,
     error,
+    isRefetching,
     refetch,
     testPanel,
     testingPanelId,
@@ -69,7 +70,6 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     setCustomTarget,
     deleteService,
   } = useAdminPanels();
-  const { textPrimary, textSecondary } = useThemeTokens();
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -270,8 +270,32 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     return panels;
   }, [panels, filter]);
 
+  const filterOptions: SegmentedOption<PanelFilter>[] = useMemo(
+    () => [
+      {
+        id: 'all',
+        label: t('admin.panels.filterAll'),
+        count: formatNumber(panels.length),
+        tone: 'brand',
+      },
+      {
+        id: 'online',
+        label: t('admin.panels.filterOnline'),
+        count: formatNumber(healthyCount),
+        tone: 'ok',
+      },
+      {
+        id: 'issues',
+        label: t('admin.panels.filterIssues'),
+        count: formatNumber(issuesCount),
+        tone: 'warn',
+      },
+    ],
+    [t, panels.length, healthyCount, issuesCount, formatNumber]
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       {/* Top Header & Fleet Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <SectionHeader
@@ -281,35 +305,33 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
         />
 
         <div className="flex items-center gap-2 flex-wrap self-end sm:self-center">
-          {/* Add Panel Button */}
           <Button type="button" size="sm" variant="primary" onClick={() => setIsAddModalOpen(true)}>
             <Plus className="w-3.5 h-3.5" />
             <span>{t('admin.panels.addPanelBtn')}</span>
           </Button>
 
-          {/* Test All Button */}
           <Button
             type="button"
             size="sm"
             variant="outline"
             loading={isTestingAll}
             disabled={panels.length === 0}
-            onClick={handleTestAll}
+            onClick={() => void handleTestAll()}
             title={t('admin.panels.testAllBtn')}
           >
             <Zap className="w-3.5 h-3.5 text-warn-fg" />
             <span>{t('admin.panels.testAllBtn')}</span>
           </Button>
 
-          {/* Refresh Button */}
           <Button
             type="button"
             size="sm"
             variant="secondary"
-            onClick={() => refetch()}
+            loading={isRefetching}
+            onClick={() => void refetch()}
             title={t('common.refresh')}
           >
-            <RotateCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" />
             <span>{t('common.refresh')}</span>
           </Button>
         </div>
@@ -326,8 +348,8 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
           description={error instanceof Error ? error.message : t('common.networkError')}
           className="border-danger/25"
           action={
-            <Button type="button" size="sm" variant="primary" onClick={() => refetch()}>
-              <RotateCw className="w-3.5 h-3.5" />
+            <Button type="button" size="sm" variant="primary" onClick={() => void refetch()}>
+              <RefreshCw className="w-3.5 h-3.5" />
               <span>{t('common.refresh')}</span>
             </Button>
           }
@@ -337,7 +359,6 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
       {/* Fleet Status Summary & KPIs */}
       {!isLoading && !isError && panels.length > 0 && (
         <Card padding="md" className="space-y-4">
-          {/* Main Health Status Strip */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <IconTile tone={allHealthy ? 'ok' : 'danger'} size="md">
@@ -346,13 +367,13 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
               <div>
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${allHealthy ? 'bg-ok' : 'bg-danger'}`} />
-                  <h3 className={`text-sm font-semibold m-0 ${textPrimary}`}>
+                  <h3 className="text-sm font-semibold m-0 text-ink">
                     {allHealthy
                       ? t('admin.panels.fleetStatusOk')
                       : t('admin.panels.fleetStatusWarning')}
                   </h3>
                 </div>
-                <p className={`text-xs m-0 mt-0.5 ${textSecondary}`}>
+                <p className="text-xs m-0 mt-0.5 text-ink-soft">
                   {t('common.panelsActiveCount', {
                     healthy: formatNumber(healthyCount),
                     total: formatNumber(totalPanels),
@@ -362,9 +383,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
             </div>
           </div>
 
-          {/* 4 Quick Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-            {/* Healthy Panels */}
             <Card subCard padding="sm" className="space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] text-ok-fg font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -375,7 +394,6 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
               </div>
             </Card>
 
-            {/* Issues or Disabled */}
             <Card subCard padding="sm" className="space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
                 <AlertCircle className="w-3.5 h-3.5 text-warn-fg" />
@@ -386,7 +404,6 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
               </div>
             </Card>
 
-            {/* Fleet Total Active Configs */}
             <Card subCard padding="sm" className="space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
                 <Users className="w-3.5 h-3.5 text-brand-fg" />
@@ -397,7 +414,6 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
               </div>
             </Card>
 
-            {/* Fleet Total Services */}
             <Card subCard padding="sm" className="space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] text-ink-muted font-medium">
                 <Layers className="w-3.5 h-3.5 text-brand-fg" />
@@ -411,48 +427,14 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
         </Card>
       )}
 
-      {/* Filter Tabs if multiple panels exist */}
+      {/* Unified Filter Tabs if multiple panels exist */}
       {!isLoading && panels.length > 1 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-          <button
-            type="button"
-            className={`h-8 px-3 rounded-ctl border text-xs transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
-              filter === 'all'
-                ? 'bg-brand border-brand text-brand-ink font-semibold'
-                : 'bg-surface border-line text-ink-soft hover:bg-surface-2 font-medium'
-            }`}
-            onClick={() => setFilter('all')}
-          >
-            <span>{t('admin.panels.filterAll')}</span>
-            <bdi dir="ltr">({formatNumber(panels.length)})</bdi>
-          </button>
-
-          <button
-            type="button"
-            className={`h-8 px-3 rounded-ctl border text-xs transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
-              filter === 'online'
-                ? 'bg-ok-soft border-ok/30 text-ok-fg font-semibold'
-                : 'bg-surface border-line text-ink-soft hover:bg-surface-2 font-medium'
-            }`}
-            onClick={() => setFilter('online')}
-          >
-            <span>{t('admin.panels.filterOnline')}</span>
-            <bdi dir="ltr">({formatNumber(healthyCount)})</bdi>
-          </button>
-
-          <button
-            type="button"
-            className={`h-8 px-3 rounded-ctl border text-xs transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
-              filter === 'issues'
-                ? 'bg-warn-soft border-warn/30 text-warn-fg font-semibold'
-                : 'bg-surface border-line text-ink-soft hover:bg-surface-2 font-medium'
-            }`}
-            onClick={() => setFilter('issues')}
-          >
-            <span>{t('admin.panels.filterIssues')}</span>
-            <bdi dir="ltr">({formatNumber(issuesCount)})</bdi>
-          </button>
-        </div>
+        <SegmentedControl
+          options={filterOptions}
+          value={filter}
+          onChange={setFilter}
+          ariaLabel={t('admin.panels.fleetTitle')}
+        />
       )}
 
       {/* Empty State */}
@@ -492,11 +474,11 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
             <PanelCard
               key={p.id}
               panel={p}
-              onTest={handleTestPanel}
+              onTest={(id) => void handleTestPanel(id)}
               onEdit={(target) => setEditingPanel(target)}
               onManageServices={(target) => setServicesPanel(target)}
-              onToggle={handleToggle}
-              onSetDefault={handleSetDefault}
+              onToggle={(id, enabled) => void handleToggle(id, enabled)}
+              onSetDefault={(id) => void handleSetDefault(id)}
               onDelete={(target) => setDeletingPanel(target)}
               isTesting={testingPanelId === p.id}
               isToggling={togglingPanelId === p.id}

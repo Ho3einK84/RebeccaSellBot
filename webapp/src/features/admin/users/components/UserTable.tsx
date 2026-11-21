@@ -1,8 +1,7 @@
 import React from 'react';
-import { Copy, Eye, Wallet, RotateCw } from 'lucide-react';
+import { Copy, Check, Eye, Wallet, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
@@ -13,7 +12,9 @@ interface UserTableProps {
   onInspect: (telegramId: number) => void;
   onOpenBalanceModal: (user: UserProfile) => void;
   onCopyId: (id: string, key: string) => void;
+  isCopied?: (key: string) => boolean;
   inspectingId: number | null;
+  isInspecting?: boolean;
 }
 
 export const UserTable: React.FC<UserTableProps> = ({
@@ -21,11 +22,12 @@ export const UserTable: React.FC<UserTableProps> = ({
   onInspect,
   onOpenBalanceModal,
   onCopyId,
+  isCopied = () => false,
   inspectingId,
+  isInspecting = false,
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber, formatId } = useFormatters();
-  const { textMuted, textPrimary } = useThemeTokens();
 
   return (
     <Card className="hidden md:block overflow-x-auto">
@@ -42,20 +44,26 @@ export const UserTable: React.FC<UserTableProps> = ({
         </thead>
         <tbody className="divide-y divide-line">
           {users.map((u) => {
-            const isInspectingThis = inspectingId === u.telegramId;
+            const isInspectingThis = inspectingId === u.telegramId && isInspecting;
+            const copyKey = `table-user-${u.telegramId}`;
+            const copied = isCopied(copyKey);
             return (
               <tr key={u.telegramId} className="transition-colors hover:bg-surface-2">
                 <td className="py-3 px-4 tnum">
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 h-7 px-2 rounded-ctl border tnum text-xs press rs-focus cursor-pointer bg-surface-2 border-line hover:border-line-strong text-ink-soft"
-                    onClick={() => onCopyId(String(u.telegramId), `table-user-${u.telegramId}`)}
+                    onClick={() => onCopyId(String(u.telegramId), copyKey)}
                     title={t('common.copy')}
                   >
                     <bdi dir="ltr" className="tnum font-medium">
                       #{formatId(u.telegramId)}
                     </bdi>
-                    <Copy className={`w-3 h-3 ${textMuted}`} />
+                    {copied ? (
+                      <Check className="w-3 h-3 text-ok-fg shrink-0" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-ink-muted shrink-0" />
+                    )}
                   </button>
                 </td>
                 <td className="py-3 px-4 text-brand-fg tnum">
@@ -64,10 +72,10 @@ export const UserTable: React.FC<UserTableProps> = ({
                       @{u.username}
                     </bdi>
                   ) : (
-                    <span className={textMuted}>—</span>
+                    <span className="text-ink-muted">—</span>
                   )}
                 </td>
-                <td className={`py-3 px-4 font-medium ${textPrimary}`}>
+                <td className="py-3 px-4 font-medium text-ink">
                   <div className="flex items-center gap-2">
                     <span>{[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}</span>
                     {u.isBanned && (
@@ -106,7 +114,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                       onClick={() => onInspect(u.telegramId)}
                     >
                       {isInspectingThis ? (
-                        <RotateCw className="w-3.5 h-3.5 animate-spin text-brand-fg" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-fg" />
                       ) : (
                         <Eye className="w-3.5 h-3.5 opacity-70" />
                       )}

@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import '@/styles/app.css';
 import { Providers } from './providers.js';
 import { useAuth } from '@/features/auth/hooks/useAuth.js';
 import { AuthLoadingScreen } from '@/features/auth/components/AuthLoadingScreen.js';
 import { AuthErrorScreen } from '@/features/auth/components/AuthErrorScreen.js';
-import { AdminLayout } from '@/features/admin/AdminLayout.js';
-import { UserBetaPortal } from '@/features/user-portal/UserBetaPortal.js';
-import { UserPortalPage } from '@/features/user-portal/UserPortalPage.js';
+
+const AdminLayout = lazy(() =>
+  import('@/features/admin/AdminLayout.js').then((m) => ({ default: m.AdminLayout }))
+);
+const UserPortal = lazy(() =>
+  import('@/features/user-portal/UserPortal.js').then((m) => ({ default: m.UserPortal }))
+);
 
 export const App: React.FC = () => {
   const { loading, error, authData } = useAuth();
@@ -21,19 +25,25 @@ export const App: React.FC = () => {
         <AuthLoadingScreen />
       ) : error || !authData ? (
         <AuthErrorScreen error={error} />
-      ) : authData.role === 'admin' ? (
-        adminViewMode === 'admin' ? (
-          <AdminLayout user={authData.user} onSwitchToUserPortal={() => setAdminViewMode('user')} />
-        ) : (
-          <UserBetaPortal
-            user={authData.user}
-            onExitBeta={() => setAdminViewMode('admin')}
-            isAdminPreview={true}
-            onSwitchToAdmin={() => setAdminViewMode('admin')}
-          />
-        )
       ) : (
-        <UserPortalPage user={authData.user} />
+        <Suspense fallback={<AuthLoadingScreen />}>
+          {authData.role === 'admin' ? (
+            adminViewMode === 'admin' ? (
+              <AdminLayout
+                user={authData.user}
+                onSwitchToUserPortal={() => setAdminViewMode('user')}
+              />
+            ) : (
+              <UserPortal
+                user={authData.user}
+                isAdminView={true}
+                onSwitchToAdmin={() => setAdminViewMode('admin')}
+              />
+            )
+          ) : (
+            <UserPortal user={authData.user} />
+          )}
+        </Suspense>
       )}
     </Providers>
   );

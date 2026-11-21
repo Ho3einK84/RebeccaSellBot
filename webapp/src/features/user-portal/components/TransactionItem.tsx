@@ -1,8 +1,8 @@
 import React from 'react';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import type { UserTransactionRecord } from '@/shared/types/userPortal.js';
 import {
   getTransactionTypeLabel,
@@ -16,7 +16,6 @@ interface TransactionItemProps {
 
 export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }) => {
   const { t, locale, isRtl } = useLanguage();
-  const { subCardClass } = useThemeTokens();
   const { formatToman } = useFormatters();
 
   const isCredit = tx.amount > 0;
@@ -30,19 +29,11 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }
     : parsedCreatedAt.toLocaleDateString(isRtl ? 'fa-IR' : 'en-US');
 
   return (
-    <div
-      className={`p-3.5 rounded-tile border flex items-center justify-between text-start gap-3 transition-colors ${subCardClass} hover:border-line-strong`}
-    >
+    <div className="p-3.5 rounded-tile border border-line bg-surface-2 hover:border-line-strong flex items-center justify-between text-start gap-3 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
-        <div
-          className={`w-8 h-8 rounded-ctl flex items-center justify-center shrink-0 ${
-            isCredit
-              ? 'bg-ok-soft text-ok-fg border border-ok/20'
-              : 'bg-danger-soft text-danger-fg border border-danger/20'
-          }`}
-        >
-          <Icon className="w-4 h-4" />
-        </div>
+        <IconTile tone={isCredit ? 'ok' : 'danger'} size="sm">
+          <Icon />
+        </IconTile>
 
         <div className="flex flex-col min-w-0">
           <div className="flex items-center gap-2 min-w-0">

@@ -17,7 +17,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Skeleton } from '@/shared/components/ui/Skeleton.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { useToast } from '@/shared/components/ui/Toast.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -58,6 +60,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const { triggerHaptic } = useHaptic();
   const { formatToman, formatNumber } = useFormatters();
   const { copy, isCopied } = useCopy();
+  const { notify } = useToast();
   const queryClient = useQueryClient();
 
   const [state, dispatch] = useReducer(checkoutReducer, INITIAL_CHECKOUT_STATE);
@@ -98,7 +101,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const createCheckoutSession = useCallback(async () => {
     const pkgKey = buildPackageKey(pkg);
     if (!pkg || !pkgKey) return;
-    // Freeze: Never recreate checkout session if already in success or currently processing
     if (reachedSuccess() || isProcessingRef.current) return;
 
     dispatch({ type: 'CREATE_START', pkgKey });
@@ -116,7 +118,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             packageId: pkg.id,
           });
 
-      // If state transitioned to success during network latency, do not overwrite
       if (reachedSuccess()) return;
 
       dispatch({ type: 'CREATE_SUCCESS', checkout: res });
@@ -165,11 +166,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     const currentPkgKey = buildPackageKey(pkg);
     if (isOpen && pkg && currentPkgKey) {
       if (sessionPkgKeyRef.current === currentPkgKey) {
-        // Freeze modal state for the active open cycle of the same package
         return;
       }
       if (sessionPkgKeyRef.current !== null && !reachedSuccess() && !isProcessingRef.current) {
-        // Package changed while modal stayed open: reset before initiating the new session
         dispatch({ type: 'RESET' });
       }
       if (reachedSuccess() || isProcessingRef.current) {
@@ -206,7 +205,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       if (res.success) {
         triggerHaptic('success');
 
-        // Invalidate queries for user data
         void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
         void queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
         void queryClient.invalidateQueries({ queryKey: ['user', 'transactions'] });
@@ -242,7 +240,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           err.code === 'PURCHASE_OUTCOME_PENDING' ||
           errData?.code === 'PURCHASE_OUTCOME_PENDING'
         ) {
-          // Funds reserved, verifying outcome
           void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
           void queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
           void queryClient.invalidateQueries({ queryKey: ['user', 'transactions'] });
@@ -366,7 +363,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {step === 'review' && checkout && (
           <>
             {/* Expiry countdown banner */}
-            <div className="flex items-center justify-between px-1">
+            <div className="flex items-center justify-between px-0.5">
               <span className="text-xs text-ink-muted">{t('user.shop.orderModalTitle')}</span>
               <div className="flex items-center gap-1.5 text-xs text-warn-fg tnum font-semibold px-2.5 py-1 rounded-ctl bg-warn-soft border border-warn/25">
                 <Clock className="w-3.5 h-3.5" />
@@ -378,11 +375,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {/* Server-confirmed package card */}
             <div className="p-4 rounded-tile border bg-surface-2 border-line">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm sm:text-base text-ink">{checkout.name}</span>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand-soft text-brand-fg border border-brand/25">
-                  {t('user.shop.trafficUnit').replace('{gb}', formatNumber(checkout.gb))}
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="font-semibold text-sm sm:text-base text-ink truncate">
+                  {checkout.name}
                 </span>
+                <Badge variant="primary" size="xs" className="shrink-0">
+                  {t('user.shop.trafficUnit').replace('{gb}', formatNumber(checkout.gb))}
+                </Badge>
               </div>
 
               <div className="flex items-center justify-between text-xs text-ink-muted pt-2 border-t border-line">
@@ -396,7 +395,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {/* Feature points */}
-            <div className="flex flex-col gap-1.5 px-1 text-[11px] text-ink-muted">
+            <div className="flex flex-col gap-1.5 px-0.5 text-[11px] text-ink-muted">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-ok-fg shrink-0" />
                 <span>{t('user.shop.fastConnectionFeature')}</span>
@@ -419,7 +418,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col gap-2 mt-2">
+            <div className="flex flex-col gap-2 mt-1">
               <Button
                 type="button"
                 variant="primary"
@@ -427,7 +426,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 block
                 disabled={isProcessing}
                 loading={isProcessing}
-                onClick={handleConfirmCheckout}
+                onClick={() => void handleConfirmCheckout()}
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>{t('user.shop.confirmOrder')}</span>
@@ -437,9 +436,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 type="button"
                 variant="secondary"
                 size="md"
+                block
                 disabled={isProcessing}
                 onClick={handleClose}
-                className="w-full"
               >
                 {t('common.cancel')}
               </Button>
@@ -450,12 +449,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 3: Insufficient Balance */}
         {step === 'insufficient_balance' && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-tile bg-warn-soft border border-warn/25 flex items-center justify-center text-warn-fg">
-              <AlertCircle className="w-6 h-6" />
-            </div>
+            <IconTile tone="warn" size="lg">
+              <AlertCircle />
+            </IconTile>
 
             <div className="flex flex-col gap-1">
-              <h3 className="text-sm sm:text-base font-semibold text-ink">
+              <h3 className="text-sm sm:text-base font-semibold text-ink m-0">
                 {t('user.shop.insufficientBalance')}
               </h3>
               <p className="text-xs text-ink-muted m-0">
@@ -478,7 +477,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </span>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-line text-danger-fg font-semibold">
-                <span>{t('user.shop.chargeNeeded').split(':')[0]}:</span>
+                <span>{t('user.shop.deficitLabel')}:</span>
                 <span className="tnum font-semibold">
                   {formatToman(deficitAmount)} {displayCurrency}
                 </span>
@@ -502,12 +501,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 4: Checkout Expired */}
         {step === 'expired' && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-tile bg-warn-soft border border-warn/25 flex items-center justify-center text-warn-fg">
-              <Clock className="w-6 h-6" />
-            </div>
+            <IconTile tone="warn" size="lg">
+              <Clock />
+            </IconTile>
 
             <div className="flex flex-col gap-1">
-              <h3 className="text-sm sm:text-base font-semibold text-ink">
+              <h3 className="text-sm sm:text-base font-semibold text-ink m-0">
                 {t('user.shop.checkoutExpiredTitle')}
               </h3>
               <p className="text-xs text-ink-muted m-0 max-w-xs">
@@ -540,12 +539,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 5: Verifying Screen (Outcome Pending) */}
         {step === 'verifying' && (
           <div className="flex flex-col items-center text-center gap-4 py-3">
-            <div className="w-12 h-12 rounded-tile bg-brand-soft border border-brand/25 flex items-center justify-center text-brand-fg">
-              <Loader2 className="w-6 h-6 animate-spin" />
-            </div>
+            <IconTile tone="brand" size="lg">
+              <Loader2 className="animate-spin" />
+            </IconTile>
 
             <div className="flex flex-col gap-1.5 max-w-sm">
-              <h3 className="text-sm sm:text-base font-semibold text-ink">
+              <h3 className="text-sm sm:text-base font-semibold text-ink m-0">
                 {t('user.shop.orderVerifyingTitle')}
               </h3>
               <p className="text-xs text-ink-muted m-0 leading-relaxed">
@@ -569,12 +568,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 6: Creation Error or Confirm Error */}
         {(step === 'creation_error' || step === 'confirm_error') && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-tile bg-danger-soft border border-danger/25 flex items-center justify-center text-danger-fg">
-              <AlertCircle className="w-6 h-6" />
-            </div>
+            <IconTile tone="danger" size="lg">
+              <AlertCircle />
+            </IconTile>
 
             <div className="flex flex-col gap-1 max-w-xs">
-              <h3 className="text-sm sm:text-base font-semibold text-ink">
+              <h3 className="text-sm sm:text-base font-semibold text-ink m-0">
                 {t('user.shop.checkoutErrorTitle')}
               </h3>
               <p className="text-xs text-ink-muted m-0">
@@ -610,12 +609,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 7: Success Screen */}
         {step === 'success' && successData && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <div className="w-12 h-12 rounded-tile bg-ok-soft border border-ok/25 flex items-center justify-center text-ok-fg">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
+            <IconTile tone="ok" size="lg">
+              <CheckCircle2 />
+            </IconTile>
 
             <div className="flex flex-col gap-1">
-              <h3 className="text-sm sm:text-base font-semibold text-ink">
+              <h3 className="text-sm sm:text-base font-semibold text-ink m-0">
                 {t('user.shop.orderSuccess')}
               </h3>
             </div>
@@ -637,19 +636,21 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     readOnly
                     dir="ltr"
                     value={successData.subUrl}
-                    className="flex-1 h-10 px-3 rounded-ctl border text-xs font-mono bg-surface-2 border-line select-all truncate text-ink-soft"
+                    aria-label={t('user.shop.subUrl')}
+                    className="flex-1 h-10 px-3 rounded-ctl border text-xs font-mono bg-surface-2 border-line select-all truncate text-ink-soft rs-focus"
                   />
-                  <button
+                  <Button
                     type="button"
-                    onClick={() => {
+                    size="sm"
+                    variant={isCopied('checkout-sub-url') ? 'success' : 'primary'}
+                    onClick={async () => {
                       triggerHaptic('light');
-                      copy(successData.subUrl!, 'checkout-sub-url');
+                      const ok = await copy(successData.subUrl!, 'checkout-sub-url');
+                      if (ok) {
+                        notify(t('user.services.linkCopied'), 'success');
+                      }
                     }}
-                    className={`h-10 px-3.5 rounded-ctl text-xs font-medium flex items-center gap-1.5 press rs-focus cursor-pointer shrink-0 ${
-                      isCopied('checkout-sub-url')
-                        ? 'bg-ok text-white'
-                        : 'bg-brand hover:bg-brand-hover text-brand-ink'
-                    }`}
+                    className="h-10 shrink-0"
                   >
                     {isCopied('checkout-sub-url') ? (
                       <>
@@ -662,7 +663,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         <span>{t('common.copy')}</span>
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

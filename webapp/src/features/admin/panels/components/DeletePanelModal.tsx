@@ -3,6 +3,7 @@ import { AlertTriangle, Trash2 } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { PanelSummary } from '@/shared/types/admin.js';
@@ -65,10 +66,12 @@ export const DeletePanelModal: React.FC<DeletePanelModalProps> = ({
           {t('admin.panels.deleteConfirmPrompt', { name: panel.name })}
         </p>
 
-        <div className="p-3 rounded-tile bg-danger-soft border border-danger/25 text-xs text-danger-fg space-y-1">
+        <AlertBanner tone="danger">
           <p className="font-semibold m-0">{t('admin.panels.deleteWarningTitle')}</p>
-          <p className="m-0 text-xs leading-relaxed">{t('admin.panels.deleteWarningDesc')}</p>
-        </div>
+          <p className="m-0 mt-0.5 text-xs leading-relaxed">
+            {t('admin.panels.deleteWarningDesc')}
+          </p>
+        </AlertBanner>
       </div>
     </Modal>
   );

@@ -4,8 +4,8 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type { PanelSummary } from '@/shared/types/admin.js';
 import type { UpdatePanelPayload } from '@/shared/types/api.js';
 
@@ -25,7 +25,6 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
   loading,
 }) => {
   const { t } = useLanguage();
-  const { textPrimary, textSecondary } = useThemeTokens();
 
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -81,6 +80,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      closeOnBackdrop={!loading}
       title={t('admin.panels.editModalTitle')}
       subtitle={panel.name}
       icon={
@@ -89,16 +89,23 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
         </IconTile>
       }
       maxWidth="md"
+      footer={
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            {t('common.cancel')}
+          </Button>
+          <Button type="submit" form="edit-panel-form" variant="primary" loading={loading}>
+            <Save className="w-4 h-4" />
+            <span>{t('admin.panels.saveChangesButton')}</span>
+          </Button>
+        </div>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {validationError && (
-          <div className="p-3 rounded-tile bg-danger-soft border border-danger/25 text-danger-fg text-xs font-medium">
-            {validationError}
-          </div>
-        )}
+      <form id="edit-panel-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        {validationError && <AlertBanner tone="danger">{validationError}</AlertBanner>}
 
         <div className="space-y-1.5 text-start">
-          <label className={`block text-xs font-semibold ${textPrimary}`}>
+          <label className="block text-xs font-semibold text-ink">
             {t('admin.panels.nameField')} <span className="text-danger-fg">*</span>
           </label>
           <Input
@@ -111,7 +118,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
         </div>
 
         <div className="space-y-1.5 text-start">
-          <label className={`block text-xs font-semibold ${textPrimary}`}>
+          <label className="block text-xs font-semibold text-ink">
             {t('admin.panels.urlField')} <span className="text-danger-fg">*</span>
           </label>
           <Input
@@ -124,7 +131,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
         </div>
 
         <div className="space-y-1.5 text-start">
-          <label className={`block text-xs font-semibold ${textPrimary}`}>
+          <label className="block text-xs font-semibold text-ink">
             {t('admin.panels.apiKeyField')}
           </label>
           <Input
@@ -138,7 +145,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
             dir="ltr"
             disabled={loading || clearApiKey}
           />
-          <span className={`block text-[11px] ${textSecondary}`}>
+          <span className="block text-[11px] text-ink-soft">
             {t('admin.panels.apiKeyEditHelp')}
           </span>
           <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
@@ -152,20 +159,8 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
               disabled={loading}
               className="rs-checkbox cursor-pointer"
             />
-            <span className={`text-xs ${textSecondary}`}>
-              {t('admin.panels.clearApiKeyOption')}
-            </span>
+            <span className="text-xs text-ink-soft">{t('admin.panels.clearApiKeyOption')}</span>
           </label>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-line">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" variant="primary" loading={loading}>
-            <Save className="w-4 h-4" />
-            <span>{t('admin.panels.saveChangesButton')}</span>
-          </Button>
         </div>
       </form>
     </Modal>

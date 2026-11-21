@@ -74,17 +74,18 @@ export function computeSubscriptionSplit(
 
 /**
  * Custom responsive SVG analytics row driven exclusively by live `DashboardStats`.
- * Renders crisp geometric SVGs for proportional metrics and native HTML/RTL text
- * readouts so Persian & English numerals maintain exact directional clarity.
+ * Renders crisp geometric SVGs for proportional metrics and keeps the bar chart and
+ * its readout columns in a shared LTR time-series frame so columns align 1:1 in RTL & LTR.
  */
 export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) => {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const { formatMoney, formatNumber } = useFormatters();
 
   const currency = t('common.currency');
   const bars = computeRevenueBarMetrics(stats);
   const split = computeSubscriptionSplit(stats, 44);
   const netRewards = stats.totalReferralBonus + stats.totalCashback;
+  const percentSign = locale === 'fa' ? '٪' : '%';
 
   const barLabels: Record<RevenueBarMetric['id'], string> = {
     daily: t('admin.overview.dailyShort'),
@@ -92,7 +93,7 @@ export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) =
     monthly: t('admin.overview.monthlyShort'),
   };
 
-  // Fixed SVG chart geometry (bars sit cleanly inside y=10..110)
+  // Fixed SVG chart geometry (bars sit cleanly inside y=16..108)
   const svgWidth = 360;
   const svgHeight = 120;
   const maxBarHeight = 92;
@@ -121,8 +122,8 @@ export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) =
           <span className="text-xs text-ink-muted shrink-0">{currency}</span>
         </div>
 
-        {/* SVG Proportional Column Visualization */}
-        <div className="w-full">
+        {/* SVG Proportional Column Visualization + 1:1 Aligned Readout Strip (LTR chart axis) */}
+        <div dir="ltr" className="w-full">
           <svg
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
             className="w-full h-32 overflow-visible"
@@ -181,11 +182,13 @@ export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) =
             })}
           </svg>
 
-          {/* Aligned Readout Strip */}
+          {/* Aligned Readout Strip — strictly shares LTR column order with the SVG bars above */}
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-line text-center">
             {bars.map((bar) => (
               <div key={bar.id} className="flex flex-col items-center gap-0.5 min-w-0">
-                <span className="text-[11px] text-ink-muted truncate">{barLabels[bar.id]}</span>
+                <span dir="auto" className="text-[11px] text-ink-muted truncate max-w-full">
+                  {barLabels[bar.id]}
+                </span>
                 <bdi dir="ltr" className="text-xs sm:text-sm font-semibold tnum text-ink truncate">
                   {formatMoney(bar.value)}
                 </bdi>
@@ -242,7 +245,8 @@ export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) =
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <bdi dir="ltr" className="text-base font-semibold tnum text-ink leading-none">
-                {formatNumber(split.activePercent)}%
+                {formatNumber(split.activePercent)}
+                {percentSign}
               </bdi>
             </div>
           </div>

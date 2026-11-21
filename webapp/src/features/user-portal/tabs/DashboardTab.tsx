@@ -36,6 +36,7 @@ import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
+import { useToast } from '@/shared/components/ui/Toast.js';
 
 interface DashboardTabProps {
   profile: UserPortalProfile | null;
@@ -43,6 +44,7 @@ interface DashboardTabProps {
   configs: UserConfigRecord[];
   transactions: UserTransactionRecord[];
   onSwitchTab: (tab: UserTabType) => void;
+  onOpenService?: (configId: string) => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -51,11 +53,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   configs,
   transactions,
   onSwitchTab,
+  onOpenService,
 }) => {
   const { t } = useLanguage();
   const { triggerHaptic } = useHaptic();
   const { formatToman, formatNumber } = useFormatters();
   const { copy, isCopied } = useCopy();
+  const { notify } = useToast();
 
   const currency = settings?.currency || t('common.currency');
   const availableBalance = profile?.availableBalance ?? 0;
@@ -67,10 +71,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return `${code.slice(0, 8)}...${code.slice(-4)}`;
   };
 
-  const handleCopyReferral = () => {
+  const handleCopyReferral = async () => {
     if (!profile?.referralCode) return;
     triggerHaptic('light');
-    copy(profile.referralCode, 'dashboard-ref-code');
+    const ok = await copy(profile.referralCode, 'dashboard-ref-code');
+    if (ok) {
+      notify(t('user.referral.codeCopied'), 'success');
+    }
   };
 
   const handleAction = (tab: UserTabType) => {
@@ -102,13 +109,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       <div className="lg:col-span-7 flex flex-col gap-4">
         <section
           aria-label={t('user.dashboard.walletBalance')}
-          className="relative overflow-hidden rounded-card border border-[#283142] bg-[#151a23] text-[#eef1f6] p-5 sm:p-6 shadow-[var(--shadow-float)]"
+          className="relative overflow-hidden rounded-card border border-obsidian-line bg-obsidian text-obsidian-ink p-5 sm:p-6 shadow-[var(--shadow-float)]"
         >
           {/* Technical hairline corner mark — crisp vector precision, no blur glow */}
           <svg
             aria-hidden="true"
             viewBox="0 0 120 120"
-            className="pointer-events-none absolute -bottom-5 -end-5 w-36 h-36 text-white/[0.04]"
+            className="pointer-events-none absolute -bottom-5 -end-5 w-36 h-36 text-white/[0.045]"
             fill="none"
           >
             <circle cx="60" cy="60" r="54" stroke="currentColor" strokeWidth="1" />
@@ -128,8 +135,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </span>
               </div>
 
-              <span className="inline-flex items-center px-2 py-0.5 rounded-ctl bg-white/[0.08] border border-white/15 text-[11px] font-medium text-white/80">
-                {t('user.betaBadge')}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.08] border border-white/15 text-[11px] font-medium text-white/85 tnum">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    activeConfigs.length > 0 ? 'bg-emerald-400' : 'bg-white/45'
+                  }`}
+                  aria-hidden="true"
+                />
+                <span>
+                  {activeConfigs.length > 0
+                    ? `${formatNumber(activeConfigs.length)} ${t('user.services.statusActive')}`
+                    : t('user.serviceOnlineStatus')}
+                </span>
               </span>
             </div>
 
@@ -152,7 +169,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <div className="flex items-center gap-1.5 min-w-0">
                   <bdi
                     dir="ltr"
-                    className="text-xs font-mono tnum font-medium text-white/90 truncate"
+                    className="text-xs font-mono font-medium text-white/90 truncate"
                     title={profile?.referralCode || ''}
                   >
                     {formatShortRefCode(profile?.referralCode)}
@@ -160,13 +177,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   {profile?.referralCode && (
                     <button
                       type="button"
-                      onClick={handleCopyReferral}
+                      onClick={() => void handleCopyReferral()}
                       className="w-7 h-7 rounded-ctl bg-white/10 hover:bg-white/15 flex items-center justify-center press rs-focus text-white/85 shrink-0 cursor-pointer"
                       title={t('common.copy')}
                       aria-label={t('common.copy')}
                     >
                       {isCopied('dashboard-ref-code') ? (
-                        <Check className="w-3.5 h-3.5 text-ok" />
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
@@ -293,7 +310,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <button
                   type="button"
                   key={cfg.id}
-                  onClick={() => handleAction('services')}
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    if (onOpenService) {
+                      onOpenService(cfg.id);
+                    } else {
+                      onSwitchTab('services');
+                    }
+                  }}
                   className="w-full rounded-card border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col gap-2.5 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
                 >
                   <div className="flex items-center justify-between w-full gap-2">
@@ -301,7 +325,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       <ServiceStatusDot status={cfg.panelStatus} />
                       <bdi
                         dir="ltr"
-                        className="text-[13px] font-mono tnum font-medium truncate text-ink"
+                        className="text-[13px] font-mono font-medium truncate text-ink"
                       >
                         {cfg.configUsername}
                       </bdi>

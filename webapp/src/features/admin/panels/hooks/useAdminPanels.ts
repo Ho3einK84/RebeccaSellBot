@@ -232,9 +232,12 @@ export function useAdminPanels() {
     isRefetching: query.isRefetching,
     refetch: query.refetch,
     testingPanelId,
-    togglingPanelId:
-      (togglePanelMutation.variables as { panelId: string } | undefined)?.panelId ?? null,
-    settingDefaultPanelId: (setDefaultPanelMutation.variables as string | undefined) ?? null,
+    togglingPanelId: togglePanelMutation.isPending
+      ? ((togglePanelMutation.variables as { panelId: string } | undefined)?.panelId ?? null)
+      : null,
+    settingDefaultPanelId: setDefaultPanelMutation.isPending
+      ? ((setDefaultPanelMutation.variables as string | undefined) ?? null)
+      : null,
     isTestingAll: testAllMutation.isPending,
     isCreating: createPanelMutation.isPending,
     isUpdating: updatePanelMutation.isPending,

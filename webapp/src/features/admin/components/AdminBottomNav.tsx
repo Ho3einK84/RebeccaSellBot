@@ -9,6 +9,7 @@ export interface TabConfig {
   mobileLabel?: string;
   icon: React.ComponentType<{ className?: string }>;
   count?: number;
+  badgeTone?: 'brand' | 'warn' | 'danger';
 }
 
 interface AdminBottomNavProps {

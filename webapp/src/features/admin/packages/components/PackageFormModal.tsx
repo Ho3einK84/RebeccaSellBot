@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Package, Wand2 } from 'lucide-react';
+import { Package, Wand2 } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
-import { Input } from '@/shared/components/ui/Input.js';
+import { Input, Select } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
+import { Switch } from '@/shared/components/ui/Switch.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
-import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import type {
   AdminCategoryDto,
   AdminPackageDto,
@@ -62,13 +63,10 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
   onUpdate,
 }) => {
   const { t, locale } = useLanguage();
-  const { formatToman } = useFormatters();
-  const { inputClass } = useThemeTokens();
+  const { formatMoney } = useFormatters();
 
   const [values, setValues] = useState<PackageFormValues>(DEFAULT_VALUES);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
-
-  useTelegramBackButton(onClose, isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -226,8 +224,13 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      closeOnBackdrop={!isSubmitting}
       maxWidth="lg"
-      icon={<Package className="w-5 h-5 text-brand" />}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <Package />
+        </IconTile>
+      }
       title={
         mode === 'edit' ? t('admin.packages.form.editTitle') : t('admin.packages.form.createTitle')
       }
@@ -238,7 +241,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
       }
       footer={
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={isSubmitting}>
             {t('admin.packages.actions.cancel')}
           </Button>
           <Button
@@ -257,13 +260,8 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
         </div>
       }
     >
-      <form id="admin-package-form" onSubmit={handleSubmit} className="space-y-4">
-        {formBannerError && (
-          <div className="p-3 rounded-ctl bg-danger-soft border border-danger/30 text-danger text-xs font-medium flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{formBannerError}</span>
-          </div>
-        )}
+      <form id="admin-package-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        {formBannerError && <AlertBanner tone="danger">{formBannerError}</AlertBanner>}
 
         {/* Package ID */}
         <div>
@@ -275,7 +273,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
               <button
                 type="button"
                 onClick={handleAutoGenerateId}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-fg hover:underline"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-fg hover:underline cursor-pointer"
               >
                 <Wand2 className="w-3 h-3" />
                 {t('admin.packages.form.autoIdLabel')}
@@ -291,8 +289,10 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
             className="font-mono text-xs"
             onChange={(e) => setValues((prev) => ({ ...prev, id: e.target.value }))}
           />
-          <p className="text-[11px] text-ink-muted mt-1">{t('admin.packages.form.idHint')}</p>
-          {fieldError('id') && <p className="text-xs text-danger mt-1">{fieldError('id')}</p>}
+          <p className="text-[11px] text-ink-muted mt-1 m-0">{t('admin.packages.form.idHint')}</p>
+          {fieldError('id') && (
+            <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('id')}</p>
+          )}
         </div>
 
         {/* Name */}
@@ -309,8 +309,10 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
             placeholder={t('admin.packages.form.namePlaceholder')}
             onChange={(e) => setValues((prev) => ({ ...prev, name: e.target.value }))}
           />
-          <p className="text-[11px] text-ink-muted mt-1">{t('admin.packages.form.nameHint')}</p>
-          {fieldError('name') && <p className="text-xs text-danger mt-1">{fieldError('name')}</p>}
+          <p className="text-[11px] text-ink-muted mt-1 m-0">{t('admin.packages.form.nameHint')}</p>
+          {fieldError('name') && (
+            <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('name')}</p>
+          )}
         </div>
 
         {/* GB / Days / Price */}
@@ -332,7 +334,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
               onChange={(e) => setValues((prev) => ({ ...prev, gbAmount: e.target.value }))}
             />
             {fieldError('gbAmount') && (
-              <p className="text-xs text-danger mt-1">{fieldError('gbAmount')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('gbAmount')}</p>
             )}
           </div>
 
@@ -358,7 +360,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
                   key={days}
                   type="button"
                   onClick={() => setValues((prev) => ({ ...prev, durationDays: days }))}
-                  className={`px-1.5 py-0.5 rounded border text-[11px] font-medium tnum transition-colors ${
+                  className={`px-1.5 py-0.5 rounded border text-[11px] font-medium tnum transition-colors cursor-pointer ${
                     values.durationDays === days
                       ? 'bg-brand-soft border-brand/40 text-brand-fg'
                       : 'bg-surface-2 border-line text-ink-muted hover:text-ink'
@@ -369,7 +371,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
               ))}
             </div>
             {fieldError('durationDays') && (
-              <p className="text-xs text-danger mt-1">{fieldError('durationDays')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('durationDays')}</p>
             )}
           </div>
 
@@ -390,7 +392,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
               onChange={(e) => setValues((prev) => ({ ...prev, price: e.target.value }))}
             />
             {fieldError('price') && (
-              <p className="text-xs text-danger mt-1">{fieldError('price')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('price')}</p>
             )}
           </div>
         </div>
@@ -398,7 +400,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
         {liveUnitPrice !== null && (
           <div className="px-3 py-2 rounded-ctl bg-surface-2 border border-line text-xs text-ink-soft tnum">
             {t('admin.packages.form.liveUnitPrice', {
-              price: formatToman(liveUnitPrice).replace(' تومان', '').replace(' Toman', ''),
+              price: formatMoney(liveUnitPrice),
             })}
           </div>
         )}
@@ -411,11 +413,10 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
           >
             {t('admin.packages.form.categoryLabel')}
           </label>
-          <select
+          <Select
             id="pkg-category-select"
             value={values.categoryId}
             onChange={(e) => setValues((prev) => ({ ...prev, categoryId: e.target.value }))}
-            className={`${inputClass} w-full rounded-ctl px-3 py-2 text-xs`}
           >
             <option value="">{t('admin.packages.form.categoryNone')}</option>
             {categories.map((cat) => {
@@ -428,7 +429,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
                 </option>
               );
             })}
-          </select>
+          </Select>
         </div>
 
         {/* Panel & Service Target */}
@@ -440,11 +441,10 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
             >
               {t('admin.packages.form.panelLabel')}
             </label>
-            <select
+            <Select
               id="pkg-panel-select"
               value={values.panelId}
               onChange={(e) => handlePanelChange(e.target.value)}
-              className={`${inputClass} w-full rounded-ctl px-3 py-2 text-xs`}
             >
               <option value="">{t('admin.packages.form.panelDefaultOption')}</option>
               {targets.map((panel) => (
@@ -462,7 +462,7 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
                   {t('admin.packages.card.panelMissing', { id: values.panelId })}
                 </option>
               )}
-            </select>
+            </Select>
           </div>
 
           <div>
@@ -472,12 +472,11 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
             >
               {t('admin.packages.form.serviceLabel')}
             </label>
-            <select
+            <Select
               id="pkg-service-select"
               value={values.serviceId}
               disabled={!values.panelId}
               onChange={(e) => setValues((prev) => ({ ...prev, serviceId: e.target.value }))}
-              className={`${inputClass} w-full rounded-ctl px-3 py-2 text-xs disabled:opacity-60`}
             >
               {!values.panelId ? (
                 <option value="">{t('admin.packages.form.serviceDefaultOption')}</option>
@@ -503,9 +502,9 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
                     )}
                 </>
               )}
-            </select>
+            </Select>
             {values.panelId && (
-              <p className="text-[11px] text-ink-muted mt-1">
+              <p className="text-[11px] text-ink-muted mt-1 m-0">
                 {t('admin.packages.form.serviceRequiredHint')}
               </p>
             )}
@@ -513,15 +512,14 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
         </div>
 
         {showDisabledTargetNotice && (
-          <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{t('admin.packages.form.targetDisabledNotice')}</span>
-          </div>
+          <AlertBanner tone="warn">{t('admin.packages.form.targetDisabledNotice')}</AlertBanner>
         )}
-        {fieldError('target') && <p className="text-xs text-danger">{fieldError('target')}</p>}
+        {fieldError('target') && (
+          <p className="text-xs text-danger-fg m-0">{fieldError('target')}</p>
+        )}
 
         {/* Enabled Toggle */}
-        <label className="flex items-center justify-between gap-3 p-3 rounded-ctl bg-surface-2 border border-line cursor-pointer">
+        <div className="flex items-center justify-between gap-3 p-3 rounded-tile bg-surface-2 border border-line">
           <div className="min-w-0">
             <div className="text-xs font-semibold text-ink">
               {t('admin.packages.form.enabledLabel')}
@@ -530,13 +528,12 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
               {t('admin.packages.form.enabledHint')}
             </div>
           </div>
-          <input
-            type="checkbox"
+          <Switch
             checked={values.enabled}
-            onChange={(e) => setValues((prev) => ({ ...prev, enabled: e.target.checked }))}
-            className="rs-switch shrink-0"
+            onChange={(checked) => setValues((prev) => ({ ...prev, enabled: checked }))}
+            ariaLabel={t('admin.packages.form.enabledLabel')}
           />
-        </label>
+        </div>
       </form>
     </Modal>
   );

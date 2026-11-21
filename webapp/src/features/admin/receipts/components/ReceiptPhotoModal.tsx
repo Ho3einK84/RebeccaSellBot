@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Image as ImageIcon,
   ZoomIn,
   ZoomOut,
   Download,
-  RotateCw,
+  RefreshCw,
   Copy,
   Check,
   Loader2,
@@ -12,6 +12,7 @@ import {
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
+import { useToast } from '@/shared/components/ui/Toast.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
@@ -38,12 +39,17 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatId } = useFormatters();
+  const { notify } = useToast();
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
   const { copy, isCopied } = useCopy();
+
+  // Keep latest error callback in ref so inline lambdas never trigger photo refetches
+  const onErrorNotifyRef = useRef(onErrorNotify);
+  onErrorNotifyRef.current = onErrorNotify;
 
   useEffect(() => {
     setIsZoomed(false);
@@ -71,7 +77,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
         if (controller.signal.aborted) return;
         console.error('Receipt photo preview error:', err);
         setHasError(true);
-        onErrorNotify?.();
+        onErrorNotifyRef.current?.();
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -85,7 +91,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [photoUrl, onErrorNotify]);
+  }, [photoUrl]);
 
   if (!photoUrl) return null;
 
@@ -112,9 +118,17 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
     } catch (err) {
       console.error('Download error:', err);
-      onErrorNotify?.();
+      onErrorNotifyRef.current?.();
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleCopyId = async () => {
+    if (!receiptId) return;
+    const ok = await copy(receiptId, `receipt-photo-${receiptId}`);
+    if (ok) {
+      notify(t('common.copied'), 'success');
     }
   };
 
@@ -153,7 +167,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
           {receiptId && (
             <button
               type="button"
-              onClick={() => copy(receiptId, `receipt-photo-${receiptId}`)}
+              onClick={() => void handleCopyId()}
               className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-ctl border text-xs tnum cursor-pointer bg-surface-2 border-line hover:border-line-strong text-ink-soft rs-focus"
               title={isCopied(`receipt-photo-${receiptId}`) ? t('common.copied') : t('common.copy')}
             >
@@ -194,12 +208,12 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
           <button
             type="button"
             disabled={isDownloading}
-            onClick={handleDownload}
+            onClick={() => void handleDownload()}
             className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-ctl border text-xs font-semibold press rs-focus cursor-pointer disabled:opacity-50 bg-brand-soft border-brand/30 hover:bg-brand/15 text-brand-fg"
             title={t('admin.receipts.downloadReceipt')}
           >
             {isDownloading ? (
-              <RotateCw className="w-3.5 h-3.5 animate-spin" />
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
             ) : (
               <Download className="w-3.5 h-3.5" />
             )}
@@ -209,36 +223,38 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       </div>
 
       <div
-        className={`rounded-card overflow-auto border flex items-center justify-center p-2 relative select-none ${
-          isZoomed ? 'min-h-[380px] max-h-[75vh]' : 'min-h-[260px] max-h-[60vh]'
-        } bg-[#0e1218] border-line`}
+        className={`rounded-card overflow-auto border flex p-2 relative select-none bg-obsidian border-obsidian-line ${
+          isZoomed
+            ? 'min-h-[380px] max-h-[75vh] items-start justify-start'
+            : 'min-h-[260px] max-h-[60vh] items-center justify-center'
+        }`}
         style={{
           touchAction: isZoomed ? 'pan-x pan-y' : 'auto',
           WebkitOverflowScrolling: 'touch',
         }}
       >
         {hasError ? (
-          <div className="p-8 text-center flex flex-col items-center justify-center gap-3">
-            <ImageIcon className="w-10 h-10 text-ink-muted opacity-50" />
-            <p className="text-xs text-ink-muted m-0">{t('admin.receipts.noPhoto')}</p>
+          <div className="p-8 text-center flex flex-col items-center justify-center gap-3 m-auto">
+            <ImageIcon className="w-10 h-10 text-white/40" />
+            <p className="text-xs text-white/70 m-0">{t('admin.receipts.noPhoto')}</p>
             <Button
               size="sm"
               variant="primary"
               disabled={isDownloading}
               loading={isDownloading}
-              onClick={handleDownload}
+              onClick={() => void handleDownload()}
             >
               <Download className="w-3.5 h-3.5" />
               <span>{t('admin.receipts.downloadReceipt')}</span>
             </Button>
           </div>
         ) : isLoadingPhoto || !previewSrc ? (
-          <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-brand-fg text-xs">
+          <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-sky-400 text-xs m-auto">
             <Loader2 className="w-6 h-6 animate-spin" />
             <span>{t('common.loading')}</span>
           </div>
         ) : (
-          <div className={isZoomed ? 'w-[220%] max-w-none flex-shrink-0' : 'w-auto max-w-full'}>
+          <div className={isZoomed ? 'w-[220%] max-w-none shrink-0' : 'w-auto max-w-full'}>
             <img
               key={previewSrc}
               src={previewSrc}
@@ -251,7 +267,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
               onClick={() => setIsZoomed(!isZoomed)}
               onError={() => {
                 setHasError(true);
-                onErrorNotify?.();
+                onErrorNotifyRef.current?.();
               }}
             />
           </div>

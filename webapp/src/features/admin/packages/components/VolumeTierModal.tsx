@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
+import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/SegmentedControl.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import type {
   CreateVolumeTierPayload,
   UpdateVolumeTierPayload,
@@ -49,7 +51,13 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
   });
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
 
-  useTelegramBackButton(onClose, isOpen);
+  const modeOptions: SegmentedOption<TierPricingMode>[] = useMemo(
+    () => [
+      { id: 'pricePerGb', label: t('admin.packages.tiers.modePricePerGb'), tone: 'brand' },
+      { id: 'discountPercent', label: t('admin.packages.tiers.modeDiscount'), tone: 'brand' },
+    ],
+    [t]
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -131,8 +139,13 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      closeOnBackdrop={!isSubmitting}
       maxWidth="md"
-      icon={<Layers className="w-5 h-5 text-brand" />}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <Layers />
+        </IconTile>
+      }
       title={
         mode === 'edit'
           ? t('admin.packages.tiers.formEditTitle')
@@ -140,7 +153,7 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
       }
       footer={
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={isSubmitting}>
             {t('admin.packages.actions.cancel')}
           </Button>
           <Button
@@ -159,12 +172,8 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
         </div>
       }
     >
-      <form id="volume-tier-form" onSubmit={handleSubmit} className="space-y-4">
-        {fieldError('form') && (
-          <p className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-ctl p-2.5">
-            {fieldError('form')}
-          </p>
-        )}
+      <form id="volume-tier-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        {fieldError('form') && <AlertBanner tone="danger">{fieldError('form')}</AlertBanner>}
 
         <div>
           <label htmlFor="tier-id-input" className="block text-xs font-semibold text-ink-soft mb-1">
@@ -179,7 +188,9 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
             placeholder={t('admin.packages.tiers.idPlaceholder')}
             onChange={(e) => setValues((prev) => ({ ...prev, id: e.target.value }))}
           />
-          {fieldError('id') && <p className="text-xs text-danger mt-1">{fieldError('id')}</p>}
+          {fieldError('id') && (
+            <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('id')}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -196,7 +207,7 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
               onChange={(e) => setValues((prev) => ({ ...prev, minGb: e.target.value }))}
             />
             {fieldError('minGb') && (
-              <p className="text-xs text-danger mt-1">{fieldError('minGb')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('minGb')}</p>
             )}
           </div>
 
@@ -214,7 +225,7 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
               onChange={(e) => setValues((prev) => ({ ...prev, maxGb: e.target.value }))}
             />
             {fieldError('maxGb') && (
-              <p className="text-xs text-danger mt-1">{fieldError('maxGb')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('maxGb')}</p>
             )}
           </div>
         </div>
@@ -224,30 +235,13 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
           <span className="block text-xs font-semibold text-ink-soft mb-1.5">
             {t('admin.packages.tiers.modeLabel')}
           </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setValues((prev) => ({ ...prev, mode: 'pricePerGb' }))}
-              className={`px-3 py-2 rounded-ctl border text-xs font-semibold transition-colors ${
-                values.mode === 'pricePerGb'
-                  ? 'bg-brand-soft border-brand text-brand-fg'
-                  : 'bg-surface-2 border-line text-ink-soft'
-              }`}
-            >
-              {t('admin.packages.tiers.modePricePerGb')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setValues((prev) => ({ ...prev, mode: 'discountPercent' }))}
-              className={`px-3 py-2 rounded-ctl border text-xs font-semibold transition-colors ${
-                values.mode === 'discountPercent'
-                  ? 'bg-brand-soft border-brand text-brand-fg'
-                  : 'bg-surface-2 border-line text-ink-soft'
-              }`}
-            >
-              {t('admin.packages.tiers.modeDiscount')}
-            </button>
-          </div>
+          <SegmentedControl
+            options={modeOptions}
+            value={values.mode}
+            onChange={(nextMode) => setValues((prev) => ({ ...prev, mode: nextMode }))}
+            role="group"
+            ariaLabel={t('admin.packages.tiers.modeLabel')}
+          />
         </div>
 
         {values.mode === 'pricePerGb' ? (
@@ -267,7 +261,7 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
               onChange={(e) => setValues((prev) => ({ ...prev, pricePerGb: e.target.value }))}
             />
             {fieldError('pricePerGb') && (
-              <p className="text-xs text-danger mt-1">{fieldError('pricePerGb')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('pricePerGb')}</p>
             )}
           </div>
         ) : (
@@ -287,7 +281,7 @@ export const VolumeTierModal: React.FC<VolumeTierModalProps> = ({
               onChange={(e) => setValues((prev) => ({ ...prev, discountPercent: e.target.value }))}
             />
             {fieldError('discountPercent') && (
-              <p className="text-xs text-danger mt-1">{fieldError('discountPercent')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('discountPercent')}</p>
             )}
           </div>
         )}

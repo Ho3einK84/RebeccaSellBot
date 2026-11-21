@@ -420,7 +420,9 @@ export function useAdminPackages(onNotify: (message: string, type?: 'success' | 
     togglePackage: (id: string, enabled?: boolean) =>
       togglePackageMutation.mutateAsync({ id, enabled }),
     isTogglingPackage: togglePackageMutation.isPending,
-    togglingPackageId: togglePackageMutation.variables?.id ?? null,
+    togglingPackageId: togglePackageMutation.isPending
+      ? (togglePackageMutation.variables?.id ?? null)
+      : null,
 
     clonePackage: (id: string, name?: string) => clonePackageMutation.mutateAsync({ id, name }),
     isCloningPackage: clonePackageMutation.isPending,

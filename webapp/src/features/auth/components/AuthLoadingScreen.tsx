@@ -9,8 +9,7 @@ export const AuthLoadingScreen: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 w-screen flex items-center justify-center p-4 bg-canvas text-ink"
-      style={{ height: '100dvh' }}
+      className="fixed inset-0 flex items-center justify-center p-4 bg-canvas text-ink safe-top safe-bottom"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <Card
@@ -18,13 +17,13 @@ export const AuthLoadingScreen: React.FC = () => {
         className="w-full max-w-xs flex flex-col items-center text-center gap-4 anim-rise"
       >
         <IconTile tone="brand" size="lg">
-          <Shield className="w-5 h-5" />
+          <Shield />
         </IconTile>
 
         <div className="space-y-1.5">
-          <div className="flex items-center justify-center gap-2 text-sm font-medium text-ink">
+          <div className="flex items-center justify-center gap-2 text-sm font-semibold text-ink">
             <Loader2 className="w-4 h-4 animate-spin text-brand-fg shrink-0" />
-            <span>{t('common.loading')}</span>
+            <span>{t('auth.connecting')}</span>
           </div>
           <p className="text-xs text-ink-muted m-0">{t('user.serviceOnlineStatus')}</p>
         </div>

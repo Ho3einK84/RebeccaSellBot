@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  RotateCw,
+  RefreshCw,
   KeyRound,
   Settings,
   Layers,
@@ -17,6 +17,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
+import { useToast } from '@/shared/components/ui/Toast.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
@@ -51,6 +52,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
   const { formatNumber } = useFormatters();
   const { textPrimary, textSecondary, textMuted } = useThemeTokens();
   const { copy, isCopied } = useCopy();
+  const { notify } = useToast();
 
   const isHealthy = panel.healthy !== false;
   const isEnabled = panel.enabled;
@@ -119,7 +121,7 @@ export const PanelCard: React.FC<PanelCardProps> = ({
             onClick={() => onTest(panel.id)}
             title={t('admin.panels.testBtn')}
           >
-            <RotateCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" />
             <span>{t('admin.panels.testBtn')}</span>
           </Button>
         </div>
@@ -136,7 +138,10 @@ export const PanelCard: React.FC<PanelCardProps> = ({
               <button
                 type="button"
                 className="w-7 h-7 flex items-center justify-center rounded-ctl hover:bg-surface-3 text-ink-muted hover:text-ink cursor-pointer rs-focus"
-                onClick={() => copy(panel.baseUrl || '', `panel-url-${panel.id}`)}
+                onClick={async () => {
+                  const ok = await copy(panel.baseUrl || '', `panel-url-${panel.id}`);
+                  if (ok) notify(t('common.copied'), 'success');
+                }}
                 title={t('common.copy')}
                 aria-label={t('common.copy')}
               >

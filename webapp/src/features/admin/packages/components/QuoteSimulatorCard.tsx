@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Calculator, Info, RotateCcw } from 'lucide-react';
+import { Calculator, Info, RotateCcw } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Input } from '@/shared/components/ui/Input.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import type { AdminPricingQuoteResponse } from '@/shared/types/admin.js';
@@ -96,20 +98,20 @@ export const QuoteSimulatorCard: React.FC<QuoteSimulatorCardProps> = ({
     result && baseReferencePrice !== null ? baseReferencePrice - result.quote.totalPrice : 0;
 
   return (
-    <Card padding="md" className="space-y-3">
+    <Card padding="md" className="space-y-3 text-start">
       <div className="flex items-start gap-2.5">
-        <div className="w-8 h-8 rounded-tile bg-brand-soft border border-brand/20 flex items-center justify-center shrink-0">
-          <Calculator className="w-4 h-4 text-brand-fg" />
-        </div>
+        <IconTile tone="brand" size="sm">
+          <Calculator />
+        </IconTile>
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-ink">{t('admin.packages.simulator.title')}</h3>
-          <p className="text-[11px] text-ink-muted mt-0.5">
+          <h3 className="text-sm font-bold text-ink m-0">{t('admin.packages.simulator.title')}</h3>
+          <p className="text-[11px] text-ink-muted mt-0.5 m-0">
             {t('admin.packages.simulator.subtitle')}
           </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-start">
           <div>
             <label
@@ -138,7 +140,7 @@ export const QuoteSimulatorCard: React.FC<QuoteSimulatorCardProps> = ({
                     hasEditedGbRef.current = true;
                     setGbRaw(sample);
                   }}
-                  className={`px-1.5 py-0.5 rounded border text-[11px] tnum transition-colors ${
+                  className={`px-1.5 py-0.5 rounded border text-[11px] tnum transition-colors cursor-pointer ${
                     gbRaw === sample
                       ? 'bg-brand-soft border-brand/40 text-brand-fg font-semibold'
                       : 'bg-surface-2 border-line text-ink-muted hover:text-ink'
@@ -149,11 +151,11 @@ export const QuoteSimulatorCard: React.FC<QuoteSimulatorCardProps> = ({
               ))}
             </div>
             {fieldError('gbAmount') && (
-              <p className="text-xs text-danger mt-1">{fieldError('gbAmount')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('gbAmount')}</p>
             )}
           </div>
 
-          <div className="p-2.5 rounded-ctl border border-dashed border-line-strong bg-surface-2/40 space-y-1.5">
+          <div className="p-2.5 rounded-tile border border-dashed border-line-strong bg-surface-2/40 space-y-1.5">
             <div className="flex items-center justify-between gap-1.5 flex-wrap">
               <label htmlFor="sim-days-input" className="text-xs font-semibold text-ink-soft">
                 {t('admin.packages.simulator.daysLabel')}
@@ -180,7 +182,7 @@ export const QuoteSimulatorCard: React.FC<QuoteSimulatorCardProps> = ({
                   hasEditedDaysRef.current = false;
                   setDaysRaw(String(defaultDays || 30));
                 }}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-fg hover:underline tnum"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-fg hover:underline tnum cursor-pointer"
               >
                 <RotateCcw className="w-3 h-3" />
                 {t('admin.packages.simulator.resetToDefaultDays', {
@@ -189,7 +191,7 @@ export const QuoteSimulatorCard: React.FC<QuoteSimulatorCardProps> = ({
               </button>
             )}
             {fieldError('durationDays') && (
-              <p className="text-xs text-danger mt-1">{fieldError('durationDays')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('durationDays')}</p>
             )}
           </div>
 
@@ -205,21 +207,21 @@ export const QuoteSimulatorCard: React.FC<QuoteSimulatorCardProps> = ({
           </div>
         </div>
 
-        <div className="p-2.5 rounded-ctl border border-dashed border-line-strong bg-surface-2/45 text-[11px] text-ink-muted flex items-start gap-2">
+        <div className="p-2.5 rounded-tile border border-dashed border-line-strong bg-surface-2/45 text-[11px] text-ink-muted flex items-start gap-2">
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
           <div className="space-y-0.5 leading-relaxed">
-            <p>
+            <p className="m-0">
               {t('admin.packages.simulator.fixedDaysPreviewHint', {
                 days: formatNumber(defaultDays || 30),
               })}
             </p>
-            <p>{t('admin.packages.simulator.hintSaveFirst')}</p>
+            <p className="m-0">{t('admin.packages.simulator.hintSaveFirst')}</p>
           </div>
         </div>
       </form>
 
       {result && (
-        <div className="p-3 rounded-card bg-surface-2 border border-line space-y-2.5">
+        <div className="p-3 rounded-tile bg-surface-2 border border-line space-y-2.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="space-y-1">
               <div className="text-[11px] text-ink-muted">
@@ -303,13 +305,9 @@ export const QuoteSimulatorCard: React.FC<QuoteSimulatorCardProps> = ({
           {result.warnings.length > 0 && (
             <div className="space-y-1.5">
               {result.warnings.map((warnCode) => (
-                <div
-                  key={warnCode}
-                  className="p-2 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-1.5"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span>{renderWarningLabel(warnCode)}</span>
-                </div>
+                <AlertBanner key={warnCode} tone="warn">
+                  {renderWarningLabel(warnCode)}
+                </AlertBanner>
               ))}
             </div>
           )}

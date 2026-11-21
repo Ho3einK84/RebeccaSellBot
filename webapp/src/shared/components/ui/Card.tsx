@@ -1,7 +1,6 @@
 import React, { type HTMLAttributes } from 'react';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 
-export type CardTone = 'default' | 'subtle' | 'brand' | 'danger';
+export type CardTone = 'default' | 'subtle' | 'brand' | 'danger' | 'warn';
 export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
@@ -19,11 +18,11 @@ const paddingClasses: Record<CardPadding, string> = {
   lg: 'p-5',
 };
 
-const toneClasses: Record<CardTone, string> = {
-  default: '',
-  subtle: '!bg-surface-2',
-  brand: '!bg-brand-soft !border-brand/30',
-  danger: '!bg-danger-soft !border-danger/30',
+const toneSurfaceClasses: Record<Exclude<CardTone, 'default'>, string> = {
+  subtle: 'bg-surface-2 border-line',
+  brand: 'bg-brand-soft border-brand/30',
+  danger: 'bg-danger-soft border-danger/30',
+  warn: 'bg-warn-soft border-warn/30',
 };
 
 export const Card: React.FC<CardProps> = ({
@@ -35,13 +34,16 @@ export const Card: React.FC<CardProps> = ({
   padding = 'none',
   ...props
 }) => {
-  const { cardClass, subCardClass } = useThemeTokens();
+  const surfaceClass =
+    tone !== 'default'
+      ? toneSurfaceClasses[tone]
+      : subCard
+        ? 'bg-surface-2 border-line'
+        : 'bg-surface border-line shadow-[var(--shadow-card)]';
 
   return (
     <div
-      className={`${subCard ? 'rounded-tile' : 'rounded-card'} border ${
-        subCard ? subCardClass : cardClass
-      } ${toneClasses[tone]} ${paddingClasses[padding]} ${
+      className={`${subCard ? 'rounded-tile' : 'rounded-card'} border ${surfaceClass} ${paddingClasses[padding]} ${
         interactive ? 'cursor-pointer press hover:border-line-strong hover:bg-surface-2' : ''
       } ${className}`}
       {...props}

@@ -7,7 +7,7 @@ import {
   Send,
   History,
   ShieldCheck,
-  RotateCw,
+  ExternalLink,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -26,6 +26,7 @@ import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
+import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import type {
   UserPortalProfile,
   UserPortalSettings,
@@ -56,7 +57,8 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const [page, setPage] = useState<number>(1);
 
   const { data: txQueryData, isFetching: isFetchingTx } = useUserTransactions(page, 10);
-  const currentTransactions = txQueryData?.transactions ?? transactions;
+  const isLoadingPage = page > 1 && isFetchingTx && !txQueryData;
+  const currentTransactions = txQueryData?.transactions ?? (page === 1 ? transactions : []);
   const totalPages = txQueryData?.totalPages ?? 1;
 
   const currency = settings?.currency || t('common.currency');
@@ -78,10 +80,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
   const handleOpenBotForReceipt = (payload = 'receipt') => {
     triggerHaptic('medium');
-    const botUser = settings?.botUsername || '';
+    const botUser = (settings?.botUsername || '').replace(/^@/, '').trim();
     if (botUser) {
-      const cleanBot = botUser.replace(/^@/, '');
-      const url = `https://t.me/${cleanBot}?start=${payload}`;
+      const url = `https://t.me/${botUser}?start=${payload}`;
       openTelegramLinkAndMinimize(url);
       return;
     }
@@ -122,7 +123,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
       {/* Pending Receipt Status Banner */}
       {pendingReceipt && (
-        <Card padding="md" className="border-warn/30 bg-warn-soft flex flex-col gap-3 text-start">
+        <Card tone="warn" padding="md" className="flex flex-col gap-3 text-start">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-warn shrink-0" aria-hidden="true" />
@@ -140,11 +141,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
             {t('user.wallet.pendingReceiptSubtitle')}
           </p>
 
-          <Card
-            subCard
-            padding="sm"
-            className="!bg-surface border-warn/25 flex items-center justify-between gap-3 text-xs tnum"
-          >
+          <div className="rounded-tile border border-warn/25 bg-surface p-3 flex items-center justify-between gap-3 text-xs tnum">
             <div className="flex flex-col">
               <span className="text-[11px] text-ink-muted">
                 {t('user.wallet.pendingReceiptAmountLabel')}
@@ -182,7 +179,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 )}
               </button>
             </div>
-          </Card>
+          </div>
         </Card>
       )}
 
@@ -211,7 +208,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               </p>
 
               {/* Anodized Matte Bank Card Presentation */}
-              <div className="rounded-card border border-[#2a3344] bg-[#161b24] text-[#eef1f6] p-4 sm:p-5 flex flex-col justify-between gap-4">
+              <div className="rounded-card border border-obsidian-line bg-obsidian text-obsidian-ink p-4 sm:p-5 flex flex-col justify-between gap-4 shadow-[var(--shadow-float)]">
                 <div className="flex items-center justify-between gap-2">
                   {/* Minimalist EMV metallic chip mark */}
                   <div
@@ -221,8 +218,8 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     <div className="w-6 h-4 border border-amber-300/40 rounded-xs grid grid-cols-2" />
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-white/75">
-                    <ShieldCheck className="w-4 h-4 text-brand" />
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-white/80">
+                    <ShieldCheck className="w-4 h-4 text-sky-400" />
                     <span>{t('user.wallet.bankCard')}</span>
                   </div>
                 </div>
@@ -247,8 +244,8 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
                   <button
                     type="button"
-                    onClick={handleCopyCard}
-                    className={`h-11 px-3.5 rounded-ctl font-medium text-xs inline-flex items-center justify-center gap-1.5 press rs-focus cursor-pointer shrink-0 border ${
+                    onClick={() => void handleCopyCard()}
+                    className={`h-11 px-3.5 rounded-ctl font-medium text-xs inline-flex items-center justify-center gap-1.5 press rs-focus cursor-pointer shrink-0 border transition-colors ${
                       isCopied('bank-card')
                         ? 'bg-ok border-ok text-white'
                         : 'bg-white/12 hover:bg-white/20 text-white border-white/20'
@@ -297,7 +294,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   onClick={() => handleOpenBotForReceipt('receipt')}
                   className="w-full sm:flex-1"
                 >
-                  <Send className="w-4 h-4 rtl:rotate-180 shrink-0" />
+                  <Send className="w-4 h-4 shrink-0" />
                   <span>{t('user.wallet.sendReceiptDirect')}</span>
                 </Button>
 
@@ -307,7 +304,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   onClick={() => handleOpenBotForReceipt('topup')}
                   className="w-full sm:w-auto shrink-0"
                 >
-                  <RotateCw className="w-4 h-4 shrink-0" />
+                  <ExternalLink className="w-4 h-4 shrink-0" />
                   <span>{t('user.wallet.openBotTopup')}</span>
                 </Button>
               </div>
@@ -326,7 +323,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 </p>
               </div>
               <Button size="md" variant="primary" onClick={() => handleOpenBotForReceipt('topup')}>
-                <RotateCw className="w-4 h-4 shrink-0" />
+                <ExternalLink className="w-4 h-4 shrink-0" />
                 <span>{t('user.wallet.topupInBot')}</span>
               </Button>
             </Card>
@@ -337,7 +334,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         <section className="lg:col-span-5 flex flex-col gap-3">
           <SectionHeader icon={<History />} title={t('user.wallet.txHistory')} />
 
-          {currentTransactions.length === 0 ? (
+          {isLoadingPage ? (
+            <SkeletonList count={3} />
+          ) : currentTransactions.length === 0 ? (
             <Card padding="lg" className="text-center text-xs text-ink-muted">
               {t('user.wallet.txEmpty')}
             </Card>

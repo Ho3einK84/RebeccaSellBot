@@ -1,9 +1,8 @@
 @import 'tailwindcss';
-@plugin "daisyui";
 
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
-/* Self-hosted Vazirmatn Persian/Latin font weights (400..700) */
+/* Self-hosted Vazirmatn Persian/Latin font weights (400..800) */
 @font-face {
   font-family: 'Vazirmatn';
   font-style: normal;
@@ -36,23 +35,31 @@
   src: url('../assets/fonts/Vazirmatn-Bold.woff2') format('woff2');
 }
 
+@font-face {
+  font-family: 'Vazirmatn';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('../assets/fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
+}
+
 /* ==========================================================================
-   RebeccaSellBot Design Tokens — Unified Matte Instrument System
-   Restrained craft informed by unslop (CC BY 4.0 by @heydamir)
+   RebeccaSellBot Design Tokens — Unified Matte Precision System
+   Minimal, crisp hairline elevation, WCAG AA+ contrast in Light & Dark.
    ========================================================================== */
 @theme {
   --font-sans:
     'Vazirmatn', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
   --font-mono:
-    'Vazirmatn', ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Monaco, Consolas,
+    ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Monaco, Consolas, 'Vazirmatn',
     monospace;
 
-  /* Radii follow clean 4px/2px nesting scale */
+  /* Nested geometry scale (inner radius = outer radius - padding step) */
   --radius-ctl: 0.5rem;
-  --radius-tile: 0.625rem;
-  --radius-item: 0.625rem;
-  --radius-card: 0.875rem;
+  --radius-tile: 0.6875rem;
+  --radius-item: 0.6875rem;
+  --radius-card: 0.9375rem;
   --radius-sheet: 1.25rem;
 }
 
@@ -82,6 +89,7 @@
   --color-warn: var(--rs-warn);
   --color-warn-fg: var(--rs-warn-fg);
   --color-warn-soft: var(--rs-warn-soft);
+  --color-warn-ink: var(--rs-warn-ink);
 
   --color-danger: var(--rs-danger);
   --color-danger-fg: var(--rs-danger-fg);
@@ -90,26 +98,30 @@
   --color-info: var(--rs-info);
   --color-info-fg: var(--rs-info-fg);
   --color-info-soft: var(--rs-info-soft);
+
+  --color-obsidian: var(--rs-obsidian);
+  --color-obsidian-line: var(--rs-obsidian-line);
+  --color-obsidian-ink: var(--rs-obsidian-ink);
 }
 
 :root {
   color-scheme: light;
-  --rs-canvas: #f4f5f7;
+  --rs-canvas: #f5f6f8;
   --rs-surface: #ffffff;
-  --rs-surface-2: #eceef2;
-  --rs-surface-3: #e2e5eb;
+  --rs-surface-2: #eff1f5;
+  --rs-surface-3: #e3e7ef;
 
-  --rs-ink: #11141b;
-  --rs-ink-soft: #4a5468;
-  --rs-ink-muted: #6e788c;
+  --rs-ink: #0f141e;
+  --rs-ink-soft: #475267;
+  --rs-ink-muted: #5d687d;
 
-  --rs-line: #e2e5eb;
-  --rs-line-strong: #cdd2dc;
+  --rs-line: #e2e6ee;
+  --rs-line-strong: #cbd2df;
 
   --rs-brand: #2563eb;
   --rs-brand-hover: #1d4ed8;
   --rs-brand-fg: #1d4ed8;
-  --rs-brand-soft: rgba(37, 99, 235, 0.1);
+  --rs-brand-soft: rgba(37, 99, 235, 0.09);
   --rs-brand-ink: #ffffff;
 
   --rs-ok: #059669;
@@ -117,16 +129,21 @@
   --rs-ok-soft: rgba(5, 150, 105, 0.1);
 
   --rs-warn: #d97706;
-  --rs-warn-fg: #b45309;
+  --rs-warn-fg: #9a4a06;
   --rs-warn-soft: rgba(217, 119, 6, 0.11);
+  --rs-warn-ink: #ffffff;
 
   --rs-danger: #dc2626;
   --rs-danger-fg: #b91c1c;
-  --rs-danger-soft: rgba(220, 38, 38, 0.1);
+  --rs-danger-soft: rgba(220, 38, 38, 0.09);
 
   --rs-info: #0284c7;
   --rs-info-fg: #0369a1;
   --rs-info-soft: rgba(2, 132, 199, 0.1);
+
+  --rs-obsidian: #131822;
+  --rs-obsidian-line: #273144;
+  --rs-obsidian-ink: #f3f5f9;
 
   /* Compat aliases */
   --bg-primary: var(--rs-canvas);
@@ -136,28 +153,38 @@
   --border-color: var(--rs-line);
 
   --nav-h: 4rem;
+  --rs-safe-top: max(
+    env(safe-area-inset-top, 0px),
+    calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px))
+  );
+  --rs-safe-bottom: max(
+    env(safe-area-inset-bottom, 0px),
+    calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px))
+  );
+
   --ease-out-calm: cubic-bezier(0.22, 1, 0.36, 1);
-  --shadow-card: 0 1px 2px rgba(17, 20, 27, 0.04);
-  --shadow-popover: 0 10px 28px -8px rgba(17, 20, 27, 0.12), 0 2px 6px rgba(17, 20, 27, 0.04);
+  --shadow-card: 0 1px 2px rgba(15, 20, 30, 0.04);
+  --shadow-float: 0 8px 24px -8px rgba(15, 20, 30, 0.16), 0 2px 6px rgba(15, 20, 30, 0.05);
+  --shadow-popover: 0 12px 32px -8px rgba(15, 20, 30, 0.14), 0 2px 8px rgba(15, 20, 30, 0.05);
 }
 
 .dark,
 [data-theme='dark'] {
   color-scheme: dark;
-  --rs-canvas: #0b0d11;
-  --rs-surface: #12161d;
-  --rs-surface-2: #181d26;
-  --rs-surface-3: #222936;
+  --rs-canvas: #0a0d12;
+  --rs-surface: #12161f;
+  --rs-surface-2: #181e29;
+  --rs-surface-3: #222a38;
 
-  --rs-ink: #eef1f6;
-  --rs-ink-soft: #9ca6b8;
-  --rs-ink-muted: #707b8f;
+  --rs-ink: #f0f3f8;
+  --rs-ink-soft: #a3aebf;
+  --rs-ink-muted: #808ca0;
 
-  --rs-line: #202633;
-  --rs-line-strong: #2e3748;
+  --rs-line: #212836;
+  --rs-line-strong: #323c50;
 
-  --rs-brand: #2563eb;
-  --rs-brand-hover: #1d4ed8;
+  --rs-brand: #3b82f6;
+  --rs-brand-hover: #2563eb;
   --rs-brand-fg: #60a5fa;
   --rs-brand-soft: rgba(59, 130, 246, 0.14);
   --rs-brand-ink: #ffffff;
@@ -169,6 +196,7 @@
   --rs-warn: #f59e0b;
   --rs-warn-fg: #fbbf24;
   --rs-warn-soft: rgba(245, 158, 11, 0.14);
+  --rs-warn-ink: #0f141e;
 
   --rs-danger: #ef4444;
   --rs-danger-fg: #f87171;
@@ -178,14 +206,19 @@
   --rs-info-fg: #38bdf8;
   --rs-info-soft: rgba(14, 165, 233, 0.14);
 
+  --rs-obsidian: #151b27;
+  --rs-obsidian-line: #2b364b;
+  --rs-obsidian-ink: #f3f5f9;
+
   --bg-primary: var(--rs-canvas);
   --bg-secondary: var(--rs-surface);
   --text-primary: var(--rs-ink);
   --text-secondary: var(--rs-ink-soft);
   --border-color: var(--rs-line);
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28);
-  --shadow-popover: 0 14px 36px -10px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-float: 0 12px 32px -10px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.32);
+  --shadow-popover: 0 16px 40px -10px rgba(0, 0, 0, 0.62), 0 2px 10px rgba(0, 0, 0, 0.34);
 }
 
 /* ==========================================================================
@@ -200,13 +233,13 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden;
+  overflow-x: clip;
   transition:
     background-color 180ms var(--ease-out-calm),
     color 180ms var(--ease-out-calm);
 }
 
-/* Never apply letter-spacing or uppercase transform across Arabic/Persian runs */
+/* Never apply letter-spacing across Arabic/Persian runs */
 [dir='rtl'],
 [dir='rtl'] h1,
 [dir='rtl'] h2,
@@ -224,16 +257,22 @@ body {
   line-height: 1.4;
 }
 
-.tnum,
+/* Tabular figures in Vazirmatn (ideal for Persian/English numbers & amounts) */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Crisp technical monospace for slugs, URLs, tokens, card digits */
 .font-mono {
-  font-family: var(--font-sans);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
 }
 
 .rs-backdrop-blur {
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
 }
 
 .rs-card-surface {
@@ -272,7 +311,6 @@ body {
 
 /* ==========================================================================
    Accessible Custom Native Controls (Range, Switch, Checkbox)
-   Replaces generic DaisyUI primary/indigo utilities with coherent tokens.
    ========================================================================== */
 .rs-range {
   -webkit-appearance: none;
@@ -298,7 +336,7 @@ body {
   border-radius: 9999px;
   background: var(--rs-brand);
   border: 2px solid var(--rs-surface);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
   transition: transform 120ms var(--ease-out-calm);
 }
 
@@ -312,7 +350,7 @@ body {
   border-radius: 9999px;
   background: var(--rs-brand);
   border: 2px solid var(--rs-surface);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
   transition: transform 120ms var(--ease-out-calm);
 }
 
@@ -381,7 +419,7 @@ body {
   width: 16px;
   height: 16px;
   border-radius: 9999px;
-  background-color: var(--rs-surface);
+  background-color: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   transition: transform 160ms var(--ease-out-calm);
 }
@@ -403,7 +441,7 @@ body {
 }
 
 .rs-switch:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -413,13 +451,21 @@ body {
 }
 
 /* ==========================================================================
-   Safe-Area Insets & Focused Motion Grammar
+   Safe-Area Insets (Standard + Telegram Mini App 8.0+) & Motion Grammar
    ========================================================================== */
-.nav-inset {
-  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 1rem);
+.safe-top {
+  padding-top: var(--rs-safe-top);
 }
 
-@media (min-width: 1024px) {
+.safe-bottom {
+  padding-bottom: var(--rs-safe-bottom);
+}
+
+.nav-inset {
+  padding-bottom: calc(var(--nav-h) + var(--rs-safe-bottom) + 1rem);
+}
+
+@media (min-width: 768px) {
   .nav-inset {
     padding-bottom: 2rem;
   }
@@ -433,7 +479,7 @@ body {
 @keyframes rs-rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(5px);
   }
   to {
     opacity: 1;
@@ -453,7 +499,7 @@ body {
 @keyframes rs-modal-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(8px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -484,27 +530,27 @@ body {
 }
 
 .anim-rise {
-  animation: rs-rise 220ms var(--ease-out-calm) both;
+  animation: rs-rise 200ms var(--ease-out-calm) both;
 }
 
 .anim-fade {
-  animation: rs-fade 160ms ease-out both;
+  animation: rs-fade 150ms ease-out both;
 }
 
 .anim-modal {
-  animation: rs-modal-in 220ms var(--ease-out-calm) both;
+  animation: rs-modal-in 210ms var(--ease-out-calm) both;
 }
 
 .anim-pop {
-  animation: rs-pop 180ms var(--ease-out-calm) both;
+  animation: rs-pop 170ms var(--ease-out-calm) both;
 }
 
 .anim-sheet {
-  animation: rs-sheet-up 240ms var(--ease-out-calm) both;
+  animation: rs-sheet-up 230ms var(--ease-out-calm) both;
 }
 
 .anim-stagger > * {
-  animation: rs-rise 200ms var(--ease-out-calm) both;
+  animation: rs-rise 190ms var(--ease-out-calm) both;
 }
 
 .anim-stagger > *:nth-child(1) {
@@ -512,30 +558,31 @@ body {
 }
 
 .anim-stagger > *:nth-child(2) {
-  animation-delay: 30ms;
+  animation-delay: 25ms;
 }
 
 .anim-stagger > *:nth-child(3) {
-  animation-delay: 60ms;
+  animation-delay: 50ms;
 }
 
 .anim-stagger > *:nth-child(4) {
-  animation-delay: 90ms;
+  animation-delay: 75ms;
 }
 
 .anim-stagger > *:nth-child(5) {
-  animation-delay: 120ms;
+  animation-delay: 100ms;
 }
 
 .anim-stagger > *:nth-child(6) {
-  animation-delay: 150ms;
+  animation-delay: 125ms;
 }
 
 .press {
   transition:
-    transform 120ms var(--ease-out-calm),
+    transform 110ms var(--ease-out-calm),
     background-color 140ms var(--ease-out-calm),
-    border-color 140ms var(--ease-out-calm);
+    border-color 140ms var(--ease-out-calm),
+    color 140ms var(--ease-out-calm);
 }
 
 .press:active:not(:disabled) {

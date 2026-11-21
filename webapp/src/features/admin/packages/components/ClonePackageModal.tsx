@@ -3,8 +3,8 @@ import { Copy } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import type { AdminPackageDto } from '@/shared/types/admin.js';
 import { formatBilingualPackageName, MAX_PACKAGE_NAME_LENGTH } from '../packageValidation.js';
 
@@ -24,8 +24,6 @@ export const ClonePackageModal: React.FC<ClonePackageModalProps> = ({
   const { t, locale } = useLanguage();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  useTelegramBackButton(onClose, pkg !== null);
 
   useEffect(() => {
     if (pkg) {
@@ -58,13 +56,18 @@ export const ClonePackageModal: React.FC<ClonePackageModalProps> = ({
     <Modal
       isOpen={pkg !== null}
       onClose={onClose}
+      closeOnBackdrop={!isCloning}
       maxWidth="md"
-      icon={<Copy className="w-5 h-5 text-brand" />}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <Copy />
+        </IconTile>
+      }
       title={t('admin.packages.cloneModal.title')}
       subtitle={t('admin.packages.cloneModal.subtitle', { name: displayName })}
       footer={
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isCloning}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={isCloning}>
             {t('admin.packages.actions.cancel')}
           </Button>
           <Button
@@ -81,7 +84,7 @@ export const ClonePackageModal: React.FC<ClonePackageModalProps> = ({
         </div>
       }
     >
-      <form id="clone-package-form" onSubmit={handleSubmit} className="space-y-3">
+      <form id="clone-package-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
         <div>
           <label
             htmlFor="clone-package-name"
@@ -95,7 +98,7 @@ export const ClonePackageModal: React.FC<ClonePackageModalProps> = ({
             placeholder={t('admin.packages.cloneModal.namePlaceholder')}
             onChange={(e) => setName(e.target.value)}
           />
-          {error && <p className="text-xs text-danger mt-1">{error}</p>}
+          {error && <p className="text-xs text-danger-fg mt-1 m-0">{error}</p>}
         </div>
       </form>
     </Modal>

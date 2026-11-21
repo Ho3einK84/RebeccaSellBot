@@ -1,5 +1,4 @@
 import React, { type ReactNode } from 'react';
-import { AmbientBackground } from './AmbientBackground.js';
 
 interface AppShellProps {
   children: ReactNode;
@@ -9,21 +8,21 @@ interface AppShellProps {
   bottomNav?: ReactNode;
   /** Desktop tab rail (md+). */
   desktopNav?: ReactNode;
-  /** Overlays (toasts, sheets) rendered outside the scroll column. */
+  /** Optional overlays rendered outside the scroll column. */
   overlay?: ReactNode;
   /**
    * `wide` = full operational console width (max-w-6xl),
-   * `narrow` = portal view (expands cleanly on desktop when tabbed, stays compact for single-card flows).
+   * `narrow` = user portal workspace (expands cleanly on desktop when tabbed).
    */
   width?: 'wide' | 'narrow';
-  /** Changing this key replays the gentle tab entrance animation. */
+  /** Changing this key replays the subtle tab entrance animation. */
   transitionKey?: string | number;
   className?: string;
 }
 
 /**
- * Shared frame rendered by User Portal, Coming-Soon view, and Admin Panel so every
- * screen inhabits the exact same coordinate grid, surface rhythm, and safe-area behavior.
+ * Shared frame rendered by User Portal and Admin Console so every screen
+ * inhabits the exact same coordinate grid, surface rhythm, and safe-area behavior.
  */
 export const AppShell: React.FC<AppShellProps> = ({
   children,
@@ -41,10 +40,8 @@ export const AppShell: React.FC<AppShellProps> = ({
     <div
       className={`relative flex min-h-[100dvh] w-full flex-col bg-canvas text-ink safe-top ${className}`}
     >
-      <AmbientBackground />
-
       <div
-        className={`relative z-10 mx-auto flex w-full flex-1 flex-col gap-4 px-3.5 pt-3.5 sm:px-5 sm:pt-5 ${maxWidthClass} ${
+        className={`relative z-10 mx-auto flex w-full flex-1 flex-col gap-4 px-3.5 pt-3 sm:px-5 sm:pt-5 ${maxWidthClass} ${
           bottomNav ? 'nav-inset' : 'pb-8'
         }`}
       >

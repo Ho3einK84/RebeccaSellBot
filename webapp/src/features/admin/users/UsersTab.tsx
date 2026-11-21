@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { Users } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Users, XCircle, Loader2 } from 'lucide-react';
 import { useAdminUsers } from './hooks/useAdminUsers.js';
 import { UserSearchBar } from './components/UserSearchBar.js';
 import { UserMobileCard } from './components/UserMobileCard.js';
 import { UserTable } from './components/UserTable.js';
 import { UserDossierModal } from './components/UserDossierModal.js';
 import { BalanceModal } from './components/BalanceModal.js';
+import { Button } from '@/shared/components/ui/Button.js';
+import { Modal } from '@/shared/components/ui/Modal.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
@@ -35,7 +37,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     totalPages,
     totalCount,
     isLoading,
+    isError,
+    error,
     isRefetching,
+    refetch,
     setPage,
     searchQuery,
     setSearchQuery,
@@ -50,6 +55,8 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     closeDossier,
     dossier,
     isInspecting,
+    isDossierError,
+    dossierError,
     adjustBalanceMutation,
     isAdjustingBalance,
     banUserMutation,
@@ -59,14 +66,32 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     syncConfigMutation,
   } = useAdminUsers();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (inspectedUserId && inspectedUserId !== inspectingId) {
       inspectUser(inspectedUserId);
       onClearInspectedUser?.();
     }
   }, [inspectedUserId, inspectingId, inspectUser, onClearInspectedUser]);
 
+  useEffect(() => {
+    if (isDossierError && inspectingId) {
+      const msg = dossierError instanceof Error ? dossierError.message : t('common.networkError');
+      onNotify(msg, 'error');
+      closeDossier();
+    }
+  }, [isDossierError, dossierError, inspectingId, onNotify, closeDossier, t]);
+
   const [balanceModalUser, setBalanceModalUser] = useState<UserProfile | null>(null);
+
+  const handleCopyWithToast = useCallback(
+    async (text: string, key: string) => {
+      const ok = await copy(text, key);
+      if (ok) {
+        onNotify(t('common.copied'), 'success');
+      }
+    },
+    [copy, onNotify, t]
+  );
 
   const handleAdjustBalance = async (data: {
     operation: BalanceOperation;
@@ -138,7 +163,21 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
       {isLoading && <SkeletonList count={4} />}
 
-      {!isLoading && users.length === 0 && (
+      {isError && users.length === 0 && (
+        <EmptyState
+          icon={<XCircle />}
+          tone="danger"
+          title={t('common.error')}
+          description={error instanceof Error ? error.message : t('common.networkError')}
+          action={
+            <Button size="sm" variant="primary" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+
+      {!isLoading && !isError && users.length === 0 && (
         <EmptyState
           icon={<Users />}
           tone="neutral"
@@ -155,7 +194,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
               user={u}
               onInspect={inspectUser}
               onOpenBalanceModal={setBalanceModalUser}
-              onCopyId={copy}
+              onCopyId={(text, key) => void handleCopyWithToast(text, key)}
               isCopied={isCopied(`user-${u.telegramId}`)}
               inspecting={inspectingId === u.telegramId && isInspecting}
             />
@@ -168,8 +207,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
           users={users}
           onInspect={inspectUser}
           onOpenBalanceModal={setBalanceModalUser}
-          onCopyId={copy}
+          onCopyId={(text, key) => void handleCopyWithToast(text, key)}
+          isCopied={isCopied}
           inspectingId={inspectingId}
+          isInspecting={isInspecting}
         />
       )}
 
@@ -182,11 +223,25 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         />
       )}
 
+      {inspectingId && isInspecting && !dossier && (
+        <Modal
+          isOpen={true}
+          onClose={closeDossier}
+          maxWidth="sm"
+          title={t('admin.users.btnDetails')}
+        >
+          <div className="flex flex-col items-center justify-center gap-2.5 py-8 text-xs text-ink-muted">
+            <Loader2 className="w-6 h-6 animate-spin text-brand-fg" />
+            <span>{t('common.loading')}</span>
+          </div>
+        </Modal>
+      )}
+
       <UserDossierModal
         dossier={dossier}
         onClose={closeDossier}
         onOpenBalanceModal={setBalanceModalUser}
-        onCopyId={copy}
+        onCopyId={(text, key) => void handleCopyWithToast(text, key)}
         isCopied={isCopied}
         onNotify={onNotify}
         onBanUser={handleBanUser}
@@ -199,7 +254,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
       <BalanceModal
         user={balanceModalUser}
         onClose={() => setBalanceModalUser(null)}
-        onSubmit={handleAdjustBalance}
+        onSubmit={(payload) => void handleAdjustBalance(payload)}
         loading={isAdjustingBalance}
       />
     </div>

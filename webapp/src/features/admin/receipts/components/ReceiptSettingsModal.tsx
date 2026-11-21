@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Save, Check, Users, RotateCw } from 'lucide-react';
+import { Bell, Save, Check, Users, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -7,6 +7,7 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { Switch } from '@/shared/components/ui/Switch.js';
 import { useReceiptSettings } from '../hooks/useAdminReceipts.js';
 
 interface ReceiptSettingsModalProps {
@@ -119,7 +120,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
       <div className="space-y-4">
         {isLoading ? (
           <div className="py-12 flex flex-col items-center justify-center gap-2">
-            <RotateCw className="w-6 h-6 animate-spin text-brand-fg" />
+            <Loader2 className="w-6 h-6 animate-spin text-brand-fg" />
             <span className={`text-xs ${textMuted}`}>{t('common.loading')}</span>
           </div>
         ) : (
@@ -133,12 +134,10 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
                   {t('admin.receipts.settingsNotifyEnabledDesc')}
                 </span>
               </div>
-              <input
-                type="checkbox"
-                className="rs-switch cursor-pointer shrink-0"
+              <Switch
                 checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                aria-label={t('admin.receipts.settingsNotifyEnabled')}
+                onChange={setEnabled}
+                ariaLabel={t('admin.receipts.settingsNotifyEnabled')}
               />
             </Card>
 

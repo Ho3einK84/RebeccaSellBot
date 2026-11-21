@@ -4,6 +4,7 @@ import { QrCode, Copy, Check, ExternalLink, AlertCircle, RefreshCw } from 'lucid
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { useToast } from '@/shared/components/ui/Toast.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -24,6 +25,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
   const { t } = useLanguage();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
+  const { notify } = useToast();
   const [qrSrc, setQrSrc] = useState<string>('');
   const [hasError, setHasError] = useState<boolean>(false);
   const [retryKey, setRetryKey] = useState<number>(0);
@@ -62,9 +64,12 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
     };
   }, [subUrl, isOpen, retryKey]);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     triggerHaptic('light');
-    copy(subUrl, 'qr-sub-url');
+    const ok = await copy(subUrl, 'qr-sub-url');
+    if (ok) {
+      notify(t('user.services.linkCopied'), 'success');
+    }
   };
 
   const handleOpenLink = () => {
@@ -99,8 +104,8 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
         <div className="bg-white p-3.5 rounded-card border border-line flex items-center justify-center min-w-[220px] min-h-[220px]">
           {hasError ? (
             <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex flex-col items-center justify-center gap-2 p-2">
-              <AlertCircle className="w-7 h-7 text-danger" />
-              <span className="text-xs text-danger font-medium text-center">
+              <AlertCircle className="w-7 h-7 text-red-700" />
+              <span className="text-xs text-red-700 font-medium text-center">
                 {t('user.services.qrError')}
               </span>
               <Button
@@ -124,20 +129,20 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
               className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] select-none pointer-events-none"
             />
           ) : (
-            <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex items-center justify-center text-ink-muted text-xs">
+            <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex items-center justify-center text-neutral-600 text-xs">
               {t('common.loading')}
             </div>
           )}
         </div>
 
         {/* Action Button: Copy Subscription Link */}
-        <div className="w-full flex flex-col gap-2 mt-2">
+        <div className="w-full flex flex-col gap-2 mt-1">
           <Button
             type="button"
             variant={isCopied('qr-sub-url') ? 'success' : 'primary'}
             size="md"
-            onClick={handleCopy}
-            className="w-full"
+            block
+            onClick={() => void handleCopy()}
           >
             {isCopied('qr-sub-url') ? (
               <>

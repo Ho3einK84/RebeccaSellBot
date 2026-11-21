@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Folder, Pencil, Trash2 } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { Switch } from '@/shared/components/ui/Switch.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import type { AdminCategoryDto } from '@/shared/types/admin.js';
@@ -36,7 +37,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   return (
     <Card
       padding="md"
-      className={`transition-all ${
+      className={`transition-colors text-start ${
         category.enabled ? 'hover:border-line-strong' : 'opacity-80 bg-surface-2/60 border-line'
       }`}
     >
@@ -44,11 +45,11 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="w-8 h-8 rounded-ctl bg-surface-2 border border-line flex items-center justify-center text-base shrink-0">
-              {category.icon ? category.icon : <Folder className="w-4 h-4 text-brand" />}
+              {category.icon ? category.icon : <Folder className="w-4 h-4 text-brand-fg" />}
             </span>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="text-sm font-bold text-ink truncate">{primary}</h3>
+                <h3 className="text-sm font-bold text-ink truncate m-0">{primary}</h3>
                 <Badge variant={category.enabled ? 'success' : 'neutral'} size="xs" dot>
                   {category.enabled
                     ? t('admin.packages.card.activeBadge')
@@ -63,26 +64,25 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
                 </Badge>
               </div>
               {secondary && (
-                <p className="text-[11px] text-ink-muted mt-0.5 truncate">{secondary}</p>
+                <p className="text-[11px] text-ink-muted mt-0.5 truncate m-0">{secondary}</p>
               )}
             </div>
           </div>
 
-          <p className="text-xs text-ink-soft mt-2 line-clamp-2">
+          <p className="text-xs text-ink-soft mt-2 line-clamp-2 m-0">
             {category.description || t('admin.packages.categories.noDescription')}
           </p>
         </div>
 
-        <input
-          type="checkbox"
+        <Switch
           checked={category.enabled}
           onChange={() => onToggle(category)}
-          aria-label={
+          ariaLabel={
             category.enabled
               ? t('admin.packages.actions.deactivate')
               : t('admin.packages.actions.activate')
           }
-          className="rs-switch shrink-0 mt-0.5 cursor-pointer"
+          className="mt-0.5"
         />
       </div>
 

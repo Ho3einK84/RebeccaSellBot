@@ -7,17 +7,19 @@ interface DesktopNavProps<T extends string> {
   activeId: T;
   onSelect: (id: T) => void;
   ariaLabel: string;
+  badgeTone?: 'brand' | 'danger';
 }
 
 /**
  * Clean tabbed instrument rail on `md+` screens aligned with the matte surface system.
- * Uses a sharp bottom indicator rule instead of bulky pill buttons.
+ * Uses a sharp bottom indicator rule and consistent badge styling.
  */
 export function DesktopNav<T extends string>({
   items,
   activeId,
   onSelect,
   ariaLabel,
+  badgeTone = 'brand',
 }: DesktopNavProps<T>) {
   const { locale } = useLanguage();
   const { formatNumber } = useFormatters();
@@ -39,6 +41,13 @@ export function DesktopNav<T extends string>({
               : formatNumber(item.count)
             : null;
 
+        const badgeClass =
+          badgeTone === 'danger'
+            ? 'bg-danger-soft text-danger-fg border border-danger/25'
+            : active
+              ? 'bg-brand-soft text-brand-fg border border-brand/25'
+              : 'bg-surface-2 text-ink-soft border border-line';
+
         return (
           <button
             key={item.id}
@@ -48,18 +57,14 @@ export function DesktopNav<T extends string>({
             className={`relative inline-flex h-11 items-center gap-2 px-3.5 text-[13px] whitespace-nowrap rounded-t-ctl rs-focus cursor-pointer transition-colors duration-150 ${
               active
                 ? 'font-semibold text-ink'
-                : 'font-medium text-ink-soft hover:text-ink hover:bg-surface-2'
+                : 'font-medium text-ink-soft hover:text-ink hover:bg-surface-2/80'
             }`}
           >
             <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-brand-fg' : 'text-ink-muted'}`} />
             <span>{item.label}</span>
             {countStr !== null ? (
               <span
-                className={`tnum inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-medium ${
-                  active
-                    ? 'bg-brand-soft text-brand-fg'
-                    : 'bg-surface-2 text-ink-soft border border-line'
-                }`}
+                className={`tnum inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-medium ${badgeClass}`}
               >
                 {countStr}
               </span>

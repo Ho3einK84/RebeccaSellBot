@@ -1,16 +1,29 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertCircle, AlertTriangle, X } from 'lucide-react';
+import { useHaptic } from '@/shared/hooks/useHaptic.js';
+
+export type ToastType = 'success' | 'error' | 'warning';
 
 export interface ToastItem {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'warning';
+  type: ToastType;
 }
 
 export interface ToastProps {
   message: string;
-  type?: 'success' | 'error' | 'warning';
+  type?: ToastType;
   onDismiss?: () => void;
+  dismissLabel?: string;
   className?: string;
 }
 
@@ -18,6 +31,7 @@ export const Toast: React.FC<ToastProps> = ({
   message,
   type = 'success',
   onDismiss,
+  dismissLabel = 'Dismiss',
   className = '',
 }) => {
   const toneConfig = {
@@ -51,13 +65,13 @@ export const Toast: React.FC<ToastProps> = ({
       >
         <Icon className="w-3.5 h-3.5" />
       </span>
-      <span className="flex-1 min-w-0 leading-relaxed">{message}</span>
+      <span className="flex-1 min-w-0 leading-relaxed text-start">{message}</span>
       {onDismiss ? (
         <button
           type="button"
           onClick={onDismiss}
           className="w-7 h-7 rounded-ctl inline-flex items-center justify-center text-ink-muted hover:text-ink hover:bg-surface-2 rs-focus cursor-pointer shrink-0"
-          aria-label="Dismiss"
+          aria-label={dismissLabel}
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -69,36 +83,46 @@ export const Toast: React.FC<ToastProps> = ({
 export interface ToastContainerProps {
   toasts: ToastItem[];
   onDismiss: (id: string) => void;
+  dismissLabel?: string;
   className?: string;
 }
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({
   toasts,
   onDismiss,
+  dismissLabel,
   className = '',
 }) => {
   if (toasts.length === 0) return null;
 
-  return (
+  const content = (
     <div
-      className={`fixed top-3.5 inset-x-3.5 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-sm z-50 flex flex-col gap-2 pointer-events-none ${className}`}
+      className={`fixed inset-x-3.5 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-sm z-[1100] flex flex-col gap-2 pointer-events-none ${className}`}
+      style={{ top: 'calc(0.875rem + var(--rs-safe-top, 0px))' }}
     >
       {toasts.map((toast) => (
         <Toast
           key={toast.id}
           message={toast.message}
           type={toast.type}
+          dismissLabel={dismissLabel}
           onDismiss={() => onDismiss(toast.id)}
         />
       ))}
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(content, document.body);
+  }
+
+  return content;
 };
 
 export function enqueueToast(
   current: ToastItem[],
   message: string,
-  type: 'success' | 'error' | 'warning' = 'success',
+  type: ToastType = 'success',
   customId?: string,
   maxVisible = 3
 ): { toasts: ToastItem[]; id: string; added: boolean } {
@@ -122,6 +146,16 @@ export function useToastQueue(defaultTimeout = 3500) {
   const toastsRef = useRef<ToastItem[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, []);
+
   const dismissToast = useCallback((id: string) => {
     const timer = timersRef.current.get(id);
     if (timer) {
@@ -134,7 +168,7 @@ export function useToastQueue(defaultTimeout = 3500) {
   }, []);
 
   const showToast = useCallback(
-    (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    (message: string, type: ToastType = 'success') => {
       const result = enqueueToast(toastsRef.current, message, type);
       if (!result.added) {
         return result.id;
@@ -166,4 +200,47 @@ export function useToastQueue(defaultTimeout = 3500) {
   }, []);
 
   return { toasts, showToast, dismissToast, clearAll };
+}
+
+interface ToastContextValue {
+  notify: (message: string, type?: ToastType) => string;
+  dismissToast: (id: string) => void;
+  clearAll: () => void;
+}
+
+const ToastContext = createContext<ToastContextValue | null>(null);
+
+/**
+ * Single unified toast provider shared by Admin Console, User Portal, and Auth flows.
+ * Always renders above Modal sheets (`z-[1100]`) and respects safe-area insets.
+ */
+export const ToastProvider: React.FC<{ children: ReactNode; dismissLabel?: string }> = ({
+  children,
+  dismissLabel,
+}) => {
+  const { toasts, showToast, dismissToast, clearAll } = useToastQueue(3600);
+  const { triggerHaptic } = useHaptic();
+
+  const notify = useCallback(
+    (message: string, type: ToastType = 'success') => {
+      triggerHaptic(type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'error');
+      return showToast(message, type);
+    },
+    [showToast, triggerHaptic]
+  );
+
+  return (
+    <ToastContext.Provider value={{ notify, dismissToast, clearAll }}>
+      {children}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} dismissLabel={dismissLabel} />
+    </ToastContext.Provider>
+  );
+};
+
+export function useToast(): ToastContextValue {
+  const ctx = useContext(ToastContext);
+  if (!ctx) {
+    throw new Error('useToast must be used within a ToastProvider');
+  }
+  return ctx;
 }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Wifi, Copy, Check, QrCode, ShieldCheck, ShoppingBag, Settings2 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
@@ -17,10 +17,13 @@ import { ServiceManagementModal } from '@/features/user-portal/components/Servic
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
+import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 
 interface ServicesTabProps {
   configs: UserConfigRecord[];
   botUsername?: string;
+  initialConfigId?: string | null;
+  onClearInitialConfig?: () => void;
   onOpenQr: (subUrl: string, configUsername: string) => void;
   onGoToShop: () => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
@@ -29,6 +32,8 @@ interface ServicesTabProps {
 export const ServicesTab: React.FC<ServicesTabProps> = ({
   configs,
   botUsername,
+  initialConfigId,
+  onClearInitialConfig,
   onOpenQr,
   onGoToShop,
   onNotify,
@@ -39,6 +44,13 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
   const { formatNumber } = useFormatters();
 
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialConfigId && configs.some((c) => c.id === initialConfigId)) {
+      setSelectedConfigId(initialConfigId);
+      onClearInitialConfig?.();
+    }
+  }, [initialConfigId, configs, onClearInitialConfig]);
 
   const selectedConfig = useMemo(
     () => configs.find((c) => c.id === selectedConfigId) ?? null,
@@ -66,18 +78,15 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
   return (
     <div className="w-full flex flex-col gap-4 pb-6">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Wifi className="w-4 h-4 text-brand-fg shrink-0" aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-ink m-0 truncate">
-            {t('user.services.title')}
-          </h2>
-          <span className="tnum inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-surface-2 border border-line px-1.5 text-[11px] font-medium text-ink-soft">
-            {formatNumber(configs.length)}
-          </span>
-        </div>
+        <SectionHeader
+          icon={<Wifi />}
+          title={t('user.services.title')}
+          count={formatNumber(configs.length)}
+          className="flex-1 min-w-0"
+        />
 
         {configs.length > 0 && (
-          <Button size="sm" variant="secondary" onClick={onGoToShop}>
+          <Button size="sm" variant="secondary" onClick={onGoToShop} className="shrink-0">
             <ShoppingBag className="w-3.5 h-3.5 text-brand-fg shrink-0" />
             <span>{t('user.dashboard.buyService')}</span>
           </Button>
@@ -116,7 +125,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                       <ServiceStatusDot status={c.panelStatus} />
                       <bdi
                         dir="ltr"
-                        className="text-[13.5px] font-mono tnum font-medium truncate text-ink"
+                        className="text-[13.5px] font-mono font-medium truncate text-ink"
                       >
                         {c.configUsername}
                       </bdi>
@@ -151,7 +160,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                       <Button
                         size="md"
                         variant={isSubCopied ? 'success' : 'secondary'}
-                        onClick={() => handleCopySub(c.subUrl!, `sub-${c.id}`)}
+                        onClick={() => void handleCopySub(c.subUrl!, `sub-${c.id}`)}
                         className="flex-1 min-w-0"
                       >
                         {isSubCopied ? (
@@ -169,9 +178,9 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
 
                       <Button
                         size="md"
-                        variant="outline"
+                        variant="tonal"
                         onClick={() => handleQrClick(c.subUrl!, c.configUsername)}
-                        className="w-11 !px-0 shrink-0 !bg-brand-soft !border-brand/25 !text-brand-fg hover:!bg-brand/15"
+                        className="w-11 px-0 shrink-0"
                         title={t('user.services.showQr')}
                         aria-label={t('user.services.showQr')}
                       >

@@ -8,7 +8,7 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   /** Accessible label — required for icon-only actions. */
   label: string;
   tone?: IconButtonTone;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
   active?: boolean;
 }
 
@@ -20,6 +20,7 @@ const toneClasses: Record<IconButtonTone, string> = {
 };
 
 const sizeClasses = {
+  xs: 'w-8 h-8 rounded-ctl [&>svg]:w-4 [&>svg]:h-4',
   sm: 'w-9 h-9 rounded-ctl [&>svg]:w-4 [&>svg]:h-4',
   md: 'w-11 h-11 rounded-ctl [&>svg]:w-[18px] [&>svg]:h-[18px]',
 } as const;

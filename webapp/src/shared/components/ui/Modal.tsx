@@ -1,8 +1,29 @@
-import React, { useEffect, type ReactNode } from 'react';
+import React, { useEffect, useId, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
+
+let activeModalScrollLocks = 0;
+let savedBodyOverflow = '';
+
+function lockBodyScroll() {
+  if (typeof document === 'undefined') return;
+  if (activeModalScrollLocks === 0) {
+    savedBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+  activeModalScrollLocks += 1;
+}
+
+function unlockBodyScroll() {
+  if (typeof document === 'undefined') return;
+  activeModalScrollLocks = Math.max(0, activeModalScrollLocks - 1);
+  if (activeModalScrollLocks === 0) {
+    document.body.style.overflow = savedBodyOverflow;
+  }
+}
 
 export interface ModalProps {
   isOpen: boolean;
@@ -44,6 +65,10 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const { modalBoxClass } = useThemeTokens();
   const { t } = useLanguage();
+  const titleId = useId();
+
+  // Register native Telegram BackButton for every open modal cleanly
+  useTelegramBackButton(onClose, isOpen && closeOnBackdrop);
 
   useEffect(() => {
     if (!isOpen || typeof document === 'undefined') return;
@@ -54,12 +79,11 @@ export const Modal: React.FC<ModalProps> = ({
       }
     };
 
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll();
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.body.style.overflow = prevOverflow;
+      unlockBodyScroll();
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, closeOnBackdrop, onClose]);
@@ -72,11 +96,12 @@ export const Modal: React.FC<ModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby={title && !customHeader ? titleId : undefined}
       className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center sm:p-4"
     >
-      {/* Frosted glass backdrop */}
+      {/* Matte frosted backdrop */}
       <div
-        className="fixed inset-0 bg-black/65 dark:bg-black/75 rs-backdrop-blur backdrop-blur-md anim-fade"
+        className="fixed inset-0 bg-black/55 dark:bg-black/70 rs-backdrop-blur anim-fade"
         onClick={() => {
           if (closeOnBackdrop) onClose();
         }}
@@ -85,11 +110,11 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Elevated modal / bottom-sheet surface */}
       <div
-        className={`relative z-10 w-full ${maxWidthClasses[maxWidth]} max-h-[90dvh] sm:max-h-[88dvh] flex flex-col overflow-hidden border-t sm:border rounded-t-sheet sm:rounded-card anim-sheet sm:anim-modal safe-bottom shadow-[0_-16px_48px_rgba(0,0,0,0.48)] sm:shadow-[var(--shadow-popover)] ${modalBoxClass}`}
+        className={`relative z-10 w-full ${maxWidthClasses[maxWidth]} max-h-[92dvh] sm:max-h-[88dvh] flex flex-col overflow-hidden border-t sm:border rounded-t-sheet sm:rounded-card anim-sheet sm:anim-modal safe-bottom shadow-[0_-16px_48px_rgba(0,0,0,0.42)] sm:shadow-[var(--shadow-popover)] ${modalBoxClass}`}
       >
         {/* Mobile sheet grab handle */}
         <div className="flex sm:hidden justify-center pt-2.5 pb-1 shrink-0" aria-hidden="true">
-          <div className="w-10 h-1 rounded-full bg-line-strong/80" />
+          <div className="w-9 h-1 rounded-full bg-line-strong/80" />
         </div>
 
         {/* Sticky Modal Header */}
@@ -102,7 +127,10 @@ export const Modal: React.FC<ModalProps> = ({
                 {icon ? <span className="shrink-0 flex items-center">{icon}</span> : null}
                 <div className="min-w-0 flex-1">
                   {title ? (
-                    <h3 className="font-semibold text-sm sm:text-base text-ink leading-[1.4] m-0 truncate">
+                    <h3
+                      id={titleId}
+                      className="font-semibold text-sm sm:text-base text-ink leading-[1.4] m-0 truncate"
+                    >
                       {title}
                     </h3>
                   ) : null}
@@ -118,7 +146,7 @@ export const Modal: React.FC<ModalProps> = ({
                 type="button"
                 onClick={onClose}
                 aria-label={t('common.close')}
-                className="w-8 h-8 rounded-ctl inline-flex items-center justify-center border border-line bg-surface-2 text-ink-soft hover:text-ink hover:border-line-strong rs-focus press cursor-pointer shrink-0"
+                className="w-8 h-8 rounded-ctl inline-flex items-center justify-center border border-line bg-surface-2 text-ink-soft hover:text-ink hover:border-line-strong hover:bg-surface-3 rs-focus press cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -133,7 +161,7 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Sticky Modal Footer */}
         {footer ? (
-          <div className="px-4 sm:px-5 py-3 border-t border-line bg-surface-2/50 shrink-0">
+          <div className="px-4 sm:px-5 py-3 border-t border-line bg-surface-2/60 shrink-0">
             {footer}
           </div>
         ) : null}

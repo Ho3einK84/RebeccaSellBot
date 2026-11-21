@@ -1,7 +1,8 @@
 import React from 'react';
-import { FolderOpen, Info, Plus } from 'lucide-react';
+import { FolderOpen, Plus } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -37,26 +38,26 @@ export const CategoriesListSection: React.FC<CategoriesListSectionProps> = ({
       <div className="space-y-1">
         <SectionHeader
           title={t('admin.packages.categories.title')}
-          count={categories.length}
-          icon={<FolderOpen className="w-4 h-4 text-brand" />}
+          count={formatNumber(categories.length)}
+          icon={<FolderOpen />}
         />
-        <p className="text-xs text-ink-muted">{t('admin.packages.categories.subtitle')}</p>
+        <p className="text-xs text-ink-muted m-0">{t('admin.packages.categories.subtitle')}</p>
       </div>
 
       {uncategorizedCount > 0 && (
-        <div className="p-2.5 rounded-ctl bg-surface border border-line text-xs text-ink-soft flex items-center gap-2">
-          <Info className="w-4 h-4 text-info shrink-0" />
+        <AlertBanner tone="info">
           <span className="tnum">
             {t('admin.packages.categories.uncategorizedBanner', {
               count: formatNumber(uncategorizedCount),
             })}
           </span>
-        </div>
+        </AlertBanner>
       )}
 
       {categories.length === 0 ? (
         <EmptyState
-          icon={<FolderOpen className="w-6 h-6 text-brand" />}
+          tone="brand"
+          icon={<FolderOpen />}
           title={t('admin.packages.categories.emptyTitle')}
           description={t('admin.packages.categories.emptyDesc')}
           action={

@@ -4,9 +4,10 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import type {
   CreatePriceOverridePayload,
   CustomPriceOverrideDto,
@@ -55,8 +56,6 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
     pricePerDay: '',
   });
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
-
-  useTelegramBackButton(onClose, isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -145,8 +144,13 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      closeOnBackdrop={!isSubmitting}
       maxWidth="lg"
-      icon={<Sliders className="w-5 h-5 text-brand" />}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <Sliders />
+        </IconTile>
+      }
       title={
         mode === 'edit'
           ? t('admin.packages.overrides.formEditTitle')
@@ -154,7 +158,7 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
       }
       footer={
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={isSubmitting}>
             {t('admin.packages.actions.cancel')}
           </Button>
           <Button
@@ -173,12 +177,8 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
         </div>
       }
     >
-      <form id="price-override-form" onSubmit={handleSubmit} className="space-y-4">
-        {fieldError('form') && (
-          <p className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-ctl p-2.5">
-            {fieldError('form')}
-          </p>
-        )}
+      <form id="price-override-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        {fieldError('form') && <AlertBanner tone="danger">{fieldError('form')}</AlertBanner>}
 
         <div>
           <label
@@ -196,7 +196,9 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
             placeholder={t('admin.packages.overrides.idPlaceholder')}
             onChange={(e) => setValues((prev) => ({ ...prev, id: e.target.value }))}
           />
-          {fieldError('id') && <p className="text-xs text-danger mt-1">{fieldError('id')}</p>}
+          {fieldError('id') && (
+            <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('id')}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -237,11 +239,11 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
           </div>
         </div>
         {fieldError('gbRange') && (
-          <p className="text-xs text-danger -mt-2">{fieldError('gbRange')}</p>
+          <p className="text-xs text-danger-fg -mt-2 m-0">{fieldError('gbRange')}</p>
         )}
 
         {/* Duration bounds — dashed/dimmed while buyers stay on fixed Default Duration */}
-        <div className="p-3 rounded-ctl border border-dashed border-line-strong bg-surface-2/50 opacity-90 space-y-2.5">
+        <div className="p-3 rounded-tile border border-dashed border-line-strong bg-surface-2/50 opacity-90 space-y-2.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-[11px] font-semibold text-ink-soft">
               {t('admin.packages.overrides.daysBoundsDimTitle')}
@@ -289,13 +291,13 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
             </div>
           </div>
 
-          <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed">
+          <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed m-0">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
             <span>{t('admin.packages.overrides.daysBoundsDimHint', { days: daysDisplay })}</span>
           </p>
         </div>
         {fieldError('daysRange') && (
-          <p className="text-xs text-danger -mt-2">{fieldError('daysRange')}</p>
+          <p className="text-xs text-danger-fg -mt-2 m-0">{fieldError('daysRange')}</p>
         )}
 
         <div>
@@ -314,7 +316,7 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
             placeholder={t('admin.packages.overrides.optionalPlaceholder')}
             onChange={(e) => setValues((prev) => ({ ...prev, price: e.target.value }))}
           />
-          <p className="text-[11px] text-ink-muted mt-1">
+          <p className="text-[11px] text-ink-muted mt-1 m-0">
             {t('admin.packages.overrides.fixedPriceHint')}
           </p>
         </div>
@@ -338,7 +340,7 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
             />
           </div>
 
-          <div className="p-2.5 rounded-ctl border border-dashed border-line-strong bg-surface-2/50 opacity-90 space-y-1.5">
+          <div className="p-2.5 rounded-tile border border-dashed border-line-strong bg-surface-2/50 opacity-90 space-y-1.5">
             <div className="flex items-center justify-between gap-1.5 flex-wrap">
               <label htmlFor="override-per-day" className="text-xs font-semibold text-ink-soft">
                 {t('admin.packages.overrides.pricePerDayLabel')}
@@ -356,13 +358,13 @@ export const PriceOverrideModal: React.FC<PriceOverrideModalProps> = ({
               placeholder={t('admin.packages.overrides.optionalPlaceholder')}
               onChange={(e) => setValues((prev) => ({ ...prev, pricePerDay: e.target.value }))}
             />
-            <p className="text-[11px] text-ink-muted leading-relaxed">
+            <p className="text-[11px] text-ink-muted leading-relaxed m-0">
               {t('admin.packages.overrides.pricePerDayDimHint', { days: daysDisplay })}
             </p>
           </div>
         </div>
         {fieldError('pricing') && (
-          <p className="text-xs text-danger -mt-2">{fieldError('pricing')}</p>
+          <p className="text-xs text-danger-fg -mt-2 m-0">{fieldError('pricing')}</p>
         )}
       </form>
     </Modal>

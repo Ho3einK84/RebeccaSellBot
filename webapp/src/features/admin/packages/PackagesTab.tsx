@@ -4,7 +4,7 @@ import {
   Layers,
   Package,
   Plus,
-  RotateCw,
+  RefreshCw,
   Sliders,
   Sparkles,
   XCircle,
@@ -13,6 +13,8 @@ import { Card } from '@/shared/components/ui/Card.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
+import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/SegmentedControl.js';
 import { SkeletonList, SkeletonStatsGrid } from '@/shared/components/ui/Skeleton.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -122,6 +124,33 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
         overridesCount: overrides.length,
       }),
     [packages, categories, customSettings, tiers.length, overrides.length]
+  );
+
+  const subTabOptions: SegmentedOption<PackagesSubTab>[] = useMemo(
+    () => [
+      {
+        id: 'packages',
+        label: t('admin.packages.subtabs.packages'),
+        icon: Package,
+        count: formatNumber(packages.length),
+        tone: 'brand',
+      },
+      {
+        id: 'categories',
+        label: t('admin.packages.subtabs.categories'),
+        icon: FolderOpen,
+        count: formatNumber(categories.length),
+        tone: 'brand',
+      },
+      {
+        id: 'pricing',
+        label: t('admin.packages.subtabs.pricing'),
+        icon: Layers,
+        count: formatNumber(tiers.length + overrides.length),
+        tone: 'brand',
+      },
+    ],
+    [t, formatNumber, packages.length, categories.length, tiers.length, overrides.length]
   );
 
   const openCreatePackage = () => {
@@ -239,24 +268,19 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
     }
   };
 
-  const handleSwitchSubTab = (next: PackagesSubTab) => {
-    triggerHaptic('selection');
-    setSubTab(next);
-  };
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="min-w-0">
           <SectionHeader
             title={t('admin.packages.title')}
-            icon={<Package className="w-5 h-5 text-brand" />}
+            icon={<Package />}
             count={
               packages.length > 0 ? <bdi dir="ltr">{formatNumber(packages.length)}</bdi> : undefined
             }
           />
-          <p className="text-xs text-ink-muted mt-0.5">{t('admin.packages.subtitle')}</p>
+          <p className="text-xs text-ink-muted mt-0.5 m-0">{t('admin.packages.subtitle')}</p>
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center">
@@ -283,7 +307,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
             loading={adminPkg.isFetching}
             onClick={() => void adminPkg.refetchAll()}
           >
-            <RotateCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" />
             <span>{t('admin.packages.refresh')}</span>
           </Button>
         </div>
@@ -307,7 +331,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
           className="border-danger/25"
           action={
             <Button variant="primary" size="sm" onClick={() => void adminPkg.refetchAll()}>
-              <RotateCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3.5 h-3.5" />
               <span>{t('admin.packages.retry')}</span>
             </Button>
           }
@@ -393,84 +417,13 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
             </Card>
           </div>
 
-          {/* 3-Segment Sub-Tab Switcher */}
-          <div
-            role="tablist"
-            aria-label={t('admin.packages.subtabsAriaLabel')}
-            className="grid grid-cols-3 gap-1.5 p-1 bg-surface border border-line rounded-card"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={subTab === 'packages'}
-              onClick={() => handleSwitchSubTab('packages')}
-              className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-ctl text-xs font-semibold transition-colors ${
-                subTab === 'packages'
-                  ? 'bg-brand text-brand-ink shadow-sm'
-                  : 'text-ink-soft hover:bg-surface-2'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{t('admin.packages.subtabs.packages')}</span>
-              <span
-                className={`text-[11px] px-1.5 py-0.5 rounded-full tnum leading-none ${
-                  subTab === 'packages'
-                    ? 'bg-black/15 text-brand-ink'
-                    : 'bg-surface-2 text-ink-muted'
-                }`}
-              >
-                {formatNumber(packages.length)}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={subTab === 'categories'}
-              onClick={() => handleSwitchSubTab('categories')}
-              className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-ctl text-xs font-semibold transition-colors ${
-                subTab === 'categories'
-                  ? 'bg-brand text-brand-ink shadow-sm'
-                  : 'text-ink-soft hover:bg-surface-2'
-              }`}
-            >
-              <FolderOpen className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{t('admin.packages.subtabs.categories')}</span>
-              <span
-                className={`text-[11px] px-1.5 py-0.5 rounded-full tnum leading-none ${
-                  subTab === 'categories'
-                    ? 'bg-black/15 text-brand-ink'
-                    : 'bg-surface-2 text-ink-muted'
-                }`}
-              >
-                {formatNumber(categories.length)}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={subTab === 'pricing'}
-              onClick={() => handleSwitchSubTab('pricing')}
-              className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-ctl text-xs font-semibold transition-colors ${
-                subTab === 'pricing'
-                  ? 'bg-brand text-brand-ink shadow-sm'
-                  : 'text-ink-soft hover:bg-surface-2'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{t('admin.packages.subtabs.pricing')}</span>
-              <span
-                className={`text-[11px] px-1.5 py-0.5 rounded-full tnum leading-none ${
-                  subTab === 'pricing'
-                    ? 'bg-black/15 text-brand-ink'
-                    : 'bg-surface-2 text-ink-muted'
-                }`}
-              >
-                {formatNumber(tiers.length + overrides.length)}
-              </span>
-            </button>
-          </div>
+          {/* Unified 3-Segment Sub-Tab Switcher */}
+          <SegmentedControl
+            options={subTabOptions}
+            value={subTab}
+            onChange={setSubTab}
+            ariaLabel={t('admin.packages.subtabsAriaLabel')}
+          />
 
           {/* Sub-Views */}
           {subTab === 'packages' && (
@@ -514,7 +467,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
                     size="sm"
                     onClick={() => void adminPkg.refetchCategories()}
                   >
-                    <RotateCw className="w-3.5 h-3.5" />
+                    <RefreshCw className="w-3.5 h-3.5" />
                     <span>{t('admin.packages.retry')}</span>
                   </Button>
                 }
@@ -522,17 +475,21 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
             ) : (
               <div className="space-y-3">
                 {adminPkg.isCategoriesError && (
-                  <div className="p-3 rounded-card bg-danger-soft border border-danger/30 text-danger text-xs flex items-center justify-between gap-2 flex-wrap">
-                    <span>{t('admin.packages.loadErrorDesc')}</span>
-                    <Button
-                      variant="secondary"
-                      size="xs"
-                      onClick={() => void adminPkg.refetchCategories()}
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                      <span>{t('admin.packages.retry')}</span>
-                    </Button>
-                  </div>
+                  <AlertBanner
+                    tone="danger"
+                    action={
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        onClick={() => void adminPkg.refetchCategories()}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>{t('admin.packages.retry')}</span>
+                      </Button>
+                    }
+                  >
+                    {t('admin.packages.loadErrorDesc')}
+                  </AlertBanner>
                 )}
                 <CategoriesListSection
                   categories={categories}
@@ -569,7 +526,7 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
                     size="sm"
                     onClick={() => void adminPkg.refetchCustomPricing()}
                   >
-                    <RotateCw className="w-3.5 h-3.5" />
+                    <RefreshCw className="w-3.5 h-3.5" />
                     <span>{t('admin.packages.retry')}</span>
                   </Button>
                 }
@@ -577,17 +534,21 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
             ) : customPricingData ? (
               <div className="space-y-3">
                 {adminPkg.isCustomPricingError && (
-                  <div className="p-3 rounded-card bg-danger-soft border border-danger/30 text-danger text-xs flex items-center justify-between gap-2 flex-wrap">
-                    <span>{t('admin.packages.loadErrorDesc')}</span>
-                    <Button
-                      variant="secondary"
-                      size="xs"
-                      onClick={() => void adminPkg.refetchCustomPricing()}
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                      <span>{t('admin.packages.retry')}</span>
-                    </Button>
-                  </div>
+                  <AlertBanner
+                    tone="danger"
+                    action={
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        onClick={() => void adminPkg.refetchCustomPricing()}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>{t('admin.packages.retry')}</span>
+                      </Button>
+                    }
+                  >
+                    {t('admin.packages.loadErrorDesc')}
+                  </AlertBanner>
                 )}
                 <CustomTariffsSection
                   customPricing={customPricingData}

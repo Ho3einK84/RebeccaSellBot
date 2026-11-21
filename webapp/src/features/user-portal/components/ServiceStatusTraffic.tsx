@@ -1,9 +1,11 @@
 import React from 'react';
 import { Calendar } from 'lucide-react';
-import { useLanguage } from '../../../shared/i18n/LanguageContext.js';
-import { toPersianDigits, formatBytes } from '../../../shared/lib/formatters.js';
-import { normalizeDataLimit } from '../../../shared/lib/traffic.js';
+import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { toPersianDigits, formatBytes } from '@/shared/lib/formatters.js';
+import { normalizeDataLimit } from '@/shared/lib/traffic.js';
 import { Badge, type BadgeVariant } from '@/shared/components/ui/Badge.js';
+import { ProgressBar } from '@/shared/components/ui/ProgressBar.js';
+import type { TileTone } from '@/shared/components/ui/IconTile.js';
 import type { NestedTranslationKey } from '@/shared/i18n/types.js';
 
 export { normalizeDataLimit };
@@ -38,8 +40,7 @@ export interface ServiceExpiryInfo {
 }
 
 /**
- * Maps panelStatus to a standardized status object with label, dot color, and badge classes.
- * Pulsing green dot is only applied for 'active' status.
+ * Maps panelStatus to a standardized status object with label, dot color, and AA+ badge classes.
  */
 export function getServiceStatusInfo(
   panelStatus: string | null | undefined,
@@ -52,7 +53,7 @@ export function getServiceStatusInfo(
       return {
         type: 'active',
         label: t('user.services.statusActive'),
-        badgeClass: 'bg-ok/10 text-ok-fg border-ok/20',
+        badgeClass: 'bg-ok-soft text-ok-fg border-ok/25',
         dotClass: 'bg-ok',
         isPulsing: false,
       };
@@ -60,7 +61,7 @@ export function getServiceStatusInfo(
       return {
         type: 'limited',
         label: t('user.services.statusLimited'),
-        badgeClass: 'bg-warn/10 text-warn border-warn/20',
+        badgeClass: 'bg-warn-soft text-warn-fg border-warn/25',
         dotClass: 'bg-warn',
         isPulsing: false,
       };
@@ -68,7 +69,7 @@ export function getServiceStatusInfo(
       return {
         type: 'expired',
         label: t('user.services.statusExpired'),
-        badgeClass: 'bg-danger/10 text-danger border-danger/20',
+        badgeClass: 'bg-danger-soft text-danger-fg border-danger/25',
         dotClass: 'bg-danger',
         isPulsing: false,
       };
@@ -76,15 +77,15 @@ export function getServiceStatusInfo(
       return {
         type: 'disabled',
         label: t('user.services.statusDisabled'),
-        badgeClass: 'bg-zinc-500/10 text-ink-muted border-zinc-500/20',
-        dotClass: 'bg-zinc-400',
+        badgeClass: 'bg-surface-2 text-ink-muted border-line',
+        dotClass: 'bg-ink-muted',
         isPulsing: false,
       };
     case 'on_hold':
       return {
         type: 'on_hold',
         label: t('user.services.statusOnHold'),
-        badgeClass: 'bg-warn/10 text-warn border-warn/20',
+        badgeClass: 'bg-warn-soft text-warn-fg border-warn/25',
         dotClass: 'bg-warn',
         isPulsing: false,
       };
@@ -92,8 +93,8 @@ export function getServiceStatusInfo(
       return {
         type: 'unknown',
         label: t('user.services.statusUnknown'),
-        badgeClass: 'bg-zinc-500/10 text-ink-muted border-zinc-500/20',
-        dotClass: 'bg-zinc-400',
+        badgeClass: 'bg-surface-2 text-ink-muted border-line',
+        dotClass: 'bg-ink-muted',
         isPulsing: false,
       };
   }
@@ -288,8 +289,9 @@ export const ServiceTrafficBar: React.FC<{
   dataLimit: number | null | undefined;
   usedTraffic: number | null | undefined;
   compact?: boolean;
+  hideLabel?: boolean;
   className?: string;
-}> = ({ dataLimit, usedTraffic, compact = false, className = '' }) => {
+}> = ({ dataLimit, usedTraffic, compact = false, hideLabel = false, className = '' }) => {
   const { t, locale } = useLanguage();
   const info = getServiceTrafficInfo(dataLimit, usedTraffic, locale, t);
 
@@ -298,12 +300,21 @@ export const ServiceTrafficBar: React.FC<{
       ? `(${locale === 'fa' ? `${toPersianDigits(info.percentage)}٪` : `${info.percentage}%`})`
       : '';
 
+  const barTone: TileTone =
+    info.percentage !== null && info.percentage > 90
+      ? 'danger'
+      : info.percentage !== null && info.percentage > 75
+        ? 'warn'
+        : 'brand';
+
   return (
     <div className={`w-full flex flex-col ${compact ? 'gap-1' : 'gap-1.5'} ${className}`}>
-      <div className="flex items-center justify-between gap-2 text-[11px] text-ink-muted">
-        <span className="shrink-0">{t('user.services.trafficUsed')}</span>
+      <div
+        className={`flex items-center ${hideLabel ? 'justify-end' : 'justify-between'} gap-2 text-[11px] text-ink-muted`}
+      >
+        {!hideLabel ? <span className="shrink-0">{t('user.services.trafficUsed')}</span> : null}
         {/* LRM marks isolate the slash so "used / total" keeps its reading order in RTL */}
-        <span className="tnum shrink-0 font-semibold">
+        <span className="tnum shrink-0 font-semibold text-ink-soft">
           {info.isUnlimited
             ? `${info.formattedUsed} ‎/‎ ${info.formattedLimit}`
             : info.isUnknownLimit
@@ -313,14 +324,12 @@ export const ServiceTrafficBar: React.FC<{
       </div>
 
       {!info.isUnlimited && !info.isUnknownLimit && info.percentage !== null && (
-        <div
-          className={`w-full ${compact ? 'h-1.5' : 'h-2'} rounded-full overflow-hidden bg-surface-3`}
-        >
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${info.progressColorClass}`}
-            style={{ width: `${info.percentage}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={info.percentage}
+          tone={barTone}
+          size={compact ? 'sm' : 'md'}
+          label={t('user.services.trafficUsed')}
+        />
       )}
     </div>
   );

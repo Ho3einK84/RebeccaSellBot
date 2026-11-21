@@ -151,6 +151,46 @@ describe('Webapp i18n Locales Parity & Copy Quality', () => {
     expect(en.admin.receipts.approveConfirmBody).not.toMatch(/\{amount\}\s+Toman/i);
     expect(en.admin.receipts.batchApproveConfirmBody).not.toMatch(/toman\s+toman/i);
   });
+
+  it('removes all obsolete Beta/Preview gate keys from User Portal while preserving free-trial strings', () => {
+    const removedUserKeys = [
+      'betaBadge',
+      'betaNotice',
+      'betaPreviewActive',
+      'enterBetaMode',
+      'enterBetaModeDesc',
+      'backToComingSoon',
+      'adminPreviewBadge',
+      'portalTitle',
+      'portalDesc',
+      'inDevelopmentStatus',
+      'upcomingFeaturesTitle',
+    ];
+    for (const key of removedUserKeys) {
+      expect(key in fa.user, `unexpected beta key fa.user.${key}`).toBe(false);
+      expect(key in en.user, `unexpected beta key en.user.${key}`).toBe(false);
+    }
+
+    const removedAdminKeys = ['betaBadge', 'betaNotice', 'enterUserBeta'];
+    for (const key of removedAdminKeys) {
+      expect(key in fa.admin, `unexpected beta key fa.admin.${key}`).toBe(false);
+      expect(key in en.admin, `unexpected beta key en.admin.${key}`).toBe(false);
+    }
+
+    // Production view-switch & UX copy must be present in both locales
+    expect(fa.user.adminViewBadge.length).toBeGreaterThan(0);
+    expect(en.user.adminViewBadge.length).toBeGreaterThan(0);
+    expect(fa.admin.switchToUserPortal.length).toBeGreaterThan(0);
+    expect(en.admin.switchToUserPortal.length).toBeGreaterThan(0);
+    expect(fa.user.shop.deficitLabel.length).toBeGreaterThan(0);
+    expect(en.user.shop.deficitLabel.length).toBeGreaterThan(0);
+    expect(fa.user.referral.codeCopied.length).toBeGreaterThan(0);
+    expect(en.user.referral.codeCopied.length).toBeGreaterThan(0);
+
+    // Free-trial module strings must remain preserved
+    expect(fa.admin.modules.trial.length).toBeGreaterThan(0);
+    expect(en.admin.modules.trial.length).toBeGreaterThan(0);
+  });
 });
 
 describe('transactionFormatters', () => {
@@ -341,8 +381,8 @@ describe('Traffic Normalization & ServiceStatusTraffic', () => {
       const disabledFa = getServiceStatusInfo('disabled', tFa);
       expect(disabledFa.type).toBe('disabled');
       expect(disabledFa.label).toBe('غیرفعال');
-      expect(disabledFa.dotClass).toContain('bg-zinc-400');
-      expect(disabledFa.badgeClass).toContain('bg-zinc-500');
+      expect(disabledFa.dotClass).toContain('bg-ink-muted');
+      expect(disabledFa.badgeClass).toContain('bg-surface-2');
       expect(getServiceStatusInfo('disabled', tEn).label).toBe('Disabled');
 
       const onHoldFa = getServiceStatusInfo('on_hold', tFa);

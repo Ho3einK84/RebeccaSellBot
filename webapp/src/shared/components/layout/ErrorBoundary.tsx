@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { AlertTriangle, RotateCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -40,23 +40,28 @@ export class ErrorBoundary extends Component<Props, State> {
       const retryLabel = isEn ? 'Retry' : 'تلاش مجدد';
 
       return (
-        <div className="min-h-[260px] w-full flex items-center justify-center p-4 bg-canvas">
-          <div className="rounded-card border border-line bg-surface p-6 max-w-md w-full text-center flex flex-col items-center gap-3 shadow-[var(--shadow-card)]">
-            <div className="w-11 h-11 rounded-tile bg-danger-soft border border-danger/25 flex items-center justify-center text-danger-fg">
+        <div
+          dir={isEn ? 'ltr' : 'rtl'}
+          className="min-h-[100dvh] w-full flex items-center justify-center p-4 bg-canvas text-ink safe-top safe-bottom"
+        >
+          <div className="rounded-card border border-line bg-surface p-6 max-w-md w-full text-center flex flex-col items-center gap-3.5 shadow-[var(--shadow-card)] anim-rise">
+            <div className="w-12 h-12 rounded-tile bg-danger-soft border border-danger/25 flex items-center justify-center text-danger-fg">
               <AlertTriangle className="w-5 h-5" />
             </div>
-            <h3 className="text-base font-semibold text-ink m-0 leading-[1.4]">
-              {this.props.fallbackTitle || defaultTitle}
-            </h3>
-            <p className="text-xs text-ink-muted leading-relaxed max-w-xs m-0">
-              {this.state.error?.message || this.props.fallbackMessage || defaultBody}
-            </p>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold text-ink m-0 leading-[1.4]">
+                {this.props.fallbackTitle || defaultTitle}
+              </h3>
+              <p className="text-xs text-ink-muted leading-relaxed max-w-xs m-0">
+                {this.state.error?.message || this.props.fallbackMessage || defaultBody}
+              </p>
+            </div>
             <button
               type="button"
               onClick={this.handleReset}
               className="mt-1 inline-flex h-10 items-center justify-center gap-2 rounded-ctl border border-line-strong bg-surface-2 px-4 text-xs font-medium text-ink hover:bg-surface-3 rs-focus press cursor-pointer"
             >
-              <RotateCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3.5 h-3.5" />
               <span>{retryLabel}</span>
             </button>
           </div>

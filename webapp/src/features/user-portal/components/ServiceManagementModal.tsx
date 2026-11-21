@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  RotateCw,
   Copy,
   Check,
   QrCode,
@@ -11,18 +10,22 @@ import {
   ExternalLink,
   AlertTriangle,
   ShieldAlert,
+  RotateCcw,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { Switch } from '@/shared/components/ui/Switch.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { api, ApiClientError } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
-import { openTelegramLinkAndMinimize } from '@/shared/lib/telegramNavigation.js';
+import {
+  openTelegramLinkAndMinimize,
+  minimizeOrCloseWebApp,
+} from '@/shared/lib/telegramNavigation.js';
 import type { UserConfigRecord } from '@/shared/types/userPortal.js';
 import {
   ServiceStatusDot,
@@ -51,7 +54,6 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   onNotify,
 }) => {
   const { t, locale } = useLanguage();
-  const { textPrimary, textSecondary } = useThemeTokens();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
   const queryClient = useQueryClient();
@@ -70,6 +72,12 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
       setAutoRenewOptimistic(Boolean(config.autoRenewEnabled));
     }
   }, [config]);
+
+  useEffect(() => {
+    if (!isOpen || !config) {
+      setConfirmAction(null);
+    }
+  }, [isOpen, config]);
 
   if (!isOpen || !config) return null;
 
@@ -116,10 +124,8 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
     }
   };
 
-  const handleToggleAutoRenew = async () => {
+  const handleToggleAutoRenew = async (nextValue: boolean) => {
     if (isTogglingAutoRenew) return;
-    const nextValue = !autoRenewOptimistic;
-    triggerHaptic('selection');
     setAutoRenewOptimistic(nextValue);
     setIsTogglingAutoRenew(true);
     try {
@@ -187,11 +193,13 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
 
   const handleOpenBotAction = (action: 'renew' | 'transfer' | 'delete') => {
     triggerHaptic('selection');
-    const cleanBot = (botUsername || '').replace(/^@/, '');
-    const url = cleanBot
-      ? `https://t.me/${cleanBot}?start=${action}_${config.id}`
-      : `https://t.me?start=${action}_${config.id}`;
+    const cleanBot = (botUsername || '').replace(/^@/, '').trim();
     onClose();
+    if (!cleanBot) {
+      minimizeOrCloseWebApp();
+      return;
+    }
+    const url = `https://t.me/${cleanBot}?start=${action}_${config.id}`;
     openTelegramLinkAndMinimize(url);
   };
 
@@ -202,9 +210,9 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
         onClose={onClose}
         maxWidth="lg"
         title={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <ServiceStatusDot status={config.panelStatus} />
-            <bdi dir="ltr" className="tnum text-sm sm:text-base font-bold truncate">
+            <bdi dir="ltr" className="font-mono text-sm sm:text-base font-semibold truncate">
               {config.configUsername}
             </bdi>
           </div>
@@ -213,9 +221,9 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
       >
         <div className="flex flex-col gap-4 text-start">
           {/* Status & Timing Overview */}
-          <div className="p-3.5 rounded-card border flex flex-col gap-2.5 bg-surface-2 border-line">
+          <div className="p-3.5 rounded-tile border flex flex-col gap-2.5 bg-surface-2 border-line">
             <div className="flex items-center justify-between gap-2">
-              <span className={`text-xs font-medium ${textSecondary}`}>
+              <span className="text-xs font-medium text-ink-soft">
                 {t('user.services.trafficUsed')}
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -227,6 +235,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <ServiceTrafficBar
               dataLimit={config.panelDataLimit}
               usedTraffic={config.panelUsedTraffic}
+              hideLabel
             />
 
             <div className="flex items-center justify-between text-[11px] text-ink-muted pt-2 border-t border-line gap-2 flex-wrap">
@@ -239,95 +248,79 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
 
           {/* Quick Actions: Copy Link, QR, Refresh Status */}
           <div className="flex flex-col gap-2">
-            <h4 className={`text-xs font-semibold px-1 m-0 ${textSecondary}`}>
+            <h4 className="text-xs font-semibold px-0.5 m-0 text-ink-soft">
               {t('user.services.quickActionsTitle')}
             </h4>
 
-            <div className="grid grid-cols-2 gap-2">
-              {config.subUrl && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleCopySub}
-                    className={`min-h-11 py-2 px-3 rounded-ctl font-medium text-xs flex items-center justify-center gap-2 press rs-focus cursor-pointer border ${
-                      isSubCopied
-                        ? 'bg-ok-soft text-ok-fg border-ok/30'
-                        : 'bg-surface-2 hover:bg-surface-3 text-ink border-line-strong'
-                    }`}
-                  >
-                    {isSubCopied ? (
-                      <>
-                        <Check className="w-4 h-4 shrink-0" />
-                        <span>{t('user.services.linkCopied')}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4 shrink-0" />
-                        <span>{t('user.services.copyLink')}</span>
-                      </>
-                    )}
-                  </button>
+            {config.subUrl && (
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  size="md"
+                  variant={isSubCopied ? 'success' : 'secondary'}
+                  onClick={() => void handleCopySub()}
+                  block
+                >
+                  {isSubCopied ? (
+                    <>
+                      <Check className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{t('user.services.linkCopied')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{t('user.services.copyLink')}</span>
+                    </>
+                  )}
+                </Button>
 
-                  <button
-                    type="button"
-                    onClick={handleOpenQr}
-                    className="min-h-11 py-2 px-3 rounded-ctl font-medium text-xs flex items-center justify-center gap-2 press rs-focus cursor-pointer border bg-brand-soft hover:bg-brand/20 text-brand-fg border-brand/25"
-                  >
-                    <QrCode className="w-4 h-4 shrink-0" />
-                    <span>{t('user.services.showQr')}</span>
-                  </button>
-                </>
-              )}
-            </div>
+                <Button type="button" size="md" variant="tonal" onClick={handleOpenQr} block>
+                  <QrCode className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{t('user.services.showQr')}</span>
+                </Button>
+              </div>
+            )}
 
-            {/* Refresh Live Status Button */}
-            <button
+            <Button
               type="button"
-              onClick={handleRefreshStats}
+              size="md"
+              variant="secondary"
+              onClick={() => void handleRefreshStats()}
               disabled={isRefreshing}
-              className="w-full min-h-11 py-2.5 px-3 rounded-ctl font-medium text-xs flex items-center justify-center gap-2 press rs-focus cursor-pointer border bg-surface-2 hover:bg-surface-3 text-ink border-line-strong disabled:opacity-50"
+              block
             >
-              <RotateCw className={`w-4 h-4 text-brand-fg ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-4 h-4 text-brand-fg shrink-0 ${isRefreshing ? 'animate-spin' : ''}`}
+              />
               <span>
                 {isRefreshing ? t('user.services.refreshing') : t('user.services.refresh')}
               </span>
-            </button>
+            </Button>
           </div>
 
           {/* Service Controls: Auto-Renew Toggle, Status Toggle, Revoke Link */}
           <div className="flex flex-col gap-2">
-            <h4 className={`text-xs font-semibold px-1 m-0 ${textSecondary}`}>
+            <h4 className="text-xs font-semibold px-0.5 m-0 text-ink-soft">
               {t('user.services.controlsTitle')}
             </h4>
 
             {/* Auto-Renew Switch Card */}
             <div className="p-3.5 rounded-tile border flex items-center justify-between gap-3 bg-surface-2 border-line">
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className={`text-xs font-semibold ${textPrimary}`}>
+                <span className="text-xs font-semibold text-ink">
                   {t('user.services.autoRenewToggle')}
                 </span>
-                <span className={`text-[11px] leading-relaxed ${textSecondary}`}>
+                <span className="text-[11px] leading-relaxed text-ink-muted">
                   {t('user.services.autoRenewHint')}
                 </span>
               </div>
 
-              <button
-                type="button"
-                role="switch"
-                aria-checked={autoRenewOptimistic}
-                onClick={handleToggleAutoRenew}
+              <Switch
+                checked={autoRenewOptimistic}
+                onChange={(checked) => void handleToggleAutoRenew(checked)}
                 disabled={isTogglingAutoRenew}
-                aria-label={t('user.services.autoRenewToggle')}
-                className={`w-11 h-6 p-0.5 rounded-full border transition-colors duration-150 relative shrink-0 cursor-pointer rs-focus ${
-                  autoRenewOptimistic ? 'bg-ok border-ok' : 'bg-surface-3 border-line-strong'
-                } disabled:opacity-50`}
-              >
-                <div
-                  className={`w-[18px] h-[18px] rounded-full bg-white shadow-[var(--shadow-card)] transform transition-transform duration-150 ${
-                    autoRenewOptimistic ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+                ariaLabel={t('user.services.autoRenewToggle')}
+              />
             </div>
 
             {/* Disable / Enable Button */}
@@ -337,17 +330,21 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 triggerHaptic('warning');
                 setConfirmAction(isDisabled ? 'enable' : 'disable');
               }}
-              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-between transition-all active:scale-95 cursor-pointer border ${isDisabled ? 'bg-ok/10 hover:bg-ok/20 text-ok border-ok/30' : 'bg-warn/10 hover:bg-warn/20 text-warn border-warn/30'}`}
+              className={`w-full min-h-11 py-2.5 px-3.5 rounded-tile font-medium text-xs flex items-center justify-between press rs-focus cursor-pointer border transition-colors ${
+                isDisabled
+                  ? 'bg-ok-soft hover:bg-ok/15 text-ok-fg border-ok/25'
+                  : 'bg-warn-soft hover:bg-warn/15 text-warn-fg border-warn/30'
+              }`}
             >
               <div className="flex items-center gap-2">
-                <Power className="w-4 h-4" />
+                <Power className="w-4 h-4 shrink-0" />
                 <span>
                   {isDisabled
                     ? t('user.services.enableService')
                     : t('user.services.disableService')}
                 </span>
               </div>
-              <span className="text-[11px] opacity-75">
+              <span className="text-[11px] opacity-80">
                 {isDisabled ? t('user.services.statusDisabled') : t('user.services.statusActive')}
               </span>
             </button>
@@ -359,19 +356,19 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 triggerHaptic('warning');
                 setConfirmAction('revoke');
               }}
-              className={`w-full min-h-[44px] py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-between transition-all active:scale-95 cursor-pointer border bg-danger/10 hover:bg-danger/20 text-danger border-danger/30`}
+              className="w-full min-h-11 py-2.5 px-3.5 rounded-tile font-medium text-xs flex items-center justify-between press rs-focus cursor-pointer border transition-colors bg-danger-soft hover:bg-danger/15 text-danger-fg border-danger/25"
             >
               <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4" />
+                <RotateCcw className="w-4 h-4 shrink-0" />
                 <span>{t('user.services.revokeLink')}</span>
               </div>
-              <AlertTriangle className="w-3.5 h-3.5 opacity-70" />
+              <AlertTriangle className="w-3.5 h-3.5 opacity-75 shrink-0" />
             </button>
           </div>
 
           {/* Bot Hand-off Actions */}
           <div className="flex flex-col gap-2 pt-3 border-t border-line">
-            <h4 className={`text-xs font-semibold px-1 m-0 ${textSecondary}`}>
+            <h4 className="text-xs font-semibold px-0.5 m-0 text-ink-soft">
               {t('user.services.botActionsTitle')}
             </h4>
 
@@ -379,15 +376,15 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('renew')}
-              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/20 text-ink border-brand/25"
+              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/15 text-ink border-brand/25 transition-colors"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-ctl bg-brand/15 text-brand-fg flex items-center justify-center shrink-0">
-                  <RotateCw className="w-4 h-4" />
-                </div>
+                <IconTile tone="brand" size="sm">
+                  <RefreshCw />
+                </IconTile>
                 <div className="flex flex-col text-start min-w-0">
                   <span className="text-xs font-semibold">{t('user.services.renewService')}</span>
-                  <span className={`text-[11px] truncate ${textSecondary}`}>
+                  <span className="text-[11px] truncate text-ink-muted">
                     {t('user.services.renewHint')}
                   </span>
                 </div>
@@ -399,17 +396,17 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('transfer')}
-              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between press rs-focus cursor-pointer bg-surface-2 hover:bg-surface-3 text-ink border-line"
+              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-surface-2 hover:bg-surface-3 text-ink border-line transition-colors"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-ctl bg-info-soft text-info-fg flex items-center justify-center shrink-0">
-                  <Send className="w-4 h-4" />
-                </div>
+                <IconTile tone="info" size="sm">
+                  <Send />
+                </IconTile>
                 <div className="flex flex-col text-start min-w-0">
                   <span className="text-xs font-semibold">
                     {t('user.services.transferService')}
                   </span>
-                  <span className={`text-[11px] truncate ${textSecondary}`}>
+                  <span className="text-[11px] truncate text-ink-muted">
                     {t('user.services.transferHint')}
                   </span>
                 </div>
@@ -421,15 +418,15 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('delete')}
-              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between press rs-focus cursor-pointer bg-danger-soft hover:bg-danger/20 text-danger-fg border-danger/25"
+              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-danger-soft hover:bg-danger/15 text-danger-fg border-danger/25 transition-colors"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-ctl bg-danger/15 text-danger-fg flex items-center justify-center shrink-0">
-                  <Trash2 className="w-4 h-4" />
-                </div>
+                <IconTile tone="danger" size="sm">
+                  <Trash2 />
+                </IconTile>
                 <div className="flex flex-col text-start min-w-0">
                   <span className="text-xs font-semibold">{t('user.services.deleteService')}</span>
-                  <span className={`text-[11px] truncate ${textSecondary}`}>
+                  <span className="text-[11px] truncate text-ink-muted">
                     {t('user.services.deleteHint')}
                   </span>
                 </div>
@@ -478,16 +475,12 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
 
               <Button
                 type="button"
-                variant={
-                  confirmAction === 'revoke'
-                    ? 'danger'
-                    : confirmAction === 'disable'
-                      ? 'danger'
-                      : 'success'
-                }
+                variant={confirmAction === 'enable' ? 'success' : 'danger'}
                 className="flex-1"
-                onClick={
-                  confirmAction === 'revoke' ? handleExecuteRevoke : handleExecuteStatusToggle
+                onClick={() =>
+                  void (confirmAction === 'revoke'
+                    ? handleExecuteRevoke()
+                    : handleExecuteStatusToggle())
                 }
                 disabled={isTogglingStatus || isRevoking}
                 loading={isTogglingStatus || isRevoking}
@@ -503,7 +496,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             </div>
           }
         >
-          <p className={`text-xs leading-relaxed m-0 ${textSecondary}`}>
+          <p className="text-xs leading-relaxed m-0 text-ink-soft">
             {confirmAction === 'revoke'
               ? t('user.services.revokeWarning')
               : confirmAction === 'disable'

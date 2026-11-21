@@ -23,13 +23,11 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
 
   const currency = settings?.currency || t('common.currency');
   const referralCode = profile?.referralCode || '';
-  const botUsername = settings?.botUsername || '';
+  const cleanBotUsername = (settings?.botUsername || '').replace(/^@/, '').trim();
   const inviteLink =
-    referralCode && botUsername
-      ? `https://t.me/${botUsername}?start=${referralCode}`
-      : referralCode
-        ? `https://t.me?start=${referralCode}`
-        : '';
+    referralCode && cleanBotUsername
+      ? `https://t.me/${cleanBotUsername}?start=${referralCode}`
+      : '';
 
   const handleCopyLink = async () => {
     if (!inviteLink) return;
@@ -45,7 +43,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
     triggerHaptic('light');
     const ok = await copy(referralCode, 'referral-code');
     if (ok) {
-      onNotify(t('user.referral.linkCopied'));
+      onNotify(t('user.referral.codeCopied'));
     }
   };
 
@@ -110,7 +108,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           <span className="text-xs font-medium text-ink-soft">{t('user.referral.yourCode')}</span>
           <button
             type="button"
-            onClick={handleCopyCode}
+            onClick={() => void handleCopyCode()}
             disabled={!referralCode}
             className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3 flex items-center justify-between gap-2.5 press rs-focus cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-start"
           >
@@ -146,7 +144,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           <span className="text-xs font-medium text-ink-soft">{t('user.referral.yourLink')}</span>
           <button
             type="button"
-            onClick={handleCopyLink}
+            onClick={() => void handleCopyLink()}
             disabled={!inviteLink}
             className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3 flex items-center justify-between gap-2.5 press rs-focus cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-start"
           >
@@ -182,7 +180,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           <Button
             size="md"
             variant={isCopied('referral-link') ? 'success' : 'secondary'}
-            onClick={handleCopyLink}
+            onClick={() => void handleCopyLink()}
             disabled={!inviteLink}
             block
           >

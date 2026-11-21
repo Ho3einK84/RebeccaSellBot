@@ -176,6 +176,9 @@ export const api = {
   setAuthToken,
   getAuthToken,
 
+  getBotInfo: (): Promise<{ username?: string }> =>
+    request<{ username?: string }>('/api/auth/bot-info'),
+
   validateTelegramAuth: async (initData: string): Promise<AuthResponse> => {
     const res = await request<AuthResponse>('/api/auth/telegram-validate', {
       method: 'POST',

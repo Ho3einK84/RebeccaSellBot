@@ -98,9 +98,10 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
           const cardContent = (
             <Card
               padding="md"
-              interactive={isLive}
-              className={`h-full flex flex-col justify-between gap-3.5 text-start ${
-                isLive ? 'border-brand/40 hover:border-brand' : 'hover:border-line-strong'
+              className={`h-full flex flex-col justify-between gap-3.5 text-start transition-colors ${
+                isLive
+                  ? 'border-brand/35 group-hover:border-brand group-hover:bg-surface-2'
+                  : 'hover:border-line-strong'
               }`}
             >
               <div className="space-y-3">
@@ -157,7 +158,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
                 key={mod.id}
                 type="button"
                 onClick={() => onSwitchTab(mod.targetTab!)}
-                className="text-start w-full h-full rounded-card rs-focus"
+                className="group press rs-focus cursor-pointer text-start w-full h-full rounded-card"
               >
                 {cardContent}
               </button>

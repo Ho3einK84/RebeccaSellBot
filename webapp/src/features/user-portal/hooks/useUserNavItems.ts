@@ -5,7 +5,7 @@ import type { UserTabType } from '@/shared/types/userPortal.js';
 
 /**
  * Single source of truth for the user-portal tab list — shared by the mobile
- * `BetaBottomNav` and the desktop `DesktopNav` so the two rails can never drift.
+ * `UserBottomNav` and the desktop `DesktopNav` so the two rails can never drift.
  */
 export function useUserNavItems(options?: {
   configsCount?: number;

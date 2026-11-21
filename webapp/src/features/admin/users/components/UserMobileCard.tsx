@@ -1,8 +1,7 @@
 import React from 'react';
-import { Copy, Wallet, Eye, RotateCw } from 'lucide-react';
+import { Copy, Check, Wallet, Eye, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
@@ -28,18 +27,17 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatMoney, formatNumber, formatId, sanitizeDisplayName } = useFormatters();
-  const { textPrimary, textMuted } = useThemeTokens();
 
   const { displayName } = sanitizeDisplayName(user.firstName, user.lastName, t('user.guestUser'));
 
   return (
-    <Card padding="md" className="space-y-3 hover:border-line-strong text-start">
+    <Card padding="md" className="space-y-3 hover:border-line-strong transition-colors text-start">
       <div className="flex justify-between items-start gap-2">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <Avatar name={user.firstName} username={user.username} size="md" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`font-semibold text-sm truncate ${textPrimary}`}>{displayName}</span>
+              <span className="font-semibold text-sm truncate text-ink">{displayName}</span>
               {user.isBanned && (
                 <Badge variant="error" size="xs" className="shrink-0">
                   {t('admin.users.bannedBadge')}
@@ -52,7 +50,7 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
                   @{user.username}
                 </bdi>
               ) : (
-                <span className={textMuted}>{t('admin.users.noUsername')}</span>
+                <span className="text-ink-muted">{t('admin.users.noUsername')}</span>
               )}
             </div>
           </div>
@@ -68,9 +66,9 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
             #{formatId(user.telegramId)}
           </bdi>
           {isCopied ? (
-            <span className="text-[10px] text-ok-fg font-medium">{t('common.copied')}</span>
+            <Check className="w-3 h-3 text-ok-fg shrink-0" />
           ) : (
-            <Copy className={`w-3 h-3 ${textMuted}`} />
+            <Copy className="w-3 h-3 text-ink-muted shrink-0" />
           )}
         </button>
       </div>
@@ -81,7 +79,7 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
           <bdi dir="ltr" className="font-semibold text-sm tnum text-ok-fg">
             {formatMoney(user.balance)}
           </bdi>
-          <span className={`text-xs ${textMuted}`}>{t('common.currency')}</span>
+          <span className="text-xs text-ink-muted">{t('common.currency')}</span>
         </div>
 
         <div>
@@ -108,9 +106,9 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
           onClick={() => onInspect(user.telegramId)}
         >
           {inspecting ? (
-            <RotateCw className="w-3.5 h-3.5 animate-spin text-brand-fg" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-fg" />
           ) : (
-            <Eye className={`w-3.5 h-3.5 ${textMuted}`} />
+            <Eye className="w-3.5 h-3.5 text-ink-muted" />
           )}
           <span>{t('admin.users.btnDetails')}</span>
         </Button>

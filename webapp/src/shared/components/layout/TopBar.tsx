@@ -9,13 +9,13 @@ export interface TopBarProps {
   subtitle?: ReactNode;
   /** Utility icon buttons rendered on the trailing edge. */
   actions?: ReactNode;
-  /** Identity strip rendered under a clean hairline divider. */
+  /** Identity or mode strip rendered under a clean hairline divider. */
   footer?: ReactNode;
   className?: string;
 }
 
 /**
- * Unified top chrome shared by Coming-Soon, User Portal, and Admin Panel.
+ * Unified top chrome shared by User Portal and Admin Console.
  * Uses flat matte surface depth and crisp 1px structural borders.
  */
 export const TopBar: React.FC<TopBarProps> = ({
@@ -33,7 +33,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     <div className="flex items-center justify-between gap-2.5">
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
         {icon}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 text-start">
           <div className="flex items-center gap-2 min-w-0">
             <h1 className="truncate font-semibold text-sm sm:text-base text-ink leading-[1.4] m-0">
               {title}

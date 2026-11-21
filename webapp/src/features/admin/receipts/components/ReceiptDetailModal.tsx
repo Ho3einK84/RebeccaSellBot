@@ -265,11 +265,10 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
         {receipt.photoFileId && onViewPhoto && (
           <Button
             type="button"
-            variant="secondary"
+            variant="tonal"
             size="md"
             block
             onClick={() => onViewPhoto(receipt)}
-            className="!bg-brand-soft !border-brand/30 !text-brand-fg hover:!bg-brand/15"
           >
             <ImageIcon className="w-4 h-4" />
             <span>{t('admin.receipts.viewPhoto')}</span>

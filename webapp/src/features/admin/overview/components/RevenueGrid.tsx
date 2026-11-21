@@ -21,7 +21,7 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
         value={formatMoney(stats.weeklyRevenue)}
         unit={t('common.currency')}
         hint={t('admin.overview.weeklyRevenueSub')}
-        icon={<CalendarDays className="h-4.5 w-4.5" />}
+        icon={<CalendarDays className="h-4 w-4" />}
         tone="ok"
         index={0}
       />
@@ -30,7 +30,7 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
         value={formatMoney(stats.monthlyRevenue)}
         unit={t('common.currency')}
         hint={t('admin.overview.monthlyRevenueSub')}
-        icon={<CalendarRange className="h-4.5 w-4.5" />}
+        icon={<CalendarRange className="h-4 w-4" />}
         tone="ok"
         index={1}
       />
@@ -38,7 +38,7 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
         label={t('admin.overview.activeSubs')}
         value={formatNumber(stats.activeSubscriptions)}
         hint={t('admin.overview.activeSubsSub')}
-        icon={<CheckCircle2 className="h-4.5 w-4.5" />}
+        icon={<CheckCircle2 className="h-4 w-4" />}
         tone="ok"
         index={2}
       />
@@ -46,7 +46,7 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
         label={t('admin.overview.inactiveSubs')}
         value={formatNumber(stats.inactiveSubscriptions)}
         hint={t('admin.overview.inactiveSubsSub')}
-        icon={<XCircle className="h-4.5 w-4.5" />}
+        icon={<XCircle className="h-4 w-4" />}
         tone="neutral"
         index={3}
       />
@@ -55,7 +55,7 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
         value={formatMoney(stats.totalReferralBonus)}
         unit={t('common.currency')}
         hint={t('admin.overview.referralBonusSub')}
-        icon={<Gift className="h-4.5 w-4.5" />}
+        icon={<Gift className="h-4 w-4" />}
         tone="warn"
         index={4}
       />
@@ -64,7 +64,7 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
         value={formatMoney(stats.totalCashback)}
         unit={t('common.currency')}
         hint={t('admin.overview.cashbackSub')}
-        icon={<Coins className="h-4.5 w-4.5" />}
+        icon={<Coins className="h-4 w-4" />}
         tone="info"
         index={5}
       />

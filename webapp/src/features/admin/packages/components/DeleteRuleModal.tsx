@@ -1,9 +1,10 @@
 import React from 'react';
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 
 export type PendingRuleDelete =
   { kind: 'tier'; id: string } | { kind: 'override'; id: string } | null;
@@ -22,7 +23,6 @@ export const DeleteRuleModal: React.FC<DeleteRuleModalProps> = ({
   onConfirm,
 }) => {
   const { t } = useLanguage();
-  useTelegramBackButton(onClose, target !== null);
 
   if (!target) return null;
 
@@ -48,12 +48,17 @@ export const DeleteRuleModal: React.FC<DeleteRuleModalProps> = ({
     <Modal
       isOpen={target !== null}
       onClose={onClose}
+      closeOnBackdrop={!isDeleting}
       maxWidth="sm"
-      icon={<Trash2 className="w-5 h-5 text-danger" />}
+      icon={
+        <IconTile tone="danger" size="sm">
+          <Trash2 />
+        </IconTile>
+      }
       title={title}
       footer={
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isDeleting}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={isDeleting}>
             {t('admin.packages.actions.cancel')}
           </Button>
           <Button
@@ -70,11 +75,8 @@ export const DeleteRuleModal: React.FC<DeleteRuleModalProps> = ({
       }
     >
       <div className="space-y-3">
-        <p className="text-sm font-medium text-ink">{confirmText}</p>
-        <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{t('admin.packages.deleteModal.warning')}</span>
-        </div>
+        <p className="text-sm font-medium text-ink m-0">{confirmText}</p>
+        <AlertBanner tone="warn">{t('admin.packages.deleteModal.warning')}</AlertBanner>
       </div>
     </Modal>
   );

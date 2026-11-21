@@ -15,6 +15,7 @@ import {
 import { Card } from '@/shared/components/ui/Card.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { Switch } from '@/shared/components/ui/Switch.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import type {
@@ -77,7 +78,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
   return (
     <Card
       padding="md"
-      className={`transition-all ${
+      className={`transition-colors text-start ${
         pkg.enabled ? 'hover:border-line-strong' : 'opacity-80 bg-surface-2/60 border-line'
       }`}
     >
@@ -88,7 +89,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
             <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-surface-3 text-ink-muted tnum">
               #{formatNumber(index + 1)}
             </span>
-            <h3 className="text-sm font-bold text-ink truncate">{primary}</h3>
+            <h3 className="text-sm font-bold text-ink truncate m-0">{primary}</h3>
             <Badge variant={pkg.enabled ? 'success' : 'neutral'} size="xs" dot>
               {pkg.enabled
                 ? t('admin.packages.card.activeBadge')
@@ -96,7 +97,9 @@ export const PackageCard: React.FC<PackageCardProps> = ({
             </Badge>
           </div>
 
-          {secondary && <p className="text-[11px] text-ink-muted mt-0.5 truncate">{secondary}</p>}
+          {secondary && (
+            <p className="text-[11px] text-ink-muted mt-0.5 truncate m-0">{secondary}</p>
+          )}
 
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <span
@@ -120,18 +123,16 @@ export const PackageCard: React.FC<PackageCardProps> = ({
           </div>
         </div>
 
-        {/* Inline Active Toggle */}
-        <input
-          type="checkbox"
+        <Switch
           checked={pkg.enabled}
           disabled={isToggling}
           onChange={() => onToggle(pkg)}
-          aria-label={
+          ariaLabel={
             pkg.enabled
               ? t('admin.packages.actions.deactivate')
               : t('admin.packages.actions.activate')
           }
-          className="rs-switch shrink-0 mt-0.5"
+          className="mt-0.5"
         />
       </div>
 
@@ -139,7 +140,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
       <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-line">
         <div className="bg-surface-2 rounded-ctl px-2.5 py-2 border border-line/70 min-w-0">
           <div className="flex items-center gap-1 text-[11px] text-ink-muted">
-            <HardDrive className="w-3 h-3 shrink-0 text-brand" />
+            <HardDrive className="w-3 h-3 shrink-0 text-brand-fg" />
             <span className="truncate">{t('admin.packages.card.gbUnit')}</span>
           </div>
           <div className="text-sm font-bold text-ink tnum mt-0.5">{formatNumber(pkg.gbAmount)}</div>
@@ -147,7 +148,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
 
         <div className="bg-surface-2 rounded-ctl px-2.5 py-2 border border-line/70 min-w-0">
           <div className="flex items-center gap-1 text-[11px] text-ink-muted">
-            <Clock className="w-3 h-3 shrink-0 text-info" />
+            <Clock className="w-3 h-3 shrink-0 text-info-fg" />
             <span className="truncate">{t('admin.packages.card.daysUnit')}</span>
           </div>
           <div className="text-sm font-bold text-ink tnum mt-0.5">
@@ -157,7 +158,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
 
         <div className="bg-surface-2 rounded-ctl px-2.5 py-2 border border-line/70 min-w-0">
           <div className="flex items-center gap-1 text-[11px] text-ink-muted">
-            <Tag className="w-3 h-3 shrink-0 text-ok" />
+            <Tag className="w-3 h-3 shrink-0 text-ok-fg" />
             <span className="truncate">{t('admin.packages.card.tomanUnit')}</span>
           </div>
           <div className="text-sm font-bold text-ink tnum mt-0.5 truncate">
@@ -173,7 +174,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
       <div className="mt-3 pt-2.5 border-t border-line flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 min-w-0 text-xs">
           {hasTargetWarning ? (
-            <AlertTriangle className="w-3.5 h-3.5 text-warn shrink-0" />
+            <AlertTriangle className="w-3.5 h-3.5 text-warn-fg shrink-0" />
           ) : (
             <Server className="w-3.5 h-3.5 text-ink-muted shrink-0" />
           )}
@@ -183,7 +184,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
               {t('admin.packages.card.panelSystemDefault')}
             </span>
           ) : !targetPanel ? (
-            <span className="text-warn font-medium truncate">
+            <span className="text-warn-fg font-medium truncate">
               {t('admin.packages.card.panelMissing', { id: pkg.panelId })}
             </span>
           ) : (

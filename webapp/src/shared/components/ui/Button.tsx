@@ -2,7 +2,8 @@ import React, { type ButtonHTMLAttributes } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
+export type ButtonVariant =
+  'primary' | 'tonal' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -27,8 +28,9 @@ const sizeClasses: Record<ButtonSize, string> = {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: 'bg-brand hover:bg-brand-hover text-brand-ink border border-transparent',
+  tonal: 'bg-brand-soft hover:bg-brand/20 text-brand-fg border border-brand/25',
   secondary: 'bg-surface-2 hover:bg-surface-3 border border-line-strong text-ink',
-  outline: 'bg-transparent hover:bg-surface-2 border border-line-strong text-ink',
+  outline: 'bg-surface hover:bg-surface-2 border border-line-strong text-ink',
   ghost: 'bg-transparent hover:bg-surface-2 border border-transparent text-ink-soft hover:text-ink',
   danger: 'bg-danger-soft hover:bg-danger/20 border border-danger/25 text-danger-fg',
   success: 'bg-ok hover:bg-ok/90 border border-transparent text-white',

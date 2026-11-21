@@ -4,14 +4,14 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useUserNavItems } from '../hooks/useUserNavItems.js';
 import type { UserTabType } from '@/shared/types/userPortal.js';
 
-interface BetaBottomNavProps {
+interface UserBottomNavProps {
   activeTab: UserTabType;
   onSelectTab: (tab: UserTabType) => void;
   configsCount?: number;
   hasPendingReceipt?: boolean;
 }
 
-export const BetaBottomNav: React.FC<BetaBottomNavProps> = ({
+export const UserBottomNav: React.FC<UserBottomNavProps> = ({
   activeTab,
   onSelectTab,
   configsCount = 0,

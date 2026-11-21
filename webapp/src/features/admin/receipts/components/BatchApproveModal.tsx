@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Check, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Check } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -7,6 +7,7 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface BatchApproveModalProps {
@@ -70,15 +71,12 @@ export const BatchApproveModal: React.FC<BatchApproveModalProps> = ({
       }
     >
       <div className="space-y-4">
-        <div className="p-3.5 rounded-tile border flex items-start gap-2.5 text-xs bg-warn-soft border-warn/25 text-warn-fg">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <p className="m-0 leading-relaxed">
-            {t('admin.receipts.batchApproveConfirmBody', {
-              count: formatNumber(receipts.length),
-              amount: `${formatMoney(totalAmount)} ${t('common.currency')}`,
-            })}
-          </p>
-        </div>
+        <AlertBanner tone="warn">
+          {t('admin.receipts.batchApproveConfirmBody', {
+            count: formatNumber(receipts.length),
+            amount: `${formatMoney(totalAmount)} ${t('common.currency')}`,
+          })}
+        </AlertBanner>
 
         <Card subCard padding="sm" className="max-h-52 overflow-y-auto space-y-1.5 text-xs">
           {receipts.map((rec) => (

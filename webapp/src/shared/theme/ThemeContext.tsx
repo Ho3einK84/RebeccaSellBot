@@ -13,6 +13,17 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 
 const STORAGE_KEY = 'rsbot_miniapp_theme';
 
+const THEME_CHROME_COLORS = {
+  dark: {
+    canvas: '#0a0d12',
+    surface: '#12161f',
+  },
+  light: {
+    canvas: '#f5f6f8',
+    surface: '#ffffff',
+  },
+} as const;
+
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
     // 1. Check local storage
@@ -22,26 +33,25 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return saved;
       }
     } catch {
-      // ignore
+      // ignore storage errors
     }
 
     // 2. Check Telegram WebApp colorScheme
-    const tgScheme = window.Telegram?.WebApp?.colorScheme;
-    if (tgScheme === 'dark' || tgScheme === 'light') {
-      return tgScheme;
-    }
+    if (typeof window !== 'undefined') {
+      const tgScheme = window.Telegram?.WebApp?.colorScheme;
+      if (tgScheme === 'dark' || tgScheme === 'light') {
+        return tgScheme;
+      }
 
-    // 3. Fallback to system preferences, default to dark
-    if (
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-color-scheme: light)').matches
-    ) {
-      return 'light';
+      // 3. Fallback to system preferences, default to dark
+      if (window.matchMedia?.('(prefers-color-scheme: light)').matches) {
+        return 'light';
+      }
     }
     return 'dark';
   });
 
-  // Apply theme to document and sync with Telegram
+  // Apply theme to document and sync with Telegram native chrome
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
@@ -54,20 +64,20 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       root.classList.remove('dark');
     }
 
-    // Update Telegram WebApp header/background colors if supported
     const tg = window.Telegram?.WebApp;
     if (tg) {
-      const bgColor = theme === 'dark' ? '#0b0d11' : '#f4f5f7';
-      if (tg.setHeaderColor) {
-        tg.setHeaderColor(bgColor);
-      }
-      if (tg.setBackgroundColor) {
-        tg.setBackgroundColor(bgColor);
+      const colors = THEME_CHROME_COLORS[theme];
+      try {
+        tg.setHeaderColor?.(colors.canvas);
+        tg.setBackgroundColor?.(colors.canvas);
+        tg.setBottomBarColor?.(colors.surface);
+      } catch {
+        // Older Telegram clients may not support hex colors on all setters
       }
     }
   }, [theme]);
 
-  // Listen to Telegram themeChanged events
+  // Listen to Telegram themeChanged events when user has no manual override
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (!tg?.onEvent) return;
@@ -82,7 +92,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           }
         }
       } catch {
-        // ignore
+        // ignore storage errors
       }
     };
 
@@ -97,7 +107,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       localStorage.setItem(STORAGE_KEY, mode);
     } catch {
-      // ignore
+      // ignore storage errors
     }
     window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
   };

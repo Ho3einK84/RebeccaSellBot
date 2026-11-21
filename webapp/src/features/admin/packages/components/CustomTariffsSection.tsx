@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Info,
@@ -15,11 +14,14 @@ import {
 import { Card } from '@/shared/components/ui/Card.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
-import { Input } from '@/shared/components/ui/Input.js';
+import { Input, Select } from '@/shared/components/ui/Input.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
+import { Switch } from '@/shared/components/ui/Switch.js';
+import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/SegmentedControl.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import type {
   AdminCustomPricingResponse,
   AdminPackagePoliciesDto,
@@ -85,7 +87,6 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
 }) => {
   const { t } = useLanguage();
   const { formatNumber, formatMoney } = useFormatters();
-  const { inputClass } = useThemeTokens();
 
   const { settings, tiers, overrides, targets, bounds } = customPricing;
 
@@ -136,6 +137,14 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
   const targetsById = useMemo(
     () => new Map(targets.map((panel) => [panel.panelId, panel])),
     [targets]
+  );
+
+  const displayModeOptions: SegmentedOption<'specs' | 'name'>[] = useMemo(
+    () => [
+      { id: 'specs', label: t('admin.packages.policies.displayModeSpecs'), tone: 'brand' },
+      { id: 'name', label: t('admin.packages.policies.displayModeName'), tone: 'brand' },
+    ],
+    [t]
   );
 
   const selectedPanel = customForm.panelId ? targetsById.get(customForm.panelId) : undefined;
@@ -244,14 +253,16 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
   return (
     <div className="space-y-4">
       {/* 1. Custom Volume Settings */}
-      <Card padding="md" className="space-y-4">
+      <Card padding="md" className="space-y-4 text-start">
         <div>
-          <h3 className="text-sm font-bold text-ink">{t('admin.packages.custom.title')}</h3>
-          <p className="text-[11px] text-ink-muted mt-0.5">{t('admin.packages.custom.subtitle')}</p>
+          <h3 className="text-sm font-bold text-ink m-0">{t('admin.packages.custom.title')}</h3>
+          <p className="text-[11px] text-ink-muted mt-0.5 m-0">
+            {t('admin.packages.custom.subtitle')}
+          </p>
         </div>
 
-        <form onSubmit={handleCustomSubmit} className="space-y-3.5">
-          <label className="flex items-center justify-between gap-3 p-3 rounded-ctl bg-surface-2 border border-line cursor-pointer">
+        <form onSubmit={(e) => void handleCustomSubmit(e)} className="space-y-3.5">
+          <div className="flex items-center justify-between gap-3 p-3 rounded-tile bg-surface-2 border border-line">
             <div className="min-w-0">
               <div className="text-xs font-semibold text-ink">
                 {t('admin.packages.custom.enabledLabel')}
@@ -260,13 +271,12 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                 {t('admin.packages.custom.enabledHint')}
               </div>
             </div>
-            <input
-              type="checkbox"
+            <Switch
               checked={customForm.enabled}
-              onChange={(e) => setCustomForm((prev) => ({ ...prev, enabled: e.target.checked }))}
-              className="rs-switch shrink-0"
+              onChange={(checked) => setCustomForm((prev) => ({ ...prev, enabled: checked }))}
+              ariaLabel={t('admin.packages.custom.enabledLabel')}
             />
-          </label>
+          </div>
 
           {/* Active Custom Volume Rate & Bounds */}
           <div>
@@ -285,7 +295,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
               onChange={(e) => setCustomForm((prev) => ({ ...prev, pricePerGb: e.target.value }))}
             />
             {customError('pricePerGb') && (
-              <p className="text-xs text-danger mt-1">{customError('pricePerGb')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{customError('pricePerGb')}</p>
             )}
           </div>
 
@@ -346,15 +356,17 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   setCustomForm((prev) => ({ ...prev, defaultDays: e.target.value }))
                 }
               />
-              <p className="text-[11px] text-ink-muted mt-1 leading-relaxed">
+              <p className="text-[11px] text-ink-muted mt-1 leading-relaxed m-0">
                 {t('admin.packages.custom.defaultDaysHint')}
               </p>
             </div>
           </div>
 
-          {customError('minGb') && <p className="text-xs text-danger">{customError('minGb')}</p>}
+          {customError('minGb') && (
+            <p className="text-xs text-danger-fg m-0">{customError('minGb')}</p>
+          )}
           {customError('defaultDays') && (
-            <p className="text-xs text-danger">{customError('defaultDays')}</p>
+            <p className="text-xs text-danger-fg m-0">{customError('defaultDays')}</p>
           )}
 
           {/* Price per day — dashed & dimmed because buyers cannot select custom days yet */}
@@ -376,9 +388,9 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
               onChange={(e) => setCustomForm((prev) => ({ ...prev, pricePerDay: e.target.value }))}
             />
             {customError('pricePerDay') && (
-              <p className="text-xs text-danger mt-1">{customError('pricePerDay')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{customError('pricePerDay')}</p>
             )}
-            <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed">
+            <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed m-0">
               <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
               <span>
                 {t('admin.packages.custom.pricePerDayExplain', {
@@ -390,23 +402,14 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
 
           {(livePerGb === 0 && livePerDay === 0) ||
           settings.warnings.includes('ZERO_BASE_RATES') ? (
-            <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{t('admin.packages.custom.zeroBothRatesWarning')}</span>
-            </div>
+            <AlertBanner tone="warn">{t('admin.packages.custom.zeroBothRatesWarning')}</AlertBanner>
           ) : livePerGb === 0 ? (
-            <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{t('admin.packages.custom.zeroPriceWarning')}</span>
-            </div>
+            <AlertBanner tone="warn">{t('admin.packages.custom.zeroPriceWarning')}</AlertBanner>
           ) : null}
 
           {((liveCustomDays !== null && liveCustomDays > WEB_MAX_DURATION_DAYS) ||
             settings.warnings.includes('DEFAULT_DAYS_EXCEEDS_WEB_LIMIT')) && (
-            <div className="p-2.5 rounded-ctl bg-warn-soft border border-warn/30 text-warn text-xs flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{t('admin.packages.custom.webDaysWarning')}</span>
-            </div>
+            <AlertBanner tone="warn">{t('admin.packages.custom.webDaysWarning')}</AlertBanner>
           )}
 
           {/* Custom Target Panel & Service */}
@@ -418,11 +421,10 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
               >
                 {t('admin.packages.custom.targetPanelLabel')}
               </label>
-              <select
+              <Select
                 id="custom-panel-select"
                 value={customForm.panelId}
                 onChange={(e) => handlePanelChange(e.target.value)}
-                className={`${inputClass} w-full rounded-ctl px-3 py-2 text-xs`}
               >
                 <option value="">{t('admin.packages.form.panelDefaultOption')}</option>
                 {targets.map((panel) => (
@@ -440,7 +442,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                     {t('admin.packages.card.panelMissing', { id: customForm.panelId })}
                   </option>
                 )}
-              </select>
+              </Select>
             </div>
 
             <div>
@@ -450,12 +452,11 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
               >
                 {t('admin.packages.custom.targetServiceLabel')}
               </label>
-              <select
+              <Select
                 id="custom-service-select"
                 value={customForm.serviceId}
                 disabled={!customForm.panelId}
                 onChange={(e) => setCustomForm((prev) => ({ ...prev, serviceId: e.target.value }))}
-                className={`${inputClass} w-full rounded-ctl px-3 py-2 text-xs disabled:opacity-60`}
               >
                 {!customForm.panelId ? (
                   <option value="">{t('admin.packages.form.serviceDefaultOption')}</option>
@@ -483,10 +484,12 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                       )}
                   </>
                 )}
-              </select>
+              </Select>
             </div>
           </div>
-          {customError('target') && <p className="text-xs text-danger">{customError('target')}</p>}
+          {customError('target') && (
+            <p className="text-xs text-danger-fg m-0">{customError('target')}</p>
+          )}
 
           <div className="flex items-center justify-end gap-2.5 flex-wrap">
             {isCustomDirty && (
@@ -518,18 +521,22 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       />
 
       {/* 3. Volume Pricing Tiers */}
-      <Card padding="md" className="space-y-3">
+      <Card padding="md" className="space-y-3 text-start">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
-            <Layers className="w-4 h-4 text-brand-fg shrink-0" />
+            <IconTile tone="brand" size="sm">
+              <Layers />
+            </IconTile>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-ink">{t('admin.packages.tiers.title')}</h3>
+                <h3 className="text-sm font-bold text-ink m-0">
+                  {t('admin.packages.tiers.title')}
+                </h3>
                 <Badge variant="success" size="xs" dot>
                   {t('admin.packages.tiers.liveBadge')}
                 </Badge>
               </div>
-              <p className="text-[11px] text-ink-muted">{t('admin.packages.tiers.subtitle')}</p>
+              <p className="text-[11px] text-ink-muted m-0">{t('admin.packages.tiers.subtitle')}</p>
             </div>
           </div>
           <Button
@@ -543,14 +550,12 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
           </Button>
         </div>
 
-        <div className="p-2.5 rounded-ctl bg-surface-2 border border-line text-[11px] text-ink-muted flex items-center gap-2">
-          <Info className="w-3.5 h-3.5 text-info shrink-0" />
-          <span>{t('admin.packages.tiers.sortNotice')}</span>
-        </div>
+        <AlertBanner tone="neutral">{t('admin.packages.tiers.sortNotice')}</AlertBanner>
 
         {tiers.length === 0 ? (
           <EmptyState
-            icon={<Layers className="w-5 h-5 text-brand" />}
+            tone="brand"
+            icon={<Layers />}
             title={t('admin.packages.tiers.emptyTitle')}
             description={t('admin.packages.tiers.emptyDesc')}
           />
@@ -577,7 +582,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
               return (
                 <div
                   key={tier.id}
-                  className="p-3 rounded-ctl bg-surface-2 border border-line flex items-center justify-between gap-2 flex-wrap"
+                  className="p-3 rounded-tile bg-surface-2 border border-line flex items-center justify-between gap-2 flex-wrap"
                 >
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -626,20 +631,24 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       </Card>
 
       {/* 4. Custom Price Overrides */}
-      <Card padding="md" className="space-y-3">
+      <Card padding="md" className="space-y-3 text-start">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
-            <Sliders className="w-4 h-4 text-brand-fg shrink-0" />
+            <IconTile tone="brand" size="sm">
+              <Sliders />
+            </IconTile>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-ink">
+                <h3 className="text-sm font-bold text-ink m-0">
                   {t('admin.packages.overrides.title')}
                 </h3>
                 <Badge variant="outline" size="xs" className="border-dashed">
                   {t('admin.packages.overrides.partialActiveBadge')}
                 </Badge>
               </div>
-              <p className="text-[11px] text-ink-muted">{t('admin.packages.overrides.subtitle')}</p>
+              <p className="text-[11px] text-ink-muted m-0">
+                {t('admin.packages.overrides.subtitle')}
+              </p>
             </div>
           </div>
           <Button
@@ -653,23 +662,18 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
           </Button>
         </div>
 
-        <div className="p-2.5 rounded-ctl border border-dashed border-line-strong bg-surface-2/50 text-[11px] text-ink-soft flex items-start gap-2 leading-relaxed">
-          <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
-          <span>
-            {t('admin.packages.overrides.fixedDaysScopeNote', {
-              days: formatNumber(settings.defaultDays),
-            })}
-          </span>
-        </div>
+        <AlertBanner tone="neutral" dashed>
+          {t('admin.packages.overrides.fixedDaysScopeNote', {
+            days: formatNumber(settings.defaultDays),
+          })}
+        </AlertBanner>
 
-        <div className="p-2.5 rounded-ctl bg-info-soft border border-info/30 text-info-fg text-[11px] flex items-center gap-2">
-          <Info className="w-3.5 h-3.5 shrink-0" />
-          <span>{t('admin.packages.overrides.priorityNotice')}</span>
-        </div>
+        <AlertBanner tone="info">{t('admin.packages.overrides.priorityNotice')}</AlertBanner>
 
         {overrides.length === 0 ? (
           <EmptyState
-            icon={<Sliders className="w-5 h-5 text-brand" />}
+            tone="brand"
+            icon={<Sliders />}
             title={t('admin.packages.overrides.emptyTitle')}
             description={t('admin.packages.overrides.emptyDesc')}
           />
@@ -682,7 +686,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
               return (
                 <div
                   key={rule.id}
-                  className="p-3 rounded-ctl bg-surface-2 border border-line flex items-start justify-between gap-2 flex-wrap"
+                  className="p-3 rounded-tile bg-surface-2 border border-line flex items-start justify-between gap-2 flex-wrap"
                 >
                   <div className="min-w-0 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -767,25 +771,27 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       </Card>
 
       {/* 5. Storefront Display & Subscription Policies */}
-      <Card padding="md" className="space-y-4">
+      <Card padding="md" className="space-y-4 text-start">
         <div className="flex items-start gap-2.5">
-          <div className="w-8 h-8 rounded-tile bg-surface-2 border border-line flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-4 h-4 text-ok-fg" />
-          </div>
+          <IconTile tone="ok" size="sm">
+            <ShieldCheck />
+          </IconTile>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-bold text-ink">{t('admin.packages.policies.title')}</h3>
+              <h3 className="text-sm font-bold text-ink m-0">
+                {t('admin.packages.policies.title')}
+              </h3>
               <Badge variant="success" size="xs" dot>
                 {t('admin.packages.policies.liveBadge')}
               </Badge>
             </div>
-            <p className="text-[11px] text-ink-muted mt-0.5">
+            <p className="text-[11px] text-ink-muted mt-0.5 m-0">
               {t('admin.packages.policies.subtitle')}
             </p>
           </div>
         </div>
 
-        <form onSubmit={handlePoliciesSubmit} className="space-y-3.5">
+        <form onSubmit={(e) => void handlePoliciesSubmit(e)} className="space-y-3.5">
           <div>
             <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5">
               <span className="text-xs font-semibold text-ink-soft">
@@ -795,33 +801,16 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                 {t('admin.packages.policies.telegramOnlyBadge')}
               </Badge>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setPoliciesForm((prev) => ({ ...prev, packageDisplayMode: 'specs' }))
-                }
-                className={`px-3 py-2 rounded-ctl border text-xs font-semibold transition-colors text-start ${
-                  policiesForm.packageDisplayMode === 'specs'
-                    ? 'bg-brand-soft border-brand text-brand-fg'
-                    : 'bg-surface-2 border-line text-ink-soft'
-                }`}
-              >
-                {t('admin.packages.policies.displayModeSpecs')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPoliciesForm((prev) => ({ ...prev, packageDisplayMode: 'name' }))}
-                className={`px-3 py-2 rounded-ctl border text-xs font-semibold transition-colors text-start ${
-                  policiesForm.packageDisplayMode === 'name'
-                    ? 'bg-brand-soft border-brand text-brand-fg'
-                    : 'bg-surface-2 border-line text-ink-soft'
-                }`}
-              >
-                {t('admin.packages.policies.displayModeName')}
-              </button>
-            </div>
-            <p className="text-[11px] text-ink-muted mt-1">
+            <SegmentedControl
+              options={displayModeOptions}
+              value={policiesForm.packageDisplayMode}
+              onChange={(mode) =>
+                setPoliciesForm((prev) => ({ ...prev, packageDisplayMode: mode }))
+              }
+              role="group"
+              ariaLabel={t('admin.packages.policies.displayModeLabel')}
+            />
+            <p className="text-[11px] text-ink-muted mt-1 m-0">
               {t('admin.packages.policies.displayModeHint')}
             </p>
           </div>
@@ -844,11 +833,13 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   setPoliciesForm((prev) => ({ ...prev, lowTrafficThresholdGb: e.target.value }))
                 }
               />
-              <p className="text-[11px] text-ink-muted mt-1">
+              <p className="text-[11px] text-ink-muted mt-1 m-0">
                 {t('admin.packages.policies.lowTrafficHint')}
               </p>
               {policyError('lowTrafficThresholdGb') && (
-                <p className="text-xs text-danger mt-1">{policyError('lowTrafficThresholdGb')}</p>
+                <p className="text-xs text-danger-fg mt-1 m-0">
+                  {policyError('lowTrafficThresholdGb')}
+                </p>
               )}
             </div>
 
@@ -869,11 +860,13 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   setPoliciesForm((prev) => ({ ...prev, expiryWarningDays: e.target.value }))
                 }
               />
-              <p className="text-[11px] text-ink-muted mt-1">
+              <p className="text-[11px] text-ink-muted mt-1 m-0">
                 {t('admin.packages.policies.expiryWarningHint')}
               </p>
               {policyError('expiryWarningDays') && (
-                <p className="text-xs text-danger mt-1">{policyError('expiryWarningDays')}</p>
+                <p className="text-xs text-danger-fg mt-1 m-0">
+                  {policyError('expiryWarningDays')}
+                </p>
               )}
             </div>
 
@@ -894,11 +887,13 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   setPoliciesForm((prev) => ({ ...prev, refundWindowHours: e.target.value }))
                 }
               />
-              <p className="text-[11px] text-ink-muted mt-1">
+              <p className="text-[11px] text-ink-muted mt-1 m-0">
                 {t('admin.packages.policies.refundWindowHint')}
               </p>
               {policyError('refundWindowHours') && (
-                <p className="text-xs text-danger mt-1">{policyError('refundWindowHours')}</p>
+                <p className="text-xs text-danger-fg mt-1 m-0">
+                  {policyError('refundWindowHours')}
+                </p>
               )}
             </div>
           </div>

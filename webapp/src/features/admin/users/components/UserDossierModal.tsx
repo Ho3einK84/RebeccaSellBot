@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Copy,
   Wallet,
   QrCode,
-  RotateCw,
   Power,
   RotateCcw,
   RefreshCw,
@@ -13,14 +12,17 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { ProgressBar } from '@/shared/components/ui/ProgressBar.js';
+import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/SegmentedControl.js';
 import { UserConfigQrModal } from './UserConfigQrModal.js';
 import { UserConfirmModal } from './UserConfirmModal.js';
 import { ReceiptPhotoModal } from '@/features/admin/receipts/components/ReceiptPhotoModal.js';
@@ -30,6 +32,8 @@ import {
 } from '@/shared/lib/transactionFormatters.js';
 import type { UserDossierResponse } from '@/shared/types/api.js';
 import type { UserProfile, UserConfigItem } from '@/shared/types/admin.js';
+
+type DossierTabId = 'finances' | 'configs' | 'orders' | 'receipts' | 'transactions';
 
 interface UserDossierModalProps {
   dossier: UserDossierResponse | null;
@@ -69,11 +73,8 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   const { t, locale } = useLanguage();
   const { formatMoney, formatNumber, formatId, formatIsoDate, formatBytes, sanitizeDisplayName } =
     useFormatters();
-  const { subCardClass, textPrimary, textSecondary, textMuted } = useThemeTokens();
 
-  const [activeTab, setActiveTab] = useState<
-    'finances' | 'configs' | 'orders' | 'receipts' | 'transactions'
-  >('finances');
+  const [activeTab, setActiveTab] = useState<DossierTabId>('finances');
 
   // Sub-modals state
   const [qrModalConfig, setQrModalConfig] = useState<UserConfigItem | null>(null);
@@ -83,11 +84,18 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   } | null>(null);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [photoReceiptId, setPhotoReceiptId] = useState<string | null>(null);
+  const [photoTarget, setPhotoTarget] = useState<{ id: string; mediaType?: string } | null>(null);
 
-  const notifyAction = (message: string, type: 'success' | 'error' = 'success') => {
-    onNotify?.(message, type);
-  };
+  const notifyAction = useCallback(
+    (message: string, type: 'success' | 'error' = 'success') => {
+      onNotify?.(message, type);
+    },
+    [onNotify]
+  );
+
+  const handlePhotoError = useCallback(() => {
+    onNotify?.(t('admin.receipts.noPhoto'), 'error');
+  }, [onNotify, t]);
 
   // Reset to first tab whenever a different user dossier is opened
   useEffect(() => {
@@ -95,8 +103,28 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     setQrModalConfig(null);
     setConfirmModal(null);
     setActionLoading(null);
-    setPhotoReceiptId(null);
+    setPhotoTarget(null);
   }, [dossier?.summary?.user?.telegramId]);
+
+  const ordersCount = dossier?.orders?.length ?? 0;
+  const receiptsCount = dossier?.receipts?.length ?? 0;
+  const configsCount = dossier?.configs?.length ?? 0;
+  const transactionsCount = dossier?.transactions?.length ?? 0;
+
+  const tabOptions: SegmentedOption<DossierTabId>[] = useMemo(
+    () => [
+      { id: 'finances', label: t('admin.users.tabFinances') },
+      { id: 'configs', label: t('admin.users.tabConfigs'), count: formatNumber(configsCount) },
+      {
+        id: 'transactions',
+        label: t('admin.users.tabTransactions'),
+        count: formatNumber(transactionsCount),
+      },
+      { id: 'orders', label: t('admin.users.tabOrders'), count: formatNumber(ordersCount) },
+      { id: 'receipts', label: t('admin.users.tabReceipts'), count: formatNumber(receiptsCount) },
+    ],
+    [t, formatNumber, configsCount, transactionsCount, ordersCount, receiptsCount]
+  );
 
   if (!dossier) return null;
 
@@ -176,7 +204,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <h3 className={`text-sm sm:text-base font-semibold m-0 truncate ${textPrimary}`}>
+          <h3 className="text-sm sm:text-base font-semibold m-0 truncate text-ink">
             {displayName}
           </h3>
           {user.isBanned ? (
@@ -197,10 +225,10 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 @{user.username}
               </bdi>
             ) : (
-              <span className={textMuted}>{t('admin.users.noUsername')}</span>
+              <span className="text-ink-muted">{t('admin.users.noUsername')}</span>
             )}
           </span>
-          <span className={textMuted}>·</span>
+          <span className="text-ink-muted">·</span>
           <button
             type="button"
             className="inline-flex items-center gap-1 tnum text-[11px] px-2 h-6 rounded-md border press rs-focus cursor-pointer bg-surface-2 border-line hover:border-line-strong text-ink-soft hover:text-ink"
@@ -265,18 +293,6 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     </div>
   );
 
-  const tabItems = [
-    { id: 'finances' as const, label: t('admin.users.tabFinances'), count: null },
-    { id: 'configs' as const, label: t('admin.users.tabConfigs'), count: configs.length },
-    {
-      id: 'transactions' as const,
-      label: t('admin.users.tabTransactions'),
-      count: transactions.length,
-    },
-    { id: 'orders' as const, label: t('admin.users.tabOrders'), count: orders.length },
-    { id: 'receipts' as const, label: t('admin.users.tabReceipts'), count: receipts.length },
-  ];
-
   return (
     <>
       <Modal
@@ -287,43 +303,19 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
         footer={dossierFooter}
       >
         <div className="space-y-4">
-          {/* Segmented Dossier Tabs */}
-          <div className="p-1 rounded-tile bg-surface-2 border border-line flex items-center gap-1 overflow-x-auto no-scrollbar">
-            {tabItems.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`h-8 px-2.5 rounded-ctl text-xs cursor-pointer shrink-0 inline-flex items-center justify-center gap-1.5 rs-focus press transition-colors ${
-                    isActive
-                      ? 'bg-surface border border-line-strong text-ink font-semibold shadow-[var(--shadow-card)]'
-                      : 'border border-transparent text-ink-muted hover:text-ink font-medium'
-                  }`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <span>{tab.label}</span>
-                  {tab.count !== null ? (
-                    <span
-                      className={`tnum inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none ${
-                        isActive
-                          ? 'bg-brand-soft text-brand-fg font-semibold'
-                          : 'bg-surface-3 text-ink-muted'
-                      }`}
-                    >
-                      {formatNumber(tab.count)}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          {/* Unified Segmented Dossier Tabs */}
+          <SegmentedControl
+            options={tabOptions}
+            value={activeTab}
+            onChange={setActiveTab}
+            fullWidth={false}
+          />
 
           {/* Sub-tab 1: Finances Grid */}
           {activeTab === 'finances' && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-[11px] font-medium block ${textMuted}`}>
+              <div className="p-3.5 rounded-tile border border-line bg-surface-2">
+                <span className="text-[11px] font-medium block text-ink-muted">
                   {t('admin.users.userCurBalance')}
                 </span>
                 <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
@@ -336,12 +328,12 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 </div>
               </div>
 
-              <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-[11px] font-medium block ${textMuted}`}>
+              <div className="p-3.5 rounded-tile border border-line bg-surface-2">
+                <span className="text-[11px] font-medium block text-ink-muted">
                   {t('admin.users.userTotalDeposit')}
                 </span>
                 <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
-                  <bdi dir="ltr" className={`text-base sm:text-lg font-bold tnum ${textPrimary}`}>
+                  <bdi dir="ltr" className="text-base sm:text-lg font-bold tnum text-ink">
                     {formatMoney(summary.totalDeposit)}
                   </bdi>
                   <span className="text-[11px] font-normal text-ink-muted">
@@ -350,12 +342,12 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 </div>
               </div>
 
-              <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-[11px] font-medium block ${textMuted}`}>
+              <div className="p-3.5 rounded-tile border border-line bg-surface-2">
+                <span className="text-[11px] font-medium block text-ink-muted">
                   {t('admin.users.userTotalSpend')}
                 </span>
                 <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
-                  <bdi dir="ltr" className={`text-base sm:text-lg font-bold tnum ${textPrimary}`}>
+                  <bdi dir="ltr" className="text-base sm:text-lg font-bold tnum text-ink">
                     {formatMoney(summary.totalSpend)}
                   </bdi>
                   <span className="text-[11px] font-normal text-ink-muted">
@@ -364,8 +356,8 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 </div>
               </div>
 
-              <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-[11px] font-medium block ${textMuted}`}>
+              <div className="p-3.5 rounded-tile border border-line bg-surface-2">
+                <span className="text-[11px] font-medium block text-ink-muted">
                   {t('admin.users.userActiveConfigs')}
                 </span>
                 <div className="text-base sm:text-lg font-bold text-brand-fg tnum mt-1.5">
@@ -373,8 +365,8 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 </div>
               </div>
 
-              <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-[11px] font-medium block ${textMuted}`}>
+              <div className="p-3.5 rounded-tile border border-line bg-surface-2">
+                <span className="text-[11px] font-medium block text-ink-muted">
                   {t('admin.users.userApprovedReceipts')}
                 </span>
                 <div className="text-base sm:text-lg font-bold tnum mt-1.5 text-ok-fg">
@@ -382,11 +374,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                 </div>
               </div>
 
-              <div className={`p-3.5 rounded-tile border ${subCardClass}`}>
-                <span className={`text-[11px] font-medium block ${textMuted}`}>
+              <div className="p-3.5 rounded-tile border border-line bg-surface-2">
+                <span className="text-[11px] font-medium block text-ink-muted">
                   {t('admin.users.userAuditEvents')}
                 </span>
-                <div className={`text-base sm:text-lg font-bold tnum mt-1.5 ${textSecondary}`}>
+                <div className="text-base sm:text-lg font-bold tnum mt-1.5 text-ink-soft">
                   {formatNumber(summary.auditEventsCount)}
                 </div>
               </div>
@@ -397,7 +389,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           {activeTab === 'configs' && (
             <div className="space-y-3">
               {configs.length === 0 ? (
-                <p className={`text-xs text-center py-8 m-0 ${textMuted}`}>
+                <p className="text-xs text-center py-8 m-0 text-ink-muted">
                   {t('admin.users.noConfigs')}
                 </p>
               ) : (
@@ -421,14 +413,14 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   return (
                     <div
                       key={cfg.id}
-                      className={`p-3.5 sm:p-4 rounded-tile border space-y-3 transition-colors ${subCardClass}`}
+                      className="p-3.5 sm:p-4 rounded-tile border border-line bg-surface-2 space-y-3 transition-colors"
                     >
                       {/* Config Title and Badges */}
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <bdi
                             dir="ltr"
-                            className={`tnum font-semibold text-xs sm:text-sm truncate ${textPrimary}`}
+                            className="font-mono font-semibold text-xs sm:text-sm truncate text-ink"
                           >
                             {cfg.configUsername}
                           </bdi>
@@ -459,10 +451,10 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="flex justify-between items-center text-[11px]">
-                            <span className={textMuted}>{t('admin.users.configTraffic')}</span>
-                            <bdi className="tnum font-semibold" dir="ltr">
+                            <span className="text-ink-muted">{t('admin.users.configTraffic')}</span>
+                            <bdi className="tnum font-semibold text-ink" dir="ltr">
                               {formatBytes(usedTraffic)} /{' '}
                               {dataLimit > 0
                                 ? formatBytes(dataLimit)
@@ -471,25 +463,18 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             </bdi>
                           </div>
                           {progressPct !== null && (
-                            <div className="w-full h-1.5 rounded-full bg-surface-3 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  progressPct > 90
-                                    ? 'bg-danger'
-                                    : progressPct > 70
-                                      ? 'bg-warn'
-                                      : 'bg-ok'
-                                }`}
-                                style={{ width: `${progressPct}%` }}
-                              />
-                            </div>
+                            <ProgressBar
+                              value={progressPct}
+                              tone={progressPct > 90 ? 'danger' : progressPct > 70 ? 'warn' : 'ok'}
+                              size="sm"
+                            />
                           )}
                         </div>
 
                         {/* Expiry Date */}
                         <div className="flex items-center justify-between sm:justify-end gap-2 text-[11px]">
-                          <span className={textMuted}>{t('admin.users.configExpire')}</span>
-                          <span className="tnum font-medium">
+                          <span className="text-ink-muted">{t('admin.users.configExpire')}</span>
+                          <span className="tnum font-medium text-ink">
                             {cfg.panelExpire
                               ? isExpired
                                 ? t('admin.users.configExpired')
@@ -539,15 +524,15 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           <button
                             type="button"
                             disabled={isToggling}
-                            onClick={() => handleToggle(cfg)}
-                            className={`h-8 px-2.5 rounded-ctl border text-xs font-medium flex items-center gap-1 press rs-focus cursor-pointer ${
+                            onClick={() => void handleToggle(cfg)}
+                            className={`h-8 px-2.5 rounded-ctl border text-xs font-medium flex items-center gap-1 press rs-focus cursor-pointer disabled:opacity-50 ${
                               cfg.panelStatus === 'disabled'
-                                ? 'bg-ok-soft border-ok/30 text-ok-fg hover:bg-ok/20'
-                                : 'bg-danger-soft border-danger/25 text-danger-fg hover:bg-danger/20'
+                                ? 'bg-ok-soft border-ok/30 text-ok-fg hover:bg-ok/15'
+                                : 'bg-danger-soft border-danger/25 text-danger-fg hover:bg-danger/15'
                             }`}
                           >
                             {isToggling ? (
-                              <RotateCw className="w-3 h-3 animate-spin" />
+                              <Loader2 className="w-3 h-3 animate-spin" />
                             ) : (
                               <Power className="w-3 h-3" />
                             )}
@@ -585,11 +570,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           <button
                             type="button"
                             disabled={isSyncing}
-                            onClick={() => handleSync(cfg)}
-                            className="h-8 px-2.5 rounded-ctl border text-xs font-medium flex items-center gap-1 press rs-focus cursor-pointer ms-auto bg-surface border-line text-ink-muted hover:text-ink hover:border-line-strong"
+                            onClick={() => void handleSync(cfg)}
+                            className="h-8 px-2.5 rounded-ctl border text-xs font-medium flex items-center gap-1 press rs-focus cursor-pointer disabled:opacity-50 ms-auto bg-surface border-line text-ink-muted hover:text-ink hover:border-line-strong"
                           >
-                            <RotateCw
-                              className={`w-3 h-3 opacity-60 ${isSyncing ? 'animate-spin' : ''}`}
+                            <RefreshCw
+                              className={`w-3 h-3 opacity-70 ${isSyncing ? 'animate-spin' : ''}`}
                             />
                             <span>{t('admin.users.btnSync')}</span>
                           </button>
@@ -606,7 +591,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           {activeTab === 'transactions' && (
             <div className="space-y-2">
               {transactions.length === 0 ? (
-                <p className={`text-xs text-center py-8 m-0 ${textMuted}`}>
+                <p className="text-xs text-center py-8 m-0 text-ink-muted">
                   {t('admin.users.noTransactions')}
                 </p>
               ) : (
@@ -617,35 +602,22 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   return (
                     <div
                       key={tx.id}
-                      className={`p-3 sm:p-3.5 rounded-tile border flex items-center justify-between text-xs transition-colors ${subCardClass}`}
+                      className="p-3 sm:p-3.5 rounded-tile border border-line bg-surface-2 flex items-center justify-between gap-2.5 text-xs transition-colors"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className={`w-7 h-7 rounded-ctl flex items-center justify-center shrink-0 border ${
-                            isCredit
-                              ? 'bg-ok-soft border-ok/25 text-ok-fg'
-                              : 'bg-danger-soft border-danger/25 text-danger-fg'
-                          }`}
-                        >
-                          {isCredit ? (
-                            <ArrowDownLeft className="w-3.5 h-3.5 rtl:-scale-x-100" />
-                          ) : (
-                            <ArrowUpRight className="w-3.5 h-3.5 rtl:-scale-x-100" />
-                          )}
-                        </div>
+                        <IconTile tone={isCredit ? 'ok' : 'danger'} size="sm">
+                          {isCredit ? <ArrowDownLeft /> : <ArrowUpRight />}
+                        </IconTile>
                         <div className="space-y-0.5 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`font-semibold text-xs truncate ${textPrimary}`}>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-semibold text-xs truncate text-ink">
                               {typeLabel}
                             </span>
-                            <bdi className={`text-[11px] tnum ${textMuted}`} dir="ltr">
+                            <bdi className="text-[11px] tnum text-ink-muted shrink-0" dir="ltr">
                               {formatIsoDate(tx.createdAt)}
                             </bdi>
                           </div>
-                          <div
-                            className={`text-[11px] truncate ${textSecondary}`}
-                            title={friendlyDesc}
-                          >
+                          <div className="text-[11px] truncate text-ink-soft" title={friendlyDesc}>
                             {friendlyDesc}
                           </div>
                         </div>
@@ -665,7 +637,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             {t('common.currency')}
                           </span>
                         </div>
-                        <div className={`text-[11px] tnum ${textMuted}`}>
+                        <div className="text-[11px] tnum text-ink-muted">
                           {t('admin.users.txBalanceAfter')}:{' '}
                           <bdi dir="ltr">{formatMoney(tx.balanceAfter)}</bdi>
                         </div>
@@ -681,31 +653,31 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           {activeTab === 'orders' && (
             <div className="space-y-2">
               {orders.length === 0 ? (
-                <p className={`text-xs text-center py-8 m-0 ${textMuted}`}>
+                <p className="text-xs text-center py-8 m-0 text-ink-muted">
                   {t('admin.users.noOrders')}
                 </p>
               ) : (
                 orders.map((order) => (
                   <div
                     key={order.id}
-                    className={`p-3 sm:p-3.5 rounded-tile border flex items-center justify-between text-xs ${subCardClass}`}
+                    className="p-3 sm:p-3.5 rounded-tile border border-line bg-surface-2 flex items-center justify-between gap-2 text-xs"
                   >
-                    <div className="space-y-0.5">
-                      <div className={`font-semibold text-xs sm:text-sm ${textPrimary}`}>
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="font-semibold text-xs sm:text-sm text-ink truncate">
                         {order.packageName || t('admin.users.orderPackage')}
                       </div>
-                      <div className={`text-[11px] tnum ${textMuted}`}>
+                      <div className="text-[11px] tnum text-ink-muted">
                         {t('common.idLabel')} <bdi dir="ltr">#{formatId(order.id)}</bdi>
                       </div>
                     </div>
-                    <div className="text-end space-y-0.5">
+                    <div className="text-end space-y-0.5 shrink-0">
                       <div className="tnum font-semibold text-xs sm:text-sm text-ok-fg">
                         <bdi dir="ltr">{formatMoney(order.amount)}</bdi>{' '}
                         <span className="font-normal text-[11px] text-ink-muted">
                           {t('common.currency')}
                         </span>
                       </div>
-                      <bdi dir="ltr" className={`block text-[11px] tnum ${textMuted}`}>
+                      <bdi dir="ltr" className="block text-[11px] tnum text-ink-muted">
                         {formatIsoDate(order.createdAt)}
                       </bdi>
                     </div>
@@ -719,32 +691,34 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           {activeTab === 'receipts' && (
             <div className="space-y-2">
               {receipts.length === 0 ? (
-                <p className={`text-xs text-center py-8 m-0 ${textMuted}`}>
+                <p className="text-xs text-center py-8 m-0 text-ink-muted">
                   {t('admin.users.noReceipts')}
                 </p>
               ) : (
                 receipts.map((rec) => (
                   <div
                     key={rec.id}
-                    className={`p-3 sm:p-3.5 rounded-tile border flex items-center justify-between text-xs ${subCardClass}`}
+                    className="p-3 sm:p-3.5 rounded-tile border border-line bg-surface-2 flex items-center justify-between gap-2 flex-wrap text-xs"
                   >
-                    <div className="space-y-0.5">
-                      <div className={`font-semibold tnum text-xs sm:text-sm ${textPrimary}`}>
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="font-semibold tnum text-xs sm:text-sm text-ink">
                         <bdi dir="ltr">{formatMoney(rec.amount)}</bdi>{' '}
                         <span className="font-normal text-[11px] text-ink-muted">
                           {t('common.currency')}
                         </span>
                       </div>
-                      <div className={`text-[11px] tnum ${textMuted}`}>
+                      <div className="text-[11px] tnum text-ink-muted">
                         {t('common.idLabel')} <bdi dir="ltr">#{formatId(rec.id)}</bdi>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {rec.photoFileId && (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-ctl border press rs-focus cursor-pointer bg-brand-soft border-brand/25 hover:bg-brand/20 text-brand-fg"
-                          onClick={() => setPhotoReceiptId(rec.id)}
+                          className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-ctl border press rs-focus cursor-pointer bg-brand-soft border-brand/25 hover:bg-brand/15 text-brand-fg"
+                          onClick={() =>
+                            setPhotoTarget({ id: rec.id, mediaType: rec.mediaType ?? undefined })
+                          }
                           title={t('admin.receipts.viewPhoto')}
                         >
                           <ImageIcon className="w-3 h-3" />
@@ -768,7 +742,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             ? t('common.statusRejected')
                             : t('common.statusPending')}
                       </Badge>
-                      <span dir="ltr" className={`text-[10px] tnum ${textMuted}`}>
+                      <span dir="ltr" className="text-[10px] tnum text-ink-muted">
                         {formatIsoDate(rec.createdAt)}
                       </span>
                     </div>
@@ -793,7 +767,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
         <UserConfirmModal
           isOpen={Boolean(confirmModal)}
           onClose={() => setConfirmModal(null)}
-          onConfirm={handleConfirmAction}
+          onConfirm={(reason) => void handleConfirmAction(reason)}
           loading={Boolean(actionLoading)}
           title={
             confirmModal.type === 'ban'
@@ -836,11 +810,12 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
 
       <ReceiptPhotoModal
         photoUrl={
-          photoReceiptId ? `/api/admin/receipts/${encodeURIComponent(photoReceiptId)}/photo` : null
+          photoTarget ? `/api/admin/receipts/${encodeURIComponent(photoTarget.id)}/photo` : null
         }
-        receiptId={photoReceiptId}
-        onClose={() => setPhotoReceiptId(null)}
-        onErrorNotify={() => onNotify?.(t('admin.receipts.noPhoto'), 'error')}
+        receiptId={photoTarget?.id ?? null}
+        mediaType={photoTarget?.mediaType}
+        onClose={() => setPhotoTarget(null)}
+        onErrorNotify={handlePhotoError}
       />
     </>
   );

@@ -4,8 +4,9 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Input } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
+import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import type { CreatePanelPayload } from '@/shared/types/api.js';
 
 interface AddPanelModalProps {
@@ -22,7 +23,6 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
   loading,
 }) => {
   const { t } = useLanguage();
-  const { textPrimary, textSecondary } = useThemeTokens();
 
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -62,7 +62,7 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
       return;
     }
 
-    const parsedServiceId = Number(serviceId);
+    const parsedServiceId = Number(normalizeInputDigits(serviceId));
     if (!Number.isSafeInteger(parsedServiceId) || parsedServiceId <= 0) {
       setValidationError(t('admin.panels.validationServiceId'));
       return;
@@ -91,6 +91,7 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      closeOnBackdrop={!loading}
       title={t('admin.panels.addModalTitle')}
       icon={
         <IconTile tone="brand" size="sm">
@@ -98,16 +99,23 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
         </IconTile>
       }
       maxWidth="md"
+      footer={
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            {t('common.cancel')}
+          </Button>
+          <Button type="submit" form="add-panel-form" variant="primary" loading={loading}>
+            <Plus className="w-4 h-4" />
+            <span>{t('admin.panels.createButton')}</span>
+          </Button>
+        </div>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {validationError && (
-          <div className="p-3 rounded-tile bg-danger-soft border border-danger/25 text-danger-fg text-xs font-medium">
-            {validationError}
-          </div>
-        )}
+      <form id="add-panel-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        {validationError && <AlertBanner tone="danger">{validationError}</AlertBanner>}
 
         <div className="space-y-1.5 text-start">
-          <label className={`block text-xs font-semibold ${textPrimary}`}>
+          <label className="block text-xs font-semibold text-ink">
             {t('admin.panels.nameField')} <span className="text-danger-fg">*</span>
           </label>
           <Input
@@ -121,7 +129,7 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
         </div>
 
         <div className="space-y-1.5 text-start">
-          <label className={`block text-xs font-semibold ${textPrimary}`}>
+          <label className="block text-xs font-semibold text-ink">
             {t('admin.panels.urlField')} <span className="text-danger-fg">*</span>
           </label>
           <Input
@@ -132,11 +140,11 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
             dir="ltr"
             disabled={loading}
           />
-          <span className={`block text-[11px] ${textSecondary}`}>{t('admin.panels.urlHelp')}</span>
+          <span className="block text-[11px] text-ink-soft">{t('admin.panels.urlHelp')}</span>
         </div>
 
         <div className="space-y-1.5 text-start">
-          <label className={`block text-xs font-semibold ${textPrimary}`}>
+          <label className="block text-xs font-semibold text-ink">
             {t('admin.panels.apiKeyField')}
           </label>
           <Input
@@ -151,22 +159,25 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5 text-start">
-            <label className={`block text-xs font-semibold ${textPrimary}`}>
+            <label className="block text-xs font-semibold text-ink">
               {t('admin.panels.serviceIdField')}
             </label>
             <Input
-              type="number"
-              min="1"
+              type="text"
+              inputMode="numeric"
               value={serviceId}
-              onChange={(e) => setServiceId(e.target.value)}
+              onChange={(e) =>
+                setServiceId(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
+              }
               placeholder="1"
               dir="ltr"
+              className="tnum"
               disabled={loading}
             />
           </div>
 
           <div className="space-y-1.5 text-start">
-            <label className={`block text-xs font-semibold ${textPrimary}`}>
+            <label className="block text-xs font-semibold text-ink">
               {t('admin.panels.serviceNameField')}
             </label>
             <Input
@@ -177,16 +188,6 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
               maxLength={80}
             />
           </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-line">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" variant="primary" loading={loading}>
-            <Plus className="w-4 h-4" />
-            <span>{t('admin.panels.createButton')}</span>
-          </Button>
         </div>
       </form>
     </Modal>

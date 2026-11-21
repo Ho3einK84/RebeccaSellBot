@@ -83,7 +83,7 @@ export const UserConfigQrModal: React.FC<UserConfigQrModalProps> = ({
                 className="w-56 h-56 block object-contain select-none"
               />
             ) : (
-              <div className="w-56 h-56 flex items-center justify-center text-xs text-slate-600">
+              <div className="w-56 h-56 flex items-center justify-center text-xs text-neutral-600">
                 {config.subUrl ? t('common.loading') : t('admin.users.noSubUrl')}
               </div>
             )}

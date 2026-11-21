@@ -118,6 +118,7 @@ export interface UserReceiptItem {
   status: string;
   createdAt: string;
   photoFileId?: string | null;
+  mediaType?: string | null;
   reviewedBy?: number | null;
 }
 

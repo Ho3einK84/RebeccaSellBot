@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User } from 'lucide-react';
 import { getAvatarChar } from '@/shared/lib/formatters.js';
 
@@ -28,6 +28,11 @@ export const Avatar: React.FC<AvatarProps> = ({
   className = '',
 }) => {
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [photoUrl]);
+
   const char = getAvatarChar(name, username);
   const isFallbackEmoji = char === '👤';
   const radiusClass = circle ? 'rounded-full' : 'rounded-tile';

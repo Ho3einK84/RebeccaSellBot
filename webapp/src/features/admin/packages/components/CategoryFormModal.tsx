@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { FolderPlus } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal.js';
-import { Input } from '@/shared/components/ui/Input.js';
+import { Input, Textarea } from '@/shared/components/ui/Input.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { Switch } from '@/shared/components/ui/Switch.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
-import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
-import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import type {
   AdminCategoryDto,
   CreateAdminCategoryPayload,
@@ -39,7 +39,6 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
   onUpdate,
 }) => {
   const { t } = useLanguage();
-  const { inputClass } = useThemeTokens();
 
   const [values, setValues] = useState<CategoryFormValues>({
     name: '',
@@ -49,8 +48,6 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
     enabled: true,
   });
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
-
-  useTelegramBackButton(onClose, isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -136,8 +133,13 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      closeOnBackdrop={!isSubmitting}
       maxWidth="md"
-      icon={<FolderPlus className="w-5 h-5 text-brand" />}
+      icon={
+        <IconTile tone="brand" size="sm">
+          <FolderPlus />
+        </IconTile>
+      }
       title={
         mode === 'edit'
           ? t('admin.packages.categories.formEditTitle')
@@ -145,7 +147,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
       }
       footer={
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={isSubmitting}>
             {t('admin.packages.actions.cancel')}
           </Button>
           <Button
@@ -164,7 +166,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
         </div>
       }
     >
-      <form id="admin-category-form" onSubmit={handleSubmit} className="space-y-4">
+      <form id="admin-category-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <div>
           <label
             htmlFor="cat-name-input"
@@ -178,7 +180,9 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
             placeholder={t('admin.packages.categories.namePlaceholder')}
             onChange={(e) => setValues((prev) => ({ ...prev, name: e.target.value }))}
           />
-          {fieldError('name') && <p className="text-xs text-danger mt-1">{fieldError('name')}</p>}
+          {fieldError('name') && (
+            <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('name')}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -204,7 +208,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
                   key={emoji}
                   type="button"
                   onClick={() => setValues((prev) => ({ ...prev, icon: emoji }))}
-                  className={`px-1.5 py-0.5 rounded border text-xs transition-colors ${
+                  className={`px-1.5 py-0.5 rounded border text-xs transition-colors cursor-pointer ${
                     values.icon === emoji
                       ? 'bg-brand-soft border-brand/40 text-ink'
                       : 'bg-surface-2 border-line hover:border-line-strong'
@@ -214,10 +218,12 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-ink-muted mt-1">
+            <p className="text-[11px] text-ink-muted mt-1 m-0">
               {t('admin.packages.categories.iconHint')}
             </p>
-            {fieldError('icon') && <p className="text-xs text-danger mt-1">{fieldError('icon')}</p>}
+            {fieldError('icon') && (
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('icon')}</p>
+            )}
           </div>
 
           <div>
@@ -237,7 +243,7 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
               onChange={(e) => setValues((prev) => ({ ...prev, displayOrder: e.target.value }))}
             />
             {fieldError('displayOrder') && (
-              <p className="text-xs text-danger mt-1">{fieldError('displayOrder')}</p>
+              <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('displayOrder')}</p>
             )}
           </div>
         </div>
@@ -249,20 +255,19 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
           >
             {t('admin.packages.categories.descLabel')}
           </label>
-          <textarea
+          <Textarea
             id="cat-desc-input"
             rows={3}
             value={values.description}
             placeholder={t('admin.packages.categories.descPlaceholder')}
             onChange={(e) => setValues((prev) => ({ ...prev, description: e.target.value }))}
-            className={`${inputClass} w-full rounded-ctl px-3 py-2 text-xs`}
           />
           {fieldError('description') && (
-            <p className="text-xs text-danger mt-1">{fieldError('description')}</p>
+            <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('description')}</p>
           )}
         </div>
 
-        <label className="flex items-center justify-between gap-3 p-3 rounded-ctl bg-surface-2 border border-line cursor-pointer">
+        <div className="flex items-center justify-between gap-3 p-3 rounded-tile bg-surface-2 border border-line">
           <div className="min-w-0">
             <div className="text-xs font-semibold text-ink">
               {t('admin.packages.categories.enabledLabel')}
@@ -271,13 +276,12 @@ export const CategoryFormModal: React.FC<CategoryFormModalProps> = ({
               {t('admin.packages.categories.enabledHint')}
             </div>
           </div>
-          <input
-            type="checkbox"
+          <Switch
             checked={values.enabled}
-            onChange={(e) => setValues((prev) => ({ ...prev, enabled: e.target.checked }))}
-            className="rs-switch shrink-0"
+            onChange={(checked) => setValues((prev) => ({ ...prev, enabled: checked }))}
+            ariaLabel={t('admin.packages.categories.enabledLabel')}
           />
-        </label>
+        </div>
       </form>
     </Modal>
   );

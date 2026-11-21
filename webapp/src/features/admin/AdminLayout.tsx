@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState } from 'react';
 import { LayoutDashboard, Receipt, Users, Server, Package, Layers } from 'lucide-react';
+import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { OverviewTab } from './overview/OverviewTab.js';
 import { ReceiptsTab } from './receipts/ReceiptsTab.js';
 import { UsersTab } from './users/UsersTab.js';
@@ -9,16 +9,16 @@ import { PackagesTab } from './packages/PackagesTab.js';
 import { ModulesTab } from './modules/ModulesTab.js';
 import { AdminHeader } from './components/AdminHeader.js';
 import { AdminDesktopNav } from './components/AdminDesktopNav.js';
-import { AdminBottomNav } from './components/AdminBottomNav.js';
+import { AdminBottomNav, type TabConfig } from './components/AdminBottomNav.js';
 import { useAdminReceipts } from './receipts/hooks/useAdminReceipts.js';
 import { useAdminStats } from './overview/hooks/useAdminStats.js';
 import { useAdminPanels } from './panels/hooks/useAdminPanels.js';
-import { useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/shared/components/layout/AppShell.js';
-import { Toast } from '@/shared/components/ui/Toast.js';
+import { useToast } from '@/shared/components/ui/Toast.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
+import { minimizeOrCloseWebApp } from '@/shared/lib/telegramNavigation.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
 import type { TabType } from '@/shared/types/admin.js';
 
@@ -30,12 +30,10 @@ interface AdminLayoutProps {
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPortal }) => {
   const { t } = useLanguage();
   const { triggerHaptic } = useHaptic();
+  const { notify } = useToast();
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
-  const [notification, setNotification] = useState<{
-    message: string;
-    type: 'success' | 'error';
-  } | null>(null);
+  const [tabHistory, setTabHistory] = useState<TabType[]>(['overview']);
   const [inspectingUserId, setInspectingUserId] = useState<number | null>(null);
 
   // Queries for badge count and refresh handling
@@ -43,95 +41,107 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
   const { refetch: refetchStats } = useAdminStats();
   const { refetch: refetchPanels } = useAdminPanels();
   const queryClient = useQueryClient();
-  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    };
-  }, []);
-
-  const notify = (message: string, type: 'success' | 'error' = 'success') => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-    }
-    setNotification({ message, type });
-    triggerHaptic(type === 'success' ? 'success' : 'error');
-    toastTimerRef.current = setTimeout(() => {
-      setNotification(null);
-      toastTimerRef.current = null;
-    }, 4000);
-  };
+  const isFetchingAdmin = useIsFetching({ queryKey: ['admin'] }) > 0;
 
   const handleClose = () => {
     triggerHaptic('medium');
-    if (window.Telegram?.WebApp?.close) {
-      window.Telegram.WebApp.close();
-    } else {
-      window.close();
-    }
+    minimizeOrCloseWebApp();
   };
 
-  // Base BackButton handler when at the root layout
-  useTelegramBackButton(handleClose, true);
-
   const switchTab = (tab: TabType) => {
+    if (tab === activeTab) return;
     triggerHaptic('selection');
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (tab === 'overview') {
+      setTabHistory(['overview']);
+    } else {
+      setTabHistory((prev) => {
+        if (prev.length >= 2 && prev[prev.length - 2] === tab) {
+          return prev.slice(0, -1);
+        }
+        return [...prev, tab];
+      });
+    }
     setActiveTab(tab);
   };
 
+  // Native Telegram BackButton: navigate back across admin tabs to overview;
+  // hide on root overview so Telegram shows its native Close affordance.
+  const canNavigateBack = tabHistory.length > 1 || activeTab !== 'overview';
+
+  const handleBack = () => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (tabHistory.length > 1) {
+      triggerHaptic('selection');
+      const nextHistory = tabHistory.slice(0, -1);
+      const prevTab = nextHistory[nextHistory.length - 1] ?? 'overview';
+      setTabHistory(nextHistory);
+      setActiveTab(prevTab);
+    } else if (activeTab !== 'overview') {
+      triggerHaptic('selection');
+      setTabHistory(['overview']);
+      setActiveTab('overview');
+    }
+  };
+
+  useTelegramBackButton(handleBack, canNavigateBack);
+
   const handleInspectUserFromReceipts = (telegramId: number) => {
     setInspectingUserId(telegramId);
-    setActiveTab('users');
+    switchTab('users');
   };
 
   const handleRefresh = () => {
     triggerHaptic('light');
-    if (activeTab === 'overview') refetchStats();
-    if (activeTab === 'receipts') refetchReceipts();
-    if (activeTab === 'panels') refetchPanels();
+    if (activeTab === 'overview') void refetchStats();
+    if (activeTab === 'receipts') void refetchReceipts();
+    if (activeTab === 'panels') void refetchPanels();
     if (activeTab === 'users') void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     if (activeTab === 'packages') {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'packages'] });
       void queryClient.invalidateQueries({ queryKey: ['admin', 'categories'] });
       void queryClient.invalidateQueries({ queryKey: ['admin', 'pricing', 'custom'] });
     }
+    if (activeTab === 'coming-soon') {
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+    }
   };
 
-  const tabsConfig = [
+  const tabsConfig: TabConfig[] = [
     {
-      id: 'overview' as const,
+      id: 'overview',
       label: t('admin.tabs.overview'),
       mobileLabel: t('admin.tabs.overviewShort'),
       icon: LayoutDashboard,
     },
     {
-      id: 'receipts' as const,
+      id: 'receipts',
       label: t('admin.tabs.receipts'),
       mobileLabel: t('admin.tabs.receiptsShort'),
       icon: Receipt,
       count: pendingCount,
+      badgeTone: 'warn',
     },
     {
-      id: 'users' as const,
+      id: 'users',
       label: t('admin.tabs.users'),
       mobileLabel: t('admin.tabs.usersShort'),
       icon: Users,
     },
     {
-      id: 'panels' as const,
+      id: 'panels',
       label: t('admin.tabs.panels'),
       mobileLabel: t('admin.tabs.panelsShort'),
       icon: Server,
     },
     {
-      id: 'packages' as const,
+      id: 'packages',
       label: t('admin.tabs.packages'),
       mobileLabel: t('admin.tabs.packagesShort'),
       icon: Package,
     },
     {
-      id: 'coming-soon' as const,
+      id: 'coming-soon',
       label: t('admin.tabs.comingSoon'),
       mobileLabel: t('admin.tabs.comingSoonShort'),
       icon: Layers,
@@ -145,8 +155,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
         <AdminHeader
           user={user}
           onRefresh={handleRefresh}
+          isRefreshing={isFetchingAdmin}
           onClose={handleClose}
-          onNotify={notify}
           onSwitchToUserPortal={onSwitchToUserPortal}
         />
       }
@@ -155,37 +165,27 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
       }
       transitionKey={activeTab}
       bottomNav={<AdminBottomNav tabs={tabsConfig} activeTab={activeTab} onSelectTab={switchTab} />}
-      overlay={
-        notification
-          ? createPortal(
-              <aside
-                aria-live="polite"
-                className="fixed top-4 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[100000] pointer-events-auto"
-              >
-                <Toast
-                  message={notification.message}
-                  type={notification.type}
-                  onDismiss={() => setNotification(null)}
-                />
-              </aside>,
-              document.body
-            )
-          : null
-      }
     >
       {activeTab === 'overview' && <OverviewTab onSwitchTab={switchTab} />}
       {activeTab === 'receipts' && (
-        <ReceiptsTab onInspectUser={handleInspectUserFromReceipts} onNotify={notify} />
+        <ReceiptsTab
+          onInspectUser={handleInspectUserFromReceipts}
+          onNotify={(msg, type) => notify(msg, type ?? 'success')}
+        />
       )}
       {activeTab === 'users' && (
         <UsersTab
-          onNotify={notify}
+          onNotify={(msg, type) => notify(msg, type ?? 'success')}
           inspectedUserId={inspectingUserId}
           onClearInspectedUser={() => setInspectingUserId(null)}
         />
       )}
-      {activeTab === 'panels' && <PanelsTab onNotify={notify} />}
-      {activeTab === 'packages' && <PackagesTab onNotify={notify} />}
+      {activeTab === 'panels' && (
+        <PanelsTab onNotify={(msg, type) => notify(msg, type ?? 'success')} />
+      )}
+      {activeTab === 'packages' && (
+        <PackagesTab onNotify={(msg, type) => notify(msg, type ?? 'success')} />
+      )}
       {activeTab === 'coming-soon' && <ModulesTab onSwitchTab={switchTab} />}
     </AppShell>
   );

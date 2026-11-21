@@ -17,11 +17,12 @@ export const AdminDesktopNav: React.FC<AdminDesktopNavProps> = ({
   onSelectTab,
 }) => {
   const { t } = useLanguage();
-  const desktopItems = tabs.map(({ id, label, icon, count }) => ({
+  const desktopItems = tabs.map(({ id, label, icon, count, badgeTone }) => ({
     id,
     label,
     icon,
     count,
+    badgeTone,
   }));
 
   return (
