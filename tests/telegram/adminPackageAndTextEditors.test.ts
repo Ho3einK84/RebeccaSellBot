@@ -19,8 +19,17 @@ import {
 } from '../../src/telegram/conversations/adminConversations.js';
 import {
   adminEditTextsConversation,
+  buildKeyDetailScreen,
+  classifyTranslationKey,
+  composeLivePreviewPayload,
   ESSENTIAL_USER_TEXTS,
+  formatKeyListButtonLabels,
+  getSamplePlaceholderValues,
+  PLACEHOLDER_DESCRIPTIONS,
+  PLACEHOLDER_METADATA,
+  validateTemplateMarkdown,
 } from '../../src/telegram/conversations/adminConversations/texts.js';
+import { templatePlaceholders } from '../../src/domain/services/TranslationService.js';
 import { validateTelegramMarkdown } from '../../src/telegram/rendering.js';
 import type { ConversationContext, MyConversation, SessionData } from '../../src/telegram/types.js';
 import { extractCallbackDataList } from './helpers/botHarness.js';
@@ -144,19 +153,30 @@ function createTextsHarness(
     isAdmin?: boolean;
     failSave?: boolean;
     failDelete?: boolean;
+    failFirstMarkdownReply?: boolean;
     extraKeys?: string[];
+    useRealTranslationService?: boolean;
   } = {}
 ) {
   const settings = new Map(Object.entries(initialSettings));
   const knownKeys = [
-    'welcome',
-    'shop',
     'onboarding_welcome',
+    'home_subtitle',
+    'shop_subtitle',
     'home_title',
+    'home_near_expiry_detail',
     ...(options.extraKeys ?? []),
   ];
   let messageId = 100;
-  const reply = vi.fn(async () => ({ message_id: messageId++ }));
+  let failedMarkdownOnce = false;
+  const reply = vi.fn(async (_text: string, extra?: { parse_mode?: string }) => {
+    if (options.failFirstMarkdownReply && extra?.parse_mode === 'Markdown' && !failedMarkdownOnce) {
+      failedMarkdownOnce = true;
+      throw new Error("Bad Request: can't parse entities: Can't find end of entity");
+    }
+    return { message_id: messageId++ };
+  });
+  const deleteMessage = vi.fn(async () => true);
   const updateSetting = vi.fn(async (key: string, value: string) => {
     if (options.failSave) throw new Error('DB_WRITE_FAILED');
     settings.set(key, value);
@@ -166,35 +186,108 @@ function createTextsHarness(
     settings.delete(key);
   });
 
-  const translationService = {
-    get: vi.fn((key: string, _locale?: string, params?: Record<string, string | number>) => {
-      let rendered = key;
-      for (const [name, value] of Object.entries(params ?? {})) {
-        rendered += ` ${name}=${String(value)}`;
+  const realTs = options.useRealTranslationService ? new TranslationService() : undefined;
+  const translationService = realTs
+    ? {
+        get: vi.fn((key: string, locale?: string, params?: Record<string, string | number>) => {
+          const explicit = /^(fa|en)\.(.+)$/iu.exec(key);
+          const resolvedLocale = explicit ? explicit[1]!.toLowerCase() : (locale ?? 'fa');
+          const bareKey = explicit ? explicit[2]! : key;
+          const override = settings.get(`${resolvedLocale}.${bareKey}`);
+          if (override !== undefined) {
+            if (!params) return override;
+            return Object.entries(params).reduce(
+              (acc, [name, val]) => acc.replaceAll(`{${name}}`, String(val)),
+              override
+            );
+          }
+          return realTs.get(key, locale, params);
+        }),
+        getRawTemplate: vi.fn((key: string, locale?: string) => {
+          const explicit = /^(fa|en)\.(.+)$/iu.exec(key);
+          const resolvedLocale = explicit ? explicit[1]!.toLowerCase() : (locale ?? 'fa');
+          const bareKey = explicit ? explicit[2]! : key;
+          return settings.get(`${resolvedLocale}.${bareKey}`) ?? realTs.getRawTemplate(key, locale);
+        }),
+        getSetting: vi.fn((key: string, fallback = '') => settings.get(key) ?? fallback),
+        getStoredSetting: vi.fn((key: string) => settings.get(key)),
+        getTranslationKeys: vi.fn(() => [
+          ...realTs.getTranslationKeys(),
+          ...(options.extraKeys ?? []),
+        ]),
+        hasTranslationKey: vi.fn(
+          (k: string) => realTs.hasTranslationKey(k) || (options.extraKeys ?? []).includes(k)
+        ),
+        getCustomizedKeys: vi.fn((locale?: string) => {
+          const targetLocale = locale ?? 'fa';
+          return [...settings.keys()]
+            .filter((k) => k.startsWith(`${targetLocale}.`))
+            .map((k) => k.slice(3))
+            .sort();
+        }),
+        searchTranslations: vi.fn(
+          (
+            query: string,
+            locale?: 'fa' | 'en',
+            filterOrOpts?:
+              | ((k: string) => boolean)
+              | {
+                  filter?: (k: string) => boolean;
+                  extraText?: (k: string) => string | readonly string[] | undefined;
+                }
+          ) => {
+            const realMatches = realTs.searchTranslations(query, locale, filterOrOpts);
+            const extraMatches = (options.extraKeys ?? []).filter((k) =>
+              k.toLowerCase().includes(query.toLowerCase())
+            );
+            return [...new Set([...realMatches, ...extraMatches])];
+          }
+        ),
+        resolveLocale: vi.fn((raw?: string) => realTs.resolveLocale(raw)),
+        getDefaultLocale: vi.fn(() => 'fa' as const),
+        updateSetting,
+        deleteSetting,
       }
-      return rendered;
-    }),
-    getSetting: vi.fn((key: string, fallback = '') => settings.get(key) ?? fallback),
-    getStoredSetting: vi.fn((key: string) => settings.get(key)),
-    getTranslationKeys: vi.fn(() => knownKeys),
-    hasTranslationKey: vi.fn((k: string) => knownKeys.includes(k)),
-    getCustomizedKeys: vi.fn((locale?: string) => {
-      const targetLocale = locale ?? 'fa';
-      const keys: string[] = [];
-      for (const k of settings.keys()) {
-        if (k.startsWith(`${targetLocale}.`)) keys.push(k.slice(3));
-      }
-      return keys;
-    }),
-    searchTranslations: vi.fn((query: string) => {
-      const q = query.toLowerCase();
-      return knownKeys.filter((k) => k.toLowerCase().includes(q));
-    }),
-    resolveLocale: vi.fn(() => 'fa'),
-    getDefaultLocale: vi.fn(() => 'fa'),
-    updateSetting,
-    deleteSetting,
-  };
+    : {
+        get: vi.fn((key: string, _locale?: string, params?: Record<string, string | number>) => {
+          const stored = settings.get(key);
+          let rendered = stored ?? key;
+          for (const [name, value] of Object.entries(params ?? {})) {
+            rendered += ` ${name}=${String(value)}`;
+          }
+          return rendered;
+        }),
+        getSetting: vi.fn((key: string, fallback = '') => settings.get(key) ?? fallback),
+        getStoredSetting: vi.fn((key: string) => settings.get(key)),
+        getTranslationKeys: vi.fn(() => knownKeys),
+        hasTranslationKey: vi.fn((k: string) => knownKeys.includes(k)),
+        getCustomizedKeys: vi.fn((locale?: string) => {
+          const targetLocale = locale ?? 'fa';
+          const keys: string[] = [];
+          for (const k of settings.keys()) {
+            if (k.startsWith(`${targetLocale}.`)) keys.push(k.slice(3));
+          }
+          return keys.sort();
+        }),
+        searchTranslations: vi.fn(
+          (
+            query: string,
+            _locale?: string,
+            filterOrOpts?: ((k: string) => boolean) | { filter?: (k: string) => boolean }
+          ) => {
+            const q = query.toLowerCase();
+            const filterFn =
+              typeof filterOrOpts === 'function' ? filterOrOpts : filterOrOpts?.filter;
+            return knownKeys.filter(
+              (k) => (!filterFn || filterFn(k)) && k.toLowerCase().includes(q)
+            );
+          }
+        ),
+        resolveLocale: vi.fn(() => 'fa'),
+        getDefaultLocale: vi.fn(() => 'fa'),
+        updateSetting,
+        deleteSetting,
+      };
 
   const adminService = {
     isAdmin: vi.fn(async () => options.isAdmin ?? true),
@@ -205,6 +298,7 @@ function createTextsHarness(
     from: { id: 1001, first_name: 'Admin', language_code: 'fa' },
     chat: { id: 1001 },
     session: {},
+    api: { deleteMessage },
     reply,
     services: {
       translationService,
@@ -246,7 +340,15 @@ function createTextsHarness(
     halt: vi.fn(async () => undefined),
   } as unknown as MyConversation;
 
-  return { conversation, ctx, translationService, reply, updateSetting, deleteSetting };
+  return {
+    conversation,
+    ctx,
+    translationService,
+    reply,
+    deleteMessage,
+    updateSetting,
+    deleteSetting,
+  };
 }
 
 function replyTexts(reply: ReturnType<typeof vi.fn>): string[] {
@@ -571,12 +673,13 @@ describe('Admin text editor & translation catalog coverage', () => {
     const fakeCtx = createTextsHarness({}, []).ctx;
     const keyboard = buildCategoryKeyboard(fakeCtx);
     const buttons = keyboard.inline_keyboard.flat();
-    expect(TEXT_CATEGORIES.length).toBeGreaterThan(0);
+    expect(TEXT_CATEGORIES).toHaveLength(8);
     expect(buttons).toHaveLength(TEXT_CATEGORIES.length + 1);
     for (const category of TEXT_CATEGORIES) {
       expect(category.descriptionKey).toBeDefined();
       const match = buttons.find((btn) => btn.callback_data === `text-cat:${category.id}`);
       expect(match?.text).toBe(category.labelKey);
+      expect(Buffer.byteLength(match?.callback_data ?? '', 'utf8')).toBeLessThanOrEqual(64);
     }
     expect(buttons.find((btn) => btn.callback_data === 'text-nav:mode_select')?.text).toBe(
       'admin_text_back_to_menu'
@@ -590,99 +693,229 @@ describe('Admin text editor & translation catalog coverage', () => {
     );
   });
 
-  it('supports essential, language switch, edit, reset, category, search & direct-edit flows', async () => {
-    const essential = createTextsHarness({}, [
-      { callback: 'text-mode:essential' },
-      { callback: 'text-pk:welcome' },
-      { callback: 'text-nav:back' },
-      { callback: 'text-nav:mode_select' },
-      { callback: 'nav:admin' },
-    ]);
-    await adminEditTextsConversation(essential.conversation, essential.ctx);
-    expect(essential.reply).toHaveBeenCalled();
+  it('supports hub/in-detail 🦁 فارسی ↔ 🇬🇧 English switching, direct & button edit, reset, category filter & unified search without Iran flag emoji', async () => {
+    const IRAN_FLAG = '\u{1F1EE}\u{1F1F7}';
 
-    const langSwitch = createTextsHarness({}, [
-      { callback: 'text-lang:toggle' },
-      { callback: 'text-mode:essential' },
-      { callback: 'text-nav:mode_select' },
-      { callback: 'nav:admin' },
-    ]);
-    await adminEditTextsConversation(langSwitch.conversation, langSwitch.ctx);
-    expect(langSwitch.reply).toHaveBeenCalled();
+    // Hub language toggle + in-detail language toggle edits both FA and EN in one visit
+    const dualLang = createTextsHarness(
+      {},
+      [
+        { callback: 'text-lang:toggle' },
+        { callback: 'text-lang:toggle' },
+        { callback: 'text-mode:essential' },
+        { callback: 'text-pk:onboarding_welcome' },
+        { text: '✨ *خوش آمدید به نسخه جدید*' },
+        { callback: 'text-act:lang' },
+        { callback: 'text-act:edit' },
+        { text: '✨ *Welcome to our updated bot*' },
+        { callback: 'text-nav:back' },
+        { callback: 'text-nav:mode_select' },
+        { callback: 'nav:admin' },
+      ],
+      { useRealTranslationService: true }
+    );
+    await adminEditTextsConversation(dualLang.conversation, dualLang.ctx);
+    expect(dualLang.updateSetting).toHaveBeenCalledWith(
+      'fa.onboarding_welcome',
+      '✨ *خوش آمدید به نسخه جدید*'
+    );
+    expect(dualLang.updateSetting).toHaveBeenCalledWith(
+      'en.onboarding_welcome',
+      '✨ *Welcome to our updated bot*'
+    );
+    // Consumed input messages are deleted cleanly
+    expect(dualLang.deleteMessage).toHaveBeenCalledTimes(2);
+    const renderedOutputs = replyTexts(dualLang.reply).join('\n');
+    expect(renderedOutputs).toContain('🦁 فارسی');
+    expect(renderedOutputs).toContain('🇬🇧 English');
+    expect(renderedOutputs).not.toContain(IRAN_FLAG);
+    expect(renderedOutputs).not.toContain('—:');
 
-    const editHarness = createTextsHarness({}, [
-      { callback: 'text-mode:essential' },
-      { callback: 'text-pk:welcome' },
-      { callback: 'text-act:edit' },
-      { text: 'سلام و درود به ربات ما خوش آمدید!' },
-      { callback: 'text-nav:back' },
-      { callback: 'text-nav:mode_select' },
-      { callback: 'nav:admin' },
-    ]);
-    await adminEditTextsConversation(editHarness.conversation, editHarness.ctx);
-    expect(editHarness.updateSetting).toHaveBeenCalledWith(
-      'fa.welcome',
-      'سلام و درود به ربات ما خوش آمدید!'
+    // Reset flow only works on customized keys and updates inline without spam
+    const resetHarness = createTextsHarness(
+      { 'fa.home_subtitle': 'زیرعنوان اختصاصی' },
+      [
+        { callback: 'text-mode:customized' },
+        { callback: 'text-pk:home_subtitle' },
+        { callback: 'text-act:reset' },
+        { callback: 'text-act:reset_confirm' },
+        // Forged reset when already reset back to default must be rejected without deleting again
+        { callback: 'text-act:reset' },
+        { callback: 'text-nav:back' },
+        { callback: 'text-nav:mode_select' },
+        { callback: 'nav:admin' },
+      ],
+      { useRealTranslationService: true }
+    );
+    await adminEditTextsConversation(resetHarness.conversation, resetHarness.ctx);
+    expect(resetHarness.deleteSetting).toHaveBeenCalledTimes(1);
+    expect(resetHarness.deleteSetting).toHaveBeenCalledWith('fa.home_subtitle');
+
+    // Category browsing + unified in-category normalized Persian/Arabic search + clear
+    const catSearchHarness = createTextsHarness(
+      {},
+      [
+        { callback: 'text-mode:categories' },
+        { callback: 'text-cat:user_wallet' },
+        { callback: 'text-list:search' },
+        { text: 'كارت به كارت' },
+        { callback: 'text-pk:topup_subtitle' },
+        { callback: 'text-nav:back' },
+        { callback: 'text-list:clear' },
+        { callback: 'text-nav:categories' },
+        { callback: 'text-nav:mode_select' },
+        { callback: 'nav:admin' },
+      ],
+      { useRealTranslationService: true }
+    );
+    await adminEditTextsConversation(catSearchHarness.conversation, catSearchHarness.ctx);
+    expect(catSearchHarness.translationService.searchTranslations).toHaveBeenCalledWith(
+      'كارت به كارت',
+      'fa',
+      expect.objectContaining({ filter: expect.any(Function) })
+    );
+  });
+
+  it('conditionally shows default text & placeholders, validates placeholders/Markdown, and renders real Markdown live preview with safe fallback', async () => {
+    const realHarness = createTextsHarness({}, [], { useRealTranslationService: true });
+    // Default text with NO placeholders: hides default section AND hides placeholders section
+    const simpleDefaultScreen = buildKeyDetailScreen(realHarness.ctx, {
+      key: 'home_subtitle',
+      editLocale: 'fa',
+      uiLocale: 'fa',
+      currentValue: FA_TEXTS.home_subtitle!,
+      defaultValue: FA_TEXTS.home_subtitle!,
+      isCustomized: false,
+      placeholders: [],
+    });
+    expect(simpleDefaultScreen).toContain('متن فعلی');
+    expect(simpleDefaultScreen).not.toContain('متن پیش‌فرض');
+    expect(simpleDefaultScreen).not.toContain('متغیرهای مجاز');
+    expect(validateTelegramMarkdown(simpleDefaultScreen).valid).toBe(true);
+
+    // Customized text WITH placeholders: shows BOTH default text AND placeholder descriptions
+    const customWithPlaceholders = buildKeyDetailScreen(realHarness.ctx, {
+      key: 'home_near_expiry_detail',
+      editLocale: 'fa',
+      uiLocale: 'fa',
+      currentValue: '`{username}` · {days} {days_unit} باقی',
+      defaultValue: FA_TEXTS.home_near_expiry_detail!,
+      isCustomized: true,
+      placeholders: templatePlaceholders(FA_TEXTS.home_near_expiry_detail!),
+    });
+    expect(customWithPlaceholders).toContain('متن فعلی');
+    expect(customWithPlaceholders).toContain('متن پیش‌فرض');
+    expect(customWithPlaceholders).toContain('متغیرهای مجاز');
+    expect(customWithPlaceholders).toContain('`{username}`');
+    expect(customWithPlaceholders).toContain('`{days}`');
+    expect(validateTelegramMarkdown(customWithPlaceholders).valid).toBe(true);
+
+    // Validation rejects missing placeholders, extra placeholders, and broken Markdown before saving
+    const validationHarness = createTextsHarness(
+      {},
+      [
+        { callback: 'text-mode:search' },
+        { text: 'home_near_expiry_detail' },
+        { callback: 'text-pk:home_near_expiry_detail' },
+        // Missing placeholders
+        { text: 'فقط متن بدون متغیر' },
+        // Extra unknown placeholder
+        { text: '`{username}` · {days} {days_unit} {bogus}' },
+        // Broken Telegram Markdown (* unclosed)
+        { text: '*خراب `{username}` · {days} {days_unit}' },
+        // Valid update finally succeeds
+        { text: '*یادآوری* `{username}` · {days} {days_unit}' },
+        // Real Live Preview renders unescaped Markdown with FA samples, then toggles to EN samples
+        { callback: 'text-act:preview' },
+        { callback: 'text-act:lang' },
+        { callback: 'text-nav:detail' },
+        { callback: 'text-nav:back' },
+        { callback: 'text-nav:mode_select' },
+        { callback: 'nav:admin' },
+      ],
+      { useRealTranslationService: true }
+    );
+    await adminEditTextsConversation(validationHarness.conversation, validationHarness.ctx);
+    expect(validationHarness.updateSetting).toHaveBeenCalledTimes(1);
+    expect(validationHarness.updateSetting).toHaveBeenCalledWith(
+      'fa.home_near_expiry_detail',
+      '*یادآوری* `{username}` · {days} {days_unit}'
     );
 
-    const resetHarness = createTextsHarness({ 'fa.welcome': 'متن اختصاصی' }, [
-      { callback: 'text-mode:customized' },
-      { callback: 'text-pk:welcome' },
-      { callback: 'text-act:reset' },
-      { callback: 'text-act:reset_confirm' },
-      { callback: 'text-nav:back' },
-      { callback: 'text-nav:mode_select' },
-      { callback: 'nav:admin' },
-    ]);
-    await adminEditTextsConversation(resetHarness.conversation, resetHarness.ctx);
-    expect(resetHarness.deleteSetting).toHaveBeenCalledWith('fa.welcome');
+    const allReplies = validationHarness.reply.mock.calls;
+    const allTexts = replyTexts(validationHarness.reply);
+    expect(allTexts.some((txt) => txt.includes('باید در متن وجود داشته باشند'))).toBe(true);
+    expect(allTexts.some((txt) => txt.includes('مجاز نیستند'))).toBe(true);
+    expect(allTexts.some((txt) => txt.includes('قالب‌بندی Markdown معتبر نیست'))).toBe(true);
 
-    const catHarness = createTextsHarness({}, [
-      { callback: 'text-mode:advanced' },
-      { callback: 'text-cat:user_home' },
-      { callback: 'text-nav:categories' },
-      { callback: 'text-nav:mode_select' },
-      { callback: 'nav:admin' },
-    ]);
-    await adminEditTextsConversation(catHarness.conversation, catHarness.ctx);
-    expect(catHarness.reply).toHaveBeenCalled();
+    // Verify Live Preview did NOT escape *یادآوری* or `reb1042` and used FA then EN sample values
+    const faPreviewCall = allReplies.find(
+      (call) => String(call[0]).includes('پیش‌نمایش واقعی') && String(call[0]).includes('🦁 فارسی')
+    );
+    expect(faPreviewCall).toBeDefined();
+    expect(String(faPreviewCall![0])).toContain('*یادآوری* `reb1042` · ۳۰ روز');
+    expect(String(faPreviewCall![0])).not.toContain('\\*یادآوری\\*');
+    expect((faPreviewCall![1] as { parse_mode?: string })?.parse_mode).toBe('Markdown');
 
-    const searchHarness = createTextsHarness({}, [
-      { callback: 'text-mode:search' },
-      { text: 'shop' },
-      { callback: 'text-pk:shop' },
-      { callback: 'text-act:preview' },
-      { callback: 'text-nav:detail' },
-      { callback: 'text-nav:back' },
-      { callback: 'text-nav:mode_select' },
-      { callback: 'nav:admin' },
-    ]);
-    await adminEditTextsConversation(searchHarness.conversation, searchHarness.ctx);
-    expect(searchHarness.translationService.searchTranslations).toHaveBeenCalledWith('shop', 'fa');
+    const enPreviewCall = allReplies.find(
+      (call) =>
+        String(call[0]).includes('پیش‌نمایش واقعی') && String(call[0]).includes('🇬🇧 English')
+    );
+    expect(enPreviewCall).toBeDefined();
+    expect(String(enPreviewCall![0])).toContain('`reb1042` · 30 days left');
 
-    const incatHarness = createTextsHarness({}, [
-      { callback: 'text-mode:advanced' },
-      { callback: 'text-cat:user_home' },
-      { callback: 'text-incat-search' },
-      { text: 'welcome' },
-      { callback: 'text-incat-clear' },
-      { callback: 'text-nav:categories' },
-      { callback: 'text-nav:mode_select' },
-      { callback: 'nav:admin' },
-    ]);
-    await adminEditTextsConversation(incatHarness.conversation, incatHarness.ctx);
-    expect(incatHarness.reply).toHaveBeenCalled();
+    // Safe fallback when template has invalid Markdown or Telegram rejects entities
+    const malformedPayload = composeLivePreviewPayload(
+      realHarness.ctx,
+      'home_subtitle',
+      'fa',
+      '*عنوان نیمه‌کاره'
+    );
+    expect(malformedPayload.usedFallback).toBe(true);
+    expect(malformedPayload.parseMode).toBeUndefined();
+    expect(malformedPayload.text).toContain('رندر Markdown با خطا مواجه شد');
 
-    const directHarness = createTextsHarness({}, [
-      { callback: 'text-mode:essential' },
-      { callback: 'text-pk:welcome' },
-      { text: 'متن مستقیم جدید' },
-      { callback: 'text-nav:back' },
-      { callback: 'text-nav:mode_select' },
-      { callback: 'nav:admin' },
-    ]);
-    await adminEditTextsConversation(directHarness.conversation, directHarness.ctx);
-    expect(directHarness.updateSetting).toHaveBeenCalledWith('fa.welcome', 'متن مستقیم جدید');
+    const apiRejectHarness = createTextsHarness(
+      {},
+      [
+        { callback: 'text-mode:essential' },
+        { callback: 'text-pk:onboarding_welcome' },
+        { callback: 'text-act:preview' },
+        { callback: 'text-nav:detail' },
+        { callback: 'text-nav:back' },
+        { callback: 'text-nav:mode_select' },
+        { callback: 'nav:admin' },
+      ],
+      { useRealTranslationService: true, failFirstMarkdownReply: false }
+    );
+    // Simulate Telegram parse_entities rejection specifically during preview
+    let previewRejected = false;
+    apiRejectHarness.reply.mockImplementation(
+      async (txt: string, opts?: { parse_mode?: string }) => {
+        if (
+          txt.includes('پیش‌نمایش واقعی') &&
+          opts?.parse_mode === 'Markdown' &&
+          !previewRejected
+        ) {
+          previewRejected = true;
+          throw new Error("Bad Request: can't parse entities");
+        }
+        return { message_id: 999 };
+      }
+    );
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    try {
+      await adminEditTextsConversation(apiRejectHarness.conversation, apiRejectHarness.ctx);
+      expect(previewRejected).toBe(true);
+      const fallbackCall = apiRejectHarness.reply.mock.calls.find(
+        (call) =>
+          String(call[0]).includes('رندر Markdown با خطا مواجه شد') &&
+          (call[1] as { parse_mode?: string })?.parse_mode === undefined
+      );
+      expect(fallbackCall).toBeDefined();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('uses text-pi: index callbacks for >64B keys, single-escapes search queries, and surfaces DB write failures', async () => {
@@ -697,6 +930,7 @@ describe('Admin text editor & translation catalog coverage', () => {
           { callback: 'text-pi:0' },
           { callback: 'text-act:edit' },
           { text: 'متن آزمایشی جدید' },
+          { callback: 'text-nav:detail' },
           { callback: 'text-nav:back' },
           { callback: 'text-nav:mode_select' },
           { callback: 'nav:admin' },
@@ -728,7 +962,10 @@ describe('Admin text editor & translation catalog coverage', () => {
     }
   });
 
-  it('keeps ESSENTIAL_USER_TEXTS, TEXT_CATEGORIES, and config_delete_* keys complete across FA and EN catalogs', () => {
+  it('enforces 100% mutually exclusive & exhaustive TEXT_CATEGORIES, valid ESSENTIAL_USER_TEXTS, full placeholder metadata, and zero Iran flag emojis', () => {
+    const IRAN_FLAG = '\u{1F1EE}\u{1F1F7}';
+
+    // 1. ESSENTIAL_USER_TEXTS integrity
     const essentialIds = ESSENTIAL_USER_TEXTS.map((item) => item.id);
     const essentialKeys = ESSENTIAL_USER_TEXTS.map((item) => item.key);
     expect(new Set(essentialIds).size).toBe(ESSENTIAL_USER_TEXTS.length);
@@ -743,6 +980,7 @@ describe('Admin text editor & translation catalog coverage', () => {
       expect(EN_TEXTS[item.descKey], `Missing EN descKey ${item.descKey}`).toBeDefined();
     }
 
+    // 2. TEXT_CATEGORIES: unique IDs, valid labels/descriptions, non-empty, 100% exhaustive, ZERO overlap
     const catIds = TEXT_CATEGORIES.map((cat) => cat.id);
     expect(new Set(catIds).size).toBe(TEXT_CATEGORIES.length);
     for (const cat of TEXT_CATEGORIES) {
@@ -758,20 +996,130 @@ describe('Admin text editor & translation catalog coverage', () => {
       ).toBeDefined();
     }
 
-    const deleteKeys = Object.keys(FA_TEXTS).filter((k) => k.startsWith('config_delete_'));
+    const allFaKeys = Object.keys(FA_TEXTS);
+    const allEnKeys = Object.keys(EN_TEXTS);
+    expect(new Set(allFaKeys)).toEqual(new Set(allEnKeys));
+
+    const uncovered: string[] = [];
+    const overlapped: Array<{ key: string; categories: string[] }> = [];
+    const countsByCategory = new Map<string, number>();
+
+    for (const key of allFaKeys) {
+      const matched = TEXT_CATEGORIES.filter((cat) => cat.matches(key)).map((cat) => cat.id);
+      if (matched.length === 0) uncovered.push(key);
+      if (matched.length > 1) overlapped.push({ key, categories: matched });
+      if (matched.length === 1) {
+        expect(classifyTranslationKey(key)).toBe(matched[0]);
+        countsByCategory.set(matched[0]!, (countsByCategory.get(matched[0]!) ?? 0) + 1);
+      }
+    }
+    expect(uncovered, 'Every catalog key must belong to one category').toEqual([]);
+    expect(overlapped, 'Categories must be strictly mutually exclusive').toEqual([]);
+    for (const cat of TEXT_CATEGORIES) {
+      expect(
+        countsByCategory.get(cat.id) ?? 0,
+        `Category ${cat.id} should not be empty`
+      ).toBeGreaterThan(0);
+    }
+
+    // 3. Every real catalog placeholder has bilingual descriptions AND bilingual sample values (zero missing, zero stale)
+    const catalogPlaceholders = new Set<string>();
+    for (const value of Object.values(FA_TEXTS)) {
+      for (const p of templatePlaceholders(value)) catalogPlaceholders.add(p);
+    }
+    const missingMeta = [...catalogPlaceholders]
+      .filter((p) => !PLACEHOLDER_DESCRIPTIONS[p]?.fa || !PLACEHOLDER_DESCRIPTIONS[p]?.en)
+      .sort();
+    const staleMeta = Object.keys(PLACEHOLDER_METADATA)
+      .filter((p) => !catalogPlaceholders.has(p))
+      .sort();
+    expect(missingMeta, 'Missing placeholder descriptions').toEqual([]);
+    expect(staleMeta, 'Stale placeholder metadata not present in catalog').toEqual([]);
+
+    const faSamples = getSamplePlaceholderValues('fa');
+    const enSamples = getSamplePlaceholderValues('en');
+    for (const p of catalogPlaceholders) {
+      expect(faSamples[p], `Missing FA sample for ${p}`).toBeTruthy();
+      expect(enSamples[p], `Missing EN sample for ${p}`).toBeTruthy();
+    }
+
+    // 4. Zero Iran flag emoji anywhere in FA/EN catalogs or placeholder metadata
+    for (const [k, v] of Object.entries(FA_TEXTS)) {
+      expect(v, `Iran flag found in FA_TEXTS.${k}`).not.toContain(IRAN_FLAG);
+    }
+    for (const [k, v] of Object.entries(EN_TEXTS)) {
+      expect(v, `Iran flag found in EN_TEXTS.${k}`).not.toContain(IRAN_FLAG);
+    }
+    for (const [p, meta] of Object.entries(PLACEHOLDER_METADATA)) {
+      expect(meta.sampleFa, `Iran flag in sampleFa.${p}`).not.toContain(IRAN_FLAG);
+      expect(meta.sampleEn, `Iran flag in sampleEn.${p}`).not.toContain(IRAN_FLAG);
+    }
+
+    // 5. config_delete_* keys parity preserved
+    const deleteKeys = allFaKeys.filter((k) => k.startsWith('config_delete_'));
     expect(deleteKeys.length).toBeGreaterThan(0);
     for (const key of deleteKeys) {
       expect(EN_TEXTS[key], `Missing EN key for ${key}`).toBeDefined();
     }
 
-    const uncoveredFa = Object.keys(FA_TEXTS).filter(
-      (key) => !TEXT_CATEGORIES.some((cat) => cat.matches(key))
+    // 6. Readable button labels: human snippets, duplicate disambiguation, subtle ✏️ marker without duplicate leading emoji
+    const labels = formatKeyListButtonLabels(
+      [
+        {
+          key: 'onboarding_welcome',
+          activeText: FA_TEXTS.onboarding_welcome!,
+          isCustomized: true,
+          essentialLabel: FA_TEXTS.admin_text_item_onboarding!,
+        },
+        {
+          key: 'admin_panel_status_label',
+          activeText: 'وضعیت',
+          isCustomized: false,
+        },
+        {
+          key: 'admin_promo_status_label',
+          activeText: 'وضعیت',
+          isCustomized: true,
+        },
+      ],
+      'fa'
     );
-    const uncoveredEn = Object.keys(EN_TEXTS).filter(
-      (key) => !TEXT_CATEGORIES.some((cat) => cat.matches(key))
+    expect(labels[0]).toBe('👋 خوش‌آمدگویی شروع · ✏️');
+    expect(labels[1]).toBe('وضعیت (panel_status)');
+    expect(labels[2]).toBe('✏️ وضعیت (promo_status)');
+    expect(labels.every((l) => [...l].length <= 48)).toBe(true);
+
+    // 7. Template Markdown validation preserves {snake_case} placeholders & live preview stays safe across all keys
+    expect(validateTemplateMarkdown('*یادآوری* `{username}` · {days} {days_unit}').valid).toBe(
+      true
     );
-    expect(uncoveredFa).toEqual([]);
-    expect(uncoveredEn).toEqual([]);
-    expect(new Set(Object.keys(FA_TEXTS))).toEqual(new Set(Object.keys(EN_TEXTS)));
+    expect(validateTemplateMarkdown('صفحه {page} از {total_pages}').valid).toBe(true);
+    expect(validateTemplateMarkdown('*خراب {days_unit}').valid).toBe(false);
+    expect(validateTemplateMarkdown('_خراب {days_unit}').valid).toBe(false);
+
+    const realTs = new TranslationService();
+    const previewCtx = {
+      from: { id: 1001, language_code: 'fa' },
+      userLocale: 'fa' as const,
+      services: { translationService: realTs },
+    } as unknown as ConversationContext;
+    for (const locale of ['fa', 'en'] as const) {
+      const samples = getSamplePlaceholderValues(locale);
+      for (const key of allFaKeys) {
+        const raw = realTs.getRawTemplate(`${locale}.${key}`, locale);
+        expect(raw).toBe((locale === 'fa' ? FA_TEXTS : EN_TEXTS)[key]);
+        const rendered = realTs.get(`${locale}.${key}`, locale, samples);
+        const payload = composeLivePreviewPayload(previewCtx, key, locale, rendered);
+        expect(payload.text.length, `Preview too long for ${locale}.${key}`).toBeLessThanOrEqual(
+          4_096
+        );
+        if (!payload.usedFallback) {
+          expect(
+            validateTelegramMarkdown(payload.text).valid,
+            `Invalid Markdown in live preview for ${locale}.${key}`
+          ).toBe(true);
+        }
+      }
+    }
   });
 });

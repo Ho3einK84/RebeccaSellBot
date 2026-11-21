@@ -100,31 +100,83 @@ export class TranslationService {
   }
 
   /**
-   * Search translation keys matching query by key name or translated text content.
+   * Unified normalized search across translation keys, optional metadata
+   * labels/descriptions, active values, and hardcoded defaults.
+   *
+   * Supports Persian/Arabic letter folding (ي/ك/ة/أ/إ/آ), diacritic removal,
+   * Persian/Arabic digit normalization (۰-۹ / ٠-٩ -> 0-9), and ZWNJ/space matching.
    */
   searchTranslations(
     query: string,
     locale: SupportedLocale = DEFAULT_LOCALE,
-    filterFn?: (key: string) => boolean
+    filterOrOptions?: ((key: string) => boolean) | TranslationSearchOptions
   ): string[] {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return [];
+    const compiledQuery = compileSearchQuery(query);
+    if (!compiledQuery) return [];
 
+    const options: TranslationSearchOptions =
+      typeof filterOrOptions === 'function' ? { filter: filterOrOptions } : (filterOrOptions ?? {});
     const targetLocale = normalizeLocale(locale);
     const allKeys = this.getTranslationKeys();
+    const matches: Array<{ key: string; rank: number }> = [];
 
-    return allKeys
-      .filter((key) => {
-        if (filterFn && !filterFn(key)) return false;
-        if (key.toLowerCase().includes(normalizedQuery)) return true;
-        const qualifiedKey = `${targetLocale}.${key}`;
-        const activeText = this.get(key, targetLocale);
-        if (activeText.toLowerCase().includes(normalizedQuery)) return true;
-        const defaultText = DEFAULT_SETTINGS[qualifiedKey];
-        if (defaultText && defaultText.toLowerCase().includes(normalizedQuery)) return true;
-        return false;
-      })
-      .sort();
+    for (const key of allKeys) {
+      if (options.filter && !options.filter(key)) continue;
+
+      const normalizedKey = normalizeSearchText(key);
+      const spacedKey = normalizeSearchText(key.replaceAll('_', ' '));
+      let rank: number | undefined;
+
+      if (normalizedKey === compiledQuery.spaced || spacedKey === compiledQuery.spaced) {
+        rank = 0;
+      } else if (
+        normalizedKey.startsWith(compiledQuery.spaced) ||
+        spacedKey.startsWith(compiledQuery.spaced)
+      ) {
+        rank = 1;
+      } else if (
+        matchesNormalizedSearch(key, compiledQuery) ||
+        matchesNormalizedSearch(key.replaceAll('_', ' '), compiledQuery)
+      ) {
+        rank = 2;
+      } else {
+        const extraRaw = options.extraText?.(key);
+        const extraParts =
+          extraRaw === undefined ? [] : Array.isArray(extraRaw) ? extraRaw : [extraRaw];
+        if (extraParts.some((part) => matchesNormalizedSearch(part, compiledQuery))) {
+          rank = 3;
+        } else {
+          const qualifiedKey = `${targetLocale}.${key}`;
+          const activeText = this.getRawTemplate(key, targetLocale);
+          const defaultText = DEFAULT_SETTINGS[qualifiedKey];
+          if (
+            matchesNormalizedSearch(activeText, compiledQuery) ||
+            (defaultText !== undefined && matchesNormalizedSearch(defaultText, compiledQuery))
+          ) {
+            rank = 4;
+          }
+        }
+      }
+
+      if (rank !== undefined) {
+        matches.push({ key, rank });
+      }
+    }
+
+    return matches
+      .sort((a, b) => (a.rank !== b.rank ? a.rank - b.rank : a.key.localeCompare(b.key)))
+      .map((entry) => entry.key);
+  }
+
+  /**
+   * Resolve the raw, un-interpolated template string for a specific locale
+   * (persisted override if valid, otherwise hardcoded default). Preserves
+   * `{placeholders}` verbatim and avoids missing-placeholder fallback warnings.
+   */
+  getRawTemplate(key: string, locale?: string): string {
+    const { messageKey, requestedLocale } = this.parseTranslationKey(key, locale);
+    const qualifiedKey = `${requestedLocale}.${messageKey}`;
+    return this.resolveTranslationTemplate(qualifiedKey) ?? DEFAULT_SETTINGS[qualifiedKey] ?? key;
   }
 
   /**
@@ -316,6 +368,68 @@ export class TranslationService {
     if (override === undefined) return hardcoded;
     return isValidTranslationOverride(override, hardcoded) ? override : hardcoded;
   }
+}
+
+export type TranslationSearchOptions = {
+  filter?: (key: string) => boolean;
+  /** Optional extra searchable text (labels/descriptions) attached to a key. */
+  extraText?: (key: string) => string | readonly string[] | undefined;
+};
+
+type CompiledSearchQuery = {
+  spaced: string;
+  joined: string;
+};
+
+const ARABIC_DIACRITICS_REGEX = /[\u064b-\u065f\u0670\u0640\u200e\u200f]/gu;
+
+function foldSearchChars(value: string): string {
+  return value
+    .replace(ARABIC_DIACRITICS_REGEX, '')
+    .replace(/[يیى]/gu, 'ی')
+    .replace(/[كک]/gu, 'ک')
+    .replace(/[ةۀ]/gu, 'ه')
+    .replace(/[أإآ]/gu, 'ا')
+    .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+    .toLowerCase();
+}
+
+/**
+ * Normalize Persian/Arabic characters, digits, diacritics, and whitespace for
+ * consistent, forgiving text search across keys, labels, and copy.
+ */
+export function normalizeSearchText(value: string): string {
+  if (!value) return '';
+  return foldSearchChars(value)
+    .replace(/\u200c/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function normalizeSearchTextZwnjJoined(value: string): string {
+  if (!value) return '';
+  return foldSearchChars(value)
+    .replace(/\u200c/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function compileSearchQuery(query: string): CompiledSearchQuery | undefined {
+  const spaced = normalizeSearchText(query);
+  if (!spaced) return undefined;
+  return {
+    spaced,
+    joined: normalizeSearchTextZwnjJoined(query),
+  };
+}
+
+function matchesNormalizedSearch(haystack: string, query: CompiledSearchQuery): boolean {
+  if (!haystack) return false;
+  const spacedHaystack = normalizeSearchText(haystack);
+  if (spacedHaystack.includes(query.spaced)) return true;
+  const joinedHaystack = normalizeSearchTextZwnjJoined(haystack);
+  return joinedHaystack.includes(query.joined) || joinedHaystack.includes(query.spaced);
 }
 
 export function normalizeLocale(

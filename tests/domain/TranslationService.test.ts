@@ -11,6 +11,7 @@ import {
   TranslationService,
   isValidTranslationOverride,
   normalizeLocale,
+  normalizeSearchText,
   templatePlaceholders,
   validateTranslationOverrideDetailed,
 } from '../../src/domain/services/TranslationService.js';
@@ -105,7 +106,9 @@ describe('TranslationService & Catalog Standards', () => {
 
   it('uses hardcoded fallbacks before DB initialization and preserves placeholder text inside values', () => {
     const service = new TranslationService();
-    expect(service.get('welcome', 'fa')).toBe(DEFAULT_SETTINGS['fa.welcome']);
+    expect(service.get('onboarding_welcome', 'fa')).toBe(DEFAULT_SETTINGS['fa.onboarding_welcome']);
+    expect(service.getRawTemplate('balance', 'fa')).toBe(DEFAULT_SETTINGS['fa.balance']);
+    expect(service.getRawTemplate('fa.home_near_expiry_detail')).toContain('{days_unit}');
     expect(service.get('balance', 'fa', { balance: 50_000 })).toContain('50000');
     expect(service.get('completely_unknown_key_xyz', 'fa')).toBe('completely_unknown_key_xyz');
 
@@ -145,8 +148,10 @@ describe('TranslationService & Catalog Standards', () => {
     expect(normalizeLocale('en_US')).toBe('en');
     expect(normalizeLocale('de-DE')).toBe('fa');
     expect(service.resolveLocale('de-DE')).toBe('en');
-    expect(service.get('welcome', 'de-DE')).toBe(DEFAULT_SETTINGS['en.welcome']);
-    expect(service.get('EN.welcome')).toBe(DEFAULT_SETTINGS['en.welcome']);
+    expect(service.get('onboarding_welcome', 'de-DE')).toBe(
+      DEFAULT_SETTINGS['en.onboarding_welcome']
+    );
+    expect(service.get('EN.onboarding_welcome')).toBe(DEFAULT_SETTINGS['en.onboarding_welcome']);
 
     await service.updateSetting('en.custom_only', 'Configured English');
     expect(service.get('custom_only', 'fa')).toBe('Configured English');
@@ -228,10 +233,12 @@ describe('TranslationService & Catalog Standards', () => {
       insertError: () => new Error('write failed'),
     });
     getDbMock.mockReturnValue(createMockDb().db as never);
-    await service.updateSetting('en.welcome', 'Before write');
+    await service.updateSetting('en.home_title', 'Before write');
     getDbMock.mockReturnValue(failUpsertMock.db as never);
-    await expect(service.updateSetting('en.welcome', 'After fail')).rejects.toThrow('write failed');
-    expect(service.get('welcome', 'en')).toBe('Before write');
+    await expect(service.updateSetting('en.home_title', 'After fail')).rejects.toThrow(
+      'write failed'
+    );
+    expect(service.get('home_title', 'en')).toBe('Before write');
 
     // Batched updateSettings commits single multi-row upsert and isolates rollback
     const rollbackMock = createMockDb();
@@ -240,29 +247,32 @@ describe('TranslationService & Catalog Standards', () => {
     });
     getDbMock.mockReturnValue(rollbackMock.db as never);
     await expect(
-      service.updateSettings({ 'en.welcome': 'Rolled back', 'en.main_menu': 'Rolled back' })
+      service.updateSettings({ 'en.home_title': 'Rolled back', 'en.main_menu': 'Rolled back' })
     ).rejects.toThrow('transaction rolled back');
-    expect(service.get('welcome', 'en')).toBe('Before write');
+    expect(service.get('home_title', 'en')).toBe('Before write');
 
     const batchMock = createMockDb();
     getDbMock.mockReturnValue(batchMock.db as never);
-    await service.updateSettings({ 'en.welcome': 'Committed bulk', 'en.main_menu': 'Bulk menu' });
+    await service.updateSettings({
+      'en.home_title': 'Committed bulk',
+      'en.main_menu': 'Bulk menu',
+    });
     expect(batchMock.state.insertCalls).toHaveLength(1);
     expect(Array.isArray(batchMock.state.insertCalls[0]?.values)).toBe(true);
-    expect(service.get('welcome', 'en')).toBe('Committed bulk');
+    expect(service.get('home_title', 'en')).toBe('Committed bulk');
     expect(service.get('main_menu', 'en')).toBe('Bulk menu');
 
     // Delete restores fallback
-    await service.deleteSetting('en.welcome');
-    expect(service.get('welcome', 'en')).toBe(DEFAULT_SETTINGS['en.welcome']);
+    await service.deleteSetting('en.home_title');
+    expect(service.get('home_title', 'en')).toBe(DEFAULT_SETTINGS['en.home_title']);
   });
 
   it('batches stock translation cleanup in ensureDefaultSettings and handles reload/search', async () => {
     const cleanupDb = createMockDb({
       selectResults: [
         [
-          { key: 'en.welcome', value: DEFAULT_SETTINGS['en.welcome'] },
-          { key: 'fa.welcome', value: DEFAULT_SETTINGS['fa.welcome'] },
+          { key: 'en.home_title', value: DEFAULT_SETTINGS['en.home_title'] },
+          { key: 'fa.home_title', value: DEFAULT_SETTINGS['fa.home_title'] },
           { key: 'en.main_menu', value: 'Admin Customized Menu' },
         ],
         [{ key: 'en.main_menu', value: 'Admin Customized Menu' }],
@@ -277,6 +287,26 @@ describe('TranslationService & Catalog Standards', () => {
     expect(service.get('main_menu', 'en')).toBe('Admin Customized Menu');
     expect(service.getCustomizedKeys('en')).toContain('main_menu');
     expect(service.searchTranslations('Admin Customized', 'en')).toContain('main_menu');
+
+    // Normalized Persian/Arabic/digit/ZWNJ search across key, extra labels, and content
+    expect(normalizeSearchText('كارت‌به‌كارتِ ۵۰ ٥٠')).toBe('کارت به کارت 50 50');
+    expect(service.searchTranslations('كارت به كارت', 'fa')).toContain('topup_subtitle');
+    expect(service.searchTranslations('کارتبهکارت', 'fa')).toContain('topup_subtitle');
+    expect(service.searchTranslations('پیشنمایش', 'fa')).toContain('purchase_review_title');
+    expect(service.searchTranslations('30 روز', 'fa')).toContain('package_pkg_10gb_30d_name');
+    expect(service.searchTranslations('٣٠ روز', 'fa')).toContain('package_pkg_10gb_30d_name');
+    expect(service.searchTranslations('۳۰ روز', 'fa')).toContain('package_pkg_10gb_30d_name');
+    expect(service.searchTranslations('بستهِ نقره‌اي', 'fa')).toEqual([]);
+    expect(
+      service.searchTranslations('راهنمای شروع اختصاصی', 'fa', {
+        filter: (k) => k === 'onboarding_welcome' || k === 'home_subtitle',
+        extraText: (k) => (k === 'onboarding_welcome' ? 'راهنمای شروع اختصاصی' : undefined),
+      })
+    ).toEqual(['onboarding_welcome']);
+    // In-category filter restricts matches cleanly
+    const onlyWallet = service.searchTranslations('كارت', 'fa', (k) => k.startsWith('topup_'));
+    expect(onlyWallet.length).toBeGreaterThan(0);
+    expect(onlyWallet.every((k) => k.startsWith('topup_'))).toBe(true);
 
     // Reload failure resets stale cache to safe hardcoded fallbacks
     getDbMock.mockReturnValue(
