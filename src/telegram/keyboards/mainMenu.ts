@@ -1116,6 +1116,8 @@ export async function renderWalletStatementScreen(
         return '🎟️';
       case 'lucky_wheel':
         return '🎡';
+      case 'trial':
+        return '🎁';
       default:
         return amount >= 0 ? '➕' : '➖';
     }
@@ -1136,26 +1138,37 @@ export async function renderWalletStatementScreen(
     lucky_wheel: 'tx_type_lucky_wheel',
   };
 
+  const isFa = resolveContextLocale(ctx) === 'fa';
+  const currency = t(ctx, 'currency_toman');
+  const amountLabel = t(ctx, 'wallet_pending_amount');
+  const balanceAfterLabel = t(ctx, 'wallet_transfer_balance_after_label');
+
   const screen = buildUserScreen({
     emoji: '📜',
     title: t(ctx, 'wallet_history_title'),
     subtitle: t(ctx, 'wallet_dashboard_subtitle'),
-    sections: [
-      {
-        fields: result.transactions.map((tx) => {
-          const icon = typeIcon(tx.type, tx.amount);
-          const sign = tx.amount > 0 ? '+' : '';
-          const typeKey = TRANSACTION_TYPE_MAP[tx.type];
-          const typeLabel = typeKey ? t(ctx, typeKey) : escapeTelegramMarkdown(tx.type);
-          const amountText = `${sign}${localizedNumber(tx.amount, ctx)} ${t(ctx, 'currency_toman')}`;
-          const balanceAfterText = `${localizedNumber(tx.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`;
-          return {
-            emoji: icon,
-            value: `*${typeLabel}* · ${localizedDate(new Date(tx.createdAt), ctx)}\n  *${amountText}* · ${t(ctx, 'wallet_available_balance')}: ${balanceAfterText}`,
-          };
-        }),
-      },
-    ],
+    sections: result.transactions.map((tx) => {
+      const icon = typeIcon(tx.type, tx.amount);
+      const sign = tx.amount > 0 ? (isFa ? '\u200e+' : '+') : '';
+      const typeKey = TRANSACTION_TYPE_MAP[tx.type];
+      const typeLabel = typeKey ? t(ctx, typeKey) : escapeTelegramMarkdown(tx.type);
+      const amountText = `${sign}${localizedNumber(tx.amount, ctx)} ${currency}`;
+      const balanceAfterText = `${localizedNumber(tx.balanceAfter, ctx)} ${currency}`;
+      return {
+        emoji: icon,
+        title: `${typeLabel} · ${localizedDate(new Date(tx.createdAt), ctx)}`,
+        fields: [
+          {
+            label: amountLabel,
+            value: amountText,
+          },
+          {
+            label: balanceAfterLabel,
+            value: balanceAfterText,
+          },
+        ],
+      };
+    }),
     footer: t(ctx, 'subscription_list_page', {
       page: localizedNumber(result.page, ctx),
       total_pages: localizedNumber(result.totalPages, ctx),

@@ -206,13 +206,31 @@ describe('Home & wallet dashboards', () => {
                   id: 'tx_1',
                   telegramId: 12345,
                   amount: 50_000,
-                  balanceAfter: 50_000,
+                  balanceAfter: 100_000,
                   type: 'topup',
                   description: 'Topup receipt',
                   createdAt: new Date('2026-08-28T12:00:00Z'),
                 },
+                {
+                  id: 'tx_2',
+                  telegramId: 12345,
+                  amount: -30_000,
+                  balanceAfter: 70_000,
+                  type: 'purchase',
+                  description: 'Subscription purchase',
+                  createdAt: new Date('2026-08-29T12:00:00Z'),
+                },
+                {
+                  id: 'tx_3',
+                  telegramId: 12345,
+                  amount: 0,
+                  balanceAfter: 0,
+                  type: 'trial',
+                  description: 'Free trial',
+                  createdAt: new Date('2026-08-27T12:00:00Z'),
+                },
               ],
-              total: 1,
+              total: 3,
               totalPages: 1,
               page: 1,
             }),
@@ -220,7 +238,16 @@ describe('Home & wallet dashboards', () => {
           translationService: {
             get: vi.fn(
               (key: string) =>
-                ({ tx_type_topup: 'افزایش موجودی', currency_toman: 'تومان' })[key] ?? key
+                ({
+                  wallet_history_title: 'سوابق تراکنش‌ها',
+                  wallet_dashboard_subtitle: 'موجودی، شارژ حساب و گردش مالی',
+                  wallet_pending_amount: 'مبلغ',
+                  wallet_transfer_balance_after_label: 'ماندهٔ کیف پول',
+                  tx_type_topup: 'افزایش موجودی',
+                  tx_type_purchase: 'خرید اشتراک',
+                  tx_type_trial: 'تست رایگان',
+                  currency_toman: 'تومان',
+                })[key] ?? key
             ),
             resolveLocale: vi.fn(() => 'fa'),
           },
@@ -228,8 +255,15 @@ describe('Home & wallet dashboards', () => {
       } as unknown as MenuContext,
       1
     );
-    expect(replyTx.mock.calls[0]?.[0]).toContain('افزایش موجودی');
-    expect(replyTx.mock.calls[0]?.[0]).toContain('۵۰٬۰۰۰ تومان');
+    const renderedTxText = String(replyTx.mock.calls[0]?.[0] ?? '');
+    expect(renderedTxText).toContain('افزایش موجودی');
+    expect(renderedTxText).toContain('۵۰٬۰۰۰ تومان');
+    expect(renderedTxText).toContain('خرید اشتراک');
+    expect(renderedTxText).toContain('🎁 *تست رایگان');
+    // Every non-empty line in Persian statement screen (including negative amount lines with inline LRM) must start with RLM
+    for (const line of renderedTxText.split('\n').filter(Boolean)) {
+      expect(line.startsWith('\u200f')).toBe(true);
+    }
   });
 
   it('resolves configured support destination or falls back dynamically to admin ID', () => {

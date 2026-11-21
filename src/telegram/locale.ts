@@ -156,11 +156,11 @@ export function ensurePersianLineDirection(value: string): string {
   return value
     .split('\n')
     .map((line) => {
-      if (!line || line.startsWith(rlm) || line.includes(lrm)) return line;
+      if (!line || line.startsWith(rlm) || line.startsWith(lrm)) return line;
       const cleanLine = line.replace(/^[\s*_`[\]()#-]+/u, '');
       const textAfterEmoji = stripLeadingEmoji(cleanLine).replace(/^[\s*_`[\]()#-]+/u, '');
       const candidate = textAfterEmoji || cleanLine;
-      if (/^[@A-Za-z0-9]/u.test(candidate)) {
+      if (/^[@A-Za-z0-9\u200e+\-\u2212]/u.test(candidate)) {
         return `${rlm}${line}`;
       }
       return line;
@@ -176,7 +176,7 @@ export function formatPersianScreen(content: string): string {
   return content
     .split('\n')
     .map((line) => {
-      if (!line || line.startsWith(rlm) || line.includes(lrm)) return line;
+      if (!line || line.startsWith(rlm) || line.startsWith(lrm)) return line;
       return `${rlm}${line}`;
     })
     .join('\n');

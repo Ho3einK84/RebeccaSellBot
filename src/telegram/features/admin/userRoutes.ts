@@ -10,7 +10,7 @@ import {
   renderScreen,
 } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
-import { localizedDate, localizedNumber, t, tm } from '../../locale.js';
+import { localizedDate, localizedNumber, resolveContextLocale, t, tm } from '../../locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 
 import { calculateTraffic, isConfigActive } from '../../../domain/services/ConfigLifecycle.js';
@@ -657,6 +657,8 @@ function transactionIcon(type: string, amount: number): string {
       return '🎟️';
     case 'lucky_wheel':
       return '🎡';
+    case 'trial':
+      return '🎁';
     default:
       return amount >= 0 ? '➕' : '➖';
   }
@@ -980,13 +982,14 @@ export async function renderUserReportsLedger(
   }
   keyboard.text(t(ctx, 'admin_user_report_btn_back_hub'), `admin:user:reports:${targetId}`);
 
+  const isFa = resolveContextLocale(ctx) === 'fa';
   const screen = buildScreen({
     emoji: '💳',
     title: t(ctx, 'admin_user_ledger_title'),
     subtitle: t(ctx, 'admin_user_audit_subtitle', { telegram_id: targetId }),
     sections: result.transactions.map((tx) => {
       const icon = transactionIcon(tx.type, tx.amount);
-      const sign = tx.amount > 0 ? '+' : '';
+      const sign = tx.amount > 0 ? (isFa ? '\u200e+' : '+') : '';
       const typeKey = TRANSACTION_TYPE_MAP[tx.type];
       const typeLabel = typeKey ? t(ctx, typeKey) : escapeTelegramMarkdown(tx.type);
       return {
@@ -1000,7 +1003,7 @@ export async function renderUserReportsLedger(
           },
           {
             emoji: '👛',
-            label: t(ctx, 'wallet_available_balance'),
+            label: t(ctx, 'wallet_transfer_balance_after_label'),
             value: `${localizedNumber(tx.balanceAfter, ctx)} ${t(ctx, 'currency_toman')}`,
           },
           ...(tx.referenceId

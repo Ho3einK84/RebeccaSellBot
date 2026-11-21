@@ -53,7 +53,9 @@ export function formatWebhookAlertScreen(input: WebhookAlertScreenInput): string
     const lrm = '\u200e';
     return content
       .split('\n')
-      .map((line) => (!line || line.startsWith(rlm) || line.includes(lrm) ? line : `${rlm}${line}`))
+      .map((line) =>
+        !line || line.startsWith(rlm) || line.startsWith(lrm) ? line : `${rlm}${line}`
+      )
       .join('\n');
   }
 
