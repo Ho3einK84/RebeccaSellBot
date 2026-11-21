@@ -22,11 +22,11 @@ interface SegmentedControlProps<T extends string> {
 }
 
 const activeToneClasses: Record<SegmentedTone, string> = {
-  default: 'bg-surface border-line-strong text-ink font-semibold shadow-[var(--shadow-card)]',
-  brand: 'bg-surface border-brand/35 text-brand-fg font-semibold shadow-[var(--shadow-card)]',
-  ok: 'bg-surface border-ok/35 text-ok-fg font-semibold shadow-[var(--shadow-card)]',
-  warn: 'bg-surface border-warn/40 text-warn-fg font-semibold shadow-[var(--shadow-card)]',
-  danger: 'bg-surface border-danger/35 text-danger-fg font-semibold shadow-[var(--shadow-card)]',
+  default: 'bg-surface border-line-strong text-ink font-semibold shadow-[var(--shadow-xs)]',
+  brand: 'bg-surface border-brand/35 text-brand-fg font-semibold shadow-[var(--shadow-xs)]',
+  ok: 'bg-surface border-ok/35 text-ok-fg font-semibold shadow-[var(--shadow-xs)]',
+  warn: 'bg-surface border-warn/40 text-warn-fg font-semibold shadow-[var(--shadow-xs)]',
+  danger: 'bg-surface border-danger/35 text-danger-fg font-semibold shadow-[var(--shadow-xs)]',
 };
 
 const activeBadgeToneClasses: Record<SegmentedTone, string> = {
@@ -56,7 +56,7 @@ export function SegmentedControl<T extends string>({
     <div
       role={role}
       aria-label={ariaLabel}
-      className={`p-1 rounded-tile bg-surface-2 border border-line flex items-center gap-1 overflow-x-auto no-scrollbar overscroll-x-contain touch-pan-x ${className}`}
+      className={`p-1 rounded-tile bg-surface-2/90 border border-line shadow-[var(--shadow-inset-track)] flex items-center gap-1 overflow-x-auto no-scrollbar overscroll-x-contain touch-pan-x ${className}`}
     >
       {options.map((opt) => {
         const Icon = opt.icon;
@@ -78,7 +78,7 @@ export function SegmentedControl<T extends string>({
             }}
             className={`${
               fullWidth ? 'flex-1 min-w-max' : 'shrink-0'
-            } h-9 px-3 rounded-ctl text-xs cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap select-none border transition-colors duration-150 rs-focus press ${
+            } h-9 px-3 rounded-ctl text-xs cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap select-none border transition-all duration-200 rs-focus press ${
               active
                 ? activeToneClasses[tone]
                 : 'border-transparent text-ink-soft hover:text-ink font-medium'

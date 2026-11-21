@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { LayoutDashboard, Receipt, Users } from 'lucide-react';
 import { Providers } from '../../webapp/src/app/providers.js';
 import { Button } from '../../webapp/src/shared/components/ui/Button.js';
+import { Badge } from '../../webapp/src/shared/components/ui/Badge.js';
 import { Card } from '../../webapp/src/shared/components/ui/Card.js';
+import { IconTile } from '../../webapp/src/shared/components/ui/IconTile.js';
 import { Switch } from '../../webapp/src/shared/components/ui/Switch.js';
 import { AlertBanner } from '../../webapp/src/shared/components/ui/AlertBanner.js';
 import { SegmentedControl } from '../../webapp/src/shared/components/ui/SegmentedControl.js';
@@ -132,7 +134,18 @@ describe('Webapp Unified Design System & Portal SSR Smoke Tests', () => {
         'div',
         null,
         React.createElement(Button, { variant: 'tonal', size: 'sm' }, 'Tonal'),
+        React.createElement(Badge, { variant: 'accent', dot: true }, 'AccentBadge'),
+        React.createElement(
+          IconTile,
+          { tone: 'accent', size: 'sm' },
+          React.createElement('span', null, '★')
+        ),
         React.createElement(Card, { tone: 'warn', padding: 'md' }, 'Card Body'),
+        React.createElement(
+          Card,
+          { tone: 'accent', padding: 'sm', interactive: true },
+          'Accent Card'
+        ),
         React.createElement(Switch, {
           checked: true,
           onChange: () => undefined,
@@ -177,6 +190,9 @@ describe('Webapp Unified Design System & Portal SSR Smoke Tests', () => {
     );
 
     expect(html).toContain('Tonal');
+    expect(html).toContain('AccentBadge');
+    expect(html).toContain('bg-accent-soft');
+    expect(html).toContain('rs-card-interactive');
     expect(html).toContain('bg-warn-soft');
     expect(html).toContain('role="switch"');
     expect(html).toContain('Error Notice');

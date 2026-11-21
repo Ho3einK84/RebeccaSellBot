@@ -16,7 +16,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <input
         ref={ref}
-        className={`w-full h-11 px-3.5 text-sm rounded-ctl border outline-none rs-focus transition-colors duration-150 disabled:opacity-50 ${inputClass} ${className}`}
+        className={`w-full h-11 px-3.5 text-sm rounded-ctl border outline-none rs-focus transition-all duration-150 disabled:opacity-50 ${inputClass} ${className}`}
         {...props}
       />
     );
@@ -35,7 +35,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <textarea
         ref={ref}
-        className={`w-full p-3 text-xs sm:text-sm rounded-ctl border outline-none rs-focus transition-colors duration-150 disabled:opacity-50 ${inputClass} ${className}`}
+        className={`w-full p-3 text-xs sm:text-sm rounded-ctl border outline-none rs-focus transition-all duration-150 disabled:opacity-50 ${inputClass} ${className}`}
         {...props}
       />
     );
@@ -55,7 +55,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <select
         ref={ref}
-        className={`w-full ${compact ? 'h-9 px-2.5 text-xs' : 'h-11 px-3 text-xs sm:text-sm'} rounded-ctl border outline-none rs-focus cursor-pointer transition-colors duration-150 disabled:opacity-50 ${inputClass} ${className}`}
+        className={`w-full ${compact ? 'h-9 px-2.5 text-xs' : 'h-11 px-3 text-xs sm:text-sm'} rounded-ctl border outline-none rs-focus cursor-pointer transition-all duration-150 disabled:opacity-50 ${inputClass} ${className}`}
         {...props}
       >
         {children}

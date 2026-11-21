@@ -99,9 +99,9 @@ export const Modal: React.FC<ModalProps> = ({
       aria-labelledby={title && !customHeader ? titleId : undefined}
       className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center sm:p-4"
     >
-      {/* Matte frosted backdrop */}
+      {/* Frosted backdrop */}
       <div
-        className="fixed inset-0 bg-black/55 dark:bg-black/70 rs-backdrop-blur anim-fade"
+        className="fixed inset-0 bg-black/45 dark:bg-black/68 rs-backdrop-blur anim-fade"
         onClick={() => {
           if (closeOnBackdrop) onClose();
         }}
@@ -114,12 +114,12 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {/* Mobile sheet grab handle */}
         <div className="flex sm:hidden justify-center pt-2.5 pb-1 shrink-0" aria-hidden="true">
-          <div className="w-9 h-1 rounded-full bg-line-strong/80" />
+          <div className="w-10 h-1 rounded-full bg-line-strong" />
         </div>
 
         {/* Sticky Modal Header */}
         {hasHeader && (
-          <div className="flex items-start justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-line bg-surface shrink-0 text-start">
+          <div className="flex items-start justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-line bg-surface/92 rs-backdrop-blur shrink-0 text-start">
             {customHeader ? (
               <div className="min-w-0 flex-1">{customHeader}</div>
             ) : (
@@ -161,7 +161,7 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Sticky Modal Footer */}
         {footer ? (
-          <div className="px-4 sm:px-5 py-3 border-t border-line bg-surface-2/60 shrink-0">
+          <div className="px-4 sm:px-5 py-3 border-t border-line bg-surface-2/75 rs-backdrop-blur shrink-0">
             {footer}
           </div>
         ) : null}

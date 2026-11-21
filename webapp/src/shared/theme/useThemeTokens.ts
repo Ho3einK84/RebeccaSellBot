@@ -4,7 +4,7 @@ export const useThemeTokens = () => {
     subCardClass: 'bg-surface-2 border-line',
     headerClass: 'bg-surface border-b border-line',
     inputClass:
-      'bg-surface-2 border-line-strong text-ink placeholder:text-ink-muted focus:border-brand focus:bg-surface',
+      'bg-surface-2/85 border-line-strong text-ink placeholder:text-ink-muted focus:border-brand focus:bg-surface focus:ring-3 focus:ring-brand/15 shadow-[var(--shadow-xs)]',
     textPrimary: 'text-ink',
     textSecondary: 'text-ink-soft',
     textMuted: 'text-ink-muted',

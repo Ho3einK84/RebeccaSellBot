@@ -609,7 +609,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* Step 7: Success Screen */}
         {step === 'success' && successData && (
           <div className="flex flex-col items-center text-center gap-4 py-2">
-            <IconTile tone="ok" size="lg">
+            <IconTile tone="ok" size="lg" className="anim-pop">
               <CheckCircle2 />
             </IconTile>
 
@@ -670,7 +670,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {/* High-contrast white QR Code frame */}
             {qrSrc ? (
-              <div className="bg-white p-3 rounded-card border border-line flex items-center justify-center my-1">
+              <div className="bg-white p-3 rounded-card border border-line shadow-[var(--shadow-card)] flex items-center justify-center my-1 anim-pop">
                 <img
                   src={qrSrc}
                   alt={t('user.services.qrTitle')}

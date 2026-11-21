@@ -29,7 +29,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }
     : parsedCreatedAt.toLocaleDateString(isRtl ? 'fa-IR' : 'en-US');
 
   return (
-    <div className="p-3.5 rounded-tile border border-line bg-surface-2 hover:border-line-strong flex items-center justify-between text-start gap-3 transition-colors">
+    <div className="p-3.5 rounded-tile border border-line bg-surface shadow-[var(--shadow-xs)] hover:border-line-strong hover:shadow-[var(--shadow-card)] flex items-center justify-between text-start gap-3 transition-all duration-200">
       <div className="flex items-center gap-3 min-w-0">
         <IconTile tone={isCredit ? 'ok' : 'danger'} size="sm">
           <Icon />

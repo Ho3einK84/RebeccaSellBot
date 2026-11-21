@@ -15,11 +15,11 @@ const STORAGE_KEY = 'rsbot_miniapp_theme';
 
 const THEME_CHROME_COLORS = {
   dark: {
-    canvas: '#0a0d12',
-    surface: '#12161f',
+    canvas: '#080b11',
+    surface: '#111621',
   },
   light: {
-    canvas: '#f5f6f8',
+    canvas: '#f3f5f9',
     surface: '#ffffff',
   },
 } as const;

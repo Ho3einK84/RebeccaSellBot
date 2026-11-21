@@ -1,10 +1,11 @@
 import React, { type ReactNode } from 'react';
 
-export type TileTone = 'brand' | 'ok' | 'warn' | 'danger' | 'info' | 'neutral';
+export type TileTone = 'brand' | 'accent' | 'ok' | 'warn' | 'danger' | 'info' | 'neutral';
 export type TileSize = 'sm' | 'md' | 'lg';
 
 const toneClasses: Record<TileTone, string> = {
   brand: 'bg-brand-soft text-brand-fg border-brand/20',
+  accent: 'bg-accent-soft text-accent-fg border-accent/25',
   ok: 'bg-ok-soft text-ok-fg border-ok/20',
   warn: 'bg-warn-soft text-warn-fg border-warn/20',
   danger: 'bg-danger-soft text-danger-fg border-danger/20',
@@ -32,7 +33,7 @@ export const IconTile: React.FC<IconTileProps> = ({
   className = '',
 }) => (
   <span
-    className={`inline-flex items-center justify-center shrink-0 border ${sizeClasses[size]} ${toneClasses[tone]} ${className}`}
+    className={`inline-flex items-center justify-center shrink-0 border shadow-[var(--rs-specular-top)] transition-transform duration-200 ease-[var(--ease-spring)] group-hover:scale-[1.06] ${sizeClasses[size]} ${toneClasses[tone]} ${className}`}
     aria-hidden="true"
   >
     {children}

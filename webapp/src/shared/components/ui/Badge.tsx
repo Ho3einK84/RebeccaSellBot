@@ -6,6 +6,7 @@ export type BadgeVariant =
   | 'warning'
   | 'error'
   | 'primary'
+  | 'accent'
   | 'info'
   // aliases kept for compatibility
   | 'secondary'
@@ -30,6 +31,7 @@ const variantClasses: Record<BadgeVariant, string> = {
   warning: 'bg-warn-soft border-warn/25 text-warn-fg',
   error: 'bg-danger-soft border-danger/25 text-danger-fg',
   primary: 'bg-brand-soft border-brand/25 text-brand-fg',
+  accent: 'bg-accent-soft border-accent/25 text-accent-fg',
   info: 'bg-info-soft border-info/25 text-info-fg',
   secondary: 'bg-surface-2 border-line-strong text-ink-soft',
   outline: 'bg-transparent border-line-strong text-ink-soft',
@@ -37,11 +39,12 @@ const variantClasses: Record<BadgeVariant, string> = {
 
 const dotClasses: Record<BadgeVariant, string> = {
   neutral: 'bg-ink-muted',
-  success: 'bg-ok',
-  warning: 'bg-warn',
-  error: 'bg-danger',
-  primary: 'bg-brand-fg',
-  info: 'bg-info',
+  success: 'bg-ok ring-2 ring-ok/20',
+  warning: 'bg-warn ring-2 ring-warn/20',
+  error: 'bg-danger ring-2 ring-danger/20',
+  primary: 'bg-brand-fg ring-2 ring-brand/20',
+  accent: 'bg-accent ring-2 ring-accent/20',
+  info: 'bg-info ring-2 ring-info/20',
   secondary: 'bg-ink-muted',
   outline: 'bg-ink-muted',
 };

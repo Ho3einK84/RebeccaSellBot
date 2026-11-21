@@ -65,7 +65,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
       {/* Left column: Program Summary + Metrics */}
       <div className="lg:col-span-5 flex flex-col gap-3.5">
         <Card padding="lg" className="flex items-start gap-3.5">
-          <IconTile tone="brand" size="lg">
+          <IconTile tone="accent" size="lg">
             <Gift />
           </IconTile>
           <div className="flex flex-col min-w-0">
@@ -78,9 +78,9 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           </div>
         </Card>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 anim-stagger">
           <Card padding="md" className="flex flex-col items-center text-center gap-1.5">
-            <IconTile tone="brand" size="sm">
+            <IconTile tone="accent" size="sm">
               <Users />
             </IconTile>
             <span className="text-xs text-ink-muted mt-0.5">{t('user.referral.statsInvited')}</span>
@@ -110,7 +110,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
             type="button"
             onClick={() => void handleCopyCode()}
             disabled={!referralCode}
-            className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3 flex items-center justify-between gap-2.5 press rs-focus cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-start"
+            className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:bg-surface-3 flex items-center justify-between gap-2.5 rs-card-interactive rs-focus cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-start"
           >
             <bdi
               dir="ltr"
@@ -127,7 +127,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
             >
               {isCopied('referral-code') ? (
                 <>
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-3.5 h-3.5 anim-pop" />
                   <span>{t('common.copied')}</span>
                 </>
               ) : (
@@ -146,7 +146,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
             type="button"
             onClick={() => void handleCopyLink()}
             disabled={!inviteLink}
-            className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3 flex items-center justify-between gap-2.5 press rs-focus cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-start"
+            className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:bg-surface-3 flex items-center justify-between gap-2.5 rs-card-interactive rs-focus cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-start"
           >
             <bdi
               dir="ltr"
@@ -163,7 +163,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
             >
               {isCopied('referral-link') ? (
                 <>
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-3.5 h-3.5 anim-pop" />
                   <span>{t('common.copied')}</span>
                 </>
               ) : (
@@ -186,7 +186,7 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
           >
             {isCopied('referral-link') ? (
               <>
-                <Check className="w-4 h-4 shrink-0" />
+                <Check className="w-4 h-4 shrink-0 anim-pop" />
                 <span>{t('user.referral.linkCopied')}</span>
               </>
             ) : (

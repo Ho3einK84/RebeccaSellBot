@@ -30,17 +30,21 @@ export const StatCard: React.FC<StatCardProps> = ({
   aside,
   action,
   onClick,
+  index,
   className = '',
 }) => {
   const isClickable = Boolean(onClick);
+  const staggerStyle =
+    index !== undefined ? { animationDelay: `${Math.min(index, 8) * 40}ms` } : undefined;
 
   const cardNode = (
     <Card
       padding="md"
+      style={!onClick ? staggerStyle : undefined}
       className={`flex flex-col justify-between gap-2.5 ${
         isClickable
-          ? 'h-full transition-colors group-hover:border-line-strong group-hover:bg-surface-2'
-          : ''
+          ? 'h-full rs-card-interactive'
+          : 'anim-rise transition-shadow duration-200 hover:shadow-[var(--shadow-card-hover)]'
       } ${className}`}
     >
       <div className="flex items-start justify-between gap-2 min-w-0">
@@ -73,7 +77,8 @@ export const StatCard: React.FC<StatCardProps> = ({
       <button
         type="button"
         onClick={onClick}
-        className="group block w-full h-full text-start cursor-pointer press rs-focus rounded-card"
+        style={staggerStyle}
+        className="group anim-rise block w-full h-full text-start cursor-pointer press rs-focus rounded-card"
       >
         {cardNode}
       </button>

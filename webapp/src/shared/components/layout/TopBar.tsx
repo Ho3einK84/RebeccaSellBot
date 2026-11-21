@@ -28,7 +28,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   className = '',
 }) => (
   <header
-    className={`rounded-card border border-line bg-surface px-3.5 py-3 sm:px-4 sm:py-3.5 shadow-[var(--shadow-card)] ${className}`}
+    className={`rounded-card border border-line bg-surface/92 rs-backdrop-blur px-3.5 py-3 sm:px-4 sm:py-3.5 shadow-[var(--shadow-card)] transition-shadow duration-200 ${className}`}
   >
     <div className="flex items-center justify-between gap-2.5">
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">

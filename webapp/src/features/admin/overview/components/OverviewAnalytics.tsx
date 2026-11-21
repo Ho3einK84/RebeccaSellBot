@@ -130,6 +130,12 @@ export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) =
             role="img"
             aria-label={t('admin.overview.revenueOverviewTitle')}
           >
+            <defs>
+              <linearGradient id="rs-rev-bar-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--rs-brand)" stopOpacity="1" />
+                <stop offset="100%" stopColor="var(--rs-accent)" stopOpacity="0.82" />
+              </linearGradient>
+            </defs>
             {[0.25, 0.5, 0.75, 1].map((tick) => {
               const y = baselineY - tick * maxBarHeight;
               return (
@@ -174,8 +180,10 @@ export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) =
                     width={barWidth}
                     height={h}
                     rx={6}
-                    fill="var(--rs-brand)"
+                    fill="url(#rs-rev-bar-grad)"
                     fillOpacity={bar.value === 0 ? 0.18 : bar.opacity}
+                    className="anim-bar-grow"
+                    style={{ animationDelay: `${idx * 70}ms` }}
                   />
                 </g>
               );
@@ -223,6 +231,12 @@ export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) =
               role="img"
               aria-label={t('admin.overview.activeRatioLabel')}
             >
+              <defs>
+                <linearGradient id="rs-sub-ring-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="var(--rs-ok)" />
+                  <stop offset="100%" stopColor="var(--rs-info)" />
+                </linearGradient>
+              </defs>
               <circle
                 cx={56}
                 cy={56}
@@ -236,11 +250,12 @@ export const OverviewAnalytics: React.FC<OverviewAnalyticsProps> = ({ stats }) =
                 cy={56}
                 r={44}
                 fill="none"
-                stroke="var(--rs-ok)"
+                stroke="url(#rs-sub-ring-grad)"
                 strokeWidth={10}
                 strokeLinecap="round"
                 strokeDasharray={split.circumference}
                 strokeDashoffset={split.dashOffset}
+                className="transition-[stroke-dashoffset] duration-700 ease-[var(--ease-out-calm)]"
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">

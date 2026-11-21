@@ -238,7 +238,19 @@ export const ServiceStatusDot: React.FC<{
 }> = ({ status, className = '' }) => {
   const { t } = useLanguage();
   const info = getServiceStatusInfo(status, t);
-  return <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${info.dotClass} ${className}`} />;
+  const haloClass =
+    info.type === 'active'
+      ? 'ring-2 ring-ok/20'
+      : info.type === 'limited' || info.type === 'on_hold'
+        ? 'ring-2 ring-warn/20'
+        : info.type === 'expired'
+          ? 'ring-2 ring-danger/20'
+          : '';
+  return (
+    <div
+      className={`w-2.5 h-2.5 rounded-full shrink-0 ${info.dotClass} ${haloClass} ${className}`}
+    />
+  );
 };
 
 const statusVariantMap: Record<ServiceStatusType, BadgeVariant> = {

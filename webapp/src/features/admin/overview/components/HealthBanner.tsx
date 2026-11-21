@@ -26,9 +26,9 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
     <button
       type="button"
       onClick={onSwitchToPanels}
-      className={`press rs-focus flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-start cursor-pointer shadow-[var(--shadow-card)] ${
+      className={`group rs-card-interactive press rs-focus flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-start cursor-pointer shadow-[var(--shadow-card)] ${
         isUnconfigured || isHealthOk
-          ? 'border-line bg-surface hover:border-line-strong hover:bg-surface-2'
+          ? 'border-line bg-surface hover:bg-surface-2'
           : 'border-danger/30 bg-danger-soft hover:border-danger/50'
       }`}
       aria-label={t('admin.overview.panelHealthTitle')}
@@ -41,7 +41,11 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
         <span className="flex items-center gap-2">
           <span
             className={`h-2 w-2 shrink-0 rounded-full ${
-              isUnconfigured ? 'bg-ink-muted' : isHealthOk ? 'bg-ok' : 'bg-danger'
+              isUnconfigured
+                ? 'bg-ink-muted'
+                : isHealthOk
+                  ? 'bg-ok ring-2 ring-ok/25'
+                  : 'bg-danger ring-2 ring-danger/25'
             }`}
             aria-hidden="true"
           />
@@ -66,7 +70,7 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
       </span>
 
       <ChevronLeft
-        className="h-4 w-4 shrink-0 text-ink-muted rtl:rotate-0 ltr:rotate-180"
+        className="h-4 w-4 shrink-0 text-ink-muted rtl:rotate-0 ltr:rotate-180 transition-transform duration-200 group-hover:-translate-x-0.5 ltr:group-hover:translate-x-0.5"
         aria-hidden="true"
       />
     </button>

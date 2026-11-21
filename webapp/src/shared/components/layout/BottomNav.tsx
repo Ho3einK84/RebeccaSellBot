@@ -42,7 +42,7 @@ export function BottomNav<T extends string>({
   return (
     <nav
       aria-label={ariaLabel}
-      className={`fixed inset-x-0 bottom-0 z-40 md:hidden border-t border-line bg-surface/95 rs-backdrop-blur shadow-[var(--shadow-popover)] safe-bottom ${className}`}
+      className={`fixed inset-x-0 bottom-0 z-40 md:hidden border-t border-line bg-surface/84 rs-backdrop-blur shadow-[var(--shadow-nav)] safe-bottom ${className}`}
     >
       <div className="mx-auto grid h-16 max-w-xl grid-flow-col auto-cols-fr items-stretch px-1">
         {items.map((item) => {
@@ -70,7 +70,7 @@ export function BottomNav<T extends string>({
               {active ? (
                 <span
                   aria-hidden="true"
-                  className={`pointer-events-none absolute top-0 ${isDense ? 'inset-x-2' : 'inset-x-3.5'} h-0.5 rounded-b-full bg-brand`}
+                  className={`pointer-events-none absolute top-0 ${isDense ? 'inset-x-2' : 'inset-x-3.5'} h-[2.5px] rounded-b-full bg-brand anim-pop`}
                 />
               ) : null}
 
@@ -78,12 +78,15 @@ export function BottomNav<T extends string>({
                 className={`relative flex h-7 ${isDense ? 'w-9' : 'w-10'} items-center justify-center rounded-ctl`}
               >
                 {active ? (
-                  <span aria-hidden="true" className="absolute inset-0 rounded-ctl bg-brand-soft" />
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-0 rounded-ctl bg-brand-soft shadow-[var(--shadow-xs)] anim-pop"
+                  />
                 ) : null}
 
                 <Icon
-                  className={`relative w-[18px] h-[18px] transition-transform duration-150 ${
-                    active ? 'stroke-[2.2]' : 'stroke-[1.75]'
+                  className={`relative w-[18px] h-[18px] transition-transform duration-200 ease-[var(--ease-spring)] ${
+                    active ? 'scale-105 stroke-[2.2]' : 'stroke-[1.75]'
                   }`}
                 />
 

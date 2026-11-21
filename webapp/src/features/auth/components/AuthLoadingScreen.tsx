@@ -9,14 +9,14 @@ export const AuthLoadingScreen: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 bg-canvas text-ink safe-top safe-bottom"
+      className="fixed inset-0 flex items-center justify-center p-4 rs-canvas-bg bg-canvas text-ink safe-top safe-bottom"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <Card
         padding="lg"
         className="w-full max-w-xs flex flex-col items-center text-center gap-4 anim-rise"
       >
-        <IconTile tone="brand" size="lg">
+        <IconTile tone="brand" size="lg" className="anim-breathe">
           <Shield />
         </IconTile>
 

@@ -12,6 +12,7 @@ interface ProgressBarProps {
 
 const fillTone: Record<TileTone, string> = {
   brand: 'bg-brand',
+  accent: 'bg-accent',
   ok: 'bg-ok',
   warn: 'bg-warn',
   danger: 'bg-danger',
@@ -35,12 +36,12 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
-      className={`w-full overflow-hidden rounded-full bg-surface-3 ${
+      className={`w-full overflow-hidden rounded-full bg-surface-3 shadow-[var(--shadow-inset-track)] ${
         size === 'md' ? 'h-2' : 'h-1.5'
       } ${className}`}
     >
       <div
-        className={`h-full rounded-full transition-[width] duration-300 ease-out ${fillTone[tone]}`}
+        className={`relative h-full overflow-hidden rounded-full transition-[width] duration-500 ease-[var(--ease-out-calm)] after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-[45%] after:rounded-full after:bg-white/25 ${fillTone[tone]}`}
         style={{ width: `${clamped}%` }}
       />
     </div>

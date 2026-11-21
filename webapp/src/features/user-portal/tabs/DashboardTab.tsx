@@ -109,7 +109,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       <div className="lg:col-span-7 flex flex-col gap-4">
         <section
           aria-label={t('user.dashboard.walletBalance')}
-          className="relative overflow-hidden rounded-card border border-obsidian-line bg-obsidian text-obsidian-ink p-5 sm:p-6 shadow-[var(--shadow-float)]"
+          className="relative overflow-hidden rounded-card rs-hero-obsidian text-obsidian-ink p-5 sm:p-6"
         >
           {/* Technical hairline corner mark — crisp vector precision, no blur glow */}
           <svg
@@ -138,7 +138,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.08] border border-white/15 text-[11px] font-medium text-white/85 tnum">
                 <span
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    activeConfigs.length > 0 ? 'bg-emerald-400' : 'bg-white/45'
+                    activeConfigs.length > 0
+                      ? 'bg-emerald-400 ring-2 ring-emerald-400/25'
+                      : 'bg-white/45'
                   }`}
                   aria-hidden="true"
                 />
@@ -183,7 +185,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       aria-label={t('common.copy')}
                     >
                       {isCopied('dashboard-ref-code') ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-emerald-400 anim-pop" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
@@ -206,11 +208,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </section>
 
         {/* Quick Action Grid */}
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 anim-stagger">
           <button
             type="button"
             onClick={() => handleAction('shop')}
-            className="rounded-tile border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             <IconTile tone="brand" size="md">
               <ShoppingBag />
@@ -221,7 +223,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             type="button"
             onClick={() => handleAction('services')}
-            className="rounded-tile border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             <IconTile tone="ok" size="md">
               <Wifi />
@@ -232,7 +234,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             type="button"
             onClick={() => handleAction('wallet')}
-            className="rounded-tile border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             <IconTile tone="warn" size="md">
               <Wallet />
@@ -243,9 +245,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             type="button"
             onClick={() => handleAction('referral')}
-            className="rounded-tile border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
-            <IconTile tone="neutral" size="md">
+            <IconTile tone="accent" size="md">
               <Users />
             </IconTile>
             <span className="text-xs font-medium text-ink">{t('user.dashboard.inviteEarn')}</span>
@@ -257,7 +259,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             type="button"
             onClick={handleSupportClick}
-            className="w-full rounded-tile border border-brand/25 bg-brand-soft hover:bg-brand/15 p-3.5 flex items-center justify-between gap-3 text-start press rs-focus cursor-pointer"
+            className="group rs-card-interactive w-full rounded-tile border border-brand/25 bg-gradient-to-l from-brand-soft via-brand-soft/80 to-accent-soft/45 p-3.5 flex items-center justify-between gap-3 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             <div className="flex items-center gap-3 min-w-0">
               <IconTile tone="brand" size="md">
@@ -273,7 +275,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
             </div>
             <ChevronLeft
-              className="w-4 h-4 shrink-0 text-brand-fg ltr:rotate-180"
+              className="w-4 h-4 shrink-0 text-brand-fg ltr:rotate-180 transition-transform duration-200 group-hover:-translate-x-0.5 ltr:group-hover:translate-x-0.5"
               aria-hidden="true"
             />
           </button>
@@ -305,7 +307,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               }
             />
           ) : (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-2.5 anim-stagger">
               {activeConfigs.slice(0, 2).map((cfg) => (
                 <button
                   type="button"
@@ -318,7 +320,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       onSwitchTab('services');
                     }
                   }}
-                  className="w-full rounded-card border border-line bg-surface hover:border-line-strong hover:bg-surface-2 p-3.5 flex flex-col gap-2.5 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+                  className="rs-card-interactive w-full rounded-card border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col gap-2.5 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
                 >
                   <div className="flex items-center justify-between w-full gap-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -361,7 +363,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               {t('user.dashboard.noRecentActivity')}
             </Card>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 anim-stagger">
               {transactions.slice(0, 3).map((tx) => (
                 <TransactionItem key={tx.id} tx={tx} currency={currency} />
               ))}

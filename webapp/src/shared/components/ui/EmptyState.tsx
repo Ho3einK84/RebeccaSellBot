@@ -19,7 +19,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   className = '',
 }) => (
   <div
-    className={`rounded-card border border-line bg-surface p-6 sm:p-8 text-center flex flex-col items-center justify-center gap-2.5 shadow-[var(--shadow-card)] ${className}`}
+    className={`anim-rise rounded-card border border-line bg-surface p-6 sm:p-8 text-center flex flex-col items-center justify-center gap-2.5 shadow-[var(--shadow-card)] ${className}`}
   >
     {icon ? (
       <IconTile tone={tone} size="lg">

@@ -27,13 +27,15 @@ const sizeClasses: Record<ButtonSize, string> = {
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-brand hover:bg-brand-hover text-brand-ink border border-transparent',
+  primary: 'bg-brand hover:bg-brand-hover text-brand-ink border border-transparent rs-btn-primary',
   tonal: 'bg-brand-soft hover:bg-brand/20 text-brand-fg border border-brand/25',
-  secondary: 'bg-surface-2 hover:bg-surface-3 border border-line-strong text-ink',
-  outline: 'bg-surface hover:bg-surface-2 border border-line-strong text-ink',
+  secondary:
+    'bg-surface-2 hover:bg-surface-3 border border-line-strong text-ink shadow-[var(--shadow-xs)]',
+  outline:
+    'bg-surface hover:bg-surface-2 border border-line-strong text-ink shadow-[var(--shadow-xs)]',
   ghost: 'bg-transparent hover:bg-surface-2 border border-transparent text-ink-soft hover:text-ink',
   danger: 'bg-danger-soft hover:bg-danger/20 border border-danger/25 text-danger-fg',
-  success: 'bg-ok hover:bg-ok/90 border border-transparent text-white',
+  success: 'bg-ok hover:bg-ok/90 border border-transparent text-white rs-btn-success',
 };
 
 export const Button: React.FC<ButtonProps> = ({
@@ -60,7 +62,7 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       disabled={disabled || loading}
       onClick={handleClick}
-      className={`inline-flex items-center justify-center font-medium whitespace-nowrap select-none cursor-pointer press rs-focus disabled:opacity-45 disabled:pointer-events-none ${block ? 'w-full' : ''} ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
+      className={`inline-flex items-center justify-center font-medium whitespace-nowrap select-none cursor-pointer transition-all duration-150 press rs-focus disabled:opacity-45 disabled:pointer-events-none ${block ? 'w-full' : ''} ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
       {...props}
     >
       {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : null}

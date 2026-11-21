@@ -2,7 +2,7 @@
 
 export const EN_TEXTS: Record<string, string> = {
   onboarding_welcome:
-    '✨ *Welcome*\nFast, seamless service setup and management\n─────────────\n\nChoose your preferred language to begin:',
+    '✨ *Welcome*\nFast connection, instant setup, and effortless subscription management — all in one place.\n\nChoose your language to get started:',
   ui_status_active: 'Active',
   ui_status_inactive: 'Inactive',
   ui_status_pending: 'Pending',

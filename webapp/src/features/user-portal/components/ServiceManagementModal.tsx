@@ -376,7 +376,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('renew')}
-              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/15 text-ink border-brand/25 transition-colors"
+              className="group w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/15 text-ink border-brand/25 transition-all duration-200"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <IconTile tone="brand" size="sm">
@@ -396,7 +396,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('transfer')}
-              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-surface-2 hover:bg-surface-3 text-ink border-line transition-colors"
+              className="group w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-surface-2 hover:bg-surface-3 text-ink border-line transition-all duration-200"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <IconTile tone="info" size="sm">
@@ -418,7 +418,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             <button
               type="button"
               onClick={() => handleOpenBotAction('delete')}
-              className="w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-danger-soft hover:bg-danger/15 text-danger-fg border-danger/25 transition-colors"
+              className="group w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-danger-soft hover:bg-danger/15 text-danger-fg border-danger/25 transition-all duration-200"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <IconTile tone="danger" size="sm">

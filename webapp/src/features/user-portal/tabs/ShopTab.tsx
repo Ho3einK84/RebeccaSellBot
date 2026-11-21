@@ -166,6 +166,8 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   };
 
   const validPresets = PRESET_GB_OPTIONS.filter((val) => val >= minGb && val <= maxGb);
+  const rangePct =
+    maxGb > minGb ? Math.min(100, Math.max(0, ((customGb - minGb) / (maxGb - minGb)) * 100)) : 0;
 
   return (
     <div className="w-full flex flex-col gap-5 pb-6">
@@ -214,9 +216,9 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                         triggerHaptic('selection');
                         handleCustomGbChange(val);
                       }}
-                      className={`h-9 px-2 rounded-ctl text-xs font-medium border press rs-focus cursor-pointer flex items-center justify-center tnum transition-colors ${
+                      className={`h-9 px-2 rounded-ctl text-xs font-medium border press rs-focus cursor-pointer flex items-center justify-center tnum transition-all duration-150 ${
                         isSelected
-                          ? 'bg-brand border-brand text-brand-ink'
+                          ? 'bg-brand border-brand text-brand-ink shadow-[var(--shadow-brand)]'
                           : 'bg-surface-2 border-line hover:border-line-strong hover:bg-surface-3 text-ink-soft'
                       }`}
                     >
@@ -284,6 +286,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                 value={customGb}
                 onChange={(e) => handleCustomGbChange(Number(e.target.value))}
                 aria-label={t('user.shop.customGbInputLabel')}
+                style={{ '--rs-range-pct': `${rangePct}%` } as React.CSSProperties}
                 className="rs-range w-full cursor-pointer"
               />
 
@@ -359,13 +362,13 @@ export const ShopTab: React.FC<ShopTabProps> = ({
             <div
               className={`grid grid-cols-1 sm:grid-cols-2 ${
                 isCustomEnabled ? '' : 'lg:grid-cols-3'
-              } gap-3.5`}
+              } gap-3.5 anim-stagger`}
             >
               {packages.map((pkg) => (
                 <Card
                   key={pkg.id}
                   padding="md"
-                  className="flex flex-col justify-between gap-4 text-start hover:border-line-strong transition-colors"
+                  className="flex flex-col justify-between gap-4 text-start rs-card-interactive"
                 >
                   <div className="flex flex-col gap-2.5">
                     <h3 className="text-sm sm:text-[15px] font-semibold truncate text-ink m-0">

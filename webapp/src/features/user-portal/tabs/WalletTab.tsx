@@ -173,7 +173,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     : pendingReceipt.id}
                 </bdi>
                 {isCopied('receipt-id') ? (
-                  <Check className="w-3.5 h-3.5 text-ok-fg shrink-0" />
+                  <Check className="w-3.5 h-3.5 text-ok-fg shrink-0 anim-pop" />
                 ) : (
                   <Copy className="w-3.5 h-3.5 shrink-0" />
                 )}
@@ -208,11 +208,11 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               </p>
 
               {/* Anodized Matte Bank Card Presentation */}
-              <div className="rounded-card border border-obsidian-line bg-obsidian text-obsidian-ink p-4 sm:p-5 flex flex-col justify-between gap-4 shadow-[var(--shadow-float)]">
+              <div className="rounded-card rs-hero-bank text-obsidian-ink p-4 sm:p-5 flex flex-col justify-between gap-4">
                 <div className="flex items-center justify-between gap-2">
                   {/* Minimalist EMV metallic chip mark */}
                   <div
-                    className="w-10 h-7 rounded-md bg-amber-300/15 border border-amber-300/45 flex items-center justify-center"
+                    className="w-10 h-7 rounded-md bg-gradient-to-br from-amber-200/30 via-amber-300/20 to-amber-500/15 border border-amber-300/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] flex items-center justify-center"
                     aria-hidden="true"
                   >
                     <div className="w-6 h-4 border border-amber-300/40 rounded-xs grid grid-cols-2" />
@@ -254,7 +254,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   >
                     {isCopied('bank-card') ? (
                       <>
-                        <Check className="w-3.5 h-3.5" />
+                        <Check className="w-3.5 h-3.5 anim-pop" />
                         <span>{t('user.wallet.cardCopied')}</span>
                       </>
                     ) : (
@@ -341,7 +341,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               {t('user.wallet.txEmpty')}
             </Card>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 anim-stagger">
               {currentTransactions.map((tx) => (
                 <TransactionItem key={tx.id} tx={tx} currency={currency} />
               ))}

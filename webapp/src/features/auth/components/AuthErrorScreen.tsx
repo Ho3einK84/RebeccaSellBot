@@ -57,7 +57,7 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 bg-canvas text-ink safe-top safe-bottom"
+      className="fixed inset-0 flex items-center justify-center p-4 rs-canvas-bg bg-canvas text-ink safe-top safe-bottom"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <Card

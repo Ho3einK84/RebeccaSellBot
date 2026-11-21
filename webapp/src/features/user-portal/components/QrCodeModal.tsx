@@ -101,7 +101,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
         </p>
 
         {/* High-contrast light QR canvas for optical scan reliability in both themes */}
-        <div className="bg-white p-3.5 rounded-card border border-line flex items-center justify-center min-w-[220px] min-h-[220px]">
+        <div className="bg-white p-3.5 rounded-card border border-line shadow-[var(--shadow-card)] flex items-center justify-center min-w-[220px] min-h-[220px]">
           {hasError ? (
             <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex flex-col items-center justify-center gap-2 p-2">
               <AlertCircle className="w-7 h-7 text-red-700" />
@@ -126,7 +126,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
             <img
               src={qrSrc}
               alt={t('user.services.qrTitle')}
-              className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] select-none pointer-events-none"
+              className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] select-none pointer-events-none anim-pop"
             />
           ) : (
             <div className="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex items-center justify-center text-neutral-600 text-xs">
@@ -146,7 +146,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
           >
             {isCopied('qr-sub-url') ? (
               <>
-                <Check className="w-4 h-4" />
+                <Check className="w-4 h-4 anim-pop" />
                 <span>{t('user.services.linkCopied')}</span>
               </>
             ) : (

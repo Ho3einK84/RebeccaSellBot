@@ -54,13 +54,17 @@ export function DesktopNav<T extends string>({
             type="button"
             aria-current={active ? 'page' : undefined}
             onClick={() => onSelect(item.id)}
-            className={`relative inline-flex h-11 items-center gap-2 px-3.5 text-[13px] whitespace-nowrap rounded-t-ctl rs-focus cursor-pointer transition-colors duration-150 ${
+            className={`group relative inline-flex h-11 items-center gap-2 px-3.5 text-[13px] whitespace-nowrap rounded-t-ctl rs-focus cursor-pointer transition-all duration-200 ${
               active
-                ? 'font-semibold text-ink'
+                ? 'font-semibold text-ink bg-brand-soft/60'
                 : 'font-medium text-ink-soft hover:text-ink hover:bg-surface-2/80'
             }`}
           >
-            <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-brand-fg' : 'text-ink-muted'}`} />
+            <Icon
+              className={`w-4 h-4 shrink-0 transition-colors duration-200 ${
+                active ? 'text-brand-fg' : 'text-ink-muted group-hover:text-ink-soft'
+              }`}
+            />
             <span>{item.label}</span>
             {countStr !== null ? (
               <span
@@ -74,7 +78,7 @@ export function DesktopNav<T extends string>({
             {active ? (
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-2.5 bottom-0 h-0.5 rounded-t-full bg-brand"
+                className="pointer-events-none absolute inset-x-2.5 bottom-0 h-[2.5px] rounded-t-full bg-brand anim-pop"
               />
             ) : null}
           </button>

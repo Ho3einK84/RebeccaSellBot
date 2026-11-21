@@ -49,7 +49,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
         triggerHaptic('light');
         onClick?.(e);
       }}
-      className={`inline-flex items-center justify-center shrink-0 border rs-focus press cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${sizeClasses[size]} ${
+      className={`inline-flex items-center justify-center shrink-0 border shadow-[var(--shadow-xs)] transition-all duration-150 rs-focus press cursor-pointer disabled:opacity-40 disabled:pointer-events-none ${sizeClasses[size]} ${
         active ? toneClasses.brand : toneClasses[tone]
       } ${className}`}
       {...props}

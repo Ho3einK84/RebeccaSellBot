@@ -11,7 +11,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card.js';
-import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { IconTile, type TileTone } from '@/shared/components/ui/IconTile.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
@@ -27,6 +27,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
   const modules: Array<{
     id: string;
     icon: React.ComponentType<{ className?: string }>;
+    tone: TileTone;
     title: string;
     desc: string;
     category: string;
@@ -35,6 +36,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
     {
       id: 'broadcast',
       icon: Radio,
+      tone: 'info',
       title: t('admin.modules.broadcast'),
       desc: t('admin.modules.broadcastSub'),
       category: t('admin.modules.categoryBroadcast'),
@@ -42,6 +44,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
     {
       id: 'plans',
       icon: Package,
+      tone: 'ok',
       title: t('admin.modules.plans'),
       desc: t('admin.modules.plansSub'),
       category: t('admin.modules.categoryBilling'),
@@ -50,6 +53,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
     {
       id: 'promo',
       icon: Ticket,
+      tone: 'accent',
       title: t('admin.modules.promo'),
       desc: t('admin.modules.promoSub'),
       category: t('admin.modules.categoryGrowth'),
@@ -57,6 +61,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
     {
       id: 'gateways',
       icon: CreditCard,
+      tone: 'warn',
       title: t('admin.modules.gateways'),
       desc: t('admin.modules.gatewaysSub'),
       category: t('admin.modules.categoryPayments'),
@@ -64,6 +69,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
     {
       id: 'backups',
       icon: HardDrive,
+      tone: 'brand',
       title: t('admin.modules.backups'),
       desc: t('admin.modules.backupsSub'),
       category: t('admin.modules.categoryDatabase'),
@@ -71,6 +77,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
     {
       id: 'wheel',
       icon: Compass,
+      tone: 'accent',
       title: t('admin.modules.wheel'),
       desc: t('admin.modules.wheelSub'),
       category: t('admin.modules.categoryGamification'),
@@ -78,6 +85,7 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
     {
       id: 'trial',
       icon: Timer,
+      tone: 'info',
       title: t('admin.modules.trial'),
       desc: t('admin.modules.trialSub'),
       category: t('admin.modules.categoryTrial'),
@@ -91,22 +99,22 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({ onSwitchTab }) => {
         <p className="text-xs m-0 text-ink-muted">{t('admin.modules.desc')}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 anim-stagger">
         {modules.map((mod) => {
           const Icon = mod.icon;
           const isLive = Boolean(mod.targetTab && onSwitchTab);
           const cardContent = (
             <Card
               padding="md"
-              className={`h-full flex flex-col justify-between gap-3.5 text-start transition-colors ${
+              className={`h-full flex flex-col justify-between gap-3.5 text-start ${
                 isLive
-                  ? 'border-brand/35 group-hover:border-brand group-hover:bg-surface-2'
-                  : 'hover:border-line-strong'
+                  ? 'rs-card-interactive border-brand/35 group-hover:border-brand group-hover:bg-surface-2'
+                  : 'transition-all duration-200 hover:border-line-strong hover:shadow-[var(--shadow-card-hover)]'
               }`}
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <IconTile tone={isLive ? 'ok' : 'brand'} size="md">
+                  <IconTile tone={mod.tone} size="md">
                     <Icon />
                   </IconTile>
 

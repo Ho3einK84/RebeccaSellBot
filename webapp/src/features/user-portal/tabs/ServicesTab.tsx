@@ -108,7 +108,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
           className="my-2"
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 anim-stagger">
           {configs.map((c) => {
             const isSubCopied = isCopied(`sub-${c.id}`);
 
@@ -116,7 +116,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
               <Card
                 key={c.id}
                 padding="md"
-                className="flex flex-col justify-between gap-3.5 text-start"
+                className="flex flex-col justify-between gap-3.5 text-start transition-all duration-200 hover:border-line-strong hover:shadow-[var(--shadow-card-hover)]"
               >
                 <div className="flex flex-col gap-3">
                   {/* Header: Name, Auto-renew, and Status */}
@@ -165,7 +165,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                       >
                         {isSubCopied ? (
                           <>
-                            <Check className="w-3.5 h-3.5 shrink-0" />
+                            <Check className="w-3.5 h-3.5 shrink-0 anim-pop" />
                             <span className="truncate">{t('user.services.linkCopied')}</span>
                           </>
                         ) : (

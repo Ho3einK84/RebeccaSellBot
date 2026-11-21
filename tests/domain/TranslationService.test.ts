@@ -173,6 +173,11 @@ describe('TranslationService & Catalog Standards', () => {
     const service = new TranslationService();
 
     expect(Object.values(DEFAULT_SETTINGS).some((value) => value.includes('**'))).toBe(false);
+    for (const locale of ['fa', 'en'] as const) {
+      const welcome = service.get('onboarding_welcome', locale);
+      expect(welcome).not.toContain('─');
+      expect((welcome.match(/\*/g) ?? []).length % 2).toBe(0);
+    }
     expect(
       service.get('subscription_detail_heading', 'en', { username: 'h_6698253699_8' })
     ).toContain('Service · `h_6698253699_8`');

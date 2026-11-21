@@ -41,9 +41,9 @@ export const HeaderUtilityActions: React.FC<HeaderUtilityActionsProps> = ({
         onClick={toggleTheme}
       >
         {isDark ? (
-          <Sun className="h-4 w-4 text-warn-fg" />
+          <Sun key="sun" className="h-4 w-4 text-warn-fg anim-pop" />
         ) : (
-          <Moon className="h-4 w-4 text-ink-soft" />
+          <Moon key="moon" className="h-4 w-4 text-ink-soft anim-pop" />
         )}
       </IconButton>
 

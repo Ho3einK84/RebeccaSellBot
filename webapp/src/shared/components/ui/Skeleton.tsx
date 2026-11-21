@@ -5,7 +5,7 @@ interface SkeletonProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export const Skeleton: React.FC<SkeletonProps> = ({ className = '', ...props }) => {
-  return <div className={`animate-pulse rounded-ctl bg-surface-3/80 ${className}`} {...props} />;
+  return <div className={`rs-skeleton rounded-ctl ${className}`} {...props} />;
 };
 
 export const SkeletonCard: React.FC<{ className?: string }> = ({ className = '' }) => (

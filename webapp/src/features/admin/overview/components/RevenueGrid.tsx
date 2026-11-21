@@ -56,7 +56,7 @@ export const RevenueGrid: React.FC<RevenueGridProps> = ({ stats }) => {
         unit={t('common.currency')}
         hint={t('admin.overview.referralBonusSub')}
         icon={<Gift className="h-4 w-4" />}
-        tone="warn"
+        tone="accent"
         index={4}
       />
       <StatCard

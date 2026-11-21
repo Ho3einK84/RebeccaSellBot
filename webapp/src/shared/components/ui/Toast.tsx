@@ -58,10 +58,10 @@ export const Toast: React.FC<ToastProps> = ({
     <div
       role="status"
       aria-live="polite"
-      className={`pointer-events-auto flex items-center gap-2.5 w-full rounded-tile border border-line-strong border-s-4 bg-surface text-ink px-3 py-2.5 text-xs font-medium shadow-[var(--shadow-popover)] anim-rise ${toneConfig.accent} ${className}`}
+      className={`pointer-events-auto flex items-center gap-2.5 w-full rounded-tile border border-line-strong border-s-4 bg-surface/94 rs-backdrop-blur text-ink px-3 py-2.5 text-xs font-medium shadow-[var(--shadow-popover)] anim-toast ${toneConfig.accent} ${className}`}
     >
       <span
-        className={`w-6 h-6 rounded-ctl inline-flex items-center justify-center shrink-0 ${toneConfig.badge}`}
+        className={`w-6 h-6 rounded-ctl inline-flex items-center justify-center shrink-0 anim-pop ${toneConfig.badge}`}
       >
         <Icon className="w-3.5 h-3.5" />
       </span>

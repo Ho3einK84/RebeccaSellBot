@@ -38,7 +38,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
   return (
     <div
-      className={`relative flex min-h-[100dvh] w-full flex-col bg-canvas text-ink safe-top ${className}`}
+      className={`relative flex min-h-[100dvh] w-full flex-col rs-canvas-bg bg-canvas text-ink safe-top ${className}`}
     >
       <div
         className={`relative z-10 mx-auto flex w-full flex-1 flex-col gap-4 px-3.5 pt-3 sm:px-5 sm:pt-5 ${maxWidthClass} ${
