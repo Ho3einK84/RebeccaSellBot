@@ -2088,15 +2088,21 @@ export async function verifyPhoneConversation(
     footer: t(ctx, 'onboarding_phone_verify_prompt'),
   });
 
+  const trackPromptMessage = async (msg: { message_id?: number } | undefined) => {
+    if (!msg || typeof msg.message_id !== 'number') return;
+    const messageId = msg.message_id;
+    await conversation.external((outsideCtx) => {
+      if (outsideCtx?.session) {
+        rememberUiMessage(outsideCtx.session, messageId, 'prompt');
+      }
+    });
+  };
+
   const promptMsg = await ctx.reply(promptScreen, {
     parse_mode: 'Markdown',
     reply_markup: phoneKeyboard,
   });
-  await conversation.external((outsideCtx) => {
-    if (outsideCtx?.session && promptMsg && typeof promptMsg.message_id === 'number') {
-      rememberUiMessage(outsideCtx.session, promptMsg.message_id, 'prompt');
-    }
-  });
+  await trackPromptMessage(promptMsg);
 
   const ownerId = await conversationOwnerId(conversation);
   const cancelLabel = t(ctx, 'button_cancel_phone').trim();
@@ -2113,11 +2119,32 @@ export async function verifyPhoneConversation(
     if (isCancelText || isCancelCallback) {
       if (isCancelCallback) {
         await input.answerCallbackQuery({ text: t(input, 'operation_cancelled') });
+      } else if (input.api && typeof input.api.deleteMessage === 'function') {
+        await deleteConsumedInputMessage(input);
       }
-      await input.reply(t(input, 'operation_cancelled'), {
+      const cancelMsg = await input.reply(t(input, 'operation_cancelled'), {
         reply_markup: { remove_keyboard: true },
       });
+      await trackPromptMessage(cancelMsg);
+
+      const cancelNavKeyboard = new InlineKeyboard();
+      if (returnAction === 'shop' || returnAction === 'custom_amount') {
+        cancelNavKeyboard.text(t(input, 'menu_back_shop'), 'nav:shop').row();
+      }
+      cancelNavKeyboard.text(t(input, 'menu_back_main'), 'nav:main');
+
+      await replyInConversation(conversation, input, t(input, 'navigation_continue_hint'), {
+        preferEdit: false,
+        reply_markup: cancelNavKeyboard,
+      });
       return;
+    }
+
+    if (text && /^\/[a-z][a-z0-9_]*(?:@[a-z0-9_]+)?(?:\s|$)/iu.test(text)) {
+      const cleanupKbMsg = await input.reply(t(input, 'operation_cancelled'), {
+        reply_markup: { remove_keyboard: true },
+      });
+      await trackPromptMessage(cleanupKbMsg);
     }
 
     await forwardConversationNavigation(conversation, input);
@@ -2129,10 +2156,14 @@ export async function verifyPhoneConversation(
 
     const contact = input.message?.contact;
     if (!contact || !contact.phone_number) {
-      await input.reply(t(input, 'onboarding_phone_invalid'), {
+      if (input.api && typeof input.api.deleteMessage === 'function') {
+        await deleteConsumedInputMessage(input);
+      }
+      const invalidMsg = await input.reply(t(input, 'onboarding_phone_invalid'), {
         parse_mode: 'Markdown',
         reply_markup: phoneKeyboard,
       });
+      await trackPromptMessage(invalidMsg);
       continue;
     }
 
@@ -2143,10 +2174,11 @@ export async function verifyPhoneConversation(
 
     // CRITICAL SECURITY CHECK: reject forwarded or third-party contacts.
     if (!senderId || contact.user_id !== senderId) {
-      await input.reply(t(input, 'onboarding_phone_not_owner'), {
+      const notOwnerMsg = await input.reply(t(input, 'onboarding_phone_not_owner'), {
         parse_mode: 'Markdown',
         reply_markup: phoneKeyboard,
       });
+      await trackPromptMessage(notOwnerMsg);
       continue;
     }
 
@@ -2170,17 +2202,19 @@ export async function verifyPhoneConversation(
           : result.reason === 'already_bound'
             ? 'onboarding_phone_already_bound'
             : 'onboarding_phone_invalid';
-      await input.reply(t(input, errorKey), {
+      const errMsg = await input.reply(t(input, errorKey), {
         parse_mode: 'Markdown',
         reply_markup: phoneKeyboard,
       });
+      await trackPromptMessage(errMsg);
       continue;
     }
 
-    await input.reply(t(input, 'onboarding_phone_verified_success'), {
+    const verifiedMsg = await input.reply(t(input, 'onboarding_phone_verified_success'), {
       parse_mode: 'Markdown',
       reply_markup: { remove_keyboard: true },
     });
+    await trackPromptMessage(verifiedMsg);
 
     const continueKeyboard = new InlineKeyboard();
     if (returnAction === 'trial') {

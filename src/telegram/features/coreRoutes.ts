@@ -2,9 +2,16 @@
 
 import type { Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
-import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from '../ui.js';
-import { t } from '../locale.js';
-import { mainMenu } from '../keyboards/mainMenu.js';
+import {
+  backKeyboard,
+  buildUserEmptyState,
+  buildUserScreen,
+  deleteConsumedInputMessage,
+  rememberUiMessage,
+  renderScreen,
+} from '../ui.js';
+import { t, tForLocale } from '../locale.js';
+import { mainMenu, renderHomeDashboard } from '../keyboards/mainMenu.js';
 import { registerPromoAdminRoutes } from './admin/promoRoutes.js';
 import { registerAdminUserRoutes } from './admin/userRoutes.js';
 import { registerReceiptAdminRoutes } from './admin/receiptRoutes.js';
@@ -35,6 +42,24 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
   // Plain text that was not consumed by a conversation, secret-input route, or
   // subscription-link handler remains visible and gets an explicit home state.
   bot.on('message:text', async (ctx) => {
+    const trimmed = ctx.message.text.trim();
+    const faCancel = tForLocale(services.translationService, 'fa', 'button_cancel_phone').trim();
+    const enCancel = tForLocale(services.translationService, 'en', 'button_cancel_phone').trim();
+    if (trimmed === faCancel || trimmed === enCancel) {
+      await deleteConsumedInputMessage(ctx);
+      const removedMsg = await ctx.reply(t(ctx, 'operation_cancelled'), {
+        reply_markup: { remove_keyboard: true },
+      });
+      if (ctx.session) {
+        rememberUiMessage(ctx.session, removedMsg.message_id, 'prompt');
+      }
+      await renderScreen(ctx, await renderHomeDashboard(ctx), {
+        parse_mode: 'Markdown',
+        reply_markup: mainMenu,
+      });
+      return;
+    }
+
     await renderScreen(
       ctx,
       buildUserScreen({

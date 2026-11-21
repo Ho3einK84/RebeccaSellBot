@@ -614,6 +614,64 @@ describe('Telegram conversations, storefront checkout, and phone gates', () => {
     expect(replies[2]?.extra?.reply_markup).toEqual({ remove_keyboard: true });
   });
 
+  it('verifyPhoneConversation removes custom keyboard and renders inline return buttons on cancel', async () => {
+    const translationService = new TranslationService();
+    const services = createMockServices();
+    services.translationService = translationService;
+
+    const replies: Array<{ text: string; extra?: Record<string, unknown> }> = [];
+    const reply = vi.fn(async (text: string, extra?: Record<string, unknown>) => {
+      replies.push({ text, extra });
+      return { message_id: replies.length + 300 };
+    });
+
+    const outsideCtx = {
+      from: { id: 777, language_code: 'fa' },
+      userLocale: 'fa' as const,
+      session: { phoneVerifyReturnAction: 'shop' as const },
+      services,
+    };
+
+    const cancelText = '✕ انصراف از تأیید شماره';
+    const inputs = [
+      {
+        from: { id: 777, language_code: 'fa' },
+        userLocale: 'fa',
+        services,
+        message: {
+          message_id: 401,
+          text: cancelText,
+        },
+        reply,
+      },
+    ];
+
+    const conversation = {
+      external: vi.fn(async (fn: (ctx: typeof outsideCtx) => unknown) => fn(outsideCtx)),
+      wait: vi.fn(async () => inputs.shift()),
+      halt: vi.fn(),
+    } as unknown as MyConversation;
+
+    const ctx = {
+      ...outsideCtx,
+      reply,
+    } as unknown as ConversationContext;
+
+    await verifyPhoneConversation(conversation, ctx);
+
+    // 1. Prompt
+    expect(replies).toHaveLength(3);
+    // 2. Remove custom reply keyboard
+    expect(replies[1]?.extra?.reply_markup).toEqual({ remove_keyboard: true });
+    // 3. Inline navigation buttons (back to shop + back to main menu)
+    const navMarkup = replies[2]?.extra?.reply_markup as {
+      inline_keyboard?: Array<Array<{ callback_data?: string }>>;
+    };
+    const callbackIds = (navMarkup?.inline_keyboard ?? []).flat().map((btn) => btn.callback_data);
+    expect(callbackIds).toContain('nav:shop');
+    expect(callbackIds).toContain('nav:main');
+  });
+
   it('gates trial:claim when require_phone_for_trial is enabled and user is unverified', async () => {
     const claimTrial = vi.fn();
     const enterConversation = vi.fn().mockResolvedValue(undefined);
