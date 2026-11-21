@@ -135,7 +135,7 @@ describe('TranslationService & Catalog Standards', () => {
     });
     expect(rendered).toContain('`h_{telegram_id}_{counter}`');
     expect(rendered).toContain('`{prefix}`');
-    expect(rendered).toContain('کد قالب دلخواه را بفرستین');
+    expect(rendered).toContain('کد قالب دلخواه را بفرستید');
     expect(rendered).not.toContain('h_—_—');
   });
 

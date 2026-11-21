@@ -101,10 +101,14 @@ export function validateAdminSetting(
     }
     case 'naming_mode':
       return NAMING_MODES.has(value) ? value : undefined;
-    case 'naming_prefix':
-      return /^[a-z0-9][a-z0-9_-]{0,23}$/iu.test(value) ? value : undefined;
-    case 'naming_template':
-      return isValidNamingTemplate(value) ? value : undefined;
+    case 'naming_prefix': {
+      const cleanedPrefix = cleanNamingInput(value);
+      return /^[a-z0-9][a-z0-9_-]{0,23}$/iu.test(cleanedPrefix) ? cleanedPrefix : undefined;
+    }
+    case 'naming_template': {
+      const normalizedTemplate = normalizeNamingTemplate(value);
+      return isValidNamingTemplate(normalizedTemplate) ? normalizedTemplate : undefined;
+    }
   }
 }
 
@@ -215,7 +219,23 @@ export function normalizeSupportDestination(rawValue: string): string | undefine
   return undefined;
 }
 
-export function isValidNamingTemplate(value: string): boolean {
+export function cleanNamingInput(rawValue: string): string {
+  return rawValue
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff`]/gu, '')
+    .replace(/[۰-۹]/gu, (digit) => String(digit.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/gu, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .trim();
+}
+
+export function normalizeNamingTemplate(rawValue: string): string {
+  return cleanNamingInput(rawValue).replace(
+    /\{([a-z0-9_]+)\}/giu,
+    (_, token: string) => `{${token.toLowerCase()}}`
+  );
+}
+
+export function isValidNamingTemplate(rawValue: string): boolean {
+  const value = normalizeNamingTemplate(rawValue);
   if (value.length < 1 || value.length > 80 || !/^[a-z0-9_{}.-]+$/iu.test(value)) return false;
   let literal = value;
   for (const token of NAMING_TOKENS) literal = literal.replaceAll(token, 'token');

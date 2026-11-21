@@ -391,8 +391,16 @@ describe('Admin settings validation, backup catalog & sales navigation', () => {
 
   it('validates naming templates, packages_json, and https-only webapp URLs', () => {
     expect(validateAdminSetting('naming_prefix', ' Rebecca_2 ')).toBe('Rebecca_2');
+    expect(validateAdminSetting('naming_prefix', ' \u200eRebecca_۲\u200f ')).toBe('Rebecca_2');
     expect(validateAdminSetting('naming_prefix', '_hidden')).toBeUndefined();
     expect(isValidNamingTemplate('{prefix}_{telegram_id}_{counter}')).toBe(true);
+    expect(isValidNamingTemplate('\u200e`{PREFIX}_{Telegram_Id}_{Random۴}`\u200f')).toBe(true);
+    expect(
+      validateAdminSetting(
+        'custom_naming_template',
+        '\u200e`{PREFIX}_{Telegram_Id}_{Random۴}`\u200f'
+      )
+    ).toBe('{prefix}_{telegram_id}_{random4}');
     expect(isValidNamingTemplate('{prefix}_{year}_{month}_{counter}')).toBe(true);
     expect(isValidNamingTemplate('{prefix}_{yy}{month}_{counter}')).toBe(true);
     expect(isValidNamingTemplate('{prefix}_{jyear}_{jmonth}_{day}_{counter}')).toBe(true);
@@ -573,6 +581,8 @@ describe('Admin settings, trial, naming, lucky wheel & payment conversations', (
         { callback: 'naming:template' },
         { text: '{prefix}_{year}_{month}_{counter}' },
         { callback: 'set-return:naming' },
+        { callback: 'naming:template' },
+        { callback: 'tmpl:preset:prefix_tid_rand4' },
         { callback: 'set-return:naming' },
         { callback: 'naming:back' },
       ]
@@ -581,6 +591,10 @@ describe('Admin settings, trial, naming, lucky wheel & payment conversations', (
     expect(templateHarness.updateSetting).toHaveBeenCalledWith(
       'custom_naming_template',
       '{prefix}_{year}_{month}_{counter}'
+    );
+    expect(templateHarness.updateSetting).toHaveBeenCalledWith(
+      'custom_naming_template',
+      '{prefix}_{telegram_id}_{random4}'
     );
     expect(templateHarness.updateSetting).toHaveBeenCalledWith('naming_mode', 'custom');
 

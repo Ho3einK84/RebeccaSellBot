@@ -1,20 +1,37 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { t, tm } from '../../../locale.js';
+import { callbackData } from '../../../callbackData.js';
 import { buildEmptyState, buildPromptScreen, promptInConversation } from '../../../ui.js';
 import { requireAdmin } from '../shared.js';
 import { renderSettingsScreen, waitForSettingsInput } from './navigation.js';
 import {
   buildCustomNamingTemplatePrompt,
   buildNamingDashboardScreen,
+  buildSettingSavedScreen,
+  displayAdminSettingValue,
   truncateButtonLabel,
 } from './presentation.js';
 import { customServiceNameEnabled } from '../../../../domain/services/FeatureSettings.js';
-import { getSettingDefinition } from './catalog.js';
-import { saveSetting } from './conversation.js';
-import { isValidNamingTemplate, validateAdminSetting } from './validation.js';
+import { logger } from '../../../../infra/logger.js';
+import { SETTING_LABELS, getSettingDefinition } from './catalog.js';
+import { applyAdminSettingUpdate, saveSetting } from './conversation.js';
+import {
+  isValidNamingTemplate,
+  normalizeNamingTemplate,
+  validateAdminSetting,
+} from './validation.js';
 
 type FlowOutcome = 'continue' | 'back' | 'cancel';
+
+export const NAMING_TEMPLATE_PRESETS: ReadonlyArray<{ id: string; template: string }> = [
+  { id: 'prefix_tid_rand4', template: '{prefix}_{telegram_id}_{random4}' },
+  { id: 'prefix_tid_counter', template: '{prefix}_{telegram_id}_{counter}' },
+  { id: 'prefix_rand6', template: '{prefix}_{random6}' },
+  { id: 'prefix_jalali_counter', template: '{prefix}_{jyear}{jmonth}_{counter}' },
+  { id: 'prefix_date_counter', template: '{prefix}_{date}_{counter}' },
+  { id: 'prefix_counter_rand4', template: '{prefix}_{counter}_{random4}' },
+];
 
 export async function manageNamingSettings(
   conversation: MyConversation,
@@ -256,7 +273,21 @@ async function editNamingTemplate(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<FlowOutcome> {
-  const keyboard = new InlineKeyboard().text(t(ctx, 'admin_naming_back_to_naming'), 'tmpl:back');
+  const currentTemplate = await conversation.external(
+    (outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)?.translationService.getSetting(
+        'custom_naming_template',
+        '{prefix}_{telegram_id}_{counter}'
+      ) ?? '{prefix}_{telegram_id}_{counter}'
+  );
+
+  const keyboard = new InlineKeyboard();
+  for (const preset of NAMING_TEMPLATE_PRESETS) {
+    const isCurrent = currentTemplate === preset.template;
+    const label = `\u200e${isCurrent ? '✅ ' : '🧩 '}${preset.template}\u200e`;
+    keyboard.text(label, `tmpl:preset:${preset.id}`).row();
+  }
+  keyboard.text(t(ctx, 'admin_naming_back_to_naming'), 'tmpl:back');
 
   const body = buildCustomNamingTemplatePrompt(ctx);
 
@@ -270,6 +301,7 @@ async function editNamingTemplate(
   for (;;) {
     const input = await waitForSettingsInput(conversation, {
       allowText: true,
+      callbackPrefixes: ['tmpl:preset:'],
       backCallbacks: ['tmpl:back'],
       retryKeyboard: keyboard,
     });
@@ -277,17 +309,17 @@ async function editNamingTemplate(
     if (input.type === 'cancel') return 'cancel';
     if (input.type === 'back') return 'back';
 
-    if (input.type === 'text' && isValidNamingTemplate(input.value)) {
-      const selectedTemplate = input.value.trim();
-      const def = getSettingDefinition('custom_naming_template');
-      if (def) {
-        await saveSetting(conversation, input.ctx ?? ctx, def, selectedTemplate);
-      }
-      const modeDef = getSettingDefinition('naming_mode');
-      if (modeDef) {
-        await saveSetting(conversation, input.ctx ?? ctx, modeDef, 'custom');
-      }
-      return 'continue';
+    let selectedTemplate: string | undefined;
+    if (input.type === 'callback' && input.data.startsWith('tmpl:preset:')) {
+      const presetId = input.data.slice('tmpl:preset:'.length);
+      const matched = NAMING_TEMPLATE_PRESETS.find((item) => item.id === presetId);
+      if (matched) selectedTemplate = matched.template;
+    } else if (input.type === 'text' && isValidNamingTemplate(input.value)) {
+      selectedTemplate = normalizeNamingTemplate(input.value);
+    }
+
+    if (selectedTemplate) {
+      return saveCustomNamingTemplate(conversation, input.ctx ?? ctx, selectedTemplate);
     }
 
     await promptInConversation(
@@ -301,6 +333,94 @@ async function editNamingTemplate(
       { parse_mode: 'Markdown', reply_markup: keyboard }
     );
   }
+}
+
+async function saveCustomNamingTemplate(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  selectedTemplate: string
+): Promise<FlowOutcome> {
+  const previous = await conversation.external((outsideCtx) => {
+    const ts = (outsideCtx?.services ?? ctx.services)?.translationService;
+    return {
+      template: ts?.getSetting('custom_naming_template', '{prefix}_{telegram_id}_{counter}') ?? '',
+      mode: ts?.getSetting('naming_mode', 'custom') ?? 'custom',
+    };
+  });
+
+  let failure: 'save' | 'apply' | 'rollback' | undefined;
+  try {
+    await conversation.external(async (outsideCtx) => {
+      if (!outsideCtx.services) throw new Error('SETTINGS_SERVICES_UNAVAILABLE');
+      const ts = outsideCtx.services.translationService;
+      await applyAdminSettingUpdate(ts, 'custom_naming_template', selectedTemplate);
+      await applyAdminSettingUpdate(ts, 'naming_mode', 'custom');
+      try {
+        await outsideCtx.services.configService.syncCounters();
+      } catch (error) {
+        try {
+          await ts.updateSetting('custom_naming_template', previous.template);
+          await ts.updateSetting('naming_mode', previous.mode);
+        } catch (rollbackError) {
+          throw new Error('SETTING_ROLLBACK_FAILED', { cause: rollbackError });
+        }
+        throw new Error('SETTING_APPLY_FAILED', { cause: error });
+      }
+    });
+  } catch (error) {
+    failure =
+      error instanceof Error && error.message === 'SETTING_ROLLBACK_FAILED'
+        ? 'rollback'
+        : error instanceof Error && error.message === 'SETTING_APPLY_FAILED'
+          ? 'apply'
+          : 'save';
+    logger.error(
+      {
+        settingKey: 'custom_naming_template',
+        failure,
+        errorName: error instanceof Error ? errName(error) : typeof error,
+      },
+      'Admin custom naming template update failed'
+    );
+  }
+
+  const text = failure
+    ? buildEmptyState(
+        '⚠️',
+        t(ctx, 'admin_setting_custom_naming_template'),
+        t(
+          ctx,
+          failure === 'apply'
+            ? 'admin_setting_apply_failed'
+            : failure === 'rollback'
+              ? 'admin_setting_rollback_failed'
+              : 'admin_setting_save_failed'
+        )
+      )
+    : buildSettingSavedScreen(
+        ctx,
+        t(ctx, SETTING_LABELS.custom_naming_template),
+        displayAdminSettingValue(ctx, 'custom_naming_template')
+      );
+
+  const returnCallback = callbackData('set-return', 'naming');
+  const returnKeyboard = new InlineKeyboard().text(
+    t(ctx, 'admin_settings_return_category'),
+    returnCallback
+  );
+  await promptInConversation(conversation, ctx, text, {
+    parse_mode: 'Markdown',
+    reply_markup: returnKeyboard,
+  });
+  const resultInput = await waitForSettingsInput(conversation, {
+    backCallbacks: [returnCallback],
+    retryKeyboard: returnKeyboard,
+  });
+  return resultInput.type === 'cancel' ? 'cancel' : 'continue';
+}
+
+function errName(error: Error): string {
+  return error.name;
 }
 
 export async function adminNamingSettingsConversation(

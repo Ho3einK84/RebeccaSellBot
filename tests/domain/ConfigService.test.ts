@@ -468,6 +468,29 @@ describe('ConfigService, ConfigLock & ConfigTransferService', () => {
         )
       ).toBe(`reb_${dt.year}_${dt.month}_5`);
 
+      // Templates with {random4}/{random6}/{random8} and no {counter} must NOT append _{counter}
+      const randTemplateSettings = {
+        getSetting: vi.fn((k: string, fb?: string) => {
+          if (k === 'naming_mode') return 'custom';
+          if (k === 'naming_prefix') return 'h';
+          if (k === 'custom_naming_template') return '{prefix}_{telegram_id}_{random4}';
+          return fb ?? '';
+        }),
+      };
+      const previewInitial = previewConfigName(randTemplateSettings);
+      expect(previewInitial).toBe('h_6698253699_8f2d');
+      const previewRefreshed = previewConfigName(randTemplateSettings, 2784218178, 4);
+      expect(previewRefreshed).toMatch(/^h_2784218178_[a-f0-9]{4}$/u);
+      expect(previewRefreshed).not.toBe('h_2784218178_8f2d');
+      expect(previewRefreshed).not.toMatch(/_4$/u);
+
+      const randCustomSvc = new ConfigService(
+        rebeccaService as unknown as RebeccaService,
+        randTemplateSettings as unknown as TranslationService
+      );
+      const generatedRandName = await randCustomSvc.generateConfigName(2784218178);
+      expect(generatedRandName).toMatch(/^h_2784218178_[a-f0-9]{4}$/u);
+
       // Counter sync passes regex when mode is prefix_date_counter or prefix_telegramid_number
       const syncDateDb = createMockDb({
         returningResults: [[{ currentCount: 11 }], [{ currentCount: 1 }], [{ currentCount: 1 }]],

@@ -52,11 +52,31 @@ export const CUSTOM_SERVICE_NAME_RE = /^[a-z][a-z0-9_]{2,20}$/u;
 /** Normalize and validate a customer-supplied custom service name. */
 export function normalizeCustomServiceName(raw: string): string | null {
   const normalized = raw
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff`]/gu, '')
     .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
     .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
     .trim()
     .toLowerCase();
   return CUSTOM_SERVICE_NAME_RE.test(normalized) ? normalized : null;
+}
+
+/** Check whether a custom naming template includes a random uniqueness token. */
+export function templateHasRandomToken(template: string): boolean {
+  return (
+    template.includes('{random4}') ||
+    template.includes('{random6}') ||
+    template.includes('{random8}')
+  );
+}
+
+/**
+ * Determine whether a custom naming template requires sequential counter
+ * generation. Templates that already include `{random4}`, `{random6}`, or
+ * `{random8}` without `{counter}` are collision-resistant on their own and
+ * must not have an extra `_{counter}` appended.
+ */
+export function templateUsesCounter(template: string): boolean {
+  return template.includes('{counter}') || !templateHasRandomToken(template);
 }
 
 function randomAlphanumericSuffix(length: number): string {
@@ -274,13 +294,13 @@ export class ConfigService {
 
     if (mode === 'prefix_random') {
       const random6 = crypto.randomBytes(3).toString('hex');
-      return toRebeccaUsername(`${prefix}_${random6}`, 1);
+      return toRebeccaRandomUsername(`${prefix}_${random6}`, random6);
     }
 
     if (mode === 'random_alphanumeric') {
       const random8 = crypto.randomBytes(4).toString('hex');
       const shortPrefix = sanitize(prefix).slice(0, 4) || 'cfg';
-      return toRebeccaUsername(`${shortPrefix}_${random8}`, 1);
+      return toRebeccaRandomUsername(`${shortPrefix}_${random8}`, random8);
     }
 
     if (mode === 'prefix_date_counter') {
@@ -297,7 +317,8 @@ export class ConfigService {
       'custom_naming_template',
       '{prefix}_{counter}'
     );
-    const counter = await this.incrementCounter('custom');
+    const usesCounter = templateUsesCounter(template);
+    const counter = usesCounter ? await this.incrementCounter('custom') : undefined;
     const random4 = crypto.randomBytes(2).toString('hex');
     const random6 = crypto.randomBytes(3).toString('hex');
     const random8 = crypto.randomBytes(4).toString('hex');
@@ -314,10 +335,19 @@ export class ConfigService {
       dateTokens,
     });
 
-    // Templates without a counter are allowed for administrator convenience,
-    // but the generated username must still be collision-resistant.
-    const name = template.includes('{counter}') ? rendered : `${rendered}_${counter}`;
-    return toRebeccaUsername(name, counter);
+    if (!usesCounter) {
+      const fallbackTail = template.includes('{random8}')
+        ? random8
+        : template.includes('{random6}')
+          ? random6
+          : random4;
+      return toRebeccaRandomUsername(rendered, fallbackTail);
+    }
+
+    // Templates without a counter or random token get a trailing counter so
+    // generated usernames remain collision-resistant.
+    const name = template.includes('{counter}') ? rendered : `${rendered}_${counter!}`;
+    return toRebeccaUsername(name, counter!);
   }
 
   /**
@@ -1130,6 +1160,24 @@ function toRebeccaUsername(name: string, counter: number): string {
   return normalized;
 }
 
+function toRebeccaRandomUsername(name: string, randomTail: string): string {
+  const cleanTail = sanitize(randomTail) || '8f2d';
+  const suffix = `_${cleanTail}`;
+  let normalized = sanitize(name);
+  if (!normalized) normalized = `cfg${suffix}`;
+
+  if (normalized.length > MAX_REBECCA_USERNAME_LENGTH) {
+    const prefixLength = MAX_REBECCA_USERNAME_LENGTH - suffix.length;
+    const head = normalized.slice(0, Math.max(0, prefixLength)).replace(/_+$/u, '') || 'cfg';
+    normalized = `${head}${suffix}`.slice(0, MAX_REBECCA_USERNAME_LENGTH);
+  }
+
+  if (normalized.length < MIN_REBECCA_USERNAME_LENGTH) {
+    normalized = `cfg${suffix}`.slice(0, MAX_REBECCA_USERNAME_LENGTH);
+  }
+  return normalized;
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -1301,41 +1349,58 @@ export function previewConfigName(
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dateStr = `${yy}${mm}`;
 
+  const isDefaultSeed = sampleTelegramId === 6698253699 && sampleCounter === 1;
+  const seedDigest = isDefaultSeed
+    ? ''
+    : crypto.createHash('sha256').update(`${sampleTelegramId}:${sampleCounter}`).digest('hex');
+  const random4 = isDefaultSeed ? '8f2d' : seedDigest.slice(0, 4);
+  const random6 = isDefaultSeed ? 'a7f9b2' : seedDigest.slice(4, 10);
+  const random8 = isDefaultSeed ? 'd3f1a24c' : seedDigest.slice(10, 18);
+
   if (mode === 'prefix_number') {
-    return `${prefix}_${sampleCounter}`.toLowerCase();
+    return toRebeccaUsername(`${prefix}_${sampleCounter}`, sampleCounter);
   }
   if (mode === 'telegramid_number') {
-    return `${sampleTelegramId}_${sampleCounter}`.toLowerCase();
+    return toRebeccaUsername(`${sampleTelegramId}_${sampleCounter}`, sampleCounter);
   }
   if (mode === 'prefix_telegramid_number') {
-    return `${prefix}_${sampleTelegramId}_${sampleCounter}`.toLowerCase();
+    return toRebeccaUsername(`${prefix}_${sampleTelegramId}_${sampleCounter}`, sampleCounter);
   }
   if (mode === 'prefix_random') {
-    return `${prefix}_a7f9b2`.toLowerCase();
+    return toRebeccaRandomUsername(`${prefix}_${random6}`, random6);
   }
   if (mode === 'random_alphanumeric') {
     const shortPrefix = sanitize(prefix).slice(0, 4) || 'cfg';
-    return `${shortPrefix}_d3f1a24c`.toLowerCase();
+    return toRebeccaRandomUsername(`${shortPrefix}_${random8}`, random8);
   }
   if (mode === 'prefix_date_counter') {
-    return `${prefix}_${dateStr}_${sampleCounter}`.toLowerCase();
+    return toRebeccaUsername(`${prefix}_${dateStr}_${sampleCounter}`, sampleCounter);
   }
   const template = translationService.getSetting(
     'custom_naming_template',
     '{prefix}_{telegram_id}_{counter}'
   );
   const dateTokens = getDateTokens(now);
+  const usesCounter = templateUsesCounter(template);
   const rendered = renderNamingTemplate(template, {
     prefix,
     telegramId: sampleTelegramId,
-    counter: sampleCounter,
-    random4: '8f2d',
-    random6: 'a7f9b2',
-    random8: 'd3f1a24c',
+    counter: usesCounter ? sampleCounter : undefined,
+    random4,
+    random6,
+    random8,
     dateTokens,
   });
+  if (!usesCounter) {
+    const fallbackTail = template.includes('{random8}')
+      ? random8
+      : template.includes('{random6}')
+        ? random6
+        : random4;
+    return toRebeccaRandomUsername(rendered, fallbackTail);
+  }
   const name = template.includes('{counter}') ? rendered : `${rendered}_${sampleCounter}`;
-  return sanitize(name);
+  return toRebeccaUsername(name, sampleCounter);
 }
 
 function prefixCounterPattern(prefix: string): RegExp {

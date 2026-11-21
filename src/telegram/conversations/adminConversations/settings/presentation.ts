@@ -145,13 +145,18 @@ export function buildSettingSavedScreen(
   setting: string,
   value: string
 ): string {
+  const isPureLtrFormulaOrCode =
+    value.length > 0 && !/[\u0600-\u06ff]/u.test(value) && /[{}_@-]/u.test(value);
+  const renderedValue = isPureLtrFormulaOrCode
+    ? `\u200e\`${escapeInlineCode(value)}\`\u200e`
+    : escapeTelegramMarkdown(value);
   return buildScreen({
     emoji: '✅',
     title: t(ctx, 'admin_setting_saved_title'),
     primary: {
       emoji: '⚙️',
       label: setting,
-      value: escapeTelegramMarkdown(value),
+      value: renderedValue,
     },
     footer: t(ctx, 'admin_setting_saved_hint'),
   });
@@ -401,6 +406,25 @@ export function buildCustomNamingTemplatePrompt(ctx: ConversationContext): strin
   );
 }
 
+export function activeNamingFormula(mode: string, customTemplate: string): string {
+  switch (mode) {
+    case 'prefix_number':
+      return '{prefix}_{counter}';
+    case 'telegramid_number':
+      return '{telegram_id}_{counter}';
+    case 'prefix_telegramid_number':
+      return '{prefix}_{telegram_id}_{counter}';
+    case 'prefix_random':
+      return '{prefix}_{random6}';
+    case 'random_alphanumeric':
+      return '{prefix}_{random8}';
+    case 'prefix_date_counter':
+      return '{prefix}_{date}_{counter}';
+    default:
+      return customTemplate;
+  }
+}
+
 export function buildNamingDashboardScreen(
   ctx: ConversationContext,
   sampleTelegramId?: number,
@@ -411,7 +435,17 @@ export function buildNamingDashboardScreen(
   const mode = ts.getSetting('naming_mode', 'custom');
   const prefix = ts.getSetting('naming_prefix', 'rebecca');
   const template = ts.getSetting('custom_naming_template', '{prefix}_{telegram_id}_{counter}');
+  const formula = activeNamingFormula(mode, template);
   const preview = previewConfigName(ts, sampleTelegramId, sampleCounter);
+  const customServiceNameOn = readSettingBool(ctx, 'custom_service_name_enabled');
+  const cleanPrefix =
+    prefix
+      .replace(/[^a-zA-Z0-9._@-]/g, '_')
+      .toLowerCase()
+      .replace(/^_+|_+$/gu, '') || 'rebecca';
+  const customServiceNameDisplay = customServiceNameOn
+    ? `${displayAdminSettingValue(ctx, 'custom_service_name_enabled')} (\u200e\`${escapeInlineCode(`${cleanPrefix}_my_vpn`)}\`\u200e)`
+    : displayAdminSettingValue(ctx, 'custom_service_name_enabled');
 
   return buildScreen({
     emoji: '🏷️',
@@ -420,7 +454,7 @@ export function buildNamingDashboardScreen(
     primary: {
       emoji: '✨',
       label: t(ctx, 'admin_naming_preview_label'),
-      value: `\`${escapeInlineCode(preview)}\``,
+      value: `\u200e\`${escapeInlineCode(preview)}\`\u200e`,
     },
     sections: [
       {
@@ -433,19 +467,15 @@ export function buildNamingDashboardScreen(
           },
           {
             label: t(ctx, 'admin_naming_prefix_label'),
-            value: `\`${escapeInlineCode(prefix)}\``,
+            value: `\u200e\`${escapeInlineCode(prefix)}\`\u200e`,
           },
-          ...(mode === 'custom'
-            ? [
-                {
-                  label: t(ctx, 'admin_naming_template_label'),
-                  value: `\`${escapeInlineCode(template)}\``,
-                },
-              ]
-            : []),
+          {
+            label: t(ctx, 'admin_naming_template_label'),
+            value: `\n\u200e\`${escapeInlineCode(formula)}\`\u200e`,
+          },
           {
             label: t(ctx, 'admin_setting_custom_service_name_enabled'),
-            value: displayAdminSettingValue(ctx, 'custom_service_name_enabled'),
+            value: customServiceNameDisplay,
           },
         ],
       },
