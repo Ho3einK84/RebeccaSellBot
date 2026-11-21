@@ -51,6 +51,8 @@ export type RemoteOrphanSnapshot = {
   serviceId: number | null;
 };
 
+const RESOLVED_ISSUE_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
+
 /** Detect and administratively repair drift between Rebecca and local ownership. */
 export class ConfigReconciliationService {
   private readonly panels: NormalizedRebeccaPanelAccess;
@@ -740,7 +742,7 @@ export class ConfigReconciliationService {
               eq(configReconciliationIssues.kind, 'local_missing_remote'),
               eq(configReconciliationIssues.panelId, panelId),
               eq(configReconciliationIssues.configUsername, config.configUsername),
-              eq(configReconciliationIssues.status, 'open')
+              sql`${configReconciliationIssues.status} IN ('open', 'ignored')`
             )
           ),
       ]);
@@ -784,7 +786,7 @@ export class ConfigReconciliationService {
               eq(configReconciliationIssues.kind, 'remote_unbound'),
               eq(configReconciliationIssues.panelId, panelId),
               eq(configReconciliationIssues.configUsername, remote.username),
-              eq(configReconciliationIssues.status, 'open')
+              sql`${configReconciliationIssues.status} IN ('open', 'ignored')`
             )
           );
         continue;
@@ -822,17 +824,34 @@ export class ConfigReconciliationService {
   }
 
   private async resolveStaleObservations(panelId: string, scanStartedAt: Date): Promise<void> {
-    // If a remote-only service no longer appears in a complete Rebecca scan,
-    // the issue has disappeared on its own. Ignored issues stay ignored.
-    await getDb()
+    // If a remote-only service no longer appears in a complete Rebecca scan
+    // (e.g. deleted or purged from the panel), it is no longer an active open
+    // or manual/ignored service. Resolving stale ignored rows keeps the
+    // manual/ignored count aligned with live panel users and guarantees a
+    // recreated username surfaces cleanly.
+    const db = getDb();
+    await db
       .update(configReconciliationIssues)
       .set({ status: 'resolved', resolvedAt: scanStartedAt })
       .where(
         and(
           eq(configReconciliationIssues.kind, 'remote_unbound'),
           eq(configReconciliationIssues.panelId, panelId),
-          eq(configReconciliationIssues.status, 'open'),
+          sql`${configReconciliationIssues.status} IN ('open', 'ignored')`,
           lt(configReconciliationIssues.lastSeenAt, scanStartedAt)
+        )
+      );
+
+    // Prune historical resolved rows once past retention so the table stays
+    // bounded to live observations instead of growing with panel churn.
+    const pruneCutoff = new Date(scanStartedAt.getTime() - RESOLVED_ISSUE_RETENTION_MS);
+    await db
+      .delete(configReconciliationIssues)
+      .where(
+        and(
+          eq(configReconciliationIssues.panelId, panelId),
+          eq(configReconciliationIssues.status, 'resolved'),
+          lt(configReconciliationIssues.resolvedAt, pruneCutoff)
         )
       );
   }
@@ -870,7 +889,15 @@ export class ConfigReconciliationService {
           localOwnerTelegramId: params.localOwnerTelegramId,
           remoteCreatedAt: params.remoteCreatedAt,
           lastSeenAt: params.seenAt,
-          resolvedAt: null,
+          resolvedAt: sql`CASE
+            WHEN ${configReconciliationIssues.status} = 'ignored'
+              AND (
+                ${configReconciliationIssues.kind} <> 'remote_unbound'
+                OR ${configReconciliationIssues.remoteCreatedAt} IS NOT DISTINCT FROM ${params.remoteCreatedAt ?? null}
+              )
+            THEN ${configReconciliationIssues.resolvedAt}
+            ELSE NULL
+          END`,
           // Remote-only ignores are scoped to one Rebecca service incarnation.
           // A service recreated with the same username but a different
           // `created_at` is a new drift and must become actionable again.

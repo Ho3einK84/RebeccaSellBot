@@ -177,6 +177,16 @@ describe('PurchaseCheckoutService & PurchasePackageResolver', () => {
       await expect(service.reconcileStaleProcessing()).resolves.toBe(0);
       expect(keptDb.state.updateCalls).toHaveLength(0);
     });
+
+    it('marks expired pending checkouts as expired during maintenance sweep', async () => {
+      const { service } = checkoutService();
+      const expireDb = createMockDb({
+        returningResults: [[{ id: 'co_old_1' }, { id: 'co_old_2' }]],
+      });
+      getDbMock.mockReturnValue(expireDb.db as never);
+      await expect(service.expireStalePending()).resolves.toBe(2);
+      expect(expireDb.state.updateCalls[0]?.set).toMatchObject({ status: 'expired' });
+    });
   });
 
   describe('resolvePurchasePackage', () => {

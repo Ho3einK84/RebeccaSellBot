@@ -290,4 +290,33 @@ describe('ConfigReconciliationService', () => {
       failed: 0,
     });
   });
+
+  it('resolves stale ignored remote observations and prunes old resolved rows during scan', async () => {
+    panelAService.getUsers.mockResolvedValueOnce({
+      users: [],
+      total: 0,
+      status_breakdown: {},
+    });
+    panelBService.getUsers.mockResolvedValueOnce({
+      users: [],
+      total: 0,
+      status_breakdown: {},
+    });
+
+    const { db, state } = createMockDb({
+      selectResults: [[], []],
+    });
+    getDbMock.mockReturnValue(db as never);
+
+    await expect(service.scan()).resolves.toEqual({
+      localMissingRemote: 0,
+      remoteUnbound: 0,
+      remoteIgnored: 0,
+      failedPanels: [],
+    });
+
+    // Both panels issue a stale-resolution update and a retention delete
+    expect(state.updateCalls.filter((c) => c.set.status === 'resolved')).toHaveLength(2);
+    expect(state.deleteCalls).toHaveLength(2);
+  });
 });

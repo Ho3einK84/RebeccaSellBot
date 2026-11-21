@@ -649,9 +649,12 @@ export async function runReconciliationCycle(
     reconcilePendingIntents(panels, services)
   );
   if (services.purchaseCheckoutService) {
-    await runReconciliationStep('reconcile_stale_checkouts', () =>
-      services.purchaseCheckoutService!.reconcileStaleProcessing()
-    );
+    await runReconciliationStep('reconcile_stale_checkouts', async () => {
+      await services.purchaseCheckoutService!.reconcileStaleProcessing();
+      if (typeof services.purchaseCheckoutService!.expireStalePending === 'function') {
+        await services.purchaseCheckoutService!.expireStalePending();
+      }
+    });
   }
   await runReconciliationStep('sync_subscription_statuses', () => syncSubscriptionStatuses(panels));
   if (services.refundService) {

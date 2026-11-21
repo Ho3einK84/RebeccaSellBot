@@ -150,6 +150,7 @@ export const walletTransactions = pgTable(
       'wallet_transactions_type_supported',
       sql`${table.type} IN ('topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial', 'transfer_sent', 'transfer_received', 'lucky_wheel')`
     ),
+    index('wallet_transactions_user_created_idx').on(table.telegramId, table.createdAt),
   ]
 );
 
@@ -286,6 +287,7 @@ export const purchaseIntents = pgTable(
     uniqueIndex('purchase_intents_checkout_unique')
       .on(table.checkoutId)
       .where(sql`${table.checkoutId} IS NOT NULL`),
+    index('purchase_intents_user_created_idx').on(table.telegramId, table.createdAt),
   ]
 );
 
@@ -543,6 +545,15 @@ export const configReconciliationIssues = pgTable(
     index('config_reconciliation_open_idx')
       .on(table.lastSeenAt)
       .where(sql`${table.status} = 'open'`),
+    index('config_reconciliation_active_queue_idx')
+      .on(table.status, table.kind, table.firstSeenAt)
+      .where(sql`${table.status} IN ('open', 'ignored')`),
+    index('config_reconciliation_panel_stale_idx')
+      .on(table.panelId, table.lastSeenAt)
+      .where(sql`${table.status} IN ('open', 'ignored')`),
+    index('config_reconciliation_resolved_prune_idx')
+      .on(table.panelId, table.resolvedAt)
+      .where(sql`${table.status} = 'resolved'`),
     check(
       'config_reconciliation_issue_kind_supported',
       sql`${table.kind} IN ('local_missing_remote', 'remote_unbound')`
@@ -792,6 +803,7 @@ export const auditLogs = pgTable(
   (table) => [
     index('audit_logs_entity_idx').on(table.entityType, table.entityId),
     index('audit_logs_target_idx').on(table.targetTelegramId),
+    index('audit_logs_created_at_idx').on(table.createdAt),
   ]
 );
 

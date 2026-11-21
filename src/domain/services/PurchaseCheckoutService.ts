@@ -138,6 +138,20 @@ export class PurchaseCheckoutService {
     return recovered;
   }
 
+  /**
+   * Mark expired pending checkouts as `expired` so abandoned sessions do not
+   * linger indefinitely inside the partial pending-expiry index.
+   */
+  async expireStalePending(): Promise<number> {
+    const now = new Date();
+    const expired = await getDb()
+      .update(purchaseCheckouts)
+      .set({ status: 'expired', updatedAt: now })
+      .where(and(eq(purchaseCheckouts.status, 'pending'), lte(purchaseCheckouts.expiresAt, now)))
+      .returning({ id: purchaseCheckouts.id });
+    return expired.length;
+  }
+
   private async claimPending(
     checkoutId: string,
     telegramId: number,

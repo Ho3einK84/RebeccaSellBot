@@ -536,5 +536,19 @@ describeIntegration('subscription lifecycle management', () => {
       'manual_existing',
       'manual_new',
     ]);
+
+    // Deleting an ignored remote service from Rebecca must resolve it on the
+    // next complete scan so ghost/deleted users never bloat the ignored count.
+    await service.establishRemoteBaseline(999);
+    await expect(service.getQueueSummary()).resolves.toMatchObject({
+      openTotal: 0,
+      ignored: 2,
+    });
+    snapshot = [botManaged, recreated];
+    await service.scan();
+    await expect(service.getQueueSummary()).resolves.toMatchObject({
+      openTotal: 0,
+      ignored: 1,
+    });
   });
 });

@@ -64,6 +64,13 @@
       "when": 1788250000000,
       "tag": "0008_upgrade_promo_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795271500000,
+      "tag": "0009_optimize_db_indexes",
+      "breakpoints": true
     }
   ]
 }
