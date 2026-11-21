@@ -17,7 +17,16 @@ import {
   RebeccaOriginDownError,
   type RebeccaUserDetail,
 } from './RebeccaService.js';
-import { activeConfigCountSql, observedConfigLifecycle } from './ConfigLifecycle.js';
+import {
+  activeConfigCountSql,
+  normalizeDataLimit,
+  observedConfigLifecycle,
+} from './ConfigLifecycle.js';
+import {
+  onHoldDefaultEnabled,
+  renewalRolloverEnabled,
+  type SettingReader,
+} from './FeatureSettings.js';
 import type { ReferralService } from './ReferralService.js';
 import type { PromoService } from './PromoService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
@@ -49,8 +58,25 @@ export class WalletPurchaseSaga {
     private readonly panels: Pick<RebeccaPanelRegistry, 'resolveTarget'>,
     private readonly referralService: ReferralService,
     private readonly promoService: PromoService,
-    private readonly verifyBindingConflict = true
+    private readonly verifyBindingConflict = true,
+    private readonly settings?: Partial<SettingReader>
   ) {}
+
+  private resolveStartOnFirstUse(params: PurchaseSagaParams): boolean {
+    if (params.startOnFirstUse !== undefined) return params.startOnFirstUse;
+    if (typeof this.settings?.getSetting === 'function') {
+      return onHoldDefaultEnabled(this.settings as SettingReader);
+    }
+    return false;
+  }
+
+  private resolveRolloverQuota(params: PurchaseSagaParams): boolean {
+    if (params.rolloverQuota !== undefined) return params.rolloverQuota;
+    if (typeof this.settings?.getSetting === 'function') {
+      return renewalRolloverEnabled(this.settings as SettingReader);
+    }
+    return true;
+  }
 
   async execute(params: PurchaseSagaParams): Promise<PurchaseSagaResult> {
     validatePurchaseSagaParams(params);
@@ -286,22 +312,47 @@ export class WalletPurchaseSaga {
       // mutation response reconcilable.
       try {
         if (params.type === 'new_config') {
-          const res = await invokeRemoteMutation(() =>
-            rebeccaService.createUser({
-              username: params.configUsername,
-              service_id: serviceId,
-              data_limit: dataLimitBytes,
-              expire: expireTimestamp,
-              status: 'active',
-              note: purchaseOwnershipMarker(intentId),
-            })
-          );
-          if (res.note !== purchaseOwnershipMarker(intentId)) {
-            throw new PanelPurchaseVerificationError();
+          const startOnFirstUse = this.resolveStartOnFirstUse(params);
+          if (startOnFirstUse) {
+            const onHoldDurationSeconds = params.durationDays * 86400;
+            const res = await invokeRemoteMutation(() =>
+              rebeccaService.createUser({
+                username: params.configUsername,
+                service_id: serviceId,
+                data_limit: dataLimitBytes,
+                expire: null,
+                status: 'on_hold',
+                on_hold_expire_duration: onHoldDurationSeconds,
+                note: purchaseOwnershipMarker(intentId),
+              })
+            );
+            if (res.note !== purchaseOwnershipMarker(intentId)) {
+              throw new PanelPurchaseVerificationError();
+            }
+            assertPanelPurchaseApplied(res, dataLimitBytes, null, {
+              expectedStatus: 'on_hold',
+              expectedOnHoldDuration: onHoldDurationSeconds,
+            });
+            confirmedRemote = res;
+            subUrl = res.subscription_url || Object.values(res.subscription_urls ?? {})[0];
+          } else {
+            const res = await invokeRemoteMutation(() =>
+              rebeccaService.createUser({
+                username: params.configUsername,
+                service_id: serviceId,
+                data_limit: dataLimitBytes,
+                expire: expireTimestamp,
+                status: 'active',
+                note: purchaseOwnershipMarker(intentId),
+              })
+            );
+            if (res.note !== purchaseOwnershipMarker(intentId)) {
+              throw new PanelPurchaseVerificationError();
+            }
+            assertPanelPurchaseApplied(res, dataLimitBytes, expireTimestamp);
+            confirmedRemote = res;
+            subUrl = res.subscription_url || Object.values(res.subscription_urls ?? {})[0];
           }
-          assertPanelPurchaseApplied(res, dataLimitBytes, expireTimestamp);
-          confirmedRemote = res;
-          subUrl = res.subscription_url || Object.values(res.subscription_urls ?? {})[0];
         } else {
           const existing = await rebeccaService.getUser(params.configUsername);
           const [foundConfig] = await db
@@ -335,10 +386,41 @@ export class WalletPurchaseSaga {
             expire: existing.expire,
             status: existing.status,
           };
-          // Reset both traffic quota and duration explicitly from now, regardless
-          // of previous quota (finite or unlimited) or previous expiration time.
-          const expectedExpire = Math.floor(Date.now() / 1000) + params.durationDays * 86400;
-          const expectedDataLimit = dataLimitBytes;
+          const nowSec = Math.floor(Date.now() / 1000);
+          const durationSeconds = params.durationDays * 86400;
+          const rolloverEnabled = this.resolveRolloverQuota(params);
+          let remainingTrafficBytes = 0;
+          let remainingSeconds = 0;
+
+          if (rolloverEnabled) {
+            const existingLimit = normalizeDataLimit(existing.data_limit) ?? null;
+            const existingUsed =
+              typeof existing.used_traffic === 'number' && Number.isFinite(existing.used_traffic)
+                ? Math.max(0, existing.used_traffic)
+                : 0;
+            if (existingLimit !== null && existingLimit > 0) {
+              remainingTrafficBytes = Math.max(0, existingLimit - existingUsed);
+            }
+
+            if (existing.status === 'on_hold') {
+              const prevOnHold = existing.on_hold_expire_duration;
+              if (
+                typeof prevOnHold === 'number' &&
+                Number.isSafeInteger(prevOnHold) &&
+                prevOnHold > 0
+              ) {
+                remainingSeconds = prevOnHold;
+              }
+            } else if (existing.expire !== null && existing.expire !== undefined) {
+              remainingSeconds = Math.max(0, existing.expire - nowSec);
+            }
+          }
+
+          const rawExpectedDataLimit = dataLimitBytes + remainingTrafficBytes;
+          const expectedDataLimit = Number.isSafeInteger(rawExpectedDataLimit)
+            ? rawExpectedDataLimit
+            : Number.MAX_SAFE_INTEGER;
+          const expectedExpire = nowSec + durationSeconds + remainingSeconds;
 
           const prepared = await db
             .update(purchaseIntents)

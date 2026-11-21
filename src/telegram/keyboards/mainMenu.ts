@@ -22,6 +22,7 @@ import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
 import { renderAdminHome } from './adminMenu.js';
 import {
+  customServiceNameEnabled,
   customVolumeEnabled,
   walletTransferEnabled,
 } from '../../domain/services/FeatureSettings.js';
@@ -680,6 +681,15 @@ function renderPackageButtons(
               parse_mode: 'Markdown',
               reply_markup: insufficientKeyboard,
             });
+            return;
+          }
+
+          if (
+            typeof c.services.translationService?.getSetting === 'function' &&
+            customServiceNameEnabled(c.services.translationService)
+          ) {
+            c.session.pendingCustomNamePurchase = { packageId: pkg.id };
+            await c.conversation.enter('buyPackageCustomNameConversation');
             return;
           }
 

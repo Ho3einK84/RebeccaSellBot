@@ -71,6 +71,13 @@
       "when": 1795271500000,
       "tag": "0009_optimize_db_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795272000000,
+      "tag": "0010_phase1_rebecca_features",
+      "breakpoints": true
     }
   ]
 }

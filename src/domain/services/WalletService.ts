@@ -89,7 +89,8 @@ export class WalletService {
       normalizeRebeccaPanelAccess(panels),
       referralService,
       promoService,
-      isRebeccaPanelRegistryAccess(panels)
+      isRebeccaPanelRegistryAccess(panels),
+      translationService
     );
   }
 

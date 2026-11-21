@@ -315,6 +315,7 @@ export const userConfigs = pgTable(
     panelDataLimit: bigint('panel_data_limit', { mode: 'number' }),
     panelUsedTraffic: bigint('panel_used_traffic', { mode: 'number' }),
     panelExpire: bigint('panel_expire', { mode: 'number' }),
+    panelOnHoldExpireDuration: bigint('panel_on_hold_expire_duration', { mode: 'number' }),
     autoRenewEnabled: boolean('auto_renew_enabled').notNull().default(false),
     // Only a stable package ID is persisted. Price/quota/duration are resolved
     // from PricingService when the renewal actually runs.
@@ -343,6 +344,10 @@ export const userConfigs = pgTable(
     check(
       'user_configs_panel_expire_safe',
       sql`${table.panelExpire} IS NULL OR ${table.panelExpire} BETWEEN 0 AND 9007199254740991`
+    ),
+    check(
+      'user_configs_panel_on_hold_expire_duration_safe',
+      sql`${table.panelOnHoldExpireDuration} IS NULL OR ${table.panelOnHoldExpireDuration} BETWEEN 0 AND 9007199254740991`
     ),
     index('user_configs_telegram_id_idx').on(table.telegramId),
     index('user_configs_sub_url_idx').on(table.subUrl),
@@ -386,6 +391,7 @@ export const purchaseCheckouts = pgTable(
     gbAmount: integer('gb_amount').notNull(),
     durationDays: integer('duration_days').notNull(),
     promoCode: text('promo_code'),
+    requestedUsername: text('requested_username'),
     status: text('status').notNull().default('pending'),
     expiresAt: timestamp('expires_at').notNull(),
     claimedAt: timestamp('claimed_at'),

@@ -5,6 +5,7 @@ import { purchaseCheckouts, purchaseIntents } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
 import type { PackageOption } from './PricingService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
+import { normalizeCustomServiceName } from './ConfigService.js';
 
 const CHECKOUT_TTL_MS = 15 * 60 * 1000;
 export const PROCESSING_CHECKOUT_MIN_AGE_MS = 5 * 60 * 1000;
@@ -29,9 +30,11 @@ export class PurchaseCheckoutService {
     panelId?: string;
     serviceId?: number;
     promoCode?: string;
+    requestedUsername?: string | null;
     quotedAmount?: number;
   }): Promise<PurchaseCheckout> {
     const quotedAmount = input.quotedAmount ?? input.pkg.price;
+    const normalizedRequestedUsername = normalizeCheckoutRequestedUsername(input.requestedUsername);
     assertCheckoutInput(input, quotedAmount);
     const requestedPanelId = input.panelId ?? input.pkg.panelId;
     const requestedServiceId = input.serviceId ?? input.pkg.serviceId;
@@ -53,6 +56,7 @@ export class PurchaseCheckoutService {
         gbAmount: input.pkg.gbAmount,
         durationDays: input.pkg.durationDays,
         promoCode: input.promoCode ?? null,
+        requestedUsername: normalizedRequestedUsername,
         expiresAt: new Date(Date.now() + CHECKOUT_TTL_MS),
       })
       .returning();
@@ -247,6 +251,13 @@ export class PurchaseCheckoutService {
 function isProcessingCheckoutStale(checkout: PurchaseCheckout, now: Date): boolean {
   if (!checkout.claimedAt) return true;
   return checkout.claimedAt.getTime() <= now.getTime() - PROCESSING_CHECKOUT_MIN_AGE_MS;
+}
+
+function normalizeCheckoutRequestedUsername(raw: string | null | undefined): string | null {
+  if (raw === undefined || raw === null || raw.trim() === '') return null;
+  const normalized = normalizeCustomServiceName(raw);
+  if (!normalized) throw new Error('PURCHASE_CHECKOUT_INVALID_USERNAME');
+  return normalized;
 }
 
 function assertCheckoutInput(

@@ -35,6 +35,9 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   custom_price_overrides_json: '[]',
   packages_json: JSON.stringify(DEFAULT_PACKAGES),
   package_display_mode: 'specs',
+  // Native Rebecca lifecycle policies: start-on-first-use (`on_hold`) and renewal quota/time rollover.
+  on_hold_default_enabled: 'false',
+  renewal_rollover_enabled: 'true',
   // Default subscription length (days) applied to the custom-volume flow.
   custom_default_days: '30',
   // Admin switch and GB boundaries for custom-volume purchase and renewal flows.
@@ -77,6 +80,7 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   naming_mode: 'custom',
   custom_naming_template: '{prefix}_{telegram_id}_{counter}',
   naming_prefix: 'rebecca',
+  custom_service_name_enabled: 'false',
 
   // System, maintenance, and language settings.
   bot_enabled: 'true',

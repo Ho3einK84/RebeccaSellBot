@@ -38,6 +38,7 @@ import {
   rebeccaDeleteResponseSchema,
   rebeccaTokenResponseSchema,
   rebeccaUserDetailSchema,
+  rebeccaUserUsageResponseSchema,
   rebeccaUsersResponseSchema,
 } from './RebeccaApiSchemas.js';
 import { normalizeDataLimit } from '../domain/services/TrafficLimit.js';
@@ -114,6 +115,8 @@ export interface RebeccaUserDetail {
   lifetime_used_traffic: number;
   data_limit: number | null; // bytes, null = unlimited
   expire: number | null; // Unix seconds, null = never
+  /** Duration in seconds applied when the user is in `on_hold` status. */
+  on_hold_expire_duration?: number | null;
   created_at: string;
   subscription_url: string;
   /**
@@ -143,6 +146,7 @@ export interface RebeccaUserListItem {
   used_traffic: number;
   data_limit: number | null;
   expire: number | null;
+  on_hold_expire_duration?: number | null;
   subscription_url: string;
   subscription_urls?: Record<string, string>;
   links: string[];
@@ -176,6 +180,7 @@ export interface RebeccaCreateUserPayload {
   status?: UserStatusCreate;
   data_limit?: number | null; // bytes, 0 = unlimited
   expire?: number | null; // Unix seconds, 0 or null = never
+  on_hold_expire_duration?: number | null; // seconds, used when status === 'on_hold'
   inbounds?: Record<string, string[]>;
   proxies?: Record<string, Record<string, unknown>>;
   note?: string;
@@ -187,6 +192,7 @@ export interface RebeccaUpdateUserPayload {
   status?: UserStatusModify;
   data_limit?: number | null;
   expire?: number | null;
+  on_hold_expire_duration?: number | null;
   inbounds?: Record<string, string[]>;
   proxies?: Record<string, Record<string, unknown>>;
   note?: string;
@@ -197,6 +203,25 @@ export interface RebeccaUpdateUserPayload {
 export interface RebeccaDeleteResponse {
   username: string;
   status: string;
+}
+
+/** Per-node traffic breakdown entry returned by GET /api/user/:username/usage */
+export interface RebeccaUserUsagePoint {
+  node_id: number | null;
+  node_name: string;
+  used_traffic: number;
+}
+
+/** Response from GET /api/user/:username/usage */
+export interface RebeccaUserUsageResponse {
+  username: string;
+  usages: RebeccaUserUsagePoint[];
+}
+
+/** Optional query window for GET /api/user/:username/usage */
+export interface RebeccaUserUsageQueryOptions {
+  start?: string;
+  end?: string;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -622,6 +647,23 @@ export class RebeccaApiClient {
     );
   }
 
+  /** GET /api/user/:username/usage?start&end → UserUsageResponse */
+  async getUserUsage(
+    username: string,
+    options?: RebeccaUserUsageQueryOptions
+  ): Promise<RebeccaUserUsageResponse> {
+    const query = new URLSearchParams();
+    if (options?.start?.trim()) query.set('start', options.start.trim());
+    if (options?.end?.trim()) query.set('end', options.end.trim());
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    const endpoint = `/api/user/${encodeURIComponent(username)}/usage${suffix}`;
+    return this.parseContract<RebeccaUserUsageResponse>(
+      endpoint,
+      rebeccaUserUsageResponseSchema,
+      await this.request(endpoint)
+    );
+  }
+
   /**
    * GET /api/users?offset&limit&search&status
    * Returns {users, total, status_breakdown}
@@ -655,11 +697,18 @@ export class RebeccaApiClient {
   /** POST /api/user → UserDetail (201 Created) */
   async createUser(payload: RebeccaCreateUserPayload): Promise<RebeccaUserDetail> {
     // Coerce 0 / undefined / null → null for data_limit/expire so the backend treats them as unlimited/never
+    const status = payload.status ?? 'active';
     const body: Record<string, unknown> = {
       ...payload,
-      status: payload.status ?? 'active',
+      status,
       data_limit: normalizeDataLimit(payload.data_limit) ?? null,
-      expire: payload.expire === 0 ? null : (payload.expire ?? null),
+      expire: status === 'on_hold' ? null : payload.expire === 0 ? null : (payload.expire ?? null),
+      ...(payload.on_hold_expire_duration !== undefined
+        ? {
+            on_hold_expire_duration:
+              payload.on_hold_expire_duration === 0 ? null : payload.on_hold_expire_duration,
+          }
+        : {}),
     };
     return this.withAbsoluteSubscriptionUrls(
       this.parseContract<RebeccaUserDetail>(
@@ -685,6 +734,12 @@ export class RebeccaApiClient {
         : {}),
       ...(payload.expire !== undefined
         ? { expire: payload.expire === 0 ? null : payload.expire }
+        : {}),
+      ...(payload.on_hold_expire_duration !== undefined
+        ? {
+            on_hold_expire_duration:
+              payload.on_hold_expire_duration === 0 ? null : payload.on_hold_expire_duration,
+          }
         : {}),
     };
     return this.withAbsoluteSubscriptionUrls(

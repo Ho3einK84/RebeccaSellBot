@@ -74,3 +74,30 @@ export function backupLastRunAt(settings: SettingReader): string {
 export function backupLastStatus(settings: SettingReader): string {
   return settings.getSetting('backup_last_status', '').trim();
 }
+
+/**
+ * Whether new purchases default to Rebecca's `on_hold` status (start validity on
+ * first connection). Disabled by default for backwards compatibility.
+ */
+export function onHoldDefaultEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('on_hold_default_enabled', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
+/**
+ * Whether remaining traffic quota and remaining validity carry over into the
+ * renewed period. Enabled by default.
+ */
+export function renewalRolloverEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('renewal_rollover_enabled', 'true').trim().toLowerCase();
+  return value !== 'false' && value !== '0';
+}
+
+/**
+ * Whether buyers may enter a custom English service name during purchase.
+ * Disabled by default.
+ */
+export function customServiceNameEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('custom_service_name_enabled', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}

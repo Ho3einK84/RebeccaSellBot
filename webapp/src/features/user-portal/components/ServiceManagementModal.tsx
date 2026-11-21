@@ -239,7 +239,11 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             />
 
             <div className="flex items-center justify-between text-[11px] text-ink-muted pt-2 border-t border-line gap-2 flex-wrap">
-              <ServiceExpiryView expireTimestampSec={config.panelExpire} />
+              <ServiceExpiryView
+                expireTimestampSec={config.panelExpire}
+                panelStatus={config.panelStatus}
+                onHoldExpireDurationSec={config.panelOnHoldExpireDuration}
+              />
               <span className="text-[11px] text-ink-muted tnum">
                 {formatServiceCreatedDate(config.createdAt, locale, t)}
               </span>

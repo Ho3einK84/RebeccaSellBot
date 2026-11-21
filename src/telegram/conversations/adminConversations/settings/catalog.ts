@@ -5,6 +5,8 @@ export const SETTING_KEYS = [
   'webapp_enabled',
   'webapp_url',
   'packages_json',
+  'on_hold_default_enabled',
+  'renewal_rollover_enabled',
   'low_traffic_threshold_gb',
   'expiry_warning_days',
   'refund_window_hours',
@@ -35,6 +37,7 @@ export const SETTING_KEYS = [
   'naming_mode',
   'naming_prefix',
   'custom_naming_template',
+  'custom_service_name_enabled',
   'backup_enabled',
   'backup_interval_hours',
   'backup_target_chat_id',
@@ -111,6 +114,18 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'pricing',
     labelKey: 'admin_setting_packages_json',
     editor: { type: 'packages' },
+  },
+  {
+    key: 'on_hold_default_enabled',
+    group: 'pricing',
+    labelKey: 'admin_setting_on_hold_default_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'renewal_rollover_enabled',
+    group: 'pricing',
+    labelKey: 'admin_setting_renewal_rollover_enabled',
+    editor: { type: 'boolean' },
   },
   {
     key: 'low_traffic_threshold_gb',
@@ -291,6 +306,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'naming',
     labelKey: 'admin_setting_custom_naming_template',
     editor: { type: 'naming_template' },
+  },
+  {
+    key: 'custom_service_name_enabled',
+    group: 'naming',
+    labelKey: 'admin_setting_custom_service_name_enabled',
+    editor: { type: 'boolean' },
   },
   {
     key: 'backup_enabled',

@@ -20,6 +20,9 @@ import type {
   RebeccaApiClient,
   RebeccaUserDetail,
   RebeccaUsersResponse,
+  RebeccaUserUsagePoint,
+  RebeccaUserUsageQueryOptions,
+  RebeccaUserUsageResponse,
   RebeccaCreateUserPayload,
   RebeccaUpdateUserPayload,
   RebeccaDeleteResponse,
@@ -38,6 +41,9 @@ export { RebeccaApiError, RebeccaContractError, RebeccaOriginDownError };
 export type {
   RebeccaUserDetail,
   RebeccaUsersResponse,
+  RebeccaUserUsagePoint,
+  RebeccaUserUsageQueryOptions,
+  RebeccaUserUsageResponse,
   RebeccaCreateUserPayload,
   RebeccaUpdateUserPayload,
   RebeccaDeleteResponse,
@@ -148,6 +154,22 @@ export class RebeccaService {
     } catch (err) {
       if (err instanceof RebeccaOriginDownError) {
         void fireAdminAlert(this.outageAlert(`GET /api/user/${username}`, err.attempts));
+      }
+      throw err;
+    }
+  }
+
+  async getUserUsage(
+    username: string,
+    options?: RebeccaUserUsageQueryOptions
+  ): Promise<RebeccaUserUsageResponse> {
+    try {
+      const result = await this.client.getUserUsage(username, options);
+      this.markHealthy();
+      return result;
+    } catch (err) {
+      if (err instanceof RebeccaOriginDownError) {
+        void fireAdminAlert(this.outageAlert(`GET /api/user/${username}/usage`, err.attempts));
       }
       throw err;
     }

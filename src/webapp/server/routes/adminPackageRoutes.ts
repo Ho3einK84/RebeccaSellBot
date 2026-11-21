@@ -241,6 +241,18 @@ export function registerAdminPackageRoutes(
           body.enabled !== undefined
             ? parseBooleanField(body.enabled, 'INVALID_ENABLED_FLAG', 'enabled')
             : true;
+        const startOnFirstUse =
+          body.startOnFirstUse !== undefined
+            ? parseBooleanField(
+                body.startOnFirstUse,
+                'INVALID_START_ON_FIRST_USE_FLAG',
+                'startOnFirstUse'
+              )
+            : undefined;
+        const rolloverQuota =
+          body.rolloverQuota !== undefined
+            ? parseBooleanField(body.rolloverQuota, 'INVALID_ROLLOVER_QUOTA_FLAG', 'rolloverQuota')
+            : undefined;
 
         const target = resolveCreatePackageTarget(deps.panelRegistry, body.panelId, body.serviceId);
         const categoryId = await resolveCategoryIdInput(
@@ -257,6 +269,8 @@ export function registerAdminPackageRoutes(
           enabled,
           ...(target ? { panelId: target.panelId, serviceId: target.serviceId } : {}),
           ...(categoryId ? { categoryId } : {}),
+          ...(startOnFirstUse !== undefined ? { startOnFirstUse } : {}),
+          ...(rolloverQuota !== undefined ? { rolloverQuota } : {}),
         };
 
         const nextPackages = [...snapshot.packages, createdPkg];
@@ -407,7 +421,9 @@ export function registerAdminPackageRoutes(
             'enabled' in body ||
             'panelId' in body ||
             'serviceId' in body ||
-            'categoryId' in body;
+            'categoryId' in body ||
+            'startOnFirstUse' in body ||
+            'rolloverQuota' in body;
           if (!hasKnownField) {
             throw new RouteValidationError(
               400,
@@ -484,6 +500,28 @@ export function registerAdminPackageRoutes(
               ? await resolveCategoryIdInput(deps.packageCategoryService, body.categoryId)
               : existing.categoryId;
 
+          const nextStartOnFirstUse =
+            'startOnFirstUse' in body
+              ? body.startOnFirstUse === null || body.startOnFirstUse === undefined
+                ? undefined
+                : parseBooleanField(
+                    body.startOnFirstUse,
+                    'INVALID_START_ON_FIRST_USE_FLAG',
+                    'startOnFirstUse'
+                  )
+              : existing.startOnFirstUse;
+
+          const nextRolloverQuota =
+            'rolloverQuota' in body
+              ? body.rolloverQuota === null || body.rolloverQuota === undefined
+                ? undefined
+                : parseBooleanField(
+                    body.rolloverQuota,
+                    'INVALID_ROLLOVER_QUOTA_FLAG',
+                    'rolloverQuota'
+                  )
+              : existing.rolloverQuota;
+
           const updatedPkg: AdminPackageDto = {
             id: existing.id,
             name: nextName,
@@ -493,6 +531,8 @@ export function registerAdminPackageRoutes(
             enabled: nextEnabled,
             ...(nextTarget ? { panelId: nextTarget.panelId, serviceId: nextTarget.serviceId } : {}),
             ...(nextCategoryId ? { categoryId: nextCategoryId } : {}),
+            ...(nextStartOnFirstUse !== undefined ? { startOnFirstUse: nextStartOnFirstUse } : {}),
+            ...(nextRolloverQuota !== undefined ? { rolloverQuota: nextRolloverQuota } : {}),
           };
 
           const nextPackages = snapshot.packages.map((pkg, i) => (i === index ? updatedPkg : pkg));

@@ -608,6 +608,42 @@ export function waitForAdminCallbackInput(
   return waitForCallbackInput(conversation, validPrefixes, 'admin');
 }
 
+export type TextOrCallbackInput =
+  { type: 'text'; text: string } | { type: 'callback'; data: string };
+
+/**
+ * Wait for either a text message or an inline-button selection matching one of
+ * the accepted callback prefixes.
+ */
+export async function waitForTextOrCallbackInput(
+  conversation: MyConversation,
+  validPrefixes: readonly string[],
+  cancelDestination: BackDestination = 'home'
+): Promise<TextOrCallbackInput | undefined> {
+  const ownerId = await conversationOwnerId(conversation);
+  for (;;) {
+    const input = await conversation.wait();
+    if (!(await acceptConversationOwner(input, ownerId))) continue;
+    if (await handleConversationCancel(conversation, input, cancelDestination)) return undefined;
+    await forwardConversationNavigation(conversation, input);
+    const data = input.callbackQuery?.data;
+    if (data && validPrefixes.some((prefix) => data.startsWith(prefix))) {
+      await input.answerCallbackQuery();
+      return { type: 'callback', data };
+    }
+    if (input.callbackQuery) {
+      await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
+      continue;
+    }
+    if (input.message && 'text' in input.message && typeof input.message.text === 'string') {
+      await deleteConsumedInputMessage(input);
+      return { type: 'text', text: input.message.text };
+    }
+    await deleteConsumedInputMessage(input);
+    await promptInConversation(conversation, input, t(input, 'text_input_required'));
+  }
+}
+
 export async function conversationOwnerId(
   conversation: MyConversation
 ): Promise<number | undefined> {

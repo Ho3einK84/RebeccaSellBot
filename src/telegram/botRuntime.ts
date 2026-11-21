@@ -8,6 +8,7 @@ import type { BotServices, ConversationContext, MenuContext } from './types.js';
 import {
   autoRenewCustomConversation,
   buyConfigConversation,
+  buyPackageCustomNameConversation,
   customAmountConversation,
   promoConversation,
   transferConfigConversation,
@@ -254,6 +255,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     })
   );
   bot.use(createConversation(buyConfigConversation, 'buyConfigConversation'));
+  bot.use(createConversation(buyPackageCustomNameConversation, 'buyPackageCustomNameConversation'));
   bot.use(createConversation(customAmountConversation, 'customAmountConversation'));
   bot.use(createConversation(renewConfigConversation, 'renewConfigConversation'));
   bot.use(createConversation(autoRenewCustomConversation, 'autoRenewCustomConversation'));

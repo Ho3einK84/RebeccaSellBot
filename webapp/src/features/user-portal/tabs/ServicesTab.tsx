@@ -145,7 +145,11 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
 
                   {/* Expiration Info & Created Date */}
                   <div className="flex items-center justify-between text-xs text-ink-muted pt-2.5 border-t border-line gap-2 flex-wrap">
-                    <ServiceExpiryView expireTimestampSec={c.panelExpire} />
+                    <ServiceExpiryView
+                      expireTimestampSec={c.panelExpire}
+                      panelStatus={c.panelStatus}
+                      onHoldExpireDurationSec={c.panelOnHoldExpireDuration}
+                    />
 
                     <span className="text-[11px] text-ink-muted tnum">
                       {formatServiceCreatedDate(c.createdAt, locale, t)}

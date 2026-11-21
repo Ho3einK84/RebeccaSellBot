@@ -29,7 +29,10 @@ import { acquireUserActionCooldown } from '../../middleware/actionCooldown.js';
 import { clearPendingPromo, getPendingPromoPricing } from '../../promoSelection.js';
 import { purchaseFailureMessage } from '../../purchaseFeedback.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
-import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js';
+import {
+  customVolumeEnabled,
+  renewalRolloverEnabled,
+} from '../../../domain/services/FeatureSettings.js';
 import { calculateTraffic } from '../../../domain/services/ConfigLifecycle.js';
 import { RefundOutcomePendingError } from '../../../domain/services/RefundService.js';
 import { PurchaseCheckoutUnavailableError } from '../../../domain/services/PurchaseCheckoutService.js';
@@ -354,6 +357,11 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         promoCode: pendingPromo.promoCode,
         quotedAmount: price,
       });
+      const rolloverEnabled =
+        pkg.rolloverQuota ??
+        (typeof ctx.services!.translationService?.getSetting === 'function'
+          ? renewalRolloverEnabled(ctx.services!.translationService)
+          : true);
       await renderSubscriptionScreen(
         ctx,
         buildRenewalCheckoutScreen(ctx, {
@@ -363,6 +371,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           amount: price,
           pricePerGb: pkg.gbAmount > 0 ? Math.round(price / pkg.gbAmount) : price,
           promoCode: pendingPromo.quote?.code,
+          rolloverEnabled,
         }),
         new InlineKeyboard()
           .text(t(ctx, 'renew_confirm_button'), callbackData('renew', 'confirm', checkout.id))
@@ -421,6 +430,10 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     await ctx.answerCallbackQuery({ text: t(ctx, 'renewing') });
     let result: { configUsername: string; subUrl?: string };
     try {
+      const resolvedPkg =
+        typeof ctx.services.pricingService?.getPackageById === 'function'
+          ? ctx.services.pricingService.getPackageById(checkout.packageId)
+          : undefined;
       result = await ctx.services!.walletService.executePurchaseSaga({
         telegramId: checkout.telegramId,
         amount: checkout.amount,
@@ -433,6 +446,9 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         serviceId: checkout.serviceId,
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
+        ...(resolvedPkg?.rolloverQuota !== undefined
+          ? { rolloverQuota: resolvedPkg.rolloverQuota }
+          : {}),
         allowAdminOverride: isAdmin,
       });
     } catch (err) {
@@ -1139,6 +1155,8 @@ async function buildSubscriptionSnapshot(
 
   const traffic = calculateTraffic(remote, config);
   const expire = remote?.expire ?? config.panelExpire;
+  const onHoldExpireDuration =
+    remote?.on_hold_expire_duration ?? config.panelOnHoldExpireDuration ?? null;
   const status = effectiveStatus(
     remote?.status ?? config.panelStatus ?? 'unknown',
     traffic.remainingBytes ?? undefined,
@@ -1172,8 +1190,16 @@ async function buildSubscriptionSnapshot(
   } else {
     remaining = t(ctx, 'traffic_unavailable');
   }
-  let expiryInfo = formatExpiry(ctx, expire);
-  if (options.includeProgressBars && expire != null && expire * 1000 > Date.now()) {
+  let expiryInfo =
+    status === 'on_hold'
+      ? formatOnHoldExpiry(ctx, onHoldExpireDuration)
+      : formatExpiry(ctx, expire);
+  if (
+    options.includeProgressBars &&
+    status !== 'on_hold' &&
+    expire != null &&
+    expire * 1000 > Date.now()
+  ) {
     const createdAtMs = new Date(remote?.created_at || config.createdAt).getTime();
     const expireMs = expire * 1000;
     const totalMs = expireMs - createdAtMs;
@@ -1279,6 +1305,16 @@ function effectiveStatus(
   return status;
 }
 
+function formatOnHoldExpiry(ctx: MenuContext, durationSec: number | null | undefined): string {
+  if (typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0) {
+    const days = Math.max(1, Math.round(durationSec / 86_400));
+    return t(ctx, 'subscription_expiry_on_hold_days', {
+      days: localizedNumber(days, ctx),
+    });
+  }
+  return t(ctx, 'subscription_expiry_on_hold');
+}
+
 function formatExpiry(ctx: MenuContext, expire: number | null | undefined): string {
   if (expire == null) return t(ctx, 'subscription_expiry_never');
   const date = new Date(expire * 1000);
@@ -1322,7 +1358,7 @@ function statusEmoji(status: string): string {
   return '⚠️';
 }
 
-function buildRenewalCheckoutScreen(
+export function buildRenewalCheckoutScreen(
   ctx: MenuContext,
   input: {
     username: string;
@@ -1331,6 +1367,7 @@ function buildRenewalCheckoutScreen(
     amount: number;
     pricePerGb: number;
     promoCode?: string;
+    rolloverEnabled?: boolean;
   }
 ): string {
   return buildUserScreen({
@@ -1367,6 +1404,15 @@ function buildRenewalCheckoutScreen(
             label: t(ctx, 'checkout_unit_price_label'),
             value: `${localizedNumber(input.pricePerGb, ctx)} ${t(ctx, 'currency_toman')}`,
           },
+          ...(input.rolloverEnabled
+            ? [
+                {
+                  emoji: '♻️',
+                  label: t(ctx, 'renewal_rollover_label'),
+                  value: t(ctx, 'renewal_rollover_notice'),
+                },
+              ]
+            : []),
         ],
       },
       ...(input.promoCode

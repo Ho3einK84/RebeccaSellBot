@@ -7,7 +7,13 @@
 import { getDb } from '../../infra/db.js';
 import { userConfigs, configCounters, notificationDeliveries, users } from '../../infra/schema.js';
 import { withConfigLock } from './ConfigLock.js';
-import { RebeccaApiError, type RebeccaService, type RebeccaUserDetail } from './RebeccaService.js';
+import {
+  RebeccaApiError,
+  type RebeccaService,
+  type RebeccaUserDetail,
+  type RebeccaUserUsageQueryOptions,
+  type RebeccaUserUsageResponse,
+} from './RebeccaService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import {
   normalizeRebeccaPanelAccess,
@@ -38,6 +44,29 @@ const CLAIM_SEARCH_LIMIT = 10;
 const MAX_REBECCA_USERNAME_LENGTH = 32;
 const MIN_REBECCA_USERNAME_LENGTH = 3;
 const MAX_COUNTER = 2_147_483_647;
+const CUSTOM_NAME_SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const CUSTOM_NAME_COLLISION_ATTEMPTS = 10;
+
+export const CUSTOM_SERVICE_NAME_RE = /^[a-z][a-z0-9_]{2,20}$/u;
+
+/** Normalize and validate a customer-supplied custom service name. */
+export function normalizeCustomServiceName(raw: string): string | null {
+  const normalized = raw
+    .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
+    .trim()
+    .toLowerCase();
+  return CUSTOM_SERVICE_NAME_RE.test(normalized) ? normalized : null;
+}
+
+function randomAlphanumericSuffix(length: number): string {
+  const bytes = crypto.randomBytes(length);
+  let suffix = '';
+  for (let i = 0; i < length; i += 1) {
+    suffix += CUSTOM_NAME_SUFFIX_ALPHABET[bytes[i]! % CUSTOM_NAME_SUFFIX_ALPHABET.length];
+  }
+  return suffix;
+}
 
 export type SubscriptionClaimResult = {
   success: boolean;
@@ -291,6 +320,76 @@ export class ConfigService {
     return toRebeccaUsername(name, counter);
   }
 
+  /**
+   * Combine `naming_prefix` with a customer-chosen service name and verify
+   * availability against both local bindings and the Rebecca panel. If the
+   * base username is already taken, appends a random 3-character suffix so
+   * purchases never fail due to name collisions.
+   */
+  async resolveCustomConfigName(requestedName: string, panelId?: string): Promise<string> {
+    const normalized = normalizeCustomServiceName(requestedName);
+    if (!normalized) throw new Error('INVALID_CUSTOM_SERVICE_NAME');
+
+    const rawPrefix = this.translationService.getSetting('naming_prefix', 'rebecca');
+    const cleanPrefix = sanitize(rawPrefix).replace(/^_+|_+$/gu, '') || 'rebecca';
+    const resolvedPanelId =
+      panelId ??
+      (typeof this.panels.resolveTarget === 'function'
+        ? (await this.panels.resolveTarget()).panelId
+        : (this.panels.getEnabledPanelIds()[0] ?? 'legacy'));
+    const rebeccaService = this.panels.getService(resolvedPanelId);
+
+    const buildCandidate = (suffix?: string): string => {
+      const tail = suffix ? `_${suffix}` : '';
+      const maxBodyLength = MAX_REBECCA_USERNAME_LENGTH - tail.length;
+      let body = `${cleanPrefix}_${normalized}`;
+      if (body.length > maxBodyLength) {
+        const allowedPrefixLen = maxBodyLength - normalized.length - 1;
+        if (allowedPrefixLen >= 2) {
+          body = `${cleanPrefix.slice(0, allowedPrefixLen)}_${normalized}`;
+        } else {
+          body = body.slice(0, maxBodyLength);
+        }
+      }
+      const candidate = sanitize(`${body}${tail}`);
+      return candidate.length >= MIN_REBECCA_USERNAME_LENGTH ? candidate : `cfg_${normalized}`;
+    };
+
+    const isAvailable = async (candidate: string): Promise<boolean> => {
+      const [localRow] = await getDb()
+        .select({ id: userConfigs.id })
+        .from(userConfigs)
+        .where(
+          and(eq(userConfigs.panelId, resolvedPanelId), eq(userConfigs.configUsername, candidate))
+        )
+        .limit(1);
+      if (localRow) return false;
+
+      try {
+        await rebeccaService.getUser(candidate);
+        return false;
+      } catch (err) {
+        if (err instanceof RebeccaApiError && err.status === 404) {
+          return true;
+        }
+        throw err;
+      }
+    };
+
+    const baseCandidate = buildCandidate();
+    if (await isAvailable(baseCandidate)) return baseCandidate;
+
+    for (let attempt = 0; attempt < CUSTOM_NAME_COLLISION_ATTEMPTS; attempt += 1) {
+      const candidate = buildCandidate(randomAlphanumericSuffix(3));
+      if (await isAvailable(candidate)) return candidate;
+    }
+
+    const fallbackCandidate = buildCandidate(randomAlphanumericSuffix(6));
+    if (await isAvailable(fallbackCandidate)) return fallbackCandidate;
+
+    throw new Error('CUSTOM_SERVICE_NAME_UNAVAILABLE');
+  }
+
   private async incrementCounter(mode: string): Promise<number> {
     const db = getDb();
     const [updated] = await db
@@ -395,6 +494,16 @@ export class ConfigService {
    */
   async getRemoteConfigDetail(config: ConfigRemoteReference): Promise<RebeccaUserDetail> {
     return this.panels.getService(config.panelId).getUser(config.configUsername);
+  }
+
+  /**
+   * Read per-node traffic usage breakdown for a known local config binding.
+   */
+  async getRemoteConfigUsage(
+    config: ConfigRemoteReference,
+    options?: RebeccaUserUsageQueryOptions
+  ): Promise<RebeccaUserUsageResponse> {
+    return this.panels.getService(config.panelId).getUserUsage(config.configUsername, options);
   }
 
   /**
@@ -700,6 +809,7 @@ export class ConfigService {
         panelDataLimit: lifecycle.panelDataLimit,
         panelUsedTraffic: lifecycle.panelUsedTraffic,
         panelExpire: lifecycle.panelExpire,
+        panelOnHoldExpireDuration: lifecycle.panelOnHoldExpireDuration,
         lastSyncedAt: lifecycle.lastSyncedAt,
       };
     });

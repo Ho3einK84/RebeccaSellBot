@@ -442,6 +442,10 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             <Badge variant="warning" size="xs">
                               {t('admin.users.statusLimited')}
                             </Badge>
+                          ) : cfg.panelStatus === 'on_hold' ? (
+                            <Badge variant="warning" size="xs">
+                              {t('admin.users.statusOnHold')}
+                            </Badge>
                           ) : (
                             <Badge variant="success" dot size="xs">
                               {t('admin.users.statusActive')}
@@ -475,13 +479,21 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         <div className="flex items-center justify-between sm:justify-end gap-2 text-[11px]">
                           <span className="text-ink-muted">{t('admin.users.configExpire')}</span>
                           <span className="tnum font-medium text-ink">
-                            {cfg.panelExpire
-                              ? isExpired
-                                ? t('admin.users.configExpired')
-                                : t('admin.users.configExpireDaysLeft', {
-                                    days: formatNumber(daysLeft || 0),
+                            {cfg.panelStatus === 'on_hold'
+                              ? cfg.panelOnHoldExpireDuration && cfg.panelOnHoldExpireDuration > 0
+                                ? t('admin.users.configExpireOnHoldDays', {
+                                    days: formatNumber(
+                                      Math.max(1, Math.round(cfg.panelOnHoldExpireDuration / 86400))
+                                    ),
                                   })
-                              : t('admin.users.configExpireUnlimited')}
+                                : t('admin.users.configExpireOnHold')
+                              : cfg.panelExpire
+                                ? isExpired
+                                  ? t('admin.users.configExpired')
+                                  : t('admin.users.configExpireDaysLeft', {
+                                      days: formatNumber(daysLeft || 0),
+                                    })
+                                : t('admin.users.configExpireUnlimited')}
                           </span>
                         </div>
                       </div>

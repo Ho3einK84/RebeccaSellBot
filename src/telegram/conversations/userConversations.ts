@@ -13,6 +13,7 @@ import {
   formatSubscriptionLink,
   localizedNumber,
   localizedNumberForLocale,
+  localizedPackageName,
   normalizeInputDigits,
   resolveContextLocale,
   t,
@@ -30,14 +31,19 @@ import {
   sendArtifactInConversation,
   waitForCallbackInput,
   waitForTextInput,
+  waitForTextOrCallbackInput,
 } from '../ui.js';
 import { logger } from '../../infra/logger.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
+import { normalizeCustomServiceName } from '../../domain/services/ConfigService.js';
 import {
+  customServiceNameEnabled,
   customVolumeEnabled,
+  renewalRolloverEnabled,
   walletTransferEnabled,
   walletTransferMinAmount,
 } from '../../domain/services/FeatureSettings.js';
+import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 import {
   PurchaseCheckoutUnavailableError,
   type PurchaseCheckout,
@@ -83,16 +89,67 @@ function buildCustomVolumeInputScreen(ctx: ConversationContext): string {
   );
 }
 
+export type CustomNamePromptResult =
+  { kind: 'custom'; name: string } | { kind: 'random' } | { kind: 'cancel' };
+
+export async function promptCustomServiceName(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<CustomNamePromptResult> {
+  const keyboard = new InlineKeyboard()
+    .text(t(ctx, 'custom_name_random_button'), 'custom_name:random')
+    .row()
+    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildUserPromptScreen(
+      '🏷️',
+      t(ctx, 'custom_name_prompt_title'),
+      t(ctx, 'custom_name_prompt_body'),
+      t(ctx, 'custom_name_prompt_subtitle')
+    ),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
+
+  for (;;) {
+    const input = await waitForTextOrCallbackInput(conversation, ['custom_name:random']);
+    if (!input) return { kind: 'cancel' };
+    if (input.type === 'callback' && input.data === 'custom_name:random') {
+      return { kind: 'random' };
+    }
+    if (input.type === 'text') {
+      const normalized = normalizeCustomServiceName(input.text);
+      if (normalized) {
+        return { kind: 'custom', name: normalized };
+      }
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'custom_name_prompt_title'),
+          t(ctx, 'custom_name_invalid')
+        ),
+        { parse_mode: 'Markdown', reply_markup: keyboard }
+      );
+    }
+  }
+}
+
 function buildCustomCheckoutScreen(
   ctx: ConversationContext,
   input: {
     mode: 'purchase' | 'renewal';
     username?: string;
+    requestedUsername?: string;
     gbAmount: number;
     durationDays: number;
     amount: number;
     pricePerGb: number;
     promoCode?: string;
+    rolloverEnabled?: boolean;
   }
 ): string {
   const renewal = input.mode === 'renewal';
@@ -117,6 +174,14 @@ function buildCustomCheckoutScreen(
                 },
               ]
             : []),
+          ...(input.requestedUsername
+            ? [
+                {
+                  label: t(ctx, 'checkout_custom_name_label'),
+                  value: `\`${sanitizeTelegramInlineCode(input.requestedUsername)}\``,
+                },
+              ]
+            : []),
           {
             label: t(ctx, 'renewal_success_package_label'),
             value: customPackageName(ctx, input.gbAmount, input.durationDays),
@@ -133,6 +198,15 @@ function buildCustomCheckoutScreen(
             label: t(ctx, 'checkout_unit_price_label'),
             value: `${localizedNumber(input.pricePerGb, ctx)} ${t(ctx, 'currency_toman')}`,
           },
+          ...(renewal && input.rolloverEnabled
+            ? [
+                {
+                  emoji: '♻️',
+                  label: t(ctx, 'renewal_rollover_label'),
+                  value: t(ctx, 'renewal_rollover_notice'),
+                },
+              ]
+            : []),
         ],
       },
       ...(input.promoCode
@@ -191,6 +265,18 @@ async function executePurchaseFlow(
     return;
   }
 
+  const askCustomName = await conversation.external(
+    (outsideCtx) =>
+      typeof outsideCtx.services?.translationService?.getSetting === 'function' &&
+      customServiceNameEnabled(outsideCtx.services.translationService)
+  );
+  let requestedUsername: string | undefined;
+  if (askCustomName) {
+    const nameChoice = await promptCustomServiceName(conversation, ctx);
+    if (nameChoice.kind === 'cancel') return;
+    if (nameChoice.kind === 'custom') requestedUsername = nameChoice.name;
+  }
+
   const packageNameStr = customPackageName(ctx, gbAmount, durationDays);
   const target = await conversation.external((outsideCtx) =>
     outsideCtx.services!.pricingService.getCustomVolumeTarget()
@@ -211,6 +297,7 @@ async function executePurchaseFlow(
         },
         ...target,
         promoCode: pendingPromo.promoCode,
+        ...(requestedUsername ? { requestedUsername } : {}),
         quotedAmount: displayedCost,
       })
     );
@@ -229,6 +316,7 @@ async function executePurchaseFlow(
     ctx,
     buildCustomCheckoutScreen(ctx, {
       mode: 'purchase',
+      requestedUsername,
       gbAmount,
       durationDays,
       amount: displayedCost,
@@ -285,7 +373,12 @@ async function executePurchaseFlow(
 
   try {
     const configName = await conversation.external((outsideCtx) =>
-      outsideCtx.services!.configService.generateConfigName(telegramId, checkout.panelId)
+      checkout.requestedUsername
+        ? outsideCtx.services!.configService.resolveCustomConfigName(
+            checkout.requestedUsername,
+            checkout.panelId
+          )
+        : outsideCtx.services!.configService.generateConfigName(telegramId, checkout.panelId)
     );
     // This is the authoritative last check: no awaited work may occur between
     // it and entering the purchase saga.
@@ -380,6 +473,191 @@ async function executePurchaseFlow(
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
+
+export async function buyPackageCustomNameConversation(
+  conversation: MyConversation,
+  ctx: ConversationContext
+) {
+  const telegramId = ctx.from?.id;
+  if (!telegramId || !ctx.services) return;
+
+  const packageId = await conversation.external((outsideCtx) => {
+    const selected = outsideCtx.session.pendingCustomNamePurchase?.packageId;
+    delete outsideCtx.session.pendingCustomNamePurchase;
+    return selected;
+  });
+  if (!packageId) return;
+
+  const pkg = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.pricingService.getPackageById(packageId)
+  );
+  if (!pkg || pkg.enabled === false) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUserEmptyState(
+        '⚠️',
+        t(ctx, 'purchase_review_title'),
+        t(ctx, 'purchase_target_unavailable')
+      ),
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'shop') }
+    );
+    return;
+  }
+
+  const pendingPromo = await conversation.external((outsideCtx) =>
+    getPendingPromoPricing(outsideCtx, telegramId, pkg.price, pkg.gbAmount)
+  );
+  if (pendingPromo.messageKey) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUserEmptyState('⚠️', t(ctx, 'purchase_review_title'), t(ctx, pendingPromo.messageKey)),
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+    );
+    return;
+  }
+  const displayedPrice = pendingPromo.quote?.finalAmount ?? pkg.price;
+  const balance = await conversation.external((outsideCtx) =>
+    outsideCtx.services!.walletService.getAvailableBalance(telegramId)
+  );
+  if (balance < displayedPrice) {
+    await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'), {
+      reply_markup: new InlineKeyboard()
+        .text(t(ctx, 'direct_topup_button'), 'topup:direct')
+        .row()
+        .text(t(ctx, 'menu_back_shop'), 'nav:shop'),
+    });
+    return;
+  }
+
+  const nameChoice = await promptCustomServiceName(conversation, ctx);
+  if (nameChoice.kind === 'cancel') return;
+  const requestedUsername = nameChoice.kind === 'custom' ? nameChoice.name : undefined;
+
+  let checkout: PurchaseCheckout;
+  try {
+    checkout = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.purchaseCheckoutService.create({
+        telegramId,
+        kind: 'new_config',
+        pkg,
+        promoCode: pendingPromo.promoCode,
+        ...(requestedUsername ? { requestedUsername } : {}),
+        quotedAmount: displayedPrice,
+      })
+    );
+    trackFunnelEvent('checkout_start');
+  } catch {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUserEmptyState(
+        '⚠️',
+        t(ctx, 'purchase_review_title'),
+        t(ctx, 'purchase_target_unavailable')
+      ),
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+    );
+    return;
+  }
+
+  const confirmKeyboard = new InlineKeyboard()
+    .text(t(ctx, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
+    .row();
+  if (pendingPromo.quote?.code) {
+    confirmKeyboard
+      .text(t(ctx, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
+      .text(t(ctx, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
+      .row();
+  } else {
+    confirmKeyboard.text(t(ctx, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`).row();
+  }
+  confirmKeyboard.text(t(ctx, 'menu_back_shop'), 'nav:shop');
+
+  const reviewScreen = buildUserScreen({
+    emoji: '🧾',
+    title: t(ctx, 'purchase_review_title'),
+    subtitle: t(ctx, 'purchase_review_subtitle'),
+    primary: {
+      label: t(ctx, 'checkout_total_label'),
+      value: `${localizedNumber(displayedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
+      emphasizeValue: true,
+    },
+    sections: [
+      {
+        title: t(ctx, 'checkout_package_section'),
+        fields: [
+          {
+            label: t(ctx, 'checkout_package_label'),
+            value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
+          },
+          ...(requestedUsername
+            ? [
+                {
+                  label: t(ctx, 'checkout_custom_name_label'),
+                  value: `\`${sanitizeTelegramInlineCode(requestedUsername)}\``,
+                },
+              ]
+            : []),
+          {
+            label: t(ctx, 'checkout_traffic_label'),
+            value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+          },
+          {
+            label: t(ctx, 'checkout_duration_label'),
+            value: `${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
+          },
+          {
+            label: t(ctx, 'checkout_unit_price_label'),
+            value: `${localizedNumber(pkg.gbAmount > 0 ? Math.round(displayedPrice / pkg.gbAmount) : displayedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      },
+      {
+        title: t(ctx, 'checkout_wallet_section'),
+        fields: [
+          {
+            label: t(ctx, 'checkout_wallet_balance_label'),
+            value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            label: t(ctx, 'checkout_remaining_balance_label'),
+            value: `${localizedNumber(Math.max(0, balance - displayedPrice), ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ],
+      },
+      ...(pendingPromo.quote?.code
+        ? [
+            {
+              emoji: '🎟️',
+              title: t(ctx, 'checkout_promo_section'),
+              fields: [
+                {
+                  label: t(ctx, 'shop_promo_section'),
+                  value: `\`${sanitizeTelegramInlineCode(pendingPromo.quote.code)}\``,
+                },
+                ...(pkg.price > displayedPrice
+                  ? [
+                      {
+                        label: t(ctx, 'checkout_discount_label'),
+                        value: `${localizedNumber(pkg.price - displayedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]
+        : []),
+    ],
+    footer: t(ctx, 'purchase_confirmation_hint'),
+  });
+
+  await replyInConversation(conversation, ctx, reviewScreen, {
+    parse_mode: 'Markdown',
+    reply_markup: confirmKeyboard,
+  });
+}
 
 export async function buyConfigConversation(
   conversation: MyConversation,
@@ -607,6 +885,12 @@ export async function renewConfigConversation(
     return;
   }
 
+  const rolloverActive = await conversation.external((outsideCtx) =>
+    typeof outsideCtx.services?.translationService?.getSetting === 'function'
+      ? renewalRolloverEnabled(outsideCtx.services.translationService)
+      : true
+  );
+
   await promptInConversation(
     conversation,
     ctx,
@@ -618,6 +902,7 @@ export async function renewConfigConversation(
       amount: displayedCost,
       pricePerGb,
       promoCode: pendingPromo.quote?.code,
+      rolloverEnabled: rolloverActive,
     }),
     { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
   );

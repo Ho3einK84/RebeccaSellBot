@@ -470,6 +470,7 @@ export function registerAdminRoutes(
           panelDataLimit: cfg.panelDataLimit,
           panelUsedTraffic: cfg.panelUsedTraffic,
           panelExpire: cfg.panelExpire,
+          panelOnHoldExpireDuration: cfg.panelOnHoldExpireDuration ?? null,
           autoRenewEnabled: cfg.autoRenewEnabled,
           isClaimed: cfg.isClaimed,
           createdAt: cfg.createdAt,

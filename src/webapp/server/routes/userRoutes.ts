@@ -4,6 +4,7 @@ import { resolveRateLimitKey } from '../server.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
+import { normalizeCustomServiceName } from '../../../domain/services/ConfigService.js';
 import type { PricingService } from '../../../domain/services/PricingService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import {
@@ -17,7 +18,10 @@ import {
 import { RebeccaOriginDownError } from '../../../domain/services/RebeccaService.js';
 import { normalizeDataLimit } from '../../../domain/services/TrafficLimit.js';
 import { resolvePurchasePackage } from '../../../domain/services/PurchasePackageResolver.js';
-import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js';
+import {
+  customServiceNameEnabled,
+  customVolumeEnabled,
+} from '../../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import {
   recordCheckoutCompleted,
@@ -64,6 +68,7 @@ interface CheckoutRequestBody {
     gb?: number;
     days?: number;
   };
+  requestedUsername?: string;
   price?: number;
   quotedAmount?: number;
 }
@@ -278,6 +283,7 @@ export function registerUserRoutes(
           panelDataLimit: normalizeDataLimit(c.panelDataLimit) ?? null,
           panelUsedTraffic: c.panelUsedTraffic,
           panelExpire: c.panelExpire,
+          panelOnHoldExpireDuration: c.panelOnHoldExpireDuration ?? null,
           autoRenewEnabled: c.autoRenewEnabled,
           autoRenewPackageId: c.autoRenewPackageId,
           autoRenewPrice: c.autoRenewPrice,
@@ -552,6 +558,7 @@ export function registerUserRoutes(
             panelDataLimit: number | bigint | null;
             panelUsedTraffic: number | bigint | null;
             panelExpire: number | bigint | null;
+            panelOnHoldExpireDuration?: number | bigint | null;
             lastSyncedAt: Date | string | null;
           };
 
@@ -568,6 +575,8 @@ export function registerUserRoutes(
               panelDataLimit: normalizeDataLimit(remote.data_limit) ?? null,
               panelUsedTraffic: remote.used_traffic,
               panelExpire: remote.expire,
+              panelOnHoldExpireDuration:
+                remote.status === 'on_hold' ? (remote.on_hold_expire_duration ?? null) : null,
               lastSyncedAt: new Date(),
             };
           }
@@ -833,11 +842,29 @@ export function registerUserRoutes(
           });
         }
 
+        let requestedUsername: string | undefined;
+        if (
+          typeof body.requestedUsername === 'string' &&
+          body.requestedUsername.trim().length > 0 &&
+          options.translationService &&
+          customServiceNameEnabled(options.translationService)
+        ) {
+          const normalizedName = normalizeCustomServiceName(body.requestedUsername);
+          if (!normalizedName) {
+            return reply.code(400).send({
+              error: 'Invalid custom service name',
+              code: 'INVALID_CUSTOM_SERVICE_NAME',
+            });
+          }
+          requestedUsername = normalizedName;
+        }
+
         const checkout = await options.purchaseCheckoutService.create({
           telegramId,
           kind: 'new_config',
           pkg,
           ...target,
+          ...(requestedUsername ? { requestedUsername } : {}),
           quotedAmount,
         });
 
@@ -923,9 +950,17 @@ export function registerUserRoutes(
             .send({ error: 'Insufficient balance', code: 'INSUFFICIENT_BALANCE' });
         }
 
-        // Generate configName
+        // Generate or resolve custom configName
         let configName: string;
-        if (typeof options.configService?.generateConfigName === 'function') {
+        if (
+          checkout.requestedUsername &&
+          typeof options.configService?.resolveCustomConfigName === 'function'
+        ) {
+          configName = await options.configService.resolveCustomConfigName(
+            checkout.requestedUsername,
+            checkout.panelId ?? undefined
+          );
+        } else if (typeof options.configService?.generateConfigName === 'function') {
           configName = await options.configService.generateConfigName(
             telegramId,
             checkout.panelId ?? undefined
@@ -933,6 +968,11 @@ export function registerUserRoutes(
         } else {
           configName = `u${telegramId}_${Date.now()}`;
         }
+
+        const resolvedPkg =
+          typeof options.pricingService?.getPackageById === 'function'
+            ? options.pricingService.getPackageById(checkout.packageId)
+            : undefined;
 
         // Execute saga
         try {
@@ -947,6 +987,9 @@ export function registerUserRoutes(
             panelId: checkout.panelId,
             serviceId: checkout.serviceId,
             checkoutId: checkout.id,
+            ...(resolvedPkg?.startOnFirstUse !== undefined
+              ? { startOnFirstUse: resolvedPkg.startOnFirstUse }
+              : {}),
           });
 
           await safeRecordCheckoutCompleted(options.purchaseCheckoutService, checkout.id);

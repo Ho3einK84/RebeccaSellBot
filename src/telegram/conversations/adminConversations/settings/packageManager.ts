@@ -33,6 +33,10 @@ import {
 import { renderSettingsScreen, waitForSettingsInput } from './navigation.js';
 import { requireAdmin } from '../shared.js';
 import { editSetting } from './conversation.js';
+import {
+  onHoldDefaultEnabled,
+  renewalRolloverEnabled,
+} from '../../../../domain/services/FeatureSettings.js';
 import { getSettingDefinition } from './catalog.js';
 import { renderSalesMenu } from '../../../keyboards/adminMenu.js';
 
@@ -1564,6 +1568,8 @@ export async function managePackagePolicies(
       const ts = outsideCtx.services.translationService;
       return {
         displayMode: ts.getSetting('package_display_mode', 'specs'),
+        onHoldDefault: onHoldDefaultEnabled(ts),
+        renewalRollover: renewalRolloverEnabled(ts),
         lowTraffic: ts.getSettingNum('low_traffic_threshold_gb', 2),
         expiryDays: ts.getSettingNum('expiry_warning_days', 3),
         refundHours: ts.getSettingNum('refund_window_hours', 0),
@@ -1584,6 +1590,12 @@ export async function managePackagePolicies(
       policy.displayMode === 'name'
         ? t(activeCtx, 'admin_pkg_display_mode_name')
         : t(activeCtx, 'admin_pkg_display_mode_specs');
+    const onHoldBadge = policy.onHoldDefault
+      ? t(activeCtx, 'admin_setting_enabled_on')
+      : t(activeCtx, 'admin_setting_enabled_off');
+    const rolloverBadge = policy.renewalRollover
+      ? t(activeCtx, 'admin_setting_enabled_on')
+      : t(activeCtx, 'admin_setting_enabled_off');
     const previewButtonLabel = formatPackageButtonLabel(activeCtx, policy.samplePackage);
 
     const screenText = buildScreen({
@@ -1600,6 +1612,16 @@ export async function managePackagePolicies(
           emoji: '📏',
           title: t(activeCtx, 'admin_setting_group_pricing'),
           fields: [
+            {
+              emoji: '⏳',
+              label: t(activeCtx, 'admin_setting_on_hold_default_enabled'),
+              value: onHoldBadge,
+            },
+            {
+              emoji: '🔄',
+              label: t(activeCtx, 'admin_setting_renewal_rollover_enabled'),
+              value: rolloverBadge,
+            },
             {
               emoji: '📉',
               label: t(activeCtx, 'admin_setting_low_traffic_threshold_gb'),
@@ -1640,6 +1662,20 @@ export async function managePackagePolicies(
       )
       .row()
       .text(
+        truncateButtonLabel(
+          `${t(activeCtx, 'admin_setting_on_hold_default_enabled')}: ${onHoldBadge}`
+        ),
+        'pp:toggle:on_hold'
+      )
+      .row()
+      .text(
+        truncateButtonLabel(
+          `${t(activeCtx, 'admin_setting_renewal_rollover_enabled')}: ${rolloverBadge}`
+        ),
+        'pp:toggle:rollover'
+      )
+      .row()
+      .text(
         truncateButtonLabel(t(activeCtx, 'admin_setting_low_traffic_threshold_gb')),
         'pp:edit:low_traffic_threshold_gb'
       )
@@ -1675,6 +1711,30 @@ export async function managePackagePolicies(
         await outsideCtx.services.translationService.updateSetting(
           'package_display_mode',
           nextMode
+        );
+      });
+      continue;
+    }
+
+    if (input.data === 'pp:toggle:on_hold') {
+      const nextVal = (!policy.onHoldDefault).toString();
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting(
+          'on_hold_default_enabled',
+          nextVal
+        );
+      });
+      continue;
+    }
+
+    if (input.data === 'pp:toggle:rollover') {
+      const nextVal = (!policy.renewalRollover).toString();
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting(
+          'renewal_rollover_enabled',
+          nextVal
         );
       });
       continue;

@@ -481,6 +481,35 @@ describe('Traffic Normalization & ServiceStatusTraffic', () => {
       );
       expect(exp13dFa.daysRemaining).toBe(13);
       expect(exp13dFa.remainingText).toBe('۱۳ روز باقی‌مانده');
+
+      const onHold30dFa = getServiceExpiryInfo(null, 'fa', tFa, fixedNowSec, {
+        panelStatus: 'on_hold',
+        onHoldExpireDurationSec: 30 * 86400,
+      });
+      expect(onHold30dFa).toEqual({
+        isExpired: false,
+        remainingText: 'در انتظار اولین اتصال (۳۰ روز)',
+        formattedDate: '—',
+        daysRemaining: 30,
+      });
+
+      const onHold30dEn = getServiceExpiryInfo(null, 'en', tEn, fixedNowSec, {
+        panelStatus: 'on_hold',
+        onHoldExpireDurationSec: 30 * 86400,
+      });
+      expect(onHold30dEn).toEqual({
+        isExpired: false,
+        remainingText: 'Waiting for first connection (30 days)',
+        formattedDate: '—',
+        daysRemaining: 30,
+      });
+
+      const onHoldUnknownFa = getServiceExpiryInfo(null, 'fa', tFa, fixedNowSec, {
+        panelStatus: 'on_hold',
+        onHoldExpireDurationSec: null,
+      });
+      expect(onHoldUnknownFa.remainingText).toBe('در انتظار اولین اتصال');
+      expect(onHoldUnknownFa.daysRemaining).toBeNull();
     });
 
     it('checks auto-renew and service created date', () => {

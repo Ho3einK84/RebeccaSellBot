@@ -1539,4 +1539,21 @@ export const EN_TEXTS: Record<string, string> = {
   admin_webapp_ssl_error_note: 'Probe Detail',
   admin_setting_webapp_enabled: 'Web Mini App Status',
   admin_setting_webapp_url: 'Mini App HTTPS Domain',
+
+  // Native Rebecca lifecycle features & checkout options
+  admin_setting_on_hold_default_enabled: 'Start on First Connection (On-Hold)',
+  admin_setting_renewal_rollover_enabled: 'Renewal Quota Rollover',
+  admin_setting_custom_service_name_enabled: 'Customer Custom Service Name',
+  subscription_expiry_on_hold: 'Waiting for first connection',
+  subscription_expiry_on_hold_days: 'Waiting for first connection ({days} days)',
+  renewal_rollover_label: 'Quota Rollover',
+  renewal_rollover_notice: 'Remaining traffic and time will roll over into the new period',
+  custom_name_prompt_title: 'Custom Service Name',
+  custom_name_prompt_subtitle: 'Enter a custom English name or generate a random one',
+  custom_name_prompt_body:
+    'Use English letters, digits, and `_` (3–21 characters, starting with a letter).\nExample: `my_vpn` or `ali_home`',
+  custom_name_random_button: '🎲 Random Name',
+  custom_name_invalid:
+    '⚠️ Invalid name. Start with an English letter and use only letters, digits, and `_` (3–21 chars).',
+  checkout_custom_name_label: 'Selected service name',
 };

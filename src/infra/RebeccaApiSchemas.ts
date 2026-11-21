@@ -3,6 +3,13 @@ import { normalizeDataLimit } from '../domain/services/TrafficLimit.js';
 
 const safeInteger = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const nullableSafeInteger = safeInteger.nullable();
+const nullablePositiveSafeInteger = z
+  .preprocess(
+    (val) => (val === 0 ? null : val),
+    z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable()
+  )
+  .optional()
+  .default(null);
 
 export const trafficLimitSchema = z
   .preprocess((val) => {
@@ -39,6 +46,7 @@ export const rebeccaUserDetailSchema = z
     lifetime_used_traffic: safeInteger.optional().default(0),
     data_limit: trafficLimitSchema,
     expire: nullableSafeInteger,
+    on_hold_expire_duration: nullablePositiveSafeInteger,
     created_at: z.string().optional().default(''),
     subscription_url: z.string(),
     subscription_urls: subscriptionUrlsSchema,
@@ -63,6 +71,7 @@ export const rebeccaUserListItemSchema = z
     used_traffic: safeInteger,
     data_limit: trafficLimitSchema,
     expire: nullableSafeInteger,
+    on_hold_expire_duration: nullablePositiveSafeInteger,
     subscription_url: z.string(),
     subscription_urls: subscriptionUrlsSchema,
     links: z.array(z.string()),
@@ -83,5 +92,20 @@ export const rebeccaDeleteResponseSchema = z
   .object({
     username: z.string().min(1),
     status: z.string().min(1),
+  })
+  .passthrough();
+
+export const rebeccaUserUsagePointSchema = z
+  .object({
+    node_id: safeInteger.nullable().optional().default(null),
+    node_name: z.string(),
+    used_traffic: safeInteger,
+  })
+  .passthrough();
+
+export const rebeccaUserUsageResponseSchema = z
+  .object({
+    username: z.string().min(1),
+    usages: z.array(rebeccaUserUsagePointSchema),
   })
   .passthrough();

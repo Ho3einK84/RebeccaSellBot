@@ -23,6 +23,10 @@ export interface PurchaseSagaParams {
   maxAmount?: number;
   /** Optional flag allowing an administrator to pay for another user's renewal without transferring ownership. */
   allowAdminOverride?: boolean;
+  /** Optional per-purchase override for Rebecca `on_hold` (start validity on first connection). */
+  startOnFirstUse?: boolean;
+  /** Optional per-purchase override for renewal remaining quota/time rollover. */
+  rolloverQuota?: boolean;
 }
 
 export class PendingTopupReceiptError extends Error {

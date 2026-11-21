@@ -100,10 +100,16 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
 
     let result: Awaited<ReturnType<BotServices['walletService']['executePurchaseSaga']>>;
     try {
-      const configName = await services.configService.generateConfigName(
-        telegramId,
-        checkout.panelId
-      );
+      const resolvedPkg =
+        typeof services.pricingService?.getPackageById === 'function'
+          ? services.pricingService.getPackageById(checkout.packageId)
+          : undefined;
+      const configName = checkout.requestedUsername
+        ? await services.configService.resolveCustomConfigName(
+            checkout.requestedUsername,
+            checkout.panelId
+          )
+        : await services.configService.generateConfigName(telegramId, checkout.panelId);
       result = await services.walletService.executePurchaseSaga({
         telegramId,
         amount: checkout.amount,
@@ -116,6 +122,9 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
         serviceId: checkout.serviceId,
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
+        ...(resolvedPkg?.startOnFirstUse !== undefined
+          ? { startOnFirstUse: resolvedPkg.startOnFirstUse }
+          : {}),
       });
     } catch (error) {
       trackFunnelEvent('purchase_failed');

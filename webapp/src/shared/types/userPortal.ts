@@ -70,6 +70,7 @@ export interface UserConfigRecord {
   panelDataLimit: number | null;
   panelUsedTraffic: number | null;
   panelExpire: number | null;
+  panelOnHoldExpireDuration?: number | null;
   autoRenewEnabled: boolean;
   autoRenewPackageId?: string | null;
   autoRenewPrice?: number | null;
@@ -99,6 +100,7 @@ export interface RefreshConfigResponse {
     panelDataLimit: number | null;
     panelUsedTraffic: number | null;
     panelExpire: number | null;
+    panelOnHoldExpireDuration?: number | null;
     lastSyncedAt: string | Date | null;
   };
 }

@@ -338,6 +338,9 @@ export async function runAutoRenewalSweep(
           durationDays: selectedPackage.durationDays,
           panelId: config.panelId,
           serviceId: config.serviceId,
+          ...(selectedPackage.rolloverQuota !== undefined
+            ? { rolloverQuota: selectedPackage.rolloverQuota }
+            : {}),
         });
       } catch (err) {
         if (err instanceof PurchaseOutcomePendingError || err instanceof PurchaseInProgressError) {

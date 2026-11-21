@@ -13,6 +13,10 @@ export interface PackageOption {
   serviceId?: number;
   /** Optional category ID reference. */
   categoryId?: string;
+  /** Optional per-package override for Rebecca `on_hold` (start validity on first connection). */
+  startOnFirstUse?: boolean;
+  /** Optional per-package override for renewal traffic/time rollover. */
+  rolloverQuota?: boolean;
 }
 
 export interface CustomPriceQuote {
@@ -355,6 +359,8 @@ function parsePackages(value: unknown): PackageOption[] | undefined {
       !positiveSafeInteger(item.durationDays, MAX_DURATION_DAYS) ||
       !positiveSafeInteger(item.price, MAX_PRICE) ||
       (item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
+      (item.startOnFirstUse !== undefined && typeof item.startOnFirstUse !== 'boolean') ||
+      (item.rolloverQuota !== undefined && typeof item.rolloverQuota !== 'boolean') ||
       seenIds.has(id) ||
       (panelId !== undefined && !PANEL_ID_PATTERN.test(panelId)) ||
       (serviceId !== undefined && !positiveSafeInteger(serviceId, MAX_SERVICE_ID)) ||
@@ -374,6 +380,8 @@ function parsePackages(value: unknown): PackageOption[] | undefined {
       ...(panelId === undefined ? {} : { panelId }),
       ...(serviceId === undefined ? {} : { serviceId }),
       ...(categoryId === undefined ? {} : { categoryId }),
+      ...(item.startOnFirstUse !== undefined ? { startOnFirstUse: item.startOnFirstUse } : {}),
+      ...(item.rolloverQuota !== undefined ? { rolloverQuota: item.rolloverQuota } : {}),
     });
   }
   return packages;

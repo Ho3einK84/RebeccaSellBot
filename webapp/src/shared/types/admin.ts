@@ -67,6 +67,7 @@ export interface UserConfigItem {
   panelDataLimit: number | null;
   panelUsedTraffic: number | null;
   panelExpire: number | null;
+  panelOnHoldExpireDuration?: number | null;
   autoRenewEnabled: boolean;
   isClaimed: boolean;
   createdAt: string;

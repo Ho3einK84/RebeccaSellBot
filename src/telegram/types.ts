@@ -88,6 +88,8 @@ export interface SessionData {
   };
   subscriptionListPage?: number;
   activeShopCategory?: string;
+  /** Package waiting for optional custom service name selection before checkout confirmation. */
+  pendingCustomNamePurchase?: { packageId: string };
   [key: string]: unknown;
 }
 

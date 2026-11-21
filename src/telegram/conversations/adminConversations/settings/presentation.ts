@@ -393,6 +393,10 @@ export function buildNamingDashboardScreen(
                 },
               ]
             : []),
+          {
+            label: t(ctx, 'admin_setting_custom_service_name_enabled'),
+            value: displayAdminSettingValue(ctx, 'custom_service_name_enabled'),
+          },
         ],
       },
     ],
@@ -488,14 +492,19 @@ function escapeInlineCode(value: string): string {
 
 export function readSettingBool(ctx: ConversationContext, key: string): boolean {
   const service = ctx.services?.translationService;
-  if (!service) return false;
+  if (!service) return key === 'renewal_rollover_enabled';
 
+  const defaultValue = key === 'renewal_rollover_enabled';
   const boolReader = (
     service as typeof service & {
       getSettingBool?: (settingKey: string, fallback?: boolean) => boolean;
     }
   ).getSettingBool;
-  if (typeof boolReader === 'function') return boolReader.call(service, key, false);
+  if (typeof boolReader === 'function') return boolReader.call(service, key, defaultValue);
 
-  return service.getSetting(key, 'false').trim().toLowerCase() === 'true';
+  const raw = service
+    .getSetting(key, defaultValue ? 'true' : 'false')
+    .trim()
+    .toLowerCase();
+  return defaultValue ? raw !== 'false' && raw !== '0' : raw === 'true' || raw === '1';
 }

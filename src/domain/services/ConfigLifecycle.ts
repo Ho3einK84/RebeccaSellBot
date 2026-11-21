@@ -7,7 +7,7 @@ export { normalizeDataLimit };
 
 export type ConfigLifecycleObservation = Pick<
   RebeccaUserDetail,
-  'status' | 'data_limit' | 'expire' | 'used_traffic'
+  'status' | 'data_limit' | 'expire' | 'used_traffic' | 'on_hold_expire_duration'
 >;
 
 /** Values observed from Rebecca that are safe to cache alongside a local binding. */
@@ -15,11 +15,20 @@ export function observedConfigLifecycle(
   remote: ConfigLifecycleObservation,
   observedAt = new Date()
 ) {
+  const onHoldDuration =
+    remote.status === 'on_hold' &&
+    typeof remote.on_hold_expire_duration === 'number' &&
+    Number.isSafeInteger(remote.on_hold_expire_duration) &&
+    remote.on_hold_expire_duration > 0
+      ? remote.on_hold_expire_duration
+      : null;
+
   return {
     panelStatus: remote.status,
     panelDataLimit: normalizeDataLimit(remote.data_limit) ?? null,
     panelUsedTraffic: remote.used_traffic,
     panelExpire: remote.expire,
+    panelOnHoldExpireDuration: onHoldDuration,
     lastSyncedAt: observedAt,
     updatedAt: observedAt,
   };

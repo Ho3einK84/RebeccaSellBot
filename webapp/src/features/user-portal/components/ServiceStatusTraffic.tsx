@@ -160,8 +160,33 @@ export function getServiceExpiryInfo(
   panelExpire: number | null | undefined,
   locale: string = 'fa',
   t: TranslateFn,
-  nowSec?: number
+  nowSec?: number,
+  options?: {
+    panelStatus?: string | null;
+    onHoldExpireDurationSec?: number | null;
+  }
 ): ServiceExpiryInfo {
+  const normalizedStatus = (options?.panelStatus || '').trim().toLowerCase();
+  if (normalizedStatus === 'on_hold') {
+    const durationSec = options?.onHoldExpireDurationSec;
+    if (typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0) {
+      const days = Math.max(1, Math.round(durationSec / 86400));
+      const daysStr = locale === 'fa' ? toPersianDigits(days) : String(days);
+      return {
+        isExpired: false,
+        remainingText: t('user.services.waitingFirstConnectionDays').replace('{days}', daysStr),
+        formattedDate: '—',
+        daysRemaining: days,
+      };
+    }
+    return {
+      isExpired: false,
+      remainingText: t('user.services.waitingFirstConnection'),
+      formattedDate: '—',
+      daysRemaining: null,
+    };
+  }
+
   if (panelExpire === null || panelExpire === undefined) {
     return {
       isExpired: false,
@@ -349,10 +374,15 @@ export const ServiceTrafficBar: React.FC<{
 
 export const ServiceExpiryView: React.FC<{
   expireTimestampSec: number | null | undefined;
+  panelStatus?: string | null;
+  onHoldExpireDurationSec?: number | null;
   className?: string;
-}> = ({ expireTimestampSec, className = '' }) => {
+}> = ({ expireTimestampSec, panelStatus, onHoldExpireDurationSec, className = '' }) => {
   const { t, locale } = useLanguage();
-  const info = getServiceExpiryInfo(expireTimestampSec, locale, t);
+  const info = getServiceExpiryInfo(expireTimestampSec, locale, t, undefined, {
+    panelStatus,
+    onHoldExpireDurationSec,
+  });
 
   return (
     <div className={`flex items-center gap-1.5 text-[11px] text-ink-muted ${className}`}>

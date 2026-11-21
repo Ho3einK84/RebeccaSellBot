@@ -9,6 +9,7 @@ import {
   buildNamingDashboardScreen,
   truncateButtonLabel,
 } from './presentation.js';
+import { customServiceNameEnabled } from '../../../../domain/services/FeatureSettings.js';
 import { getSettingDefinition } from './catalog.js';
 import { saveSetting } from './conversation.js';
 import { isValidNamingTemplate, validateAdminSetting } from './validation.js';
@@ -26,22 +27,37 @@ export async function manageNamingSettings(
   let sampleCounter = 1;
 
   for (;;) {
-    const prefix = await conversation.external((outsideCtx) => {
+    const state = await conversation.external((outsideCtx) => {
       const ts = (outsideCtx?.services ?? activeCtx.services)?.translationService;
-      return ts ? ts.getSetting('naming_prefix', 'rebecca') : undefined;
+      if (!ts) return undefined;
+      return {
+        prefix: ts.getSetting('naming_prefix', 'rebecca'),
+        customServiceName: customServiceNameEnabled(ts),
+      };
     });
-    if (prefix === undefined) return 'cancel';
+    if (!state) return 'cancel';
 
     const screenText = buildNamingDashboardScreen(activeCtx, sampleId, sampleCounter);
+    const customNameBadge = state.customServiceName
+      ? t(activeCtx, 'admin_overview_active')
+      : t(activeCtx, 'admin_overview_inactive');
 
     const keyboard = new InlineKeyboard()
       .text(t(activeCtx, 'admin_naming_btn_change_mode'), 'naming:mode')
       .row()
       .text(
-        truncateButtonLabel(`${t(activeCtx, 'admin_naming_btn_edit_prefix')}: ${prefix}`, 32),
+        truncateButtonLabel(`${t(activeCtx, 'admin_naming_btn_edit_prefix')}: ${state.prefix}`, 32),
         'naming:prefix'
       )
       .text(t(activeCtx, 'admin_naming_btn_edit_template'), 'naming:template')
+      .row()
+      .text(
+        truncateButtonLabel(
+          `${t(activeCtx, 'admin_setting_custom_service_name_enabled')}: ${customNameBadge}`,
+          48
+        ),
+        'naming:toggle_custom_name'
+      )
       .row()
       .text(t(activeCtx, 'admin_naming_btn_refresh_preview'), 'naming:refresh')
       .row()
@@ -57,6 +73,8 @@ export async function manageNamingSettings(
         'set-edit:naming_prefix',
         'naming:template',
         'set-edit:custom_naming_template',
+        'naming:toggle_custom_name',
+        'set-edit:custom_service_name_enabled',
         'naming:refresh',
       ],
       backCallbacks: ['naming:back', 'set-groups', 'set-return:naming'],
@@ -71,6 +89,19 @@ export async function manageNamingSettings(
     if (input.data === 'naming:refresh') {
       sampleCounter += 1;
       sampleId = Math.floor(1000000000 + (await conversation.random()) * 8999999999);
+      continue;
+    }
+
+    if (
+      input.data === 'naming:toggle_custom_name' ||
+      input.data === 'set-edit:custom_service_name_enabled'
+    ) {
+      const nextVal = (!state.customServiceName).toString();
+      await conversation.external(async (outsideCtx) => {
+        const ts = (outsideCtx?.services ?? activeCtx.services)?.translationService;
+        if (!ts) return;
+        await ts.updateSetting('custom_service_name_enabled', nextVal);
+      });
       continue;
     }
 

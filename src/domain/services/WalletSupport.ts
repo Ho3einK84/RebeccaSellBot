@@ -118,23 +118,51 @@ export function sanitizeRegistrationSource(value: string): string {
   return /^[a-z0-9_-]{1,64}$/u.test(source) ? source : 'telegram';
 }
 
+export interface PanelPurchaseVerificationOptions {
+  expectedStatus?: 'active' | 'on_hold';
+  expectedOnHoldDuration?: number;
+}
+
 /**
  * A purchase is not financially final merely because Rebecca returned 2xx.
- * The API response must prove the active status and the exact requested quota
- * and expiry (within a minute of the timestamp captured immediately before
- * the request). This prevents a partial panel write from charging the wallet.
+ * The API response must prove the expected lifecycle status (`active` or
+ * `on_hold`), exact requested quota, and expiry / on-hold duration (within a
+ * minute of the value computed immediately before the request). This prevents
+ * a partial panel write from charging the wallet.
  */
 export function assertPanelPurchaseApplied(
   result: RebeccaUserDetail,
   expectedDataLimit: number | null,
-  expectedExpire: number
+  expectedExpire: number | null,
+  options?: PanelPurchaseVerificationOptions
 ): void {
   const actualLimit = normalizeDataLimit(result.data_limit) ?? null;
   const expectedLimit = normalizeDataLimit(expectedDataLimit) ?? null;
+  const expectedStatus = options?.expectedStatus ?? 'active';
+
+  if (expectedStatus === 'on_hold') {
+    const actualDuration = result.on_hold_expire_duration;
+    const expectedDuration = options?.expectedOnHoldDuration;
+    const durationMismatch =
+      expectedDuration !== undefined &&
+      (actualDuration === null ||
+        actualDuration === undefined ||
+        Math.abs(actualDuration - expectedDuration) > 60);
+    if (
+      result.status !== 'on_hold' ||
+      actualLimit !== expectedLimit ||
+      (result.expire !== null && result.expire !== undefined) ||
+      durationMismatch
+    ) {
+      throw new PanelPurchaseVerificationError();
+    }
+    return;
+  }
 
   if (
     result.status !== 'active' ||
     actualLimit !== expectedLimit ||
+    expectedExpire === null ||
     result.expire === null ||
     result.expire === undefined ||
     Math.abs(result.expire - expectedExpire) > 60

@@ -5,7 +5,11 @@ import {
   RebeccaContractError,
   RebeccaOriginDownError,
 } from '../../src/infra/RebeccaApiClient.js';
-import { trafficLimitSchema } from '../../src/infra/RebeccaApiSchemas.js';
+import {
+  rebeccaUserDetailSchema,
+  rebeccaUserUsageResponseSchema,
+  trafficLimitSchema,
+} from '../../src/infra/RebeccaApiSchemas.js';
 
 function makeJwtWithExp(exp: number): string {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -437,5 +441,126 @@ describe('RebeccaApiClient — auth, retries, timeouts, stream cancellation, and
     const healed = await client.getUser('healed');
     expect(healed.username).toBe('healed');
     expect(client.isCircuitOpen()).toBe(false);
+  });
+
+  it('supports on_hold_expire_duration in schema, createUser, and updateUser payloads', async () => {
+    const parsedOnHold = rebeccaUserDetailSchema.parse(
+      makeUserDetail({
+        status: 'on_hold',
+        expire: null,
+        on_hold_expire_duration: 2_592_000,
+      })
+    );
+    expect(parsedOnHold.on_hold_expire_duration).toBe(2_592_000);
+    expect(
+      rebeccaUserDetailSchema.parse(makeUserDetail({ on_hold_expire_duration: 0 }))
+        .on_hold_expire_duration
+    ).toBeNull();
+    expect(rebeccaUserDetailSchema.parse(makeUserDetail()).on_hold_expire_duration).toBeNull();
+    expect(() =>
+      rebeccaUserDetailSchema.parse(makeUserDetail({ on_hold_expire_duration: -10 }))
+    ).toThrow();
+
+    const sentBodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.body) sentBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+        return new Response(
+          JSON.stringify(
+            makeUserDetail({
+              username: 'hold_user',
+              status: 'on_hold',
+              expire: null,
+              on_hold_expire_duration: 2_592_000,
+            })
+          ),
+          { status: 200 }
+        );
+      }) as unknown as typeof fetch
+    );
+
+    const client = new RebeccaApiClient({ baseUrl: 'https://panel.example.com', apiKey: 'k' });
+    const created = await client.createUser({
+      username: 'hold_user',
+      service_id: 1,
+      status: 'on_hold',
+      expire: 1_900_000_000,
+      on_hold_expire_duration: 2_592_000,
+      data_limit: 10 * 1024 ** 3,
+    });
+    expect(created.status).toBe('on_hold');
+    expect(created.expire).toBeNull();
+    expect(created.on_hold_expire_duration).toBe(2_592_000);
+    expect(sentBodies[0]).toMatchObject({
+      status: 'on_hold',
+      expire: null,
+      on_hold_expire_duration: 2_592_000,
+    });
+
+    await client.updateUser('hold_user', {
+      status: 'on_hold',
+      on_hold_expire_duration: 86_400,
+    });
+    expect(sentBodies[1]).toMatchObject({
+      status: 'on_hold',
+      on_hold_expire_duration: 86_400,
+    });
+  });
+
+  it('fetches and validates per-node user usage breakdown with optional start/end query params', async () => {
+    const requestedUrls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        requestedUrls.push(url);
+        if (url.includes('bad_contract')) {
+          return new Response(JSON.stringify({ username: 'bad_contract', usages: 'invalid' }), {
+            status: 200,
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            username: 'alice',
+            usages: [
+              { node_id: 1, node_name: 'DE', used_traffic: 1024 },
+              { node_id: null, node_name: 'Master', used_traffic: 512 },
+            ],
+          }),
+          { status: 200 }
+        );
+      }) as unknown as typeof fetch
+    );
+
+    const client = new RebeccaApiClient({ baseUrl: 'https://panel.example.com', apiKey: 'k' });
+    const usage = await client.getUserUsage('alice');
+    expect(requestedUrls[0]).toBe('https://panel.example.com/api/user/alice/usage');
+    expect(usage).toEqual({
+      username: 'alice',
+      usages: [
+        { node_id: 1, node_name: 'DE', used_traffic: 1024 },
+        { node_id: null, node_name: 'Master', used_traffic: 512 },
+      ],
+    });
+
+    await client.getUserUsage('alice', {
+      start: '2026-11-01T00:00:00Z',
+      end: '2026-11-21T00:00:00Z',
+    });
+    expect(requestedUrls[1]).toBe(
+      'https://panel.example.com/api/user/alice/usage?start=2026-11-01T00%3A00%3A00Z&end=2026-11-21T00%3A00%3A00Z'
+    );
+
+    expect(
+      rebeccaUserUsageResponseSchema.parse({
+        username: 'bob',
+        usages: [{ node_name: 'NL', used_traffic: 0 }],
+      })
+    ).toEqual({
+      username: 'bob',
+      usages: [{ node_id: null, node_name: 'NL', used_traffic: 0 }],
+    });
+
+    await expect(client.getUserUsage('bad_contract')).rejects.toBeInstanceOf(RebeccaContractError);
   });
 });

@@ -407,6 +407,63 @@ describe('reconcilePendingIntents — renewal settlement, binding, and manual re
       })
     );
   });
+
+  it('reconciles new_config on_hold users and renewals originating from on_hold with rollover', async () => {
+    const onHoldDuration = 30 * 86_400;
+    const newOnHoldIntent = makeIntent({
+      id: 'intent_on_hold',
+      type: 'new_config',
+      configUsername: 'hold_cfg',
+    });
+    const dbOnHold = makeReconcileDb([newOnHoldIntent]);
+    const rebeccaOnHold = {
+      getUser: vi.fn(async () =>
+        makeUserDetail('hold_cfg', {
+          status: 'on_hold',
+          expire: null,
+          on_hold_expire_duration: onHoldDuration,
+          note: `rsbot:${newOnHoldIntent.id}`,
+        })
+      ),
+      getUsers: vi.fn(),
+    } as unknown as RebeccaService;
+
+    expect(await reconcilePendingIntents(rebeccaOnHold)).toBe(1);
+    expect(dbOnHold.intentUpdates).toContainEqual(expect.objectContaining({ status: 'completed' }));
+    expect(dbOnHold.configInserts[0]).toMatchObject({
+      panelStatus: 'on_hold',
+      panelExpire: null,
+      panelOnHoldExpireDuration: onHoldDuration,
+    });
+
+    const rolloverRenewalIntent = makeIntent({
+      id: 'intent_renew_from_hold',
+      type: 'renew_config',
+      configUsername: 'hold_cfg',
+      previousStatus: 'on_hold',
+      previousExpire: null,
+      previousDataLimit: 10 * 1024 ** 3,
+      expectedStatus: 'active',
+      expectedDataLimit: 60 * 1024 ** 3,
+      expectedExpire: 1_850_000_000,
+    });
+    const dbRollover = makeReconcileDb([rolloverRenewalIntent]);
+    const rebeccaRollover = {
+      getUser: vi.fn(async () =>
+        makeUserDetail('hold_cfg', {
+          status: 'active',
+          data_limit: 60 * 1024 ** 3,
+          expire: 1_850_000_000,
+        })
+      ),
+      getUsers: vi.fn(),
+    } as unknown as RebeccaService;
+
+    expect(await reconcilePendingIntents(rebeccaRollover)).toBe(1);
+    expect(dbRollover.intentUpdates).toContainEqual(
+      expect.objectContaining({ status: 'completed' })
+    );
+  });
 });
 
 describe('syncSubscriptionStatuses, runReconciliationCycle, and interval scheduling', () => {

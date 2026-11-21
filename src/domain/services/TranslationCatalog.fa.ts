@@ -1527,4 +1527,21 @@ export const FA_TEXTS: Record<string, string> = {
   admin_webapp_ssl_error_note: 'جزئیات بررسی',
   admin_setting_webapp_enabled: 'وضعیت مینی‌اپ وب',
   admin_setting_webapp_url: 'دامنه HTTPS مینی‌اپ',
+
+  // قابلیت‌های بومی پنل ربکا و چرخه خرید/تمدید
+  admin_setting_on_hold_default_enabled: 'شروع اعتبار با اولین اتصال (On-Hold)',
+  admin_setting_renewal_rollover_enabled: 'انتقال مانده در تمدید (Rollover)',
+  admin_setting_custom_service_name_enabled: 'نام دلخواه سرویس توسط کاربر',
+  subscription_expiry_on_hold: 'در انتظار اولین اتصال',
+  subscription_expiry_on_hold_days: 'در انتظار اولین اتصال ({days} روز)',
+  renewal_rollover_label: 'انتقال مانده',
+  renewal_rollover_notice: 'حجم و زمان باقی‌ماندهٔ سرویس به دورهٔ جدید منتقل می‌شود',
+  custom_name_prompt_title: 'نام دلخواه سرویس',
+  custom_name_prompt_subtitle: 'نام انگلیسی سرویس را بفرستید یا ساخت تصادفی را بزنید',
+  custom_name_prompt_body:
+    'از حروف کوچک انگلیسی، عدد و `_` استفاده کنید (۳ تا ۲۱ کاراکتر، شروع با حرف انگلیسی).\nمثال: `my_vpn` یا `ali_home`',
+  custom_name_random_button: '🎲 نام تصادفی',
+  custom_name_invalid:
+    '⚠️ نام واردشده معتبر نیست. با حرف انگلیسی شروع شود و فقط شامل حروف انگلیسی، عدد و `_` (۳ تا ۲۱ کاراکتر) باشد.',
+  checkout_custom_name_label: 'نام انتخابی سرویس',
 };
