@@ -1,307 +1,206 @@
-# RebeccaSellBot — Complete System Architecture
+# RebeccaSellBot — System Architecture
 
-RebeccaSellBot is an enterprise-grade, multi-panel Telegram commerce and subscription management system designed for **Rebecca Panel** VPN infrastructures. It operates as an autonomous storefront handling customer onboarding, package selection, automated payment verification, configuration provisioning, renewals, notifications, balance transfers, gamification, and backoffice administration.
+RebeccaSellBot is a multi-panel Telegram commerce and subscription management platform built for **Rebecca Panel** VPN infrastructures. It combines a clean-chat Telegram bot (`grammY`), an optional Telegram Mini App (`Fastify 5` + `React 19`), a 3-phase financial saga engine, and automated lifecycle workers backed by **PostgreSQL 16** (`Drizzle ORM`).
 
 ---
 
-## 1. System Overview & Core Principles
+## 1. High-Level Topology
 
 ```mermaid
 flowchart TD
     subgraph Clients["Client Access Layer"]
-        User["📱 Telegram User (Chat)"]
-        Admin["🛡️ Administrator (Chat)"]
-        WebAppUser["🌐 Mini App Client (Webview)"]
+        User["📱 Customer (Telegram Chat)"]
+        Admin["🛡️ Administrator (Telegram Chat)"]
+        MiniApp["🌐 Telegram Mini App (React 19)"]
     end
 
-    subgraph Ingress["Ingress & Delivery"]
-        Caddy["Caddy Reverse Proxy\n(On-Demand TLS via /api/caddy-check)"]
-        BotRuntime["botRuntime.ts\n(Long Polling or Webhook)"]
-        FastifyServer["Fastify 5 Server\n(Mini App & Mesh Ingress)"]
+    subgraph Ingress["Ingress & Transport"]
+        Caddy["Caddy Reverse Proxy\n(On-Demand TLS /api/caddy-check)"]
+        BotRuntime["botRuntime.ts\n(Long Polling / Webhook)"]
+        Fastify["Fastify 5 Server\n(Mini App API & Mesh Proxy)"]
+        HealthSrv["Health & Rebecca Webhook Server\n(/healthz, /readyz, /api/rebecca-webhook)"]
     end
 
-    subgraph RSBot["RebeccaSellBot Core Subsystem"]
-        subgraph TelegramSubsystem["Telegram Delivery Layer"]
-            UIEngine["UI Engine & Screen Manager\n(AsyncLocalStorage)"]
-            Router["Feature Routes & Conversations"]
+    subgraph Core["RebeccaSellBot Application Core"]
+        subgraph Delivery["Telegram Delivery Layer (src/telegram)"]
+            UI["UI Engine & Screen Manager\n(AsyncLocalStorage)"]
+            Routes["Feature Routes & Conversations"]
         end
 
-        subgraph Domain["Domain Layer (Business Logic & Sagas)"]
-            PurchaseSaga["WalletPurchaseSaga\n(3-Phase Commit)"]
-            WalletSvc["WalletService\n(Minor-Unit Integers)"]
-            ConfigSvc["ConfigService & Counters"]
-            PanelRegistry["RebeccaPanelRegistry\n(AES-256-GCM Vault)"]
-            GrowthEngine["Growth: LuckyWheel / Promo / Referral"]
-            AdminSvc["AdminService & Broadcasts"]
-            MeshRegistry["DomainRegistryService\n(Multi-Instance Mesh)"]
+        subgraph Domain["Domain Layer (src/domain/services)"]
+            Saga["WalletPurchaseSaga & WalletService"]
+            Pricing["PricingService & CatalogDiscountService"]
+            Payment["PaymentService (Multi-Card & Unique Amounts)"]
+            ConfigSvc["ConfigService & Reconciliation"]
+            AuthSvc["ContactVerificationService (HMAC-SHA256)"]
+            Growth["Promo / Referral / LuckyWheel / Trial"]
+            Registry["RebeccaPanelRegistry (AES-256-GCM)"]
         end
 
-        subgraph Workers["Background Workers (Cron & Queues)"]
-            WorkerRuntime["workerRuntime.ts"]
-            Reconciler["Reconciler (Every 1m)"]
-            Notifier["Notifier (Hourly: 00)"]
-            AutoRenew["Auto Renewal (Hourly: 20)"]
-            TrialCleanup["Trial Cleanup (Daily 03:30)"]
-            BackupJob["Automated Backup (Every 10m)"]
-            BroadcastJob["Throttled Broadcast Worker (5s loop)"]
+        subgraph Jobs["Background Workers (src/jobs)"]
+            Runner["workerRuntime.ts"]
+            W1["reconciler (1m)"]
+            W2["notifier (hourly :00)"]
+            W3["autoRenewal (hourly :20)"]
+            W4["firstUseNudge (hourly :40)"]
+            W5["expiredConfigCleanup (6h :15)"]
+            W6["trialCleanup (daily 03:30)"]
+            W7["backup (10m) & broadcast (5s)"]
         end
 
-        subgraph Infra["Infrastructure Layer"]
+        subgraph Infra["Infrastructure Layer (src/infra)"]
             DB[(PostgreSQL 16\nDrizzle ORM)]
             Cipher["CredentialCipher\n(AES-256-GCM)"]
-            ApiClient["RebeccaApiClient\n(REST HTTPS)"]
+            RestClient["RebeccaApiClient\n(HTTPS REST)"]
         end
     end
 
-    subgraph Panels["Rebecca Panel Fleet"]
+    subgraph Fleet["Rebecca Panel Fleet"]
         P1["Panel 1 (HTTPS REST)"]
-        P2["Panel 2 (HTTPS REST)"]
         PN["Panel N (HTTPS REST)"]
     end
 
-    User <-->|Telegram MTProto| BotRuntime
-    Admin <-->|Telegram MTProto| BotRuntime
-    WebAppUser <-->|HTTPS| Caddy
-    Caddy --> FastifyServer
-    BotRuntime --> UIEngine --> Router --> Domain
-    FastifyServer --> Domain
-    WorkerRuntime --> Workers --> Domain
+    User & Admin <-->|MTProto| BotRuntime
+    MiniApp <-->|HTTPS| Caddy --> Fastify
+    BotRuntime --> UI --> Routes --> Domain
+    Fastify --> Domain
+    HealthSrv --> Domain
+    Runner --> W1 & W2 & W3 & W4 & W5 & W6 & W7 --> Domain
     Domain --> Infra
-    ApiClient <-->|Encrypted REST API| Panels
     Infra --> DB
+    RestClient <-->|Bearer / Session HTTPS| P1 & PN
 ```
 
-### Invariant Architectural Rules
+### Architectural Invariants
 
-1. **Zero Database Touch on Rebecca Panels:** RebeccaSellBot communicates with external Rebecca panels exclusively through their official HTTPS REST APIs (`RebeccaApiClient`). It never connects directly to or mutates remote panel databases.
-2. **Dual-Mode Delivery Architecture (Long Polling & Webhook):** The bot operates by default with outbound HTTPS long polling (`bot.start()`), requiring zero inbound ports or public domains. For deployments behind reverse proxies, an optional Webhook mode (`webhookCallback()`) can be enabled with strict `X-Telegram-Bot-Api-Secret-Token` validation. Returning to polling automatically clears active webhooks.
-3. **Layered Separation of Concerns:**
-   - Presentation files (`src/telegram/*`) are strictly decoupled from database queries; all state changes flow through typed domain services.
-   - Domain services (`src/domain/services/*`) encapsulate business rules, financial invariants, and sagas.
-   - Infrastructure (`src/infra/*`) manages PostgreSQL access via Drizzle ORM, encryption ciphers, and HTTP client execution.
-4. **Static Architecture Enforcement:** Structural boundaries and anti-patterns are statically verified by [`scripts/check-architecture.mjs`](../scripts/check-architecture.mjs) on every build and CI run.
+1. **Zero Database Touch on Rebecca Panels:** All remote provisioning, quota queries, lifecycle transitions (`active`, `on_hold`, `disabled`, `limited`, `expired`), and subscription link rotations occur strictly over HTTPS REST (`RebeccaApiClient`).
+2. **Strict Layer Isolation (Enforced by `scripts/check-architecture.mjs`):**
+   - `src/telegram/*` never imports `src/infra/db.ts`, `src/infra/schema.ts`, or `RebeccaApiClient`, nor calls `panelRegistry.getService()` directly.
+   - `src/domain/*` is pure business logic and never imports `grammy` or `src/telegram/*`.
+   - `src/infra/*` encapsulates database connections, migrations, cryptography, and HTTP clients.
+3. **Dual-Mode Delivery:** Runs in outbound Long Polling mode by default (zero open ports). Switching to Webhook mode enables `X-Telegram-Bot-Api-Secret-Token` verification; switching back to polling automatically clears registered webhooks.
 
 ---
 
-## 2. Financial Architecture & Purchase Saga
+## 2. Financial Engine & Security
 
-To prevent balance discrepancies, orphaned purchases, and race conditions during network partitions, RebeccaSellBot uses strict transactional isolation and integer accounting.
+### Minor-Unit Integer Arithmetic (`DbNumber.ts`)
 
-### Integer Minor-Unit Arithmetic (`DbNumber.ts`)
+All monetary balances, package prices, discounts, referral bonuses, and ledger entries are stored and calculated as **signed 64-bit safe integers** (`-9,007,199,254,740,991` to `9,007,199,254,740,991`) in minor currency units (Tomans). PostgreSQL check constraints enforce `balance >= reserved_balance` and `reserved_balance >= 0` at all times.
 
-All financial quantities (wallet balances, package prices, discounts, referral bonuses, transaction amounts) are stored and computed as **signed 64-bit integers in minor currency units (e.g. Tomans or Rials)**. Floating-point arithmetic is strictly forbidden across the codebase to prevent rounding drift.
+### 3-Phase Purchase & Renewal Saga (`WalletPurchaseSaga.ts`)
 
 ```text
-┌────────────────────────────────────────────────────────┐
-│               Safe Integer Bounds                      │
-│   Min: -9,007,199,254,740,991                          │
-│   Max:  9,007,199,254,740,991                          │
-│   Constraint: user.balance >= 0 (Enforced by DB Check) │
-└────────────────────────────────────────────────────────┘
+1. RESERVE (Local DB Tx)
+   ├── Lock user row, verify available balance (balance - reserved_balance >= amount)
+   ├── Snapshot checkout price, catalog discount, promo reservation, & referral terms
+   └── Create `purchase_intents` row (status = 'pending') with foreground heartbeat lease
+
+2. DISPATCH (Remote HTTPS REST)
+   ├── Provision new user or renew existing user on target Rebecca panel
+   └── Apply `on_hold` start-on-first-use or renewal quota/validity rollover policies
+
+3a. COMMIT (On Confirmed Remote State)
+   ├── Deduct balance & release reservation, write immutable `wallet_transactions` row
+   ├── Upsert `user_configs`, settle referral bonus / cashback, & mark checkout completed
+   └── Deliver subscription artifact (sub link, QR code, client deep-links)
+
+3b. COMPENSATE (On Definitive Remote Failure)
+   ├── Release reserved funds & promo code redemption cap
+   └── Mark intent `'failed'` with diagnostic audit metadata
 ```
 
-### 3-Phase Purchase Saga (`WalletPurchaseSaga.ts`)
+If a process crashes or a network timeout occurs during Phase 2, the intent transitions to `'reconciliation_required'` and the background `reconciler` settles it once the foreground lease (`leaseExpiresAt`) expires by inspecting remote panel state.
 
-Purchasing a VPN configuration involves both local PostgreSQL state mutations and external panel network calls. The 3-phase saga guarantees eventual consistency:
+### Receipt Security, Payment Void & Multi-Card Rotation
+
+- **Duplicate Receipt Fingerprinting (`WalletService`):** Top-up receipts record both Telegram's `file_unique_id` (`fileUniqueId`) and the downloaded media's `SHA-256` digest (`fileSha256`). Depending on `receipt_duplicate_policy`:
+  - `'warn'` (default): Accepts the submission, links `duplicateOfReceiptId`, and displays a duplicate warning banner across admin Telegram alerts, receipt review queues, and WebApp `/api/admin/receipts`.
+  - `'block'`: Rejects duplicate receipt submissions immediately with `DuplicateReceiptError`.
+- **Atomic Approved-Receipt Voiding (`WalletService.voidApprovedTopup`):**
+  - Locks the receipt (`FOR UPDATE`) and verifies `status === 'approved'`.
+  - Deducts up to the user's available free balance (`balance - reserved_balance`), writes an idempotent `wallet_transactions` row (`type: 'topup_void'`, `referenceId: void_${receiptId}`), and marks the receipt `'voided'` (`voidedAt`, `voidedBy`, `voidReason`).
+  - If the user already spent part of the top-up and `disablePurchasedConfigs` is enabled, automatically disables active configs purchased after the receipt on the remote Rebecca panel (`ConfigService.disableConfig`), records `audit_logs`, and notifies the user.
+- **Multi-Card Pool & Unique Payable Amounts (`PaymentService`):**
+  - Supports a JSON pool of bank cards (`bank_cards_json`: `{ id, cardNumber, cardHolder, enabled, dailyCapToman }`) with automatic daily-cap tracking and rotation (`selectCardForTopup`), falling back seamlessly to `card_number` / `card_holder`.
+  - `allocateUniquePayableAmount` generates collision-free payable amounts against recent `pending` receipts.
+
+---
+
+## 3. Storefront, Flash Sales & Privacy-Preserving Auth
+
+### Timed Catalog Discounts (`CatalogDiscountService.ts` & `PricingService.ts`)
+
+- Manages scheduled flash sales in `catalog_discounts` scoped to `'all'`, `'category'`, or `'package'` with `'percent'` or `'fixed'` reductions, optional `maxDiscountAmount` ceilings, and `startsAt` / `expiresAt` windows.
+- `PricingService` resolves the highest-savings active discount for both fixed packages and custom-volume quotes, returning `originalPrice`, `effectivePrice`, `activeDiscountTitle`, and `discountExpiresAt` across Telegram menus, checkout screens, and WebApp endpoints (`/api/user/packages`, `/api/user/quote`, `/api/user/checkout`).
+- Administrators can launch segmented broadcast announcements directly from the discount creation flow.
+
+### HMAC-SHA256 Phone Verification (`ContactVerificationService.ts`)
+
+- **Zero Raw Phone Persistence:** Normalizes shared Telegram contact numbers, enforces optional Iranian `+98` prefix validation (`phone_verify_iran_only`, default `true`), and computes an `HMAC-SHA256` digest using a domain-separated key derived from `BOT_TOKEN`.
+- Only `phoneHash` (enforced unique via partial index `users_phone_hash_unique`) and `phoneVerifiedAt` are stored in `users`.
+- Configurable verification gates protect free trials (`require_phone_for_trial`) and paid checkouts (`require_phone_for_purchase`) across both Telegram (`verifyPhoneConversation` verifying `contact.user_id === ctx.from.id`) and WebApp (`403 PHONE_VERIFICATION_REQUIRED`).
+
+### Rebecca Lifecycle & Service Customization
+
+- **Start-on-First-Use (`on_hold_default_enabled`):** Provisions new subscriptions in Rebecca's `on_hold` status so duration countdown begins on first connection.
+- **Renewal Rollover (`renewal_rollover_enabled`):** Preserves remaining data quota and remaining validity when renewing an active subscription.
+- **Custom Service Names (`custom_service_name_enabled`):** Allows buyers to specify an English service label (`3–20` chars, `[a-z0-9_]`) verified for uniqueness before checkout.
+- **Client Deep-Links & Sub Rotation:** Renders 1-tap import links (Happ, v2rayNG, Streisand, Hiddify, Sing-box/Clash) and allows users to rotate compromised subscription URLs (`ConfigService.revokeSubscription`).
+
+---
+
+## 4. Background Workers (`src/jobs/`)
+
+All background jobs run under `src/jobs/workerRuntime.ts` (`jobRunner`), which prevents overlapping runs of the same job and drains active executions gracefully on `SIGINT` / `SIGTERM` (30s timeout).
+
+| Worker                     | Schedule       | Responsibility                                                                                                                                                                                                                                                                                                                                                                      |
+| :------------------------- | :------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`reconciler`**           | Every `1m`     | Settles non-terminal `purchase_intents`, `refund_intents`, `trial_claims`, and expired `purchase_checkouts`; syncs panel statuses and scans orphaned configs every 15m.                                                                                                                                                                                                             |
+| **`notifier`**             | `0 * * * *`    | Hourly sweep for low traffic (`low_traffic_threshold_gb`) and near expiry (`expiry_warning_days`) with durable deduplication in `notification_deliveries`.                                                                                                                                                                                                                          |
+| **`autoRenewal`**          | `20 * * * *`   | Hourly evaluation of subscriptions with `autoRenewEnabled = true`, executing wallet-backed renewal sagas within the user's approved price ceiling (`autoRenewPrice`).                                                                                                                                                                                                               |
+| **`firstUseNudge`**        | `40 * * * *`   | Hourly scan for configs created 24–72h ago (`firstUseCheckedAt IS NULL`) with zero live panel traffic (`used_traffic === 0 && lifetime_used_traffic === 0`); atomically marks `firstUseCheckedAt` and sends a localized connection guide.                                                                                                                                           |
+| **`expiredConfigCleanup`** | `15 */6 * * *` | Staged cleanup of expired configs when `expired_cleanup_enabled = true`. Anchors deadline to `max(panelExpire, expired_cleanup_enabled_at, cleanupHoldUntil) + graceDays`, verifies live panel state via `getUser` before every action, sends deduplicated first/last warnings (`expired_cleanup_warn_days`, default `3,1`), deletes unrenewed configs, and writes to `audit_logs`. |
+| **`trialCleanup`**         | `30 3 * * *`   | Daily sweep (03:30 UTC) removing expired free-trial configs past their grace window.                                                                                                                                                                                                                                                                                                |
+| **`backup`**               | `*/10 * * * *` | Checks every 10m whether `backup_interval_hours` has elapsed and dispatches compressed snapshots to `backup_target_chat_id`.                                                                                                                                                                                                                                                        |
+| **`broadcast`**            | `5s` loop      | Claims batches of 15 recipients (`broadcast_recipients`) with concurrency 3, respecting Telegram rate limits and live cancellation.                                                                                                                                                                                                                                                 |
+
+---
+
+## 5. Telegram Mini App & Multi-Instance Mesh
 
 ```text
-Telegram User Checkout
-         │
-         ▼
-┌────────────────────────────────┐
-│  Phase 1: Fund Reservation     │ ──► Atomically deduct balance & create pending purchase
-└────────────────┬───────────────┘
-                 │
-                 ▼
-┌────────────────────────────────┐
-│  Phase 2: External Dispatch    │ ──► Call remote Rebecca REST API (Create / Renew User)
-└────────────────┬───────────────┘
-                 │
-        ┌────────┴────────┐
-        │                 │
-     Success           Failure / Timeout
-        │                 │
-        ▼                 ▼
-┌──────────────────┐  ┌──────────────────┐
-│ Phase 3a: Commit │  │ Phase 3b: Settle │
-│ - Confirm Config │  │ - Refund Reserve │
-│ - Award Referral │  │ - Rollback State │
-│ - Clear Checkout │  │ - Audit Failure  │
-└──────────────────┘  └──────────────────┘
+Public HTTPS (*.yourdomain.com)
+       │
+       ▼
+┌────────────────────────┐
+│     Caddy Ingress      │ ── ask ──► GET http://main_bot:3002/api/caddy-check?domain=<host>
+└───────────┬────────────┘
+            │ reverse_proxy main_bot:3002
+            ▼
+┌────────────────────────┐
+│   main_bot (Fastify)   │ ── Host matches peer in /app/data/registry/*.json?
+└───────────┬────────────┘
+     ┌──────┴──────┐
+   Local         Peer Instance
+     ▼             ▼
+ Serve Local    Proxy over `rsbot_mesh` (loop-guarded via `x-rsbot-proxy-hops`)
 ```
 
-1. **Phase 1 (Reserve):** Checks balance sufficiency and atomically moves funds from the user's available balance into a reserved ledger row within a PostgreSQL transaction.
-2. **Phase 2 (Remote Dispatch):** Sends the provision/renew request to the target Rebecca Panel via `RebeccaService`.
-3. **Phase 3a (Commit on Success):** Registers the remote subscription details locally, records an immutable purchase statement, awards referral cashback/bonuses, and delivers the config/QR code.
-4. **Phase 3b (Compensation on Failure):** If the external panel is unreachable or rejects the payload, the reserved funds are automatically refunded to the user's wallet with an audit reason logged.
+- **Backend (`src/webapp/server/`):** Fastify 5 server validating Telegram WebApp `initData` (`HMAC-SHA256`), issuing HTTP-only admin JWT cookies (`ADMIN_SESSION_SECRET`), enforcing per-route rate limits, and serving `/api/user/*` and `/api/admin/*`.
+- **Frontend (`webapp/src/`):** React 19 + Tailwind CSS v4 + DaisyUI v5 + TanStack Query SPA providing customer subscription/shop views and a full admin dashboard (stats, receipt review/voiding, user management, packages, panels).
 
 ---
 
-## 3. Multi-Panel Fleet Orchestration
+## 6. Database Schema Overview (`src/infra/schema.ts`)
 
-RebeccaSellBot can manage single or multiple independent Rebecca panels across different regions and clusters.
+PostgreSQL 16 schema managed via Drizzle ORM (`drizzle/0000_*.sql` through `drizzle/0011_*.sql`) plus idempotent startup guards in `src/infra/migrate.ts`:
 
-```text
-┌───────────────────────────────────────────────────────────┐
-│                 RebeccaPanelRegistry                      │
-└─────────────────────────────┬─────────────────────────────┘
-                              │ Resolves panel by ID
-         ┌────────────────────┼────────────────────┐
-         ▼                    ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│ German Cluster  │  │ Finnish Cluster │  │ Iranian Gateway │
-│ Panel ID: de-01 │  │ Panel ID: fi-01 │  │ Panel ID: ir-01 │
-│ HTTPS REST API  │  │ HTTPS REST API  │  │ HTTPS REST API  │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
-```
-
-### Encrypted Credential Vault (`CredentialCipher.ts`)
-
-- Panel API keys, admin usernames, and passwords stored in PostgreSQL are encrypted at rest using **AES-256-GCM** with random 12-byte initialization vectors (IVs) and PBKDF2 key derivation.
-- Plaintext credentials exist in memory only for the microsecond duration of an outgoing HTTP request.
-
-### Dynamic Package-to-Panel Binding
-
-- Packages can be assigned to specific panels or panel categories (`PackageCategoryService`).
-- Administrators can seamlessly activate, deactivate, or migrate panel allocations from the Telegram `/admin` interface.
-
----
-
-## 4. Telegram Mini App & Multi-Instance Mesh Architecture
-
-RebeccaSellBot includes a modern Fastify 5 server and React 19 Telegram Mini App dashboard.
-
-```text
-               Public HTTPS Traffic (*.yourdomain.com)
-                                 │
-                                 ▼
-                    ┌────────────────────────┐
-                    │      Caddy Ingress     │
-                    │   (On-Demand TLS Ask)  │
-                    └───────────┬────────────┘
-                                │ ask http://main_bot:3002/api/caddy-check
-                                ▼
-                    ┌────────────────────────┐
-                    │   main_bot (Port 3002) │
-                    │  Shared Mesh Registry  │
-                    └───────────┬────────────┘
-                                │
-         ┌──────────────────────┼──────────────────────┐
-         ▼                      ▼                      ▼
-┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│ Instance "main"  │  │ Instance "vip"   │  │ Instance "shop3" │
-│ Local Fastify    │  │ Proxy over mesh  │  │ Proxy over mesh  │
-└──────────────────┘  └──────────────────┘  └──────────────────┘
-```
-
-### Fastify WebApp Backend (`src/webapp/server/`)
-
-1. **Authentication & Security:**
-   - **Telegram Client Auth:** Validates the cryptographic HMAC-SHA256 signature of Telegram's `initData` against the `BOT_TOKEN`.
-   - **Admin Session:** Issues HTTP-only, secure JWT cookies signed with `ADMIN_SESSION_SECRET` (or a bot-token-derived fallback).
-   - **Rate Limiting & CORS:** Enforces 100 requests/minute per IP and restricts CORS origins to authorized frontend origins.
-
-2. **On-Demand TLS Verification (`/api/caddy-check`):**
-   - Responds to Caddy's `ask` endpoint (`GET /api/caddy-check?domain=<host>`).
-   - Dynamically authorizes SSL certificate issuance for any domain registered to this instance or peer instances in the shared registry.
-
-3. **Multi-Instance Mesh Dispatcher (`DomainRegistryService`):**
-   - Each instance records its public domain, target URL, and host port in a shared Docker volume (`rsbot_registry`, `/app/data/registry/`).
-   - When Caddy routes wildcard traffic to the primary container (`main_bot`), Fastify checks the incoming `Host` header.
-   - If the request targets a peer instance, it transparently streams the HTTP request to the peer over the internal `rsbot_mesh` Docker network, guarding against loops via `x-rsbot-proxy-hops`.
-
-### React 19 Frontend (`webapp/src/`)
-
-- Built with **React 19**, **Tailwind CSS v4**, **DaisyUI v5**, and **TanStack React Query**.
-- **User Portal:** Real-time quota gauges, expiry counters, QR codes, sub links, and balance history.
-- **Admin Dashboard:** Overview metrics, user CRM, receipt verification, panel fleet status, and service modules.
-
----
-
-## 5. Background Workers & Job Scheduler
-
-Background automation is orchestrated by `src/jobs/workerRuntime.ts` using cron schedules and persistent locking:
-
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        workerRuntime.ts                                │
-└───────┬──────────────┬──────────────┬──────────────┬─────────────┬─────┘
-        │              │              │              │             │
-        ▼              ▼              ▼              ▼             ▼
-  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐  ┌──────────┐
-  │Reconciler│   │ Notifier │   │Auto-Renew│   │TrialPurge│  │Broadcast │
-  │(Every 1m)│   │ (Hourly) │   │ (Min 20) │   │  (03:30) │  │ (5s loop)│
-  └──────────┘   └──────────┘   └──────────┘   └──────────┘  └──────────┘
-```
-
-| Worker             | Schedule       | Purpose                                                                                                                    |
-| :----------------- | :------------- | :------------------------------------------------------------------------------------------------------------------------- |
-| **`reconciler`**   | Every 1 minute | Settles pending purchase intents (>5m old), synchronizes subscription statuses, and scans orphaned configs (15m interval). |
-| **`notifier`**     | `0 * * * *`    | Hourly sweep detecting low traffic (<1 GB) or near expiry (<3 days) with durable 24h deduplication.                        |
-| **`autoRenewal`**  | `20 * * * *`   | Evaluates active subscriptions with auto-renewal enabled; executes wallet-backed purchase sagas.                           |
-| **`trialCleanup`** | `30 3 * * *`   | Daily sweep (03:30 UTC) permanently purging expired trial accounts past their 3-day grace period.                          |
-| **`backup`**       | `*/10 * * * *` | Every 10 minutes checks if the configured database backup interval has elapsed and dispatches snapshots.                   |
-| **`broadcast`**    | 5-second loop  | Claims batches of 15 recipients (concurrency 3), honors Telegram rate limits, and supports live cancel.                    |
-
----
-
-## 6. Telegram Delivery Layer & UI Engine
-
-Detailed delivery layer specifications are documented in [docs/telegram-architecture.md](telegram-architecture.md).
-
-### Message Role State Machine
-
-| Role               | Description                                                                        | Lifecycle Policy                                                                              |
-| :----------------- | :--------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
-| **`screen`**       | Main interactive views (dashboards, menus, catalogs).                              | Updated in-place via `editMessageText` (`renderUiScreen`). Replaced on major view navigation. |
-| **`prompt`**       | Intermediate conversational requests (e.g. "Enter transfer amount").               | Cleaned up automatically upon conversation completion or cancellation.                        |
-| **`artifact`**     | High-value outputs (VPN subscription links, QR codes, receipts, transaction info). | **Protected & Permanent:** Never overwritten or deleted during menu navigation.               |
-| **`notification`** | Automated alerts (low quota warnings, renewal confirmations).                      | Durable messages tracked independently from interactive screens.                              |
-
-### Inbound Rebecca Panel Webhooks (`RebeccaWebhookService.ts`)
-
-In addition to outbound REST calls to Rebecca panels, RebeccaSellBot receives real-time webhook push events:
-
-- **Authentication:** Validated via constant-time comparison (`crypto.timingSafeEqual`) on the `x-webhook-secret` header against `REBECCA_WEBHOOK_SECRET`.
-- **Supported Events:** `user_limited`, `user_expired`, `user_disabled`, `user_enabled`, `user_deleted`.
-- **User Alerts:** Pushes instant notifications with a 1-tap renewal button (`sub:detail:<id>`) directly into the user's chat.
-
----
-
-## 7. Gamification & Growth Engine
-
-- **Lucky Wheel (`LuckyWheelService.ts`):** Configurable lottery wheel with weighted prize tables, daily free spin cooldowns, win caps, and instant wallet balance deposits.
-- **Referral & Cashback (`ReferralService.ts`):** Tracks inviter-invitee trees, automatically awarding percentage or fixed cashback on successful purchases.
-- **Promo Codes (`PromoService.ts`):** Supports single-use and multi-use discount vouchers with expiration dates, maximum redemption ceilings, and package-specific scopes.
-
----
-
-## 8. Database Architecture & Schema Integrity
-
-Data persistence is managed via **PostgreSQL 16** with **Drizzle ORM** (`src/infra/schema.ts`):
-
-```text
-┌──────────────┐       1:N       ┌─────────────────────┐       1:N       ┌─────────────────────┐
-│    users     │ ─────────────── │    user_configs     │ ─────────────── │   config_history    │
-└──────┬───────┘                 └──────────┬──────────┘                 └─────────────────────┘
-       │ 1:N                                │ N:1
-       ├─────────────────┐                  ▼
-       │                 │         ┌─────────────────────┐
-       ▼                 ▼         │   rebecca_panels    │
-┌──────────────┐  ┌──────────────┐ └─────────────────────┘
-│ wallet_trans │  │ topup_receipt│
-└──────────────┘  └──────────────┘
-```
-
-### Data Integrity Safeguards
-
-- **Transactional Consistency:** Critical balance changes, checkouts, and receipt verifications run in isolated database transactions.
-- **Check Constraints:** PostgreSQL enforces `balance >= 0`, valid status enumerations (`active`, `limited`, `expired`, `revoked`, `deleted`), and minor-unit bounds.
-- **Unique Indexes:** Protect against duplicate receipt submissions, concurrent checkout collisions, and duplicate referral claims.
-
----
-
-## 9. Deployment & Multi-Instance Operations
-
-For deployment instructions, reverse proxy configurations, and CLI reference, see [docs/deployment.md](deployment.md).
-For environment variable reference, see [docs/configuration.md](configuration.md).
+| Category                | Tables                                                                                                                                                               |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Panels & Fleet**      | `rebecca_panels` (AES-256-GCM credentials), `rebecca_panel_services`, `config_counters`                                                                              |
+| **Users & Auth**        | `users` (balances, CRM stats, `phone_hash`, `phone_verified_at`), `bot_admins`, `grammy_sessions`                                                                    |
+| **Wallet & Receipts**   | `wallet_transactions` (`topup`, `topup_void`, `purchase`, `refund`, etc.), `topup_receipts` (`file_unique_id`, `file_sha256`, `duplicate_of_receipt_id`, `voided_*`) |
+| **Commerce & Sagas**    | `purchase_checkouts`, `purchase_intents`, `refund_intents`, `trial_claims`, `package_categories`, `catalog_discounts`                                                |
+| **Subscriptions & Ops** | `user_configs` (`panel_*` cache, `first_use_checked_at`, `cleanup_hold_until`), `config_reconciliation_issues`, `notification_deliveries`                            |
+| **Growth & Audit**      | `promo_codes`, `code_redemptions`, `lucky_wheel_spins`, `broadcast_jobs`, `broadcast_recipients`, `settings`, `audit_logs`                                           |

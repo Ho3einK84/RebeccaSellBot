@@ -1,261 +1,108 @@
-# Telegram Delivery Layer & UI Architecture
+# RebeccaSellBot — Telegram Delivery Layer & UI Architecture
 
-This document provides a comprehensive architectural specification for the Telegram subsystem in **RebeccaSellBot**. For the complete end-to-end system architecture (including financial sagas, database schema, and background jobs), see [docs/architecture.md](architecture.md). For deployment and reverse proxy configurations, see [docs/deployment.md](deployment.md).
-
-RebeccaSellBot treats Telegram strictly as an **ephemeral delivery and interaction layer**. Telegram handlers, conversations, and keyboards never query the database directly or dispatch direct HTTP requests to Rebecca panels. All business operations are mediated through typed domain services and saga orchestrators.
+RebeccaSellBot treats Telegram strictly as an **ephemeral delivery and interaction layer**. Handlers, conversations, and keyboards under [`src/telegram/`](../src/telegram/) never query PostgreSQL directly or instantiate panel HTTP clients; every operation flows through typed domain services injected on `ctx.services`.
 
 ---
 
-## 1. Architectural Boundaries & Invariants
+## 1. Update Pipeline (`src/telegram/botRuntime.ts`)
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Telegram Bot API                                │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Outbound Polling or Inbound Webhook
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                       Delivery Layer (grammY)                          │
-│                                                                        │
-│   Middlewares ──► UI Engine (ui.ts) ──► Handlers & Conversations       │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Strictly invokes Domain Services
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Domain Service Layer                            │
-│                                                                        │
-│   WalletService   ConfigService   PricingService   RebeccaService      │
-│   TrialService    RefundService   BroadcastService PromoService        │
-│   LuckyWheelSvc   PaymentService  BackupService    UserService         │
-└───────────────────┬────────────────────────────────┬───────────────────┘
-                    │                                │
-                    ▼                                ▼
-┌──────────────────────────────────────┐   ┌─────────────────────────────┐
-│       Infrastructure Layer           │   │    Rebecca Panel Fleet      │
-│  Drizzle ORM ──► PostgreSQL (Docker) │   │  HTTPS REST API (Encrypted) │
-└──────────────────────────────────────┘   └─────────────────────────────┘
-```
-
-### Core Architecture Rules
-
-1. **No Direct DB Access from Telegram:** Files under `src/telegram/` must never import from `src/infra/db.js` or `src/infra/schema.js`. All state mutations and queries route through domain services (e.g., `WalletService`, `ConfigService`).
-2. **No Direct HTTP / API Client Access:** Telegram code must never instantiate `RebeccaApiClient` or perform raw `fetch()` calls. All panel interactions go through `RebeccaService` or the `RebeccaPanelRegistry`.
-3. **Dual-Mode Delivery Architecture:** The bot starts with long polling (`bot.start()`) by default. For reverse-proxied or panel-hosted deployments, webhook delivery (`webhookCallback()`) can be enabled. Webhook updates require `X-Telegram-Bot-Api-Secret-Token` authentication, and switching to polling automatically clears active webhooks.
-4. **Automated Enforcement:** The architectural test script [`scripts/check-architecture.mjs`](../scripts/check-architecture.mjs) runs during CI and pre-commit verification to statically enforce these import boundaries and conventions.
-
----
-
-## 2. Update Lifecycle & Middleware Pipeline
-
-Every incoming update passes through a carefully ordered pipeline in `src/telegram/botRuntime.ts`:
-
-```text
-Incoming Update
-   │
-   ├─► 1. API Transformers
-   │      ├─ apiThrottler()                 (Enforces Telegram API rate limits)
-   │      ├─ safeFormattingTransformer()    (Recovers from Markdown entity parsing errors)
-   │      └─ uiMessageTrackingTransformer() (Tracks message IDs via AsyncLocalStorage)
-   │
-   ├─► 2. registerAdminAlertHook()          (Pushes immediate panel outage alerts to admins)
-   │
-   ├─► 3. Context & Security Middlewares
-   │      ├─ Service Injection              (Attaches typed domain services to ctx.services)
-   │      ├─ Private Chat Enforcement       (Rejects non-private group/channel updates)
-   │      ├─ Locale & User Activity Sync    (Resolves user locale and updates CRM activity)
-   │      ├─ Admin Callback Firewall        (Validates admin permissions for all admin callbacks)
-   │      ├─ PostgresSessionAdapter         (Hydrates session from PostgreSQL key: chatId:userId)
-   │      ├─ cleanChatUiMiddleware()        (Cleans previous screens/prompts, protects artifacts)
-   │      ├─ Ban Enforcement                (Silently drops updates from banned users)
-   │      └─ Maintenance Mode Guard         (Blocks customer access when bot_enabled = false)
-   │
-   ├─► 4. Conversations Container
-   │      ├─ conversationContextMiddleware  (Re-injects services and locale into conversation ctx)
-   │      └─ 20+ Registered Conversations   (User checkouts, admin settings, topups, broadcasts)
-   │
-   ├─► 5. Rate Limiting Middleware          (Protects plain text input and prevents flood spam)
-   │
-   └─► 6. Feature Routes & Handlers
-          ├─ Core & Base Routes             (/start, /admin, /help, /lang, navigation)
-          ├─ Purchase & Checkout Routes     (Package browsing, checkout confirmation, promo input)
-          ├─ Subscription Management        (Config details, QR codes, sub links, auto-renew, refund)
-          ├─ Gamification Routes            (Lucky wheel daily spins, rewards, cooldown checks)
-          └─ Admin Backoffice Routes        (Receipts, users, panels, maintenance, broadcasts)
+Incoming Telegram Update
+  │
+  ├─► 1. Outbound API Transformers
+  │      ├─ apiThrottler()                 (Telegram flood-limit queueing)
+  │      ├─ safeFormattingTransformer()    (Auto-fallback on Markdown parse errors)
+  │      └─ uiMessageTrackingTransformer() (AsyncLocalStorage message role tracking)
+  │
+  ├─► 2. Context & Security Guards
+  │      ├─ Service Injection              (Attaches BotServices to ctx.services)
+  │      ├─ Private Chat Gate              (Blocks non-private chats from user/financial flows)
+  │      ├─ User Upsert & Locale Sync      (Caches ban status in WeakMap; resolves fa/en locale)
+  │      ├─ Admin Callback Firewall        (Blocks non-admins from admin:* / trial:* admin routes)
+  │      ├─ PostgresSessionAdapter         (Hydrates session from grammy_sessions)
+  │      ├─ cleanChatUiMiddleware()        (Sweeps stale screens/prompts; protects artifacts)
+  │      ├─ Ban Guard                      (Drops updates from banned users)
+  │      └─ Maintenance Guard              (Shows maintenance notice when bot_enabled = false)
+  │
+  ├─► 3. Conversation Engine (@grammyjs/conversations)
+  │      ├─ conversationContextMiddleware  (Re-hydrates services & locale on replay)
+  │      └─ Registered User & Admin Conversations
+  │
+  ├─► 4. Rate Limit & Cooldown Guards      (rateLimitMiddleware + actionCooldown)
+  │
+  └─► 5. Feature Routers
+         ├─ coreRoutes & baseRoutes        (/start, /admin, /lang, trial claims, phone gate)
+         ├─ purchaseRoutes & configRoutes  (Storefront, flash-sale checkouts, custom volume)
+         ├─ subscriptions/routes           (Live status, QR popover, client links, sub rotation)
+         ├─ luckyWheelRoutes               (Daily spin & prize ledger)
+         └─ admin/*                        (Receipts/voiding, users, panels, promos, broadcasts)
 ```
 
 ---
 
-## 3. UI Engine & Screen Management (`ui.ts`)
+## 2. Clean-Chat UI Engine (`src/telegram/ui.ts`)
 
-RebeccaSellBot provides an app-like, clean chat experience where the bot chat does not fill up with stale menus and conversational clutter.
+To prevent chat clutter while guaranteeing zero loss of payment or subscription records, every outbound message is tagged with one of four roles via `AsyncLocalStorage`:
 
-### Message Roles
+| Role               | Lifecycle Policy                                                                                   | Examples                                                                    |
+| :----------------- | :------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- |
+| **`screen`**       | Edited in-place via `renderUiScreen` (`editMessageText`) or replaced on navigation.                | Home dashboard, storefront catalog, admin menus.                            |
+| **`prompt`**       | Automatically deleted once the owning conversation step completes or cancels.                      | "Enter custom GB", "Send receipt photo", "Share contact".                   |
+| **`artifact`**     | **Immutable & Permanent (`rememberArtifactMessage`):** Never deleted or overwritten by UI cleanup. | Subscription links, QR codes, transaction receipts, trial credentials.      |
+| **`notification`** | Durable asynchronous alerts tracked separately from interactive screen navigation.                 | Low quota alerts, first-use nudges, expired-cleanup warnings, void notices. |
 
-Every message sent by the bot is classified into one of four distinct roles:
+### UX Invariants
 
-| Role               | Purpose                                                                           | Lifecycle Behavior                                                                                               |
-| :----------------- | :-------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| **`screen`**       | Interactive menu or view.                                                         | Replaced in-place via `renderUiScreen` (using `editMessageText`), or deleted when transitioning to a new screen. |
-| **`prompt`**       | Ephemeral conversational request (e.g. "Enter amount").                           | Automatically deleted once the conversation finishes or cancels.                                                 |
-| **`artifact`**     | High-value output (e.g. VPN subscription link, QR code image, trial credentials). | **Durable:** Protected against deletion or mutation by screen navigation (`rememberArtifactMessage`).            |
-| **`notification`** | Automated alerts (low-traffic warning, expiry reminder, auto-renewal report).     | Durable, tracked separately from interactive screens.                                                            |
-
-### Message Tracking with AsyncLocalStorage
-
-`uiMessageTrackingTransformer()` wraps grammY's outbound API methods (`sendMessage`, `sendPhoto`, `sendDocument`, etc.) in an `AsyncLocalStorage` store (`uiTracking`). When a route or conversation sends a message, its `message_id` is automatically recorded into the user's PostgreSQL session under the appropriate role without manual bookkeeping.
-
-### Smart Screen Rendering (`renderUiScreen`)
-
-```typescript
-export async function renderUiScreen(
-  ctx: MenuContext,
-  text: string,
-  options: RenderUiScreenOptions = {}
-): Promise<RenderUiScreenResult>;
-```
-
-1. **In-Place Editing:** If invoked from a callback query on an editable `screen` message (and not an `artifact`), `editMessageText` is used.
-2. **Idempotent Handling:** If the screen content has not changed, Telegram's `message is not modified` error is caught and safely treated as a successful no-op.
-3. **Fallback to New Message:** If the message is missing, unmodifiable, or a photo/media message, it sends a fresh tracked screen message and marks the old one for cleanup.
-4. **Single-Tap Popover Dismissal (`ui:dismiss`):** Allows temporary QR code popovers or informational overlays to dismiss with one tap without deleting the underlying subscription card.
+- **Single-Tap Popover Dismiss (`ui:dismiss`):** Temporary overlays (e.g., QR code popovers or admin outage alerts) close in a single tap without sweeping the underlying screen.
+- **Digit Normalization (`normalizeInputDigits`):** All numeric inputs (amounts, GB, days, card numbers, phone numbers, warn days) automatically normalize Persian (`۰–۹`) and Arabic (`٠–٩`) numerals to ASCII (`0–9`).
+- **Zero Duplicate Status Emojis:** Status formatters emit a single canonical badge per state (`active`, `on_hold`, `limited`, `expired`, `disabled`).
 
 ---
 
-## 4. Design System & Presentation (`designSystem.ts` & `rendering.ts`)
-
-To maintain visual hierarchy, clarity, and RTL/LTR consistency across Persian and English, all views are composed via functional builders.
-
-### Screen Composition Builder (`buildScreen`)
-
-```typescript
-export function buildScreen(definition: {
-  emoji: string;
-  title: string;
-  subtitle?: string;
-  primary?: { label: string; value: string | number; emoji?: string };
-  sections?: Array<{ title: string; emoji?: string; fields: ScreenField[] }>;
-  footer?: string;
-}): string;
-```
-
-- **Header:** Emoji + bold title + optional italic subtitle.
-- **Primary Block:** High-contrast focus state (e.g. remaining quota, wallet balance).
-- **Section Cards:** Formatted key-value pairs formatted with bullet indicators.
-- **RTL Normalization:** Passes text through `ensurePersianLineDirection()` to prevent punctuation flipping on mixed Persian/English lines.
-- **Digit Normalization:** `normalizeInputDigits()` automatically converts Persian (`۱۲۳`) and Arabic (`١٢٣`) digits to ASCII standard digits before numerical validation.
-
-### Safe Markdown Formatting & Entity Protection
-
-Telegram Legacy Markdown (`Markdown`) requires strict escaping of untrusted parameters:
-
-- `escapeTelegramMarkdown(value)`: Escapes special characters (`_`, `*`, `[`, `` ` ``, `\`) for user input, usernames, and dynamic values.
-- `sanitizeTelegramInlineCode(value)`: Strips stray backticks inside code spans to prevent broken formatting.
-- `validateTelegramMarkdown(text)`: Validates balanced delimiters before saving admin-customized templates in database settings.
-- `safeFormattingTransformer()`: An API transformer that intercepts Telegram `can't parse entities` errors and retries the dispatch as plain text, ensuring the user is never left with an unrendered screen.
-
----
-
-## 5. Callback Routing & 64-Byte Limit (`callbackData.ts`)
-
-Telegram restricts inline button `callback_data` to **strictly 64 UTF-8 bytes**. Exceeding this causes API exceptions.
-
-```typescript
-export function callbackData(...parts: Array<string | number>): string {
-  const value = parts.join(':');
-  if (Buffer.byteLength(value, 'utf8') > 64) {
-    throw new Error('TELEGRAM_CALLBACK_DATA_TOO_LONG');
-  }
-  return value;
-}
-```
-
-### Callback Encoding Conventions
-
-- **Navigation:** `nav:home`, `nav:main`, `nav:admin`
-- **Checkout Confirmation:** `buy:confirm:<checkoutId>` (using a 12-char nanoid from `PurchaseCheckoutService`)
-- **Config Management:** `config:view:<id>`, `config:qr:<id>`, `config:toggle:<id>`, `config:revoke:<id>`
-- **Renewal Package:** `r:p:<configId>:<pkgIdx>:<catalogHash>`
-- **Admin Settings:** `set:edit:<key>`, `pkg:edit:<pkgId>`, `cat:view:<catId>`
-- **Dismissible Popovers:** `ui:dismiss` (destroys the active popover card without sweeping parent screen state)
-- **Catch-All Handler:** A wild-card callback listener acknowledges any stale or unhandled callback queries with `ctx.answerCallbackQuery()` to prevent endless client loading spinners.
-
----
-
-## 6. Conversations Engine & Admin Settings Center
-
-Conversations represent multi-step interactive workflows powered by `@grammyjs/conversations`.
-
-### Registered Conversations
+## 3. Conversations Architecture (`src/telegram/conversations/`)
 
 ```text
 src/telegram/conversations/
 ├── userConversations.ts
-│   ├── buyConfigConversation           (Package purchase & checkout saga)
-│   ├── customAmountConversation        (Custom volume & duration quote)
-│   ├── renewConfigConversation         (Package-based subscription renewal)
-│   ├── autoRenewCustomConversation     (Auto-renewal setup & package binding)
-│   ├── promoConversation               (Promo code application)
-│   ├── transferConfigConversation      (Transfer config ownership to another user)
-│   ├── transferBalanceConversation     (Peer-to-peer wallet balance transfer)
-│   └── topupConversation               (Card payment receipt photo upload)
+│   ├── buyConfigConversation            (Package selection & checkout creation)
+│   ├── buyPackageCustomNameConversation (Buyer-chosen English service name prompt)
+│   ├── customAmountConversation         (Custom GB/day quote with active flash-sale discount)
+│   ├── renewConfigConversation          (Package-based renewal with quota/time rollover)
+│   ├── autoRenewCustomConversation      (Auto-renewal package binding & price ceiling consent)
+│   ├── promoConversation                (Promo & gift code redemption)
+│   ├── transferConfigConversation       (Peer-to-peer subscription ownership transfer)
+│   ├── transferBalanceConversation      (Peer-to-peer wallet balance transfer)
+│   └── verifyPhoneConversation          (requestContact flow with contact.user_id === ctx.from.id check)
 │
 └── adminConversations/
-    ├── settings/                       (Modular Admin Settings Center)
-    │   ├── catalog.ts                  (Typed setting definitions & groups)
-    │   ├── validation.ts               (Type guards, bounds checking, regexes)
-    │   ├── presentation.ts             (Settings screen & item formatters)
-    │   ├── navigation.ts               (Settings hierarchy & breadcrumbs)
-    │   ├── packageManager.ts           (Full CRUD for packages & panel bindings)
-    │   ├── customVolume.ts             (Custom volume price & default days editor)
-    │   ├── luckyWheel.ts               (Lucky wheel reward tiers & daily spin odds)
-    │   ├── payment.ts                  (Card number, holder, and transfer rules)
-    │   ├── referral.ts                 (Referral bonus & cashback percentages)
-    │   ├── backup.ts                   (Automated backup intervals & delivery)
-    │   ├── naming.ts                   (Dynamic username prefixes & config templates)
-    │   ├── trial.ts                    (Trial duration, traffic limit, panel assignment)
-    │   ├── webapp.ts                   (Telegram Mini App interactive toggle & URL)
-    │   └── conversation.ts             (Settings conversation orchestrator)
-    ├── texts.ts                        (Customizable bot messages & localization overrides)
-    ├── wallet.ts                       (Manual balance adjustments & audit logs)
-    ├── promos.ts                       (Promo code creation, search & editing)
-    ├── messaging.ts                    (Segmented broadcasts & direct user DMs)
-    └── panels.ts                       (Interactive panel registry setup)
+    ├── wallet.ts
+    │   ├── topupConversation            (Card top-up receipt upload + SHA-256 & file_unique_id hashing)
+    │   └── adminSetBalanceConversation  (Admin credit/debit/set balance with audit reason)
+    ├── catalogDiscounts.ts              (Timed flash-sale CRUD + 1-tap Broadcast launch)
+    ├── lifecycle.ts                     (Admin subscription quota/expiry/service editors)
+    ├── promos.ts                        (Single/bulk promo creation, editing & search)
+    ├── messaging.ts                     (Segmented broadcasts, direct DMs, admin management)
+    ├── panels.ts                        (Multi-panel registry & service synchronization)
+    ├── texts.ts                         (In-bot FA/EN translation override editor)
+    └── settings/                        (Modular Admin Settings Center)
+        ├── catalog.ts & validation.ts   (11 typed groups: system, pricing, custom_volume, payment,
+        │                                 support, trial, referral, lucky_wheel, naming, retention, backup)
+        ├── packageManager.ts            (Packages & categories CRUD + panel/service binding)
+        ├── payment.ts                   (Primary card, multi-card pool bank_cards_json, duplicate policy)
+        ├── customVolume.ts              (Per-GB rates, tiers, bounds & target panel)
+        ├── trial.ts & referral.ts       (Trial quotas/phone gate & referral/cashback rates)
+        ├── luckyWheel.ts & naming.ts    (Spin odds/decay & username templates/custom naming)
+        └── backup.ts & webapp.ts        (Automated backup delivery & live Mini App activation)
 ```
 
-### The Zero-Secret Replay Principle
+### Zero-Secret Replay Rule
 
 > [!CAUTION]
-> Sensitive credentials (e.g. Rebecca panel API keys and admin passwords) **must never enter conversation replay state**.
-
-Because `@grammyjs/conversations` records message histories into session storage to handle step replays, storing secrets inside conversation state would persist unencrypted credentials into session rows.
-
-To prevent this:
-
-1. Panel API keys and passwords are collected via a dedicated one-shot `bot.on('message:text')` route in `src/telegram/features/admin/panelRoutes.ts`.
-2. The incoming message is immediately encrypted at rest using AES-256-GCM (`CredentialCipher`).
-3. The user's Telegram message containing the plain text key is instantly deleted via `ctx.deleteMessage()`.
+> `@grammyjs/conversations` serializes replay logs into `grammy_sessions`. Panel API keys and admin passwords are **never** read inside a conversation; they are captured by a dedicated one-shot handler in [`src/telegram/features/admin/panelRoutes.ts`](../src/telegram/features/admin/panelRoutes.ts), encrypted immediately with `CredentialCipher` (`AES-256-GCM`), and the user's plaintext message is deleted via `ctx.deleteMessage()`.
 
 ---
 
-## 7. Bilingual Localization Pipeline (`locale.ts`)
+## 4. Callback Data & Bilingual Localization
 
-RebeccaSellBot supports complete internationalization in **Persian (fa)** and **English (en)**:
-
-1. **Auto-Detection & Persistence:** Newly observed Telegram users have their client language code detected and saved. If the user explicitly selects a language from `/lang`, `localeManual` is set to `true`, preventing automatic client overrides.
-2. **Context Resolution (`resolveContextLocale`):** Middlewares and background jobs resolve the effective locale from user records, conversation contexts, or the global default setting.
-3. **Template Translation (`t` and `tm`):**
-   - `t(ctx, 'key', params)`: Translates a catalog key with automatic parameter substitution and Markdown escaping.
-   - `tm(ctx, 'template_key', params)`: Injects localized dynamic values into administrator-editable long-form templates.
-4. **Strict Catalog Parity:** Every translation key in `TranslationCatalog.fa.ts` must have an identical counterpart in `TranslationCatalog.en.ts`. This invariant is verified by the unit test suite.
-5. **Number & Date Formatting:**
-   - `localizedNumber(num, ctx)`: Formats numbers with Persian numerals in `fa` and standard digits in `en`.
-   - `localizedDate(timestamp, ctx)`: Renders dates using the appropriate calendar representation.
-
----
-
-## 8. Anti-Abuse, Concurrency & Security Controls
-
-- **Action Cooldowns (`actionCooldown.ts`):** In-memory per-user sliding window locks prevent duplicate rapid button taps on financial and remote mutating actions (e.g. buying a config, claiming a trial, revoking).
-- **WeakMap Ban Status Cache:** Prevents duplicate database queries for banned users during rapid update batches.
-- **Purchase Checkouts Guard:** Checkouts snapshot packages and prices with expiration timestamps (`PurchaseCheckoutService`), preventing Time-of-Check to Time-of-Use (TOCTOU) exploits if an admin changes package prices while a user is on the checkout screen.
-- **Private Chat Gate:** Financial and management features are strictly blocked in group chats to protect sensitive user subscriptions and balance details.
+- **64-Byte UTF-8 Callback Guard ([`callbackData.ts`](../src/telegram/callbackData.ts)):** Enforces Telegram's 64-byte `callback_data` ceiling at construction time. Compact prefixes (`buy:confirm:<id>`, `r:p:<cfg>:<idx>:<hash>`, `renew:open:<id>`, `ui:dismiss`) keep payloads well under the limit.
+- **100% Bilingual Catalog Parity:** Every key in [`TranslationCatalog.fa.ts`](../src/domain/services/TranslationCatalog.fa.ts) has an exact counterpart and matching `{placeholder}` set in [`TranslationCatalog.en.ts`](../src/domain/services/TranslationCatalog.en.ts), verified on every test run by [`tests/domain/TranslationService.test.ts`](../tests/domain/TranslationService.test.ts).

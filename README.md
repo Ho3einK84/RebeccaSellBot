@@ -1,18 +1,18 @@
 # ✦ RebeccaSellBot
 
 <p align="center">
-  <strong>A resilient, multi-panel Telegram storefront for Rebecca Panel VPN subscriptions.</strong>
+  <strong>Resilient, multi-panel Telegram commerce and subscription platform for Rebecca Panel.</strong>
   <br />
-  Automate sales, renewals, wallet payments, customer subscriptions, and multi-panel fleets entirely inside Telegram.
+  Automate sales, renewals, wallet accounting, flash sales, and multi-panel fleets across Telegram and Mini App.
 </p>
 
 <p align="center">
   <a href="https://github.com/Ho3einK84/RebeccaSellBot"><img src="https://img.shields.io/badge/release-0.3.0-7c3aed?style=flat-square" alt="Release 0.3.0" /></a>
-  <img src="https://img.shields.io/badge/runtime-Node.js%2024-339933?style=flat-square" alt="Node.js 24" />
-  <img src="https://img.shields.io/badge/database-PostgreSQL%2016-336791?style=flat-square" alt="PostgreSQL 16" />
-  <img src="https://img.shields.io/badge/framework-grammY-0088cc?style=flat-square" alt="grammY" />
-  <img src="https://img.shields.io/badge/deployment-Docker-2496ED?style=flat-square" alt="Docker" />
-  <img src="https://img.shields.io/badge/platform-Ubuntu%2024.04-E95420?style=flat-square" alt="Ubuntu 24.04" />
+  <img src="https://img.shields.io/badge/node-24.x-339933?style=flat-square" alt="Node.js 24" />
+  <img src="https://img.shields.io/badge/postgres-16-336791?style=flat-square" alt="PostgreSQL 16" />
+  <img src="https://img.shields.io/badge/telegram-grammY-0088cc?style=flat-square" alt="grammY" />
+  <img src="https://img.shields.io/badge/webapp-Fastify%205%20%2B%20React%2019-111827?style=flat-square" alt="Fastify 5 + React 19" />
+  <img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square" alt="Docker" />
 </p>
 
 > [!NOTE]
@@ -21,68 +21,58 @@
 > **Project Status & Development Notice:** This project is under active development and may contain bugs, experimental behaviors, or architectural changes. It has been built with AI assistance (Vibe Coding).
 
 > [!IMPORTANT]
-> **Zero Database Touch:** RebeccaSellBot communicates with Rebecca panels exclusively via their official HTTPS REST APIs. It never reads from or writes to the Rebecca database directly.
+> **Zero Database Touch:** RebeccaSellBot communicates with Rebecca panels exclusively via their official HTTPS REST APIs. It never connects to or mutates remote panel databases directly.
 
 ---
 
 ## Documentation
 
-| Document                                                    | Description                                                                           |
-| :---------------------------------------------------------- | :------------------------------------------------------------------------------------ |
-| 🏛️ **[System Architecture](docs/architecture.md)**          | End-to-end subsystem overview, 3-phase financial saga, and background workers.        |
-| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Screen manager, conversation containers, design system, and error resilience.         |
-| 🚀 **[Deployment & Operations](docs/deployment.md)**        | Installation options, Caddy/Nginx reverse proxy, mesh routing, and disaster recovery. |
-| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete guide to environment variables (`.env`) and in-bot `/admin` settings.        |
+| Document                                                    | Scope                                                                                            |
+| :---------------------------------------------------------- | :----------------------------------------------------------------------------------------------- |
+| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga, 24-table PostgreSQL schema, and background workers. |
+| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, message roles, conversation flows, and callback routing.                |
+| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                    |
+| 🚀 **[Deployment & Operations](docs/deployment.md)**        | Interactive/unattended installation, `rsbot` CLI, Caddy On-Demand TLS mesh, and backups.         |
+| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, and database integrity rules.                    |
 
 ---
 
-## Key Capabilities
+## Capabilities
 
-| For Customers                                                                                  | For Administrators                                                                                  |
-| :--------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
-| 🛒 **Instant Ordering:** Purchase and renew fixed packages or custom-volume plans.             | 🌐 **Multi-Panel Fleet:** Connect multiple Rebecca panels and assign distinct services per package. |
-| 💳 **Wallet & Transfers:** Top up via card-to-card receipts; transfer balance to peers.        | 🛡️ **Financial Backoffice:** Review payment receipts, adjust balances, and audit transaction logs.  |
-| 📊 **Subscription Portal:** Real-time quota, expiry dates, QR codes, and sub links.            | ⚙️ **In-Bot Settings:** Manage pricing, packages, categories, card info, and trial limits directly. |
-| 🔄 **Auto-Renewal & Refunds:** Automatic renewal safeguards and one-click unused-plan refunds. | 📢 **Segmented Broadcasts:** Send cancelable, throttled broadcasts by user subscription status.     |
-| 🎰 **Growth & Gamification:** Lucky Wheel with odds tuning, referral rewards, and promo codes. | 🔍 **Reconciliation Engine:** Detect and resolve orphaned subscriptions and remote state drifts.    |
-| 🌐 **Bilingual UX:** Seamless Persian (FA) and English (EN) localized interfaces.              | 📦 **Multi-Instance Ready:** Run isolated bot instances with separate databases on a single server. |
+| Customer Experience                                                                                                                                              | Administration & Backoffice                                                                                                                                    |
+| :--------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🛒 **Instant Storefront:** Fixed packages, categorized plans, custom GB/day ordering, and optional buyer-chosen service names.                                   | 🌐 **Multi-Panel Fleet:** Connect multiple Rebecca panels at runtime (`AES-256-GCM` vault) and bind packages to specific services.                             |
+| 🔥 **Flash Sales & Promos:** Timed catalog discounts (strikethrough pricing + countdowns) and single/multi-use promo vouchers.                                   | 🛡️ **Receipt Security & Voiding:** `SHA-256` + `file_unique_id` duplicate receipt detection (`warn`/`block`), atomic receipt voiding, and multi-card rotation. |
+| 💳 **Wallet & P2P Transfers:** Card-to-card top-ups, unique payable amounts, and peer-to-peer balance or subscription transfers.                                 | 📊 **Telegram & Mini App CRM:** Real-time stats, user dossiers, balance adjustments, orphan reconciliation, and audit trails.                                  |
+| 📊 **Subscription Portal:** Live traffic/expiry gauges, QR codes, 1-tap client import links (Happ, v2rayNG, Streisand, Hiddify, Sing-box), and sub URL rotation. | 📢 **Growth & Retention:** Throttled segmented broadcasts, 24h first-use connection nudges, and staged expired-config cleanup with renewal warnings.           |
+| 🔄 **Lifecycle & Safeguards:** Start-on-first-use (`on_hold`), renewal quota/time rollover, auto-renewal, and unused-plan refunds.                               | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` Telegram contact verification for trials and purchases (zero raw phone storage).                       |
+| 🎰 **Loyalty & Bilingual UX:** Daily Lucky Wheel, referral bonuses, lifetime purchase cashback, and full Persian (`fa`) / English (`en`) localization.           | 📦 **Multi-Instance Operations:** Run isolated instances with automated Caddy On-Demand TLS mesh routing and transactional backups.                            |
 
 ---
 
-## Safety & Financial Architecture
+## Financial & Operational Guarantees
 
 ```text
-Telegram Customer
-       │
-       ▼
- ┌──────────────┐
- │ Wallet       │ ──► [ Reserve Funds ]
- └──────┬───────┘
-        │
-        ▼
- ┌──────────────┐      Success
- │ Rebecca API  │ ────────────────► [ Commit Wallet + Award Bonuses ]
- └──────┬───────┘
-        │ Failure / Timeout
-        ▼
- ┌──────────────┐
- │ Compensation │ ────────────────► [ Release Reserve + Audit Record ]
- └──────────────┘
+Checkout ──► [1. Reserve Wallet Funds] ──► [2. Provision on Rebecca REST API]
+                                                   │
+                         ┌─────────────────────────┴─────────────────────────┐
+                      Success                                        Failure / Timeout
+                         ▼                                                   ▼
+        [3a. Commit Ledger + Award Bonuses]                 [3b. Release Reserve + Audit Log]
 ```
 
-- **Integer Minor-Unit Math:** All currency calculations use signed 64-bit integers in minor units (no floating-point rounding errors).
-- **3-Phase Purchase Saga:** Balances are reserved prior to external API dispatch and committed only upon verified creation.
-- **Idempotent Rewards:** Referral bonuses, cashback, and promo usages are bound to unique transaction references.
-- **Encrypted Credentials:** Panel API keys and passwords are encrypted at rest using AES-256-GCM.
-- **Dual-Mode Delivery:** Outbound Long Polling by default, alongside Webhook delivery with secret token verification.
+- **64-Bit Minor-Unit Integer Accounting:** All monetary values use safe integers (`DbNumber`) with PostgreSQL check constraints (`balance >= reserved_balance`, `reserved_balance >= 0`).
+- **3-Phase Purchase & Renewal Saga:** Funds and promo redemptions are reserved before remote API dispatch and automatically compensated on network failure or reconciliation recovery.
+- **Cryptographic Fraud & Privacy Controls:** Receipts are fingerprinted via `SHA-256` and Telegram `file_unique_id`; verified phone numbers are stored strictly as `HMAC-SHA256` digests keyed from `BOT_TOKEN`.
+- **Dual-Mode Delivery:** Outbound Long Polling by default (zero open ports required) or reverse-proxied Webhook delivery with `X-Telegram-Bot-Api-Secret-Token` validation.
 
 ---
 
 ## Quick Start
 
-### Option A: Guided Interactive Installation (Recommended)
+### 1. Guided Interactive Install (Recommended)
 
-Run the bootstrap script on a clean **Ubuntu 24.04 LTS** server:
+On a clean **Ubuntu 22.04 / 24.04 LTS** server:
 
 ```bash
 git clone https://github.com/Ho3einK84/RebeccaSellBot.git
@@ -90,122 +80,78 @@ cd RebeccaSellBot
 ./install.sh
 ```
 
-The installer verifies prerequisites, installs Docker if needed, configures your instance, applies database migrations, and boots the service. Panel connections can be added immediately from `/admin` → **Rebecca panels**.
+The installer verifies Docker & Compose, generates encryption keys, provisions PostgreSQL, runs migrations, and installs the `/usr/local/bin/rsbot` CLI. Connect your Rebecca panels afterward via `/admin` → **Rebecca panels**.
 
-### Option B: Unattended 1-Command Deployment
+### 2. Unattended 1-Command Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
-  | sudo bash -s -- --instance bot1 --env-file /root/rsbot.env --non-interactive --yes
+  | sudo bash -s -- --instance main --env-file /root/rsbot.env --non-interactive --yes
 ```
 
-See [docs/deployment.md](docs/deployment.md#option-b-unattended-automated-installation) for `.env` templates and non-interactive parameters.
-
-### Option C: Server-to-Server Migration (`--from-backup`)
-
-Move an existing instance to a new server with zero data loss:
+### 3. Server-to-Server Migration (`--from-backup`)
 
 ```bash
-# 1. On source server: Create full backup bundle (.tar.gz)
+# Source server: create full snapshot (database.dump + .env + docker-compose.yml + manifest.txt)
 rsbot main backup
 
-# 2. On target server: Restore directly from backup bundle
-./install.sh --from-backup /path/to/manual_backup_main_YYYYMMDD_HHMMSS_xxxxxx.tar.gz
+# Target server: bootstrap directly from archive
+./install.sh --from-backup /path/to/manual_backup_main_YYYYMMDD_HHMMSS.tar.gz --non-interactive --yes
 ```
 
 ---
 
-## Managing Instances (`rsbot`)
-
-The global CLI utility `/usr/local/bin/rsbot` simplifies multi-instance management:
+## Instance CLI (`rsbot`)
 
 ```bash
-rsbot list                     # List all installed instances and port mappings
-rsbot <name> status            # Inspect service health and container status
-rsbot <name> logs -f           # Stream real-time structured logs
+rsbot list                        # List all instances, states, ports, and delivery modes
+rsbot <instance> status           # Container status and readiness probes
+rsbot <instance> verify           # Deep diagnostics (containers, DB, ports, /readyz)
+rsbot <instance> logs -f          # Follow structured service logs
+rsbot <instance> update           # Git pull, rebuild, migrate schema, and restart
+rsbot <instance> backup           # Create compressed 0600 backup bundle (.tar.gz)
+rsbot <instance> restore <file>   # Transactional restore with automatic rollback snapshot
 ```
 
-| Command                       | Description                                                               |
-| :---------------------------- | :------------------------------------------------------------------------ |
-| `rsbot <name> up`             | Build images, apply SQL migrations, and start containers.                 |
-| `rsbot <name> down`           | Gracefully stop containers while retaining all data volumes.              |
-| `rsbot <name> restart`        | Perform a zero-downtime service restart.                                  |
-| `rsbot <name> update`         | Pull latest Git commits, migrate schema, rebuild, and relaunch.           |
-| `rsbot <name> backup`         | Create a compressed full backup: PostgreSQL + `.env` + metadata (`0600`). |
-| `rsbot <name> restore <file>` | Validate and transactionally restore a backup with automatic rollback.    |
-
-> For the complete command reference (including `verify`, `backups`, `prune-backups`, and `uninstall`), see [docs/deployment.md](docs/deployment.md#3-instance-lifecycle-management-rsbot).
+See [docs/deployment.md](docs/deployment.md) for the complete CLI and reverse-proxy reference.
 
 ---
 
-## Core Configuration
+## Essential Environment (`.env`)
 
-The most essential environment variables configured in `.env`:
+| Variable                | Description                                                    | Default     |
+| :---------------------- | :------------------------------------------------------------- | :---------- |
+| `BOT_TOKEN`             | Telegram Bot API token from `@BotFather`.                      | _Required_  |
+| `ADMIN_IDS`             | Comma-separated initial admin Telegram user IDs.               | `123456789` |
+| `DATABASE_URL`          | PostgreSQL 16 connection string.                               | _Required_  |
+| `PANEL_CREDENTIALS_KEY` | 32–512 char key for `AES-256-GCM` panel credential encryption. | Generated   |
+| `DEFAULT_LOCALE`        | Default locale for new users (`fa` or `en`).                   | `fa`        |
+| `BOT_DELIVERY_MODE`     | Telegram update transport (`polling` or `webhook`).            | `polling`   |
+| `WEBAPP_URL`            | Public HTTPS URL enabling the Fastify + React 19 Mini App.     | —           |
 
-| Variable                | Description                                                     | Default / Example                    |
-| :---------------------- | :-------------------------------------------------------------- | :----------------------------------- |
-| `BOT_TOKEN`             | Telegram Bot API token obtained from `@BotFather`.              | _Required_                           |
-| `ADMIN_IDS`             | Comma-separated initial Telegram user IDs for admin bootstrap.  | `123456789`                          |
-| `DATABASE_URL`          | PostgreSQL connection string.                                   | `postgres://user:pass@db:5432/rsbot` |
-| `PANEL_CREDENTIALS_KEY` | 32+ character key used to encrypt panel credentials at rest.    | Generated by installer               |
-| `DEFAULT_LOCALE`        | Default language for newly registered users (`fa` or `en`).     | `fa`                                 |
-| `BOT_DELIVERY_MODE`     | Telegram delivery mode: `polling` (default) or `webhook`.       | `polling`                            |
-| `WEBAPP_URL`            | Public HTTPS URL for Telegram Mini App (optional feature flag). | `https://app.example.com`            |
-
-> For all advanced options (custom ports, webhook tokens, database pools, PaaS single-port multiplexing, and in-bot settings), see [docs/configuration.md](docs/configuration.md).
-
----
-
-## Delivery Modes & Telegram Mini App
-
-- **Long Polling Mode (Default):** Zero domain, zero open ports, and zero firewall adjustments required. Automatically clears stale webhooks on startup to prevent 409 conflicts.
-- **Webhook Mode:** Designed for reverse-proxied production environments behind Caddy or Nginx with `X-Telegram-Bot-Api-Secret-Token` verification.
-- **Telegram Mini App (Fastify + React 19):** An optional, feature-flagged web dashboard for customers and admins. In multi-instance deployments, Caddy utilizes zero-touch On-Demand TLS (`/api/caddy-check`) and internal mesh dispatching.
-
-> For complete reverse proxy configurations (Caddy, Nginx) and multi-instance mesh guides, see [docs/deployment.md](docs/deployment.md#4-delivery-modes--reverse-proxy-integration).
+See [docs/configuration.md](docs/configuration.md) for all environment variables and in-bot `/admin` settings.
 
 ---
 
 ## Development & Verification
 
 ```bash
-# Clone and install dependencies
-git clone https://github.com/Ho3einK84/RebeccaSellBot.git
-cd RebeccaSellBot
 npm ci
-
-# Configure environment & migrate database
 cp .env.example .env
-npm run db:migrate
-
-# Start with live reloading
-npm run dev
-
-# Run full quality verification pipeline
-npm run verify
+npm run dev          # Start bot + watcher in development mode
+npm run verify       # Full CI gate: architecture, typecheck, lint, format, test, build
 ```
 
-The `verify` script runs:
-
-- `npm run architecture:check` — Structural and API isolation rules.
-- `npm run typecheck` — Strict TypeScript compiler checks.
-- `npm run lint` — ESLint static analysis.
-- `npm run format:check` — Prettier code style validation.
-- `npm test` — Comprehensive Vitest test suite.
-- `npm run build` — Production TypeScript bundle and WebApp build.
-
----
-
-## Security & Operational Checklist
-
-- [x] **HTTPS Enforcement:** Rebecca panels must expose valid TLS endpoints; insecure connections are rejected.
-- [x] **Secret Redaction:** Logs automatically redact authorization tokens, card details, and sensitive receipts.
-- [x] **Outbound-Only Polling:** No exposed inbound webhook ports required; resilient against direct network scans.
-- [x] **Non-Root Execution:** Node.js processes run under an unprivileged `node` user in production Docker containers.
-- [x] **Audit Trail:** Balance alterations, card approval actions, and admin overrides are immutably logged.
+| Script                          | Check                                                                                            |
+| :------------------------------ | :----------------------------------------------------------------------------------------------- |
+| `npm run architecture:check`    | Static layer isolation and import boundary verification (`scripts/check-architecture.mjs`).      |
+| `npm run typecheck`             | Strict TypeScript checks across backend (`tsconfig.json`) and Mini App (`webapp/tsconfig.json`). |
+| `npm run lint` / `format:check` | ESLint 10 static analysis and Prettier formatting checks.                                        |
+| `npm test`                      | Vitest unit and subsystem suite (domain, infra, jobs, telegram, webapp).                         |
+| `npm run build`                 | Production Vite frontend build + esbuild backend bundle.                                         |
 
 ---
 
 ## License
 
-This project is licensed under the terms of the [MIT License](LICENSE).
+Released under the [MIT License](LICENSE).

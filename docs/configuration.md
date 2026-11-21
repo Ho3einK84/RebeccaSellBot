@@ -1,161 +1,175 @@
-# RebeccaSellBot — Configuration & Environment Reference
+# RebeccaSellBot — Configuration Reference
 
-This document details all configuration options available in **RebeccaSellBot**, covering both environment variables (`.env`) and database-persisted settings managed in-bot via the `/admin` interface.
+This reference covers all environment variables (`.env`) validated by [`src/infra/config.ts`](../src/infra/config.ts) and all runtime database settings (`settings` table) managed in-bot via `/admin` → **Settings**.
 
 ---
 
 ## 1. Environment Variables (`.env`)
 
-Environment variables configure low-level runtime options, secrets, port bindings, and networking.
+### Core Runtime
 
-### Core Bot Configuration
+| Variable         | Type      | Default       | Description                                                                                    |
+| :--------------- | :-------- | :------------ | :--------------------------------------------------------------------------------------------- |
+| `NODE_ENV`       | Enum      | `development` | Runtime mode: `production`, `development`, or `test`.                                          |
+| `BOT_TOKEN`      | String    | _Required_    | Telegram Bot API token from `@BotFather`.                                                      |
+| `ADMIN_IDS`      | CSV Ints  | `[]`          | Comma-separated positive integer Telegram user IDs used to bootstrap `bot_admins`.             |
+| `DEFAULT_LOCALE` | Enum      | `fa`          | Initial language for newly observed users (`fa` or `en`).                                      |
+| `INSTANCE_NAME`  | String    | `main`        | Alphanumeric instance identifier (`[a-z0-9_-]`) for multi-instance isolation and mesh routing. |
+| `SUPPORT_URL`    | HTTPS URL | —             | Optional support link override (`https://...`); defaults to the primary admin chat.            |
 
-| Variable         | Type   | Default       | Description                                                                                   |
-| :--------------- | :----- | :------------ | :-------------------------------------------------------------------------------------------- |
-| `NODE_ENV`       | String | `development` | Runtime environment: `production`, `development`, or `test`.                                  |
-| `BOT_TOKEN`      | String | _Required_    | Telegram Bot API token obtained from `@BotFather`.                                            |
-| `ADMIN_IDS`      | String | _Required_    | Comma-separated list of positive integer Telegram user IDs granted administrative privileges. |
-| `DEFAULT_LOCALE` | String | `fa`          | Default language for newly observed users (`fa` for Persian, `en` for English).               |
-| `SUPPORT_URL`    | String | First Admin   | Optional customer support link (e.g. `https://t.me/your_support` or external helpdesk URL).   |
-| `INSTANCE_NAME`  | String | `main`        | Alphanumeric identifier for this bot instance, used in multi-instance directories and logs.   |
+### Database & Encryption
 
----
+| Variable                | Type    | Default            | Description                                                                            |
+| :---------------------- | :------ | :----------------- | :------------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | URI     | _Required_         | PostgreSQL 16 connection URI (`postgres://user:pass@host:5432/dbname`).                |
+| `DATABASE_POOL_SIZE`    | Integer | `20`               | Maximum concurrent PostgreSQL pool connections (`1–100`).                              |
+| `PANEL_CREDENTIALS_KEY` | Secret  | _Required in prod_ | `32–512` character key used for `AES-256-GCM` encryption of panel credentials at rest. |
 
-### Database Configuration
+### Telegram Delivery & Webhooks
 
-| Variable             | Type    | Default    | Description                                                                               |
-| :------------------- | :------ | :--------- | :---------------------------------------------------------------------------------------- |
-| `DATABASE_URL`       | String  | _Required_ | PostgreSQL connection URI (`postgres://user:password@host:5432/dbname`).                  |
-| `DATABASE_POOL_SIZE` | Integer | `20`       | Maximum number of concurrent connections in the PostgreSQL client pool (range: 1 to 100). |
-
----
-
-### Security & Credential Vault
-
-| Variable                | Type   | Default     | Description                                                                                                                      |
-| :---------------------- | :----- | :---------- | :------------------------------------------------------------------------------------------------------------------------------- |
-| `PANEL_CREDENTIALS_KEY` | String | _Generated_ | 32–512 character secret key used for AES-256-GCM encryption of panel credentials stored in the database. Required in production. |
-
----
-
-### Legacy Bootstrap Panel Variables (Optional)
-
-> [!NOTE]
-> In RebeccaSellBot v0.2+, multiple Rebecca panels can be connected and configured interactively via `/admin` → **Rebecca panels**. The following variables are used only for legacy single-panel bootstrap on fresh installations:
-
-| Variable                 | Type    | Default | Description                                                                   |
-| :----------------------- | :------ | :------ | :---------------------------------------------------------------------------- |
-| `REBECCA_API_URL`        | String  | —       | HTTPS origin of the initial Rebecca panel (e.g. `https://panel.example.com`). |
-| `REBECCA_API_KEY`        | String  | —       | Initial Rebecca panel API key.                                                |
-| `REBECCA_ADMIN_USERNAME` | String  | `admin` | Panel administrator username.                                                 |
-| `REBECCA_ADMIN_PASSWORD` | String  | —       | Panel administrator password.                                                 |
-| `REBECCA_SERVICE_ID`     | Integer | `1`     | Rebecca panel service ID.                                                     |
-
----
-
-### Telegram Delivery & Webhook Mode
-
-| Variable               | Type    | Default     | Description                                                                           |
-| :--------------------- | :------ | :---------- | :------------------------------------------------------------------------------------ |
-| `BOT_DELIVERY_MODE`    | String  | `polling`   | Update delivery mode: `polling` (outbound long polling) or `webhook`.                 |
-| `WEBHOOK_URL`          | String  | —           | Public HTTPS URL registered with Telegram. Required when `BOT_DELIVERY_MODE=webhook`. |
-| `WEBHOOK_SECRET_TOKEN` | String  | —           | 32+ char secret string verifying incoming `X-Telegram-Bot-Api-Secret-Token` headers.  |
-| `WEBHOOK_PORT`         | Integer | `3000`      | Internal container port on which the Fastify webhook HTTP listener binds.             |
-| `WEBHOOK_HOST_PORT`    | Integer | `3000`      | Published host port bound in Docker Compose for reverse proxy forwarding.             |
-| `WEBHOOK_PATH`         | String  | `/webhook`  | Request path for incoming Telegram updates (defaults to pathname from `WEBHOOK_URL`). |
-| `WEBHOOK_HOST`         | String  | `0.0.0.0`   | Internal listening interface for the webhook HTTP server.                             |
-| `WEBHOOK_BIND_HOST`    | String  | `127.0.0.1` | Host IP interface to which the published webhook container port binds.                |
-
----
+| Variable               | Type      | Default     | Description                                                                                     |
+| :--------------------- | :-------- | :---------- | :---------------------------------------------------------------------------------------------- |
+| `BOT_DELIVERY_MODE`    | Enum      | `polling`   | `polling` (outbound long polling) or `webhook` (defaults to `webhook` if `WEBHOOK_URL` is set). |
+| `WEBHOOK_URL`          | HTTPS URL | —           | Public HTTPS webhook endpoint registered with Telegram (required in `webhook` mode).            |
+| `WEBHOOK_SECRET_TOKEN` | Secret    | —           | `1–256` char `[A-Za-z0-9_-]` secret verified against `X-Telegram-Bot-Api-Secret-Token`.         |
+| `WEBHOOK_PORT`         | Port      | `3000`      | Internal container port for the webhook HTTP listener.                                          |
+| `WEBHOOK_HOST_PORT`    | Port      | `3000`      | Published Docker Compose host port for reverse proxy forwarding.                                |
+| `WEBHOOK_PATH`         | Path      | `/webhook`  | HTTP path for Telegram updates (auto-derived from `WEBHOOK_URL` pathname if omitted).           |
+| `WEBHOOK_HOST`         | Host      | `0.0.0.0`   | Internal bind address for the webhook HTTP server.                                              |
+| `WEBHOOK_BIND_HOST`    | IP        | `127.0.0.1` | Host interface bound by Docker Compose for `WEBHOOK_HOST_PORT`.                                 |
 
 ### Inbound Rebecca Panel Webhooks
 
-| Variable                 | Type   | Default                | Description                                                                                        |
-| :----------------------- | :----- | :--------------------- | :------------------------------------------------------------------------------------------------- |
-| `REBECCA_WEBHOOK_SECRET` | String | —                      | Shared secret verified against incoming `x-webhook-secret` headers via timing-safe comparison.     |
-| `REBECCA_WEBHOOK_PATH`   | String | `/api/rebecca-webhook` | Endpoint path where Rebecca panel push events (`user_limited`, `user_expired`, etc.) are received. |
+| Variable                 | Type   | Default                | Description                                                                                                                       |
+| :----------------------- | :----- | :--------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `REBECCA_WEBHOOK_SECRET` | Secret | —                      | Shared secret verified via constant-time comparison against `x-webhook-secret`.                                                   |
+| `REBECCA_WEBHOOK_PATH`   | Path   | `/api/rebecca-webhook` | POST endpoint receiving real-time panel events (`user_limited`, `user_expired`, `user_disabled`, `user_enabled`, `user_deleted`). |
+
+### Telegram Mini App & Multi-Instance Mesh
+
+| Variable               | Type      | Default                        | Description                                                                                                |
+| :--------------------- | :-------- | :----------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| `WEBAPP_URL`           | HTTPS URL | —                              | Public HTTPS origin for the Telegram Mini App. Enables the Fastify + React 19 WebApp server on boot.       |
+| `ADMIN_SESSION_SECRET` | Secret    | —                              | `32+` char secret signing HTTP-only admin JWT cookies (required when `WEBAPP_URL` is set).                 |
+| `WEBAPP_PORT`          | Port      | `3002`                         | Internal container port for the Fastify WebApp server.                                                     |
+| `WEBAPP_HOST_PORT`     | Port      | `3002`                         | Published Docker Compose host port for Mini App traffic.                                                   |
+| `WEBAPP_HOST`          | Host      | `0.0.0.0`                      | Internal bind address for the Fastify WebApp server.                                                       |
+| `WEBAPP_BIND_HOST`     | IP        | `127.0.0.1`                    | Host interface bound by Docker Compose for `WEBAPP_HOST_PORT`.                                             |
+| `REGISTRY_DIR`         | Path      | `/app/data/registry`           | Shared volume directory storing active instance domain mappings for Caddy On-Demand TLS and mesh proxying. |
+| `WEBAPP_TARGET_URL`    | URL       | `http://<instance>_bot:<port>` | Optional upstream URL override advertised in the shared mesh registry.                                     |
+
+### Health Checks & Legacy Single-Panel Bootstrap
+
+| Variable                 | Type      | Default | Description                                                                                                |
+| :----------------------- | :-------- | :------ | :--------------------------------------------------------------------------------------------------------- |
+| `HEALTH_CHECK_PORT`      | Port      | `3001`  | Internal HTTP port serving `/health`, `/healthz`, `/ready`, `/readyz`, and fallback Rebecca webhooks.      |
+| `PORT`                   | Port      | —       | Optional unified port override for single-port PaaS environments (multiplexes health checks and webhooks). |
+| `REBECCA_API_URL`        | HTTPS URL | —       | _Optional legacy bootstrap:_ Initial panel HTTPS origin (use `/admin` → **Rebecca panels** instead).       |
+| `REBECCA_API_KEY`        | Secret    | —       | _Optional legacy bootstrap:_ Initial panel API key.                                                        |
+| `REBECCA_ADMIN_USERNAME` | String    | `admin` | _Optional legacy bootstrap:_ Initial panel admin username.                                                 |
+| `REBECCA_ADMIN_PASSWORD` | Secret    | —       | _Optional legacy bootstrap:_ Initial panel admin password.                                                 |
+| `REBECCA_SERVICE_ID`     | Integer   | `1`     | _Optional legacy bootstrap:_ Initial panel default service ID.                                             |
 
 ---
 
-### Telegram Mini App (Optional Feature)
+## 2. In-Bot Runtime Settings (`/admin` → Settings)
 
-| Variable               | Type    | Default              | Description                                                                                              |
-| :--------------------- | :------ | :------------------- | :------------------------------------------------------------------------------------------------------- |
-| `WEBAPP_URL`           | String  | —                    | Public HTTPS URL for the Telegram Mini App dashboard. Setting this enables the WebApp feature flag.      |
-| `WEBAPP_PORT`          | Integer | `3002`               | Internal container port for the Fastify WebApp server.                                                   |
-| `WEBAPP_HOST_PORT`     | Integer | `3002`               | Published host port bound in Docker Compose for WebApp reverse proxy forwarding.                         |
-| `WEBAPP_HOST`          | String  | `0.0.0.0`            | Internal listening interface for the Fastify WebApp server.                                              |
-| `WEBAPP_BIND_HOST`     | String  | `127.0.0.1`          | Host IP interface to which the published WebApp container port binds.                                    |
-| `ADMIN_SESSION_SECRET` | String  | —                    | 32+ character secret for signing WebApp admin JWT authentication cookies.                                |
-| `REGISTRY_DIR`         | String  | `/app/data/registry` | Path to shared multi-instance domain registry directory used for automated reverse proxy mesh discovery. |
-| `WEBAPP_TARGET_URL`    | String  | —                    | Optional target URL override for mesh dispatching.                                                       |
+Runtime settings are persisted in the PostgreSQL `settings` table ([`TranslationCatalog.ts`](../src/domain/services/TranslationCatalog.ts) & [`FeatureSettings.ts`](../src/domain/services/FeatureSettings.ts)) and take effect immediately without restarting containers.
 
----
+### System, Language & Mini App (`system`)
 
-### Health Probes & Single-Port PaaS Hosting
+| Key                          | Default   | Description                                                                          |
+| :--------------------------- | :-------- | :----------------------------------------------------------------------------------- |
+| `bot_enabled`                | `'true'`  | Enables customer access. When `'false'`, non-admin users see the maintenance screen. |
+| `language_selection_enabled` | `'true'`  | Allows users to switch between Persian (`fa`) and English (`en`).                    |
+| `default_locale`             | `'fa'`    | Fallback locale (`'fa'` or `'en'`) for users without an explicit preference.         |
+| `webapp_enabled`             | `'false'` | Dynamically starts/stops the Mini App server and toggles the WebApp launch button.   |
+| `webapp_url`                 | `''`      | Public HTTPS URL registered in the multi-instance mesh registry when enabled in-bot. |
+| `require_phone_for_purchase` | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before paid checkouts. |
+| `phone_verify_iran_only`     | `'true'`  | Restricts phone verification to Iranian (`+98`) mobile numbers.                      |
 
-| Variable            | Type    | Default | Description                                                                                                                   |
-| :------------------ | :------ | :------ | :---------------------------------------------------------------------------------------------------------------------------- |
-| `HEALTH_CHECK_PORT` | Integer | `3001`  | Internal HTTP port for `/health`, `/healthz`, `/ready`, `/readyz` probes.                                                     |
-| `PORT`              | Integer | —       | Dynamic port override injected by PaaS providers. Automatically multiplexes health checks and webhooks onto this single port. |
+### Pricing, Lifecycle & Thresholds (`pricing`)
 
----
+| Key                        | Default         | Description                                                                                                              |
+| :------------------------- | :-------------- | :----------------------------------------------------------------------------------------------------------------------- |
+| `packages_json`            | 4 starter plans | JSON array of fixed packages (`id`, `name`, `gbAmount`, `durationDays`, `price`, `categoryId`, `panelId`, `serviceId`).  |
+| `package_display_mode`     | `'specs'`       | Storefront package button label style.                                                                                   |
+| `on_hold_default_enabled`  | `'false'`       | Provisions new purchases in Rebecca `on_hold` mode (validity starts on first connection).                                |
+| `renewal_rollover_enabled` | `'true'`        | Carries remaining traffic quota and validity days over into renewed subscriptions.                                       |
+| `low_traffic_threshold_gb` | `'2'`           | Remaining quota threshold (GB) that triggers an automated low-traffic notification.                                      |
+| `expiry_warning_days`      | `'3'`           | Days before expiration that triggers an automated near-expiry notification.                                              |
+| `refund_window_hours`      | `'0'`           | Hours after purchase during which an unused subscription (`0` traffic) can be self-refunded (`0` disables self-refunds). |
 
-## 2. In-Bot Database Settings (`/admin` → Settings)
+### Custom-Volume Plans (`custom_volume`)
 
-Unlike environment variables, database settings are stored in PostgreSQL (`settings` table) and can be modified at runtime directly from Telegram or the WebApp without restarting the bot.
+| Key                               | Default         | Description                                                                |
+| :-------------------------------- | :-------------- | :------------------------------------------------------------------------- |
+| `custom_volume_enabled`           | `'true'`        | Enables custom GB/duration ordering and renewal flows.                     |
+| `price_per_gb`                    | `'5000'`        | Base price per GB in minor units (Tomans).                                 |
+| `price_per_day`                   | `'0'`           | Optional base price per day in minor units.                                |
+| `custom_default_days`             | `'30'`          | Default duration (days) applied to custom-volume plans.                    |
+| `custom_min_gb` / `custom_max_gb` | `'5'` / `'500'` | Minimum and maximum selectable traffic (GB) for custom plans.              |
+| `volume_pricing_tiers_json`       | `'[]'`          | Tiered per-GB pricing breakpoints JSON.                                    |
+| `custom_price_overrides_json`     | `'[]'`          | Exact GB/day price override rules JSON.                                    |
+| `custom_volume_target_json`       | `'{}'`          | Target Rebecca `panelId` and `serviceId` binding for custom-volume orders. |
 
-### 1. General & Maintenance
+### Payments, Multi-Card & Receipt Security (`payment`)
 
-- **`bot_enabled` (boolean):** Toggles public access to customer features. When set to `false`, non-admin users receive the maintenance notice.
-- **`maintenance_reason` (string):** Optional custom notice explaining the ongoing maintenance or expected return time.
+| Key                                     | Default                  | Description                                                                                                      |
+| :-------------------------------------- | :----------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| `card_number`                           | `'6037997900000000'`     | Primary/fallback 16-digit bank card number for card-to-card top-ups.                                             |
+| `card_holder`                           | `'Name'`                 | Cardholder name displayed alongside `card_number`.                                                               |
+| `bank_cards_json`                       | `'[]'`                   | Multi-card rotation pool (`[{ id, cardNumber, cardHolder, enabled, dailyCapToman }]`).                           |
+| `topup_min_amount` / `topup_max_amount` | `'10000'` / `'10000000'` | Minimum and maximum wallet top-up bounds in Tomans.                                                              |
+| `receipt_duplicate_policy`              | `'warn'`                 | Action on duplicate receipt (`SHA-256` or `file_unique_id` match): `'warn'` (flag banner) or `'block'` (reject). |
+| `wallet_transfer_enabled`               | `'true'`                 | Enables peer-to-peer wallet balance transfers between users.                                                     |
+| `wallet_transfer_min_amount`            | `'5000'`                 | Minimum peer-to-peer balance transfer amount in Tomans.                                                          |
+| `receipt_notify_enabled`                | `'true'`                 | Sends instant Telegram notifications to admins when a receipt is submitted.                                      |
+| `receipt_notify_mode`                   | `'full'`                 | Admin notification format (`'full'` media card or compact alert).                                                |
+| `receipt_notify_admins`                 | `''`                     | Optional subset of admin Telegram IDs to receive receipt alerts (empty = all admins).                            |
 
-### 2. Pricing, Packages & Categories
+### Free Trial (`trial`)
 
-- **Packages CRUD:** Create, update, or remove subscription plans with custom name, traffic limit (GB), duration (days), price (Tomans), and assigned Rebecca panel.
-- **Package Categories:** Group packages into logical categories (e.g. "Standard German", "High-Speed VIP", "Gaming Ping-Optimized").
-- **Custom Volume Plans:** Enable or disable flexible ordering where customers choose custom GB and duration based on per-GB and per-day base rates.
+| Key                       | Default   | Description                                                             |
+| :------------------------ | :-------- | :---------------------------------------------------------------------- |
+| `trial_enabled`           | `'true'`  | Enables one-time free trial claims for new users.                       |
+| `trial_gb`                | `'1'`     | Traffic quota (GB) allocated to trial subscriptions.                    |
+| `trial_days`              | `'3'`     | Validity duration (days) allocated to trial subscriptions.              |
+| `require_phone_for_trial` | `'false'` | Requires `HMAC-SHA256` phone verification before claiming a free trial. |
 
-### 3. Free Trial Configurations
+### Service Naming (`naming`)
 
-- **`trial_enabled` (boolean):** Enable or disable one-time free trials for new customers.
-- **`trial_traffic_gb` (integer):** Traffic limit granted to trial accounts (e.g. 1 GB).
-- **`trial_duration_days` (integer):** Expiry duration for trial accounts (e.g. 1 day).
-- **`trial_panel_id` (string):** Target Rebecca panel dedicated to provisioning trial accounts.
+| Key                           | Default                              | Description                                                                                   |
+| :---------------------------- | :----------------------------------- | :-------------------------------------------------------------------------------------------- |
+| `naming_mode`                 | `'custom'`                           | Username generation strategy (`'prefix_number'`, `'random'`, `'custom'`, etc.).               |
+| `naming_prefix`               | `'rebecca'`                          | Prefix token (`{prefix}`) injected into generated panel usernames.                            |
+| `custom_naming_template`      | `'{prefix}_{telegram_id}_{counter}'` | Pattern for generated usernames.                                                              |
+| `custom_service_name_enabled` | `'false'`                            | Prompts buyers to choose a custom English username (or skip for auto-generation) at checkout. |
 
-### 4. Lucky Wheel Gamification
+### Retention & Expired Cleanup (`retention`)
 
-- **`lucky_wheel_enabled` (boolean):** Toggles the gamified daily spin wheel.
-- **`lucky_wheel_cooldown_hours` (integer):** Minimum wait time between free spins (default: 24 hours).
-- **Reward Tiers & Odds:** Configurable weighted prize tables (wallet credit, discount percentage, extra days, or "try again").
+| Key                          | Default   | Description                                                                                            |
+| :--------------------------- | :-------- | :----------------------------------------------------------------------------------------------------- |
+| `first_use_nudge_enabled`    | `'true'`  | Sends a one-time connection guide 24–72h after purchase if live traffic is still `0`.                  |
+| `expired_cleanup_enabled`    | `'false'` | Enables automated staged cleanup of long-expired subscriptions.                                        |
+| `expired_cleanup_grace_days` | `'14'`    | Days after expiration (`1–365`) before an unrenewed expired service is deleted.                        |
+| `expired_cleanup_warn_days`  | `'3,1'`   | Comma-separated warning thresholds (`firstWarn,lastWarn` days before deletion).                        |
+| `expired_cleanup_enabled_at` | `''`      | ISO timestamp auto-stamped when cleanup is toggled ON (safety floor for pre-existing expired configs). |
 
-### 5. Card-to-Card Payment Rules
+### Referral, Lucky Wheel, Support & Backups (`referral`, `lucky_wheel`, `support`, `backup`)
 
-- **`card_number` (string):** Bank card number displayed on checkout for manual top-ups.
-- **`card_holder` (string):** Name of the cardholder displayed alongside the card number.
-- **`min_topup_amount` (DbNumber):** Minimum allowable wallet top-up in Tomans.
-- **`max_topup_amount` (DbNumber):** Maximum allowable wallet top-up in Tomans.
-
-### 6. Referral & Cashback Loyalty
-
-- **`referral_bonus_toman` (DbNumber):** One-time wallet credit awarded to the inviter upon successful invitee registration.
-- **`referral_cashback_percent` (integer):** Lifetime percentage of purchases awarded to the inviter whenever their referrals purchase a plan.
-
-### 7. Automated Backups
-
-- **`backup_interval_hours` (integer):** Interval between automated background database snapshots (e.g. 24 hours).
-- **`backup_send_to_admin` (boolean):** When enabled, automatically delivers the compressed `.tar.gz` backup file directly to the primary admin in Telegram.
-
-### 8. Telegram Mini App
-
-- **`webapp_enabled` (boolean):** Toggles the WebApp button in the Telegram user portal.
-- **`webapp_url` (string):** Domain/URL where the Mini App is served.
-
-### 9. Dynamic Naming & Config Templates
-
-- **`username_prefix` (string):** Prefix applied when provisioning usernames on Rebecca panels (e.g. `usr_`).
-- **`config_name_template` (string):** Format string for the customer-visible subscription label.
-
-### 10. Localization & Text Customization
-
-- Custom Persian and English overrides for core messages, purchase confirmation dialogues, and help texts.
+| Key                                       | Default              | Description                                                                            |
+| :---------------------------------------- | :------------------- | :------------------------------------------------------------------------------------- |
+| `referral_bonus_toman`                    | `'10000'`            | Fixed bonus (Tomans) credited when a referred user completes their first purchase.     |
+| `cashback_percent`                        | `'5'`                | Percentage (`0–100`) of purchase amounts credited to the referrer.                     |
+| `lucky_wheel_enabled`                     | `'true'`             | Enables the gamified Lucky Wheel feature.                                              |
+| `lucky_wheel_min_amount` / `max_amount`   | `'1000'` / `'50000'` | Minimum and maximum wallet credit reward bounds on a winning spin.                     |
+| `lucky_wheel_base_luck_percent`           | `'50'`               | Base win probability (`1–100%`) on the first spin.                                     |
+| `lucky_wheel_decay_percent`               | `'10'`               | Win probability reduction (`0–100%`) per subsequent spin.                              |
+| `lucky_wheel_cooldown_hours`              | `'24'`               | Hours between spins (`1–720`).                                                         |
+| `lucky_wheel_max_spins`                   | `'5'`                | Maximum total spins allowed per user (`1–1000`).                                       |
+| `support_enabled` / `support_destination` | `'true'` / `''`      | Toggles the support button and sets the target `@username` or `https://t.me/...` link. |
+| `backup_enabled`                          | `'false'`            | Enables scheduled PostgreSQL + `.env` snapshot delivery via Telegram.                  |
+| `backup_interval_hours`                   | `'24'`               | Hours between automated backups (`1–720`).                                             |
+| `backup_target_chat_id`                   | `''`                 | Destination Telegram chat ID, supergroup ID, or `@channel` for backup archives.        |
+| `backup_include_env`                      | `'true'`             | Includes `.env` inside automated backup bundles.                                       |
