@@ -24,10 +24,12 @@ export async function adminTrialSettingsConversation(
         isEnabled: ts.getSettingBool('trial_enabled', true),
         trialGb: ts.getSettingNum('trial_gb', 1),
         trialDays: ts.getSettingNum('trial_days', 3),
+        requirePhone: ts.getSettingBool('require_phone_for_trial', false),
+        iranOnlyPhone: ts.getSettingBool('phone_verify_iran_only', true),
       };
     });
     if (!state) return;
-    const { isEnabled, trialGb, trialDays } = state;
+    const { isEnabled, trialGb, trialDays, requirePhone, iranOnlyPhone } = state;
 
     const onBadge = t(activeCtx, 'admin_overview_active');
     const offBadge = t(activeCtx, 'admin_overview_inactive');
@@ -54,6 +56,14 @@ export async function adminTrialSettingsConversation(
               label: t(activeCtx, 'admin_setting_trial_days'),
               value: `${localizedNumber(trialDays, activeCtx)} ${t(activeCtx, 'days_unit')}`,
             },
+            {
+              label: t(activeCtx, 'admin_setting_require_phone_for_trial'),
+              value: requirePhone ? onBadge : offBadge,
+            },
+            {
+              label: t(activeCtx, 'admin_setting_phone_verify_iran_only'),
+              value: iranOnlyPhone ? onBadge : offBadge,
+            },
           ],
         },
       ],
@@ -69,6 +79,16 @@ export async function adminTrialSettingsConversation(
       .text(t(activeCtx, 'admin_setting_trial_gb'), 'trial:edit:trial_gb')
       .row()
       .text(t(activeCtx, 'admin_setting_trial_days'), 'trial:edit:trial_days')
+      .row()
+      .text(
+        `${t(activeCtx, 'admin_setting_require_phone_for_trial')}: ${requirePhone ? onBadge : offBadge}`,
+        'trial:toggle:phone'
+      )
+      .row()
+      .text(
+        `${t(activeCtx, 'admin_setting_phone_verify_iran_only')}: ${iranOnlyPhone ? onBadge : offBadge}`,
+        'trial:toggle:iran_only'
+      )
       .row()
       .text(t(activeCtx, 'admin_menu_back_to_sales'), 'trial:back');
 
@@ -90,6 +110,30 @@ export async function adminTrialSettingsConversation(
       await conversation.external(async (outsideCtx) => {
         if (!outsideCtx.services) return;
         await outsideCtx.services.translationService.updateSetting('trial_enabled', nextVal);
+      });
+      continue;
+    }
+
+    if (input.data === 'trial:toggle:phone') {
+      const nextVal = (!requirePhone).toString();
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting(
+          'require_phone_for_trial',
+          nextVal
+        );
+      });
+      continue;
+    }
+
+    if (input.data === 'trial:toggle:iran_only') {
+      const nextVal = (!iranOnlyPhone).toString();
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting(
+          'phone_verify_iran_only',
+          nextVal
+        );
       });
       continue;
     }

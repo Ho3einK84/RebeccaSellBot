@@ -101,3 +101,122 @@ export function customServiceNameEnabled(settings: SettingReader): boolean {
   const value = settings.getSetting('custom_service_name_enabled', 'false').trim().toLowerCase();
   return value === 'true' || value === '1';
 }
+
+export type ReceiptDuplicatePolicy = 'warn' | 'block';
+
+/**
+ * Policy when a submitted top-up receipt matches an existing receipt's
+ * Telegram file_unique_id or SHA-256 hash. Defaults to `'warn'`.
+ */
+export function receiptDuplicatePolicy(settings: SettingReader): ReceiptDuplicatePolicy {
+  const value = settings.getSetting('receipt_duplicate_policy', 'warn').trim().toLowerCase();
+  return value === 'block' ? 'block' : 'warn';
+}
+
+/**
+ * Whether users must verify their phone number (stored only as HMAC-SHA256
+ * hash) before claiming a free trial. Disabled by default.
+ */
+export function requirePhoneForTrial(settings: SettingReader): boolean {
+  const value = settings.getSetting('require_phone_for_trial', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
+/**
+ * Whether users must verify their phone number (stored only as HMAC-SHA256
+ * hash) before completing a paid purchase. Disabled by default.
+ */
+export function requirePhoneForPurchase(settings: SettingReader): boolean {
+  const value = settings.getSetting('require_phone_for_purchase', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
+/**
+ * Whether phone verification is restricted to Iranian (+98) mobile numbers.
+ * Enabled by default.
+ */
+export function phoneVerifyIranOnly(settings: SettingReader): boolean {
+  const value = settings.getSetting('phone_verify_iran_only', 'true').trim().toLowerCase();
+  return value !== 'false' && value !== '0';
+}
+
+/**
+ * Whether the 24-hour first-use connection guide nudge is enabled for newly
+ * provisioned services with zero traffic. Enabled by default.
+ */
+export function firstUseNudgeEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('first_use_nudge_enabled', 'true').trim().toLowerCase();
+  return value !== 'false' && value !== '0';
+}
+
+/**
+ * Whether automatic cleanup of long-expired services is enabled.
+ * Disabled by default until explicitly enabled by an administrator.
+ */
+export function expiredCleanupEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('expired_cleanup_enabled', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
+/**
+ * Grace period (in days after expiration) before an expired service is removed
+ * by the cleanup worker.
+ */
+export function expiredCleanupGraceDays(settings: SettingReader, fallback = 14): number {
+  const raw = settings.getSetting('expired_cleanup_grace_days', String(fallback)).trim();
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 365 ? parsed : fallback;
+}
+
+export interface ExpiredCleanupWarnDays {
+  firstWarnDays: number;
+  lastWarnDays: number;
+}
+
+const DEFAULT_EXPIRED_CLEANUP_WARN_DAYS: ExpiredCleanupWarnDays = {
+  firstWarnDays: 3,
+  lastWarnDays: 1,
+};
+
+function normalizeDigits(value: string): string {
+  return value
+    .replace(/[۰-۹]/gu, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660));
+}
+
+/**
+ * Warning thresholds (days remaining before automatic expired-service deletion)
+ * parsed from `expired_cleanup_warn_days` (e.g. `'3,1'`). Enforces
+ * `firstWarnDays > lastWarnDays >= 1` and falls back to `{ firstWarnDays: 3, lastWarnDays: 1 }`.
+ */
+export function expiredCleanupWarnDays(settings: SettingReader): ExpiredCleanupWarnDays {
+  const raw = normalizeDigits(settings.getSetting('expired_cleanup_warn_days', '3,1')).trim();
+  const parts = raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length !== 2) return { ...DEFAULT_EXPIRED_CLEANUP_WARN_DAYS };
+  const firstWarnDays = Number(parts[0]);
+  const lastWarnDays = Number(parts[1]);
+  if (
+    !Number.isSafeInteger(firstWarnDays) ||
+    !Number.isSafeInteger(lastWarnDays) ||
+    lastWarnDays < 1 ||
+    firstWarnDays <= lastWarnDays ||
+    firstWarnDays > 365
+  ) {
+    return { ...DEFAULT_EXPIRED_CLEANUP_WARN_DAYS };
+  }
+  return { firstWarnDays, lastWarnDays };
+}
+
+/**
+ * Timestamp when expired-service cleanup was enabled (used as a safety floor so
+ * pre-existing expired services receive a full grace window before deletion).
+ */
+export function expiredCleanupEnabledAt(settings: SettingReader): Date | null {
+  const raw = settings.getSetting('expired_cleanup_enabled_at', '').trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}

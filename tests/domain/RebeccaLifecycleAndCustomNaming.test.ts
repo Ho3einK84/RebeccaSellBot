@@ -77,7 +77,7 @@ function makeRemoteUser(overrides: Partial<RebeccaUserDetail> = {}): RebeccaUser
   };
 }
 
-describe('Phase 1: Native Rebecca Panel Features & Purchase/Renewal Lifecycle', () => {
+describe('Native Rebecca Panel Features & Purchase/Renewal Lifecycle', () => {
   const getDbMock = vi.mocked(getDb);
   const getPoolMock = vi.mocked(getPool);
 

@@ -28,6 +28,8 @@ import type { PaymentService } from '../domain/services/PaymentService.js';
 import type { BackupService } from '../domain/services/BackupService.js';
 import type { LuckyWheelService } from '../domain/services/LuckyWheelService.js';
 import type { DomainRegistryService } from '../domain/services/DomainRegistryService.js';
+import type { CatalogDiscountService } from '../domain/services/CatalogDiscountService.js';
+import type { ContactVerificationService } from '../domain/services/ContactVerificationService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
@@ -90,6 +92,8 @@ export interface SessionData {
   activeShopCategory?: string;
   /** Package waiting for optional custom service name selection before checkout confirmation. */
   pendingCustomNamePurchase?: { packageId: string };
+  /** Post-verification destination so users can smoothly continue after phone verification. */
+  phoneVerifyReturnAction?: 'trial' | 'shop' | 'custom_amount' | 'main';
   [key: string]: unknown;
 }
 
@@ -113,6 +117,10 @@ export type BotServices = {
   broadcastService: BroadcastService;
   backupService: BackupService;
   luckyWheelService: LuckyWheelService;
+  /** Optional timed catalog discounts / flash sales service. */
+  catalogDiscountService?: CatalogDiscountService;
+  /** Optional HMAC-SHA256 Telegram phone verification service. */
+  contactVerificationService?: ContactVerificationService;
   /** Telegram bot username (e.g. "RebeccaSellBot") from bot.botInfo, for deep links. */
   botUsername?: string;
   /** Optional Telegram-compatible support destination rendered as a URL button. */

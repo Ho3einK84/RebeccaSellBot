@@ -1,4 +1,10 @@
 import type { TranslationService } from './TranslationService.js';
+import {
+  resolveBestCatalogDiscount,
+  safeListActiveDiscounts,
+  type CatalogDiscountRule,
+  type CatalogDiscountService,
+} from './CatalogDiscountService.js';
 
 export interface PackageOption {
   id: string;
@@ -27,6 +33,68 @@ export interface CustomPriceQuote {
   pricePerDay: number;
   tierId?: string;
   overrideId?: string;
+}
+
+export interface DiscountedPackageOption extends PackageOption {
+  originalPrice: number;
+  effectivePrice: number;
+  discountAmount: number;
+  activeDiscountId: string | null;
+  activeDiscountTitle: string | null;
+  discountExpiresAt: Date | null;
+}
+
+export interface DiscountedCustomPriceQuote extends CustomPriceQuote {
+  originalPrice: number;
+  effectivePrice: number;
+  discountAmount: number;
+  activeDiscountId: string | null;
+  activeDiscountTitle: string | null;
+  discountExpiresAt: Date | null;
+}
+
+/**
+ * Format the remaining duration of a flash sale / catalog discount in `fa` or `en`.
+ */
+export function formatRemainingDiscountDuration(
+  expiresAt: Date | null | undefined,
+  locale: 'fa' | 'en' = 'fa',
+  now = new Date()
+): string {
+  if (!expiresAt) {
+    return locale === 'fa' ? 'محدود' : 'Limited time';
+  }
+  const diffMs = expiresAt.getTime() - now.getTime();
+  if (!Number.isFinite(diffMs) || diffMs <= 0) {
+    return locale === 'fa' ? 'پایان یافته' : 'Ended';
+  }
+
+  const totalMinutes = Math.max(1, Math.ceil(diffMs / 60_000));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  const numLocale = locale === 'fa' ? 'fa-IR' : 'en-US';
+
+  if (days > 0) {
+    const d = days.toLocaleString(numLocale);
+    const h = hours.toLocaleString(numLocale);
+    if (locale === 'fa') {
+      return hours > 0 ? `${d} روز و ${h} ساعت` : `${d} روز`;
+    }
+    return hours > 0 ? `${d}d ${h}h` : `${d}d`;
+  }
+
+  if (hours > 0) {
+    const h = hours.toLocaleString(numLocale);
+    const m = minutes.toLocaleString(numLocale);
+    if (locale === 'fa') {
+      return minutes > 0 ? `${h} ساعت و ${m} دقیقه` : `${h} ساعت`;
+    }
+    return minutes > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+
+  const m = minutes.toLocaleString(numLocale);
+  return locale === 'fa' ? `${m} دقیقه` : `${m}m`;
 }
 
 export interface VolumePricingTier {
@@ -237,6 +305,104 @@ export class PricingService {
   /** Backward-compatible total-price API for existing bot entry points. */
   calculateCustomPrice(gbAmount: number, durationDays = 30): number {
     return this.getCustomPriceQuote(gbAmount, durationDays).totalPrice;
+  }
+
+  /**
+   * Resolve catalog-discount-aware pricing for a single package using preloaded active discounts.
+   */
+  resolvePackagePrice(
+    pkg: PackageOption,
+    activeDiscounts: readonly CatalogDiscountRule[] = [],
+    now = new Date()
+  ): DiscountedPackageOption {
+    const resolved = resolveBestCatalogDiscount(
+      activeDiscounts,
+      {
+        packageId: pkg.id,
+        categoryId: pkg.categoryId ?? null,
+        originalPrice: pkg.price,
+      },
+      now
+    );
+
+    return {
+      ...pkg,
+      originalPrice: resolved.originalPrice,
+      effectivePrice: resolved.effectivePrice,
+      discountAmount: resolved.discountAmount,
+      activeDiscountId: resolved.activeDiscountId,
+      activeDiscountTitle: resolved.activeDiscountTitle,
+      discountExpiresAt: resolved.discountExpiresAt,
+    };
+  }
+
+  /**
+   * Resolve catalog-discount-aware pricing for custom volume using preloaded active discounts.
+   */
+  resolveCustomPriceWithDiscount(
+    gbAmount: number,
+    durationDays: number,
+    activeDiscounts: readonly CatalogDiscountRule[] = [],
+    now = new Date()
+  ): DiscountedCustomPriceQuote {
+    const base = this.getCustomPriceQuote(gbAmount, durationDays);
+    const resolved = resolveBestCatalogDiscount(
+      activeDiscounts,
+      {
+        packageId: `custom_${gbAmount}gb_${durationDays}d`,
+        categoryId: null,
+        originalPrice: base.totalPrice,
+      },
+      now
+    );
+
+    return {
+      ...base,
+      totalPrice: resolved.effectivePrice,
+      originalPrice: resolved.originalPrice,
+      effectivePrice: resolved.effectivePrice,
+      discountAmount: resolved.discountAmount,
+      activeDiscountId: resolved.activeDiscountId,
+      activeDiscountTitle: resolved.activeDiscountTitle,
+      discountExpiresAt: resolved.discountExpiresAt,
+    };
+  }
+
+  /**
+   * Async helper fetching active catalog discounts and resolving effective package prices.
+   */
+  async getPackagesWithDiscounts(
+    catalogDiscountService?: Pick<CatalogDiscountService, 'listActiveDiscounts'>,
+    options?: {
+      panelId?: string;
+      serviceId?: number;
+      includeDisabled?: boolean;
+      categoryId?: string | null;
+      now?: Date;
+    }
+  ): Promise<DiscountedPackageOption[]> {
+    const now = options?.now ?? new Date();
+    const packages = this.getPackages(
+      options?.panelId,
+      options?.serviceId,
+      options?.includeDisabled ?? false,
+      options?.categoryId
+    );
+    const activeDiscounts = await safeListActiveDiscounts(catalogDiscountService, now);
+    return packages.map((pkg) => this.resolvePackagePrice(pkg, activeDiscounts, now));
+  }
+
+  /**
+   * Async helper fetching active catalog discounts and quoting custom volume with best discount.
+   */
+  async quoteWithCatalogDiscount(
+    gbAmount: number,
+    durationDays: number,
+    catalogDiscountService?: Pick<CatalogDiscountService, 'listActiveDiscounts'>,
+    now = new Date()
+  ): Promise<DiscountedCustomPriceQuote> {
+    const activeDiscounts = await safeListActiveDiscounts(catalogDiscountService, now);
+    return this.resolveCustomPriceWithDiscount(gbAmount, durationDays, activeDiscounts, now);
   }
 
   getCustomVolumeTarget(): { panelId?: string; serviceId?: number } {

@@ -54,15 +54,28 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   receipt_notify_enabled: 'true',
   receipt_notify_mode: 'full',
   receipt_notify_admins: '',
+  receipt_duplicate_policy: 'warn',
+  bank_cards_json: '[]',
   support_message: 'برای پشتیبانی با مدیر در تماس باشید.',
   support_destination: '',
   support_enabled: 'true',
 
-  // Notification thresholds. Rebecca connection/service configuration lives
-  // in normalized, encrypted panel tables rather than this generic K/V store.
+  // Notification thresholds & retention / expired cleanup policies. Rebecca
+  // connection/service configuration lives in normalized, encrypted panel tables
+  // rather than this generic K/V store.
   low_traffic_threshold_gb: '2',
   expiry_warning_days: '3',
   refund_window_hours: '0',
+  first_use_nudge_enabled: 'true',
+  expired_cleanup_enabled: 'false',
+  expired_cleanup_grace_days: '14',
+  expired_cleanup_warn_days: '3,1',
+  expired_cleanup_enabled_at: '',
+
+  // Phone verification gates (privacy-preserving HMAC-SHA256 hash).
+  require_phone_for_trial: 'false',
+  require_phone_for_purchase: 'false',
+  phone_verify_iran_only: 'true',
 
   // Trial, referral, cashback, and dynamic naming.
   trial_enabled: 'true',

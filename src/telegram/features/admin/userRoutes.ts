@@ -622,6 +622,7 @@ async function renderUserProfile(ctx: MenuContext, targetId: number): Promise<vo
 
 const TRANSACTION_TYPE_MAP: Record<string, string> = {
   topup: 'tx_type_topup',
+  topup_void: 'tx_type_topup_void',
   purchase: 'tx_type_purchase',
   refund: 'tx_type_refund',
   admin_adjustment: 'tx_type_admin_adjustment',
@@ -638,6 +639,8 @@ function transactionIcon(type: string, amount: number): string {
   switch (type) {
     case 'topup':
       return '➕';
+    case 'topup_void':
+      return '🚫';
     case 'purchase':
       return '🛍️';
     case 'refund':
@@ -677,6 +680,9 @@ function getAuditActionEmoji(action: string): string {
     case 'receipt_rejected':
     case 'topup_receipt_rejected':
       return '❌';
+    case 'receipt_voided':
+    case 'topup_receipt_voided':
+      return '🚫';
     case 'user_banned':
       return '🚫';
     case 'user_unbanned':
@@ -724,6 +730,9 @@ function formatAuditAction(ctx: MenuContext, action: string): string {
     case 'receipt_rejected':
     case 'topup_receipt_rejected':
       return t(ctx, 'admin_user_audit_action_receipt_rejected');
+    case 'receipt_voided':
+    case 'topup_receipt_voided':
+      return t(ctx, 'admin_user_audit_action_receipt_voided');
     case 'config_transferred_out':
     case 'subscription_transferred':
       return t(ctx, 'admin_user_audit_action_config_transfer_out');
@@ -1182,6 +1191,9 @@ export async function renderUserReportsReceipts(
       } else if (rec.status === 'pending') {
         statusEmoji = '⏳';
         statusLabel = t(ctx, 'admin_user_receipt_status_pending');
+      } else if (rec.status === 'voided') {
+        statusEmoji = '🚫';
+        statusLabel = t(ctx, 'admin_user_receipt_status_voided');
       }
 
       return {

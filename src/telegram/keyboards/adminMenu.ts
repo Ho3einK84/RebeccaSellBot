@@ -127,6 +127,7 @@ export function salesMenuKeyboard(ctx: MenuContext | ConversationContext): Inlin
     .text(t(ctx, 'admin_sales_wallet_transfer_button'), 'admin:sales:payment')
     .row()
     .text(t(ctx, 'admin_sales_lucky_wheel_button'), 'admin:sales:lucky_wheel')
+    .text(t(ctx, 'admin_sales_discounts_button'), 'admin:sales:discounts')
     .row()
     .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 }
@@ -190,6 +191,13 @@ export const adminSalesMenu = new Menu<MenuContext>('admin-sales-menu')
     (ctx) => t(ctx, 'admin_sales_lucky_wheel_button'),
     async (ctx) => {
       await ctx.conversation.enter('adminLuckyWheelSettingsConversation');
+    }
+  )
+  .row()
+  .text(
+    (ctx) => t(ctx, 'admin_sales_discounts_button'),
+    async (ctx) => {
+      await ctx.conversation.enter('adminCatalogDiscountsConversation');
     }
   )
   .row()

@@ -7,6 +7,7 @@ import { requireAdmin } from '../shared.js';
 import { renderSettingsScreen, waitForSettingsInput } from './navigation.js';
 import { editSetting } from './conversation.js';
 import { getSettingDefinition } from './catalog.js';
+import { displayAdminSettingValue } from './presentation.js';
 import { renderSalesMenu } from '../../../keyboards/adminMenu.js';
 import { formatCardNumberGrouped } from '../wallet.js';
 
@@ -30,6 +31,10 @@ export async function adminPaymentSettingsConversation(
         receiptNotifyEnabled: ts.getSettingBool('receipt_notify_enabled', true),
         receiptNotifyMode: ts.getSetting('receipt_notify_mode', 'full') as 'full' | 'simple',
         receiptNotifyAdminsRaw: ts.getSetting('receipt_notify_admins', '').trim(),
+        receiptDuplicatePolicy:
+          ts.getSetting('receipt_duplicate_policy', 'warn').trim().toLowerCase() === 'block'
+            ? ('block' as const)
+            : ('warn' as const),
       };
     });
     if (!state) return;
@@ -41,11 +46,16 @@ export async function adminPaymentSettingsConversation(
       receiptNotifyEnabled,
       receiptNotifyMode,
       receiptNotifyAdminsRaw,
+      receiptDuplicatePolicy,
     } = state;
 
     const onBadge = t(activeCtx, 'admin_overview_active');
     const offBadge = t(activeCtx, 'admin_overview_inactive');
     const isAllAdmins = !receiptNotifyAdminsRaw || receiptNotifyAdminsRaw === 'all';
+    const duplicatePolicyLabel =
+      receiptDuplicatePolicy === 'block'
+        ? t(activeCtx, 'admin_receipt_duplicate_policy_block')
+        : t(activeCtx, 'admin_receipt_duplicate_policy_warn');
 
     const screenText = buildScreen({
       emoji: '💳',
@@ -63,6 +73,10 @@ export async function adminPaymentSettingsConversation(
             {
               label: t(activeCtx, 'admin_setting_card_holder'),
               value: escapeTelegramMarkdown(cardHolder),
+            },
+            {
+              label: t(activeCtx, 'admin_setting_bank_cards_json'),
+              value: escapeTelegramMarkdown(displayAdminSettingValue(activeCtx, 'bank_cards_json')),
             },
           ],
         },
@@ -104,6 +118,10 @@ export async function adminPaymentSettingsConversation(
                     .map((id) => `\`${sanitizeTelegramInlineCode(id.trim())}\``)
                     .join(', '),
             },
+            {
+              label: t(activeCtx, 'admin_setting_receipt_duplicate_policy'),
+              value: duplicatePolicyLabel,
+            },
           ],
         },
       ],
@@ -114,6 +132,8 @@ export async function adminPaymentSettingsConversation(
       .text(t(activeCtx, 'admin_setting_card_number'), 'pay:edit:card_number')
       .row()
       .text(t(activeCtx, 'admin_setting_card_holder'), 'pay:edit:card_holder')
+      .row()
+      .text(t(activeCtx, 'admin_setting_bank_cards_json'), 'pay:edit:bank_cards_json')
       .row()
       .text(
         `${t(activeCtx, 'admin_setting_wallet_transfer_enabled')}: ${transferEnabled ? onBadge : offBadge}`,
@@ -137,6 +157,11 @@ export async function adminPaymentSettingsConversation(
             : t(activeCtx, 'admin_receipt_notify_mode_full')
         }`,
         'pay:toggle:receipt_mode'
+      )
+      .row()
+      .text(
+        `${t(activeCtx, 'admin_setting_receipt_duplicate_policy')}: ${duplicatePolicyLabel}`,
+        'pay:toggle:dup_policy'
       )
       .row()
       .text(
@@ -192,6 +217,18 @@ export async function adminPaymentSettingsConversation(
       await conversation.external(async (outsideCtx) => {
         if (!outsideCtx.services) return;
         await outsideCtx.services.translationService.updateSetting('receipt_notify_mode', nextMode);
+      });
+      continue;
+    }
+
+    if (input.data === 'pay:toggle:dup_policy') {
+      const nextPolicy = receiptDuplicatePolicy === 'block' ? 'warn' : 'block';
+      await conversation.external(async (outsideCtx) => {
+        if (!outsideCtx.services) return;
+        await outsideCtx.services.translationService.updateSetting(
+          'receipt_duplicate_policy',
+          nextPolicy
+        );
       });
       continue;
     }

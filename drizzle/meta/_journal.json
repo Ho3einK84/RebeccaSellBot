@@ -76,7 +76,14 @@
       "idx": 10,
       "version": "7",
       "when": 1795272000000,
-      "tag": "0010_phase1_rebecca_features",
+      "tag": "0010_rebecca_lifecycle_and_custom_naming",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795273000000,
+      "tag": "0011_receipt_security_discounts_phone_retention",
       "breakpoints": true
     }
   ]

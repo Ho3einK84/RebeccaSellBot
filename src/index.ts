@@ -21,6 +21,8 @@ import { PackageCategoryService } from './domain/services/PackageCategoryService
 import { PaymentService } from './domain/services/PaymentService.js';
 import { BackupService } from './domain/services/BackupService.js';
 import { LuckyWheelService } from './domain/services/LuckyWheelService.js';
+import { CatalogDiscountService } from './domain/services/CatalogDiscountService.js';
+import { ContactVerificationService } from './domain/services/ContactVerificationService.js';
 import { DomainRegistryService } from './domain/services/DomainRegistryService.js';
 import {
   normalizeDomainInput,
@@ -54,6 +56,11 @@ import { startTrialCleanupCron, stopTrialCleanupCron } from './jobs/trialCleanup
 import { startAutoRenewalCron, stopAutoRenewalCron } from './jobs/autoRenewal.js';
 import { startBroadcastWorker, stopBroadcastWorker } from './jobs/broadcast.js';
 import { startBackupCron, stopBackupCron } from './jobs/backup.js';
+import { startFirstUseNudgeJob, stopFirstUseNudgeJob } from './jobs/firstUseNudge.js';
+import {
+  startExpiredConfigCleanupJob,
+  stopExpiredConfigCleanupJob,
+} from './jobs/expiredConfigCleanup.js';
 import { jobRunner } from './jobs/workerRuntime.js';
 
 const WORKER_SHUTDOWN_TIMEOUT_MS = 30_000;
@@ -247,6 +254,8 @@ function stopScheduledWorkers(): void {
   stopAutoRenewalCron();
   stopBroadcastWorker();
   stopBackupCron();
+  stopFirstUseNudgeJob();
+  stopExpiredConfigCleanupJob();
 }
 
 async function drainWorkers(): Promise<void> {
@@ -381,6 +390,11 @@ async function main() {
   luckyWheelService.registerInvalidationHook((telegramId) =>
     walletService.invalidateUserCache(telegramId)
   );
+  const catalogDiscountService = new CatalogDiscountService();
+  const contactVerificationService = new ContactVerificationService({
+    translationService,
+    botToken: config.BOT_TOKEN,
+  });
 
   const domainRegistryService = new DomainRegistryService(config.REGISTRY_DIR);
 
@@ -496,6 +510,8 @@ async function main() {
     broadcastService,
     backupService,
     luckyWheelService,
+    catalogDiscountService,
+    contactVerificationService,
     supportUrl: config.SUPPORT_URL,
     webAppUrl: currentWebAppUrl,
     webAppPort: config.WEBAPP_HOST_PORT ?? config.WEBAPP_PORT,
@@ -530,6 +546,18 @@ async function main() {
   startAutoRenewalCron(panelRegistry, walletService, pricingService, translationService, bot.api);
   startBroadcastWorker(broadcastService, bot.api);
   startBackupCron(backupService, bot.api);
+  startFirstUseNudgeJob({
+    panels: panelRegistry,
+    translationService,
+    telegramApi: bot.api,
+    supportUrl: config.SUPPORT_URL,
+  });
+  startExpiredConfigCleanupJob({
+    panels: panelRegistry,
+    configService,
+    translationService,
+    telegramApi: bot.api,
+  });
 
   const rebeccaWebhookService = new RebeccaWebhookService({
     panels: panelRegistry,

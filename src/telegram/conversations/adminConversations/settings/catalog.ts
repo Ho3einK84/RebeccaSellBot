@@ -4,6 +4,8 @@ export const SETTING_KEYS = [
   'default_locale',
   'webapp_enabled',
   'webapp_url',
+  'require_phone_for_purchase',
+  'phone_verify_iran_only',
   'packages_json',
   'on_hold_default_enabled',
   'renewal_rollover_enabled',
@@ -15,16 +17,19 @@ export const SETTING_KEYS = [
   'custom_default_days',
   'card_number',
   'card_holder',
+  'bank_cards_json',
   'wallet_transfer_enabled',
   'wallet_transfer_min_amount',
   'receipt_notify_enabled',
   'receipt_notify_mode',
   'receipt_notify_admins',
+  'receipt_duplicate_policy',
   'support_destination',
   'support_enabled',
   'trial_enabled',
   'trial_gb',
   'trial_days',
+  'require_phone_for_trial',
   'referral_bonus_toman',
   'cashback_percent',
   'lucky_wheel_enabled',
@@ -38,6 +43,10 @@ export const SETTING_KEYS = [
   'naming_prefix',
   'custom_naming_template',
   'custom_service_name_enabled',
+  'first_use_nudge_enabled',
+  'expired_cleanup_enabled',
+  'expired_cleanup_grace_days',
+  'expired_cleanup_warn_days',
   'backup_enabled',
   'backup_interval_hours',
   'backup_target_chat_id',
@@ -55,6 +64,7 @@ export type SettingGroupId =
   | 'referral'
   | 'lucky_wheel'
   | 'naming'
+  | 'retention'
   | 'backup';
 
 export type SettingEditor =
@@ -64,6 +74,9 @@ export type SettingEditor =
   | { type: 'integer'; minimum: number; maximum: number }
   | { type: 'decimal'; minimum: number; maximum: number }
   | { type: 'card_number' }
+  | { type: 'bank_cards_json' }
+  | { type: 'receipt_duplicate_policy' }
+  | { type: 'cleanup_warn_days' }
   | { type: 'text'; minimumLength: number; maximumLength: number }
   | { type: 'support' }
   | { type: 'backup_target' }
@@ -108,6 +121,18 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'system',
     labelKey: 'admin_setting_webapp_url',
     editor: { type: 'text', minimumLength: 8, maximumLength: 200 },
+  },
+  {
+    key: 'require_phone_for_purchase',
+    group: 'system',
+    labelKey: 'admin_setting_require_phone_for_purchase',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'phone_verify_iran_only',
+    group: 'system',
+    labelKey: 'admin_setting_phone_verify_iran_only',
+    editor: { type: 'boolean' },
   },
   {
     key: 'packages_json',
@@ -176,6 +201,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     editor: { type: 'text', minimumLength: 1, maximumLength: 120 },
   },
   {
+    key: 'bank_cards_json',
+    group: 'payment',
+    labelKey: 'admin_setting_bank_cards_json',
+    editor: { type: 'bank_cards_json' },
+  },
+  {
     key: 'wallet_transfer_enabled',
     group: 'payment',
     labelKey: 'admin_setting_wallet_transfer_enabled',
@@ -206,6 +237,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     editor: { type: 'text', minimumLength: 0, maximumLength: 500 },
   },
   {
+    key: 'receipt_duplicate_policy',
+    group: 'payment',
+    labelKey: 'admin_setting_receipt_duplicate_policy',
+    editor: { type: 'receipt_duplicate_policy' },
+  },
+  {
     key: 'support_destination',
     group: 'support',
     labelKey: 'admin_setting_support_destination',
@@ -234,6 +271,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'trial',
     labelKey: 'admin_setting_trial_days',
     editor: { type: 'integer', minimum: 1, maximum: 3_650 },
+  },
+  {
+    key: 'require_phone_for_trial',
+    group: 'trial',
+    labelKey: 'admin_setting_require_phone_for_trial',
+    editor: { type: 'boolean' },
   },
   {
     key: 'referral_bonus_toman',
@@ -314,6 +357,30 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     editor: { type: 'boolean' },
   },
   {
+    key: 'first_use_nudge_enabled',
+    group: 'retention',
+    labelKey: 'admin_setting_first_use_nudge_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'expired_cleanup_enabled',
+    group: 'retention',
+    labelKey: 'admin_setting_expired_cleanup_enabled',
+    editor: { type: 'boolean' },
+  },
+  {
+    key: 'expired_cleanup_grace_days',
+    group: 'retention',
+    labelKey: 'admin_setting_expired_cleanup_grace_days',
+    editor: { type: 'integer', minimum: 1, maximum: 365 },
+  },
+  {
+    key: 'expired_cleanup_warn_days',
+    group: 'retention',
+    labelKey: 'admin_setting_expired_cleanup_warn_days',
+    editor: { type: 'cleanup_warn_days' },
+  },
+  {
     key: 'backup_enabled',
     group: 'backup',
     labelKey: 'admin_setting_backup_enabled',
@@ -350,6 +417,7 @@ export const GENERAL_SETTING_GROUPS: readonly SettingGroup[] = [
   settingGroup('system', 'admin_setting_group_system', 'admin_setting_group_system_desc'),
   settingGroup('support', 'admin_setting_group_support', 'admin_setting_group_support_desc'),
   settingGroup('naming', 'admin_setting_group_naming', 'admin_setting_group_naming_desc'),
+  settingGroup('retention', 'admin_setting_group_retention', 'admin_setting_group_retention_desc'),
 ];
 
 export const SETTING_GROUPS: readonly SettingGroup[] = [

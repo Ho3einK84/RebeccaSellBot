@@ -14,7 +14,9 @@ import {
   transferConfigConversation,
   transferBalanceConversation,
   renewConfigConversation,
+  verifyPhoneConversation,
 } from './conversations/userConversations.js';
+import { adminCatalogDiscountsConversation } from './conversations/adminConversations/catalogDiscounts.js';
 import {
   topupConversation,
   adminSetBalanceConversation,
@@ -289,6 +291,10 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   bot.use(createConversation(adminAddAdminConversation, 'adminAddAdminConversation'));
   bot.use(createConversation(adminAssignOrphanConversation, 'adminAssignOrphanConversation'));
   bot.use(createConversation(adminPanelConversation, 'adminPanelConversation'));
+  bot.use(
+    createConversation(adminCatalogDiscountsConversation, 'adminCatalogDiscountsConversation')
+  );
+  bot.use(createConversation(verifyPhoneConversation, 'verifyPhoneConversation'));
 
   // Conversations must see replies before the light plain-text limiter; a
   // global limiter before this point left admin conversations waiting forever.
@@ -324,12 +330,13 @@ export function isAdminCallbackData(data: string): boolean {
     data.startsWith('nm-set:') ||
     data.startsWith('pfx:') ||
     data.startsWith('tmpl:') ||
-    data.startsWith('trial:') ||
+    (data.startsWith('trial:') && data !== 'trial:claim') ||
     data.startsWith('target:') ||
     data.startsWith('balance-op:') ||
     data.startsWith('balance-confirm') ||
     data.startsWith('broadcast:') ||
-    data.startsWith('direct-confirm')
+    data.startsWith('direct-confirm') ||
+    data.startsWith('cdisc:')
   );
 }
 

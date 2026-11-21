@@ -1,5 +1,7 @@
 import { InlineKeyboard } from 'grammy';
+import { expiredCleanupGraceDays } from '../../../../domain/services/FeatureSettings.js';
 import { logger } from '../../../../infra/logger.js';
+import { countConfigsApproachingCleanup } from '../../../../jobs/expiredConfigCleanup.js';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { t, tm } from '../../../locale.js';
 import { callbackData } from '../../../callbackData.js';
@@ -13,12 +15,14 @@ import {
   type SettingDefinition,
   type SettingGroup,
   type SettingGroupId,
+  type SettingKey,
 } from './catalog.js';
 import {
   buildBooleanSettingKeyboard,
   buildCustomNamingTemplatePrompt,
   buildEditorNavigationKeyboard,
   buildLocaleSettingKeyboard,
+  buildReceiptDuplicatePolicyKeyboard,
   buildSettingSavedScreen,
   buildSettingsGroupKeyboard,
   buildSettingsGroupPrompt,
@@ -33,6 +37,28 @@ import { managePackages } from './packageManager.js';
 import { manageNamingSettings } from './naming.js';
 import { waitForSettingsInput } from './navigation.js';
 import { settingValidationMessage, validateAdminSetting } from './validation.js';
+
+/**
+ * Persist an admin setting update, automatically recording `expired_cleanup_enabled_at`
+ * when `expired_cleanup_enabled` transitions from disabled (`false`) to enabled (`true`)
+ * so pre-existing expired configs receive the full grace period + warnings.
+ */
+export async function applyAdminSettingUpdate(
+  translationService: {
+    getSetting(key: string, fallback?: string): string;
+    updateSetting(key: string, value: string): Promise<void>;
+  },
+  key: SettingKey,
+  value: string,
+  now = new Date()
+): Promise<void> {
+  const prevRaw = translationService.getSetting(key, 'false').trim().toLowerCase();
+  const wasEnabled = prevRaw === 'true' || prevRaw === '1';
+  await translationService.updateSetting(key, value);
+  if (key === 'expired_cleanup_enabled' && !wasEnabled && value === 'true') {
+    await translationService.updateSetting('expired_cleanup_enabled_at', now.toISOString());
+  }
+}
 
 type FlowOutcome = 'continue' | 'back' | 'cancel';
 type GroupChoice =
@@ -95,7 +121,11 @@ export async function adminEditSettingsConversation(
       const nextVal = (!current).toString();
       await conversation.external(async (outsideCtx) => {
         if (!outsideCtx.services) return;
-        await outsideCtx.services.translationService.updateSetting(choice.definition.key, nextVal);
+        await applyAdminSettingUpdate(
+          outsideCtx.services.translationService,
+          choice.definition.key,
+          nextVal
+        );
       });
       continue;
     }
@@ -133,13 +163,34 @@ async function chooseSettingInGroup(
   group: SettingGroup
 ): Promise<SettingChoice> {
   const keyboard = buildSettingsInGroupKeyboard(ctx, group);
+  let approachingDeletionCount: number | undefined;
+  if (group.id === 'retention') {
+    approachingDeletionCount = await conversation.external(async (outsideCtx) => {
+      const ts = (outsideCtx?.services ?? ctx.services)?.translationService;
+      if (!ts) return undefined;
+      try {
+        const preview = await countConfigsApproachingCleanup(ts);
+        return preview.approachingDeletion;
+      } catch {
+        return undefined;
+      }
+    });
+  }
   await promptInConversation(
     conversation,
     ctx,
-    buildSettingsPrompt(ctx, buildSettingsGroupPrompt(ctx, group.id), {
-      emoji: '📂',
-      title: t(ctx, group.labelKey),
-    }),
+    buildSettingsPrompt(
+      ctx,
+      buildSettingsGroupPrompt(
+        ctx,
+        group.id,
+        approachingDeletionCount !== undefined ? { approachingDeletionCount } : undefined
+      ),
+      {
+        emoji: '📂',
+        title: t(ctx, group.labelKey),
+      }
+    ),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
   const input = await waitForSettingsInput(conversation, {
@@ -165,6 +216,8 @@ export async function editSetting(
       return editBooleanSetting(conversation, ctx, definition);
     case 'locale':
       return editLocaleSetting(conversation, ctx, definition);
+    case 'receipt_duplicate_policy':
+      return editReceiptDuplicatePolicy(conversation, ctx, definition);
     case 'naming_mode':
       return editNamingMode(conversation, ctx, definition);
     case 'support':
@@ -172,6 +225,45 @@ export async function editSetting(
     default:
       return editTextSetting(conversation, ctx, definition);
   }
+}
+
+async function editReceiptDuplicatePolicy(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  definition: SettingDefinition
+): Promise<FlowOutcome> {
+  const current = await conversation.external(
+    (outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)?.translationService.getSetting(
+        definition.key,
+        'warn'
+      ) ?? 'warn'
+  );
+  const callbackPrefix = 'set-dup:';
+  const keyboard = buildReceiptDuplicatePolicyKeyboard(ctx, current, callbackPrefix);
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(
+      ctx,
+      tm(ctx, 'admin_setting_value_prompt', {
+        setting: t(ctx, definition.labelKey),
+        current_value: displayAdminSettingValue(ctx, definition.key),
+      }),
+      { emoji: '🧾', title: t(ctx, definition.labelKey) }
+    ),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
+  const input = await waitForSettingsInput(conversation, {
+    callbackPrefixes: [callbackPrefix],
+    backCallbacks: [`${callbackPrefix}back`],
+    retryKeyboard: keyboard,
+  });
+  if (input.type === 'cancel') return 'cancel';
+  if (input.type !== 'callback') return 'back';
+  const value = validateAdminSetting(definition.key, input.data.slice(callbackPrefix.length));
+  if (value === undefined) return 'back';
+  return saveSetting(conversation, input.ctx ?? ctx, definition, value);
 }
 
 async function editLocaleSetting(
@@ -362,7 +454,15 @@ async function editTextSetting(
     });
     if (input.type === 'cancel') return 'cancel';
     if (input.type !== 'text') return 'back';
-    const value = validateAdminSetting(definition.key, input.value);
+    const graceDays =
+      definition.key === 'expired_cleanup_warn_days' && ctx.services
+        ? expiredCleanupGraceDays(ctx.services.translationService)
+        : undefined;
+    const value = validateAdminSetting(
+      definition.key,
+      input.value,
+      graceDays !== undefined ? { graceDays } : undefined
+    );
     if (value !== undefined) return saveSetting(conversation, input.ctx ?? ctx, definition, value);
 
     await promptInConversation(
@@ -393,7 +493,7 @@ export async function saveSetting(
   try {
     await conversation.external(async (outsideCtx) => {
       if (!outsideCtx.services) throw new Error('SETTINGS_SERVICES_UNAVAILABLE');
-      await outsideCtx.services.translationService.updateSetting(definition.key, value);
+      await applyAdminSettingUpdate(outsideCtx.services.translationService, definition.key, value);
       if (!isNamingSetting(definition.key)) return;
       try {
         await outsideCtx.services.configService.syncCounters();

@@ -22,6 +22,12 @@ import {
   customServiceNameEnabled,
   customVolumeEnabled,
 } from '../../../domain/services/FeatureSettings.js';
+import {
+  resolveBestCatalogDiscount,
+  safeListActiveDiscounts,
+  type CatalogDiscountService,
+} from '../../../domain/services/CatalogDiscountService.js';
+import { ContactVerificationService } from '../../../domain/services/ContactVerificationService.js';
 import { trackFunnelEvent } from '../../../domain/services/FunnelTelemetry.js';
 import {
   recordCheckoutCompleted,
@@ -82,9 +88,16 @@ export function registerUserRoutes(
     pricingService?: PricingService;
     translationService?: TranslationService;
     purchaseCheckoutService?: PurchaseCheckoutService;
+    catalogDiscountService?: CatalogDiscountService;
+    contactVerificationService?: ContactVerificationService;
     botUsername?: string;
   }
 ): void {
+  const contactVerificationService =
+    options.contactVerificationService ??
+    new ContactVerificationService({
+      translationService: options.translationService,
+    });
   const userRateLimitKey = (req: FastifyRequest) => resolveRateLimitKey(req);
 
   const standardUserRateLimit = {
@@ -612,16 +625,30 @@ export function registerUserRoutes(
           return reply.code(200).send({ packages: [] });
         }
 
+        const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
         const packages = options.pricingService
           .getPackages(undefined, undefined, false)
           .filter((p) => p.enabled !== false)
-          .map((p) => ({
-            id: p.id,
-            name: p.name,
-            gbAmount: p.gbAmount,
-            durationDays: p.durationDays,
-            price: p.price,
-          }));
+          .map((p) => {
+            const discount = resolveBestCatalogDiscount(activeDiscounts, {
+              packageId: p.id,
+              categoryId: p.categoryId ?? null,
+              originalPrice: p.price,
+            });
+            return {
+              id: p.id,
+              name: p.name,
+              gbAmount: p.gbAmount,
+              durationDays: p.durationDays,
+              price: discount.effectivePrice,
+              originalPrice: discount.originalPrice,
+              effectivePrice: discount.effectivePrice,
+              activeDiscountTitle: discount.activeDiscountTitle,
+              discountExpiresAt: discount.discountExpiresAt
+                ? discount.discountExpiresAt.toISOString()
+                : null,
+            };
+          });
 
         return reply.code(200).send({ packages });
       }
@@ -723,13 +750,26 @@ export function registerUserRoutes(
           days = parsed;
         }
 
+        const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
+
         if (options.pricingService) {
           try {
             const quote = options.pricingService.getCustomPriceQuote(gb, days);
+            const discount = resolveBestCatalogDiscount(activeDiscounts, {
+              packageId: `custom_${gb}gb_${days}d`,
+              categoryId: null,
+              originalPrice: quote.totalPrice,
+            });
             return reply.code(200).send({
               gbAmount: gb,
               durationDays: days,
-              totalPrice: quote.totalPrice,
+              totalPrice: discount.effectivePrice,
+              originalPrice: discount.originalPrice,
+              effectivePrice: discount.effectivePrice,
+              activeDiscountTitle: discount.activeDiscountTitle,
+              discountExpiresAt: discount.discountExpiresAt
+                ? discount.discountExpiresAt.toISOString()
+                : null,
               pricePerGb: quote.pricePerGb,
               pricePerDay: quote.pricePerDay,
             });
@@ -749,10 +789,22 @@ export function registerUserRoutes(
           typeof options.translationService?.getSettingNum === 'function'
             ? options.translationService.getSettingNum('price_per_day', 0)
             : 0;
+        const baseTotalPrice = gb * pricePerGb + days * pricePerDay;
+        const discount = resolveBestCatalogDiscount(activeDiscounts, {
+          packageId: `custom_${gb}gb_${days}d`,
+          categoryId: null,
+          originalPrice: baseTotalPrice,
+        });
         return reply.code(200).send({
           gbAmount: gb,
           durationDays: days,
-          totalPrice: gb * pricePerGb + days * pricePerDay,
+          totalPrice: discount.effectivePrice,
+          originalPrice: discount.originalPrice,
+          effectivePrice: discount.effectivePrice,
+          activeDiscountTitle: discount.activeDiscountTitle,
+          discountExpiresAt: discount.discountExpiresAt
+            ? discount.discountExpiresAt.toISOString()
+            : null,
           pricePerGb,
           pricePerDay,
         });
@@ -777,6 +829,18 @@ export function registerUserRoutes(
 
         if (!options.purchaseCheckoutService) {
           return reply.code(500).send({ error: 'Purchase checkout service unavailable' });
+        }
+
+        if (
+          await contactVerificationService.shouldRequirePhoneForPurchase(
+            telegramId,
+            options.translationService
+          )
+        ) {
+          return reply.code(403).send({
+            error: 'Phone verification is required before purchasing',
+            code: 'PHONE_VERIFICATION_REQUIRED',
+          });
         }
 
         const body = request.body;
@@ -811,7 +875,17 @@ export function registerUserRoutes(
           return reply.code(resolved.status).send({ error: resolved.error, code: resolved.code });
         }
 
-        const { pkg, target, quotedAmount } = resolved;
+        const { pkg, target, quotedAmount: baseQuotedAmount } = resolved;
+
+        const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
+        const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
+          packageId: pkg.id,
+          categoryId: pkg.categoryId ?? null,
+          originalPrice: baseQuotedAmount,
+        });
+        const quotedAmount = catalogDiscount.effectivePrice;
+        const checkoutPkg =
+          catalogDiscount.discountAmount > 0 ? { ...pkg, price: quotedAmount } : pkg;
 
         const clientSpecifiedPrice = body.price !== undefined ? body.price : body.quotedAmount;
         if (clientSpecifiedPrice !== undefined && clientSpecifiedPrice !== quotedAmount) {
@@ -862,7 +936,7 @@ export function registerUserRoutes(
         const checkout = await options.purchaseCheckoutService.create({
           telegramId,
           kind: 'new_config',
-          pkg,
+          pkg: checkoutPkg,
           ...target,
           ...(requestedUsername ? { requestedUsername } : {}),
           quotedAmount,
@@ -877,6 +951,12 @@ export function registerUserRoutes(
           days: checkout.durationDays,
           price: checkout.amount,
           quotedAmount: checkout.quotedAmount,
+          originalPrice: catalogDiscount.originalPrice,
+          effectivePrice: catalogDiscount.effectivePrice,
+          activeDiscountTitle: catalogDiscount.activeDiscountTitle,
+          discountExpiresAt: catalogDiscount.discountExpiresAt
+            ? catalogDiscount.discountExpiresAt.toISOString()
+            : null,
           availableBalance,
           expiresAt:
             checkout.expiresAt instanceof Date
@@ -904,6 +984,18 @@ export function registerUserRoutes(
 
         if (!options.purchaseCheckoutService) {
           return reply.code(500).send({ error: 'Purchase checkout service unavailable' });
+        }
+
+        if (
+          await contactVerificationService.shouldRequirePhoneForPurchase(
+            telegramId,
+            options.translationService
+          )
+        ) {
+          return reply.code(403).send({
+            error: 'Phone verification is required before purchasing',
+            code: 'PHONE_VERIFICATION_REQUIRED',
+          });
         }
 
         const { id } = request.params;

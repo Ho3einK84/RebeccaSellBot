@@ -33,7 +33,11 @@ const NAMING_TOKENS = [
 ] as const;
 
 /** Validate and canonicalize one persisted setting value. */
-export function validateAdminSetting(key: SettingKey, rawValue: string): string | undefined {
+export function validateAdminSetting(
+  key: SettingKey,
+  rawValue: string,
+  options?: { graceDays?: number }
+): string | undefined {
   const definition = getSettingDefinition(key);
   if (!definition) return undefined;
   const value = rawValue.trim();
@@ -67,6 +71,12 @@ export function validateAdminSetting(key: SettingKey, rawValue: string): string 
       const normalized = normalizeInputDigits(value.replaceAll('-', ''));
       return /^\d{12,24}$/u.test(normalized) ? normalized : undefined;
     }
+    case 'bank_cards_json':
+      return validateBankCardsJson(value);
+    case 'receipt_duplicate_policy':
+      return validateReceiptDuplicatePolicy(value);
+    case 'cleanup_warn_days':
+      return validateExpiredCleanupWarnDays(value, options?.graceDays);
     case 'text':
       if (key === 'webapp_url') {
         if (!value.startsWith('https://')) return undefined;
@@ -96,6 +106,52 @@ export function validateAdminSetting(key: SettingKey, rawValue: string): string 
     case 'naming_template':
       return isValidNamingTemplate(value) ? value : undefined;
   }
+}
+
+export function validateReceiptDuplicatePolicy(rawValue: string): 'warn' | 'block' | undefined {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'warn' || normalized === 'block') return normalized;
+  return undefined;
+}
+
+export function validateBankCardsJson(rawValue: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) return undefined;
+    for (const item of parsed) {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) return undefined;
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Validate `expired_cleanup_warn_days` (`"first,last"`, e.g. `"3,1"`).
+ * Normalizes Persian/Arabic digits and Persian commas (`،`), enforcing
+ * `first > last >= 1`, `first <= 365`, and `first < graceDays` when supplied.
+ */
+export function validateExpiredCleanupWarnDays(
+  rawValue: string,
+  graceDays?: number
+): string | undefined {
+  const normalized = rawValue
+    .replace(/[۰-۹]/gu, (digit) => String(digit.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/gu, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[،٬]/gu, ',')
+    .trim();
+  const parts = normalized.split(',').map((part) => part.trim());
+  if (parts.length !== 2) return undefined;
+  if (!/^\d+$/u.test(parts[0]!) || !/^\d+$/u.test(parts[1]!)) return undefined;
+  const first = Number(parts[0]);
+  const last = Number(parts[1]);
+  if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last)) return undefined;
+  if (last < 1 || first <= last || first > 365) return undefined;
+  if (graceDays !== undefined && Number.isFinite(graceDays) && first >= graceDays) {
+    return undefined;
+  }
+  return `${first},${last}`;
 }
 
 export function settingValidationMessage(ctx: ConversationContext, key: SettingKey): string {

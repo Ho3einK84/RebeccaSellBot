@@ -97,6 +97,8 @@ export const users = pgTable(
     lastSeenAt: timestamp('last_seen_at').notNull().defaultNow(),
     totalSpend: bigint('total_spend', { mode: 'number' }).notNull().default(0),
     activeSubscriptionCount: integer('active_subscription_count').notNull().default(0),
+    phoneHash: text('phone_hash'),
+    phoneVerifiedAt: timestamp('phone_verified_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -119,8 +121,27 @@ export const users = pgTable(
       'users_active_subscription_count_nonnegative',
       sql`${table.activeSubscriptionCount} >= 0`
     ),
+    uniqueIndex('users_phone_hash_unique')
+      .on(table.phoneHash)
+      .where(sql`${table.phoneHash} IS NOT NULL`),
   ]
 );
+
+export const WALLET_TRANSACTION_TYPES = [
+  'topup',
+  'topup_void',
+  'purchase',
+  'refund',
+  'admin_adjustment',
+  'promo',
+  'referral_bonus',
+  'cashback',
+  'trial',
+  'transfer_sent',
+  'transfer_received',
+  'lucky_wheel',
+] as const;
+export type WalletTransactionType = (typeof WALLET_TRANSACTION_TYPES)[number];
 
 // Wallet Transaction Audit Log
 export const walletTransactions = pgTable(
@@ -132,7 +153,7 @@ export const walletTransactions = pgTable(
       .references(() => users.telegramId),
     amount: bigint('amount', { mode: 'number' }).notNull(), // positive for credit, negative for debit
     balanceAfter: bigint('balance_after', { mode: 'number' }).notNull(),
-    type: text('type').notNull(), // 'topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial'
+    type: text('type').notNull(), // 'topup', 'topup_void', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial', 'transfer_sent', 'transfer_received', 'lucky_wheel'
     referenceId: text('reference_id').unique(), // Deterministic ID for idempotency (e.g. cashback_<intentId>, ref_<intentId>)
     description: text('description').notNull(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -148,7 +169,7 @@ export const walletTransactions = pgTable(
     ),
     check(
       'wallet_transactions_type_supported',
-      sql`${table.type} IN ('topup', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial', 'transfer_sent', 'transfer_received', 'lucky_wheel')`
+      sql`${table.type} IN ('topup', 'topup_void', 'purchase', 'refund', 'admin_adjustment', 'promo', 'referral_bonus', 'cashback', 'trial', 'transfer_sent', 'transfer_received', 'lucky_wheel')`
     ),
     index('wallet_transactions_user_created_idx').on(table.telegramId, table.createdAt),
   ]
@@ -325,6 +346,8 @@ export const userConfigs = pgTable(
     autoRenewPrice: bigint('auto_renew_price', { mode: 'number' }),
     remoteCreatedAt: text('remote_created_at'),
     lastSyncedAt: timestamp('last_synced_at'),
+    firstUseCheckedAt: timestamp('first_use_checked_at'),
+    cleanupHoldUntil: timestamp('cleanup_hold_until'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -352,6 +375,12 @@ export const userConfigs = pgTable(
     index('user_configs_telegram_id_idx').on(table.telegramId),
     index('user_configs_sub_url_idx').on(table.subUrl),
     uniqueIndex('user_configs_panel_username_unique').on(table.panelId, table.configUsername),
+    index('user_configs_first_use_pending_idx')
+      .on(table.createdAt)
+      .where(sql`${table.firstUseCheckedAt} IS NULL`),
+    index('user_configs_expired_cleanup_idx')
+      .on(table.panelStatus, table.panelExpire, table.cleanupHoldUntil)
+      .where(sql`${table.panelStatus} = 'expired'`),
     check(
       'user_configs_service_id_positive',
       sql`${table.serviceId} > 0 AND ${table.serviceId} <= 2147483647`
@@ -458,7 +487,7 @@ export const notificationDeliveries = pgTable(
   (table) => [
     check(
       'notification_deliveries_type_supported',
-      sql`${table.notificationType} IN ('low_traffic', 'near_expiry', 'auto_renew_low_balance', 'auto_renew_package_missing')`
+      sql`${table.notificationType} IN ('low_traffic', 'near_expiry', 'auto_renew_low_balance', 'auto_renew_package_missing', 'first_use_nudge', 'expired_cleanup_warn_first', 'expired_cleanup_warn_last')`
     ),
     primaryKey({
       columns: [table.telegramId, table.panelId, table.configUsername, table.notificationType],
@@ -813,6 +842,9 @@ export const auditLogs = pgTable(
   ]
 );
 
+export const TOPUP_RECEIPT_STATUSES = ['pending', 'approved', 'rejected', 'voided'] as const;
+export type TopupReceiptStatus = (typeof TOPUP_RECEIPT_STATUSES)[number];
+
 // Top-up Receipts (Manual payments pending admin approval)
 export const topupReceipts = pgTable(
   'topup_receipts',
@@ -824,8 +856,14 @@ export const topupReceipts = pgTable(
     amount: bigint('amount', { mode: 'number' }).notNull(),
     photoFileId: text('photo_file_id').notNull(),
     mediaType: text('media_type').notNull().default('photo'),
-    status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
+    fileUniqueId: text('file_unique_id'),
+    fileSha256: text('file_sha256'),
+    duplicateOfReceiptId: text('duplicate_of_receipt_id'),
+    status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected', 'voided'
     reviewedBy: bigint('reviewed_by', { mode: 'number' }),
+    voidedAt: timestamp('voided_at'),
+    voidedBy: bigint('voided_by', { mode: 'number' }),
+    voidReason: text('void_reason'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -837,14 +875,20 @@ export const topupReceipts = pgTable(
     check('topup_receipts_media_type_supported', sql`${table.mediaType} IN ('photo', 'document')`),
     check(
       'topup_receipts_status_supported',
-      sql`${table.status} IN ('pending', 'approved', 'rejected')`
+      sql`${table.status} IN ('pending', 'approved', 'rejected', 'voided')`
     ),
     check(
       'topup_receipts_reviewed_by_safe_integer',
       sql`${table.reviewedBy} IS NULL OR (${table.reviewedBy} > 0 AND ${table.reviewedBy} <= 9007199254740991)`
     ),
+    check(
+      'topup_receipts_voided_by_safe_integer',
+      sql`${table.voidedBy} IS NULL OR (${table.voidedBy} > 0 AND ${table.voidedBy} <= 9007199254740991)`
+    ),
     index('topup_receipts_status_created_idx').on(table.status, table.createdAt),
     index('topup_receipts_user_status_idx').on(table.telegramId, table.status),
+    index('topup_receipts_file_unique_id_idx').on(table.fileUniqueId),
+    index('topup_receipts_file_sha256_idx').on(table.fileSha256),
   ]
 );
 
@@ -906,3 +950,48 @@ export const luckyWheelSpins = pgTable(
     check('lucky_wheel_spins_spin_number_safe', sql`${table.spinNumber} >= 1`),
   ]
 );
+
+export const CATALOG_DISCOUNT_SCOPES = ['all', 'category', 'package'] as const;
+export type CatalogDiscountScope = (typeof CATALOG_DISCOUNT_SCOPES)[number];
+
+export const CATALOG_DISCOUNT_TYPES = ['percent', 'fixed'] as const;
+export type CatalogDiscountType = (typeof CATALOG_DISCOUNT_TYPES)[number];
+
+// Scheduled Catalog Discounts / Flash Sales
+export const catalogDiscounts = pgTable(
+  'catalog_discounts',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    scope: text('scope').notNull(), // 'all', 'category', 'package'
+    targetId: text('target_id'),
+    discountType: text('discount_type').notNull(), // 'percent', 'fixed'
+    value: integer('value').notNull(),
+    maxDiscountAmount: bigint('max_discount_amount', { mode: 'number' }),
+    startsAt: timestamp('starts_at').notNull(),
+    expiresAt: timestamp('expires_at'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'catalog_discounts_scope_supported',
+      sql`${table.scope} IN ('all', 'category', 'package')`
+    ),
+    check('catalog_discounts_type_supported', sql`${table.discountType} IN ('percent', 'fixed')`),
+    check('catalog_discounts_value_positive', sql`${table.value} > 0`),
+    check(
+      'catalog_discounts_percent_range',
+      sql`${table.discountType} <> 'percent' OR ${table.value} <= 100`
+    ),
+    check(
+      'catalog_discounts_max_discount_safe',
+      sql`${table.maxDiscountAmount} IS NULL OR (${table.maxDiscountAmount} > 0 AND ${table.maxDiscountAmount} <= 9007199254740991)`
+    ),
+    index('catalog_discounts_active_window_idx').on(table.active, table.startsAt, table.expiresAt),
+    index('catalog_discounts_scope_target_idx').on(table.scope, table.targetId),
+  ]
+);
+
+export type CatalogDiscountRow = typeof catalogDiscounts.$inferSelect;
+export type NewCatalogDiscountRow = typeof catalogDiscounts.$inferInsert;

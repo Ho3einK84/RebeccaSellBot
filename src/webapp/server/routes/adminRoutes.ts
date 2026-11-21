@@ -12,18 +12,26 @@ import {
 import { RebeccaOriginDownError } from '../../../domain/services/RebeccaService.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
-import type { AdminBalanceOperation } from '../../../domain/services/WalletContracts.js';
+import {
+  TopupVoidError,
+  type AdminBalanceOperation,
+} from '../../../domain/services/WalletContracts.js';
+import { receiptDuplicatePolicy } from '../../../domain/services/FeatureSettings.js';
 import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
 import { downloadTelegramFile } from '../../../infra/telegramFiles.js';
 import {
+  formatDuplicateReceiptBanner,
   sendReceiptApprovalNotification,
   sendReceiptRejectionNotification,
+  sendReceiptVoidedNotification,
   sendBalanceAdjustmentNotification,
 } from '../../../telegram/features/admin/adminNotifications.js';
+import { formatReceiptShortId } from '../../../telegram/features/admin/receiptRoutes.js';
 
 interface ReceiptActionBody {
-  action: 'approve' | 'reject';
+  action: 'approve' | 'reject' | 'void';
   reason?: string;
+  disablePurchasedConfigs?: boolean;
 }
 
 interface AdjustBalanceBody {
@@ -76,7 +84,7 @@ export function registerAdminRoutes(
       Querystring: {
         page?: string;
         limit?: string;
-        status?: 'pending' | 'approved' | 'rejected' | 'all';
+        status?: 'pending' | 'approved' | 'rejected' | 'voided' | 'all';
         search?: string;
       };
     }>('/api/admin/receipts', async (request, reply) => {
@@ -84,17 +92,64 @@ export function registerAdminRoutes(
       const limit = clampPositiveInt(request.query.limit, 10, 50);
       const status = request.query.status ?? 'pending';
       const search = request.query.search;
-      if (typeof services.walletService.listTopupsPage === 'function') {
-        const result = await services.walletService.listTopupsPage({
-          page,
-          pageSize: limit,
-          status,
-          search,
-        });
-        return reply.code(200).send(result);
-      }
-      const result = await services.walletService.listPendingTopupsPage(page, limit);
-      return reply.code(200).send(result);
+      const rawResult =
+        typeof services.walletService.listTopupsPage === 'function'
+          ? await services.walletService.listTopupsPage({
+              page,
+              pageSize: limit,
+              status,
+              search,
+            })
+          : await services.walletService.listPendingTopupsPage(page, limit);
+
+      const ts = services.translationService;
+      const defaultLocale =
+        typeof ts?.getDefaultLocale === 'function' ? ts.getDefaultLocale() : 'fa';
+
+      const enrichedItems = rawResult.items.map((item) => {
+        const record = item as typeof item & {
+          fileUniqueId?: string | null;
+          fileSha256?: string | null;
+          duplicateOfReceiptId?: string | null;
+          voidedAt?: Date | string | null;
+          voidedBy?: number | null;
+          voidReason?: string | null;
+        };
+        const duplicateOfReceiptId = record.duplicateOfReceiptId ?? null;
+        let duplicateWarning: string | null = null;
+        if (duplicateOfReceiptId) {
+          const shortId = formatReceiptShortId(duplicateOfReceiptId);
+          const translated =
+            ts && typeof ts.get === 'function'
+              ? formatDuplicateReceiptBanner(
+                  ts,
+                  defaultLocale,
+                  duplicateOfReceiptId,
+                  formatReceiptShortId
+                )
+              : null;
+          duplicateWarning =
+            translated && translated !== 'admin_receipt_duplicate_warning'
+              ? translated
+              : `⚠️ هشدار رسید تکراری (مشابه رسید #${shortId})`;
+        }
+
+        return {
+          ...item,
+          fileUniqueId: record.fileUniqueId ?? null,
+          fileSha256: record.fileSha256 ?? null,
+          duplicateOfReceiptId,
+          voidedAt: record.voidedAt ?? null,
+          voidedBy: record.voidedBy ?? null,
+          voidReason: record.voidReason ?? null,
+          duplicateWarning,
+        };
+      });
+
+      return reply.code(200).send({
+        ...rawResult,
+        items: enrichedItems,
+      });
     });
 
     // GET /api/admin/receipts/settings
@@ -104,6 +159,7 @@ export function registerAdminRoutes(
       const mode = ts
         ? (ts.getSetting('receipt_notify_mode', 'full') as 'full' | 'simple')
         : 'full';
+      const duplicatePolicy = ts ? receiptDuplicatePolicy(ts) : 'warn';
       const adminsRaw = ts ? ts.getSetting('receipt_notify_admins', '').trim() : '';
       const selectedAdmins =
         !adminsRaw || adminsRaw === 'all'
@@ -118,6 +174,7 @@ export function registerAdminRoutes(
       return reply.code(200).send({
         enabled,
         mode,
+        duplicatePolicy,
         admins: selectedAdmins,
         allAdmins,
       });
@@ -128,6 +185,7 @@ export function registerAdminRoutes(
       Body: {
         enabled?: boolean;
         mode?: 'full' | 'simple';
+        duplicatePolicy?: 'warn' | 'block';
         admins?: number[];
       };
     }>(
@@ -139,13 +197,14 @@ export function registerAdminRoutes(
             properties: {
               enabled: { type: 'boolean' },
               mode: { type: 'string', enum: ['full', 'simple'] },
+              duplicatePolicy: { type: 'string', enum: ['warn', 'block'] },
               admins: { type: 'array', items: { type: 'number' } },
             },
           },
         },
       },
       async (request, reply) => {
-        const { enabled, mode, admins } = request.body;
+        const { enabled, mode, duplicatePolicy, admins } = request.body;
         const ts = services.translationService;
         if (!ts) {
           return reply.code(500).send({ error: 'Translation service unavailable' });
@@ -157,6 +216,10 @@ export function registerAdminRoutes(
 
         if (mode === 'full' || mode === 'simple') {
           await ts.updateSetting('receipt_notify_mode', mode);
+        }
+
+        if (duplicatePolicy === 'warn' || duplicatePolicy === 'block') {
+          await ts.updateSetting('receipt_duplicate_policy', duplicatePolicy);
         }
 
         if (Array.isArray(admins)) {
@@ -283,15 +346,16 @@ export function registerAdminRoutes(
             type: 'object',
             required: ['action'],
             properties: {
-              action: { type: 'string', enum: ['approve', 'reject'] },
+              action: { type: 'string', enum: ['approve', 'reject', 'void'] },
               reason: { type: 'string' },
+              disablePurchasedConfigs: { type: 'boolean' },
             },
           },
         },
       },
       async (request, reply) => {
         const { id } = request.params;
-        const { action, reason } = request.body;
+        const { action, reason, disablePurchasedConfigs } = request.body;
         const adminId = request.userSession!.telegramId;
 
         if (action === 'approve') {
@@ -318,6 +382,60 @@ export function registerAdminRoutes(
 
             return reply.code(200).send({ success: true, result });
           } catch (err: unknown) {
+            if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
+              return reply.code(404).send({ error: 'Receipt owner not found' });
+            }
+            throw err;
+          }
+        }
+
+        if (action === 'void') {
+          try {
+            const result = await services.walletService.voidApprovedTopup({
+              receiptId: id,
+              adminId,
+              reason: reason?.trim() || undefined,
+              disablePurchasedConfigs: Boolean(disablePurchasedConfigs),
+              disableConfig: services.configService
+                ? (username, panelId) => services.configService!.disableConfig(username, panelId)
+                : undefined,
+            });
+
+            if (!result.alreadyVoided && services.botApi && services.translationService) {
+              try {
+                await sendReceiptVoidedNotification(
+                  services.botApi,
+                  {
+                    userService: services.userService,
+                    translationService: services.translationService,
+                  },
+                  {
+                    telegramId: result.telegramId,
+                    receiptId: id,
+                    amount: result.originalAmount,
+                    deductedAmount: result.deductedAmount,
+                    disabledConfigsCount: result.disabledConfigs.length,
+                    shortId: formatReceiptShortId(id),
+                  }
+                );
+              } catch (notifyErr) {
+                request.log.warn(
+                  { err: notifyErr, receiptId: id },
+                  'Failed to send receipt void notification'
+                );
+              }
+            }
+
+            return reply.code(200).send({ success: true, result });
+          } catch (err: unknown) {
+            if (err instanceof TopupVoidError) {
+              if (err.reason === 'not_found') {
+                return reply.code(404).send({ error: 'Receipt not found', code: 'not_found' });
+              }
+              return reply
+                .code(400)
+                .send({ error: 'Only approved receipts can be voided', code: 'not_approved' });
+            }
             if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
               return reply.code(404).send({ error: 'Receipt owner not found' });
             }

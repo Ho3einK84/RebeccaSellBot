@@ -1544,4 +1544,138 @@ export const FA_TEXTS: Record<string, string> = {
   custom_name_invalid:
     '⚠️ نام واردشده معتبر نیست. با حرف انگلیسی شروع شود و فقط شامل حروف انگلیسی، عدد و `_` (۳ تا ۲۱ کاراکتر) باشد.',
   checkout_custom_name_label: 'نام انتخابی سرویس',
+
+  // امنیت مالی، رسید تکراری، ابطال رسید و چندکارت بانکی
+  tx_type_topup_void: 'ابطال شارژ کیف پول',
+  admin_receipt_duplicate_warning: '⚠️ هشدار رسید تکراری (مشابه رسید `#{short_id}`)',
+  topup_duplicate_blocked: '⚠️ این تصویر رسید قبلاً ثبت شده است. لطفاً فیش جدید و معتبر ارسال کنید.',
+  admin_setting_receipt_duplicate_policy: 'سیاست رسید تکراری',
+  admin_receipt_duplicate_policy_warn: '⚠️ هشدار به مدیر',
+  admin_receipt_duplicate_policy_block: '🚫 مسدودسازی خودکار',
+  admin_receipt_void_button: '🚫 ابطال رسید',
+  admin_receipt_void_title: 'ابطال رسید تأییدشده',
+  admin_receipt_void_confirm_prompt:
+    'آیا از ابطال رسید `#{short_id}` به مبلغ *{amount} {currency}* برای کاربر `{telegram_id}` اطمینان دارید؟ مبلغ از کیف پول کاربر کسر می‌شود.',
+  admin_receipt_void_only_button: '🚫 ابطال و کسر موجودی',
+  admin_receipt_void_and_disable_button: '⛔ ابطال + غیرفعال‌سازی سرویس‌ها',
+  admin_receipt_void_success:
+    '✅ رسید `#{short_id}` باطل شد و مبلغ *{amount} {currency}* از موجودی کاربر کسر شد.',
+  admin_receipt_void_success_with_disabled:
+    '✅ رسید `#{short_id}` باطل شد، مبلغ *{amount} {currency}* کسر و {count} سرویس کاربر غیرفعال شد.',
+  admin_receipt_void_not_approved: '⚠️ فقط رسیدهای تأییدشده قابل ابطال هستند.',
+  admin_receipt_void_already_voided: 'ℹ️ این رسید قبلاً باطل شده است.',
+  admin_user_receipt_status_voided: 'باطل‌شده',
+  admin_user_audit_action_receipt_voided: 'ابطال رسید تأییدشده',
+  receipt_result_voided_title: 'رسید پرداخت باطل شد',
+  receipt_result_voided_subtitle:
+    'رسید `#{short_id}` به مبلغ {amount} {currency} توسط مدیریت باطل و از کیف پول شما کسر شد.',
+  receipt_result_voided_disabled_configs:
+    '⚠️ همچنین {count} سرویس خریداری‌شده پس از این شارژ موقتاً غیرفعال شد. در صورت نیاز با پشتیبانی تماس بگیرید.',
+  topup_unique_amount_hint:
+    '💡 برای تأیید سریع‌تر، دقیقاً مبلغ *{amount} {currency}* (با رقم یکتا) را واریز کنید.',
+  topup_card_bank_label: 'بانک',
+  admin_setting_bank_cards_json: 'کارت‌های بانکی',
+  admin_sales_bank_cards_button: '💳 کارت‌های بانکی',
+  admin_sales_bank_cards_title: 'مدیریت کارت‌های بانکی',
+  admin_sales_bank_cards_subtitle: 'افزودن، ویرایش و چرخش خودکار کارت‌های واریز',
+  admin_sales_bank_cards_empty:
+    'هنوز کارت بانکی جداگانه‌ای ثبت نشده و از کارت پیش‌فرض استفاده می‌شود.',
+  admin_sales_bank_cards_add_button: '➕ افزودن کارت جدید',
+
+  // تخفیف‌های کاتالوگ (فروش ویژه)
+  admin_sales_discounts_button: '🔥 تخفیف‌های فصلی',
+  admin_sales_discounts_title: 'تخفیف‌های کاتالوگ و فروش ویژه',
+  admin_sales_discounts_subtitle: 'مدیریت تخفیف‌های زمان‌دار روی کل فروشگاه، دسته‌ها یا بسته‌ها',
+  admin_sales_discounts_empty: '📭 هنوز هیچ تخفیف کاتالوگی ثبت نشده است.',
+  admin_sales_discount_create_button: '➕ تخفیف جدید',
+  admin_sales_discount_detail_title: 'جزئیات تخفیف کاتالوگ',
+  admin_sales_discount_title_label: 'عنوان تخفیف',
+  admin_sales_discount_scope_label: 'محدودهٔ اعمال',
+  admin_sales_discount_scope_all: 'همهٔ بسته‌ها',
+  admin_sales_discount_scope_category: 'دسته‌بندی خاص',
+  admin_sales_discount_scope_package: 'بستهٔ خاص',
+  admin_sales_discount_type_label: 'نوع تخفیف',
+  admin_sales_discount_type_percent: 'درصدی (٪)',
+  admin_sales_discount_type_fixed: 'مبلغ ثابت',
+  admin_sales_discount_value_label: 'مقدار تخفیف',
+  admin_sales_discount_max_cap_label: 'سقف تخفیف',
+  admin_sales_discount_starts_label: 'زمان شروع',
+  admin_sales_discount_expires_label: 'زمان پایان',
+  admin_sales_discount_title_prompt:
+    '🏷️ عنوان تخفیف یا جشنواره را وارد کنید (مثال: تخفیف آخر هفته):',
+  admin_sales_discount_scope_prompt: '🎯 محدودهٔ اعمال تخفیف را انتخاب کنید:',
+  admin_sales_discount_target_prompt: '📦 دسته‌بندی یا بستهٔ هدف را انتخاب کنید:',
+  admin_sales_discount_type_prompt: '💰 نوع محاسبهٔ تخفیف را انتخاب کنید:',
+  admin_sales_discount_value_prompt:
+    '🔢 مقدار تخفیف را وارد کنید (درصد بین ۱ تا ۱۰۰ یا مبلغ به تومان):',
+  admin_sales_discount_max_cap_prompt:
+    '🛑 سقف مبلغ تخفیف را به تومان وارد کنید (برای بدون سقف عدد 0 بفرستید):',
+  admin_sales_discount_start_prompt:
+    '📅 تاریخ شروع را وارد کنید (YYYY-MM-DD یا عبارت now برای شروع فوری):',
+  admin_sales_discount_expiry_prompt:
+    '⏳ تاریخ پایان را وارد کنید (YYYY-MM-DD یا عدد 0 برای بدون انقضا):',
+  admin_sales_discount_created: '✅ تخفیف «{name}» با موفقیت ثبت شد.',
+  admin_sales_discount_toggled: '✅ وضعیت تخفیف «{name}»: {status}',
+  admin_sales_discount_deleted: '✅ تخفیف «{name}» حذف شد.',
+  admin_sales_discount_not_found: '⚠️ تخفیف مورد نظر پیدا نشد.',
+  admin_sales_discount_activate_button: '✅ فعال‌سازی',
+  admin_sales_discount_deactivate_button: '⏸ غیرفعال‌سازی',
+  admin_sales_discount_delete_button: '🗑 حذف تخفیف',
+  admin_sales_discount_broadcast_button: '📣 اطلاع‌رسانی همگانی',
+  admin_sales_discount_broadcast_template:
+    '🔥 *فروش ویژه: {name}*\n\n{description}\n⏳ اعتبار تا: {date}\n\nهمین حالا از بخش «خرید سرویس» با تخفیف ویژه تهیه کنید!',
+  admin_sales_discount_broadcast_queued:
+    '✅ پیام اطلاع‌رسانی فروش ویژه برای {count} کاربر در صف ارسال قرار گرفت.',
+  shop_discount_banner: '🔥 *فروش ویژه فعال:* {name} · {remaining}',
+  shop_discount_price_line: '{price} ◂ *{amount}* {currency}',
+  shop_discount_time_remaining: 'زمان باقی‌مانده: {remaining}',
+  checkout_catalog_discount_label: 'تخفیف ویژه ({name})',
+  checkout_original_price_label: 'قیمت اصلی',
+  checkout_effective_price_label: 'قیمت پس از تخفیف',
+
+  // احراز شماره تلفن (ذخیره‌سازی فقط به‌صورت هش امن HMAC-SHA256)
+  onboarding_phone_verify_title: 'تأیید شماره تلفن',
+  onboarding_phone_verify_prompt:
+    '🔐 برای جلوگیری از سوءاستفاده، لطفاً با دکمهٔ زیر شمارهٔ تلگرام خود را تأیید کنید.\n\n*حفظ حریم خصوصی:* شمارهٔ خام شما هرگز ذخیره نمی‌شود و فقط یک شناسهٔ رمزنگاری‌شده و برگشت‌ناپذیر (هش) ثبت می‌گردد.',
+  button_share_phone: '📱 ارسال شماره تلفن من',
+  button_cancel_phone: '✕ انصراف از تأیید شماره',
+  onboarding_phone_not_owner:
+    '⚠️ باید حتماً شمارهٔ حساب تلگرام خودتان را از طریق دکمهٔ «ارسال شماره تلفن من» به اشتراک بگذارید.',
+  onboarding_phone_iran_only:
+    '⚠️ در حال حاضر فقط شماره‌های موبایل ایران (+98) برای تأیید مجاز هستند.',
+  onboarding_phone_already_bound: '⚠️ این شماره تلفن قبلاً به حساب کاربری دیگری متصل شده است.',
+  onboarding_phone_invalid:
+    '⚠️ شماره تلفن ارسالی معتبر نیست. لطفاً دوباره از دکمهٔ زیر استفاده کنید.',
+  onboarding_phone_verified_success:
+    '✅ شماره تلفن شما با موفقیت تأیید شد. اکنون می‌توانید ادامه دهید.',
+  trial_phone_required:
+    '📱 برای دریافت سرویس تست رایگان، ابتدا لازم است شماره تلفن خود را تأیید کنید.',
+  purchase_phone_required: '📱 برای تکمیل خرید، ابتدا لازم است شماره تلفن خود را تأیید کنید.',
+  admin_setting_require_phone_for_trial: 'الزام تأیید شماره برای تست رایگان',
+  admin_setting_require_phone_for_purchase: 'الزام تأیید شماره برای خرید',
+  admin_setting_phone_verify_iran_only: 'محدودیت شمارهٔ ایران (+98)',
+
+  // یادآور اولین اتصال و پاک‌سازی خودکار سرویس‌های منقضی
+  subscription_first_use_nudge_title: 'راهنمای شروع اتصال',
+  subscription_first_use_nudge_body:
+    'سلام! متوجه شدیم سرویس `{username}` شما هنوز هیچ مصرفی نداشته است.\n\nبرای شروع، لینک اشتراک را از بخش «سرویس‌های من» کپی کرده و در برنامهٔ VPN خود وارد کنید. اگر در راه‌اندازی سوالی دارید، پشتیبانی در کنار شماست.',
+  subscription_first_use_view_button: '📡 مشاهدهٔ سرویس',
+  subscription_first_use_support_button: '💬 راهنمایی پشتیبانی',
+  subscription_cleanup_warn_first_title: 'یادآوری حذف خودکار سرویس منقضی',
+  subscription_cleanup_warn_first_body:
+    'سرویس منقضی‌شدهٔ `{username}` در صورت عدم تمدید، تا *{days} روز دیگر* به‌صورت خودکار از پنل حذف خواهد شد. برای حفظ تنظیمات فعلی، همین حالا تمدید کنید.',
+  subscription_cleanup_warn_last_title: 'آخرین هشدار پیش از حذف سرویس',
+  subscription_cleanup_warn_last_body:
+    '⚠️ سرویس `{username}` کمتر از *{days} روز دیگر* برای همیشه حذف می‌شود. برای جلوگیری از حذف کامل، اکنون اقدام به تمدید کنید.',
+  subscription_cleanup_renew_button: '🔄 تمدید فوری سرویس',
+  subscription_cleanup_deleted_title: 'سرویس منقضی حذف شد',
+  subscription_cleanup_deleted_body:
+    'سرویس `{username}` به دلیل گذشتن مهلت پس از انقضا، به‌صورت خودکار حذف شد. هر زمان مایل بودید می‌توانید از فروشگاه سرویس جدید تهیه کنید.',
+  admin_setting_group_retention: '🧹 نگهداری و پاک‌سازی خودکار',
+  admin_setting_group_retention_desc: 'یادآور اولین اتصال و حذف خودکار سرویس‌های منقضی‌شده',
+  admin_setting_first_use_nudge_enabled: 'یادآور اولین اتصال (۲۴ ساعته)',
+  admin_setting_expired_cleanup_enabled: 'پاک‌سازی خودکار سرویس‌های منقضی',
+  admin_setting_expired_cleanup_grace_days: 'مهلت نگهداری پس از انقضا (روز)',
+  admin_setting_expired_cleanup_warn_days: 'روزهای هشدار پیش از حذف (مثال: 3,1)',
+  admin_setting_expired_cleanup_preview: 'سرویس‌های در آستانهٔ حذف: *{count}*',
 };

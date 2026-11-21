@@ -32,7 +32,7 @@ afterEach(() => {
   resetActionCooldowns();
 });
 
-describe('Phase 1 Telegram UI & Flows (on_hold, rollover, custom name, admin toggles)', () => {
+describe('Rebecca Lifecycle Telegram UI & Flows (on_hold, rollover, custom name, admin toggles)', () => {
   it('renders waiting-for-first-connection text on Telegram subscription card when status is on_hold', async () => {
     const realTs = new TranslationService();
     const config = {

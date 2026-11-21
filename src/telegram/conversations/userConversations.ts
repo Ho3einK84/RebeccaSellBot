@@ -5,7 +5,7 @@
  * customAmountConversation — free-form GB + days entry
  * promoConversation      — promo/gift code redemption
  */
-import { InlineKeyboard } from 'grammy';
+import { InlineKeyboard, Keyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../types.js';
 import { clearPendingPromo, getPendingPromoPricing } from '../promoSelection.js';
 import { purchaseFailureMessage } from '../purchaseFeedback.js';
@@ -21,12 +21,17 @@ import {
 } from '../locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import {
+  acceptConversationOwner,
   backKeyboard,
   buildUserEmptyState,
   buildUserPromptScreen,
   buildUserScreen,
+  conversationOwnerId,
+  deleteConsumedInputMessage,
+  forwardConversationNavigation,
   promptInConversation,
   rememberArtifactMessage,
+  rememberUiMessage,
   replyInConversation,
   sendArtifactInConversation,
   waitForCallbackInput,
@@ -36,6 +41,13 @@ import {
 import { logger } from '../../infra/logger.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
 import { normalizeCustomServiceName } from '../../domain/services/ConfigService.js';
+import {
+  resolveBestCatalogDiscount,
+  safeListActiveDiscounts,
+  type ResolvedCatalogDiscount,
+} from '../../domain/services/CatalogDiscountService.js';
+import { formatRemainingDiscountDuration } from '../../domain/services/PricingService.js';
+import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 import {
   customServiceNameEnabled,
   customVolumeEnabled,
@@ -138,7 +150,7 @@ export async function promptCustomServiceName(
   }
 }
 
-function buildCustomCheckoutScreen(
+export function buildCustomCheckoutScreen(
   ctx: ConversationContext,
   input: {
     mode: 'purchase' | 'renewal';
@@ -150,16 +162,20 @@ function buildCustomCheckoutScreen(
     pricePerGb: number;
     promoCode?: string;
     rolloverEnabled?: boolean;
+    catalogDiscount?: ResolvedCatalogDiscount;
   }
 ): string {
   const renewal = input.mode === 'renewal';
+  const currency = t(ctx, 'currency_toman');
+  const locale = resolveContextLocale(ctx);
+  const catalogDiscount = input.catalogDiscount;
   return buildUserScreen({
     emoji: renewal ? '🔄' : '🧾',
     title: t(ctx, renewal ? 'renewal_review_title' : 'purchase_review_title'),
     subtitle: t(ctx, renewal ? 'renewal_review_subtitle' : 'purchase_review_subtitle'),
     primary: {
       label: t(ctx, 'checkout_total_label'),
-      value: `${localizedNumber(input.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      value: `${localizedNumber(input.amount, ctx)} ${currency}`,
       emphasizeValue: true,
     },
     sections: [
@@ -196,7 +212,7 @@ function buildCustomCheckoutScreen(
           },
           {
             label: t(ctx, 'checkout_unit_price_label'),
-            value: `${localizedNumber(input.pricePerGb, ctx)} ${t(ctx, 'currency_toman')}`,
+            value: `${localizedNumber(input.pricePerGb, ctx)} ${currency}`,
           },
           ...(renewal && input.rolloverEnabled
             ? [
@@ -209,6 +225,43 @@ function buildCustomCheckoutScreen(
             : []),
         ],
       },
+      ...(catalogDiscount && catalogDiscount.discountAmount > 0
+        ? [
+            {
+              emoji: '🔥',
+              title: t(ctx, 'checkout_catalog_discount_label', {
+                name: escapeTelegramMarkdown(catalogDiscount.activeDiscountTitle ?? ''),
+              }),
+              fields: [
+                {
+                  label: t(ctx, 'checkout_original_price_label'),
+                  value: `${localizedNumber(catalogDiscount.originalPrice, ctx)} ${currency}`,
+                },
+                {
+                  label: t(ctx, 'checkout_effective_price_label'),
+                  value: t(ctx, 'shop_discount_price_line', {
+                    price: localizedNumber(catalogDiscount.originalPrice, ctx),
+                    amount: localizedNumber(catalogDiscount.effectivePrice, ctx),
+                    currency,
+                  }),
+                },
+                ...(catalogDiscount.discountExpiresAt
+                  ? [
+                      {
+                        emoji: '⏳',
+                        value: t(ctx, 'shop_discount_time_remaining', {
+                          remaining: formatRemainingDiscountDuration(
+                            catalogDiscount.discountExpiresAt,
+                            locale
+                          ),
+                        }),
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]
+        : []),
       ...(input.promoCode
         ? [
             {
@@ -242,11 +295,48 @@ async function executePurchaseFlow(
   // Pricing rules live in settings and are evaluated server-side. The
   // confirmation uses the same base amount that the wallet saga receives;
   // promo settlement remains authoritative inside the saga transaction.
-  const customQuote = await conversation.external((outsideCtx) =>
-    outsideCtx.services!.pricingService.getCustomPriceQuote(gbAmount, durationDays)
-  );
+  const phoneRequired = await conversation.external(async (outsideCtx) => {
+    const services = outsideCtx?.services ?? ctx.services!;
+    const phoneService =
+      services.contactVerificationService ??
+      new ContactVerificationService({
+        translationService: services.translationService,
+      });
+    return phoneService.shouldRequirePhoneForPurchase(telegramId);
+  });
+  if (phoneRequired) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUserEmptyState(
+        '📱',
+        t(ctx, 'onboarding_phone_verify_title'),
+        t(ctx, 'purchase_phone_required')
+      ),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'button_share_phone'), 'phone:verify:start')
+          .row()
+          .text(t(ctx, 'menu_back_shop'), 'nav:shop'),
+      }
+    );
+    return;
+  }
+
+  const { customQuote, catalogDiscount } = await conversation.external(async (outsideCtx) => {
+    const services = outsideCtx?.services ?? ctx.services!;
+    const quote = services.pricingService.getCustomPriceQuote(gbAmount, durationDays);
+    const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
+    const discount = resolveBestCatalogDiscount(activeDiscounts, {
+      packageId: `custom_${gbAmount}gb_${durationDays}d`,
+      categoryId: null,
+      originalPrice: quote.totalPrice,
+    });
+    return { customQuote: quote, catalogDiscount: discount };
+  });
   const pricePerGb = customQuote.pricePerGb;
-  const totalCost = customQuote.totalPrice;
+  const totalCost = catalogDiscount.effectivePrice;
 
   const pendingPromo = await conversation.external((outsideCtx) =>
     getPendingPromoPricing(outsideCtx, telegramId, totalCost, gbAmount)
@@ -322,6 +412,7 @@ async function executePurchaseFlow(
       amount: displayedCost,
       pricePerGb,
       promoCode: pendingPromo.quote?.code,
+      catalogDiscount,
     }),
     {
       parse_mode: 'Markdown',
@@ -505,8 +596,22 @@ export async function buyPackageCustomNameConversation(
     return;
   }
 
+  const { catalogDiscount, effectivePkg } = await conversation.external(async (outsideCtx) => {
+    const services = outsideCtx?.services ?? ctx.services!;
+    const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
+    const discount = resolveBestCatalogDiscount(activeDiscounts, {
+      packageId: pkg.id,
+      categoryId: pkg.categoryId ?? null,
+      originalPrice: pkg.price,
+    });
+    return {
+      catalogDiscount: discount,
+      effectivePkg: discount.discountAmount > 0 ? { ...pkg, price: discount.effectivePrice } : pkg,
+    };
+  });
+
   const pendingPromo = await conversation.external((outsideCtx) =>
-    getPendingPromoPricing(outsideCtx, telegramId, pkg.price, pkg.gbAmount)
+    getPendingPromoPricing(outsideCtx, telegramId, effectivePkg.price, pkg.gbAmount)
   );
   if (pendingPromo.messageKey) {
     await replyInConversation(
@@ -517,7 +622,7 @@ export async function buyPackageCustomNameConversation(
     );
     return;
   }
-  const displayedPrice = pendingPromo.quote?.finalAmount ?? pkg.price;
+  const displayedPrice = pendingPromo.quote?.finalAmount ?? effectivePkg.price;
   const balance = await conversation.external((outsideCtx) =>
     outsideCtx.services!.walletService.getAvailableBalance(telegramId)
   );
@@ -541,7 +646,7 @@ export async function buyPackageCustomNameConversation(
       outsideCtx.services!.purchaseCheckoutService.create({
         telegramId,
         kind: 'new_config',
-        pkg,
+        pkg: effectivePkg,
         promoCode: pendingPromo.promoCode,
         ...(requestedUsername ? { requestedUsername } : {}),
         quotedAmount: displayedPrice,
@@ -627,6 +732,39 @@ export async function buyPackageCustomNameConversation(
           },
         ],
       },
+      ...(catalogDiscount.discountAmount > 0
+        ? [
+            {
+              emoji: '🔥',
+              title: t(ctx, 'checkout_catalog_discount_label', {
+                name: escapeTelegramMarkdown(catalogDiscount.activeDiscountTitle ?? ''),
+              }),
+              fields: [
+                {
+                  label: t(ctx, 'checkout_original_price_label'),
+                  value: `${localizedNumber(catalogDiscount.originalPrice, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  label: t(ctx, 'checkout_effective_price_label'),
+                  value: `${localizedNumber(catalogDiscount.effectivePrice, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                ...(catalogDiscount.discountExpiresAt
+                  ? [
+                      {
+                        emoji: '⏳',
+                        value: t(ctx, 'shop_discount_time_remaining', {
+                          remaining: formatRemainingDiscountDuration(
+                            catalogDiscount.discountExpiresAt,
+                            resolveContextLocale(ctx)
+                          ),
+                        }),
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]
+        : []),
       ...(pendingPromo.quote?.code
         ? [
             {
@@ -637,11 +775,11 @@ export async function buyPackageCustomNameConversation(
                   label: t(ctx, 'shop_promo_section'),
                   value: `\`${sanitizeTelegramInlineCode(pendingPromo.quote.code)}\``,
                 },
-                ...(pkg.price > displayedPrice
+                ...(effectivePkg.price > displayedPrice
                   ? [
                       {
                         label: t(ctx, 'checkout_discount_label'),
-                        value: `${localizedNumber(pkg.price - displayedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
+                        value: `${localizedNumber(effectivePkg.price - displayedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
                       },
                     ]
                   : []),
@@ -1907,5 +2045,155 @@ export async function transferBalanceConversation(
       buildUserEmptyState('⚠️', t(ctx, 'wallet_transfer_title'), t(ctx, errorKey)),
       { parse_mode: 'Markdown' }
     );
+  }
+}
+
+/**
+ * Privacy-first Telegram phone verification conversation.
+ * Verifies ownership (`contact.user_id === from.id`) and stores ONLY an HMAC-SHA256 hash.
+ */
+export async function verifyPhoneConversation(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<void> {
+  const userId = ctx.from?.id;
+  if (!userId || !ctx.services) return;
+
+  const returnAction = await conversation.external((outsideCtx) => {
+    const action = outsideCtx?.session?.phoneVerifyReturnAction;
+    if (outsideCtx?.session) {
+      delete outsideCtx.session.phoneVerifyReturnAction;
+    }
+    return action;
+  });
+
+  const phoneKeyboard = new Keyboard()
+    .requestContact(t(ctx, 'button_share_phone'))
+    .row()
+    .text(t(ctx, 'button_cancel_phone'))
+    .resized()
+    .oneTime();
+
+  const reasonText =
+    returnAction === 'trial'
+      ? t(ctx, 'trial_phone_required')
+      : returnAction === 'shop' || returnAction === 'custom_amount'
+        ? t(ctx, 'purchase_phone_required')
+        : undefined;
+
+  const promptScreen = buildUserScreen({
+    emoji: '📱',
+    title: t(ctx, 'onboarding_phone_verify_title'),
+    ...(reasonText ? { subtitle: reasonText } : {}),
+    footer: t(ctx, 'onboarding_phone_verify_prompt'),
+  });
+
+  const promptMsg = await ctx.reply(promptScreen, {
+    parse_mode: 'Markdown',
+    reply_markup: phoneKeyboard,
+  });
+  await conversation.external((outsideCtx) => {
+    if (outsideCtx?.session && promptMsg && typeof promptMsg.message_id === 'number') {
+      rememberUiMessage(outsideCtx.session, promptMsg.message_id, 'prompt');
+    }
+  });
+
+  const ownerId = await conversationOwnerId(conversation);
+  const cancelLabel = t(ctx, 'button_cancel_phone').trim();
+
+  for (;;) {
+    const input = await conversation.wait();
+    if (!(await acceptConversationOwner(input, ownerId))) continue;
+
+    const text = input.message?.text?.trim();
+    const isCancelText =
+      text === '/cancel' || text === cancelLabel || text === t(input, 'button_cancel_phone').trim();
+    const isCancelCallback = input.callbackQuery?.data === 'conversation:cancel';
+
+    if (isCancelText || isCancelCallback) {
+      if (isCancelCallback) {
+        await input.answerCallbackQuery({ text: t(input, 'operation_cancelled') });
+      }
+      await input.reply(t(input, 'operation_cancelled'), {
+        reply_markup: { remove_keyboard: true },
+      });
+      return;
+    }
+
+    await forwardConversationNavigation(conversation, input);
+
+    if (input.callbackQuery) {
+      await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
+      continue;
+    }
+
+    const contact = input.message?.contact;
+    if (!contact || !contact.phone_number) {
+      await input.reply(t(input, 'onboarding_phone_invalid'), {
+        parse_mode: 'Markdown',
+        reply_markup: phoneKeyboard,
+      });
+      continue;
+    }
+
+    const senderId = input.from?.id ?? ownerId ?? userId;
+    if (input.api && typeof input.api.deleteMessage === 'function') {
+      await deleteConsumedInputMessage(input);
+    }
+
+    // CRITICAL SECURITY CHECK: reject forwarded or third-party contacts.
+    if (!senderId || contact.user_id !== senderId) {
+      await input.reply(t(input, 'onboarding_phone_not_owner'), {
+        parse_mode: 'Markdown',
+        reply_markup: phoneKeyboard,
+      });
+      continue;
+    }
+
+    const result = await conversation.external(async (outsideCtx) => {
+      const services = outsideCtx?.services ?? ctx.services!;
+      const verificationService =
+        services.contactVerificationService ??
+        new ContactVerificationService({
+          translationService: services.translationService,
+        });
+      return verificationService.verifyAndBindPhone({
+        telegramId: senderId,
+        rawPhoneNumber: contact.phone_number,
+      });
+    });
+
+    if (!result.ok) {
+      const errorKey =
+        result.reason === 'iran_only'
+          ? 'onboarding_phone_iran_only'
+          : result.reason === 'already_bound'
+            ? 'onboarding_phone_already_bound'
+            : 'onboarding_phone_invalid';
+      await input.reply(t(input, errorKey), {
+        parse_mode: 'Markdown',
+        reply_markup: phoneKeyboard,
+      });
+      continue;
+    }
+
+    await input.reply(t(input, 'onboarding_phone_verified_success'), {
+      parse_mode: 'Markdown',
+      reply_markup: { remove_keyboard: true },
+    });
+
+    const continueKeyboard = new InlineKeyboard();
+    if (returnAction === 'trial') {
+      continueKeyboard.text(t(input, 'trial_start_button'), 'trial:claim').row();
+    } else if (returnAction === 'shop' || returnAction === 'custom_amount') {
+      continueKeyboard.text(t(input, 'menu_back_shop'), 'nav:shop').row();
+    }
+    continueKeyboard.text(t(input, 'menu_back_main'), 'nav:main');
+
+    await replyInConversation(conversation, input, t(input, 'navigation_continue_hint'), {
+      preferEdit: false,
+      reply_markup: continueKeyboard,
+    });
+    return;
   }
 }

@@ -19,7 +19,7 @@
  *        backed by `wallet_transactions.reference_id` UNIQUE constraint to guarantee idempotency.
  */
 
-import { and, count, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { logger } from '../../infra/logger.js';
 import { getDb } from '../../infra/db.js';
 import {
@@ -33,6 +33,7 @@ import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { SupportedLocale, TranslationService } from './TranslationService.js';
 import type { ReferralService } from './ReferralService.js';
 import type { PromoService } from './PromoService.js';
+import { receiptDuplicatePolicy } from './FeatureSettings.js';
 import { dbIntegerToSafeNumber } from './DbNumber.js';
 import crypto from 'crypto';
 import { WalletPurchaseSaga } from './WalletPurchaseSaga.js';
@@ -40,12 +41,19 @@ import type { RebeccaService } from './RebeccaService.js';
 import { isRebeccaPanelRegistryAccess, normalizeRebeccaPanelAccess } from './RebeccaPanelAccess.js';
 
 import {
+  DuplicateReceiptError,
   PendingTopupReceiptError,
   PurchaseInProgressError,
+  TopupVoidError,
   type AdminBalanceAdjustment,
   type DashboardStats,
   type PurchaseSagaParams,
   type PurchaseSagaResult,
+  type SubmitTopupReceiptParams,
+  type SubmitTopupReceiptResult,
+  type TopupReceiptFingerprint,
+  type VoidApprovedTopupParams,
+  type VoidApprovedTopupResult,
   type WalletTransferParams,
   type WalletTransferResult,
 } from './WalletContracts.js';
@@ -57,9 +65,11 @@ import {
 
 export {
   ADMIN_BALANCE_OPERATIONS,
+  DuplicateReceiptError,
   PendingTopupReceiptError,
   PurchaseInProgressError,
   PurchaseOutcomePendingError,
+  TopupVoidError,
 } from './WalletContracts.js';
 export type {
   AdminBalanceAdjustment,
@@ -67,6 +77,12 @@ export type {
   DashboardStats,
   PurchaseSagaParams,
   PurchaseSagaResult,
+  SubmitTopupReceiptParams,
+  SubmitTopupReceiptResult,
+  TopupReceiptFingerprint,
+  TopupVoidErrorReason,
+  VoidApprovedTopupParams,
+  VoidApprovedTopupResult,
   WalletTransferParams,
   WalletTransferResult,
 } from './WalletContracts.js';
@@ -462,19 +478,22 @@ export class WalletService {
     return Number(row?.value ?? 0);
   }
 
-  async submitTopupReceipt(
-    telegramId: number,
-    amount: number,
-    photoFileId: string,
-    mediaType: 'photo' | 'document' = 'photo'
-  ): Promise<string> {
+  async submitTopupReceiptDetailed(
+    params: SubmitTopupReceiptParams
+  ): Promise<SubmitTopupReceiptResult> {
+    const { telegramId, amount, photoFileId } = params;
+    const mediaType = params.mediaType ?? 'photo';
     assertPositiveSafeInteger(amount, 'INVALID_TOPUP_AMOUNT');
     if (!Number.isSafeInteger(telegramId) || telegramId <= 0 || !photoFileId.trim()) {
       throw new Error('INVALID_TOPUP_RECEIPT');
     }
 
+    const normalizedFileUniqueId = params.fileUniqueId?.trim() || null;
+    const normalizedFileSha256 = params.fileSha256?.trim().toLowerCase() || null;
+    const hasFingerprint = Boolean(normalizedFileUniqueId || normalizedFileSha256);
+
     const receiptId = `rec_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
-    await getDb().transaction(async (tx) => {
+    const duplicateOfReceiptId = await getDb().transaction(async (tx) => {
       // Serialize submissions per wallet owner. This prevents two bot workers
       // from accepting duplicate pending receipts for the same user.
       const [owner] = await tx
@@ -490,16 +509,82 @@ export class WalletService {
         .where(and(eq(topupReceipts.telegramId, telegramId), eq(topupReceipts.status, 'pending')))
         .limit(1);
       if (pending) throw new PendingTopupReceiptError(pending.id);
+
+      let matchedDuplicateId: string | null = null;
+      if (hasFingerprint) {
+        const matchConditions: SQL[] = [];
+        if (normalizedFileUniqueId) {
+          matchConditions.push(eq(topupReceipts.fileUniqueId, normalizedFileUniqueId));
+        }
+        if (normalizedFileSha256) {
+          matchConditions.push(eq(topupReceipts.fileSha256, normalizedFileSha256));
+        }
+        const duplicateWhere =
+          matchConditions.length === 1 ? matchConditions[0]! : or(...matchConditions)!;
+
+        const priorMatches = await tx
+          .select({
+            id: topupReceipts.id,
+            status: topupReceipts.status,
+            createdAt: topupReceipts.createdAt,
+          })
+          .from(topupReceipts)
+          .where(duplicateWhere)
+          .orderBy(desc(topupReceipts.createdAt))
+          .limit(10);
+
+        const nonRejectedMatch = priorMatches.find(
+          (row) => row.id !== receiptId && row.status !== 'rejected'
+        );
+        const fallbackMatch = priorMatches.find((row) => row.id !== receiptId);
+        const matchedReceipt = nonRejectedMatch ?? fallbackMatch ?? null;
+
+        if (matchedReceipt) {
+          const policy =
+            typeof this.translationService?.getSetting === 'function'
+              ? receiptDuplicatePolicy(this.translationService)
+              : 'warn';
+          if (policy === 'block') {
+            throw new DuplicateReceiptError(matchedReceipt.id);
+          }
+          matchedDuplicateId = matchedReceipt.id;
+        }
+      }
+
       await tx.insert(topupReceipts).values({
         id: receiptId,
         telegramId,
         amount,
         photoFileId,
         mediaType,
+        ...(normalizedFileUniqueId ? { fileUniqueId: normalizedFileUniqueId } : {}),
+        ...(normalizedFileSha256 ? { fileSha256: normalizedFileSha256 } : {}),
+        ...(matchedDuplicateId ? { duplicateOfReceiptId: matchedDuplicateId } : {}),
         status: 'pending',
       });
+
+      return matchedDuplicateId;
     });
-    return receiptId;
+
+    return { receiptId, duplicateOfReceiptId };
+  }
+
+  async submitTopupReceipt(
+    telegramId: number,
+    amount: number,
+    photoFileId: string,
+    mediaType: 'photo' | 'document' = 'photo',
+    fingerprint?: TopupReceiptFingerprint
+  ): Promise<string> {
+    const result = await this.submitTopupReceiptDetailed({
+      telegramId,
+      amount,
+      photoFileId,
+      mediaType,
+      fileUniqueId: fingerprint?.fileUniqueId,
+      fileSha256: fingerprint?.fileSha256,
+    });
+    return result.receiptId;
   }
 
   async rejectTopup(
@@ -527,6 +612,228 @@ export class WalletService {
       });
       return { telegramId: rejected.telegramId };
     });
+  }
+
+  /**
+   * Atomically and idempotently void an approved top-up receipt.
+   *
+   * - Only `'approved'` receipts can be voided (`'voided'` returns `alreadyVoided: true`;
+   *   missing or `'pending'`/`'rejected'` throws `TopupVoidError`).
+   * - Deducts up to available free balance (`Math.max(0, balance - reservedBalance)`),
+   *   never driving wallet balance negative or below reserved funds.
+   * - Writes a deterministic `wallet_transactions` ledger entry (`type: 'topup_void'`,
+   *   `referenceId: 'void_<receiptId>'`) and an immutable `audit_logs` record.
+   * - When `shortfallAmount > 0` and `disablePurchasedConfigs` is enabled, disables
+   *   active configs owned by the user created at or after the receipt's approval/creation time.
+   */
+  async voidApprovedTopup(params: VoidApprovedTopupParams): Promise<VoidApprovedTopupResult> {
+    const receiptId = params.receiptId?.trim();
+    if (!receiptId || !Number.isSafeInteger(params.adminId) || params.adminId <= 0) {
+      throw new TopupVoidError('not_found', receiptId ?? '');
+    }
+
+    const db = getDb();
+    const txResult = await db.transaction(async (tx) => {
+      const [receipt] = await tx
+        .select()
+        .from(topupReceipts)
+        .where(eq(topupReceipts.id, receiptId))
+        .for('update')
+        .limit(1);
+
+      if (!receipt) {
+        throw new TopupVoidError('not_found', receiptId);
+      }
+      if (receipt.status === 'voided') {
+        return {
+          alreadyVoided: true as const,
+          receiptId: receipt.id,
+          telegramId: receipt.telegramId,
+          originalAmount: receipt.amount,
+          deductedAmount: 0,
+          shortfallAmount: 0,
+          balanceAfter: undefined as number | undefined,
+          cutoffDate: receipt.createdAt,
+        };
+      }
+      if (receipt.status !== 'approved') {
+        throw new TopupVoidError('not_approved', receiptId, receipt.status);
+      }
+
+      const [user] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.telegramId, receipt.telegramId))
+        .for('update')
+        .limit(1);
+      if (!user) {
+        throw new Error('USER_NOT_FOUND');
+      }
+
+      const reserved = Math.max(0, user.reservedBalance ?? 0);
+      const availableBalance = Math.max(0, user.balance - reserved);
+      const deductedAmount = Math.min(availableBalance, receipt.amount);
+      const shortfallAmount = receipt.amount - deductedAmount;
+      const balanceAfter = user.balance - deductedAmount;
+      const now = new Date();
+      const trimmedReason = params.reason?.trim() || null;
+
+      const receiptWithApprovedAt = receipt as typeof receipt & { approvedAt?: Date | null };
+      const cutoffDate =
+        receiptWithApprovedAt.approvedAt ?? receipt.updatedAt ?? receipt.createdAt ?? now;
+
+      if (deductedAmount > 0) {
+        await tx
+          .update(users)
+          .set({ balance: balanceAfter, updatedAt: now })
+          .where(eq(users.telegramId, receipt.telegramId));
+      }
+
+      await tx
+        .update(topupReceipts)
+        .set({
+          status: 'voided',
+          voidedAt: now,
+          voidedBy: params.adminId,
+          voidReason: trimmedReason,
+          updatedAt: now,
+        })
+        .where(and(eq(topupReceipts.id, receiptId), eq(topupReceipts.status, 'approved')));
+
+      const txId = `tx_void_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+      await tx.insert(walletTransactions).values({
+        id: txId,
+        telegramId: receipt.telegramId,
+        amount: deductedAmount > 0 ? -deductedAmount : 0,
+        balanceAfter,
+        type: 'topup_void',
+        referenceId: `void_${receiptId}`,
+        description: trimmedReason
+          ? `Top-up receipt ${receiptId} voided by admin ${params.adminId}: ${trimmedReason}`
+          : `Top-up receipt ${receiptId} voided by admin ${params.adminId}`,
+      });
+
+      await tx.insert(auditLogs).values({
+        id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+        actorTelegramId: params.adminId,
+        action: 'topup_receipt_voided',
+        entityType: 'topup_receipt',
+        entityId: receipt.id,
+        targetTelegramId: receipt.telegramId,
+        metadata: JSON.stringify({
+          originalAmount: receipt.amount,
+          deductedAmount,
+          shortfallAmount,
+          balanceAfter,
+          reason: trimmedReason,
+          disablePurchasedConfigs: Boolean(params.disablePurchasedConfigs),
+          disabledConfigs: [],
+        }),
+      });
+
+      return {
+        alreadyVoided: false as const,
+        receiptId: receipt.id,
+        telegramId: receipt.telegramId,
+        originalAmount: receipt.amount,
+        deductedAmount,
+        shortfallAmount,
+        balanceAfter,
+        cutoffDate,
+      };
+    });
+
+    if (txResult.alreadyVoided) {
+      return {
+        receiptId: txResult.receiptId,
+        telegramId: txResult.telegramId,
+        originalAmount: txResult.originalAmount,
+        deductedAmount: 0,
+        shortfallAmount: 0,
+        disabledConfigs: [],
+        alreadyVoided: true,
+      };
+    }
+
+    this.invalidateUserCache(txResult.telegramId);
+
+    const disabledConfigs: string[] = [];
+    if (
+      txResult.shortfallAmount > 0 &&
+      params.disablePurchasedConfigs &&
+      typeof params.disableConfig === 'function'
+    ) {
+      const candidateConfigs = await db
+        .select()
+        .from(userConfigs)
+        .where(
+          and(
+            eq(userConfigs.telegramId, txResult.telegramId),
+            gte(userConfigs.createdAt, txResult.cutoffDate),
+            or(
+              isNull(userConfigs.panelStatus),
+              inArray(userConfigs.panelStatus, ['active', 'on_hold'])
+            )
+          )
+        );
+
+      const cutoffMs = new Date(txResult.cutoffDate).getTime();
+      const eligibleConfigs = candidateConfigs.filter((cfg) => {
+        const status = cfg.panelStatus ?? 'active';
+        if (status === 'disabled' || status === 'deleted' || status === 'expired') {
+          return false;
+        }
+        if (cfg.createdAt && Number.isFinite(cutoffMs)) {
+          const createdMs = new Date(cfg.createdAt).getTime();
+          if (Number.isFinite(createdMs) && createdMs < cutoffMs) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      for (const cfg of eligibleConfigs) {
+        const username =
+          cfg.configUsername ?? (cfg as { rebeccaUsername?: string }).rebeccaUsername;
+        if (!username) continue;
+        try {
+          await params.disableConfig(username, cfg.panelId);
+          disabledConfigs.push(username);
+        } catch (err) {
+          logger.warn(
+            { err, receiptId: txResult.receiptId, username, panelId: cfg.panelId },
+            'Failed to disable config purchased after voided top-up'
+          );
+        }
+      }
+
+      if (disabledConfigs.length > 0) {
+        await db.insert(auditLogs).values({
+          id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+          actorTelegramId: params.adminId,
+          action: 'topup_receipt_void_configs_disabled',
+          entityType: 'topup_receipt',
+          entityId: txResult.receiptId,
+          targetTelegramId: txResult.telegramId,
+          metadata: JSON.stringify({
+            receiptId: txResult.receiptId,
+            shortfallAmount: txResult.shortfallAmount,
+            disabledConfigs,
+          }),
+        });
+      }
+    }
+
+    return {
+      receiptId: txResult.receiptId,
+      telegramId: txResult.telegramId,
+      originalAmount: txResult.originalAmount,
+      deductedAmount: txResult.deductedAmount,
+      shortfallAmount: txResult.shortfallAmount,
+      balanceAfter: txResult.balanceAfter,
+      disabledConfigs,
+      alreadyVoided: false,
+    };
   }
 
   async listPendingTopups(limit = 5) {
@@ -589,7 +896,7 @@ export class WalletService {
     options: {
       page?: number;
       pageSize?: number;
-      status?: 'pending' | 'approved' | 'rejected' | 'all';
+      status?: 'pending' | 'approved' | 'rejected' | 'voided' | 'all';
       search?: string;
     } = {}
   ): Promise<{
@@ -599,8 +906,14 @@ export class WalletService {
       amount: number;
       photoFileId: string;
       mediaType: string;
+      fileUniqueId: string | null;
+      fileSha256: string | null;
+      duplicateOfReceiptId: string | null;
       status: string;
       reviewedBy: number | null;
+      voidedAt: Date | null;
+      voidedBy: number | null;
+      voidReason: string | null;
       createdAt: Date;
       updatedAt: Date;
       user: {
@@ -674,8 +987,14 @@ export class WalletService {
           amount: topupReceipts.amount,
           photoFileId: topupReceipts.photoFileId,
           mediaType: topupReceipts.mediaType,
+          fileUniqueId: topupReceipts.fileUniqueId,
+          fileSha256: topupReceipts.fileSha256,
+          duplicateOfReceiptId: topupReceipts.duplicateOfReceiptId,
           status: topupReceipts.status,
           reviewedBy: topupReceipts.reviewedBy,
+          voidedAt: topupReceipts.voidedAt,
+          voidedBy: topupReceipts.voidedBy,
+          voidReason: topupReceipts.voidReason,
           createdAt: topupReceipts.createdAt,
           updatedAt: topupReceipts.updatedAt,
           username: users.username,
@@ -728,8 +1047,14 @@ export class WalletService {
       amount: r.amount,
       photoFileId: r.photoFileId,
       mediaType: r.mediaType,
+      fileUniqueId: r.fileUniqueId ?? null,
+      fileSha256: r.fileSha256 ?? null,
+      duplicateOfReceiptId: r.duplicateOfReceiptId ?? null,
       status: r.status,
       reviewedBy: r.reviewedBy,
+      voidedAt: r.voidedAt ?? null,
+      voidedBy: r.voidedBy ?? null,
+      voidReason: r.voidReason ?? null,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       user:

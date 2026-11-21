@@ -1556,4 +1556,135 @@ export const EN_TEXTS: Record<string, string> = {
   custom_name_invalid:
     '⚠️ Invalid name. Start with an English letter and use only letters, digits, and `_` (3–21 chars).',
   checkout_custom_name_label: 'Selected service name',
+
+  // Finance security, duplicate receipts, receipt void, multi-card
+  tx_type_topup_void: 'Top-up Voided',
+  admin_receipt_duplicate_warning: '⚠️ Duplicate receipt warning (matches receipt `#{short_id}`)',
+  topup_duplicate_blocked:
+    '⚠️ This receipt image was already submitted. Please upload a new valid payment receipt.',
+  admin_setting_receipt_duplicate_policy: 'Duplicate receipt policy',
+  admin_receipt_duplicate_policy_warn: '⚠️ Warn Admin',
+  admin_receipt_duplicate_policy_block: '🚫 Auto-Block',
+  admin_receipt_void_button: '🚫 Void Receipt',
+  admin_receipt_void_title: 'Void Approved Receipt',
+  admin_receipt_void_confirm_prompt:
+    'Are you sure you want to void receipt `#{short_id}` for *{amount} {currency}* from user `{telegram_id}`? The credited amount will be deducted from their wallet.',
+  admin_receipt_void_only_button: '🚫 Void & Deduct Balance',
+  admin_receipt_void_and_disable_button: '⛔ Void & Disable Services',
+  admin_receipt_void_success:
+    '✅ Receipt `#{short_id}` voided and *{amount} {currency}* deducted from the user wallet.',
+  admin_receipt_void_success_with_disabled:
+    '✅ Receipt `#{short_id}` voided, *{amount} {currency}* deducted, and {count} service(s) disabled.',
+  admin_receipt_void_not_approved: '⚠️ Only approved receipts can be voided.',
+  admin_receipt_void_already_voided: 'ℹ️ This receipt has already been voided.',
+  admin_user_receipt_status_voided: 'Voided',
+  admin_user_audit_action_receipt_voided: 'Approved Receipt Voided',
+  receipt_result_voided_title: 'Payment Receipt Voided',
+  receipt_result_voided_subtitle:
+    'Receipt `#{short_id}` for {amount} {currency} was voided by an administrator and deducted from your wallet.',
+  receipt_result_voided_disabled_configs:
+    '⚠️ Additionally, {count} service(s) purchased after this top-up were temporarily disabled. Please contact support if needed.',
+  topup_unique_amount_hint:
+    '💡 For faster verification, please transfer the exact unique amount: *{amount} {currency}*.',
+  topup_card_bank_label: 'Bank',
+  admin_setting_bank_cards_json: 'Bank cards',
+  admin_sales_bank_cards_button: '💳 Bank Cards',
+  admin_sales_bank_cards_title: 'Bank Cards Manager',
+  admin_sales_bank_cards_subtitle: 'Add, edit, and rotate payment bank cards',
+  admin_sales_bank_cards_empty: 'No extra bank cards configured yet; using the default card.',
+  admin_sales_bank_cards_add_button: '➕ Add Bank Card',
+
+  // Catalog Discounts / Flash Sales
+  admin_sales_discounts_button: '🔥 Flash Sales',
+  admin_sales_discounts_title: 'Catalog Discounts & Flash Sales',
+  admin_sales_discounts_subtitle:
+    'Manage scheduled discounts for all plans, categories, or packages',
+  admin_sales_discounts_empty: '📭 No catalog discounts created yet.',
+  admin_sales_discount_create_button: '➕ New Discount',
+  admin_sales_discount_detail_title: 'Catalog Discount Details',
+  admin_sales_discount_title_label: 'Title',
+  admin_sales_discount_scope_label: 'Scope',
+  admin_sales_discount_scope_all: 'All Packages',
+  admin_sales_discount_scope_category: 'Specific Category',
+  admin_sales_discount_scope_package: 'Specific Package',
+  admin_sales_discount_type_label: 'Discount Type',
+  admin_sales_discount_type_percent: 'Percentage (%)',
+  admin_sales_discount_type_fixed: 'Fixed Amount',
+  admin_sales_discount_value_label: 'Discount Value',
+  admin_sales_discount_max_cap_label: 'Max Discount Cap',
+  admin_sales_discount_starts_label: 'Starts At',
+  admin_sales_discount_expires_label: 'Expires At',
+  admin_sales_discount_title_prompt:
+    '🏷️ Enter the discount or campaign title (e.g., Weekend Sale):',
+  admin_sales_discount_scope_prompt: '🎯 Choose where this discount applies:',
+  admin_sales_discount_target_prompt: '📦 Select the target category or package:',
+  admin_sales_discount_type_prompt: '💰 Choose the discount type:',
+  admin_sales_discount_value_prompt: '🔢 Enter the discount value (1–100 for % or Toman amount):',
+  admin_sales_discount_max_cap_prompt:
+    '🛑 Enter maximum discount cap in Toman (send 0 for no cap):',
+  admin_sales_discount_start_prompt:
+    '📅 Enter start date (YYYY-MM-DD or `now` to start immediately):',
+  admin_sales_discount_expiry_prompt:
+    '⏳ Enter expiration date (YYYY-MM-DD or 0 for no expiration):',
+  admin_sales_discount_created: '✅ Discount "{name}" created.',
+  admin_sales_discount_toggled: '✅ Discount "{name}" status: {status}',
+  admin_sales_discount_deleted: '✅ Discount "{name}" deleted.',
+  admin_sales_discount_not_found: '⚠️ Discount not found.',
+  admin_sales_discount_activate_button: '✅ Activate',
+  admin_sales_discount_deactivate_button: '⏸ Deactivate',
+  admin_sales_discount_delete_button: '🗑 Delete Discount',
+  admin_sales_discount_broadcast_button: '📣 Broadcast Announcement',
+  admin_sales_discount_broadcast_template:
+    '🔥 *Flash Sale: {name}*\n\n{description}\n⏳ Valid until: {date}\n\nOpen Buy Service now to claim this special offer!',
+  admin_sales_discount_broadcast_queued: '✅ Flash sale announcement queued for {count} user(s).',
+  shop_discount_banner: '🔥 *Active Sale:* {name} · {remaining}',
+  shop_discount_price_line: '{price} → *{amount}* {currency}',
+  shop_discount_time_remaining: 'Time remaining: {remaining}',
+  checkout_catalog_discount_label: 'Special Offer ({name})',
+  checkout_original_price_label: 'Original price',
+  checkout_effective_price_label: 'Discounted price',
+
+  // Privacy-First Phone Verification (HMAC-SHA256)
+  onboarding_phone_verify_title: 'Phone Verification',
+  onboarding_phone_verify_prompt:
+    '🔐 To prevent abuse, please verify your Telegram phone number using the button below.\n\n*Privacy Guarantee:* Your raw phone number is never stored — only an irreversible cryptographic hash is saved.',
+  button_share_phone: '📱 Share My Phone Number',
+  button_cancel_phone: '✕ Cancel Verification',
+  onboarding_phone_not_owner:
+    '⚠️ Please share your own Telegram account phone number using the "Share My Phone Number" button.',
+  onboarding_phone_iran_only:
+    '⚠️ Only Iranian (+98) mobile phone numbers are currently accepted for verification.',
+  onboarding_phone_already_bound: '⚠️ This phone number is already linked to another account.',
+  onboarding_phone_invalid: '⚠️ Invalid contact received. Please try again using the button below.',
+  onboarding_phone_verified_success:
+    '✅ Your phone number has been verified successfully. You may now continue.',
+  trial_phone_required: '📱 Please verify your phone number first before claiming a free trial.',
+  purchase_phone_required: '📱 Please verify your phone number first before completing a purchase.',
+  admin_setting_require_phone_for_trial: 'Require phone verification for free trial',
+  admin_setting_require_phone_for_purchase: 'Require phone verification for purchases',
+  admin_setting_phone_verify_iran_only: 'Restrict to Iran (+98) numbers only',
+
+  // First-Use Nudge & Expired Config Cleanup
+  subscription_first_use_nudge_title: 'Quick Connection Guide',
+  subscription_first_use_nudge_body:
+    'Hi! We noticed your service `{username}` has not recorded any traffic yet.\n\nTo get started, open My Services, copy your subscription link, and import it into your VPN app. Reach out to support anytime if you need help!',
+  subscription_first_use_view_button: '📡 View Service',
+  subscription_first_use_support_button: '💬 Contact Support',
+  subscription_cleanup_warn_first_title: 'Expired Service Cleanup Notice',
+  subscription_cleanup_warn_first_body:
+    'Your expired service `{username}` will be automatically removed in *{days} days* unless renewed. Renew now to keep your configuration.',
+  subscription_cleanup_warn_last_title: 'Final Notice Before Service Deletion',
+  subscription_cleanup_warn_last_body:
+    '⚠️ Your expired service `{username}` will be permanently deleted in *{days} day(s)*. Renew now to avoid permanent removal.',
+  subscription_cleanup_renew_button: '🔄 Quick Renew',
+  subscription_cleanup_deleted_title: 'Expired Service Removed',
+  subscription_cleanup_deleted_body:
+    'Your expired service `{username}` was automatically deleted after its post-expiry grace period ended. You can purchase a new service anytime from the shop.',
+  admin_setting_group_retention: '🧹 Retention & Auto-Cleanup',
+  admin_setting_group_retention_desc: 'First-use connection nudge and expired service cleanup',
+  admin_setting_first_use_nudge_enabled: '24h first-use connection nudge',
+  admin_setting_expired_cleanup_enabled: 'Auto-cleanup of expired services',
+  admin_setting_expired_cleanup_grace_days: 'Post-expiry grace period (days)',
+  admin_setting_expired_cleanup_warn_days: 'Warning days before deletion (e.g. 3,1)',
+  admin_setting_expired_cleanup_preview: 'Services approaching deletion: *{count}*',
 };

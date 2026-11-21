@@ -14,6 +14,7 @@ import { adminMenu, renderAdminHome, renderSalesMenu } from '../keyboards/adminM
 import { showPromoCenter } from '../promoAdminUi.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
+import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { formatSubscriptionLink, localizedNumber, resolveServiceLocale, t } from '../locale.js';
 import { renderRenewalSelection, buildDeleteReviewScreen } from './subscriptions/routes.js';
@@ -83,6 +84,34 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     }
 
     if (payload === 'custom' || payload?.startsWith('custom_')) {
+      const phoneService =
+        services.contactVerificationService ??
+        new ContactVerificationService({
+          translationService: services.translationService,
+        });
+      if (await phoneService.shouldRequirePhoneForPurchase(telegramId)) {
+        ctx.session.phoneVerifyReturnAction = 'custom_amount';
+        if (typeof ctx.conversation?.enter === 'function') {
+          await ctx.conversation.enter('verifyPhoneConversation');
+        } else {
+          await renderScreen(
+            ctx,
+            buildUserEmptyState(
+              '📱',
+              t(ctx, 'onboarding_phone_verify_title'),
+              t(ctx, 'purchase_phone_required')
+            ),
+            {
+              parse_mode: 'Markdown',
+              reply_markup: new InlineKeyboard()
+                .text(t(ctx, 'button_share_phone'), 'phone:verify:start')
+                .row()
+                .text(t(ctx, 'menu_back_main'), 'nav:main'),
+            }
+          );
+        }
+        return;
+      }
       await ctx.conversation.enter('customAmountConversation');
       return;
     }
@@ -319,10 +348,52 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     await ctx.conversation.enter('adminLuckyWheelSettingsConversation');
   });
 
+  adminCallback('admin:sales:discounts', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('adminCatalogDiscountsConversation');
+  });
+
+  // Explicit phone verification entry CTA
+  bot.callbackQuery('phone:verify:start', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('verifyPhoneConversation');
+  });
+
   // Free Trial Claim Handler
   bot.callbackQuery('trial:claim', async (ctx) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
+
+    const phoneService =
+      services.contactVerificationService ??
+      new ContactVerificationService({
+        translationService: services.translationService,
+      });
+    if (await phoneService.shouldRequirePhoneForTrial(telegramId)) {
+      ctx.session.phoneVerifyReturnAction = 'trial';
+      await ctx.answerCallbackQuery();
+      if (typeof ctx.conversation?.enter === 'function') {
+        await ctx.conversation.enter('verifyPhoneConversation');
+      } else {
+        await renderScreen(
+          ctx,
+          buildUserEmptyState(
+            '📱',
+            t(ctx, 'onboarding_phone_verify_title'),
+            t(ctx, 'trial_phone_required')
+          ),
+          {
+            parse_mode: 'Markdown',
+            reply_markup: new InlineKeyboard()
+              .text(t(ctx, 'button_share_phone'), 'phone:verify:start')
+              .row()
+              .text(t(ctx, 'menu_back_main'), 'nav:main'),
+          }
+        );
+      }
+      return;
+    }
+
     if (!acquireUserActionCooldown(telegramId, 'trial-claim', 5_000)) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') });
       return;

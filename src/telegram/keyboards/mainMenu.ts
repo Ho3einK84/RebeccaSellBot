@@ -14,9 +14,20 @@ import {
   localizedNumber,
   localizedPackageName,
   observedContextLocale,
+  resolveContextLocale,
   t,
 } from '../locale.js';
-import type { PackageOption } from '../../domain/services/PricingService.js';
+import {
+  formatRemainingDiscountDuration,
+  type PackageOption,
+} from '../../domain/services/PricingService.js';
+import {
+  resolveBestCatalogDiscount,
+  safeListActiveDiscounts,
+  type CatalogDiscountRow,
+  type ResolvedCatalogDiscount,
+} from '../../domain/services/CatalogDiscountService.js';
+import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
@@ -116,6 +127,56 @@ function formatShopPromoBadge(
   return safeCode;
 }
 
+function findFeaturedShopDiscount(
+  packages: readonly PackageOption[],
+  activeDiscounts: readonly CatalogDiscountRow[]
+): ResolvedCatalogDiscount | undefined {
+  if (activeDiscounts.length === 0) return undefined;
+  let featured: ResolvedCatalogDiscount | undefined;
+  for (const pkg of packages) {
+    const resolved = resolveBestCatalogDiscount(activeDiscounts, {
+      packageId: pkg.id,
+      categoryId: pkg.categoryId ?? null,
+      originalPrice: pkg.price,
+    });
+    if (resolved.discountAmount <= 0) continue;
+    if (!featured || resolved.discountAmount > featured.discountAmount) {
+      featured = resolved;
+    }
+  }
+  if (!featured) {
+    const fallbackAll = activeDiscounts.find((d) => d.scope === 'all');
+    if (fallbackAll) {
+      featured = {
+        originalPrice: 0,
+        effectivePrice: 0,
+        discountAmount: fallbackAll.value,
+        activeDiscountId: fallbackAll.id,
+        activeDiscountTitle: fallbackAll.title,
+        discountExpiresAt: fallbackAll.expiresAt ? new Date(fallbackAll.expiresAt) : null,
+      };
+    }
+  }
+  return featured;
+}
+
+function buildShopDiscountBannerField(
+  ctx: MenuContext,
+  featured: ResolvedCatalogDiscount | undefined
+): Array<{ emoji?: string; label?: string; value: string }> {
+  if (!featured?.activeDiscountTitle) return [];
+  const locale = resolveContextLocale(ctx);
+  const remaining = formatRemainingDiscountDuration(featured.discountExpiresAt, locale);
+  return [
+    {
+      value: t(ctx, 'shop_discount_banner', {
+        name: escapeTelegramMarkdown(featured.activeDiscountTitle),
+        remaining,
+      }),
+    },
+  ];
+}
+
 /**
  * Render shop header text with live catalog summary, active category, and promo code if set.
  */
@@ -123,6 +184,9 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
   const pendingPromo = ctx.session.pendingPromo;
   const packages = ctx.services?.pricingService?.getPackages?.() ?? [];
   const categories = (await ctx.services?.packageCategoryService?.listCategories?.(false)) ?? [];
+  const activeDiscounts = ctx.services
+    ? await safeListActiveDiscounts(ctx.services.catalogDiscountService)
+    : [];
   const isCustomEnabled = ctx.services?.translationService
     ? customVolumeEnabled(ctx.services.translationService)
     : false;
@@ -140,6 +204,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           false,
           ctx.session.activeShopCategory
         ) ?? [];
+      const featuredCategoryDiscount = findFeaturedShopDiscount(catPackages, activeDiscounts);
       return buildUserScreen({
         emoji: category.icon || '📦',
         title: escapeTelegramMarkdown(category.name),
@@ -157,6 +222,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           {
             bullet: '',
             fields: [
+              ...buildShopDiscountBannerField(ctx, featuredCategoryDiscount),
               {
                 label: t(ctx, 'shop_available_plans_label'),
                 value:
@@ -178,11 +244,13 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
     return buildUserEmptyState('🛍️', t(ctx, 'shop_title'), t(ctx, 'shop_empty_message'));
   }
 
+  const featuredDiscount = findFeaturedShopDiscount(packages, activeDiscounts);
   const nonEmptyCategoryCount = categories.filter((cat) =>
     packages.some((pkg) => pkg.categoryId === cat.id)
   ).length;
 
   const catalogFields = [
+    ...buildShopDiscountBannerField(ctx, featuredDiscount),
     ...(packages.length > 0
       ? [
           {
@@ -269,20 +337,25 @@ function buildInsufficientBalanceScreen(
   });
 }
 
-function buildPurchaseCheckoutScreen(
+export function buildPurchaseCheckoutScreen(
   ctx: MenuContext,
   pkg: { name: string; gbAmount: number; durationDays: number; price: number; id: string },
   amount: number,
   promoCode?: string,
-  walletBalance?: number
+  walletBalance?: number,
+  catalogDiscount?: ResolvedCatalogDiscount
 ): string {
+  const hasCatalogDiscount = Boolean(catalogDiscount && catalogDiscount.discountAmount > 0);
+  const currency = t(ctx, 'currency_toman');
+  const locale = resolveContextLocale(ctx);
+
   return buildUserScreen({
     emoji: '🧾',
     title: t(ctx, 'purchase_review_title'),
     subtitle: t(ctx, 'purchase_review_subtitle'),
     primary: {
       label: t(ctx, 'checkout_total_label'),
-      value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
+      value: `${localizedNumber(amount, ctx)} ${currency}`,
       emphasizeValue: true,
     },
     sections: [
@@ -303,10 +376,47 @@ function buildPurchaseCheckoutScreen(
           },
           {
             label: t(ctx, 'checkout_unit_price_label'),
-            value: `${localizedNumber(pkg.gbAmount > 0 ? Math.round(amount / pkg.gbAmount) : amount, ctx)} ${t(ctx, 'currency_toman')}`,
+            value: `${localizedNumber(pkg.gbAmount > 0 ? Math.round(amount / pkg.gbAmount) : amount, ctx)} ${currency}`,
           },
         ],
       },
+      ...(hasCatalogDiscount && catalogDiscount
+        ? [
+            {
+              emoji: '🔥',
+              title: t(ctx, 'checkout_catalog_discount_label', {
+                name: escapeTelegramMarkdown(catalogDiscount.activeDiscountTitle ?? ''),
+              }),
+              fields: [
+                {
+                  label: t(ctx, 'checkout_original_price_label'),
+                  value: `${localizedNumber(catalogDiscount.originalPrice, ctx)} ${currency}`,
+                },
+                {
+                  label: t(ctx, 'checkout_effective_price_label'),
+                  value: t(ctx, 'shop_discount_price_line', {
+                    price: localizedNumber(catalogDiscount.originalPrice, ctx),
+                    amount: localizedNumber(catalogDiscount.effectivePrice, ctx),
+                    currency,
+                  }),
+                },
+                ...(catalogDiscount.discountExpiresAt
+                  ? [
+                      {
+                        emoji: '⏳',
+                        value: t(ctx, 'shop_discount_time_remaining', {
+                          remaining: formatRemainingDiscountDuration(
+                            catalogDiscount.discountExpiresAt,
+                            locale
+                          ),
+                        }),
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]
+        : []),
       ...(walletBalance !== undefined
         ? [
             {
@@ -314,11 +424,11 @@ function buildPurchaseCheckoutScreen(
               fields: [
                 {
                   label: t(ctx, 'checkout_wallet_balance_label'),
-                  value: `${localizedNumber(walletBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+                  value: `${localizedNumber(walletBalance, ctx)} ${currency}`,
                 },
                 {
                   label: t(ctx, 'checkout_remaining_balance_label'),
-                  value: `${localizedNumber(Math.max(0, walletBalance - amount), ctx)} ${t(ctx, 'currency_toman')}`,
+                  value: `${localizedNumber(Math.max(0, walletBalance - amount), ctx)} ${currency}`,
                 },
               ],
             },
@@ -334,11 +444,11 @@ function buildPurchaseCheckoutScreen(
                   label: t(ctx, 'shop_promo_section'),
                   value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
                 },
-                ...(pkg.price > amount
+                ...((catalogDiscount?.effectivePrice ?? pkg.price) > amount
                   ? [
                       {
                         label: t(ctx, 'checkout_discount_label'),
-                        value: `${localizedNumber(pkg.price - amount, ctx)} ${t(ctx, 'currency_toman')}`,
+                        value: `${localizedNumber((catalogDiscount?.effectivePrice ?? pkg.price) - amount, ctx)} ${currency}`,
                       },
                     ]
                   : []),
@@ -636,19 +746,79 @@ export function getEffectivePackagePrice(
 
 // ── Shop Menu ────────────────────────────────────────────────────────────────
 
+async function enforcePurchasePhoneGate(
+  ctx: MenuContext,
+  returnAction: 'shop' | 'custom_amount'
+): Promise<boolean> {
+  const telegramId = ctx.from?.id;
+  if (!telegramId || !ctx.services) return false;
+  const phoneService =
+    ctx.services.contactVerificationService ??
+    new ContactVerificationService({
+      translationService: ctx.services.translationService,
+    });
+  if (!(await phoneService.shouldRequirePhoneForPurchase(telegramId))) {
+    return false;
+  }
+
+  ctx.session.phoneVerifyReturnAction = returnAction;
+  if (typeof ctx.conversation?.enter === 'function') {
+    await ctx.conversation.enter('verifyPhoneConversation');
+  } else {
+    await renderScreen(
+      ctx,
+      buildUserEmptyState(
+        '📱',
+        t(ctx, 'onboarding_phone_verify_title'),
+        t(ctx, 'purchase_phone_required')
+      ),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'button_share_phone'), 'phone:verify:start')
+          .row()
+          .text(t(ctx, 'menu_back_shop'), 'nav:shop'),
+      }
+    );
+  }
+  return true;
+}
+
 function renderPackageButtons(
   range: Parameters<Parameters<typeof shopMenu.dynamic>[0]>[1],
-  packages: readonly PackageOption[]
+  packages: readonly PackageOption[],
+  activeDiscounts: readonly CatalogDiscountRow[] = []
 ) {
   for (const pkg of packages) {
     const isPopular =
       pkg.id.includes('popular') || pkg.id.includes('best') || pkg.id.includes('pro');
     const tag = isPopular ? '⭐ ' : '';
+    const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
+      packageId: pkg.id,
+      categoryId: pkg.categoryId ?? null,
+      originalPrice: pkg.price,
+    });
 
     range
       .text(
         (c) => {
-          const effectivePrice = getEffectivePackagePrice(pkg, c.session.pendingPromo);
+          const basePrice = catalogDiscount.effectivePrice;
+          const effectivePrice = getEffectivePackagePrice(
+            { price: basePrice, gbAmount: pkg.gbAmount },
+            c.session.pendingPromo
+          );
+          if (catalogDiscount.discountAmount > 0) {
+            const locale = resolveContextLocale(c);
+            const label = formatPackageButtonLabel(c, pkg, {
+              effectivePrice,
+              tag: `${tag}🔥 `,
+            });
+            const origPrice = localizedNumber(catalogDiscount.originalPrice, c);
+            const remaining = catalogDiscount.discountExpiresAt
+              ? ` · ⏳ ${formatRemainingDiscountDuration(catalogDiscount.discountExpiresAt, locale)}`
+              : '';
+            return `${label} (${origPrice})${remaining}`;
+          }
           return formatPackageButtonLabel(c, pkg, { effectivePrice, tag });
         },
         async (c) => {
@@ -656,7 +826,25 @@ function renderPackageButtons(
           const chatId = c.chat?.id;
           if (!telegramId || !chatId || !c.services) return;
 
-          const pendingPromo = await getPendingPromoPricing(c, telegramId, pkg.price, pkg.gbAmount);
+          if (await enforcePurchasePhoneGate(c, 'shop')) {
+            return;
+          }
+
+          const latestDiscounts = await safeListActiveDiscounts(c.services.catalogDiscountService);
+          const liveDiscount = resolveBestCatalogDiscount(latestDiscounts, {
+            packageId: pkg.id,
+            categoryId: pkg.categoryId ?? null,
+            originalPrice: pkg.price,
+          });
+          const effectivePkg: PackageOption =
+            liveDiscount.discountAmount > 0 ? { ...pkg, price: liveDiscount.effectivePrice } : pkg;
+
+          const pendingPromo = await getPendingPromoPricing(
+            c,
+            telegramId,
+            effectivePkg.price,
+            pkg.gbAmount
+          );
           if (pendingPromo.messageKey) {
             await renderScreen(
               c,
@@ -669,7 +857,7 @@ function renderPackageButtons(
             );
             return;
           }
-          const displayedPrice = pendingPromo.quote?.finalAmount ?? pkg.price;
+          const displayedPrice = pendingPromo.quote?.finalAmount ?? effectivePkg.price;
           const balance = await c.services.walletService.getBalance(telegramId);
           if (balance < displayedPrice) {
             const insufficientKeyboard = new InlineKeyboard()
@@ -698,7 +886,7 @@ function renderPackageButtons(
             checkout = await c.services.purchaseCheckoutService.create({
               telegramId,
               kind: 'new_config',
-              pkg,
+              pkg: effectivePkg,
               promoCode: pendingPromo.promoCode,
               quotedAmount: displayedPrice,
             });
@@ -733,7 +921,14 @@ function renderPackageButtons(
 
           await renderScreen(
             c,
-            buildPurchaseCheckoutScreen(c, pkg, displayedPrice, pendingPromo.quote?.code, balance),
+            buildPurchaseCheckoutScreen(
+              c,
+              pkg,
+              displayedPrice,
+              pendingPromo.quote?.code,
+              balance,
+              liveDiscount
+            ),
             {
               parse_mode: 'Markdown',
               reply_markup: confirmKeyboard,
@@ -748,6 +943,7 @@ function renderPackageButtons(
 export const shopMenu = new Menu<MenuContext>('shop-menu')
   .dynamic(async (ctx, range) => {
     if (!ctx.services) return;
+    const activeDiscounts = await safeListActiveDiscounts(ctx.services.catalogDiscountService);
 
     if (ctx.session.activeShopCategory) {
       const categoryPackages = ctx.services.pricingService.getPackages(
@@ -765,7 +961,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           )
           .row();
       } else {
-        renderPackageButtons(range, categoryPackages);
+        renderPackageButtons(range, categoryPackages, activeDiscounts);
       }
 
       range
@@ -806,7 +1002,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           ? ctx.services.pricingService.getPackages(undefined, undefined, false, null)
           : allPackages;
 
-      renderPackageButtons(range, uncategorizedPackages);
+      renderPackageButtons(range, uncategorizedPackages, activeDiscounts);
 
       if (customVolumeEnabled(ctx.services.translationService)) {
         const customPricePerGb = ctx.services.translationService.getSettingNum(
@@ -821,6 +1017,9 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
                 await renderScreen(c, t(c, 'custom_volume_unavailable'), {
                   reply_markup: backKeyboard(c, 'main'),
                 });
+                return;
+              }
+              if (await enforcePurchasePhoneGate(c, 'custom_amount')) {
                 return;
               }
               await c.conversation.enter('customAmountConversation');
@@ -899,6 +1098,8 @@ export async function renderWalletStatementScreen(
     switch (type) {
       case 'topup':
         return '➕';
+      case 'topup_void':
+        return '🚫';
       case 'purchase':
         return '🛍️';
       case 'refund':
@@ -922,6 +1123,7 @@ export async function renderWalletStatementScreen(
 
   const TRANSACTION_TYPE_MAP: Record<string, string> = {
     topup: 'tx_type_topup',
+    topup_void: 'tx_type_topup_void',
     purchase: 'tx_type_purchase',
     refund: 'tx_type_refund',
     admin_adjustment: 'tx_type_admin_adjustment',

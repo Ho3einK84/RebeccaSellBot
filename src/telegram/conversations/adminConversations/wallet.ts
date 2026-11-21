@@ -1,18 +1,18 @@
+import crypto from 'node:crypto';
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { logger } from '../../../infra/logger.js';
+import { downloadTelegramFile } from '../../../infra/telegramFiles.js';
+import { localizedDate, localizedNumber, t } from '../../locale.js';
 import {
-  localizedDate,
-  localizedNumber,
-  localizedNumberForLocale,
-  t,
-  tForLocale,
-} from '../../locale.js';
-import {
+  DuplicateReceiptError,
   PendingTopupReceiptError,
   type AdminBalanceOperation,
 } from '../../../domain/services/WalletService.js';
-import { sendBalanceAdjustmentNotification } from '../../features/admin/adminNotifications.js';
+import {
+  sendAdminNewReceiptNotification,
+  sendBalanceAdjustmentNotification,
+} from '../../features/admin/adminNotifications.js';
 import { formatReceiptShortId } from '../../features/admin/receiptRoutes.js';
 import {
   acceptConversationOwner,
@@ -32,7 +32,6 @@ import {
   sendArtifactInConversation,
   waitForAdminCallbackInput,
   waitForCallbackInput,
-  waitForReceiptMediaInput,
   type ReceiptMediaInput,
   waitForAdminTextInput,
 } from '../../ui.js';
@@ -44,6 +43,67 @@ import {
   requireAdmin,
 } from './shared.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
+
+export interface TopupReceiptMediaInput extends ReceiptMediaInput {
+  fileUniqueId?: string;
+}
+
+export async function computeReceiptFileSha256(
+  botToken: string | undefined,
+  fileId: string,
+  downloader: typeof downloadTelegramFile = downloadTelegramFile
+): Promise<string | null> {
+  if (!botToken?.trim() || !fileId.trim()) return null;
+  try {
+    const downloaded = await downloader(botToken, fileId, { timeoutMs: 5_000 });
+    if (!downloaded.ok || !downloaded.buffer || downloaded.buffer.byteLength === 0) {
+      return null;
+    }
+    return crypto.createHash('sha256').update(downloaded.buffer).digest('hex');
+  } catch (err) {
+    logger.debug({ err, fileId }, 'Could not hash receipt media bytes; proceeding without SHA-256');
+    return null;
+  }
+}
+
+async function waitForTopupReceiptMedia(
+  conversation: MyConversation
+): Promise<TopupReceiptMediaInput | undefined> {
+  const ownerId = await conversationOwnerId(conversation);
+  for (;;) {
+    const input = await conversation.wait();
+    if (!(await acceptConversationOwner(input, ownerId))) continue;
+    if (await handleConversationCancel(conversation, input, 'home')) return undefined;
+    await forwardConversationNavigation(conversation, input);
+    if (input.callbackQuery) {
+      await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
+      continue;
+    }
+    const photos = input.message && 'photo' in input.message ? input.message.photo : undefined;
+    if (photos && photos.length > 0) {
+      await deleteConsumedInputMessage(input);
+      const largest = photos[photos.length - 1]!;
+      return {
+        fileId: largest.file_id,
+        fileUniqueId: largest.file_unique_id,
+        type: 'photo',
+      };
+    }
+    const document =
+      input.message && 'document' in input.message ? input.message.document : undefined;
+    if (document) {
+      await deleteConsumedInputMessage(input);
+      return {
+        fileId: document.file_id,
+        fileUniqueId: document.file_unique_id,
+        type: 'document',
+        mimeType: document.mime_type,
+      };
+    }
+    await deleteConsumedInputMessage(input);
+    await promptInConversation(conversation, input, t(input, 'photo_input_required'));
+  }
+}
 
 export function formatCardNumberGrouped(rawCard: string): string {
   const digits = rawCard.replace(/\D/g, '');
@@ -70,8 +130,26 @@ function buildPaymentInfoCard(
   cardNumber: string,
   cardHolder: string,
   amountToman?: number,
-  options: { title?: string; subtitle?: string; footer?: string } = {}
+  options: {
+    title?: string;
+    subtitle?: string;
+    footer?: string;
+    bankName?: string;
+    isUniqueAmount?: boolean;
+  } = {}
 ): string {
+  const uniqueHint =
+    options.isUniqueAmount && amountToman !== undefined
+      ? t(ctx, 'topup_unique_amount_hint', {
+          amount: localizedNumber(amountToman, ctx),
+          currency: t(ctx, 'currency_toman'),
+        })
+      : undefined;
+  const combinedFooter =
+    uniqueHint && options.footer
+      ? `${uniqueHint}\n${options.footer}`
+      : (uniqueHint ?? options.footer);
+
   return buildUserScreen({
     emoji: '💳',
     title: options.title ?? t(ctx, 'topup_title'),
@@ -98,10 +176,18 @@ function buildPaymentInfoCard(
             label: t(ctx, 'topup_card_holder_label'),
             value: escapeTelegramMarkdown(cardHolder),
           },
+          ...(options.bankName
+            ? [
+                {
+                  label: t(ctx, 'topup_card_bank_label'),
+                  value: escapeTelegramMarkdown(options.bankName),
+                },
+              ]
+            : []),
         ],
       },
     ],
-    footer: options.footer,
+    footer: combinedFooter,
   });
 }
 
@@ -175,15 +261,23 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     return;
   }
 
-  const { cardNumber, cardHolder, minimum, maximum } = await conversation.external((outsideCtx) => {
-    const ts = (outsideCtx?.services ?? ctx.services)!.translationService;
-    return {
-      cardNumber: ts.getSetting('card_number', '—'),
-      cardHolder: ts.getSetting('card_holder', '—'),
-      minimum: ts.getSettingNum('topup_min_amount', 10_000),
-      maximum: ts.getSettingNum('topup_max_amount', 10_000_000),
-    };
-  });
+  const { cardNumber, cardHolder, bankName, minimum, maximum } = await conversation.external(
+    (outsideCtx) => {
+      const targetServices = (outsideCtx?.services ?? ctx.services)!;
+      const ts = targetServices.translationService;
+      const selectedCard =
+        typeof targetServices.paymentService?.selectCardForTopup === 'function'
+          ? targetServices.paymentService.selectCardForTopup()
+          : null;
+      return {
+        cardNumber: selectedCard?.cardNumber || ts.getSetting('card_number', '—'),
+        cardHolder: selectedCard?.cardHolder || ts.getSetting('card_holder', '—'),
+        bankName: selectedCard?.bankName,
+        minimum: ts.getSettingNum('topup_min_amount', 10_000),
+        maximum: ts.getSettingNum('topup_max_amount', 10_000_000),
+      };
+    }
+  );
 
   const presets = buildTopupPresets(minimum, maximum);
   const presetKeyboard = new InlineKeyboard();
@@ -206,6 +300,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     conversation,
     ctx,
     buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
+      bankName,
       footer: t(ctx, 'topup_choose_amount_hint'),
     }),
     { parse_mode: 'Markdown', reply_markup: presetKeyboard }
@@ -250,6 +345,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       conversation,
       ctx,
       buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
+        bankName,
         footer: `⚠️ ${t(ctx, 'topup_amount_invalid_range', {
           min: localizedNumber(minimum, ctx),
           max: localizedNumber(maximum, ctx),
@@ -259,19 +355,20 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     );
   }
 
-  let mediaInput: ReceiptMediaInput | undefined;
+  let mediaInput: TopupReceiptMediaInput | undefined;
   while (!mediaInput) {
     await promptInConversation(
       conversation,
       ctx,
       buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
+        bankName,
         title: t(ctx, 'topup_receipt_title'),
         subtitle: t(ctx, 'topup_receipt_subtitle'),
         footer: t(ctx, 'topup_photo_prompt'),
       }),
       { parse_mode: 'Markdown' }
     );
-    mediaInput = await waitForReceiptMediaInput(conversation);
+    mediaInput = await waitForTopupReceiptMedia(conversation);
     if (mediaInput === undefined) return;
 
     await promptReceiptPreview(
@@ -279,6 +376,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       ctx,
       mediaInput,
       buildPaymentInfoCard(ctx, cardNumber, cardHolder, amountToman, {
+        bankName,
         title: t(ctx, 'topup_review_title'),
         subtitle: t(ctx, 'topup_review_subtitle'),
         footer: `⚠️ ${t(ctx, 'topup_review_consequence')}`,
@@ -304,20 +402,94 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
 
   const photoFileId = mediaInput.fileId;
   const mediaType = mediaInput.type;
+  const fileUniqueId = mediaInput.fileUniqueId ?? null;
 
   try {
-    const receiptId = await conversation.external(async (outsideCtx) => {
-      const targetCtx = outsideCtx?.services ? outsideCtx : ctx;
-      const id = await targetCtx.services!.walletService.submitTopupReceipt(
-        telegramId,
-        amountToman,
-        photoFileId,
-        mediaType
+    const submission = await conversation.external(
+      async (
+        outsideCtx
+      ): Promise<
+        | { status: 'ok'; receiptId: string }
+        | { status: 'duplicate_blocked' }
+        | { status: 'pending' }
+      > => {
+        const targetCtx = outsideCtx?.services ? outsideCtx : ctx;
+        const ws = targetCtx.services!.walletService;
+        let id: string;
+        let duplicateOfReceiptId: string | null = null;
+
+        try {
+          if (typeof ws.submitTopupReceiptDetailed === 'function') {
+            const fileSha256 = await computeReceiptFileSha256(targetCtx.api?.token, photoFileId);
+            const submitted = await ws.submitTopupReceiptDetailed({
+              telegramId,
+              amount: amountToman,
+              photoFileId,
+              mediaType,
+              fileUniqueId,
+              fileSha256,
+            });
+            id = submitted.receiptId;
+            duplicateOfReceiptId = submitted.duplicateOfReceiptId;
+          } else {
+            id = await ws.submitTopupReceipt(telegramId, amountToman, photoFileId, mediaType);
+          }
+        } catch (submitErr) {
+          if (
+            submitErr instanceof DuplicateReceiptError ||
+            (submitErr instanceof Error &&
+              ((submitErr as { code?: string }).code === 'DUPLICATE_RECEIPT' ||
+                submitErr.name === 'DuplicateReceiptError' ||
+                submitErr.message.startsWith('DUPLICATE_RECEIPT')))
+          ) {
+            return { status: 'duplicate_blocked' };
+          }
+          if (
+            submitErr instanceof PendingTopupReceiptError ||
+            (submitErr instanceof Error &&
+              (submitErr.name === 'PendingTopupReceiptError' ||
+                submitErr.message === 'PENDING_TOPUP_RECEIPT_EXISTS'))
+          ) {
+            return { status: 'pending' };
+          }
+          throw submitErr;
+        }
+
+        trackFunnelEvent('receipt_submit');
+        await notifyAdminsOfReceipt(
+          targetCtx,
+          id,
+          telegramId,
+          amountToman,
+          photoFileId,
+          mediaType,
+          duplicateOfReceiptId
+        );
+        return { status: 'ok', receiptId: id };
+      }
+    );
+
+    if (submission.status === 'duplicate_blocked') {
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildUserEmptyState('🚫', t(ctx, 'topup_receipt_title'), t(ctx, 'topup_duplicate_blocked')),
+        { parse_mode: 'Markdown', preferEdit: false }
       );
-      trackFunnelEvent('receipt_submit');
-      await notifyAdminsOfReceipt(targetCtx, id, telegramId, amountToman, photoFileId, mediaType);
-      return id;
-    });
+      return;
+    }
+
+    if (submission.status === 'pending') {
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildUserEmptyState('⏳', t(ctx, 'topup_pending_title'), t(ctx, 'topup_pending_subtitle')),
+        { parse_mode: 'Markdown', preferEdit: false }
+      );
+      return;
+    }
+
+    const receiptId = submission.receiptId;
 
     await sendArtifactInConversation(
       conversation,
@@ -341,12 +513,27 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
         .text(t(ctx, 'menu_back_main'), 'nav:main'),
     });
   } catch (err) {
+    if (
+      err instanceof DuplicateReceiptError ||
+      (err instanceof Error &&
+        ((err as { code?: string }).code === 'DUPLICATE_RECEIPT' ||
+          err.name === 'DuplicateReceiptError' ||
+          err.message.startsWith('DUPLICATE_RECEIPT')))
+    ) {
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildUserEmptyState('🚫', t(ctx, 'topup_receipt_title'), t(ctx, 'topup_duplicate_blocked')),
+        { parse_mode: 'Markdown', preferEdit: false }
+      );
+      return;
+    }
     if (err instanceof PendingTopupReceiptError) {
       await replyInConversation(
         conversation,
         ctx,
         buildUserEmptyState('⏳', t(ctx, 'topup_pending_title'), t(ctx, 'topup_pending_subtitle')),
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'Markdown', preferEdit: false }
       );
       return;
     }
@@ -355,7 +542,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       conversation,
       ctx,
       buildUserEmptyState('⚠️', t(ctx, 'topup_receipt_title'), t(ctx, 'topup_failed')),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', preferEdit: false }
     );
   }
 }
@@ -366,151 +553,19 @@ async function notifyAdminsOfReceipt(
   telegramId: number,
   amount: number,
   photoFileId: string,
-  mediaType: 'photo' | 'document' = 'photo'
+  mediaType: 'photo' | 'document' = 'photo',
+  duplicateOfReceiptId: string | null = null
 ): Promise<void> {
   if (!ctx.services) return;
-
-  const ts = ctx.services.translationService;
-  const notifyEnabled =
-    typeof ts.getSettingBool === 'function'
-      ? ts.getSettingBool('receipt_notify_enabled', true)
-      : true;
-  if (!notifyEnabled) {
-    logger.info({ receiptId }, 'Admin receipt notification skipped (disabled in settings)');
-    return;
-  }
-
-  const notifyAdminsSetting =
-    typeof ts.getSetting === 'function' ? ts.getSetting('receipt_notify_admins', '').trim() : '';
-  let targetAdminIds = ctx.services.adminIds;
-  if (notifyAdminsSetting && notifyAdminsSetting !== 'all') {
-    const configuredIds = notifyAdminsSetting
-      .split(',')
-      .map((id) => Number(id.trim()))
-      .filter((id) => Number.isSafeInteger(id) && id > 0);
-    if (configuredIds.length > 0) {
-      targetAdminIds = configuredIds;
-    }
-  }
-
-  const notifyMode =
-    typeof ts.getSetting === 'function'
-      ? (ts.getSetting('receipt_notify_mode', 'full') as 'full' | 'simple')
-      : 'full';
-  const createdAt = new Date();
-  const shortId = formatReceiptShortId(receiptId);
-
-  for (const adminId of targetAdminIds) {
-    try {
-      const adminLocale = (await ctx.services.userService.getLocale(adminId)) ?? ts.resolveLocale();
-
-      if (notifyMode === 'simple') {
-        const briefTitle = tForLocale(ts, adminLocale, 'admin_receipt_notify_simple_brief');
-        const simpleText = tForLocale(ts, adminLocale, 'admin_receipt_notify_simple_message', {
-          amount: localizedNumberForLocale(amount, adminLocale),
-          currency: tForLocale(ts, adminLocale, 'currency_toman'),
-          telegram_id: String(telegramId),
-          short_id: shortId,
-        });
-        await ctx.api.sendMessage(adminId, simpleText || `🔔 *${briefTitle}*`, {
-          parse_mode: 'Markdown',
-        });
-        continue;
-      }
-
-      const caption = buildScreen({
-        emoji: '🧾',
-        title: tForLocale(
-          ctx.services.translationService,
-          adminLocale,
-          'admin_receipt_review_title'
-        ),
-        subtitle: tForLocale(
-          ctx.services.translationService,
-          adminLocale,
-          'admin_receipt_review_subtitle'
-        ),
-        primary: {
-          emoji: '💰',
-          label: tForLocale(
-            ctx.services.translationService,
-            adminLocale,
-            'admin_receipt_amount_label'
-          ),
-          value: `${localizedNumberForLocale(amount, adminLocale)} ${tForLocale(ctx.services.translationService, adminLocale, 'currency_toman')}`,
-        },
-        sections: [
-          {
-            emoji: '👤',
-            title: tForLocale(
-              ctx.services.translationService,
-              adminLocale,
-              'admin_receipt_user_section'
-            ),
-            fields: [
-              {
-                emoji: '🆔',
-                label: tForLocale(
-                  ctx.services.translationService,
-                  adminLocale,
-                  'admin_receipt_user_label'
-                ),
-                value: `\`${telegramId}\``,
-              },
-              {
-                emoji: '🧾',
-                label: tForLocale(
-                  ctx.services.translationService,
-                  adminLocale,
-                  'admin_receipt_id_label'
-                ),
-                value: `\`#${receiptId}\``,
-              },
-              {
-                emoji: '📅',
-                label: tForLocale(
-                  ctx.services.translationService,
-                  adminLocale,
-                  'admin_receipt_created_label'
-                ),
-                value: createdAt.toLocaleDateString(adminLocale === 'fa' ? 'fa-IR' : 'en-US'),
-              },
-            ],
-          },
-        ],
-        footer: `⚡ ${tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_approve_hint')}`,
-      });
-      const receiptMenu = new InlineKeyboard()
-        .text(
-          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_approve'),
-          `receipt:quick_approve:${receiptId}`
-        )
-        .text(
-          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_reject'),
-          `receipt:reject_prompt:${receiptId}`
-        )
-        .row()
-        .text(
-          tForLocale(ctx.services.translationService, adminLocale, 'admin_receipt_dismiss_button'),
-          'ui:dismiss'
-        );
-      if (mediaType === 'document') {
-        await ctx.api.sendDocument(adminId, photoFileId, {
-          caption,
-          parse_mode: 'Markdown',
-          reply_markup: receiptMenu,
-        });
-      } else {
-        await ctx.api.sendPhoto(adminId, photoFileId, {
-          caption,
-          parse_mode: 'Markdown',
-          reply_markup: receiptMenu,
-        });
-      }
-    } catch (err) {
-      logger.warn({ err, adminId, receiptId }, 'Failed to notify admin of new receipt');
-    }
-  }
+  await sendAdminNewReceiptNotification(ctx.api, ctx.services, {
+    receiptId,
+    telegramId,
+    amount,
+    photoFileId,
+    mediaType,
+    duplicateOfReceiptId,
+    shortIdFormatter: formatReceiptShortId,
+  });
 }
 
 // ── Admin: set user wallet balance ────────────────────────────────────────────

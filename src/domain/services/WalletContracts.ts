@@ -36,6 +36,71 @@ export class PendingTopupReceiptError extends Error {
   }
 }
 
+export class DuplicateReceiptError extends Error {
+  readonly code = 'DUPLICATE_RECEIPT';
+
+  constructor(public readonly originalReceiptId: string) {
+    super(`DUPLICATE_RECEIPT:${originalReceiptId}`);
+    this.name = 'DuplicateReceiptError';
+  }
+}
+
+export type TopupVoidErrorReason = 'not_found' | 'not_approved';
+
+export class TopupVoidError extends Error {
+  readonly code: 'TOPUP_VOID_NOT_FOUND' | 'TOPUP_VOID_NOT_APPROVED';
+
+  constructor(
+    public readonly reason: TopupVoidErrorReason,
+    public readonly receiptId: string,
+    public readonly currentStatus?: string
+  ) {
+    super(
+      reason === 'not_found'
+        ? `TOPUP_VOID_NOT_FOUND:${receiptId}`
+        : `TOPUP_VOID_NOT_APPROVED:${receiptId}:${currentStatus ?? 'unknown'}`
+    );
+    this.name = 'TopupVoidError';
+    this.code = reason === 'not_found' ? 'TOPUP_VOID_NOT_FOUND' : 'TOPUP_VOID_NOT_APPROVED';
+  }
+}
+
+export interface TopupReceiptFingerprint {
+  fileUniqueId?: string | null;
+  fileSha256?: string | null;
+}
+
+export interface SubmitTopupReceiptParams extends TopupReceiptFingerprint {
+  telegramId: number;
+  amount: number;
+  photoFileId: string;
+  mediaType?: 'photo' | 'document';
+}
+
+export interface SubmitTopupReceiptResult {
+  receiptId: string;
+  duplicateOfReceiptId: string | null;
+}
+
+export interface VoidApprovedTopupParams {
+  receiptId: string;
+  adminId: number;
+  reason?: string;
+  disablePurchasedConfigs?: boolean;
+  disableConfig?: (username: string, panelId?: string) => Promise<void>;
+}
+
+export interface VoidApprovedTopupResult {
+  receiptId: string;
+  telegramId: number;
+  originalAmount: number;
+  deductedAmount: number;
+  shortfallAmount: number;
+  balanceAfter?: number;
+  disabledConfigs: string[];
+  alreadyVoided: boolean;
+}
+
 export interface PurchaseSagaResult {
   success: boolean;
   configUsername: string;

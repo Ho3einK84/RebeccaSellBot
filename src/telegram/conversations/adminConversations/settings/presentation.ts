@@ -101,6 +101,22 @@ export function buildLocaleSettingKeyboard(
     .text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`);
 }
 
+export function buildReceiptDuplicatePolicyKeyboard(
+  ctx: ConversationContext,
+  currentPolicy: string,
+  callbackPrefix: string
+): InlineKeyboard {
+  const isBlock = currentPolicy === 'block';
+  const warnLabel = t(ctx, 'admin_receipt_duplicate_policy_warn');
+  const blockLabel = t(ctx, 'admin_receipt_duplicate_policy_block');
+  return new InlineKeyboard()
+    .text(!isBlock ? `✅ ${warnLabel}` : warnLabel, `${callbackPrefix}warn`)
+    .row()
+    .text(isBlock ? `✅ ${blockLabel}` : blockLabel, `${callbackPrefix}block`)
+    .row()
+    .text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`);
+}
+
 export function buildEditorNavigationKeyboard(
   ctx: ConversationContext,
   groupId: SettingGroupId
@@ -141,13 +157,24 @@ export function buildSettingSavedScreen(
   });
 }
 
-export function buildSettingsGroupPrompt(ctx: ConversationContext, groupId: string): string {
+export function buildSettingsGroupPrompt(
+  ctx: ConversationContext,
+  groupId: string,
+  options?: { approachingDeletionCount?: number }
+): string {
   const group = getSettingGroup(groupId);
   if (!group) return '';
   const entries = group.settings.map(
     (key) =>
       `• ${escapeTelegramMarkdown(t(ctx, SETTING_LABELS[key]))}: \`${escapeInlineCode(displayAdminSettingValue(ctx, key))}\``
   );
+  if (groupId === 'retention' && options?.approachingDeletionCount !== undefined) {
+    entries.push(
+      `• ${t(ctx, 'admin_setting_expired_cleanup_preview', {
+        count: localizedNumber(options.approachingDeletionCount, ctx),
+      })}`
+    );
+  }
   return tm(
     ctx,
     'admin_settings_group_prompt',
@@ -279,6 +306,29 @@ export function displayAdminSettingValue(ctx: ConversationContext, key: string):
   if (key === 'backup_interval_hours') {
     const value = parseSettingNum(ctx.services.translationService.getSetting(key), 24);
     return `${localizedNumber(value, ctx)} ${t(ctx, 'hours_unit')}`;
+  }
+  if (key === 'expired_cleanup_grace_days') {
+    const value = parseSettingNum(ctx.services.translationService.getSetting(key), 14);
+    return `${localizedNumber(value, ctx)} ${t(ctx, 'days_unit')}`;
+  }
+  if (key === 'receipt_duplicate_policy') {
+    const policy = ctx.services.translationService.getSetting(key, 'warn').trim().toLowerCase();
+    return t(
+      ctx,
+      policy === 'block'
+        ? 'admin_receipt_duplicate_policy_block'
+        : 'admin_receipt_duplicate_policy_warn'
+    );
+  }
+  if (key === 'bank_cards_json') {
+    try {
+      const parsed: unknown = JSON.parse(ctx.services.translationService.getSetting(key, '[]'));
+      return Array.isArray(parsed)
+        ? localizedNumber(parsed.length, ctx)
+        : t(ctx, 'admin_setting_invalid');
+    } catch {
+      return t(ctx, 'admin_setting_invalid');
+    }
   }
   const definition = getSettingDefinition(key);
   if (definition?.editor.type === 'boolean') {
@@ -490,11 +540,17 @@ function escapeInlineCode(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('`', '\\`');
 }
 
-export function readSettingBool(ctx: ConversationContext, key: string): boolean {
-  const service = ctx.services?.translationService;
-  if (!service) return key === 'renewal_rollover_enabled';
+const DEFAULT_TRUE_BOOL_SETTINGS = new Set([
+  'renewal_rollover_enabled',
+  'first_use_nudge_enabled',
+  'phone_verify_iran_only',
+]);
 
-  const defaultValue = key === 'renewal_rollover_enabled';
+export function readSettingBool(ctx: ConversationContext, key: string): boolean {
+  const defaultValue = DEFAULT_TRUE_BOOL_SETTINGS.has(key);
+  const service = ctx.services?.translationService;
+  if (!service) return defaultValue;
+
   const boolReader = (
     service as typeof service & {
       getSettingBool?: (settingKey: string, fallback?: boolean) => boolean;

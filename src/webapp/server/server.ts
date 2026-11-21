@@ -14,6 +14,8 @@ import type { BotServices } from '../../telegram/types.js';
 import { DomainRegistryService } from '../../domain/services/DomainRegistryService.js';
 import { PackageCategoryService } from '../../domain/services/PackageCategoryService.js';
 import { PricingService } from '../../domain/services/PricingService.js';
+import { CatalogDiscountService } from '../../domain/services/CatalogDiscountService.js';
+import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 import { logger } from '../../infra/logger.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
 import { registerAdminRoutes } from './routes/adminRoutes.js';
@@ -456,6 +458,15 @@ export async function createWebAppServer(
     adminService: services.adminService,
   });
 
+  const resolvedCatalogDiscountService =
+    services.catalogDiscountService ?? new CatalogDiscountService();
+  const resolvedContactVerificationService =
+    services.contactVerificationService ??
+    new ContactVerificationService({
+      translationService: services.translationService,
+      botToken: config.BOT_TOKEN,
+    });
+
   registerUserRoutes(app, {
     userService: services.userService,
     walletService: services.walletService,
@@ -464,6 +475,8 @@ export async function createWebAppServer(
     translationService: services.translationService,
     botUsername: services.botUsername,
     purchaseCheckoutService: services.purchaseCheckoutService,
+    catalogDiscountService: resolvedCatalogDiscountService,
+    contactVerificationService: resolvedContactVerificationService,
   });
 
   // Static files & SPA fallback
