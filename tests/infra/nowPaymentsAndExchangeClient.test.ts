@@ -132,17 +132,33 @@ describe('ExchangeRateClient', () => {
     vi.restoreAllMocks();
   });
 
-  it('parses Nobitex Rial rate into Toman, caches result, and falls back to Wallex on error', async () => {
+  it('parses Nobitex market stats Rial rate, caches result, and falls back to Wallex USDTTMN and TGJU', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: 'ok', lastTradePrice: '850000' }), { status: 200 })
+        new Response(
+          JSON.stringify({
+            status: 'ok',
+            stats: { 'usdt-rls': { latest: '2727990', bestSell: '2728000' } },
+          }),
+          { status: 200 }
+        )
       )
       .mockRejectedValueOnce(new Error('nobitex timeout'))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            result: { symbols: { USDTIRT: { stats: { lastPrice: '86500' } } } },
+            result: { symbols: { USDTTMN: { stats: { lastPrice: '271389.0000' } } } },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockRejectedValueOnce(new Error('nobitex down'))
+      .mockRejectedValueOnce(new Error('wallex down'))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            current: { 'crypto-tether-irr': { p: '2,715,220' } },
           }),
           { status: 200 }
         )
@@ -151,25 +167,32 @@ describe('ExchangeRateClient', () => {
 
     const client = new ExchangeRateClient();
     const first = await client.fetchUsdTomanRate();
-    expect(first).toMatchObject({ rateToman: 85_000, provider: 'nobitex' });
+    expect(first).toMatchObject({ rateToman: 272_799, provider: 'nobitex' });
 
     // Cached second call does not trigger fetch
     const cached = await client.fetchUsdTomanRate();
-    expect(cached?.rateToman).toBe(85_000);
+    expect(cached?.rateToman).toBe(272_799);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // Forced refresh fails Nobitex -> succeeds via Wallex
+    // Forced refresh fails Nobitex -> succeeds via Wallex USDTTMN
     const refreshed = await client.fetchUsdTomanRate({ forceRefresh: true });
-    expect(refreshed).toMatchObject({ rateToman: 86_500, provider: 'wallex' });
+    expect(refreshed).toMatchObject({ rateToman: 271_389, provider: 'wallex' });
+
+    // Forced refresh fails Nobitex & Wallex -> succeeds via TGJU
+    const tgjuFallback = await client.fetchUsdTomanRate({ forceRefresh: true });
+    expect(tgjuFallback).toMatchObject({ rateToman: 271_522, provider: 'tgju' });
   });
 
   it('returns null when cold and all live providers fail or return out-of-bounds prices', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: 'ok', lastTradePrice: '50' }), { status: 200 })
+        new Response(JSON.stringify({ status: 'ok', stats: { 'usdt-rls': { latest: '50' } } }), {
+          status: 200,
+        })
       )
-      .mockResolvedValueOnce(new Response('bad gateway', { status: 502 }));
+      .mockResolvedValueOnce(new Response('bad gateway', { status: 502 }))
+      .mockResolvedValueOnce(new Response('service unavailable', { status: 503 }));
     vi.stubGlobal('fetch', fetchMock);
 
     const client = new ExchangeRateClient();

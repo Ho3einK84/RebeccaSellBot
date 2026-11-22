@@ -49,6 +49,7 @@ export class ExchangeRateClient {
     const providers: Array<{ name: string; run: () => Promise<number | null> }> = [
       { name: 'nobitex', run: () => this.fetchNobitexUsdtToman() },
       { name: 'wallex', run: () => this.fetchWallexUsdtToman() },
+      { name: 'tgju', run: () => this.fetchTgjuUsdtToman() },
     ];
 
     for (const provider of providers) {
@@ -80,10 +81,16 @@ export class ExchangeRateClient {
   }
 
   private async fetchNobitexUsdtToman(): Promise<number | null> {
-    const res = await this.fetchJson('https://apiv2.nobitex.ir/v3/orderbook/USDTIRT');
+    const res = await this.fetchJson(
+      'https://apiv2.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls'
+    );
     if (!res || typeof res !== 'object') return null;
-    const record = res as Record<string, unknown>;
-    const rawRial = Number(record.lastTradePrice);
+    const stats = (
+      res as {
+        stats?: Record<string, { latest?: unknown; bestSell?: unknown; mark?: unknown }>;
+      }
+    ).stats?.['usdt-rls'];
+    const rawRial = Number(stats?.latest ?? stats?.bestSell ?? stats?.mark);
     if (!Number.isFinite(rawRial) || rawRial <= 0) return null;
     return Math.round(rawRial / 10);
   }
@@ -91,12 +98,25 @@ export class ExchangeRateClient {
   private async fetchWallexUsdtToman(): Promise<number | null> {
     const res = await this.fetchJson('https://api.wallex.ir/v1/markets');
     if (!res || typeof res !== 'object') return null;
-    const result = (
+    const symbols = (
       res as { result?: { symbols?: Record<string, { stats?: { lastPrice?: unknown } }> } }
-    ).result;
-    const rawToman = Number(result?.symbols?.USDTIRT?.stats?.lastPrice);
+    ).result?.symbols;
+    const rawToman = Number(
+      symbols?.USDTTMN?.stats?.lastPrice ?? symbols?.USDTIRT?.stats?.lastPrice
+    );
     if (!Number.isFinite(rawToman) || rawToman <= 0) return null;
     return Math.round(rawToman);
+  }
+
+  private async fetchTgjuUsdtToman(): Promise<number | null> {
+    const res = await this.fetchJson('https://call.tgju.org/ajax.json');
+    if (!res || typeof res !== 'object') return null;
+    const current = (res as { current?: Record<string, { p?: unknown }> }).current;
+    const rawStr = current?.['crypto-tether-irr']?.p ?? current?.price_dollar_rl?.p;
+    if (typeof rawStr !== 'string' && typeof rawStr !== 'number') return null;
+    const rawRial = Number(String(rawStr).replace(/,/g, '').trim());
+    if (!Number.isFinite(rawRial) || rawRial <= 0) return null;
+    return Math.round(rawRial / 10);
   }
 
   private async fetchJson(url: string): Promise<unknown> {
@@ -105,7 +125,10 @@ export class ExchangeRateClient {
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'RebeccaSellBot/1.0',
+        },
         signal: controller.signal,
       });
       if (!response.ok) return null;
