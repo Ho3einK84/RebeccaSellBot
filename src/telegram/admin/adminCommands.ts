@@ -7,6 +7,7 @@ import { clearTransientConversationSession, renderScreen } from '../ui.js';
 import { clearAdminInput } from './adminInput.js';
 import { markAdminContext } from './adminNav.js';
 import { dispatchAdminRoute } from './adminRouter.js';
+import { formatUserDisplayName } from '../features/admin/userRoutes.js';
 
 /**
  * Sync native Telegram command menus:
@@ -112,9 +113,7 @@ export function registerAdminQuickCommands(bot: Bot<MenuContext>, services: BotS
 
     const kb = new InlineKeyboard();
     for (const candidate of candidates) {
-      const name =
-        `${candidate.firstName ?? ''} ${candidate.lastName ?? ''}`.trim() ||
-        (candidate.username ? `@${candidate.username}` : String(candidate.telegramId));
+      const name = formatUserDisplayName(candidate);
       const badge = candidate.isBanned ? '🚫 ' : candidate.activeSubscriptionCount > 0 ? '🟢 ' : '';
       kb.text(
         `${badge}${name} (${candidate.telegramId})`,

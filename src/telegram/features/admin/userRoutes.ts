@@ -43,6 +43,34 @@ import { formatReceiptShortId } from './receiptRoutes.js';
 const USER_PAGE_SIZE = 7;
 const USER_SERVICE_PAGE_SIZE = 4;
 
+/**
+ * Strip invisible/blank filler characters commonly used in Telegram names
+ * (Hangul filler \u3164, Braille blank \u2800, zero-width & directional marks)
+ * so `.trim()` does not treat an invisible name as non-empty.
+ */
+const INVISIBLE_NAME_CHARS_RE =
+  /(?:\p{Cc}|\p{Cf}|\p{Zl}|\p{Zp}|\u034F|\u115F|\u1160|\u17B4|\u17B5|\u2800|\u3000|\u3164|\uFFA0)+/gu;
+
+export function cleanVisibleUserName(firstName?: string | null, lastName?: string | null): string {
+  return `${firstName ?? ''} ${lastName ?? ''}`
+    .replace(INVISIBLE_NAME_CHARS_RE, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+export function formatUserDisplayName(user: {
+  telegramId: number | string;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+}): string {
+  const cleaned = cleanVisibleUserName(user.firstName, user.lastName);
+  if (cleaned) return cleaned;
+  const uname = user.username?.replace(INVISIBLE_NAME_CHARS_RE, '').trim().replace(/^@+/u, '');
+  if (uname) return `@${uname}`;
+  return `#${user.telegramId}`;
+}
+
 const USER_FILTERS: readonly { id: AdminUserListFilter; short: string; labelKey: string }[] = [
   { id: 'all', short: 'a', labelKey: 'admin_user_filter_all' },
   { id: 'active_subs', short: 's', labelKey: 'admin_user_filter_active' },
@@ -122,10 +150,7 @@ export async function renderUserListPage(
   filterRowKb(keyboard);
 
   for (const user of result.users) {
-    const displayName =
-      `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
-      user.username ||
-      String(user.telegramId);
+    const displayName = formatUserDisplayName(user);
     const badge = user.isBanned
       ? '🚫 '
       : user.activeSubscriptionCount > 0
@@ -211,9 +236,7 @@ function registerUserInputHandlers(): void {
 
     const kb = new InlineKeyboard();
     for (const candidate of candidates) {
-      const displayName =
-        `${candidate.firstName ?? ''} ${candidate.lastName ?? ''}`.trim() ||
-        (candidate.username ? `@${candidate.username}` : String(candidate.telegramId));
+      const displayName = formatUserDisplayName(candidate);
       const badge = candidate.isBanned ? '🚫 ' : candidate.activeSubscriptionCount > 0 ? '🟢 ' : '';
       kb.text(
         `${badge}${displayName} (${candidate.telegramId})`,
@@ -360,9 +383,7 @@ async function renderBalanceOpPicker(ctx: MenuContext, targetId: number): Promis
     await renderUserProfile(ctx, targetId);
     return;
   }
-  const displayName =
-    `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
-    (user.username ? `@${user.username}` : String(user.telegramId));
+  const displayName = formatUserDisplayName(user);
   const kb = new InlineKeyboard()
     .text(t(ctx, 'admin_balance_add'), `adm:usr:balo:${targetId}:add`)
     .text(t(ctx, 'admin_balance_deduct'), `adm:usr:balo:${targetId}:deduct`)
@@ -543,9 +564,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       await renderUserProfile(ctx, targetId);
       return;
     }
-    const displayName =
-      `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
-      (user.username ? `@${user.username}` : String(user.telegramId));
+    const displayName = formatUserDisplayName(user);
     await startAdminInput(ctx, {
       kind: 'usr:bal',
       payload: { targetId, op, currentBalance: user.balance, displayName },
@@ -565,9 +584,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       await renderUserProfile(ctx, targetId);
       return;
     }
-    const displayName =
-      `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
-      (user.username ? `@${user.username}` : String(user.telegramId));
+    const displayName = formatUserDisplayName(user);
     await renderBalanceConfirmation(ctx, targetId, displayName, user.balance, op, amount);
   });
 
@@ -1174,7 +1191,7 @@ export async function renderUserProfile(
   }
 
   const displayName =
-    `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || t(ctx, 'admin_name_unset');
+    cleanVisibleUserName(user.firstName, user.lastName) || t(ctx, 'admin_name_unset');
   const statusBadge = user.isBanned
     ? buildStatusBadge(ctx, 'inactive', t(ctx, 'admin_banned'))
     : buildStatusBadge(ctx, 'active', t(ctx, 'admin_active'));

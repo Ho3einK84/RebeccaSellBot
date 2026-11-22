@@ -32,6 +32,10 @@ import { registerAdminSalesRoutes } from '../../src/telegram/admin/adminSalesRou
 import { registerAdminSettingsRoutes } from '../../src/telegram/admin/adminSettingsRoutes.js';
 import { registerAdminTextsRoutes } from '../../src/telegram/admin/adminTextsRoutes.js';
 import { registerPromoAdminRoutes } from '../../src/telegram/features/admin/promoRoutes.js';
+import {
+  cleanVisibleUserName,
+  formatUserDisplayName,
+} from '../../src/telegram/features/admin/userRoutes.js';
 import { registerBaseRoutes } from '../../src/telegram/features/baseRoutes.js';
 import { registerCoreRoutes } from '../../src/telegram/features/coreRoutes.js';
 import { TranslationService } from '../../src/domain/services/TranslationService.js';
@@ -145,7 +149,7 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
 
     expect(text).toContain('admin_home_alert_panels');
     expect(text).toContain('admin_home_alert_receipts');
-    expect(text).toContain('admin_home_alert_orphans');
+    expect(text).not.toContain('admin_home_alert_orphans');
     expect(callbacks).toEqual(
       expect.arrayContaining([
         'adm:rcpt:q:1',
@@ -167,7 +171,7 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
       )?.inline_keyboard ?? []
     ).flat();
     const panelsBtn = buttons.find((b) => b.callback_data === 'adm:pnl:p:1');
-    expect(panelsBtn?.text).toContain('⚠️');
+    expect(panelsBtn?.text).toBe('admin_nav_panels (⚠️)');
     expect(panelsBtn?.text).not.toContain('🟢');
 
     // Calling again within TTL hits cache without re-probing panels
@@ -620,6 +624,25 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
     await harness.sendCallback('adm:cat:p:1', { userId: 1 });
     const catListText = String(harness.callsFor('editMessageText').at(-1)?.payload.text ?? '');
     expect(catListText).not.toMatch(/admin_?[a-z]+/iu);
+
+    // Verify invisible Unicode Telegram names fall back cleanly to @username or #telegramId
+    expect(cleanVisibleUserName('\u3164', '\u2800\u200B')).toBe('');
+    expect(
+      formatUserDisplayName({
+        telegramId: 123456,
+        firstName: '\u3164',
+        lastName: '\u2800',
+        username: 'skylink_user',
+      })
+    ).toBe('@skylink_user');
+    expect(
+      formatUserDisplayName({
+        telegramId: 123456,
+        firstName: '\u3164',
+        lastName: null,
+        username: null,
+      })
+    ).toBe('#123456');
   });
 });
 

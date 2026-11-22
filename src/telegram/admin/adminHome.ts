@@ -80,7 +80,7 @@ async function measurePanelHealth(
 
 export function buildAdminHomeKeyboard(
   ctx: MenuContext,
-  counts: { pendingReceipts: number; openOrphans: number; panelHealth: CachedPanelHealth | null }
+  counts: { pendingReceipts: number; openOrphans?: number; panelHealth: CachedPanelHealth | null }
 ): InlineKeyboard {
   const receiptsBase = t(ctx, 'admin_nav_receipts');
   const receiptsLabel =
@@ -92,12 +92,7 @@ export function buildAdminHomeKeyboard(
   let panelsLabel = panelsBase;
   if (counts.panelHealth && counts.panelHealth.configured > 0) {
     const healthIcon = counts.panelHealth.allHealthy ? '🟢' : '⚠️';
-    panelsLabel =
-      counts.openOrphans > 0
-        ? `${panelsBase} (${healthIcon}·${localizedNumber(counts.openOrphans, ctx)})`
-        : `${panelsBase} (${healthIcon})`;
-  } else if (counts.openOrphans > 0) {
-    panelsLabel = `${panelsBase} (⚠️ ${localizedNumber(counts.openOrphans, ctx)})`;
+    panelsLabel = `${panelsBase} (${healthIcon})`;
   }
 
   const kb = new InlineKeyboard()
@@ -130,16 +125,13 @@ export async function renderAdminHomeScreen(
   let dailyRevenue: number | undefined;
   let activeSubscriptions: number | undefined;
 
-  const [pendingRes, orphanSummary, panelHealth, statsRes] = await Promise.all([
+  const [pendingRes, panelHealth, statsRes] = await Promise.all([
     ctx.services?.walletService?.getPendingReceiptCount?.().catch(() => 0) ?? Promise.resolve(0),
-    ctx.services?.configReconciliationService?.getQueueSummary?.().catch(() => null) ??
-      Promise.resolve(null),
     measurePanelHealth(ctx, PANEL_HEALTH_FAST_TIMEOUT_MS, true),
     ctx.services?.walletService?.getDashboardStats?.().catch(() => null) ?? Promise.resolve(null),
   ]);
 
   let pendingReceipts = pendingRes ?? 0;
-  const openOrphans = orphanSummary?.openTotal ?? 0;
   if (statsRes) {
     dailyRevenue = statsRes.dailyRevenue;
     activeSubscriptions = statsRes.activeSubscriptions;
@@ -153,9 +145,6 @@ export async function renderAdminHomeScreen(
     alerts.push(
       t(ctx, 'admin_home_alert_receipts', { count: localizedNumber(pendingReceipts, ctx) })
     );
-  }
-  if (openOrphans > 0) {
-    alerts.push(t(ctx, 'admin_home_alert_orphans', { count: localizedNumber(openOrphans, ctx) }));
   }
   if (panelHealth && panelHealth.configured > 0 && !panelHealth.allHealthy) {
     alerts.push(
@@ -201,7 +190,6 @@ export async function renderAdminHomeScreen(
     parse_mode: 'Markdown',
     reply_markup: buildAdminHomeKeyboard(ctx, {
       pendingReceipts,
-      openOrphans,
       panelHealth,
     }),
   });

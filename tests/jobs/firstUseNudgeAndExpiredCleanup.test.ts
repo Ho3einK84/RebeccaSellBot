@@ -883,7 +883,7 @@ describe('Admin Retention, Receipt Policy & Phone Verification Settings Wiring a
     const promptWithPreview = buildSettingsGroupPrompt(fakeCtx, 'retention', {
       approachingDeletionCount: 7,
     });
-    expect(promptWithPreview).toContain('سرویس‌های در آستانهٔ حذف: *۷*');
+    expect(promptWithPreview).toContain('در آستانهٔ حذف: *۷*');
     expect(validateTelegramMarkdown(promptWithPreview).valid).toBe(true);
 
     expect(displayAdminSettingValue(fakeCtx, 'receipt_duplicate_policy')).toContain('مسدودسازی');

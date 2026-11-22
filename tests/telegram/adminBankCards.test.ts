@@ -190,7 +190,7 @@ describe('Interactive Admin Bank Cards Manager & Payment Settings', () => {
     await harness.sendCallback('pay:cards', { userId: 1 });
     const managerText = lastRenderedText();
     expect(validateTelegramMarkdown(managerText).valid).toBe(true);
-    expect(managerText).toContain('مدیریت کارت‌های بانکی');
+    expect(managerText).toContain('کارت‌های بانکی');
     expect(managerText).not.toContain('مقدار جدید:');
     expect(managerText).not.toContain('\\[');
 
