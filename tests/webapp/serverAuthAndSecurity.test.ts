@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { validateTelegramInitData } from '../../src/webapp/server/auth.js';
 import {
@@ -18,6 +18,7 @@ import type { BotServices } from '../../src/telegram/types.js';
 import {
   TEST_BOT_TOKEN,
   createMockBaseServices,
+  createResettableRateLimitStore,
   createSignedInitData,
   createTestConfig,
 } from './helpers/webappTestHarness.js';
@@ -168,16 +169,32 @@ describe('WebApp Server Auth, Security & Mesh Proxy', () => {
     let app: FastifyInstance;
     let mockUserService: ReturnType<typeof createMockBaseServices>['mockUserService'];
     let mockTranslationService: ReturnType<typeof createMockBaseServices>['mockTranslationService'];
+    const rateLimits = createResettableRateLimitStore();
 
-    beforeEach(async () => {
+    beforeAll(async () => {
       const base = createMockBaseServices();
       mockUserService = base.mockUserService;
       mockTranslationService = base.mockTranslationService;
-      app = await createWebAppServer(createTestConfig(), base.mockServices);
+      app = await createWebAppServer(createTestConfig(), base.mockServices, {
+        serveStatic: false,
+        rateLimitStore: rateLimits.Store,
+      });
     });
 
-    afterEach(async () => {
+    afterAll(async () => {
       if (app) await app.close();
+    });
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      rateLimits.reset();
+      mockTranslationService.getSettingBool.mockImplementation(
+        (key: string, defaultValue = false) => {
+          if (key === 'language_selection_enabled') return true;
+          if (key === 'webapp_enabled') return true;
+          return defaultValue;
+        }
+      );
     });
 
     it('authenticates admin user, sets session cookie, and returns Bearer token', async () => {
@@ -365,7 +382,7 @@ describe('WebApp Server Auth, Security & Mesh Proxy', () => {
       });
 
       it('permits authorized origin with credentials: true', async () => {
-        const app = await createWebAppServer(baseConfig, mockServices);
+        const app = await createWebAppServer(baseConfig, mockServices, { serveStatic: false });
         try {
           const res = await app.inject({
             method: 'OPTIONS',
@@ -383,7 +400,7 @@ describe('WebApp Server Auth, Security & Mesh Proxy', () => {
       });
 
       it('rejects unauthorized origin by omitting Access-Control-Allow-Origin', async () => {
-        const app = await createWebAppServer(baseConfig, mockServices);
+        const app = await createWebAppServer(baseConfig, mockServices, { serveStatic: false });
         try {
           const res = await app.inject({
             method: 'OPTIONS',
@@ -404,7 +421,7 @@ describe('WebApp Server Auth, Security & Mesh Proxy', () => {
           WEBAPP_URL: '',
           WEBHOOK_URL: '',
         } as Partial<Config>);
-        const app = await createWebAppServer(emptyConfig, mockServices);
+        const app = await createWebAppServer(emptyConfig, mockServices, { serveStatic: false });
         try {
           const res = await app.inject({
             method: 'OPTIONS',
@@ -433,7 +450,7 @@ describe('WebApp Server Auth, Security & Mesh Proxy', () => {
       });
 
       it('extracts user:<telegramId> for verified userSession or cryptographically verified JWT', async () => {
-        const app = await createWebAppServer(baseConfig, mockServices);
+        const app = await createWebAppServer(baseConfig, mockServices, { serveStatic: false });
         try {
           const validToken = app.jwt.sign({ telegramId: 443322, role: 'user' });
 
@@ -468,12 +485,13 @@ describe('WebApp Server Auth, Security & Mesh Proxy', () => {
       });
 
       it('rejects forged, wrong-secret, or non-positive JWT identities and falls back to ip:<ip>', async () => {
-        const app = await createWebAppServer(baseConfig, mockServices);
+        const app = await createWebAppServer(baseConfig, mockServices, { serveStatic: false });
         const wrongSecretApp = await createWebAppServer(
           createTestConfig({
             ADMIN_SESSION_SECRET: 'wrong_secret_definitely_different_from_real_32',
           }),
-          mockServices
+          mockServices,
+          { serveStatic: false }
         );
         try {
           const forgedToken = wrongSecretApp.jwt.sign({ telegramId: 55555, role: 'user' });
@@ -503,12 +521,13 @@ describe('WebApp Server Auth, Security & Mesh Proxy', () => {
       });
 
       it('isolates forged-JWT callers from legitimate user rate-limit buckets in live Fastify server', async () => {
-        const app = await createWebAppServer(baseConfig, mockServices);
+        const app = await createWebAppServer(baseConfig, mockServices, { serveStatic: false });
         const wrongApp = await createWebAppServer(
           createTestConfig({
             ADMIN_SESSION_SECRET: 'attacker_forged_secret_at_least_32_characters!!',
           }),
-          mockServices
+          mockServices,
+          { serveStatic: false }
         );
         try {
           let customHits = 0;

@@ -1,5 +1,8 @@
-import { defineConfig } from 'vitest/config';
+import os from 'node:os';
 import path from 'node:path';
+import { defineConfig } from 'vitest/config';
+
+const maxWorkers = process.env.CI ? 2 : Math.min(4, Math.max(2, os.availableParallelism() - 1));
 
 export default defineConfig({
   resolve: {
@@ -12,10 +15,32 @@ export default defineConfig({
     environment: 'node',
     unstubEnvs: true,
     unstubGlobals: true,
-    // Keep CI and small production hosts stable; each worker loads the full
-    // TypeScript/grammY graph and the suite does not benefit from wide fan-out.
-    maxWorkers: 2,
-    include: ['tests/**/*.test.ts'],
+    // Keep CI stable at 2 workers; locally scale to available cores minus 1 (capped at 4).
+    maxWorkers,
+    projects: [
+      {
+        extends: true,
+        test: {
+          // Pure DI suites (zero vi.mock / vi.resetModules / process.chdir): reuse module
+          // graph per thread worker so grammY / Fastify / React / catalogs load once.
+          name: 'shared',
+          pool: 'threads',
+          isolate: false,
+          include: ['tests/telegram/**/*.test.ts', 'tests/webapp/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          // Suites using vi.mock, vi.resetModules, process.chdir, or process-level state.
+          name: 'isolated',
+          pool: 'forks',
+          isolate: true,
+          include: ['tests/**/*.test.ts'],
+          exclude: ['tests/telegram/**/*.test.ts', 'tests/webapp/**/*.test.ts'],
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

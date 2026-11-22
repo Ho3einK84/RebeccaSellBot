@@ -1,15 +1,17 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createWebAppServer } from '../../src/webapp/server/server.js';
 import { RebeccaOriginDownError } from '../../src/domain/services/RebeccaService.js';
 import {
   TEST_BOT_TOKEN,
   createMockAdminServices,
+  createResettableRateLimitStore,
   createTestConfig,
 } from './helpers/webappTestHarness.js';
 
 describe('WebApp Server & Admin Routes', () => {
   let app: FastifyInstance;
+  const rateLimits = createResettableRateLimitStore();
   const {
     mockServices,
     mockAdminService,
@@ -20,14 +22,34 @@ describe('WebApp Server & Admin Routes', () => {
     mockPanelRegistry,
   } = createMockAdminServices();
   const mockConfig = createTestConfig();
+  const defaultGetSetting = mockTranslationService.getSetting.getMockImplementation();
+  const defaultUpdateSetting = mockTranslationService.updateSetting.getMockImplementation();
+  const defaultUpdateSettings = mockTranslationService.updateSettings;
 
-  beforeEach(async () => {
-    app = await createWebAppServer(mockConfig, mockServices);
+  beforeAll(async () => {
+    app = await createWebAppServer(mockConfig, mockServices, {
+      serveStatic: false,
+      rateLimitStore: rateLimits.Store,
+    });
   });
 
-  afterEach(async () => {
-    vi.unstubAllGlobals();
+  afterAll(async () => {
     if (app) await app.close();
+  });
+
+  beforeEach(() => {
+    if (defaultGetSetting) {
+      mockTranslationService.getSetting.mockImplementation(defaultGetSetting);
+    }
+    if (defaultUpdateSetting) {
+      mockTranslationService.updateSetting.mockImplementation(defaultUpdateSetting);
+    }
+    mockTranslationService.updateSettings = defaultUpdateSettings;
+    rateLimits.reset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   const getAdminToken = () => {
@@ -1224,10 +1246,14 @@ describe('WebApp Server & Admin Routes', () => {
 
       const sendMessage = vi.fn().mockResolvedValue({ message_id: 99 });
       mockUserService.recordAdminAction.mockClear();
-      const dmApp = await createWebAppServer(mockConfig, {
-        ...mockServices,
-        botApi: { sendMessage } as unknown as NonNullable<typeof mockServices.botApi>,
-      });
+      const dmApp = await createWebAppServer(
+        mockConfig,
+        {
+          ...mockServices,
+          botApi: { sendMessage } as unknown as NonNullable<typeof mockServices.botApi>,
+        },
+        { serveStatic: false }
+      );
       try {
         const dmToken = dmApp.jwt.sign({ telegramId: 12345, role: 'admin' });
         const dmRes = await dmApp.inject({

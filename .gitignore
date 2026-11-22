@@ -21,8 +21,11 @@ build/
 .env.test.local
 .env.production.local
 
-# Testing
+# Testing & tool caches
 coverage/
+*.tsbuildinfo
+.eslintcache
+.prettiercache
 
 # OS generated files
 .DS_Store

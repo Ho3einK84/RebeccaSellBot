@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createWebAppServer } from '../../src/webapp/server/server.js';
 import {
@@ -18,7 +18,11 @@ import type {
 } from '../../src/domain/services/PackageCategoryService.js';
 import type { TranslationService } from '../../src/domain/services/TranslationService.js';
 import type { BotServices } from '../../src/telegram/types.js';
-import { createMockAdminServices, createTestConfig } from './helpers/webappTestHarness.js';
+import {
+  createMockAdminServices,
+  createResettableRateLimitStore,
+  createTestConfig,
+} from './helpers/webappTestHarness.js';
 
 function createPackageTestServerHarness() {
   const base = createMockAdminServices();
@@ -173,6 +177,20 @@ function createPackageTestServerHarness() {
     panelRegistry,
   } as unknown as BotServices;
 
+  const initialStoreEntries = Object.entries(store);
+  const reset = () => {
+    for (const key of Object.keys(store)) {
+      delete store[key];
+    }
+    for (const [key, value] of initialStoreEntries) {
+      store[key] = value;
+    }
+    categories.clear();
+    adminIds.clear();
+    adminIds.add(12345);
+    vi.clearAllMocks();
+  };
+
   return {
     services,
     store,
@@ -181,20 +199,30 @@ function createPackageTestServerHarness() {
     adminIds,
     mockUserService: base.mockUserService,
     translationService,
+    reset,
   };
 }
 
 describe('Admin Package, Category & Custom Tariff Routes', () => {
   let app: FastifyInstance;
   let harness: ReturnType<typeof createPackageTestServerHarness>;
+  const rateLimits = createResettableRateLimitStore();
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     harness = createPackageTestServerHarness();
-    app = await createWebAppServer(createTestConfig(), harness.services);
+    app = await createWebAppServer(createTestConfig(), harness.services, {
+      serveStatic: false,
+      rateLimitStore: rateLimits.Store,
+    });
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     if (app) await app.close();
+  });
+
+  beforeEach(() => {
+    harness.reset();
+    rateLimits.reset();
   });
 
   const getAdminToken = (telegramId = 12345) => app.jwt.sign({ telegramId, role: 'admin' });

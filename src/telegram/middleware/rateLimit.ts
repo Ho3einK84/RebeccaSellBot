@@ -8,13 +8,19 @@ import type { MenuContext } from '../types.js';
 export const MAX_TRACKED_USERS = 10_000;
 
 const userCooldowns = new Map<number, number>();
+let nextExpiryAt = Number.POSITIVE_INFINITY;
 
 function purgeElapsedCooldowns(now: number): void {
+  if (userCooldowns.size === 0 || now < nextExpiryAt) return;
+  let earliest = Number.POSITIVE_INFINITY;
   for (const [telegramId, expiresAt] of userCooldowns) {
     if (expiresAt <= now) {
       userCooldowns.delete(telegramId);
+    } else if (expiresAt < earliest) {
+      earliest = expiresAt;
     }
   }
+  nextExpiryAt = earliest;
 }
 
 function evictOldestUserIfFull(): void {
@@ -53,7 +59,11 @@ export function rateLimitMiddleware({
     if (expiresAt !== undefined && expiresAt > now) return;
 
     evictOldestUserIfFull();
-    userCooldowns.set(telegramId, now + messageCooldownMs);
+    const nextExpiresAt = now + messageCooldownMs;
+    userCooldowns.set(telegramId, nextExpiresAt);
+    if (nextExpiresAt < nextExpiryAt) {
+      nextExpiryAt = nextExpiresAt;
+    }
     return next();
   };
 }
@@ -66,4 +76,5 @@ export function getTrackedRateLimitUserCount(): number {
 /** Test-only/reset helper; not used by application code. */
 export function resetRateLimits(): void {
   userCooldowns.clear();
+  nextExpiryAt = Number.POSITIVE_INFINITY;
 }
