@@ -62,7 +62,7 @@ export { renderHomeDashboard };
  */
 export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
   const telegramId = ctx.from?.id;
-  if (!telegramId || !ctx.services) return t(ctx, 'balance');
+  if (!telegramId || !ctx.services) return t(ctx, 'balance', { balance: '0' });
 
   const [balance, pendingReceipt] = await Promise.all([
     ctx.services.walletService.getBalance(telegramId),

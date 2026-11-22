@@ -263,7 +263,7 @@ export async function renderTextsListScreen(
     backCallback: state.mode === 'category' ? 'adm:txt:cats' : 'adm:txt:hub',
     backLabel:
       state.mode === 'category'
-        ? t(ctx, 'admin_text_back_to_categories')
+        ? t(ctx, 'admin_text_back_categories')
         : t(ctx, 'admin_text_back_to_menu'),
     showHome: true,
   });

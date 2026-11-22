@@ -287,8 +287,11 @@ export async function renderGeneralSettingsScreen(
       `${t(ctx, 'admin_setting_default_locale')}: ${defLocale === 'en' ? '🇬🇧' : '🦁'}`,
       'adm:cfg:gen:locale'
     )
+    .row()
     .text(
-      `${t(ctx, 'admin_setting_language_selection_enabled')}: ${langSelection ? '🟢' : '⚪'}`,
+      truncateButtonLabel(
+        `${t(ctx, 'admin_setting_language_selection_enabled')}: ${langSelection ? '🟢' : '⚪'}`
+      ),
       'adm:cfg:tg:language_selection_enabled:gen'
     )
     .row()
@@ -331,6 +334,7 @@ export async function renderGeneralSettingsScreen(
       t(ctx, 'admin_setting_expired_cleanup_grace_days'),
       'adm:cfg:ed:expired_cleanup_grace_days:gen'
     )
+    .row()
     .text(
       t(ctx, 'admin_setting_expired_cleanup_warn_days'),
       'adm:cfg:ed:expired_cleanup_warn_days:gen'
@@ -353,6 +357,9 @@ export async function renderPaymentSettingsScreen(
 ): Promise<void> {
   if (!ctx.services) return;
   markAdminContext(ctx);
+  if (ctx.session) {
+    delete ctx.session.bankCardsReturnTo;
+  }
   const ts = ctx.services.translationService;
   const configuredCards = parseBankCardsJson(ts.getSetting('bank_cards_json', '[]'));
   const activeCardsCount = configuredCards.filter((c) => c.enabled).length;
@@ -457,6 +464,7 @@ export async function renderPaymentSettingsScreen(
       `${t(ctx, 'admin_setting_wallet_transfer_enabled')}: ${transferOn ? '🟢' : '⚪'}`,
       'adm:cfg:tg:wallet_transfer_enabled:pay'
     )
+    .row()
     .text(
       t(ctx, 'admin_setting_wallet_transfer_min_amount'),
       'adm:cfg:ed:wallet_transfer_min_amount:pay'
@@ -466,23 +474,21 @@ export async function renderPaymentSettingsScreen(
       `${t(ctx, 'admin_setting_receipt_notify_enabled')}: ${notifyOn ? '🟢' : '⚪'}`,
       'adm:cfg:tg:receipt_notify_enabled:pay'
     )
+    .row()
     .text(
       notifyMode === 'simple'
         ? t(ctx, 'admin_receipt_notify_mode_simple')
         : t(ctx, 'admin_receipt_notify_mode_full'),
       'adm:cfg:pay:mode'
     )
-    .row()
     .text(
       dupPolicy === 'block'
         ? t(ctx, 'admin_receipt_duplicate_policy_block')
         : t(ctx, 'admin_receipt_duplicate_policy_warn'),
       'adm:cfg:pay:dup'
     )
-    .text(t(ctx, 'admin_setting_receipt_notify_admins'), 'adm:cfg:pay:adm')
     .row()
-    .text(t(ctx, 'admin_setting_card_number'), 'adm:cfg:ed:card_number:pay')
-    .text(t(ctx, 'admin_setting_card_holder'), 'adm:cfg:ed:card_holder:pay')
+    .text(t(ctx, 'admin_setting_receipt_notify_admins'), 'adm:cfg:pay:adm')
     .row();
   appendAdminFooterNav(kb, ctx, {
     backCallback: 'adm:cfg',
@@ -597,9 +603,12 @@ export async function renderBankCardsListScreen(
     kb.text(t(ctx, 'admin_bank_cards_import_legacy_button'), 'adm:bc:imp').row();
   }
   kb.text(t(ctx, 'admin_sales_bank_cards_add_button'), 'adm:bc:add').row();
+  const returnToReceipts = ctx.session?.bankCardsReturnTo === 'receipts';
   appendAdminFooterNav(kb, ctx, {
-    backCallback: 'adm:cfg:pay',
-    backLabel: `‹ ${t(ctx, 'admin_cfg_payment_button')}`,
+    backCallback: returnToReceipts ? 'adm:rcpt:q:1' : 'adm:cfg:pay',
+    backLabel: returnToReceipts
+      ? t(ctx, 'admin_receipt_back_queue')
+      : `‹ ${t(ctx, 'admin_cfg_payment_button')}`,
     showHome: true,
   });
 
@@ -1109,7 +1118,7 @@ export async function renderAdminsAndSupportScreen(
         title: t(ctx, 'admin_registry_title'),
         fields: [
           {
-            label: t(ctx, 'admin_registry_title'),
+            label: t(ctx, 'admin_registry_count_label'),
             value: localizedNumber(adminCount, ctx),
           },
         ],
@@ -1125,7 +1134,7 @@ export async function renderAdminsAndSupportScreen(
     .row()
     .text(t(ctx, 'admin_setting_support_destination'), 'adm:cfg:ed:support_destination:adm')
     .row()
-    .text(t(ctx, 'admin_registry_title'), 'admin:admins:list')
+    .text(t(ctx, 'admin_registry_title'), 'admin:admins:open')
     .text(t(ctx, 'admin_add_admin_button'), 'admin:admins:add')
     .row();
   appendAdminFooterNav(kb, ctx, {
@@ -1479,12 +1488,16 @@ export function registerAdminSettingsRoutes(): void {
   registerAdminInputHandler('cfg:naming_template', async (ctx, rawText) => {
     if (!ctx.services) return { status: 'done' };
     if (!isValidNamingTemplate(rawText)) {
+      const current = ctx.services.translationService.getSetting(
+        'custom_naming_template',
+        '{prefix}_{telegram_id}_{counter}'
+      );
       return {
         status: 'retry',
         promptText: buildAdminPromptScreen({
           emoji: '🎨',
           title: t(ctx, 'admin_setting_custom_naming_template'),
-          body: t(ctx, 'admin_setting_naming_template_invalid'),
+          body: `${t(ctx, 'admin_naming_template_label')}: \`${sanitizeTelegramInlineCode(current)}\``,
           error: t(ctx, 'admin_setting_naming_template_invalid'),
         }),
       };
@@ -1570,12 +1583,16 @@ export function registerAdminSettingsRoutes(): void {
     if (!ctx.services) return { status: 'done' };
     const normalized = normalizeDomainInput(rawText.trim());
     if (!normalized.valid) {
+      const port = ctx.services.webAppHostPort ?? ctx.services.webAppPort ?? 3002;
+      const ip = sanitizeTelegramInlineCode(
+        (await getServerPublicIp().catch(() => '')) || 'SERVER_IP'
+      );
       return {
         status: 'retry',
         promptText: buildAdminPromptScreen({
           emoji: '🌐',
           title: t(ctx, 'admin_webapp_invalid_url_title'),
-          body: t(ctx, 'admin_webapp_invalid_url'),
+          body: t(ctx, 'admin_webapp_prompt_url', { port, serverIp: ip }),
           error: t(ctx, 'admin_webapp_invalid_url'),
         }),
       };
@@ -1986,12 +2003,18 @@ export function registerAdminSettingsRoutes(): void {
     const field = String(state.payload?.field ?? '');
     const { cards } = await loadBankCardsSnapshot(ctx);
     const list = cards.map(stripCardStatus);
+    const promptKeyMap: Record<string, string> = {
+      num: 'admin_bank_cards_prompt_number',
+      hld: 'admin_bank_cards_prompt_holder',
+      bnk: 'admin_bank_cards_prompt_bank',
+      cap: 'admin_bank_cards_prompt_cap',
+    };
     const retry = (errKey: string) => ({
       status: 'retry' as const,
       promptText: buildAdminPromptScreen({
         emoji: '💳',
         title: t(ctx, 'admin_bank_cards_detail_title'),
-        body: t(ctx, errKey),
+        body: t(ctx, promptKeyMap[field] ?? 'admin_bank_cards_prompt_number'),
         error: t(ctx, errKey),
       }),
     });

@@ -168,7 +168,7 @@ export async function renderAdminRegistry(
   }
   keyboard.text(t(ctx, 'admin_add_admin_button'), 'admin:admins:add').row();
   keyboard
-    .text(t(ctx, 'admin_cfg_back_settings'), 'adm:cfg')
+    .text(`‹ ${t(ctx, 'admin_cfg_admins_support_button')}`, 'adm:cfg:adm')
     .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin');
 
   const breadcrumb = buildBreadcrumb(
@@ -447,7 +447,14 @@ export function registerAdminMaintenanceRoutes(bot: Bot<MenuContext>): void {
   });
 
   // Admin Registry callbacks
+  registerAdminRoute('adm:adm:open', async (ctx, _m, notice) => {
+    await renderAdminRegistry(ctx, notice);
+  });
   adminCallback('admin:admins:open', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await renderAdminRegistry(ctx);
+  });
+  adminCallback('admin:admins:list', async (ctx) => {
     await ctx.answerCallbackQuery();
     await renderAdminRegistry(ctx);
   });

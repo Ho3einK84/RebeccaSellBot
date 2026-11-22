@@ -600,6 +600,26 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
     }>;
     expect(afterTgt[0]?.panelId).toBe(longPanelId);
     expect(afterTgt[0]?.serviceId).toBe(7);
+
+    // Verify Package Detail & Categories List render valid Persian Markdown with zero raw keys and compact 2-col buttons
+    await harness.sendCallback(`adm:pkg:v:${longPkgId}`, { userId: 1 });
+    const pkgDetailCall = harness.callsFor('editMessageText').at(-1)?.payload;
+    const pkgDetailText = String(pkgDetailCall?.text ?? '');
+    expect(pkgDetailText).not.toMatch(/admin_?[a-z]+/iu);
+    const pkgRows =
+      (pkgDetailCall?.reply_markup as { inline_keyboard?: Array<Array<{ text: string }>> })
+        ?.inline_keyboard ?? [];
+    for (const row of pkgRows) {
+      if (row.length >= 2) {
+        for (const btn of row) {
+          expect([...btn.text].length).toBeLessThanOrEqual(24);
+        }
+      }
+    }
+
+    await harness.sendCallback('adm:cat:p:1', { userId: 1 });
+    const catListText = String(harness.callsFor('editMessageText').at(-1)?.payload.text ?? '');
+    expect(catListText).not.toMatch(/admin_?[a-z]+/iu);
   });
 });
 

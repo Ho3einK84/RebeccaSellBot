@@ -468,6 +468,19 @@ export async function renderPackagesListScreen(
       }),
       inline: true,
     },
+    ...(visible.length > 0
+      ? {
+          sections: [
+            {
+              fields: visible.map((pkg) => ({
+                emoji: pkg.enabled !== false ? '🟢' : '⚪️',
+                label: escapeTelegramMarkdown(pkg.name),
+                value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')} · ${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')} · ${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
+              })),
+            },
+          ],
+        }
+      : {}),
     footer:
       packages.length === 0
         ? t(ctx, 'admin_pkg_empty_list_hint')
@@ -509,11 +522,13 @@ export async function renderPackageDetailScreen(
     (pkg.serviceId !== undefined ? `#${pkg.serviceId}` : undefined);
   const targetLabel = panel
     ? `${panel.name}${serviceName ? ` · ${serviceName}` : ''}`
-    : t(ctx, 'admin_pkg_target_default');
+    : t(ctx, 'admin_pkg_default_target');
 
   const ts = ctx.services.translationService;
   const globalOnHold = onHoldDefaultEnabled(ts);
   const globalRollover = renewalRolloverEnabled(ts);
+  const effectiveOnHold = pkg.startOnFirstUse ?? globalOnHold;
+  const effectiveRollover = pkg.rolloverQuota ?? globalRollover;
   const onHoldLabel =
     pkg.startOnFirstUse === undefined
       ? `${t(ctx, 'admin_pkg_override_default')} (${globalOnHold ? t(ctx, 'admin_overview_active') : t(ctx, 'admin_overview_inactive')})`
@@ -594,8 +609,14 @@ export async function renderPackageDetailScreen(
     .text(t(ctx, 'admin_pkg_edit_category_btn'), `adm:pkg:cat:${pkg.id}:1`)
     .text(t(ctx, 'admin_pkg_edit_target_btn'), `adm:pkg:tgt:${pkg.id}`)
     .row()
-    .text(t(ctx, 'admin_setting_on_hold_default_enabled'), `adm:pkg:oh:${pkg.id}`)
-    .text(t(ctx, 'admin_setting_renewal_rollover_enabled'), `adm:pkg:ro:${pkg.id}`)
+    .text(
+      `${t(ctx, 'admin_pkg_on_hold_btn')}: ${effectiveOnHold ? '🟢' : '⚪'}`,
+      `adm:pkg:oh:${pkg.id}`
+    )
+    .text(
+      `${t(ctx, 'admin_pkg_rollover_btn')}: ${effectiveRollover ? '🟢' : '⚪'}`,
+      `adm:pkg:ro:${pkg.id}`
+    )
     .row();
 
   if (index > 0) {
@@ -652,26 +673,44 @@ export async function renderCategoriesListScreen(
   kb.text(t(ctx, 'admin_category_add_button'), 'adm:cat:add').row();
   appendAdminFooterNav(kb, ctx, {
     backCallback: 'adm:pkg:p:1',
-    backLabel: `‹ ${t(ctx, 'admin_package_manager_title')}`,
+    backLabel: t(ctx, 'admin_menu_back_to_packages'),
     showHome: true,
   });
 
   const text = buildAdminScreen({
     emoji: '📂',
-    title: t(ctx, 'admin_categories_title'),
+    title: t(ctx, 'admin_category_manager_title'),
     breadcrumb: buildBreadcrumb(
       t(ctx, 'admin_sales_title'),
       t(ctx, 'admin_package_manager_title'),
-      t(ctx, 'admin_categories_title')
+      t(ctx, 'admin_category_manager_title')
     ),
     notice,
     primary: {
       emoji: '📂',
-      label: t(ctx, 'admin_categories_title'),
+      label: t(ctx, 'admin_pkg_categories_button'),
       value: localizedNumber(categories.length, ctx),
       inline: true,
     },
-    footer: categories.length === 0 ? t(ctx, 'admin_categories_empty') : undefined,
+    ...(visible.length > 0
+      ? {
+          sections: [
+            {
+              fields: visible.map((cat) => {
+                const linked = packages.filter((p) => p.categoryId === cat.id).length;
+                return {
+                  emoji: cat.enabled ? '🟢' : '⚪️',
+                  label: escapeTelegramMarkdown(`${cat.icon ? `${cat.icon} ` : ''}${cat.name}`),
+                  value: t(ctx, 'admin_category_count_badge', {
+                    count: localizedNumber(linked, ctx),
+                  }),
+                };
+              }),
+            },
+          ],
+        }
+      : {}),
+    footer: categories.length === 0 ? t(ctx, 'admin_category_empty_hint') : undefined,
   });
 
   await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: kb });
@@ -698,7 +737,7 @@ export async function renderCategoryDetailScreen(
     title: escapeTelegramMarkdown(cat.name),
     breadcrumb: buildBreadcrumb(
       t(ctx, 'admin_package_manager_title'),
-      t(ctx, 'admin_categories_title'),
+      t(ctx, 'admin_category_manager_title'),
       cat.name
     ),
     notice,
@@ -712,41 +751,42 @@ export async function renderCategoryDetailScreen(
       {
         fields: [
           {
-            label: t(ctx, 'admin_sales_packages_count_label'),
-            value: localizedNumber(linked, ctx),
+            label: t(ctx, 'admin_category_icon_label'),
+            value: cat.icon ? escapeTelegramMarkdown(cat.icon) : '—',
           },
-          ...(cat.description
-            ? [
-                {
-                  label: t(ctx, 'admin_category_desc_label'),
-                  value: escapeTelegramMarkdown(cat.description),
-                },
-              ]
-            : []),
+          {
+            label: t(ctx, 'admin_category_desc_label'),
+            value: cat.description ? escapeTelegramMarkdown(cat.description) : '—',
+          },
+          {
+            label: t(ctx, 'admin_category_packages_count_label'),
+            value: t(ctx, 'admin_category_count_badge', { count: localizedNumber(linked, ctx) }),
+          },
         ],
       },
     ],
   });
 
   const kb = new InlineKeyboard()
+    .text(t(ctx, 'admin_category_edit_name_btn'), `adm:cat:ed:name:${cat.id}`)
+    .text(t(ctx, 'admin_category_edit_icon_btn'), `adm:cat:ed:icon:${cat.id}`)
+    .row()
+    .text(t(ctx, 'admin_category_edit_desc_btn'), `adm:cat:ed:desc:${cat.id}`)
     .text(
       cat.enabled ? t(ctx, 'admin_pkg_disable_btn') : t(ctx, 'admin_pkg_enable_btn'),
       `adm:cat:tg:${cat.id}`
     )
-    .row()
-    .text(t(ctx, 'admin_pkg_edit_name_btn'), `adm:cat:ed:name:${cat.id}`)
-    .text(t(ctx, 'admin_category_edit_icon_button'), `adm:cat:ed:icon:${cat.id}`)
     .row();
   if (index > 0) kb.text(t(ctx, 'admin_pkg_move_up_btn'), `adm:cat:mv:up:${cat.id}`);
   if (index < categories.length - 1) {
     kb.text(t(ctx, 'admin_pkg_move_down_btn'), `adm:cat:mv:dn:${cat.id}`);
   }
   if (index > 0 || index < categories.length - 1) kb.row();
-  kb.text(t(ctx, 'admin_category_delete_button'), `adm:cat:del:${cat.id}`).row();
+  kb.text(t(ctx, 'admin_category_delete_btn'), `adm:cat:del:${cat.id}`).row();
 
   appendAdminFooterNav(kb, ctx, {
     backCallback: 'adm:cat:p:1',
-    backLabel: `‹ ${t(ctx, 'admin_categories_title')}`,
+    backLabel: t(ctx, 'admin_menu_back_to_categories'),
     showHome: true,
   });
 
@@ -762,14 +802,25 @@ function formatDiscountValue(ctx: MenuContext, discount: CatalogDiscountRow): st
   return `${localizedNumber(discount.value, ctx)}%`;
 }
 
-function formatDiscountScope(ctx: MenuContext, discount: CatalogDiscountRow): string {
+function formatDiscountScope(
+  ctx: MenuContext,
+  discount: CatalogDiscountRow,
+  resolvedTargetName?: string
+): string {
   if (discount.scope === 'category') {
     const label = t(ctx, 'admin_sales_discount_scope_category');
-    return discount.targetId ? `${label} (${escapeTelegramMarkdown(discount.targetId)})` : label;
+    const target = resolvedTargetName ?? discount.targetId;
+    return target ? `${label} (${escapeTelegramMarkdown(target)})` : label;
   }
   if (discount.scope === 'package') {
     const label = t(ctx, 'admin_sales_discount_scope_package');
-    return discount.targetId ? `${label} (${escapeTelegramMarkdown(discount.targetId)})` : label;
+    const pkgName =
+      resolvedTargetName ??
+      (discount.targetId
+        ? loadPackages(ctx).find((p) => p.id === discount.targetId)?.name
+        : undefined) ??
+      discount.targetId;
+    return pkgName ? `${label} (${escapeTelegramMarkdown(pkgName)})` : label;
   }
   return t(ctx, 'admin_sales_discount_scope_all');
 }
@@ -820,10 +871,23 @@ export async function renderDiscountsListScreen(
     notice,
     primary: {
       emoji: '🔥',
-      label: t(ctx, 'admin_sales_discounts_title'),
+      label: t(ctx, 'admin_sales_discounts_button'),
       value: localizedNumber(discounts.length, ctx),
       inline: true,
     },
+    ...(visible.length > 0
+      ? {
+          sections: [
+            {
+              fields: visible.map((d) => ({
+                emoji: d.active ? '🟢' : '⚪️',
+                label: escapeTelegramMarkdown(d.title),
+                value: `${formatDiscountValue(ctx, d)} · ${formatDiscountScope(ctx, d)}`,
+              })),
+            },
+          ],
+        }
+      : {}),
     footer: discounts.length === 0 ? t(ctx, 'admin_sales_discounts_empty') : undefined,
   });
 
@@ -847,6 +911,16 @@ export async function renderDiscountDetailScreen(
     return;
   }
 
+  let resolvedTargetName: string | undefined;
+  if (discount.scope === 'category' && discount.targetId) {
+    const cat = await ctx.services.packageCategoryService
+      ?.getCategoryById(discount.targetId)
+      .catch(() => null);
+    if (cat) resolvedTargetName = `${cat.icon ? `${cat.icon} ` : ''}${cat.name}`;
+  } else if (discount.scope === 'package' && discount.targetId) {
+    resolvedTargetName = loadPackages(ctx).find((p) => p.id === discount.targetId)?.name;
+  }
+
   const text = buildAdminScreen({
     emoji: '🔥',
     title: escapeTelegramMarkdown(discount.title),
@@ -867,7 +941,7 @@ export async function renderDiscountDetailScreen(
         fields: [
           {
             label: t(ctx, 'admin_sales_discount_scope_label'),
-            value: formatDiscountScope(ctx, discount),
+            value: formatDiscountScope(ctx, discount, resolvedTargetName),
           },
           {
             label: t(ctx, 'admin_sales_discount_type_label'),
@@ -1112,22 +1186,31 @@ export function registerAdminSalesRoutes(): void {
     if (pkgs.length >= MAX_PACKAGE_COUNT) {
       await renderPackageDetailScreen(ctx, id, {
         tone: 'warning',
-        text: t(ctx, 'admin_pkg_limit_reached', { max: localizedNumber(MAX_PACKAGE_COUNT, ctx) }),
+        text: t(ctx, 'admin_pkg_limit_reached', {
+          count: localizedNumber(MAX_PACKAGE_COUNT, ctx),
+        }),
       });
       return;
     }
-    const source = pkgs.find((p) => p.id === id);
+    const sourceIdx = pkgs.findIndex((p) => p.id === id);
+    const source = sourceIdx >= 0 ? pkgs[sourceIdx] : undefined;
     if (!source) {
       await renderPackagesListScreen(ctx, 1);
       return;
     }
-    const cloneName = `${source.name} (2)`;
+    const suffix = t(ctx, 'admin_pkg_copy_suffix');
+    let cloneName = `${source.name} ${suffix}`.trim();
+    let copyCount = 2;
+    while (hasDuplicatePackageName(pkgs, cloneName)) {
+      cloneName = `${source.name} ${suffix} ${copyCount++}`.trim();
+    }
     const clone: PackageOption = {
       ...source,
       id: generatePackageId(cloneName, pkgs),
       name: cloneName,
     };
-    await savePackages(ctx, [...pkgs, clone]);
+    const next = [...pkgs.slice(0, sourceIdx + 1), clone, ...pkgs.slice(sourceIdx + 1)];
+    await savePackages(ctx, next);
     await renderPackageDetailScreen(ctx, clone.id, {
       tone: 'success',
       text: t(ctx, 'admin_setting_saved_title'),
@@ -1173,6 +1256,24 @@ export function registerAdminSalesRoutes(): void {
   });
 
   // Package single-field edits via non-blocking adminInput
+  const formatPkgFieldPrompt = (ctx: MenuContext, pkg: PackageOption, field: string): string => {
+    const promptKeyMap: Record<string, string> = {
+      name: 'admin_pkg_name_prompt',
+      gb: 'admin_pkg_gb_prompt',
+      days: 'admin_pkg_days_prompt',
+      price: 'admin_pkg_price_prompt',
+    };
+    const currentVal =
+      field === 'name'
+        ? sanitizeTelegramInlineCode(pkg.name)
+        : field === 'gb'
+          ? localizedNumber(pkg.gbAmount, ctx)
+          : field === 'days'
+            ? localizedNumber(pkg.durationDays, ctx)
+            : localizedNumber(pkg.price, ctx);
+    return t(ctx, promptKeyMap[field]!, { current: currentVal });
+  };
+
   registerAdminRoute(
     /^adm:pkg:ed:(name|gb|days|price):([a-z0-9_-]{1,64})$/u,
     async (ctx, match) => {
@@ -1183,12 +1284,6 @@ export function registerAdminSalesRoutes(): void {
         await renderPackagesListScreen(ctx, 1);
         return;
       }
-      const promptKeyMap: Record<string, string> = {
-        name: 'admin_pkg_name_prompt',
-        gb: 'admin_pkg_gb_prompt',
-        days: 'admin_pkg_days_prompt',
-        price: 'admin_pkg_price_prompt',
-      };
       await startAdminInput(ctx, {
         kind: 'pkg:edit_field',
         payload: { id, field },
@@ -1196,7 +1291,7 @@ export function registerAdminSalesRoutes(): void {
         promptText: buildAdminPromptScreen({
           emoji: '✏️',
           title: escapeTelegramMarkdown(pkg.name),
-          body: t(ctx, promptKeyMap[field]!),
+          body: formatPkgFieldPrompt(ctx, pkg, field),
         }),
       });
     }
@@ -1214,7 +1309,7 @@ export function registerAdminSalesRoutes(): void {
       promptText: buildAdminPromptScreen({
         emoji: '✏️',
         title: escapeTelegramMarkdown(pkg.name),
-        body: errText,
+        body: formatPkgFieldPrompt(ctx, pkg, field),
         error: errText,
       }),
     });
@@ -1352,7 +1447,7 @@ export function registerAdminSalesRoutes(): void {
     }
     const panels = ctx.services.panelRegistry.listPanels();
     const kb = new InlineKeyboard()
-      .text(t(ctx, 'admin_pkg_target_default'), `adm:pkg:st:${pkgIdx}:d:0`)
+      .text(t(ctx, 'admin_pkg_default_target'), `adm:pkg:st:${pkgIdx}:d:0`)
       .row();
     panels.forEach((panel, panelIdx) => {
       for (const svc of panel.services) {
@@ -1420,7 +1515,9 @@ export function registerAdminSalesRoutes(): void {
     if (pkgs.length >= MAX_PACKAGE_COUNT) {
       await renderPackagesListScreen(ctx, 1, {
         tone: 'warning',
-        text: t(ctx, 'admin_pkg_limit_reached', { max: localizedNumber(MAX_PACKAGE_COUNT, ctx) }),
+        text: t(ctx, 'admin_pkg_limit_reached', {
+          count: localizedNumber(MAX_PACKAGE_COUNT, ctx),
+        }),
       });
       return;
     }
@@ -1434,7 +1531,7 @@ export function registerAdminSalesRoutes(): void {
       promptText: buildAdminPromptScreen({
         emoji: '➕',
         title: t(ctx, 'admin_pkg_add'),
-        body: t(ctx, 'admin_pkg_name_prompt'),
+        body: t(ctx, 'admin_pkg_name_prompt', { current: '—' }),
       }),
     });
   });
@@ -1449,7 +1546,7 @@ export function registerAdminSalesRoutes(): void {
       promptText: buildAdminPromptScreen({
         emoji: '➕',
         title: t(ctx, 'admin_pkg_add'),
-        body: t(ctx, bodyKey),
+        body: t(ctx, bodyKey, { current: '—' }),
         error: t(ctx, errKey),
       }),
     });
@@ -1469,7 +1566,7 @@ export function registerAdminSalesRoutes(): void {
         promptText: buildAdminPromptScreen({
           emoji: '➕',
           title: escapeTelegramMarkdown(name),
-          body: t(ctx, 'admin_pkg_gb_prompt'),
+          body: t(ctx, 'admin_pkg_gb_prompt', { current: '—' }),
         }),
       });
       return { status: 'handled' };
@@ -1488,7 +1585,7 @@ export function registerAdminSalesRoutes(): void {
         promptText: buildAdminPromptScreen({
           emoji: '➕',
           title: escapeTelegramMarkdown(draft.name ?? t(ctx, 'admin_pkg_add')),
-          body: t(ctx, 'admin_pkg_days_prompt'),
+          body: t(ctx, 'admin_pkg_days_prompt', { current: '—' }),
         }),
       });
       return { status: 'handled' };
@@ -1507,7 +1604,7 @@ export function registerAdminSalesRoutes(): void {
         promptText: buildAdminPromptScreen({
           emoji: '➕',
           title: escapeTelegramMarkdown(draft.name ?? t(ctx, 'admin_pkg_add')),
-          body: t(ctx, 'admin_pkg_price_prompt'),
+          body: t(ctx, 'admin_pkg_price_prompt', { current: '—' }),
         }),
       });
       return { status: 'handled' };
@@ -1572,20 +1669,26 @@ export function registerAdminSalesRoutes(): void {
     await renderCategoryDetailScreen(ctx, id);
   });
 
-  registerAdminRoute(/^adm:cat:ed:(name|icon):([a-z0-9_-]{1,64})$/u, async (ctx, match) => {
+  registerAdminRoute(/^adm:cat:ed:(name|icon|desc):([a-z0-9_-]{1,64})$/u, async (ctx, match) => {
     const field = match![1]!;
     const id = match![2]!;
+    const cat = await ctx.services?.packageCategoryService?.getCategoryById(id).catch(() => null);
+    const body =
+      field === 'name'
+        ? t(ctx, 'admin_category_name_prompt')
+        : field === 'icon'
+          ? t(ctx, 'admin_category_icon_prompt')
+          : t(ctx, 'admin_category_desc_prompt', {
+              current: sanitizeTelegramInlineCode(cat?.description || '—'),
+            });
     await startAdminInput(ctx, {
       kind: 'cat:edit_field',
       payload: { id, field },
       returnRoute: `adm:cat:v:${id}`,
       promptText: buildAdminPromptScreen({
         emoji: '✏️',
-        title: t(ctx, 'admin_categories_title'),
-        body: t(
-          ctx,
-          field === 'name' ? 'admin_category_name_prompt' : 'admin_category_icon_prompt'
-        ),
+        title: cat ? escapeTelegramMarkdown(cat.name) : t(ctx, 'admin_category_manager_title'),
+        body,
       }),
     });
   });
@@ -1601,13 +1704,28 @@ export function registerAdminSalesRoutes(): void {
           status: 'retry',
           promptText: buildAdminPromptScreen({
             emoji: '✏️',
-            title: t(ctx, 'admin_categories_title'),
+            title: t(ctx, 'admin_category_manager_title'),
             body: t(ctx, 'admin_category_name_prompt'),
             error: t(ctx, 'admin_setting_invalid'),
           }),
         };
       }
       await ctx.services.packageCategoryService.updateCategory(id, { name: trimmed });
+    } else if (field === 'desc') {
+      if (trimmed.length > 240) {
+        return {
+          status: 'retry',
+          promptText: buildAdminPromptScreen({
+            emoji: '✏️',
+            title: t(ctx, 'admin_category_manager_title'),
+            body: t(ctx, 'admin_category_desc_prompt', { current: '—' }),
+            error: t(ctx, 'admin_setting_invalid'),
+          }),
+        };
+      }
+      await ctx.services.packageCategoryService.updateCategory(id, {
+        description: trimmed === '-' ? '' : trimmed,
+      });
     } else {
       await ctx.services.packageCategoryService.updateCategory(id, {
         icon: trimmed === '-' ? '' : trimmed.slice(0, 16),
@@ -1665,10 +1783,10 @@ export function registerAdminSalesRoutes(): void {
       ctx,
       buildAdminScreen({
         emoji: '🗑️',
-        title: t(ctx, 'admin_category_delete_button'),
+        title: t(ctx, 'admin_category_delete_btn'),
         primary: {
           emoji: '📂',
-          label: t(ctx, 'admin_categories_title'),
+          label: t(ctx, 'admin_category_manager_title'),
           value: escapeTelegramMarkdown(cat.name),
           inline: true,
         },
@@ -1679,7 +1797,7 @@ export function registerAdminSalesRoutes(): void {
         reply_markup: buildAdminConfirmKeyboard(ctx, {
           confirmCallback: `adm:cat:del_ok:${id}`,
           cancelCallback: `adm:cat:v:${id}`,
-          confirmLabel: t(ctx, 'admin_category_delete_button'),
+          confirmLabel: t(ctx, 'admin_category_delete_btn'),
         }),
       }
     );
@@ -1817,7 +1935,16 @@ export function registerAdminSalesRoutes(): void {
       await renderDiscountsListScreen(ctx, 1);
       return;
     }
-    const description = `${formatDiscountValue(ctx, discount)} · ${formatDiscountScope(ctx, discount)}`;
+    let resolvedTargetName: string | undefined;
+    if (discount.scope === 'category' && discount.targetId) {
+      const cat = await ctx.services.packageCategoryService
+        ?.getCategoryById(discount.targetId)
+        .catch(() => null);
+      if (cat) resolvedTargetName = `${cat.icon ? `${cat.icon} ` : ''}${cat.name}`;
+    } else if (discount.scope === 'package' && discount.targetId) {
+      resolvedTargetName = loadPackages(ctx).find((p) => p.id === discount.targetId)?.name;
+    }
+    const description = `${formatDiscountValue(ctx, discount)} · ${formatDiscountScope(ctx, discount, resolvedTargetName)}`;
     const dateStr = discount.expiresAt ? localizedDate(new Date(discount.expiresAt), ctx) : '∞';
     const message = t(ctx, 'admin_sales_discount_broadcast_template', {
       name: escapeTelegramMarkdown(discount.title),
@@ -1926,12 +2053,18 @@ export function registerAdminSalesRoutes(): void {
     const existing = await service.getDiscountById(id);
     if (!existing) return { status: 'done', redirectRoute: 'adm:dsc:p:1' };
 
+    const promptKeyMap: Record<string, string> = {
+      title: 'admin_sales_discount_title_prompt',
+      val: 'admin_sales_discount_value_prompt',
+      cap: 'admin_sales_discount_max_cap_prompt',
+      exp: 'admin_sales_discount_expiry_prompt',
+    };
     const retry = () => ({
       status: 'retry' as const,
       promptText: buildAdminPromptScreen({
         emoji: '✏️',
         title: escapeTelegramMarkdown(existing.title),
-        body: t(ctx, 'admin_cdisc_invalid_input'),
+        body: t(ctx, promptKeyMap[field] ?? 'admin_sales_discount_title_prompt'),
         error: t(ctx, 'admin_cdisc_invalid_input'),
       }),
     });

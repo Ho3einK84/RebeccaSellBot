@@ -478,6 +478,7 @@ async function executeBatchApprove(ctx: MenuContext): Promise<void> {
 async function showReceiptReview(ctx: MenuContext, receiptId: string, page: number): Promise<void> {
   if (!ctx.services) return;
   markAdminContext(ctx);
+  protectPushNotificationMedia(ctx);
   const receipt = (await ctx.services.walletService.getPendingTopup(receiptId)) as
     PendingReceipt | undefined;
   if (!receipt) {
@@ -1037,6 +1038,7 @@ async function promptReceiptReview(
   isLegacyRefresh = false
 ): Promise<void> {
   if (!ctx.services) return;
+  protectPushNotificationMedia(ctx);
   const receipt = (await ctx.services.walletService.getPendingTopup(receiptId)) as
     PendingReceipt | undefined;
   if (!receipt) {

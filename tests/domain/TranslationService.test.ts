@@ -75,11 +75,49 @@ function listTypeScriptFiles(directory: string): string[] {
   });
 }
 
+function extractLiteralKeys(node: ts.Node): string[] {
+  const keys: string[] = [];
+  const visit = (n: ts.Node): void => {
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) {
+      keys.push(n.text);
+    } else if (ts.isConditionalExpression(n)) {
+      visit(n.whenTrue);
+      visit(n.whenFalse);
+    } else if (ts.isParenthesizedExpression(n)) {
+      visit(n.expression);
+    }
+  };
+  visit(node);
+  return keys;
+}
+
+function extractObjectPropertyNames(node: ts.Node | undefined): Set<string> | null {
+  if (!node || !ts.isObjectLiteralExpression(node)) return null;
+  const props = new Set<string>();
+  for (const prop of node.properties) {
+    if (ts.isPropertyAssignment(prop) || ts.isShorthandPropertyAssignment(prop)) {
+      const name = ts.isIdentifier(prop.name)
+        ? prop.name.text
+        : ts.isStringLiteral(prop.name)
+          ? prop.name.text
+          : '';
+      if (name) props.add(name);
+    } else if (ts.isSpreadAssignment(prop)) {
+      return null;
+    }
+  }
+  return props;
+}
+
 function collectProductionStringLiterals(): {
   literals: Set<string>;
   sourceText: string;
+  missingTranslationCalls: string[];
+  missingPlaceholderCalls: string[];
 } {
   const literals = new Set<string>();
+  const missingTranslationCalls: string[] = [];
+  const missingPlaceholderCalls: string[] = [];
   let sourceText = '';
 
   for (const filePath of listTypeScriptFiles(SOURCE_ROOT)) {
@@ -89,12 +127,42 @@ function collectProductionStringLiterals(): {
     const source = ts.createSourceFile(filePath, fileText, ts.ScriptTarget.Latest, true);
     const visit = (node: ts.Node): void => {
       if (ts.isStringLiteralLike(node)) literals.add(node.text);
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        const fnName = node.expression.text;
+        if (fnName === 't' || fnName === 'tm' || fnName === 'tForLocale') {
+          const keyIdx = fnName === 'tForLocale' ? 2 : 1;
+          const paramsIdx = fnName === 'tForLocale' ? 3 : 2;
+          const keyArg = node.arguments[keyIdx];
+          const paramsArg = node.arguments[paramsIdx];
+          if (keyArg) {
+            const keys = extractLiteralKeys(keyArg);
+            const passedProps = extractObjectPropertyNames(paramsArg);
+            for (const key of keys) {
+              if (!(key in FA_TEXTS)) {
+                missingTranslationCalls.push(`${filePath}:${key}`);
+              } else {
+                const req = templatePlaceholders(FA_TEXTS[key] ?? '');
+                if (req.length > 0 && !paramsArg) {
+                  missingPlaceholderCalls.push(`${filePath}:${key} (missing ${req.join(',')})`);
+                } else if (req.length > 0 && passedProps) {
+                  const missing = req.filter((p) => !passedProps.has(p));
+                  if (missing.length > 0) {
+                    missingPlaceholderCalls.push(
+                      `${filePath}:${key} (missing ${missing.join(',')})`
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
       ts.forEachChild(node, visit);
     };
     visit(source);
   }
 
-  return { literals, sourceText };
+  return { literals, sourceText, missingTranslationCalls, missingPlaceholderCalls };
 }
 
 describe('TranslationService & Catalog Standards', () => {
@@ -378,7 +446,16 @@ describe('TranslationService & Catalog Standards', () => {
     }
     expect(zwnjErrors).toEqual([]);
 
-    const { literals, sourceText } = collectProductionStringLiterals();
+    const { literals, sourceText, missingTranslationCalls, missingPlaceholderCalls } =
+      collectProductionStringLiterals();
+    expect(
+      missingTranslationCalls,
+      'Every t/tm/tForLocale key must exist in FA_TEXTS/EN_TEXTS'
+    ).toEqual([]);
+    expect(
+      missingPlaceholderCalls,
+      'Every t/tm/tForLocale call must supply required template placeholders'
+    ).toEqual([]);
     for (const { generator } of DYNAMIC_TRANSLATION_KEYS) {
       expect(sourceText, `Missing dynamic lookup ${generator}`).toContain(generator);
     }

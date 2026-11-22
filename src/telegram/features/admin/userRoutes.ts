@@ -280,13 +280,13 @@ function registerUserInputHandlers(): void {
         status: 'retry',
         promptText: buildAdminPromptScreen(
           '✉️',
-          t(ctx, 'admin_direct_message_title'),
+          t(ctx, 'admin_direct_title'),
           t(ctx, 'admin_direct_message_prompt'),
           {
             breadcrumb: buildBreadcrumb(
               t(ctx, 'admin_home_title'),
               t(ctx, 'admin_users_list_title'),
-              t(ctx, 'admin_direct_message_title')
+              t(ctx, 'admin_direct_title')
             ),
             error: t(ctx, 'admin_direct_too_long'),
           }
@@ -467,11 +467,11 @@ async function renderDirectMessagePreview(
 ): Promise<void> {
   const text = buildAdminScreen({
     emoji: '✉️',
-    title: t(ctx, 'admin_direct_message_title'),
+    title: t(ctx, 'admin_direct_title'),
     breadcrumb: buildBreadcrumb(
       t(ctx, 'admin_home_title'),
       t(ctx, 'admin_users_list_title'),
-      t(ctx, 'admin_direct_message_title')
+      t(ctx, 'admin_direct_title')
     ),
     primary: {
       label: t(ctx, 'admin_user_id_label'),
@@ -608,7 +608,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       returnRoute: `adm:usr:v:${targetId}`,
       promptText: buildAdminPromptScreen(
         '✉️',
-        t(ctx, 'admin_direct_message_title'),
+        t(ctx, 'admin_direct_title'),
         t(ctx, 'admin_direct_message_prompt'),
         {
           breadcrumb: buildBreadcrumb(
@@ -631,7 +631,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       returnRoute: `adm:usr:v:${targetId}`,
       promptText: buildAdminPromptScreen(
         '✉️',
-        t(ctx, 'admin_direct_message_title'),
+        t(ctx, 'admin_direct_title'),
         t(ctx, 'admin_direct_message_prompt'),
         {
           breadcrumb: buildBreadcrumb(
@@ -657,14 +657,26 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
     }
     try {
       await ctx.api.sendMessage(targetId, draftText);
+      if (ctx.from) {
+        await ctx.services?.userService
+          ?.recordAdminAction?.({
+            actorTelegramId: ctx.from.id,
+            action: 'direct_message_sent',
+            entityType: 'telegram_user',
+            entityId: String(targetId),
+            targetTelegramId: targetId,
+            metadata: { messageLength: draftText.length },
+          })
+          .catch(() => {});
+      }
       await renderUserProfile(ctx, targetId, {
         tone: 'success',
-        text: t(ctx, 'admin_direct_message_sent'),
+        text: t(ctx, 'admin_direct_sent'),
       });
     } catch {
       await renderUserProfile(ctx, targetId, {
         tone: 'error',
-        text: t(ctx, 'admin_direct_message_failed'),
+        text: t(ctx, 'admin_direct_failed'),
       });
     }
   });
@@ -881,7 +893,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
       returnRoute: `adm:usr:v:${targetId}`,
       promptText: buildAdminPromptScreen(
         '✉️',
-        t(ctx, 'admin_direct_message_title'),
+        t(ctx, 'admin_direct_title'),
         t(ctx, 'admin_direct_message_prompt'),
         {
           breadcrumb: buildBreadcrumb(

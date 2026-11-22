@@ -315,6 +315,27 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
       };
     }
 
+    const promptKeyMap: Record<string, string> = {
+      val: 'admin_promo_value_prompt',
+      max: 'admin_promo_max_uses_prompt',
+      usr: 'admin_promo_per_user_prompt',
+      min: 'admin_promo_min_purchase_prompt',
+      cap: 'admin_promo_max_discount_prompt',
+      exp: 'admin_promo_expiry_prompt',
+    };
+    const retryKeyboard = adminInputCancelKeyboard(ctx, (kb) => {
+      if (field === 'cap') {
+        kb.text(t(ctx, 'admin_promo_preset_no_cap'), `adm:prm:ep:nocap:${id}`).row();
+      } else if (field === 'exp') {
+        kb.text(t(ctx, 'admin_promo_preset_7d'), `adm:prm:ep:7d:${id}`)
+          .text(t(ctx, 'admin_promo_preset_30d'), `adm:prm:ep:30d:${id}`)
+          .row()
+          .text(t(ctx, 'admin_promo_preset_90d'), `adm:prm:ep:90d:${id}`)
+          .text(t(ctx, 'admin_promo_preset_never'), `adm:prm:ep:never:${id}`)
+          .row();
+      }
+    });
+
     const raw = rawText.trim().toLowerCase();
     const normalized = normalizeInputDigits(raw);
     const makeRetry = (errorKey: string) => ({
@@ -323,9 +344,10 @@ export function registerPromoAdminRoutes(bot: Bot<MenuContext>): void {
         emoji: '✏️',
         title: t(ctx, 'admin_promo_edit_field_title'),
         subtitle: `\`${sanitizeTelegramInlineCode(promo.code)}\``,
-        body: t(ctx, errorKey),
+        body: t(ctx, promptKeyMap[field] ?? 'admin_promo_value_prompt'),
         error: t(ctx, errorKey),
       }),
+      keyboard: retryKeyboard,
     });
 
     try {

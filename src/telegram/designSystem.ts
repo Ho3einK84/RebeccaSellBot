@@ -400,16 +400,25 @@ export function buildUserScreen(definition: UserScreenDefinition): string {
 
   if (definition.primary) {
     const rawValue = String(definition.primary.value);
-    const repeatsPrimaryEmoji = definition.primary.emoji
-      ? rawValue.trimStart().startsWith(definition.primary.emoji)
+    const { effectiveEmoji, unstarredTitle: cleanPrimaryLabel } = resolveHeadingParts(
+      definition.primary.emoji ?? '',
+      definition.primary.label
+    );
+    const normEmoji = effectiveEmoji.replaceAll('\uFE0F', '');
+    const normValue = rawValue.trimStart().replaceAll('\uFE0F', '');
+    const statusDotRegex = /^(?:🟢|⚪|🔴|🟡|⏳|⚠️|✅|❌|🚫|⌛)/u;
+    const repeatsPrimaryEmoji = normEmoji
+      ? normValue.startsWith(normEmoji) ||
+        (Boolean(definition.primary.inline) &&
+          statusDotRegex.test(normEmoji) &&
+          statusDotRegex.test(normValue))
       : false;
-    const icon =
-      definition.primary.emoji && !repeatsPrimaryEmoji ? `${definition.primary.emoji} ` : '';
+    const icon = effectiveEmoji && !repeatsPrimaryEmoji ? `${effectiveEmoji} ` : '';
     const displayValue = formatPrimaryHeroValue(rawValue, definition.primary.emphasizeValue);
     if (definition.primary.inline) {
-      blocks.push(`${icon}*${definition.primary.label}:* ${displayValue}`);
+      blocks.push(`${icon}*${cleanPrimaryLabel}:* ${displayValue}`);
     } else {
-      blocks.push(`${icon}*${definition.primary.label}*\n${displayValue}`);
+      blocks.push(`${icon}*${cleanPrimaryLabel}*\n${displayValue}`);
     }
   }
 
