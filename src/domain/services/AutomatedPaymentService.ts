@@ -59,6 +59,8 @@ import type { WalletService } from './WalletService.js';
 
 export const FORAPP_WEBHOOK_PATH = '/api/webhooks/forapp';
 export const NOWPAYMENTS_WEBHOOK_PATH = '/api/webhooks/nowpayments';
+/** Delay after which pending ForApp invoices surface a manual-receipt fallback reminder (5 minutes). */
+export const FORAPP_MANUAL_HINT_DELAY_MS = 5 * 60 * 1000;
 
 const MIN_NOWPAYMENTS_USD = 0.5;
 const MAX_SAFE_INT = Number.MAX_SAFE_INTEGER;

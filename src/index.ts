@@ -63,6 +63,10 @@ import {
   startExpiredConfigCleanupJob,
   stopExpiredConfigCleanupJob,
 } from './jobs/expiredConfigCleanup.js';
+import {
+  startForAppFallbackNudgeJob,
+  stopForAppFallbackNudgeJob,
+} from './jobs/forappFallbackNudge.js';
 import { jobRunner } from './jobs/workerRuntime.js';
 
 const WORKER_SHUTDOWN_TIMEOUT_MS = 30_000;
@@ -258,6 +262,7 @@ function stopScheduledWorkers(): void {
   stopBackupCron();
   stopFirstUseNudgeJob();
   stopExpiredConfigCleanupJob();
+  stopForAppFallbackNudgeJob();
 }
 
 async function drainWorkers(): Promise<void> {
@@ -571,6 +576,10 @@ async function main() {
   startExpiredConfigCleanupJob({
     panels: panelRegistry,
     configService,
+    translationService,
+    telegramApi: bot.api,
+  });
+  startForAppFallbackNudgeJob({
     translationService,
     telegramApi: bot.api,
   });

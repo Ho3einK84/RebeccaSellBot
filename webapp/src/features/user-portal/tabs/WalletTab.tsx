@@ -66,6 +66,8 @@ interface WalletTabProps {
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
 
+const FORAPP_MANUAL_HINT_DELAY_SECONDS = 5 * 60;
+
 function formatCountdown(seconds: number): string {
   const safe = Math.max(0, Math.floor(seconds));
   const mins = Math.floor(safe / 60);
@@ -164,6 +166,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const [isCheckingOrder, setIsCheckingOrder] = useState(false);
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
   // Native Top-Up Wizard state
   const [amountInput, setAmountInput] = useState<string>('');
@@ -218,18 +221,24 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     }
   }, [nowpaymentsEnabled, cardNumber, allCardsCapReached, activeOrder]);
 
-  // Live countdown timer for active automated order
+  // Live countdown & elapsed timer for active automated order
   useEffect(() => {
     if (!activeOrder || (activeOrder.status !== 'pending' && activeOrder.status !== 'confirming')) {
       setRemainingSeconds(0);
+      setElapsedSeconds(0);
       return;
     }
-    const updateRemaining = () => {
-      const diffMs = new Date(activeOrder.expiresAt).getTime() - Date.now();
+    const updateTimers = () => {
+      const nowMs = Date.now();
+      const diffMs = new Date(activeOrder.expiresAt).getTime() - nowMs;
       setRemainingSeconds(Math.max(0, Math.floor(diffMs / 1000)));
+      const createdMs = new Date(activeOrder.createdAt).getTime();
+      setElapsedSeconds(
+        Number.isFinite(createdMs) ? Math.max(0, Math.floor((nowMs - createdMs) / 1000)) : 0
+      );
     };
-    updateRemaining();
-    const timer = setInterval(updateRemaining, 1000);
+    updateTimers();
+    const timer = setInterval(updateTimers, 1000);
     return () => clearInterval(timer);
   }, [activeOrder]);
 
@@ -417,6 +426,12 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           onNotify(t('user.wallet.orderExpired'), 'error');
         } else if (res.order.status === 'partially_paid') {
           onNotify(t('user.wallet.cryptoPartialPaidWarning'), 'error');
+        } else if (
+          res.order.provider === 'forapp_card' &&
+          res.order.status === 'pending' &&
+          elapsedSeconds >= FORAPP_MANUAL_HINT_DELAY_SECONDS
+        ) {
+          onNotify(t('user.wallet.orderPendingDelayedToast'), 'error');
         } else {
           onNotify(t('user.wallet.orderPendingToast'), 'error');
         }
@@ -915,6 +930,55 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                       <span>{t('user.wallet.orderCancelBtn')}</span>
                     </Button>
                   </div>
+
+                  {/* 5-Minute Delayed Confirmation Guidance Banner */}
+                  {activeOrder.status === 'pending' &&
+                    remainingSeconds > 0 &&
+                    elapsedSeconds >= FORAPP_MANUAL_HINT_DELAY_SECONDS &&
+                    !pendingReceipt && (
+                      <div className="rounded-tile border border-warn/35 bg-warn-soft/50 p-3.5 flex flex-col gap-2.5 text-start anim-pop">
+                        <div className="flex items-start gap-2.5">
+                          <AlertCircle className="w-4 h-4 text-warn-fg shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="text-xs font-semibold text-ink">
+                              {t('user.wallet.forappDelayedHintTitle')}
+                            </div>
+                            <p className="text-[11px] text-ink-soft m-0 leading-relaxed">
+                              {t('user.wallet.forappDelayedHintBody')}
+                            </p>
+                          </div>
+                        </div>
+                        {settings?.nativeReceiptUploadEnabled && !showManualFallbackOnOrder ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              triggerHaptic('selection');
+                              setShowManualFallbackOnOrder(true);
+                            }}
+                          >
+                            <Upload className="w-3.5 h-3.5 shrink-0" />
+                            <span>{t('user.wallet.forappDelayedHintAction')}</span>
+                          </Button>
+                        ) : !settings?.nativeReceiptUploadEnabled && settings?.botUsername ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              triggerHaptic('selection');
+                              openTelegramLinkAndMinimize(
+                                `https://t.me/${settings.botUsername.replace(/^@+/u, '')}?start=topup`
+                              );
+                            }}
+                          >
+                            <Send className="w-3.5 h-3.5 shrink-0" />
+                            <span>{t('user.wallet.sendReceiptDirect')}</span>
+                          </Button>
+                        ) : null}
+                      </div>
+                    )}
 
                   {/* Optional Manual Receipt Fallback */}
                   {settings?.nativeReceiptUploadEnabled && (

@@ -223,4 +223,58 @@ describe('Telegram paymentOrderRoutes UX lifecycle', () => {
       guideButtons.some((b: { url?: string }) => b.url === 'https://github.com/erfjab/forapp')
     ).toBe(true);
   });
+
+  it('shows delayed manual-receipt guidance on porder:check once 5 minutes have elapsed', async () => {
+    const { bot, dispatch } = createFakeBotHarness();
+    const checkOrderStatusForUser = vi
+      .fn()
+      .mockResolvedValueOnce({
+        order: {
+          id: 'po_fa_fresh',
+          telegramId: 55555,
+          provider: 'forapp_card',
+          status: 'pending',
+          payableAmount: 49_104,
+          cashbackAmount: 0,
+          createdAt: new Date(Date.now() - 60_000),
+        },
+        newlyCompleted: false,
+      })
+      .mockResolvedValueOnce({
+        order: {
+          id: 'po_fa_delayed',
+          telegramId: 55555,
+          provider: 'forapp_card',
+          status: 'pending',
+          payableAmount: 49_104,
+          cashbackAmount: 0,
+          createdAt: new Date(Date.now() - 6 * 60_000),
+        },
+        newlyCompleted: false,
+      });
+    const services = {
+      translationService: new TranslationService(),
+      automatedPaymentService: { checkOrderStatusForUser },
+    } as unknown as BotServices;
+
+    registerPaymentOrderRoutes(bot, services);
+
+    const freshCase = createCallbackContext(services, { messageId: 970, session: {} });
+    await dispatch('porder:check:po_fa_fresh', freshCase.ctx);
+    expect(freshCase.ctx.answerCallbackQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining('هنوز واریزی ثبت نشده است'),
+        show_alert: true,
+      })
+    );
+
+    const delayedCase = createCallbackContext(services, { messageId: 971, session: {} });
+    await dispatch('porder:check:po_fa_delayed', delayedCase.ctx);
+    expect(delayedCase.ctx.answerCallbackQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining('ارسال دستی فیش'),
+        show_alert: true,
+      })
+    );
+  });
 });

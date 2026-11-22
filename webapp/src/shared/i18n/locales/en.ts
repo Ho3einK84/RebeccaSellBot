@@ -493,8 +493,12 @@ export const en: DeepPartial<TranslationSchema> = {
       forappCreateOrderBtn: 'Create Auto-Verify Invoice',
       forappActiveInvoiceTitle: 'Active Automated Transfer Invoice',
       forappNoReceiptNeeded:
-        'No receipt upload required — transfer the exact unique amount below before the timer expires.',
+        'No receipt upload required — transfer the exact unique amount above before expiry. If auto-verification takes over 5 minutes, submit your receipt manually.',
       forappExactRial: 'Exact amount in Rials: {rial} Rial',
+      forappDelayedHintTitle: 'Over 5 minutes since invoice creation',
+      forappDelayedHintBody:
+        'If you already completed the transfer and it has not been verified automatically yet, bank SMS delivery may be delayed. Please submit your receipt photo manually for fast review.',
+      forappDelayedHintAction: 'Upload Receipt Manually',
       forappManualFallbackToggle: 'Prefer to upload a receipt photo manually?',
       forappManualFallbackHide: 'Hide manual receipt upload',
       cryptoTopupTitle: 'Crypto Top-Up (NOWPayments)',
@@ -516,6 +520,8 @@ export const en: DeepPartial<TranslationSchema> = {
       orderCheckingStatus: 'Checking...',
       orderCancelBtn: 'Cancel Invoice',
       orderPendingToast: 'Payment not received yet. Please check again shortly.',
+      orderPendingDelayedToast:
+        'Over 5 minutes passed without automatic confirmation. If you already transferred, please upload your receipt manually.',
       orderConfirmingToast: 'Payment detected and awaiting confirmation.',
       orderCompletedToast: 'Wallet credited with {amount} {currency}!',
       orderCancelledToast: 'Payment invoice cancelled.',

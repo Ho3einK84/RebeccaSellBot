@@ -493,8 +493,12 @@ export const fa = {
       forappCreateOrderBtn: 'ساخت فاکتور تأیید خودکار',
       forappActiveInvoiceTitle: 'فاکتور کارت‌به‌کارت خودکار فعال',
       forappNoReceiptNeeded:
-        'نیازی به ارسال فیش نیست؛ کافی است دقیقاً مبلغ زیر را تا پیش از پایان مهلت واریز کنید.',
+        'نیازی به ارسال فیش نیست؛ کافی است دقیقاً مبلغ بالا را تا پیش از پایان مهلت واریز کنید. اگر پس از ۵ دقیقه تأیید خودکار انجام نشد، فیش را دستی بفرستید.',
       forappExactRial: 'معادل دقیق به ریال: {rial} ریال',
+      forappDelayedHintTitle: 'بیش از ۵ دقیقه از صدور فاکتور گذشت',
+      forappDelayedHintBody:
+        'در صورتی که واریز را انجام داده‌اید و هنوز به‌صورت خودکار تأیید نشده است، ممکن است ارسال پیامک بانکی با تأخیر همراه باشد. لطفاً تصویر فیش را دستی ارسال کنید تا سریع‌تر بررسی و شارژ شود.',
+      forappDelayedHintAction: 'ارسال دستی تصویر فیش',
       forappManualFallbackToggle: 'تمایل دارید عکس فیش را دستی ارسال کنید؟',
       forappManualFallbackHide: 'بستن بخش ارسال دستی فیش',
       cryptoTopupTitle: 'شارژ رمزارزی (NOWPayments)',
@@ -515,6 +519,8 @@ export const fa = {
       orderCheckingStatus: 'در حال استعلام...',
       orderCancelBtn: 'لغو فاکتور',
       orderPendingToast: 'هنوز واریزی ثبت نشده است؛ چند لحظه بعد دوباره بررسی کنید.',
+      orderPendingDelayedToast:
+        'بیش از ۵ دقیقه گذشته و تأیید خودکار ثبت نشده است؛ اگر واریز کرده‌اید لطفاً تصویر فیش را دستی ارسال کنید.',
       orderConfirmingToast: 'پرداخت شناسایی شده و در حال تأیید نهایی است.',
       orderCompletedToast: 'کیف پول شما با موفقیت {amount} {currency} شارژ شد!',
       orderCancelledToast: 'فاکتور پرداخت لغو شد.',

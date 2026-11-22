@@ -1901,8 +1901,14 @@ export const EN_TEXTS: Record<string, string> = {
   forapp_invoice_subtitle: 'Transfer the exact amount below for instant wallet credit',
   forapp_exact_rial_label: 'Exact amount in Rials',
   forapp_invoice_footer:
-    '⚡ No receipt upload required — transfer the exact unique amount before expiry. You can also submit a receipt manually below.',
+    '⚡ No receipt upload required — transfer the exact unique amount before expiry. If auto-verification takes more than 5 minutes, use "Upload Receipt Manually" below.',
   forapp_manual_fallback_button: '📸 Upload Receipt Manually',
+  forapp_status_pending_delayed:
+    '⏳ Over 5 minutes passed without auto-verification. If you already transferred, tap "📸 Upload Receipt Manually" below.',
+  forapp_delayed_hint_title: 'Payment Verification Tip',
+  forapp_delayed_hint_subtitle: '5 minutes passed without automatic bank confirmation',
+  forapp_delayed_hint_body:
+    'If you have already completed the transfer, bank SMS delivery may be temporarily delayed. Please tap the button below to upload your payment receipt manually so an admin can credit your wallet right away.',
   auto_pay_exact_amount_label: 'Exact payable amount',
   auto_pay_expires_at_label: 'Expires at',
   auto_pay_method_label: 'Payment method',

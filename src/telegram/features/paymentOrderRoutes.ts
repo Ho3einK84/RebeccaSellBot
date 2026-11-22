@@ -5,6 +5,7 @@
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { BotServices, ConversationContext, MenuContext } from '../types.js';
 import {
+  FORAPP_MANUAL_HINT_DELAY_MS,
   formatPaymentOrderShortId,
   type AutomatedPaymentService,
 } from '../../domain/services/AutomatedPaymentService.js';
@@ -253,6 +254,12 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
       return;
     }
 
+    const isDelayedForApp =
+      order.provider === 'forapp_card' &&
+      order.status === 'pending' &&
+      Boolean(order.createdAt) &&
+      Date.now() - new Date(order.createdAt).getTime() >= FORAPP_MANUAL_HINT_DELAY_MS;
+
     const statusKey =
       order.status === 'confirming'
         ? 'auto_pay_status_confirming'
@@ -264,7 +271,9 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
               ? 'auto_pay_status_cancelled'
               : order.status === 'failed'
                 ? 'auto_pay_status_failed'
-                : 'auto_pay_status_pending';
+                : isDelayedForApp
+                  ? 'forapp_status_pending_delayed'
+                  : 'auto_pay_status_pending';
 
     if (order.status === 'expired' || order.status === 'cancelled' || order.status === 'failed') {
       await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
