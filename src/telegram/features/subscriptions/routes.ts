@@ -1381,9 +1381,10 @@ async function buildSubscriptionCard(
   const isAdmin = Boolean(
     ctx.from && typeof ctx.services?.isAdmin === 'function' && ctx.services.isAdmin(ctx.from.id)
   );
+  const inAdminContext = isAdmin && ctx.session?.adminLastContext === 'admin';
   const resolvedBack =
     backCallback ??
-    (isAdmin && ctx.from && config.telegramId !== ctx.from.id
+    (isAdmin && ctx.from && (config.telegramId !== ctx.from.id || inAdminContext)
       ? `admin:user:subscriptions:${config.telegramId}:1`
       : 'subs:page:1');
   const keyboard = buildSubscriptionActionKeyboard(

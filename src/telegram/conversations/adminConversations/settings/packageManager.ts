@@ -586,13 +586,13 @@ export function buildPackageManagerKeyboard(
   }
 
   if (pageCount > 1) {
-    if (safePage > 0) keyboard.text(`⬅️ ${t(ctx, 'previous')}`, `pkg-page:${safePage - 1}`);
+    if (safePage > 0) keyboard.text(t(ctx, 'pagination_previous'), `pkg-page:${safePage - 1}`);
     keyboard.text(
-      `${localizedNumber(safePage + 1, ctx)}/${localizedNumber(pageCount, ctx)}`,
-      `pkg-page:${safePage}`
+      `${localizedNumber(safePage + 1, ctx)} / ${localizedNumber(pageCount, ctx)}`,
+      'ui:noop'
     );
     if (safePage < pageCount - 1) {
-      keyboard.text(`${t(ctx, 'next')} ➡️`, `pkg-page:${safePage + 1}`);
+      keyboard.text(t(ctx, 'pagination_next'), `pkg-page:${safePage + 1}`);
     }
     keyboard.row();
   }
@@ -1251,8 +1251,8 @@ async function manageCategories(
         () => true
       );
       if (iconResult.type === 'cancel') return 'cancel';
-      const icon =
-        iconResult.type === 'value' && iconResult.value !== '-' ? iconResult.value : undefined;
+      if (iconResult.type === 'back') continue;
+      const icon = iconResult.value !== '-' ? iconResult.value : undefined;
 
       await conversation.external(async (outsideCtx) => {
         if (!outsideCtx.services) return;

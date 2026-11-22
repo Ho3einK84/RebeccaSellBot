@@ -36,6 +36,7 @@ import {
   registerWebhook,
   type WebhookServerHandle,
 } from './telegram/bot.js';
+import { syncAdminBotCommands } from './telegram/admin/adminCommands.js';
 import { InputFile } from 'grammy';
 import type { BotServices } from './telegram/types.js';
 import { startWebAppServer, type WebAppServerHandle } from './webapp/server/server.js';
@@ -528,6 +529,7 @@ async function main() {
   const bot = setupBot(config, services);
   activeBot = bot;
   await initializeBot(bot);
+  void syncAdminBotCommands(bot, services);
 
   // Expose the resolved bot username and bot API to services for WebApp notifications
   services.botUsername = bot.botInfo.username;

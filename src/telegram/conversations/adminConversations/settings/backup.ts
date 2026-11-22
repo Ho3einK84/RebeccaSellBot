@@ -1,6 +1,6 @@
 import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../../types.js';
-import { localizedNumber, t } from '../../../locale.js';
+import { localizedDateTime, localizedNumber, t } from '../../../locale.js';
 import { buildScreen, promptInConversation } from '../../../ui.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../../rendering.js';
 import { requireAdmin } from '../shared.js';
@@ -39,17 +39,7 @@ export async function adminBackupSettingsConversation(
     if (lastRunRaw) {
       const parsedDate = new Date(lastRunRaw);
       if (!Number.isNaN(parsedDate.getTime())) {
-        formattedLastRun = parsedDate.toLocaleString(
-          activeCtx.userLocale === 'en' ? 'en-US' : 'fa-IR',
-          {
-            timeZone: 'UTC',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-          }
-        );
+        formattedLastRun = localizedDateTime(parsedDate, activeCtx);
       }
     }
 
@@ -167,7 +157,8 @@ export async function adminBackupSettingsConversation(
       if (!targetChatId) {
         const missingTargetDef = getSettingDefinition('backup_target_chat_id');
         if (missingTargetDef) {
-          await editSetting(conversation, activeCtx, missingTargetDef);
+          const outcome = await editSetting(conversation, activeCtx, missingTargetDef);
+          if (outcome === 'cancel') return;
         }
         continue;
       }
@@ -213,6 +204,7 @@ export async function adminBackupSettingsConversation(
         retryKeyboard: returnKeyboard,
       });
 
+      if (refreshInput.type === 'cancel') return;
       if (refreshInput.type === 'callback') {
         activeCtx = refreshInput.ctx;
       }
@@ -223,7 +215,8 @@ export async function adminBackupSettingsConversation(
       const key = input.data.slice('backup:edit:'.length);
       const definition = getSettingDefinition(key);
       if (definition) {
-        await editSetting(conversation, activeCtx, definition);
+        const outcome = await editSetting(conversation, activeCtx, definition);
+        if (outcome === 'cancel') return;
       }
     }
   }

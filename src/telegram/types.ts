@@ -33,6 +33,24 @@ import type { ContactVerificationService } from '../domain/services/ContactVerif
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
+export type AdminUserListFilter = 'all' | 'active_subs' | 'has_balance' | 'banned';
+export type AdminPromoListFilter = 'all' | 'active' | 'inactive' | 'expired';
+
+export interface AdminInputState {
+  kind: string;
+  payload?: Record<string, string | number | boolean | null>;
+  returnRoute: string;
+  createdAt: number;
+}
+
+export interface AdminTextsNavState {
+  locale: SupportedLocale;
+  mode: 'hub' | 'categories' | 'essential' | 'category' | 'customized' | 'search';
+  categoryId?: string;
+  query?: string;
+  page: number;
+}
+
 export interface SessionData {
   /** A validated code to be consumed atomically by the next purchase saga. */
   pendingPromo?: {
@@ -108,7 +126,25 @@ export interface SessionData {
   /** Post-verification destination so users can smoothly continue after phone verification. */
   phoneVerifyReturnAction?: 'trial' | 'shop' | 'custom_amount' | 'main';
   /** Return screen when exiting standalone bank cards manager conversation. */
-  bankCardsReturnTo?: 'sales' | 'receipts';
+  bankCardsReturnTo?: 'sales' | 'receipts' | 'settings';
+  /** Active non-blocking admin text input session (TTL-bounded, stored in Postgres session). */
+  adminInput?: AdminInputState;
+  /** Bounded admin navigation breadcrumb/back stack for exact cross-link return. */
+  adminNavStack?: string[];
+  /** Last UI mode visited by an admin so error/expired fallbacks stay in Admin context. */
+  adminLastContext?: 'admin' | 'user';
+  /** Preserved Users list filter & pagination state. */
+  adminUsersView?: { filter: AdminUserListFilter; page: number };
+  /** Preserved Promo Center filter & pagination state. */
+  adminPromoView?: { filter: AdminPromoListFilter; page: number };
+  /** Preserved Panel Registry page state. */
+  adminPanelView?: { page: number };
+  /** Preserved Receipt approved history search query. */
+  adminReceiptHistorySearch?: string;
+  /** Preserved stateless Bot Texts browser state. */
+  adminTextsView?: AdminTextsNavState;
+  /** Transient draft for multi-step admin creations without blocking conversations. */
+  adminDraft?: Record<string, unknown>;
   [key: string]: unknown;
 }
 

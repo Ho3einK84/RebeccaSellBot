@@ -2167,7 +2167,11 @@ export async function verifyPhoneConversation(
       return;
     }
 
-    if (text && /^\/[a-z][a-z0-9_]*(?:@[a-z0-9_]+)?(?:\s|$)/iu.test(text)) {
+    const navData = input.callbackQuery?.data ?? '';
+    if (
+      (text && /^\/[a-z][a-z0-9_]*(?:@[a-z0-9_]+)?(?:\s|$)/iu.test(text)) ||
+      /^(?:nav:|adm:)/u.test(navData)
+    ) {
       const cleanupKbMsg = await input.reply(t(input, 'operation_cancelled'), {
         reply_markup: { remove_keyboard: true },
       });

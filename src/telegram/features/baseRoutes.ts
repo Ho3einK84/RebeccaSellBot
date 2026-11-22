@@ -10,7 +10,10 @@ import {
   renderWalletStatementScreen,
   walletMenu,
 } from '../keyboards/mainMenu.js';
-import { adminMenu, renderAdminHome, renderSalesMenu } from '../keyboards/adminMenu.js';
+import { adminMenu } from '../keyboards/adminMenu.js';
+import { renderAdminHomeScreen, renderAdminSalesHub } from '../admin/adminHome.js';
+import { markAdminContext, markUserContext } from '../admin/adminNav.js';
+import { dispatchAdminRoute } from '../admin/adminRouter.js';
 import { showPromoCenter } from '../promoAdminUi.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
@@ -43,6 +46,8 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   bot.command('start', async (ctx) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
+    clearTransientConversationSession(ctx.session);
+    markUserContext(ctx);
 
     const payload = ctx.match;
     const referralCode = payload?.startsWith('ref_') ? payload : undefined;
@@ -123,17 +128,17 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     }
 
     if (payload === 'wallet') {
-      ctx.menu.nav('wallet-menu');
       await renderScreen(ctx, await renderWalletDashboard(ctx), {
         parse_mode: 'Markdown',
+        reply_markup: walletMenu,
       });
       return;
     }
 
     if (payload === 'shop') {
-      ctx.menu.nav('shop-menu');
       await renderScreen(ctx, await renderShopMenuText(ctx), {
         parse_mode: 'Markdown',
+        reply_markup: shopMenu,
       });
       return;
     }
@@ -222,6 +227,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
   // /admin — explicit admin menu command
   bot.command('admin', async (ctx) => {
     const telegramId = ctx.from?.id;
+    clearTransientConversationSession(ctx.session);
     if (!telegramId || !services.isAdmin(telegramId)) {
       await renderScreen(
         ctx,
@@ -230,10 +236,8 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       );
       return;
     }
-    await renderScreen(ctx, await renderAdminHome(ctx), {
-      parse_mode: 'Markdown',
-      reply_markup: adminMenu,
-    });
+    markAdminContext(ctx);
+    await renderAdminHomeScreen(ctx);
   });
 
   bot.callbackQuery(/^locale:(fa|en)$/u, async (ctx) => {
@@ -292,23 +296,25 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       return;
     }
     if (requested === 'admin:sales') {
-      await renderSalesMenu(ctx);
+      markAdminContext(ctx);
+      await renderAdminSalesHub(ctx);
     } else if (showAdmin) {
-      await renderScreen(ctx, await renderAdminHome(ctx), {
-        parse_mode: 'Markdown',
-        reply_markup: adminMenu,
-      });
+      markAdminContext(ctx);
+      await renderAdminHomeScreen(ctx);
     } else if (requested === 'wallet') {
+      markUserContext(ctx);
       await renderScreen(ctx, await renderWalletDashboard(ctx), {
         parse_mode: 'Markdown',
         reply_markup: walletMenu,
       });
     } else if (requested === 'shop') {
+      markUserContext(ctx);
       await renderScreen(ctx, await renderShopMenuText(ctx), {
         parse_mode: 'Markdown',
         reply_markup: shopMenu,
       });
     } else {
+      markUserContext(ctx);
       const dashboardText = await renderHomeDashboard(ctx);
       await renderScreen(ctx, dashboardText, {
         parse_mode: 'Markdown',
@@ -319,50 +325,70 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
 
   const adminCallback = guardAdminCallbacks(bot);
 
+  // Legacy `admin:sales:*` callbacks route through the unified stateless `adm:*` router
+  // when registered, falling back gracefully to legacy conversations.
   adminCallback('admin:sales:packages', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminManagePackagesConversation');
+    if (!(await dispatchAdminRoute(ctx, 'adm:pkg:p:1'))) {
+      await ctx.conversation.enter('adminManagePackagesConversation');
+    }
   });
 
   adminCallback('admin:sales:custom_volume', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminCustomVolumeConversation');
+    if (!(await dispatchAdminRoute(ctx, 'adm:cv'))) {
+      await ctx.conversation.enter('adminCustomVolumeConversation');
+    }
   });
 
   adminCallback('admin:sales:trial', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminTrialSettingsConversation');
+    if (!(await dispatchAdminRoute(ctx, 'adm:trl'))) {
+      await ctx.conversation.enter('adminTrialSettingsConversation');
+    }
   });
 
   adminCallback('admin:sales:promo', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await showPromoCenter(ctx);
+    if (!(await dispatchAdminRoute(ctx, 'adm:prm:p:1'))) {
+      await showPromoCenter(ctx);
+    }
   });
 
   adminCallback('admin:sales:referral', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminReferralSettingsConversation');
+    if (!(await dispatchAdminRoute(ctx, 'adm:grw'))) {
+      await ctx.conversation.enter('adminReferralSettingsConversation');
+    }
   });
 
   adminCallback('admin:sales:payment', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminPaymentSettingsConversation');
+    if (!(await dispatchAdminRoute(ctx, 'adm:cfg:pay'))) {
+      await ctx.conversation.enter('adminPaymentSettingsConversation');
+    }
   });
 
   adminCallback('admin:sales:bank_cards', async (ctx) => {
     await ctx.answerCallbackQuery();
     ctx.session.bankCardsReturnTo = 'sales';
-    await ctx.conversation.enter('adminBankCardsConversation');
+    if (!(await dispatchAdminRoute(ctx, 'adm:bc:p:1'))) {
+      await ctx.conversation.enter('adminBankCardsConversation');
+    }
   });
 
   adminCallback('admin:sales:lucky_wheel', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminLuckyWheelSettingsConversation');
+    if (!(await dispatchAdminRoute(ctx, 'adm:grw:wheel'))) {
+      await ctx.conversation.enter('adminLuckyWheelSettingsConversation');
+    }
   });
 
   adminCallback('admin:sales:discounts', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.conversation.enter('adminCatalogDiscountsConversation');
+    if (!(await dispatchAdminRoute(ctx, 'adm:dsc:p:1'))) {
+      await ctx.conversation.enter('adminCatalogDiscountsConversation');
+    }
   });
 
   // Explicit phone verification entry CTA
@@ -511,8 +537,15 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
 
   // Fallback for a stale Cancel button after a conversation has already ended.
   bot.callbackQuery('conversation:cancel', async (ctx) => {
+    const inAdmin = Boolean(
+      ctx.from?.id && services.isAdmin(ctx.from.id) && ctx.session?.adminLastContext === 'admin'
+    );
     clearTransientConversationSession(ctx.session);
     await ctx.answerCallbackQuery({ text: t(ctx, 'operation_cancelled') });
+    if (inAdmin) {
+      await renderAdminHomeScreen(ctx, { tone: 'info', text: t(ctx, 'operation_cancelled') });
+      return;
+    }
     await renderScreen(ctx, buildUserEmptyState('↩️', t(ctx, 'operation_cancelled'), ''), {
       parse_mode: 'Markdown',
       reply_markup: backKeyboard(ctx),

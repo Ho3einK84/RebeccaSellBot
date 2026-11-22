@@ -363,6 +363,96 @@ export class CatalogDiscountService {
     return updated ?? null;
   }
 
+  async updateDiscount(
+    id: string,
+    patch: {
+      title?: string;
+      discountType?: CatalogDiscountType;
+      value?: number;
+      maxDiscountAmount?: number | null;
+      startsAt?: Date | string;
+      expiresAt?: Date | string | null;
+      active?: boolean;
+    }
+  ): Promise<CatalogDiscountRow | null> {
+    const trimmed = id?.trim();
+    if (!trimmed) return null;
+    const existing = await this.getDiscountById(trimmed);
+    if (!existing) return null;
+
+    const nextTitle = patch.title !== undefined ? patch.title.trim() : existing.title;
+    if (!nextTitle || nextTitle.length > MAX_DISCOUNT_TITLE_LENGTH) {
+      throw new Error('INVALID_DISCOUNT_TITLE');
+    }
+
+    const nextType = patch.discountType ?? (existing.discountType as CatalogDiscountType);
+    if (!CATALOG_DISCOUNT_TYPES.includes(nextType)) {
+      throw new Error('INVALID_DISCOUNT_TYPE');
+    }
+
+    const nextValue = patch.value !== undefined ? patch.value : existing.value;
+    if (
+      typeof nextValue !== 'number' ||
+      !Number.isSafeInteger(nextValue) ||
+      nextValue <= 0 ||
+      (nextType === 'percent' && nextValue > 100)
+    ) {
+      throw new Error('INVALID_DISCOUNT_VALUE');
+    }
+
+    let nextMaxCap =
+      patch.maxDiscountAmount !== undefined ? patch.maxDiscountAmount : existing.maxDiscountAmount;
+    if (nextType === 'fixed') {
+      nextMaxCap = null;
+    } else if (nextMaxCap !== null) {
+      if (typeof nextMaxCap !== 'number' || !Number.isSafeInteger(nextMaxCap) || nextMaxCap < 0) {
+        throw new Error('INVALID_DISCOUNT_MAX_CAP');
+      }
+      nextMaxCap = nextMaxCap > 0 ? nextMaxCap : null;
+    }
+
+    const nextStartsAt =
+      patch.startsAt !== undefined ? toValidDate(patch.startsAt) : new Date(existing.startsAt);
+    if (!nextStartsAt) {
+      throw new Error('INVALID_DISCOUNT_WINDOW');
+    }
+
+    let nextExpiresAt: Date | null = existing.expiresAt ? new Date(existing.expiresAt) : null;
+    if (patch.expiresAt !== undefined) {
+      if (patch.expiresAt === null) {
+        nextExpiresAt = null;
+      } else {
+        const parsed = toValidDate(patch.expiresAt);
+        if (!parsed) throw new Error('INVALID_DISCOUNT_WINDOW');
+        nextExpiresAt = parsed;
+      }
+    }
+    if (nextExpiresAt && nextExpiresAt.getTime() <= nextStartsAt.getTime()) {
+      throw new Error('INVALID_DISCOUNT_WINDOW');
+    }
+
+    const nextActive = patch.active ?? existing.active;
+    const db = getDb();
+    const [updated] = await db
+      .update(catalogDiscounts)
+      .set({
+        title: nextTitle,
+        discountType: nextType,
+        value: nextValue,
+        maxDiscountAmount: nextMaxCap,
+        startsAt: nextStartsAt,
+        expiresAt: nextExpiresAt,
+        active: nextActive,
+      })
+      .where(eq(catalogDiscounts.id, trimmed))
+      .returning();
+
+    if (updated) {
+      logger.info({ discountId: updated.id }, 'Catalog discount updated');
+    }
+    return updated ?? null;
+  }
+
   async deleteDiscount(id: string): Promise<boolean> {
     const trimmed = id?.trim();
     if (!trimmed) return false;

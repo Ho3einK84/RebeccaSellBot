@@ -15,7 +15,13 @@ import { InlineKeyboard } from 'grammy';
 import { Menu } from '@grammyjs/menu';
 import type { ConversationContext, MenuContext } from '../types.js';
 import { localizedNumber, t } from '../locale.js';
-import { backKeyboard, buildScreen, buildStatusBadge, renderScreen } from '../ui.js';
+import {
+  backKeyboard,
+  buildAdminScreen,
+  buildScreen,
+  buildStatusBadge,
+  renderScreen,
+} from '../ui.js';
 import { showPromoCenter } from '../promoAdminUi.js';
 import { renderUserListPage } from '../features/admin/userRoutes.js';
 import { showReceiptQueue } from '../features/admin/receiptRoutes.js';
@@ -28,7 +34,7 @@ export async function renderAdminHome(ctx: MenuContext): Promise<string> {
   if (ctx.services) {
     pendingCount = await ctx.services.walletService.getPendingReceiptCount().catch(() => 0);
   }
-  return buildScreen({
+  return buildAdminScreen({
     emoji: '🛠️',
     title: t(ctx, 'admin_home_title'),
     subtitle: t(ctx, 'admin_home_subtitle'),
@@ -38,10 +44,10 @@ export async function renderAdminHome(ctx: MenuContext): Promise<string> {
             emoji: '🧾',
             label: t(ctx, 'admin_home_pending_label'),
             value: localizedNumber(pendingCount, ctx),
+            inline: true,
           },
         }
       : {}),
-    footer: `ℹ️ ${t(ctx, 'admin_home_hint')}`,
   });
 }
 
@@ -432,9 +438,11 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     async (ctx) => {
       const baseLabel = t(ctx, 'admin_group_daily');
       if (!ctx.services) return baseLabel;
-      const stats = await ctx.services.walletService.getDashboardStats().catch(() => null);
-      if (stats && stats.pendingReceipts > 0) {
-        return `${baseLabel} (📩 ${localizedNumber(stats.pendingReceipts, ctx)})`;
+      const pendingReceipts = await ctx.services.walletService
+        .getPendingReceiptCount()
+        .catch(() => 0);
+      if (pendingReceipts > 0) {
+        return `${baseLabel} (📩 ${localizedNumber(pendingReceipts, ctx)})`;
       }
       return baseLabel;
     },
@@ -462,9 +470,20 @@ export const adminMenu = new Menu<MenuContext>('admin-menu')
     async (ctx) => {
       const baseLabel = t(ctx, 'admin_group_panels');
       if (!ctx.services) return baseLabel;
-      const health = await ctx.services.panelRegistry.healthSummary().catch(() => null);
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const health = await Promise.race([
+        ctx.services.panelRegistry.healthSummary(),
+        new Promise<null>((resolve) => {
+          timeoutId = setTimeout(() => resolve(null), 1_500);
+        }),
+      ])
+        .catch(() => null)
+        .finally(() => {
+          if (timeoutId !== undefined) clearTimeout(timeoutId);
+        });
       if (health && health.configured > 0) {
-        const icon = health.healthy ? '🟢' : '⚠️';
+        const allHealthy = health.healthy === health.configured;
+        const icon = allHealthy ? '🟢' : '⚠️';
         return `${baseLabel} (${icon})`;
       }
       return baseLabel;

@@ -73,6 +73,10 @@ export async function waitForSettingsInput(
 
     const data = input.callbackQuery?.data;
     if (data) {
+      if (data === 'ui:noop') {
+        await input.answerCallbackQuery();
+        continue;
+      }
       if (options.backCallbacks?.includes(data)) {
         await input.answerCallbackQuery();
         return { type: 'back', ctx: input };

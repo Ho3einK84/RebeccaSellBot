@@ -5,12 +5,15 @@ import { localizedDate, localizedNumber, normalizeInputDigits, t } from '../../l
 import type { PromoType } from '../../../domain/services/PromoService.js';
 import { callbackData } from '../../callbackData.js';
 import {
+  buildAdminEmptyState,
+  buildAdminPromptScreen,
+  buildAdminScreen,
   buildEmptyState,
-  buildPromptScreen,
-  buildScreen,
   buildStatusBadge,
+  dismissKeyboard,
   promptInConversation,
   replyInAdminConversation,
+  sendArtifactInConversation,
   waitForAdminCallbackInput,
   waitForAdminTextInput,
 } from '../../ui.js';
@@ -69,12 +72,12 @@ export async function adminSearchPromoConversation(
   await promptInConversation(
     conversation,
     ctx,
-    buildPromptScreen(
-      '🔎',
-      t(ctx, 'admin_promo_center_title'),
-      t(ctx, 'admin_promo_search_prompt'),
-      t(ctx, 'admin_promo_center_subtitle')
-    ),
+    buildAdminPromptScreen({
+      emoji: '🔎',
+      title: t(ctx, 'admin_promo_center_title'),
+      subtitle: t(ctx, 'admin_promo_center_subtitle'),
+      body: t(ctx, 'admin_promo_search_prompt'),
+    }),
     { parse_mode: 'Markdown' }
   );
   const input = await waitForAdminTextInput(conversation);
@@ -86,13 +89,18 @@ export async function adminSearchPromoConversation(
     await replyInAdminConversation(
       conversation,
       ctx,
-      buildEmptyState('📭', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_no_promo_codes')),
+      buildAdminEmptyState(
+        '📭',
+        t(ctx, 'admin_promo_center_title'),
+        t(ctx, 'admin_no_promo_codes')
+      ),
       {
         parse_mode: 'Markdown',
         reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'admin_promo_back_to_list'), callbackData('promo', 'list'))
+          .text(t(ctx, 'admin_promo_search_button'), callbackData('promo', 'search'))
           .row()
-          .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
+          .text(t(ctx, 'admin_promo_back_to_list'), 'adm:prm:p:1')
+          .text(t(ctx, 'admin_menu_back_to_sales'), 'adm:sales'),
       }
     );
     return;
@@ -104,13 +112,14 @@ export async function adminSearchPromoConversation(
       .row();
   }
   keyboard
-    .text(t(ctx, 'admin_promo_back_to_list'), callbackData('promo', 'list'))
+    .text(t(ctx, 'admin_promo_search_button'), callbackData('promo', 'search'))
     .row()
-    .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+    .text(t(ctx, 'admin_promo_back_to_list'), 'adm:prm:p:1')
+    .text(t(ctx, 'admin_menu_back_to_sales'), 'adm:sales');
   await replyInAdminConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildAdminScreen({
       emoji: '🔎',
       title: t(ctx, 'admin_promo_center_title'),
       subtitle: t(ctx, 'admin_promo_search_results', { count: localizedNumber(result.total, ctx) }),
@@ -118,14 +127,14 @@ export async function adminSearchPromoConversation(
         emoji: '🎟️',
         label: t(ctx, 'admin_promo_total_label'),
         value: localizedNumber(result.total, ctx),
+        inline: true,
       },
       sections: [
         {
           emoji: '📋',
           title: t(ctx, 'admin_promo_center_title'),
           fields: result.items.map((promo) => ({
-            emoji: promo.active ? '🟢' : '⚪️',
-            label: escapeTelegramMarkdown(promo.code),
+            label: `${promo.active ? '🟢' : '⚪️'} ${escapeTelegramMarkdown(promo.code)}`,
             value: `${localizedNumber(promo.currentUses, ctx)} / ${localizedNumber(promo.maxUses, ctx)}`,
           })),
         },
@@ -190,13 +199,14 @@ export async function adminBulkPromoConversation(
   await promptInConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildAdminScreen({
       emoji: '⚡',
       title: t(ctx, 'admin_promo_bulk_title'),
       primary: {
         emoji: '🔢',
         label: t(ctx, 'admin_promo_total_label'),
         value: localizedNumber(count, ctx),
+        inline: true,
       },
       sections: [
         {
@@ -259,10 +269,11 @@ export async function adminBulkPromoConversation(
     );
 
     const codeList = codes.map((c) => `\`${sanitizeTelegramInlineCode(c)}\``).join('\n');
-    await replyInAdminConversation(
+    // Keep generated bulk promo codes as a durable artifact so navigating away never wipes them.
+    await sendArtifactInConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildAdminScreen({
         emoji: '✅',
         title: t(ctx, 'admin_promo_bulk_title'),
         subtitle: t(ctx, 'admin_promo_bulk_success', { count: localizedNumber(codes.length, ctx) }),
@@ -272,7 +283,6 @@ export async function adminBulkPromoConversation(
             title: t(ctx, 'admin_promo_bulk_copy_hint'),
             fields: [
               {
-                emoji: '🎟️',
                 label: t(ctx, 'admin_promo_total_label'),
                 value: localizedNumber(codes.length, ctx),
               },
@@ -283,10 +293,25 @@ export async function adminBulkPromoConversation(
       }),
       {
         parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(
-          t(ctx, 'admin_promo_back_to_list'),
-          callbackData('promo', 'list')
-        ),
+        reply_markup: dismissKeyboard(ctx),
+      }
+    );
+    await replyInAdminConversation(
+      conversation,
+      ctx,
+      buildAdminScreen({
+        emoji: '🎟️',
+        title: t(ctx, 'admin_promo_center_title'),
+        notice: {
+          tone: 'success',
+          text: t(ctx, 'admin_promo_bulk_success', { count: localizedNumber(codes.length, ctx) }),
+        },
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_promo_back_to_list'), 'adm:prm:p:1')
+          .text(t(ctx, 'admin_menu_back_to_sales'), 'adm:sales'),
       }
     );
   } catch (err) {
@@ -368,7 +393,7 @@ async function runPromoEditor(
   await promptInConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildAdminScreen({
       emoji: '🎟️',
       title: t(ctx, 'admin_promo_detail_title'),
       subtitle: escapeTelegramMarkdown(code),
@@ -380,6 +405,7 @@ async function runPromoEditor(
           active ? 'active' : 'inactive',
           t(ctx, active ? 'admin_promo_active' : 'admin_promo_inactive')
         ),
+        inline: true,
       },
       sections: [
         {
@@ -462,13 +488,14 @@ async function runPromoEditor(
     await replyInAdminConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildAdminScreen({
         emoji: '✅',
         title: t(ctx, 'admin_promo_detail_title'),
         primary: {
           emoji: '🎟️',
           label: t(ctx, 'checkout_promo_section'),
           value: escapeTelegramMarkdown(code),
+          inline: true,
         },
         footer: t(ctx, existing ? 'admin_promo_updated' : 'admin_promo_created', {
           code: escapeTelegramMarkdown(code),
@@ -479,7 +506,7 @@ async function runPromoEditor(
         reply_markup: new InlineKeyboard()
           .text(t(ctx, 'admin_promo_open_button'), callbackData('promo', 'open', saved.id))
           .row()
-          .text(t(ctx, 'admin_promo_back_to_list'), callbackData('promo', 'list')),
+          .text(t(ctx, 'admin_promo_back_to_list'), 'adm:prm:p:1'),
       }
     );
   } catch (err) {
@@ -501,16 +528,18 @@ async function promptPromoCode(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<string | undefined> {
+  let errorText: string | undefined;
   for (;;) {
     await promptInConversation(
       conversation,
       ctx,
-      buildPromptScreen(
-        '🎟️',
-        t(ctx, 'admin_promo_center_title'),
-        t(ctx, 'admin_promo_code_prompt'),
-        t(ctx, 'admin_promo_center_subtitle')
-      ),
+      buildAdminPromptScreen({
+        emoji: '🎟️',
+        title: t(ctx, 'admin_promo_center_title'),
+        subtitle: t(ctx, 'admin_promo_center_subtitle'),
+        body: t(ctx, 'admin_promo_code_prompt'),
+        error: errorText,
+      }),
       { parse_mode: 'Markdown' }
     );
     const input = await waitForAdminTextInput(conversation);
@@ -521,12 +550,7 @@ async function promptPromoCode(
       .replace(/[٠-٩]/gu, (d) => String(d.charCodeAt(0) - 0x0660))
       .toUpperCase();
     if (/^[A-Z0-9_-]{3,128}$/u.test(code)) return code;
-    await replyInAdminConversation(
-      conversation,
-      ctx,
-      buildEmptyState('⚠️', t(ctx, 'admin_promo_center_title'), t(ctx, 'admin_promo_code_invalid')),
-      { parse_mode: 'Markdown' }
-    );
+    errorText = t(ctx, 'admin_promo_code_invalid');
   }
 }
 
@@ -545,12 +569,12 @@ async function promptPromoType(
   await promptInConversation(
     conversation,
     ctx,
-    buildPromptScreen(
-      '⚙️',
-      t(ctx, 'admin_promo_detail_title'),
-      t(ctx, 'admin_promo_type_prompt'),
-      t(ctx, 'admin_promo_center_subtitle')
-    ),
+    buildAdminPromptScreen({
+      emoji: '⚙️',
+      title: t(ctx, 'admin_promo_detail_title'),
+      subtitle: t(ctx, 'admin_promo_center_subtitle'),
+      body: t(ctx, 'admin_promo_type_prompt'),
+    }),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
   const data = await waitForAdminCallbackInput(conversation, ['promo-type:']);
@@ -568,23 +592,24 @@ async function promptPromoPositiveNumber(
   invalid: string,
   maximum = 2_147_483_647
 ): Promise<number | undefined> {
+  let errorText: string | undefined;
   for (;;) {
     await promptInConversation(
       conversation,
       ctx,
-      buildPromptScreen('🔢', t(ctx, 'admin_promo_detail_title'), prompt),
+      buildAdminPromptScreen({
+        emoji: '🔢',
+        title: t(ctx, 'admin_promo_detail_title'),
+        body: prompt,
+        error: errorText,
+      }),
       { parse_mode: 'Markdown' }
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
     const value = parsePositiveSafeInteger(input);
     if (value !== undefined && value <= maximum) return value;
-    await replyInAdminConversation(
-      conversation,
-      ctx,
-      buildEmptyState('⚠️', t(ctx, 'admin_promo_detail_title'), invalid),
-      { parse_mode: 'Markdown' }
-    );
+    errorText = invalid;
   }
 }
 
@@ -592,15 +617,17 @@ async function promptPromoNonNegativeNumber(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<number | undefined> {
+  let errorText: string | undefined;
   for (;;) {
     await promptInConversation(
       conversation,
       ctx,
-      buildPromptScreen(
-        '🔢',
-        t(ctx, 'admin_promo_detail_title'),
-        t(ctx, 'admin_promo_min_purchase_prompt')
-      ),
+      buildAdminPromptScreen({
+        emoji: '🔢',
+        title: t(ctx, 'admin_promo_detail_title'),
+        body: t(ctx, 'admin_promo_min_purchase_prompt'),
+        error: errorText,
+      }),
       { parse_mode: 'Markdown' }
     );
     const input = await waitForAdminTextInput(conversation);
@@ -610,16 +637,7 @@ async function promptPromoNonNegativeNumber(
       const value = Number(normalized);
       if (Number.isSafeInteger(value) && value >= 0) return value;
     }
-    await replyInAdminConversation(
-      conversation,
-      ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'admin_promo_detail_title'),
-        t(ctx, 'admin_invalid_promo_min_purchase')
-      ),
-      { parse_mode: 'Markdown' }
-    );
+    errorText = t(ctx, 'admin_invalid_promo_min_purchase');
   }
 }
 
@@ -628,36 +646,29 @@ async function promptPromoMaxDiscountAmount(
   ctx: ConversationContext,
   _current?: number | null
 ): Promise<number | null | undefined> {
+  let errorText: string | undefined;
   for (;;) {
     await promptInConversation(
       conversation,
       ctx,
-      buildPromptScreen(
-        '🛑',
-        t(ctx, 'admin_promo_detail_title'),
-        t(ctx, 'admin_promo_max_discount_prompt')
-      ),
+      buildAdminPromptScreen({
+        emoji: '🛑',
+        title: t(ctx, 'admin_promo_detail_title'),
+        body: t(ctx, 'admin_promo_max_discount_prompt'),
+        error: errorText,
+      }),
       { parse_mode: 'Markdown' }
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
     const raw = input.trim().toLowerCase();
     const normalized = normalizeInputDigits(raw);
-    if (['0', 'none', 'بدون', 'no'].includes(raw)) return null;
+    if (['0', 'none', 'بدون', 'no'].includes(normalized)) return null;
     if (/^\d+$/u.test(normalized)) {
       const value = Number(normalized);
       if (Number.isSafeInteger(value) && value >= 0) return value === 0 ? null : value;
     }
-    await replyInAdminConversation(
-      conversation,
-      ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'admin_promo_detail_title'),
-        t(ctx, 'admin_promo_invalid_max_discount')
-      ),
-      { parse_mode: 'Markdown' }
-    );
+    errorText = t(ctx, 'admin_promo_invalid_max_discount');
   }
 }
 
@@ -674,11 +685,11 @@ async function promptPromoFirstPurchaseOnly(
   await promptInConversation(
     conversation,
     ctx,
-    buildPromptScreen(
-      '✨',
-      t(ctx, 'admin_promo_detail_title'),
-      t(ctx, 'admin_promo_first_purchase_prompt')
-    ),
+    buildAdminPromptScreen({
+      emoji: '✨',
+      title: t(ctx, 'admin_promo_detail_title'),
+      body: t(ctx, 'admin_promo_first_purchase_prompt'),
+    }),
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
   const data = await waitForAdminCallbackInput(conversation, ['promo-first-purchase:']);
@@ -696,11 +707,11 @@ async function promptPromoBulkPrefix(
   await promptInConversation(
     conversation,
     ctx,
-    buildPromptScreen(
-      '🏷️',
-      t(ctx, 'admin_promo_bulk_title'),
-      t(ctx, 'admin_promo_bulk_prefix_prompt')
-    ),
+    buildAdminPromptScreen({
+      emoji: '🏷️',
+      title: t(ctx, 'admin_promo_bulk_title'),
+      body: t(ctx, 'admin_promo_bulk_prefix_prompt'),
+    }),
     { parse_mode: 'Markdown' }
   );
   const input = await waitForAdminTextInput(conversation);
@@ -718,15 +729,17 @@ async function promptPromoBulkCount(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<number | undefined> {
+  let errorText: string | undefined;
   for (;;) {
     await promptInConversation(
       conversation,
       ctx,
-      buildPromptScreen(
-        '🔢',
-        t(ctx, 'admin_promo_bulk_title'),
-        t(ctx, 'admin_promo_bulk_count_prompt')
-      ),
+      buildAdminPromptScreen({
+        emoji: '🔢',
+        title: t(ctx, 'admin_promo_bulk_title'),
+        body: t(ctx, 'admin_promo_bulk_count_prompt'),
+        error: errorText,
+      }),
       { parse_mode: 'Markdown' }
     );
     const input = await waitForAdminTextInput(conversation);
@@ -736,16 +749,7 @@ async function promptPromoBulkCount(
       const value = Number(normalized);
       if (Number.isSafeInteger(value) && value >= 1 && value <= 50) return value;
     }
-    await replyInAdminConversation(
-      conversation,
-      ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'admin_promo_bulk_title'),
-        t(ctx, 'admin_promo_bulk_invalid_count')
-      ),
-      { parse_mode: 'Markdown' }
-    );
+    errorText = t(ctx, 'admin_promo_bulk_invalid_count');
   }
 }
 
@@ -753,36 +757,29 @@ async function promptPromoExpiry(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<Date | null | undefined> {
+  let errorText: string | undefined;
   for (;;) {
     await promptInConversation(
       conversation,
       ctx,
-      buildPromptScreen(
-        '📅',
-        t(ctx, 'admin_promo_detail_title'),
-        t(ctx, 'admin_promo_expiry_prompt')
-      ),
+      buildAdminPromptScreen({
+        emoji: '📅',
+        title: t(ctx, 'admin_promo_detail_title'),
+        body: t(ctx, 'admin_promo_expiry_prompt'),
+        error: errorText,
+      }),
       { parse_mode: 'Markdown' }
     );
     const input = await waitForAdminTextInput(conversation);
     if (input === undefined) return undefined;
     const raw = input.trim().toLowerCase();
     const value = normalizeInputDigits(raw);
-    if (['0', 'never', 'none', 'بدون'].includes(raw)) return null;
+    if (['0', 'never', 'none', 'بدون'].includes(value)) return null;
     if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
       const date = new Date(`${value}T23:59:59.999Z`);
       if (!Number.isNaN(date.getTime()) && date.getTime() > Date.now()) return date;
     }
-    await replyInAdminConversation(
-      conversation,
-      ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'admin_promo_detail_title'),
-        t(ctx, 'admin_invalid_promo_expiry')
-      ),
-      { parse_mode: 'Markdown' }
-    );
+    errorText = t(ctx, 'admin_invalid_promo_expiry');
   }
 }
 
@@ -799,7 +796,7 @@ async function promptPromoActive(
   await promptInConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildAdminScreen({
       emoji: '⚙️',
       title: t(ctx, 'admin_promo_detail_title'),
       primary: {
@@ -810,6 +807,7 @@ async function promptPromoActive(
           current ? 'active' : 'inactive',
           t(ctx, current ? 'admin_promo_active' : 'admin_promo_inactive')
         ),
+        inline: true,
       },
       footer: t(ctx, 'admin_promo_active_prompt', {
         active: t(ctx, current ? 'admin_promo_active' : 'admin_promo_inactive'),

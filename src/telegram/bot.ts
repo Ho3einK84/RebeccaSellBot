@@ -48,10 +48,15 @@ export function setupBot(config: Config, services: BotServices): Bot<MenuContext
         .answerCallbackQuery({ text: alertMessage, show_alert: true })
         .catch(() => undefined);
     } else if (err.ctx.chat?.type === 'private') {
+      const inAdminContext = Boolean(
+        err.ctx.from?.id &&
+        services.isAdmin(err.ctx.from.id) &&
+        err.ctx.session?.adminLastContext === 'admin'
+      );
       await err.ctx
         .reply(buildUserEmptyState('⚠️', t(err.ctx, 'ui_status_error'), replyMessage), {
           parse_mode: 'Markdown',
-          reply_markup: backKeyboard(err.ctx, 'main'),
+          reply_markup: backKeyboard(err.ctx, inAdminContext ? 'admin' : 'main'),
         })
         .catch(() => undefined);
     }

@@ -142,7 +142,8 @@ export async function adminTrialSettingsConversation(
       const key = input.data.slice('trial:edit:'.length);
       const definition = getSettingDefinition(key);
       if (definition) {
-        await editSetting(conversation, activeCtx, definition);
+        const outcome = await editSetting(conversation, activeCtx, definition);
+        if (outcome === 'cancel') return;
       }
     }
   }

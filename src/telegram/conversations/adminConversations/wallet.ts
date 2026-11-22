@@ -1034,6 +1034,12 @@ async function applyAdminBalanceOperation(
   const currentBalance = await conversation.external((outsideCtx) =>
     (outsideCtx?.services ?? ctx.services)!.walletService.getBalance(telegramId)
   );
+  const projectedBalance =
+    operation === 'add'
+      ? currentBalance + amount
+      : operation === 'deduct'
+        ? Math.max(0, currentBalance - amount)
+        : amount;
   const confirmationKeyboard = new InlineKeyboard()
     .text(t(ctx, 'admin_balance_confirm_button'), 'balance-confirm')
     .row()
@@ -1051,7 +1057,7 @@ async function applyAdminBalanceOperation(
         current_balance: localizedNumber(currentBalance, ctx),
       }),
       primary: {
-        emoji: operation === 'deduct' ? '➖' : '➕',
+        emoji: operation === 'deduct' ? '➖' : operation === 'set' ? '⚖️' : '➕',
         label: t(ctx, `admin_balance_${operation}`),
         value: `${localizedNumber(amount, ctx)} ${t(ctx, 'currency_toman')}`,
       },
@@ -1069,6 +1075,11 @@ async function applyAdminBalanceOperation(
               emoji: '💰',
               label: t(ctx, 'admin_user_balance_label'),
               value: `${localizedNumber(currentBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+            },
+            {
+              emoji: '✨',
+              label: t(ctx, 'admin_user_balance_projected_label'),
+              value: `${localizedNumber(projectedBalance, ctx)} ${t(ctx, 'currency_toman')}`,
             },
           ],
         },
@@ -1107,7 +1118,13 @@ async function applyAdminBalanceOperation(
           value: `${localizedNumber(updated, ctx)} ${t(ctx, 'currency_toman')}`,
         },
       }),
-      { parse_mode: 'Markdown' }
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_user_open_profile_button'), `adm:usr:v:${telegramId}`)
+          .row()
+          .text(t(ctx, 'admin_menu_back_to_admin'), 'adm:home'),
+      }
     );
     await conversation.external(async (outsideCtx) => {
       const targetCtx = outsideCtx?.services ? outsideCtx : ctx;

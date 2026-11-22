@@ -48,11 +48,15 @@ import { registerAdminAlertHook } from '../domain/services/RebeccaService.js';
 import { logger } from '../infra/logger.js';
 import { resolveServiceLocale, t, tForLocale } from './locale.js';
 import {
-  buildScreen,
+  buildAdminScreen,
   buildUserScreen,
   cleanChatUiMiddleware,
+  forgetUiMessage,
+  safelyDeleteMessage,
   uiMessageTrackingTransformer,
 } from './ui.js';
+import { registerAdminInputMiddleware } from './admin/adminInput.js';
+import { dispatchAdminRoute } from './admin/adminRouter.js';
 import {
   escapeTelegramMarkdown,
   safeFormattingTransformer,
@@ -247,6 +251,25 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     return next();
   });
 
+  // Always allow single-tap popover dismissal (`ui:dismiss`) even when a
+  // conversation is active, without mutating or cancelling conversation state.
+  bot.use(async (ctx, next) => {
+    if (ctx.callbackQuery?.data === 'ui:dismiss') {
+      await ctx.answerCallbackQuery().catch(() => {});
+      if (ctx.callbackQuery.message) {
+        const messageId = ctx.callbackQuery.message.message_id;
+        await safelyDeleteMessage(ctx, messageId);
+        forgetUiMessage(ctx.session, messageId);
+      }
+      return;
+    }
+    return next();
+  });
+
+  // Non-blocking, Postgres-session-backed admin input engine. Runs before
+  // conversations so active text prompts work seamlessly without locking alerts.
+  registerAdminInputMiddleware(bot, dispatchAdminRoute);
+
   // Conversation plugin
   // Conversation contexts are created from scratch by the plugin and do not
   // inherit properties installed by the outer middleware tree. Reinject the
@@ -307,6 +330,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
 /** Identify both explicit admin routes and grammY's encoded admin submenu callbacks. */
 export function isAdminCallbackData(data: string): boolean {
   return (
+    data.startsWith('adm:') ||
     /^admin(?:-[a-z0-9]+)*-menu\//u.test(data) ||
     data.startsWith('admin:') ||
     data.startsWith('admin_') ||
@@ -376,7 +400,7 @@ export function buildAdminPanelOutageScreen(
     'admin_panel_outage_attempts_unit'
   )}`;
 
-  return buildScreen({
+  return buildAdminScreen({
     emoji: '🚨',
     title: tForLocale(services.translationService, locale, 'admin_panel_outage_title'),
     subtitle: tForLocale(services.translationService, locale, 'admin_panel_outage_subtitle'),

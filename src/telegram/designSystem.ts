@@ -6,6 +6,7 @@ import {
   formatPersianScreen,
   t,
 } from './locale.js';
+import { escapeTelegramMarkdown } from './rendering.js';
 
 export type StatusType =
   'active' | 'inactive' | 'pending' | 'expired' | 'disabled' | 'healthy' | 'warning' | 'error';
@@ -45,6 +46,23 @@ export type UserScreenDefinition = {
     inline?: boolean;
     emphasizeValue?: boolean;
   };
+  sections?: UserScreenSection[];
+  footer?: string;
+  direction?: 'rtl' | 'ltr' | 'auto';
+};
+
+export type AdminScreenNoticeTone = 'success' | 'warning' | 'error' | 'info';
+export type AdminScreenNotice = {
+  tone: AdminScreenNoticeTone;
+  text: string;
+};
+export type AdminScreenDefinition = {
+  emoji: string;
+  title: string;
+  breadcrumb?: string;
+  subtitle?: string;
+  notice?: AdminScreenNotice;
+  primary?: UserScreenDefinition['primary'];
   sections?: UserScreenSection[];
   footer?: string;
   direction?: 'rtl' | 'ltr' | 'auto';
@@ -310,10 +328,11 @@ export function buildEmptyState(
   actionHint?: string,
   direction?: 'rtl' | 'ltr' | 'auto'
 ): string {
+  const cleanBody = emoji ? stripLeadingEmoji(body) : body;
   return buildScreen({
     emoji,
     title,
-    footer: [body, actionHint].filter(Boolean).join('\n\n'),
+    footer: [cleanBody, actionHint].filter(Boolean).join('\n\n'),
     direction,
   });
 }
@@ -444,5 +463,153 @@ export function buildUserPromptScreen(
     subtitle,
     footer: body,
     direction,
+  });
+}
+
+/** Compose a sleek breadcrumb path for admin screens (e.g. `فروش › بسته‌ها`). */
+export function buildBreadcrumb(...parts: Array<string | undefined | null>): string {
+  return parts
+    .map((part) => (part ? escapeTelegramMarkdown(stripLeadingEmoji(part.trim())) : ''))
+    .filter(Boolean)
+    .join(' › ');
+}
+
+function formatAdminNotice(notice: AdminScreenNotice): string {
+  const icon =
+    notice.tone === 'success'
+      ? '✅'
+      : notice.tone === 'warning'
+        ? '⚠️'
+        : notice.tone === 'error'
+          ? '❌'
+          : 'ℹ️';
+  const clean = stripLeadingEmoji(notice.text.trim());
+  return `${icon} ${clean}`;
+}
+
+/**
+ * Compose a unified, minimal, RTL-safe admin Telegram screen matching the v2
+ * user design system (no Persian-breaking italics, tight spacing, clean bullets,
+ * optional breadcrumb and inline feedback notice).
+ */
+export function buildAdminScreen(definition: AdminScreenDefinition): string {
+  const subtitleParts = [definition.breadcrumb?.trim(), definition.subtitle?.trim()].filter(
+    Boolean
+  );
+  const subtitle = subtitleParts.length > 0 ? subtitleParts.join('\n') : undefined;
+  const noticeSection: UserScreenSection[] = definition.notice
+    ? [
+        {
+          bullet: '',
+          fields: [{ value: formatAdminNotice(definition.notice) }],
+        },
+      ]
+    : [];
+
+  return buildUserScreen({
+    emoji: definition.emoji,
+    title: definition.title,
+    subtitle,
+    primary: definition.primary,
+    sections: [...noticeSection, ...(definition.sections ?? [])],
+    footer: definition.footer,
+    direction: definition.direction,
+  });
+}
+
+/** Minimal admin empty/error screen with duplicate-emoji stripping and optional breadcrumb. */
+export function buildAdminEmptyState(
+  emoji: string,
+  title: string,
+  body: string,
+  options?: {
+    breadcrumb?: string;
+    actionHint?: string;
+    notice?: AdminScreenNotice;
+    direction?: 'rtl' | 'ltr' | 'auto';
+  }
+): string {
+  const cleanBody = emoji ? stripLeadingEmoji(body) : body;
+  const cleanHint = options?.actionHint?.trim();
+  return buildAdminScreen({
+    emoji,
+    title,
+    breadcrumb: options?.breadcrumb,
+    notice: options?.notice,
+    footer: [cleanBody, cleanHint].filter(Boolean).join('\n\n'),
+    direction: options?.direction,
+  });
+}
+
+export interface AdminPromptScreenSpec {
+  emoji: string;
+  title: string;
+  body: string;
+  breadcrumb?: string;
+  subtitle?: string;
+  currentLabel?: string;
+  currentValue?: string;
+  error?: string;
+  hint?: string;
+  direction?: 'rtl' | 'ltr' | 'auto';
+}
+
+/** Focused admin input prompt with optional current value and inline retry error notice. */
+export function buildAdminPromptScreen(spec: AdminPromptScreenSpec): string;
+export function buildAdminPromptScreen(
+  emoji: string,
+  title: string,
+  body: string,
+  options?: {
+    breadcrumb?: string;
+    subtitle?: string;
+    currentLabel?: string;
+    currentValue?: string;
+    error?: string;
+    hint?: string;
+    direction?: 'rtl' | 'ltr' | 'auto';
+  }
+): string;
+export function buildAdminPromptScreen(
+  emojiOrSpec: string | AdminPromptScreenSpec,
+  titleArg?: string,
+  bodyArg?: string,
+  optionsArg?: {
+    breadcrumb?: string;
+    subtitle?: string;
+    currentLabel?: string;
+    currentValue?: string;
+    error?: string;
+    hint?: string;
+    direction?: 'rtl' | 'ltr' | 'auto';
+  }
+): string {
+  const spec: AdminPromptScreenSpec =
+    typeof emojiOrSpec === 'string'
+      ? {
+          emoji: emojiOrSpec,
+          title: titleArg ?? '',
+          body: bodyArg ?? '',
+          ...optionsArg,
+        }
+      : emojiOrSpec;
+
+  return buildAdminScreen({
+    emoji: spec.emoji,
+    title: spec.title,
+    breadcrumb: spec.breadcrumb,
+    subtitle: spec.subtitle,
+    notice: spec.error ? { tone: 'error', text: spec.error } : undefined,
+    ...(spec.currentValue !== undefined && spec.currentValue !== ''
+      ? {
+          primary: {
+            label: spec.currentLabel ?? '•',
+            value: spec.currentValue,
+            inline: true,
+          },
+        }
+      : {}),
+    footer: [spec.body, spec.hint].filter(Boolean).join('\n\n'),
+    direction: spec.direction,
   });
 }

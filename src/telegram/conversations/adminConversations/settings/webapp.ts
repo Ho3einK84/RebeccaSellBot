@@ -352,7 +352,8 @@ async function handleDomainDiagnosticsFlow(
       : []),
   ];
 
-  await replyInAdminConversation(
+  const backKb = new InlineKeyboard().text(t(activeCtx, 'menu_back'), 'webapp:dns:back');
+  await promptInConversation(
     conversation,
     activeCtx,
     buildScreen({
@@ -366,8 +367,12 @@ async function handleDomainDiagnosticsFlow(
         },
       ],
     }),
-    { parse_mode: 'Markdown', reply_markup: undefined }
+    { parse_mode: 'Markdown', reply_markup: backKb }
   );
+  await waitForSettingsInput(conversation, {
+    backCallbacks: ['webapp:dns:back'],
+    retryKeyboard: backKb,
+  });
 }
 
 async function handleDomainConfigurationFlow(

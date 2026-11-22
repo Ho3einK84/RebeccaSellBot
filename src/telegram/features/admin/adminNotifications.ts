@@ -5,9 +5,14 @@ import type {
   TranslationService,
 } from '../../../domain/services/TranslationService.js';
 import { logger } from '../../../infra/logger.js';
-import { buildScreen, buildUserScreen } from '../../designSystem.js';
+import { buildAdminScreen, buildUserScreen } from '../../designSystem.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
-import { tForLocale, localizedNumberForLocale, resolveServiceLocale } from '../../locale.js';
+import {
+  localizedDateTimeForLocale,
+  localizedNumberForLocale,
+  resolveServiceLocale,
+  tForLocale,
+} from '../../locale.js';
 
 export interface AdminNotificationServices {
   userService: UserService;
@@ -109,58 +114,72 @@ export async function sendAdminNewReceiptNotification(
           telegram_id: String(params.telegramId),
           short_id: shortId,
         });
-        const baseText = simpleText || `🔔 *${briefTitle}*`;
-        const fullSimpleText = duplicateBanner ? `${duplicateBanner}\n\n${baseText}` : baseText;
-        await api.sendMessage(adminId, fullSimpleText, {
+        const screen = buildAdminScreen({
+          emoji: '🔔',
+          title: briefTitle || tForLocale(ts, adminLocale, 'admin_receipt_review_title'),
+          notice: duplicateBanner ? { tone: 'warning', text: duplicateBanner } : undefined,
+          footer: simpleText || undefined,
+        });
+        const simpleKb = new InlineKeyboard()
+          .text(tForLocale(ts, adminLocale, 'admin_receipt_open_queue_button'), 'adm:rcpt:q:1')
+          .text(
+            tForLocale(ts, adminLocale, 'admin_receipt_view_user_button'),
+            `adm:usr:v:${params.telegramId}`
+          )
+          .row()
+          .text(tForLocale(ts, adminLocale, 'menu_close'), 'ui:dismiss');
+        await api.sendMessage(adminId, screen, {
           parse_mode: 'Markdown',
+          reply_markup: simpleKb,
         });
         continue;
       }
 
       const subtitleBase = tForLocale(ts, adminLocale, 'admin_receipt_review_subtitle');
-      const caption = buildScreen({
+      let caption = buildAdminScreen({
         emoji: '🧾',
         title: tForLocale(ts, adminLocale, 'admin_receipt_review_title'),
-        subtitle: duplicateBanner ? `${duplicateBanner}\n${subtitleBase}` : subtitleBase,
+        subtitle: subtitleBase,
+        notice: duplicateBanner ? { tone: 'warning', text: duplicateBanner } : undefined,
         primary: {
           emoji: '💰',
           label: tForLocale(ts, adminLocale, 'admin_receipt_amount_label'),
           value: `${localizedNumberForLocale(params.amount, adminLocale)} ${tForLocale(ts, adminLocale, 'currency_toman')}`,
+          inline: true,
+          emphasizeValue: true,
         },
         sections: [
           {
-            emoji: '👤',
             title: tForLocale(ts, adminLocale, 'admin_receipt_user_section'),
             fields: [
               {
-                emoji: '🆔',
                 label: tForLocale(ts, adminLocale, 'admin_receipt_user_label'),
                 value: `\`${params.telegramId}\``,
               },
               {
-                emoji: '🧾',
                 label: tForLocale(ts, adminLocale, 'admin_receipt_id_label'),
-                value: `\`#${params.receiptId}\``,
+                value: `\`${params.receiptId}\` (#${shortId})`,
               },
               ...(params.cardSummary
                 ? [
                     {
-                      emoji: '🏦',
                       label: tForLocale(ts, adminLocale, 'admin_receipt_destination_card_label'),
                       value: escapeTelegramMarkdown(params.cardSummary),
                     },
                   ]
                 : []),
               {
-                emoji: '📅',
                 label: tForLocale(ts, adminLocale, 'admin_receipt_created_label'),
-                value: createdAt.toLocaleDateString(adminLocale === 'fa' ? 'fa-IR' : 'en-US'),
+                value: localizedDateTimeForLocale(createdAt, adminLocale),
               },
             ],
           },
         ],
         footer: `⚡ ${tForLocale(ts, adminLocale, 'admin_receipt_approve_hint')}`,
       });
+      if (caption.length > 1020) {
+        caption = `${caption.slice(0, 1017)}...`;
+      }
       const receiptMenu = new InlineKeyboard()
         .text(
           tForLocale(ts, adminLocale, 'admin_receipt_approve'),
@@ -171,17 +190,41 @@ export async function sendAdminNewReceiptNotification(
           `receipt:reject_prompt:${params.receiptId}`
         )
         .row()
-        .text(tForLocale(ts, adminLocale, 'admin_receipt_dismiss_button'), 'ui:dismiss');
+        .text(
+          tForLocale(ts, adminLocale, 'admin_receipt_view_user_button'),
+          `adm:usr:v:${params.telegramId}`
+        )
+        .text(tForLocale(ts, adminLocale, 'admin_receipt_open_queue_button'), 'adm:rcpt:q:1');
+      if (params.duplicateOfReceiptId) {
+        receiptMenu
+          .row()
+          .text(
+            tForLocale(ts, adminLocale, 'admin_receipt_view_duplicate_button'),
+            `adm:rcpt:va:${params.duplicateOfReceiptId}:1`
+          );
+      }
+      receiptMenu.row().text(tForLocale(ts, adminLocale, 'menu_close'), 'ui:dismiss');
 
-      if (mediaType === 'document') {
-        await api.sendDocument(adminId, params.photoFileId, {
-          caption,
-          parse_mode: 'Markdown',
-          reply_markup: receiptMenu,
-        });
-      } else {
-        await api.sendPhoto(adminId, params.photoFileId, {
-          caption,
+      try {
+        if (mediaType === 'document') {
+          await api.sendDocument(adminId, params.photoFileId, {
+            caption,
+            parse_mode: 'Markdown',
+            reply_markup: receiptMenu,
+          });
+        } else {
+          await api.sendPhoto(adminId, params.photoFileId, {
+            caption,
+            parse_mode: 'Markdown',
+            reply_markup: receiptMenu,
+          });
+        }
+      } catch (mediaErr) {
+        logger.warn(
+          { err: mediaErr, adminId, receiptId: params.receiptId },
+          'Media receipt notification failed; falling back to text alert'
+        );
+        await api.sendMessage(adminId, caption, {
           parse_mode: 'Markdown',
           reply_markup: receiptMenu,
         });
@@ -297,10 +340,13 @@ export async function sendReceiptRejectionNotification(
       }),
       {
         parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(
-          tForLocale(services.translationService, locale, 'menu_wallet'),
-          'nav:wallet'
-        ),
+        reply_markup: new InlineKeyboard()
+          .text(
+            tForLocale(services.translationService, locale, 'admin_receipt_resubmit_button'),
+            'topup:direct'
+          )
+          .row()
+          .text(tForLocale(services.translationService, locale, 'menu_wallet'), 'nav:wallet'),
       }
     );
   } catch (err) {
@@ -389,9 +435,7 @@ export async function sendBalanceAdjustmentNotification(
       buildUserScreen({
         emoji: '💳',
         title: tForLocale(services.translationService, locale, 'wallet_dashboard_title'),
-        subtitle: tForLocale(services.translationService, locale, 'balance_adjusted_notification', {
-          balance: localizedNumberForLocale(params.newBalance, locale),
-        }),
+        subtitle: tForLocale(services.translationService, locale, 'tx_type_admin_adjustment'),
         primary: {
           label: tForLocale(services.translationService, locale, 'wallet_available_balance'),
           value: `${localizedNumberForLocale(params.newBalance, locale)} ${tForLocale(

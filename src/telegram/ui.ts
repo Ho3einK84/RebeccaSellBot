@@ -19,7 +19,15 @@ export {
   formatPersianScreen,
 } from './locale.js';
 
-export type BackDestination = 'home' | 'main' | 'admin' | 'admin:sales' | 'wallet' | 'shop';
+export type BackDestination =
+  | 'home'
+  | 'main'
+  | 'admin'
+  | 'admin:sales'
+  | 'admin:settings'
+  | 'admin:messaging'
+  | 'wallet'
+  | 'shop';
 
 type EditMessageTextOptions = NonNullable<Parameters<MenuContext['editMessageText']>[1]>;
 
@@ -346,6 +354,10 @@ function backLabelKey(destination: BackDestination): string {
       return 'admin_menu_back_to_admin';
     case 'admin:sales':
       return 'admin_menu_back_to_sales';
+    case 'admin:settings':
+      return 'admin_cfg_back_settings';
+    case 'admin:messaging':
+      return 'admin_msg_back_hub';
     case 'wallet':
       return 'menu_back_wallet';
     case 'shop':
@@ -361,7 +373,13 @@ export function backKeyboard(
   ctx: ConversationContext,
   destination: BackDestination = 'home'
 ): InlineKeyboard {
-  return new InlineKeyboard().text(t(ctx, backLabelKey(destination)), `nav:${destination}`);
+  const cb =
+    destination === 'admin:settings'
+      ? 'adm:cfg'
+      : destination === 'admin:messaging'
+        ? 'adm:msg'
+        : `nav:${destination}`;
+  return new InlineKeyboard().text(t(ctx, backLabelKey(destination)), cb);
 }
 
 /** Back button for a concrete nested screen that is not a global nav destination. */
@@ -737,6 +755,11 @@ export function clearTransientConversationSession(session: SessionData | undefin
   delete session.adminPanelDraft;
   delete session.adminReceiptBatch;
   delete session.adminQuickTopup;
+  delete session.adminInput;
+  delete session.adminDraft;
+  delete session.bankCardsReturnTo;
+  delete session.pendingCustomNamePurchase;
+  delete session.phoneVerifyReturnAction;
 }
 
 /** Admin variant of explicit conversation cancellation. */
@@ -748,19 +771,22 @@ export function handleAdminConversationCancel(
 }
 
 /**
- * Navigation buttons and bot commands remain global escape hatches while a
- * conversation is waiting. Halting with `next` lets the normal route own the
- * acknowledgement and destination rendering instead of trapping the user.
+ * Navigation buttons, urgent admin alert actions, and bot commands remain global
+ * escape hatches while a conversation is waiting. Halting with `next` lets the
+ * normal route own the acknowledgement and destination rendering instead of trapping the user.
  */
 export async function forwardConversationNavigation(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<void> {
-  const callbackData = ctx.callbackQuery?.data;
+  const callbackData = ctx.callbackQuery?.data ?? '';
   const messageText = ctx.message?.text?.trim();
-  const isNavigationCallback = /^nav:(?:home|main|admin|admin:sales|wallet|shop)$/u.test(
-    callbackData ?? ''
-  );
+  const isNavigationCallback =
+    /^nav:(?:home|main|admin|admin:sales|wallet|shop)$/u.test(callbackData) ||
+    /^adm:/u.test(callbackData) ||
+    /^(?:receipt|rcpt):/u.test(callbackData) ||
+    callbackData === 'admin:panels:open' ||
+    callbackData === 'ui:dismiss';
   const isBotCommand = /^\/[a-z][a-z0-9_]*(?:@[a-z0-9_]+)?(?:\s|$)/iu.test(messageText ?? '');
   if (isNavigationCallback || (isBotCommand && messageText !== '/cancel')) {
     if (typeof conversation.external === 'function') {

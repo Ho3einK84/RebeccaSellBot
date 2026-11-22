@@ -203,9 +203,17 @@ export function composeLivePreviewPayload(
   const langBadge = localeDisplayLabel(editLocale);
   const truncNote = truncated ? `\n\n${t(ctx, 'admin_text_preview_truncated')}` : '';
 
-  const markdownHeader = `👁️ *${title}*\n\`${sanitizeTelegramInlineCode(key)}\` · ${langBadge}`;
+  const rawMarkdownHeader = `👁️ *${title}*\n\`${sanitizeTelegramInlineCode(key)}\` · ${langBadge}`;
+  const markdownHeader =
+    editLocale === 'fa'
+      ? ensurePersianLineDirection(rawMarkdownHeader)
+      : ensureEnglishLineDirection(rawMarkdownHeader);
   const markdownMessage = `${markdownHeader}\n\n${visibleSample}${truncNote}`;
-  const plainHeader = `👁️ ${title}\n${key} · ${langBadge}`;
+  const rawPlainHeader = `👁️ ${title}\n${key} · ${langBadge}`;
+  const plainHeader =
+    editLocale === 'fa'
+      ? ensurePersianLineDirection(rawPlainHeader)
+      : ensureEnglishLineDirection(rawPlainHeader);
   const plainFallbackText = `${plainHeader}\n\n${visibleSample}${truncNote}\n\n${t(ctx, 'admin_text_preview_fallback_notice')}`;
 
   if (validateTelegramMarkdown(markdownMessage).valid) {

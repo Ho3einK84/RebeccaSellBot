@@ -30,7 +30,7 @@ import { ContactVerificationService } from '../../domain/services/ContactVerific
 import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
-import { renderAdminHome } from './adminMenu.js';
+import { renderAdminHomeScreen } from '../admin/adminHome.js';
 import {
   customServiceNameEnabled,
   customVolumeEnabled,
@@ -682,8 +682,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
             await c.answerCallbackQuery({ text: t(c, 'access_denied'), show_alert: true });
             return;
           }
-          c.menu.nav('admin-menu');
-          await renderScreen(c, await renderAdminHome(c), { parse_mode: 'Markdown' });
+          await renderAdminHomeScreen(c);
         }
       );
     }

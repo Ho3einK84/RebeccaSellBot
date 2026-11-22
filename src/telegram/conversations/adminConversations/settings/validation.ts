@@ -179,6 +179,8 @@ export function settingValidationMessage(ctx: ConversationContext, key: SettingK
       return t(ctx, 'admin_setting_naming_prefix_invalid');
     case 'naming_template':
       return t(ctx, 'admin_setting_naming_template_invalid');
+    case 'cleanup_warn_days':
+      return t(ctx, 'admin_cfg_cleanup_warn_invalid');
     default:
       if (key === 'webapp_url') {
         return t(ctx, 'admin_webapp_invalid_url');

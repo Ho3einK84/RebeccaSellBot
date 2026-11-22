@@ -18,6 +18,12 @@ import { registerReceiptAdminRoutes } from './admin/receiptRoutes.js';
 import { registerAdminMaintenanceRoutes } from './admin/maintenanceRoutes.js';
 import { registerAdminBroadcastRoutes } from './admin/broadcastRoutes.js';
 import { registerAdminPanelRoutes } from './admin/panelRoutes.js';
+import { attachAdminRouter } from '../admin/adminRouter.js';
+import { registerAdminHomeRoutes, renderAdminHomeScreen } from '../admin/adminHome.js';
+import { registerAdminQuickCommands } from '../admin/adminCommands.js';
+import { registerAdminSalesRoutes } from '../admin/adminSalesRoutes.js';
+import { registerAdminSettingsRoutes } from '../admin/adminSettingsRoutes.js';
+import { registerAdminTextsRoutes } from '../admin/adminTextsRoutes.js';
 import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { registerBaseRoutes } from './baseRoutes.js';
 import { registerPurchaseRoutes } from './purchaseRoutes.js';
@@ -25,7 +31,13 @@ import { registerConfigRoutes } from './configRoutes.js';
 import { registerLuckyWheelRoutes } from './luckyWheelRoutes.js';
 
 export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices): void {
+  registerAdminHomeRoutes();
+  registerAdminSalesRoutes();
+  registerAdminSettingsRoutes();
+  registerAdminTextsRoutes();
   registerBaseRoutes(bot, services);
+  registerAdminQuickCommands(bot, services);
+  attachAdminRouter(bot);
 
   registerPromoAdminRoutes(bot);
   registerAdminUserRoutes(bot);
@@ -60,6 +72,18 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
       return;
     }
 
+    if (
+      ctx.from?.id &&
+      services.isAdmin(ctx.from.id) &&
+      ctx.session?.adminLastContext === 'admin'
+    ) {
+      await renderAdminHomeScreen(ctx, {
+        tone: 'info',
+        text: t(ctx, 'unexpected_text_hint'),
+      });
+      return;
+    }
+
     await renderScreen(
       ctx,
       buildUserScreen({
@@ -76,10 +100,13 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
   // spinner, including callbacks from messages created by older deployments.
   bot.on('callback_query:data', async (ctx) => {
     await ctx.answerCallbackQuery({ text: t(ctx, 'button_expired'), show_alert: true });
+    const inAdmin = Boolean(
+      ctx.from?.id && services.isAdmin(ctx.from.id) && ctx.session?.adminLastContext === 'admin'
+    );
     await renderScreen(
       ctx,
       buildUserEmptyState('⌛️', t(ctx, 'button_expired'), t(ctx, 'button_expired_help')),
-      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, inAdmin ? 'admin' : 'main') }
     );
   });
 }

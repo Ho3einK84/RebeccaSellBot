@@ -71,7 +71,8 @@ export class PromoService {
   async listCodes(
     page = 1,
     pageSize = 8,
-    query?: string
+    query?: string,
+    filter: 'all' | 'active' | 'inactive' | 'expired' = 'all'
   ): Promise<{
     items: PromoCodeRecord[];
     total: number;
@@ -81,9 +82,22 @@ export class PromoService {
     const safePage = clampInteger(page, 1, MAX_DATABASE_INTEGER);
     const safePageSize = clampInteger(pageSize, 1, 20);
     const normalizedQuery = query?.trim().slice(0, 128);
-    const condition = normalizedQuery
-      ? ilike(promoCodes.code, `%${escapeLikePattern(normalizedQuery)}%`)
-      : undefined;
+    const now = new Date();
+    const conditions = [];
+    if (normalizedQuery) {
+      conditions.push(ilike(promoCodes.code, `%${escapeLikePattern(normalizedQuery)}%`));
+    }
+    if (filter === 'active') {
+      conditions.push(
+        eq(promoCodes.active, true),
+        or(isNull(promoCodes.expiresAt), gt(promoCodes.expiresAt, now))
+      );
+    } else if (filter === 'inactive') {
+      conditions.push(eq(promoCodes.active, false));
+    } else if (filter === 'expired') {
+      conditions.push(lt(promoCodes.expiresAt, now));
+    }
+    const condition = conditions.length > 0 ? and(...conditions) : undefined;
     const db = getDb();
     const [[totalRow], items] = await Promise.all([
       db.select({ value: count() }).from(promoCodes).where(condition),
@@ -98,7 +112,7 @@ export class PromoService {
     const total = Number(totalRow?.value ?? 0);
     const totalPages = Math.max(1, Math.ceil(total / safePageSize));
     const resolvedPage = Math.min(safePage, totalPages);
-    if (resolvedPage !== safePage) return this.listCodes(resolvedPage, safePageSize, query);
+    if (resolvedPage !== safePage) return this.listCodes(resolvedPage, safePageSize, query, filter);
     return { items, total, page: resolvedPage, totalPages };
   }
 

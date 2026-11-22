@@ -152,6 +152,7 @@ const ADMIN_USERS_RECEIPTS_PREFIXES = [
   'admin_broadcast_',
   'admin_direct_',
   'admin_message_',
+  'admin_msg_',
 ] as const;
 
 const ADMIN_USERS_RECEIPTS_EXACT = new Set([
@@ -170,6 +171,8 @@ const ADMIN_SALES_PROMOS_PREFIXES = [
   'admin_stats_',
   'admin_promo_',
   'admin_invalid_promo_',
+  'admin_growth_',
+  'admin_cdisc_',
 ] as const;
 
 const ADMIN_SALES_PROMOS_EXACT = new Set(['admin_no_promo_codes']);
@@ -201,6 +204,8 @@ const ADMIN_SYSTEM_TEXTS_PREFIXES = [
   'admin_detail_',
   'admin_last_admin_',
   'admin_text_',
+  'admin_nav_',
+  'admin_cfg_',
 ] as const;
 
 const ADMIN_SYSTEM_TEXTS_EXACT = new Set([
@@ -641,6 +646,12 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     en: 'Traffic quota (GB)',
     sampleFa: '۵۰',
     sampleEn: '50',
+  },
+  healthy: {
+    fa: 'تعداد پنل‌های سالم',
+    en: 'Healthy panels count',
+    sampleFa: '۲',
+    sampleEn: '2',
   },
   holder: {
     fa: 'نام صاحب کارت بانکی',

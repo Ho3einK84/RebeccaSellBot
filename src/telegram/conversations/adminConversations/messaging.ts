@@ -3,16 +3,19 @@ import type { ConversationContext, MyConversation } from '../../types.js';
 import { logger } from '../../../infra/logger.js';
 import { localizedNumber, t } from '../../locale.js';
 import {
-  buildEmptyState,
-  buildPromptScreen,
-  buildScreen,
+  buildAdminEmptyState,
+  buildAdminPromptScreen,
+  buildAdminScreen,
+  buildBreadcrumb,
+  dismissKeyboard,
   promptInConversation,
+  rememberUiMessage,
   replyInAdminConversation,
   waitForAdminCallbackInput,
   waitForAdminTextInput,
+  type AdminScreenNotice,
 } from '../../ui.js';
 import { promptAndResolveAdminTargetUser, requireAdmin } from './shared.js';
-import { callbackData } from '../../callbackData.js';
 import { escapeTelegramMarkdown } from '../../rendering.js';
 
 type BroadcastAudience =
@@ -38,63 +41,73 @@ export async function adminBroadcastConversation(
     .row()
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildPromptScreen(
-      '📣',
-      t(ctx, 'admin_broadcast_title'),
-      t(ctx, 'admin_broadcast_audience_prompt'),
-      t(ctx, 'admin_broadcast_subtitle')
-    ),
-    { parse_mode: 'Markdown', reply_markup: audienceKeyboard }
-  );
+  let audience: BroadcastAudience;
+  let recipientCount: number;
+  let audienceLabel: string;
+  let audienceError: string | undefined;
 
-  const audienceChoice = await waitForAdminCallbackInput(conversation, ['broadcast:audience:']);
-  if (!audienceChoice) return;
-
-  const audience = audienceChoice.slice('broadcast:audience:'.length) as BroadcastAudience;
-  const recipientCount = await conversation.external((outsideCtx) =>
-    outsideCtx.services!.broadcastService.countAudience(audience)
-  );
-  const audienceLabel = t(ctx, `admin_broadcast_audience_${audience}`);
-
-  if (recipientCount === 0) {
-    await replyInAdminConversation(
+  for (;;) {
+    await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState(
-        '📭',
-        t(ctx, 'admin_broadcast_title'),
-        t(ctx, 'admin_broadcast_empty_audience')
-      ),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
-      }
+      buildAdminPromptScreen({
+        emoji: '📣',
+        title: t(ctx, 'admin_broadcast_title'),
+        breadcrumb: buildBreadcrumb(t(ctx, 'admin_nav_messaging'), t(ctx, 'admin_broadcast_title')),
+        subtitle: t(ctx, 'admin_broadcast_subtitle'),
+        body: t(ctx, 'admin_broadcast_audience_prompt'),
+        error: audienceError,
+      }),
+      { parse_mode: 'Markdown', reply_markup: audienceKeyboard }
     );
-    return;
+
+    const audienceChoice = await waitForAdminCallbackInput(conversation, ['broadcast:audience:']);
+    if (!audienceChoice) return;
+
+    audience = audienceChoice.slice('broadcast:audience:'.length) as BroadcastAudience;
+    recipientCount = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.broadcastService.countAudience(audience)
+    );
+    audienceLabel = t(ctx, `admin_broadcast_audience_${audience}`);
+
+    if (recipientCount === 0) {
+      audienceError = t(ctx, 'admin_broadcast_empty_audience');
+      continue;
+    }
+    break;
   }
 
   let broadcastText: string | undefined;
   let validationError: string | undefined;
 
   while (true) {
+    const existingDraft = broadcastText ? markdownSafePreview(broadcastText) : undefined;
     await promptInConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildAdminScreen({
         emoji: '✍️',
         title: t(ctx, 'admin_broadcast_compose_title'),
+        breadcrumb: buildBreadcrumb(t(ctx, 'admin_nav_messaging'), t(ctx, 'admin_broadcast_title')),
         subtitle: t(ctx, 'admin_broadcast_compose_subtitle'),
+        notice: validationError ? { tone: 'error', text: validationError } : undefined,
         primary: {
           emoji: '🎯',
           label: t(ctx, 'admin_broadcast_audience_label'),
           value: `${audienceLabel} · ${localizedNumber(recipientCount, ctx)} ${t(ctx, 'admin_broadcast_users_unit')}`,
+          inline: true,
         },
-        footer: [validationError, t(ctx, 'admin_broadcast_prompt_for_audience')]
-          .filter(Boolean)
-          .join('\n\n'),
+        sections: existingDraft
+          ? [
+              {
+                emoji: '💬',
+                title: t(ctx, 'admin_text_current_label'),
+                bullet: '',
+                fields: [{ value: existingDraft.text }],
+              },
+            ]
+          : undefined,
+        footer: t(ctx, 'admin_broadcast_prompt_for_audience'),
       }),
       { parse_mode: 'Markdown' }
     );
@@ -109,39 +122,44 @@ export async function adminBroadcastConversation(
     validationError = undefined;
 
     const preview = markdownSafePreview(broadcastText);
-    let testSentNotice: string | undefined;
+    let testNotice: AdminScreenNotice | undefined;
     let shouldEdit = false;
 
     while (true) {
       await promptInConversation(
         conversation,
         ctx,
-        buildScreen({
+        buildAdminScreen({
           emoji: '📣',
           title: t(ctx, 'admin_broadcast_preview_title'),
+          breadcrumb: buildBreadcrumb(
+            t(ctx, 'admin_nav_messaging'),
+            t(ctx, 'admin_broadcast_title')
+          ),
           subtitle: t(ctx, 'admin_broadcast_preview_subtitle'),
+          notice: testNotice,
           primary: {
             emoji: '🎯',
             label: t(ctx, 'admin_broadcast_audience_label'),
             value: `${audienceLabel} · ${localizedNumber(recipientCount, ctx)} ${t(ctx, 'admin_broadcast_users_unit')}`,
+            inline: true,
           },
           sections: [
             {
               emoji: '💬',
               title: t(ctx, 'admin_broadcast_message_section'),
-              fields: [{ label: '', value: preview.text }],
+              bullet: '',
+              fields: [{ value: preview.text }],
             },
           ],
-          footer:
-            testSentNotice ??
-            (preview.truncated ? t(ctx, 'admin_message_preview_truncated') : undefined),
+          footer: preview.truncated ? t(ctx, 'admin_message_preview_truncated') : undefined,
         }),
         {
           parse_mode: 'Markdown',
           reply_markup: new InlineKeyboard()
             .text(t(ctx, 'admin_broadcast_confirm_button'), 'broadcast:confirm')
-            .text(t(ctx, 'admin_broadcast_test_button'), 'broadcast:test')
             .row()
+            .text(t(ctx, 'admin_broadcast_test_button'), 'broadcast:test')
             .text(t(ctx, 'admin_broadcast_edit_button'), 'broadcast:edit')
             .row()
             .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
@@ -159,12 +177,19 @@ export async function adminBroadcastConversation(
       if (action === 'broadcast:test') {
         try {
           const messageToSend = broadcastText;
-          await conversation.external((outsideCtx) =>
-            (outsideCtx?.api ?? ctx.api).sendMessage(adminId, messageToSend)
-          );
-          testSentNotice = t(ctx, 'admin_broadcast_test_sent');
+          await conversation.external(async (outsideCtx) => {
+            const api = outsideCtx?.api ?? ctx.api;
+            const sent = await api.sendMessage(adminId, messageToSend, {
+              reply_markup: dismissKeyboard(outsideCtx ?? ctx),
+            });
+            if (outsideCtx?.session && sent?.message_id !== undefined) {
+              rememberUiMessage(outsideCtx.session, sent.message_id, 'artifact');
+            }
+          });
+          testNotice = { tone: 'success', text: t(ctx, 'admin_broadcast_test_sent') };
         } catch (err) {
           logger.warn({ err, adminId }, 'Failed to deliver test broadcast to admin');
+          testNotice = { tone: 'error', text: t(ctx, 'operation_failed') };
         }
         continue;
       }
@@ -196,14 +221,16 @@ export async function adminBroadcastConversation(
   await replyInAdminConversation(
     conversation,
     ctx,
-    buildScreen({
+    buildAdminScreen({
       emoji: '✅',
       title: t(ctx, 'admin_broadcast_queued_title'),
+      breadcrumb: buildBreadcrumb(t(ctx, 'admin_nav_messaging'), t(ctx, 'admin_broadcast_title')),
       subtitle: t(ctx, 'admin_broadcast_queued_subtitle'),
       primary: {
         emoji: '🎯',
         label: t(ctx, 'admin_broadcast_audience_label'),
         value: `${audienceLabel} · ${localizedNumber(job.recipientCount, ctx)} ${t(ctx, 'admin_broadcast_users_unit')}`,
+        inline: true,
       },
       sections: [
         {
@@ -216,16 +243,13 @@ export async function adminBroadcastConversation(
     {
       parse_mode: 'Markdown',
       reply_markup: new InlineKeyboard()
-        .text(
-          t(ctx, 'admin_broadcast_status_button'),
-          callbackData('admin', 'broadcast', 'status', job.id)
-        )
-        .text(
-          t(ctx, 'admin_broadcast_cancel_button'),
-          callbackData('admin', 'broadcast', 'cancel', job.id)
-        )
+        .text(t(ctx, 'admin_broadcast_status_button'), `adm:msg:st:${job.id}`)
+        .text(t(ctx, 'admin_broadcast_cancel_button'), `adm:msg:cn:${job.id}`)
         .row()
-        .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
+        .text(t(ctx, 'admin_msg_jobs_button'), 'adm:msg:jobs:1')
+        .row()
+        .text(t(ctx, 'admin_msg_back_hub'), 'adm:msg')
+        .text(t(ctx, 'admin_nav_root_short'), 'adm:home'),
     }
   );
 }
@@ -255,55 +279,78 @@ export async function adminDirectMessageConversation(
     `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
     (user.username ? `@${user.username}` : String(user.telegramId));
 
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildScreen({
-      emoji: '✍️',
-      title: t(ctx, 'admin_direct_compose_title'),
-      subtitle: t(ctx, 'admin_direct_subtitle'),
-      primary: {
-        emoji: '👤',
-        label: t(ctx, 'admin_direct_recipient_label'),
-        value: `${escapeTelegramMarkdown(displayName)} (\`${telegramId}\`)`,
-      },
-      footer: t(ctx, 'admin_direct_message_prompt'),
-    }),
-    { parse_mode: 'Markdown' }
-  );
-  const directMessage = await waitForAdminTextInput(conversation);
-  if (directMessage === undefined) return;
-  const preview = markdownSafePreview(directMessage);
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildScreen({
-      emoji: '✉️',
-      title: t(ctx, 'admin_direct_preview_title'),
-      subtitle: t(ctx, 'admin_direct_subtitle'),
-      primary: {
-        emoji: '👤',
-        label: t(ctx, 'admin_direct_recipient_label'),
-        value: `${escapeTelegramMarkdown(displayName)} (\`${telegramId}\`)`,
-      },
-      sections: [
-        {
-          emoji: '💬',
-          title: t(ctx, 'admin_direct_message_section'),
-          fields: [{ label: '—', value: preview.text }],
+  let directMessage: string | undefined;
+  let validationError: string | undefined;
+
+  for (;;) {
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildAdminScreen({
+        emoji: '✍️',
+        title: t(ctx, 'admin_direct_compose_title'),
+        breadcrumb: buildBreadcrumb(t(ctx, 'admin_nav_messaging'), t(ctx, 'admin_direct_title')),
+        subtitle: t(ctx, 'admin_direct_subtitle'),
+        notice: validationError ? { tone: 'error', text: validationError } : undefined,
+        primary: {
+          emoji: '👤',
+          label: t(ctx, 'admin_direct_recipient_label'),
+          value: `${escapeTelegramMarkdown(displayName)} (\`${telegramId}\`)`,
+          inline: true,
         },
-      ],
-      footer: preview.truncated ? t(ctx, 'admin_message_preview_truncated') : undefined,
-    }),
-    {
-      parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard()
-        .text(t(ctx, 'admin_direct_confirm_button'), 'direct-confirm')
-        .row()
-        .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
+        footer: t(ctx, 'admin_direct_message_prompt'),
+      }),
+      { parse_mode: 'Markdown' }
+    );
+    directMessage = await waitForAdminTextInput(conversation);
+    if (directMessage === undefined) return;
+    if ([...directMessage].length > 4_096) {
+      validationError = t(ctx, 'admin_direct_too_long');
+      continue;
     }
-  );
-  if (!(await waitForAdminCallbackInput(conversation, ['direct-confirm']))) return;
+    validationError = undefined;
+
+    const preview = markdownSafePreview(directMessage);
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildAdminScreen({
+        emoji: '✉️',
+        title: t(ctx, 'admin_direct_preview_title'),
+        breadcrumb: buildBreadcrumb(t(ctx, 'admin_nav_messaging'), t(ctx, 'admin_direct_title')),
+        subtitle: t(ctx, 'admin_direct_subtitle'),
+        primary: {
+          emoji: '👤',
+          label: t(ctx, 'admin_direct_recipient_label'),
+          value: `${escapeTelegramMarkdown(displayName)} (\`${telegramId}\`)`,
+          inline: true,
+        },
+        sections: [
+          {
+            emoji: '💬',
+            title: t(ctx, 'admin_direct_message_section'),
+            bullet: '',
+            fields: [{ value: preview.text }],
+          },
+        ],
+        footer: preview.truncated ? t(ctx, 'admin_message_preview_truncated') : undefined,
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_direct_confirm_button'), 'direct-confirm')
+          .row()
+          .text(t(ctx, 'admin_direct_edit_button'), 'direct-edit')
+          .row()
+          .text(t(ctx, 'menu_cancel'), 'conversation:cancel'),
+      }
+    );
+    const choice = await waitForAdminCallbackInput(conversation, ['direct-confirm', 'direct-edit']);
+    if (!choice) return;
+    if (choice === 'direct-edit') continue;
+    break;
+  }
+
   try {
     // Operator-authored broadcasts and direct messages intentionally retain their
     // exact plaintext; wrapping or forcing a parse mode would change their meaning.
@@ -321,22 +368,24 @@ export async function adminDirectMessageConversation(
     await replyInAdminConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildAdminScreen({
         emoji: '✅',
         title: t(ctx, 'admin_direct_sent_title'),
         primary: {
           emoji: '👤',
           label: t(ctx, 'admin_direct_recipient_label'),
           value: `${escapeTelegramMarkdown(displayName)} (\`${telegramId}\`)`,
+          inline: true,
         },
         footer: t(ctx, 'admin_direct_sent'),
       }),
       {
         parse_mode: 'Markdown',
         reply_markup: new InlineKeyboard()
-          .text(t(ctx, 'admin_user_open_profile_button'), `admin:user:view:${telegramId}`)
+          .text(t(ctx, 'admin_user_open_profile_button'), `adm:usr:v:${telegramId}`)
           .row()
-          .text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
+          .text(t(ctx, 'admin_msg_back_hub'), 'adm:msg')
+          .text(t(ctx, 'admin_nav_root_short'), 'adm:home'),
       }
     );
   } catch (err) {
@@ -344,10 +393,14 @@ export async function adminDirectMessageConversation(
     await replyInAdminConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'admin_direct_title'), t(ctx, 'admin_direct_failed')),
+      buildAdminEmptyState('⚠️', t(ctx, 'admin_direct_title'), t(ctx, 'admin_direct_failed')),
       {
         parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'admin_menu_back_to_admin'), 'nav:admin'),
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'admin_user_open_profile_button'), `adm:usr:v:${telegramId}`)
+          .row()
+          .text(t(ctx, 'admin_msg_back_hub'), 'adm:msg')
+          .text(t(ctx, 'admin_nav_root_short'), 'adm:home'),
       }
     );
   }

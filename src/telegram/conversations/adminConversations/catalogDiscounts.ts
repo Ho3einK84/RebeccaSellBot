@@ -364,8 +364,8 @@ async function runCreateDiscountWizard(
     }
   }
 
-  // 6. Optional Max Discount Cap
-  let maxDiscountAmount: number | null | undefined;
+  // 6. Optional Max Discount Cap (only applicable to percent discounts)
+  let maxDiscountAmount: number | null | undefined = discountType === 'fixed' ? null : undefined;
   while (maxDiscountAmount === undefined) {
     await promptInConversation(
       conversation,

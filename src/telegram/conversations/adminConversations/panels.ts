@@ -1,9 +1,12 @@
+import { InlineKeyboard } from 'grammy';
 import type { ConversationContext, MyConversation } from '../../types.js';
 import { t } from '../../locale.js';
 import {
-  buildEmptyState,
-  buildPromptScreen,
-  buildScreen,
+  buildAdminEmptyState,
+  buildAdminPromptScreen,
+  buildAdminScreen,
+  buildBreadcrumb,
+  cancelKeyboard,
   promptInConversation,
   replyInAdminConversation,
   waitForAdminTextInput,
@@ -24,6 +27,14 @@ export async function adminPanelConversation(
     panelId: outsideCtx.session.adminPanelId,
   }));
   if (!state.action) return;
+
+  const panelReturnKb = state.panelId
+    ? new InlineKeyboard()
+        .text(t(ctx, 'admin_panel_back_detail'), `a:p:v:${state.panelId}`)
+        .text(t(ctx, 'admin_nav_root_short'), 'adm:home')
+    : new InlineKeyboard()
+        .text(t(ctx, 'admin_panel_back_list'), 'adm:pnl:p:1')
+        .text(t(ctx, 'admin_nav_root_short'), 'adm:home');
 
   try {
     if (state.action === 'add') {
@@ -51,13 +62,15 @@ export async function adminPanelConversation(
       await replyInAdminConversation(
         conversation,
         ctx,
-        buildPromptScreen(
+        buildAdminPromptScreen(
           '🔐',
           t(ctx, 'admin_panel_api_key_title'),
           t(ctx, 'admin_panel_api_key_prompt'),
-          t(ctx, 'admin_panel_api_key_subtitle')
+          {
+            breadcrumb: buildBreadcrumb(t(ctx, 'admin_home_title'), t(ctx, 'admin_nav_panels')),
+          }
         ),
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'Markdown', reply_markup: panelReturnKb }
       );
       return;
     } else {
@@ -89,32 +102,38 @@ export async function adminPanelConversation(
       outsideCtx.session.adminPanelId = undefined;
       outsideCtx.session.adminPanelDraft = undefined;
     });
+    const successKb = state.panelId
+      ? new InlineKeyboard()
+          .text(t(ctx, 'admin_panel_test_button'), `a:p:t:${state.panelId}`)
+          .text(t(ctx, 'admin_panel_back_detail'), `a:p:v:${state.panelId}`)
+          .row()
+          .text(t(ctx, 'admin_panel_back_list'), 'adm:pnl:p:1')
+      : panelReturnKb;
+
     await replyInAdminConversation(
       conversation,
       ctx,
-      buildScreen({
+      buildAdminScreen({
         emoji: '✅',
         title: t(ctx, 'admin_panel_saved_title'),
+        breadcrumb: buildBreadcrumb(t(ctx, 'admin_home_title'), t(ctx, 'admin_nav_panels')),
         subtitle: t(ctx, 'admin_panel_saved_subtitle'),
       }),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: successKb }
     );
   } catch {
     await replyInAdminConversation(
       conversation,
       ctx,
-      buildEmptyState(
+      buildAdminEmptyState(
         '⚠️',
         t(ctx, 'admin_panel_save_failed_title'),
         t(ctx, 'admin_panel_save_failed_subtitle'),
-        t(ctx, 'admin_panel_save_failed')
+        { actionHint: t(ctx, 'admin_panel_save_failed') }
       ),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: panelReturnKb }
     );
   } finally {
-    // Cancellation, invalid input and failed edits must not leave a stale
-    // action in the durable session. The API-key handoff is the sole state
-    // intentionally retained after this conversation returns.
     await conversation.external((outsideCtx) => {
       if (
         outsideCtx.session.adminPanelAction !== 'await_add_key' &&
@@ -132,22 +151,29 @@ async function askPanelUrl(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<string | undefined> {
-  const value = await askText(conversation, ctx, 'admin_panel_url_prompt', 500);
-  if (!value) return undefined;
-  try {
-    return validateRebeccaBaseUrl(value);
-  } catch {
-    await replyInAdminConversation(
+  let error: string | undefined;
+  for (;;) {
+    await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState(
-        '⚠️',
+      buildAdminPromptScreen(
+        '🌐',
         t(ctx, 'admin_panel_detail_title'),
-        t(ctx, 'admin_rebecca_url_invalid')
+        t(ctx, 'admin_panel_url_prompt'),
+        {
+          breadcrumb: buildBreadcrumb(t(ctx, 'admin_home_title'), t(ctx, 'admin_nav_panels')),
+          error,
+        }
       ),
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: cancelKeyboard(ctx) }
     );
-    return undefined;
+    const input = await waitForAdminTextInput(conversation);
+    if (input === undefined) return undefined;
+    try {
+      return validateRebeccaBaseUrl(input.trim());
+    } catch {
+      error = t(ctx, 'admin_rebecca_url_invalid');
+    }
   }
 }
 
@@ -157,58 +183,49 @@ async function askText(
   promptKey: string,
   maxLength: number
 ): Promise<string | undefined> {
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildPromptScreen(
-      '✍️',
-      t(ctx, 'admin_panel_detail_title'),
-      t(ctx, promptKey),
-      t(ctx, 'admin_panel_registry_subtitle')
-    ),
-    { parse_mode: 'Markdown' }
-  );
-  const input = await waitForAdminTextInput(conversation);
-  if (input === undefined) return undefined;
-  const value = input.trim();
-  if (!value || value.length > maxLength) {
-    await replyInAdminConversation(
+  let error: string | undefined;
+  for (;;) {
+    await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'admin_panel_detail_title'), t(ctx, 'admin_setting_invalid')),
-      { parse_mode: 'Markdown' }
+      buildAdminPromptScreen('✍️', t(ctx, 'admin_panel_detail_title'), t(ctx, promptKey), {
+        breadcrumb: buildBreadcrumb(t(ctx, 'admin_home_title'), t(ctx, 'admin_nav_panels')),
+        error,
+      }),
+      { parse_mode: 'Markdown', reply_markup: cancelKeyboard(ctx) }
     );
-    return undefined;
+    const input = await waitForAdminTextInput(conversation);
+    if (input === undefined) return undefined;
+    const value = input.trim();
+    if (value && value.length <= maxLength) return value;
+    error = t(ctx, 'admin_setting_invalid');
   }
-  return value;
 }
 
 async function askServiceId(
   conversation: MyConversation,
   ctx: ConversationContext
 ): Promise<number | undefined> {
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildPromptScreen(
-      '🔢',
-      t(ctx, 'admin_panel_detail_title'),
-      t(ctx, 'admin_panel_service_id_prompt'),
-      t(ctx, 'admin_panel_registry_subtitle')
-    ),
-    { parse_mode: 'Markdown' }
-  );
-  const input = await waitForAdminTextInput(conversation);
-  if (input === undefined) return undefined;
-  const value = parsePositiveSafeInteger(input);
-  if (!value || value > MAX_SERVICE_ID) {
-    await replyInAdminConversation(
+  let error: string | undefined;
+  for (;;) {
+    await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState('⚠️', t(ctx, 'admin_panel_detail_title'), t(ctx, 'admin_setting_invalid')),
-      { parse_mode: 'Markdown' }
+      buildAdminPromptScreen(
+        '🔢',
+        t(ctx, 'admin_panel_detail_title'),
+        t(ctx, 'admin_panel_service_id_prompt'),
+        {
+          breadcrumb: buildBreadcrumb(t(ctx, 'admin_home_title'), t(ctx, 'admin_nav_panels')),
+          error,
+        }
+      ),
+      { parse_mode: 'Markdown', reply_markup: cancelKeyboard(ctx) }
     );
-    return undefined;
+    const input = await waitForAdminTextInput(conversation);
+    if (input === undefined) return undefined;
+    const value = parsePositiveSafeInteger(input);
+    if (value && value <= MAX_SERVICE_ID) return value;
+    error = t(ctx, 'admin_setting_invalid');
   }
-  return value;
 }

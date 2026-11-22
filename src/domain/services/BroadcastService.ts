@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, asc, count, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
 import {
   auditLogs,
@@ -111,6 +111,43 @@ export class BroadcastService {
       .where(eq(broadcastJobs.id, jobId))
       .limit(1);
     return job;
+  }
+
+  async listRecentJobs(
+    page = 1,
+    pageSize = 5
+  ): Promise<{
+    items: BroadcastJob[];
+    total: number;
+    page: number;
+    totalPages: number;
+    activeCount: number;
+  }> {
+    const db = getDb();
+    const safeLimit = Math.max(1, Math.min(Math.trunc(pageSize) || 5, 20));
+    const requestedPage = Math.max(1, Math.trunc(page) || 1);
+
+    const [[totalRow], [activeRow]] = await Promise.all([
+      db.select({ value: count() }).from(broadcastJobs),
+      db
+        .select({ value: count() })
+        .from(broadcastJobs)
+        .where(inArray(broadcastJobs.status, RUNNABLE_STATUSES)),
+    ]);
+
+    const total = Number(totalRow?.value ?? 0);
+    const activeCount = Number(activeRow?.value ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+    const safePage = Math.min(requestedPage, totalPages);
+
+    const items = await db
+      .select()
+      .from(broadcastJobs)
+      .orderBy(desc(broadcastJobs.createdAt))
+      .limit(safeLimit)
+      .offset((safePage - 1) * safeLimit);
+
+    return { items, total, page: safePage, totalPages, activeCount };
   }
 
   async nextRunnableJob(): Promise<BroadcastJob | undefined> {

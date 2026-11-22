@@ -57,6 +57,7 @@ export const SETTING_KEYS = [
 export type SettingKey = (typeof SETTING_KEYS)[number];
 export type SettingGroupId =
   | 'system'
+  | 'webapp'
   | 'pricing'
   | 'custom_volume'
   | 'payment'
@@ -113,13 +114,13 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
   },
   {
     key: 'webapp_enabled',
-    group: 'system',
+    group: 'webapp',
     labelKey: 'admin_setting_webapp_enabled',
     editor: { type: 'boolean' },
   },
   {
     key: 'webapp_url',
-    group: 'system',
+    group: 'webapp',
     labelKey: 'admin_setting_webapp_url',
     editor: { type: 'text', minimumLength: 8, maximumLength: 200 },
   },

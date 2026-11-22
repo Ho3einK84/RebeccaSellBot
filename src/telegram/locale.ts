@@ -240,6 +240,21 @@ export function localizedDateForLocale(
   return value.toLocaleDateString(locale === 'fa' ? 'fa-IR' : 'en-US', { timeZone });
 }
 
+export function localizedDateTimeForLocale(
+  value: Date,
+  locale: SupportedLocale,
+  timeZone = APPLICATION_TIMEZONE
+): string {
+  const localeStr = locale === 'fa' ? 'fa-IR' : 'en-US';
+  const d = value.toLocaleDateString(localeStr, { timeZone });
+  const tmStr = value.toLocaleTimeString(localeStr, {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone,
+  });
+  return `${d} ${tmStr}`;
+}
+
 /**
  * Render a full HTTPS subscription address as a Telegram Markdown link. The
  * API client expands relative Rebecca paths before they reach this formatter.
