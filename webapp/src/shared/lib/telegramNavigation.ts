@@ -20,6 +20,20 @@ export function openTelegramLinkAndMinimize(url: string, delayMs: number = 150):
 }
 
 /**
+ * Safely opens an external HTTPS URL using Telegram's native `openLink` API
+ * inside Mini Apps, falling back to a new browser tab outside Telegram.
+ */
+export function openExternalLink(url: string): void {
+  if (typeof window === 'undefined') return;
+  const tg = window.Telegram?.WebApp;
+  if (typeof tg?.openLink === 'function') {
+    tg.openLink(url);
+  } else if (typeof window.open === 'function') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+/**
  * Minimizes the WebApp if supported by the Telegram client (API 8.0+),
  * falling back to closing it.
  */

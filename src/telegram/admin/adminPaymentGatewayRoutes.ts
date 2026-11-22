@@ -36,6 +36,7 @@ import { truncateButtonLabel } from '../conversations/adminConversations/setting
 import { sendAutomatedTopupSuccessNotification } from '../features/admin/adminNotifications.js';
 
 const DEPOSITS_PAGE_SIZE = 5;
+const FORAPP_GITHUB_URL = 'https://github.com/erfjab/forapp';
 
 function parseBoundedInt(raw: string, min: number, max: number): number | null {
   const cleaned = normalizeInputDigits(raw)
@@ -101,6 +102,7 @@ export async function renderForAppSettingsScreen(
         ],
       },
     ],
+    footer: t(ctx, 'admin_forapp_about_short'),
   });
 
   const unmatchedBadge =
@@ -117,10 +119,65 @@ export async function renderForAppSettingsScreen(
     .text(t(ctx, 'admin_forapp_edit_expiry_button'), 'adm:pg:fa:exp')
     .row()
     .text(`${t(ctx, 'admin_forapp_unmatched_button')}${unmatchedBadge}`, 'adm:pg:fad:1')
+    .row()
+    .text(t(ctx, 'admin_forapp_guide_button'), 'adm:pg:fa:guide')
+    .url(t(ctx, 'admin_forapp_github_button'), FORAPP_GITHUB_URL)
     .row();
   appendAdminFooterNav(kb, ctx, {
     backCallback: 'adm:cfg:pay',
     backLabel: `‹ ${t(ctx, 'admin_cfg_payment_button')}`,
+    showHome: true,
+  });
+
+  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: kb });
+}
+
+export async function renderForAppGuideScreen(ctx: MenuContext): Promise<void> {
+  if (!ctx.services?.automatedPaymentService) return;
+  markAdminContext(ctx);
+  const cfg = await ctx.services.automatedPaymentService.getForAppAdminConfig();
+
+  const text = buildAdminScreen({
+    emoji: '📖',
+    title: t(ctx, 'admin_forapp_guide_title'),
+    subtitle: t(ctx, 'admin_forapp_guide_subtitle'),
+    breadcrumb: buildBreadcrumb(
+      t(ctx, 'admin_cfg_payment_button'),
+      t(ctx, 'admin_forapp_title'),
+      t(ctx, 'admin_forapp_guide_title')
+    ),
+    sections: [
+      {
+        emoji: '💡',
+        title: t(ctx, 'admin_forapp_guide_what_title'),
+        fields: [{ value: t(ctx, 'admin_forapp_guide_what_body'), bullet: '' }],
+      },
+      {
+        emoji: '🛠️',
+        title: t(ctx, 'admin_forapp_guide_steps_title'),
+        fields: [{ value: t(ctx, 'admin_forapp_guide_steps_body'), bullet: '' }],
+      },
+      {
+        emoji: '🌐',
+        title: t(ctx, 'admin_forapp_webhook_url_label'),
+        fields: [
+          {
+            label: t(ctx, 'admin_forapp_webhook_url_label'),
+            value: cfg.webhookUrl
+              ? `\`${sanitizeTelegramInlineCode(cfg.webhookUrl)}\``
+              : t(ctx, 'admin_forapp_webhook_missing_hint'),
+          },
+        ],
+      },
+    ],
+  });
+
+  const kb = new InlineKeyboard()
+    .url(t(ctx, 'admin_forapp_github_button'), FORAPP_GITHUB_URL)
+    .row();
+  appendAdminFooterNav(kb, ctx, {
+    backCallback: 'adm:pg:fa',
+    backLabel: `‹ ${t(ctx, 'admin_forapp_title')}`,
     showHome: true,
   });
 
@@ -435,6 +492,10 @@ export function registerAdminPaymentGatewayRoutes(): void {
   // ForApp routes
   registerAdminRoute('adm:pg:fa', async (ctx, _m, notice) => {
     await renderForAppSettingsScreen(ctx, notice);
+  });
+
+  registerAdminRoute('adm:pg:fa:guide', async (ctx) => {
+    await renderForAppGuideScreen(ctx);
   });
 
   registerAdminRoute('adm:pg:fa:tg', async (ctx) => {

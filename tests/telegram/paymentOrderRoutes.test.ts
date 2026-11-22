@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Bot } from 'grammy';
 import { registerPaymentOrderRoutes } from '../../src/telegram/features/paymentOrderRoutes.js';
+import {
+  renderForAppGuideScreen,
+  renderForAppSettingsScreen,
+} from '../../src/telegram/admin/adminPaymentGatewayRoutes.js';
 import type { BotServices, MenuContext, SessionData } from '../../src/telegram/types.js';
 import { TranslationService } from '../../src/domain/services/TranslationService.js';
 
@@ -177,5 +181,46 @@ describe('Telegram paymentOrderRoutes UX lifecycle', () => {
       amount: 49_178,
     });
     expect(ctx.conversation.enter).toHaveBeenCalledWith('topupConversation');
+  });
+
+  it('renders ForApp admin settings and setup guide with explanation and official GitHub link', async () => {
+    const automatedPaymentService = {
+      getForAppAdminConfig: vi.fn(async () => ({
+        enabled: true,
+        apiKeyConfigured: true,
+        apiKeyMasked: 'abcd••••1234',
+        orderExpiryMinutes: 20,
+        webhookUrl: 'https://rs.netiva.ir/api/webhooks/forapp',
+        unmatchedCount: 0,
+      })),
+    };
+    const services = {
+      translationService: new TranslationService(),
+      automatedPaymentService,
+    } as unknown as BotServices;
+
+    const settingsCase = createCallbackContext(services, { messageId: 960, session: {} });
+    await renderForAppSettingsScreen(settingsCase.ctx);
+    const settingsCall = (settingsCase.ctx.editMessageText as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(settingsCall?.[0]).toContain('ForApp');
+    expect(settingsCall?.[0]).toContain('Webhook');
+    const settingsButtons = settingsCall?.[1]?.reply_markup?.inline_keyboard?.flat() ?? [];
+    expect(
+      settingsButtons.some((b: { callback_data?: string }) => b.callback_data === 'adm:pg:fa:guide')
+    ).toBe(true);
+    expect(
+      settingsButtons.some((b: { url?: string }) => b.url === 'https://github.com/erfjab/forapp')
+    ).toBe(true);
+
+    const guideCase = createCallbackContext(services, { messageId: 961, session: {} });
+    await renderForAppGuideScreen(guideCase.ctx);
+    const guideCall = (guideCase.ctx.editMessageText as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(guideCall?.[0]).toContain('erfjab/forapp');
+    expect(guideCall?.[0]).toContain('https://rs.netiva.ir/api/webhooks/forapp');
+    const guideButtons = guideCall?.[1]?.reply_markup?.inline_keyboard?.flat() ?? [];
+    expect(
+      guideButtons.some((b: { url?: string }) => b.url === 'https://github.com/erfjab/forapp')
+    ).toBe(true);
   });
 });

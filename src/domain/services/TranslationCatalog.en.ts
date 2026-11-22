@@ -1949,6 +1949,18 @@ export const EN_TEXTS: Record<string, string> = {
   admin_forapp_button: '⚡ ForApp Auto-Verify',
   admin_forapp_title: 'ForApp Auto-Verify',
   admin_forapp_subtitle: 'Automatic Iranian bank SMS deposit matching',
+  admin_forapp_about_short:
+    'ℹ️ ForApp is a free, open-source Android app that securely forwards bank deposit SMS via Webhook so customer wallets are credited automatically without manual receipts.',
+  admin_forapp_guide_button: '📖 Setup Guide',
+  admin_forapp_github_button: '🔗 ForApp GitHub',
+  admin_forapp_guide_title: 'ForApp Setup Guide',
+  admin_forapp_guide_subtitle: 'Overview and simple 4-step bank SMS setup',
+  admin_forapp_guide_what_title: 'What is ForApp?',
+  admin_forapp_guide_what_body:
+    'ForApp is a free, open-source Android app (erfjab/forapp) installed on the phone receiving your bank SMS. Each invoice generates a unique payable amount so incoming deposits credit the user wallet automatically without uploading a receipt.',
+  admin_forapp_guide_steps_title: 'Simple Setup Steps',
+  admin_forapp_guide_steps_body:
+    '1. *Install App:* Download ForApp from GitHub onto your Android phone and grant SMS permission.\n2. *Add Webhook:* Create a new *Webhook* target and paste the Webhook URL below.\n3. *Set API Key:* Generate an `X-API-Key` on the previous screen and enter it in ForApp (keep default `POST`, `JSON` body, and headers).\n4. *Test & Enable:* Select your banks, send a test webhook, then enable ForApp here.',
   admin_forapp_webhook_url_label: 'Webhook URL',
   admin_forapp_api_key_label: 'X-API-Key',
   admin_forapp_expiry_label: 'Invoice expiry',

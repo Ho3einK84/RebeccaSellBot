@@ -934,6 +934,15 @@ export const fa = {
       desc: 'ابزارهای پرداخت و اعلان همین‌جا فعال هستند؛ بخش‌های پیشرفته و سنگین‌تر فعلاً در ربات تلگرام مدیریت می‌شوند و به‌زودی به وب‌اپ اضافه خواهند شد.',
       tagComingSoon: 'به‌زودی',
       tagActive: 'فعال در وب‌اپ',
+      botBadge: 'ربات',
+      statusActiveCards: '{count} کارت فعال',
+      statusSingleCard: 'حالت تک‌کارت',
+      statusUniqueAmount: 'مبلغ یکتا',
+      statusUnmatchedCount: '{count} تطبیق‌نخورده',
+      statusAlertsOn: 'اعلان تلگرام فعال',
+      statusAlertsOff: 'اعلان تلگرام خاموش',
+      statusDupBlock: 'ضدتکرار: مسدود',
+      statusDupWarn: 'ضدتکرار: هشدار',
       openModule: 'مدیریت بخش',
       openInBot: 'باز کردن در ربات',
       sectionActiveTitle: 'فعال در وب‌اپ',
@@ -1029,6 +1038,24 @@ export const fa = {
       forappEnabledLabel: 'فعال‌سازی تأیید خودکار ForApp',
       forappEnabledDesc:
         'تطبیق خودکار پیامک واریز بانکی با مبلغ یکتا بدون نیاز به ارسال رسید توسط کاربر',
+      forappGuideTitle: 'ForApp چیست و چطور راه‌اندازی می‌شود؟',
+      forappGuideSubtitle: 'معرفی کوتاه و آموزش ۴ مرحله‌ای اتصال پیامک بانکی',
+      forappAboutDesc:
+        'ForApp یک اپلیکیشن رایگان و متن‌باز اندروید است که پیامک‌های واریز بانکی گوشی شما را می‌خواند و به‌صورت امن از طریق Webhook به ربات ارسال می‌کند. برای هر فاکتور یک مبلغ یکتا ساخته می‌شود و پس از واریز کاربر، کیف پول او بدون نیاز به ارسال عکس رسید به‌صورت خودکار شارژ می‌شود.',
+      forappGuideStep1Title: 'نصب برنامه روی گوشی',
+      forappGuideStep1Desc:
+        'نسخهٔ اندروید ForApp را از گیت‌هاب روی گوشی دارای سیم‌کارت پیامک بانکی نصب کرده و دسترسی خواندن پیامک را فعال کنید.',
+      forappGuideStep2Title: 'ساخت مقصد وبهوک',
+      forappGuideStep2Desc:
+        'در برنامه یک «مقصد تازه» از نوع وبهوک (Webhook) بسازید و آدرس Webhook زیر را در آن قرار دهید.',
+      forappGuideStep3Title: 'تنظیم کلید API',
+      forappGuideStep3Desc:
+        'در همین صفحه کلید API بسازید و در فیلد «کلید API» برنامه وارد کنید (متد POST، بدنهٔ JSON و هدرهای پیش‌فرض X-API-Key و Idempotency-Key را تغییر ندهید).',
+      forappGuideStep4Title: 'انتخاب بانک و فعال‌سازی',
+      forappGuideStep4Desc:
+        'بانک‌های مورد نظر را انتخاب و تست ارسال را بزنید؛ سپس کلید «فعال‌سازی ForApp» را بالا روشن و ذخیره کنید.',
+      forappOpenSourceNote: 'پروژهٔ متن‌باز و رایگان (erfjab/forapp)',
+      forappGithubBtn: 'گیت‌هاب پروژه ForApp',
       webhookUrlLabel: 'آدرس Webhook (آمادهٔ کپی در اپلیکیشن)',
       webhookMissing: 'دامنهٔ HTTPS مینی‌اپ هنوز تنظیم نشده است.',
       apiKeyLabel: 'کلید امنیتی X-API-Key',

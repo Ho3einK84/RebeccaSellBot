@@ -1935,6 +1935,18 @@ export const FA_TEXTS: Record<string, string> = {
   admin_forapp_button: '⚡ تأیید خودکار ForApp',
   admin_forapp_title: 'تأیید خودکار ForApp',
   admin_forapp_subtitle: 'تطبیق خودکار پیامک واریز بانکی بدون نیاز به رسید',
+  admin_forapp_about_short:
+    'ℹ️ ForApp یک اپلیکیشن رایگان و متن‌باز اندروید است که پیامک‌های واریز بانکی گوشی شما را به‌صورت امن از طریق Webhook به ربات می‌فرستد تا کیف پول کاربران بدون نیاز به ارسال رسید شارژ شود.',
+  admin_forapp_guide_button: '📖 آموزش راه‌اندازی',
+  admin_forapp_github_button: '🔗 گیت‌هاب ForApp',
+  admin_forapp_guide_title: 'آموزش راه‌اندازی ForApp',
+  admin_forapp_guide_subtitle: 'معرفی کوتاه و راهنمای سریع اتصال پیامک بانکی',
+  admin_forapp_guide_what_title: 'ForApp چیست؟',
+  admin_forapp_guide_what_body:
+    'ForApp یک برنامهٔ رایگان و متن‌باز اندروید (erfjab/forapp) است که روی گوشی دارای سیم‌کارت پیامک بانکی نصب می‌شود. برای هر فاکتور کارت‌به‌کارت یک مبلغ یکتا ساخته می‌شود و به‌محض دریافت پیامک واریز، کیف پول کاربر بدون نیاز به ارسال عکس رسید به‌صورت خودکار شارژ می‌گردد.',
+  admin_forapp_guide_steps_title: 'مراحل سادهٔ راه‌اندازی',
+  admin_forapp_guide_steps_body:
+    '۱. *نصب اپ:* نسخهٔ اندروید ForApp را از مخزن گیت‌هاب نصب کرده و دسترسی خواندن پیامک را بدهید.\n۲. *ساخت مقصد:* یک «مقصد تازه» از نوع *وبهوک (Webhook)* بسازید و آدرس Webhook پایین را وارد کنید.\n۳. *کلید API:* از صفحهٔ قبل کلید `X-API-Key` بسازید و در فیلد «کلید API» برنامه قرار دهید (متد `POST`، بدنهٔ `JSON` و هدرهای پیش‌فرض را تغییر ندهید).\n۴. *تست و فعال‌سازی:* بانک‌های مورد نظر را انتخاب و تست اتصال بزنید، سپس ForApp را در ربات فعال کنید.',
   admin_forapp_webhook_url_label: 'آدرس Webhook',
   admin_forapp_api_key_label: 'کلید X-API-Key',
   admin_forapp_expiry_label: 'مهلت انقضای فاکتور',

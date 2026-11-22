@@ -12,6 +12,9 @@ import {
   Trash2,
   Loader2,
   ShieldCheck,
+  BookOpen,
+  ExternalLink,
+  ChevronDown,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
@@ -20,14 +23,18 @@ import { useCopy } from '@/shared/hooks/useCopy.js';
 import { api } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
 import { normalizeInputDigits } from '@/shared/lib/formatters.js';
+import { openExternalLink } from '@/shared/lib/telegramNavigation.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Switch } from '@/shared/components/ui/Switch.js';
 import { SegmentedControl } from '@/shared/components/ui/SegmentedControl.js';
 import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
+
+const FORAPP_GITHUB_URL = 'https://github.com/erfjab/forapp';
 
 interface PaymentGatewaysModalProps {
   isOpen: boolean;
@@ -63,6 +70,7 @@ export const PaymentGatewaysModal: React.FC<PaymentGatewaysModalProps> = ({
   const [faEnabled, setFaEnabled] = useState(false);
   const [faExpiry, setFaExpiry] = useState('20');
   const [revealedForAppKey, setRevealedForAppKey] = useState<string | null>(null);
+  const [showForAppGuide, setShowForAppGuide] = useState(true);
 
   // NOWPayments local form state
   const [npEnabled, setNpEnabled] = useState(false);
@@ -248,13 +256,17 @@ export const PaymentGatewaysModal: React.FC<PaymentGatewaysModalProps> = ({
 
         {/* TAB 1: ForApp */}
         {tab === 'forapp' && gwData && (
-          <div className="space-y-4">
-            <Card padding="md" className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
+          <div className="space-y-3.5">
+            {/* Master Enable Switch */}
+            <Card padding="md" className="flex items-center gap-3">
+              <IconTile tone={faEnabled ? 'ok' : 'neutral'} size="md">
+                <Zap />
+              </IconTile>
+              <div className="min-w-0 flex-1 space-y-0.5">
                 <div className="text-sm font-semibold text-ink">
                   {t('admin.paymentGateways.forappEnabledLabel')}
                 </div>
-                <p className="text-xs text-ink-muted m-0 mt-0.5 leading-relaxed">
+                <p className="text-xs text-ink-muted m-0 leading-relaxed">
                   {t('admin.paymentGateways.forappEnabledDesc')}
                 </p>
               </div>
@@ -265,10 +277,87 @@ export const PaymentGatewaysModal: React.FC<PaymentGatewaysModalProps> = ({
               />
             </Card>
 
+            {/* What is ForApp + Quick Setup Guide + GitHub Link */}
+            <Card padding="md" className="space-y-3 border-info/25 bg-surface">
+              <button
+                type="button"
+                onClick={() => setShowForAppGuide((prev) => !prev)}
+                aria-expanded={showForAppGuide}
+                className="w-full flex items-center gap-2.5 text-start cursor-pointer rs-focus rounded-ctl"
+              >
+                <IconTile tone="info" size="sm">
+                  <BookOpen />
+                </IconTile>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-ink">
+                    {t('admin.paymentGateways.forappGuideTitle')}
+                  </div>
+                  <div className="text-[11px] text-ink-muted">
+                    {t('admin.paymentGateways.forappGuideSubtitle')}
+                  </div>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 text-ink-muted shrink-0 transition-transform duration-200 ${
+                    showForAppGuide ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              <p className="text-xs text-ink-soft m-0 leading-relaxed">
+                {t('admin.paymentGateways.forappAboutDesc')}
+              </p>
+
+              {showForAppGuide && (
+                <ol className="m-0 p-0 list-none space-y-2 pt-2 border-t border-line/70">
+                  {(
+                    [
+                      ['1', 'forappGuideStep1Title', 'forappGuideStep1Desc'],
+                      ['2', 'forappGuideStep2Title', 'forappGuideStep2Desc'],
+                      ['3', 'forappGuideStep3Title', 'forappGuideStep3Desc'],
+                      ['4', 'forappGuideStep4Title', 'forappGuideStep4Desc'],
+                    ] as const
+                  ).map(([stepNum, titleKey, descKey]) => (
+                    <li key={stepNum} className="flex items-start gap-2.5">
+                      <span className="tnum inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-info-soft border border-info/25 text-[11px] font-bold text-info-fg mt-0.5">
+                        {formatNumber(Number(stepNum))}
+                      </span>
+                      <div className="min-w-0 flex-1 text-xs leading-relaxed">
+                        <span className="font-semibold text-ink">
+                          {t(`admin.paymentGateways.${titleKey}`)}:{' '}
+                        </span>
+                        <span className="text-ink-muted">
+                          {t(`admin.paymentGateways.${descKey}`)}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              <div className="pt-2 border-t border-line/70 flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[11px] text-ink-muted">
+                  {t('admin.paymentGateways.forappOpenSourceNote')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openExternalLink(FORAPP_GITHUB_URL)}
+                  className="inline-flex items-center gap-1.5 rounded-ctl border border-brand/30 bg-brand-soft px-2.5 h-8 text-xs font-semibold text-brand-fg hover:bg-brand/15 rs-focus press cursor-pointer shrink-0 transition-colors"
+                >
+                  <span>{t('admin.paymentGateways.forappGithubBtn')}</span>
+                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                </button>
+              </div>
+            </Card>
+
             {/* Webhook URL */}
             <Card padding="md" className="space-y-2">
-              <div className="text-xs font-semibold text-ink-soft">
-                {t('admin.paymentGateways.webhookUrlLabel')}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-ink-soft">
+                  {t('admin.paymentGateways.webhookUrlLabel')}
+                </span>
+                <Badge variant="neutral" size="xs">
+                  POST · JSON
+                </Badge>
               </div>
               {gwData.forapp.webhookUrl ? (
                 <div className="flex items-center gap-2">
@@ -400,14 +489,17 @@ export const PaymentGatewaysModal: React.FC<PaymentGatewaysModalProps> = ({
 
         {/* TAB 2: NOWPayments */}
         {tab === 'nowpayments' && gwData && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <Card padding="md" className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <IconTile tone={npEnabled ? 'brand' : 'neutral'} size="md">
+                  <Coins />
+                </IconTile>
+                <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="text-sm font-semibold text-ink">
                     {t('admin.paymentGateways.npEnabledLabel')}
                   </div>
-                  <p className="text-xs text-ink-muted m-0 mt-0.5">
+                  <p className="text-xs text-ink-muted m-0 leading-relaxed">
                     {t('admin.paymentGateways.npEnabledDesc')}
                   </p>
                 </div>

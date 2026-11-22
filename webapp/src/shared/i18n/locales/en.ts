@@ -936,6 +936,15 @@ export const en: DeepPartial<TranslationSchema> = {
       desc: 'Payment and receipt tools are active right here; heavier bot management features stay in the Telegram bot for now and are coming soon to the WebApp.',
       tagComingSoon: 'Coming Soon',
       tagActive: 'Active in WebApp',
+      botBadge: 'Bot',
+      statusActiveCards: '{count} active cards',
+      statusSingleCard: 'Single-card mode',
+      statusUniqueAmount: 'Unique amount',
+      statusUnmatchedCount: '{count} unmatched',
+      statusAlertsOn: 'Telegram alerts on',
+      statusAlertsOff: 'Telegram alerts off',
+      statusDupBlock: 'Duplicates: Block',
+      statusDupWarn: 'Duplicates: Warn',
       openModule: 'Manage',
       openInBot: 'Open in Bot',
       sectionActiveTitle: 'Active in WebApp',
@@ -1032,6 +1041,24 @@ export const en: DeepPartial<TranslationSchema> = {
       forappEnabledLabel: 'Enable ForApp Automated Verification',
       forappEnabledDesc:
         'Match incoming bank SMS deposits against unique transfer amounts without manual receipt review',
+      forappGuideTitle: 'What is ForApp & Quick Setup Guide',
+      forappGuideSubtitle: 'Overview and simple 4-step bank SMS webhook setup',
+      forappAboutDesc:
+        'ForApp is a free, open-source Android app that reads incoming bank deposit SMS on your phone and forwards them securely to this bot via Webhook. Each invoice gets a unique payable amount so user wallets are credited automatically without uploading a receipt.',
+      forappGuideStep1Title: 'Install Android App',
+      forappGuideStep1Desc:
+        'Download and install ForApp from GitHub on the Android phone receiving your bank SMS and grant SMS permission.',
+      forappGuideStep2Title: 'Create Webhook Target',
+      forappGuideStep2Desc:
+        'Add a new Webhook destination in ForApp and paste the Webhook URL shown below.',
+      forappGuideStep3Title: 'Set API Key',
+      forappGuideStep3Desc:
+        'Generate an X-API-Key below and paste it into ForApp API Key field (keep default POST, JSON body, and X-API-Key / Idempotency-Key headers).',
+      forappGuideStep4Title: 'Select Banks & Enable',
+      forappGuideStep4Desc:
+        'Choose your banks in ForApp, run a test delivery, then toggle ForApp On above and save.',
+      forappOpenSourceNote: 'Free & open-source (erfjab/forapp)',
+      forappGithubBtn: 'ForApp on GitHub',
       webhookUrlLabel: 'Webhook URL (Copy directly into ForApp)',
       webhookMissing: 'Configure Mini App HTTPS domain first.',
       apiKeyLabel: 'X-API-Key Secret',
