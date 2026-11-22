@@ -25,6 +25,7 @@ import type { ConfigReconciliationService } from '../domain/services/ConfigRecon
 import type { BroadcastService } from '../domain/services/BroadcastService.js';
 import type { PackageCategoryService } from '../domain/services/PackageCategoryService.js';
 import type { PaymentService } from '../domain/services/PaymentService.js';
+import type { AutomatedPaymentService } from '../domain/services/AutomatedPaymentService.js';
 import type { BackupService } from '../domain/services/BackupService.js';
 import type { LuckyWheelService } from '../domain/services/LuckyWheelService.js';
 import type { DomainRegistryService } from '../domain/services/DomainRegistryService.js';
@@ -74,6 +75,16 @@ export interface SessionData {
     configId?: string;
     configUsername?: string;
     deficitAmount: number;
+    createdAt: number;
+  };
+  /** Automated ForApp order transitioning to manual receipt upload fallback. */
+  manualFallbackOrder?: {
+    orderId: string;
+    amount: number;
+    cardId?: string;
+    cardNumber: string;
+    cardHolder: string;
+    bankName?: string;
     createdAt: number;
   };
   /** Bot messages that belong to the current private-chat UI screen. */
@@ -154,6 +165,8 @@ export type BotServices = {
   pricingService: PricingService;
   packageCategoryService: PackageCategoryService;
   paymentService: PaymentService;
+  /** Automated wallet payment orchestration (ForApp SMS card-to-card & NOWPayments crypto). */
+  automatedPaymentService?: AutomatedPaymentService;
   purchaseCheckoutService: PurchaseCheckoutService;
   promoService: PromoService;
   referralService: ReferralService;

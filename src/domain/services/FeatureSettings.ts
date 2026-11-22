@@ -230,3 +230,94 @@ export function expiredCleanupEnabledAt(settings: SettingReader): Date | null {
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
+
+function parseBoundedIntSetting(
+  settings: SettingReader,
+  key: string,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  const raw = normalizeDigits(settings.getSetting(key, String(fallback)))
+    .replace(/[,_،٬\s]/gu, '')
+    .trim();
+  if (!/^\d+$/u.test(raw)) return fallback;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+}
+
+/** Whether automated card-to-card deposit verification via ForApp webhook is enabled. */
+export function forappEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('forapp_enabled', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
+/** Expiry window (minutes) for pending ForApp automated card-to-card orders (5..120, default 20). */
+export function forappOrderExpiryMinutes(settings: SettingReader, fallback = 20): number {
+  return parseBoundedIntSetting(settings, 'forapp_order_expiry_minutes', fallback, 5, 120);
+}
+
+/** Whether NOWPayments cryptocurrency top-up gateway is enabled. */
+export function nowpaymentsEnabled(settings: SettingReader): boolean {
+  const value = settings.getSetting('nowpayments_enabled', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
+/** Whether NOWPayments requests target the sandbox environment. */
+export function nowpaymentsSandbox(settings: SettingReader): boolean {
+  const value = settings.getSetting('nowpayments_sandbox', 'false').trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
+export type NowPaymentsRateMode = 'manual' | 'auto';
+
+/** Exchange rate strategy for Toman -> USD conversion ('manual' or 'auto' with fallback). */
+export function nowpaymentsRateMode(settings: SettingReader): NowPaymentsRateMode {
+  const value = settings.getSetting('nowpayments_rate_mode', 'manual').trim().toLowerCase();
+  return value === 'auto' ? 'auto' : 'manual';
+}
+
+/** Manual (and auto-fallback) USD/USDT exchange rate in Toman (default 80,000). */
+export function nowpaymentsManualUsdRateToman(settings: SettingReader, fallback = 80_000): number {
+  return parseBoundedIntSetting(
+    settings,
+    'nowpayments_usd_rate_toman',
+    fallback,
+    10_000,
+    5_000_000
+  );
+}
+
+/** Minimum NOWPayments top-up amount in Toman (default 100,000). */
+export function nowpaymentsMinAmountToman(settings: SettingReader, fallback = 100_000): number {
+  return parseBoundedIntSetting(
+    settings,
+    'nowpayments_min_amount_toman',
+    fallback,
+    10_000,
+    Number.MAX_SAFE_INTEGER
+  );
+}
+
+/** Maximum NOWPayments top-up amount in Toman (default 50,000,000). */
+export function nowpaymentsMaxAmountToman(settings: SettingReader, fallback = 50_000_000): number {
+  const min = nowpaymentsMinAmountToman(settings);
+  const parsed = parseBoundedIntSetting(
+    settings,
+    'nowpayments_max_amount_toman',
+    fallback,
+    min,
+    Number.MAX_SAFE_INTEGER
+  );
+  return Math.max(min, parsed);
+}
+
+/** Optional extra cashback percentage (0..50) credited on completed NOWPayments top-ups. */
+export function nowpaymentsCashbackPercent(settings: SettingReader, fallback = 0): number {
+  return parseBoundedIntSetting(settings, 'nowpayments_cashback_percent', fallback, 0, 50);
+}
+
+/** Expiry window (minutes) for pending NOWPayments invoices (10..1440, default 60). */
+export function nowpaymentsOrderExpiryMinutes(settings: SettingReader, fallback = 60): number {
+  return parseBoundedIntSetting(settings, 'nowpayments_order_expiry_minutes', fallback, 10, 1440);
+}

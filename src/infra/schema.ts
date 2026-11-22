@@ -998,3 +998,171 @@ export const catalogDiscounts = pgTable(
 
 export type CatalogDiscountRow = typeof catalogDiscounts.$inferSelect;
 export type NewCatalogDiscountRow = typeof catalogDiscounts.$inferInsert;
+
+export const PAYMENT_ORDER_PROVIDERS = ['forapp_card', 'nowpayments'] as const;
+export type PaymentOrderProvider = (typeof PAYMENT_ORDER_PROVIDERS)[number];
+
+export const PAYMENT_ORDER_STATUSES = [
+  'pending',
+  'confirming',
+  'partially_paid',
+  'completed',
+  'expired',
+  'failed',
+  'cancelled',
+] as const;
+export type PaymentOrderStatus = (typeof PAYMENT_ORDER_STATUSES)[number];
+
+// Automated Wallet Payment Orders (ForApp Card-to-Card & NOWPayments Crypto)
+export const paymentOrders = pgTable(
+  'payment_orders',
+  {
+    id: text('id').primaryKey(), // po_<timestamp>_<hex>
+    telegramId: bigint('telegram_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.telegramId),
+    provider: text('provider').notNull(), // 'forapp_card' | 'nowpayments'
+    status: text('status').notNull().default('pending'),
+    requestedAmount: bigint('requested_amount', { mode: 'number' }).notNull(),
+    payableAmount: bigint('payable_amount', { mode: 'number' }).notNull(),
+    payableAmountRial: bigint('payable_amount_rial', { mode: 'number' }),
+    creditedAmount: bigint('credited_amount', { mode: 'number' }),
+    cashbackAmount: bigint('cashback_amount', { mode: 'number' }).notNull().default(0),
+    cardId: text('card_id'),
+    cardNumber: text('card_number'),
+    cardHolder: text('card_holder'),
+    bankName: text('bank_name'),
+    externalId: text('external_id'), // NOWPayments invoice_id or ForApp matched deposit id
+    externalPaymentId: text('external_payment_id'), // NOWPayments payment_id
+    paymentUrl: text('payment_url'),
+    fiatAmountUsd: text('fiat_amount_usd'),
+    exchangeRateTomanPerUsd: bigint('exchange_rate_toman_per_usd', { mode: 'number' }),
+    payCurrency: text('pay_currency'),
+    payAmount: text('pay_amount'),
+    actuallyPaid: text('actually_paid'),
+    providerStatus: text('provider_status'),
+    walletTransactionId: text('wallet_transaction_id'),
+    metadata: text('metadata'),
+    expiresAt: timestamp('expires_at').notNull(),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'payment_orders_provider_supported',
+      sql`${table.provider} IN ('forapp_card', 'nowpayments')`
+    ),
+    check(
+      'payment_orders_status_supported',
+      sql`${table.status} IN ('pending', 'confirming', 'partially_paid', 'completed', 'expired', 'failed', 'cancelled')`
+    ),
+    check(
+      'payment_orders_requested_amount_safe',
+      sql`${table.requestedAmount} > 0 AND ${table.requestedAmount} <= 9007199254740991`
+    ),
+    check(
+      'payment_orders_payable_amount_safe',
+      sql`${table.payableAmount} > 0 AND ${table.payableAmount} <= 9007199254740991`
+    ),
+    check(
+      'payment_orders_payable_rial_safe',
+      sql`${table.payableAmountRial} IS NULL OR (${table.payableAmountRial} > 0 AND ${table.payableAmountRial} <= 9007199254740991)`
+    ),
+    check(
+      'payment_orders_credited_amount_safe',
+      sql`${table.creditedAmount} IS NULL OR (${table.creditedAmount} >= 0 AND ${table.creditedAmount} <= 9007199254740991)`
+    ),
+    check(
+      'payment_orders_cashback_amount_safe',
+      sql`${table.cashbackAmount} >= 0 AND ${table.cashbackAmount} <= 9007199254740991`
+    ),
+    check(
+      'payment_orders_exchange_rate_safe',
+      sql`${table.exchangeRateTomanPerUsd} IS NULL OR (${table.exchangeRateTomanPerUsd} > 0 AND ${table.exchangeRateTomanPerUsd} <= 9007199254740991)`
+    ),
+    index('payment_orders_user_status_idx').on(table.telegramId, table.status, table.createdAt),
+    index('payment_orders_forapp_pending_match_idx')
+      .on(table.payableAmount, table.expiresAt)
+      .where(sql`${table.provider} = 'forapp_card' AND ${table.status} = 'pending'`),
+    index('payment_orders_external_id_idx')
+      .on(table.provider, table.externalId)
+      .where(sql`${table.externalId} IS NOT NULL`),
+    index('payment_orders_external_payment_id_idx')
+      .on(table.externalPaymentId)
+      .where(sql`${table.externalPaymentId} IS NOT NULL`),
+    index('payment_orders_expiry_idx')
+      .on(table.expiresAt)
+      .where(sql`${table.status} IN ('pending', 'confirming')`),
+  ]
+);
+
+export type PaymentOrderRow = typeof paymentOrders.$inferSelect;
+export type NewPaymentOrderRow = typeof paymentOrders.$inferInsert;
+
+export const FORAPP_DEPOSIT_STATUSES = [
+  'matched',
+  'unmatched',
+  'ignored',
+  'manual_matched',
+  'dismissed',
+] as const;
+export type ForAppDepositStatus = (typeof FORAPP_DEPOSIT_STATUSES)[number];
+
+// Idempotent Audit Log of Incoming ForApp Bank SMS Webhook Deliveries
+export const forappDeposits = pgTable(
+  'forapp_deposits',
+  {
+    id: text('id').primaryKey(), // fad_<timestamp>_<hex>
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    forappMessageId: text('forapp_message_id'),
+    amountRial: bigint('amount_rial', { mode: 'number' }).notNull(),
+    amountToman: bigint('amount_toman', { mode: 'number' }),
+    unit: text('unit').notNull().default('rial'),
+    isDeposit: boolean('is_deposit'),
+    bank: text('bank'),
+    sender: text('sender'),
+    code: text('code'),
+    rawBody: text('raw_body'),
+    device: text('device'),
+    receivedAt: timestamp('received_at'),
+    status: text('status').notNull().default('unmatched'),
+    matchedOrderId: text('matched_order_id').references(() => paymentOrders.id),
+    matchedTelegramId: bigint('matched_telegram_id', { mode: 'number' }).references(
+      () => users.telegramId
+    ),
+    matchedByAdminId: bigint('matched_by_admin_id', { mode: 'number' }),
+    walletTransactionId: text('wallet_transaction_id'),
+    note: text('note'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'forapp_deposits_status_supported',
+      sql`${table.status} IN ('matched', 'unmatched', 'ignored', 'manual_matched', 'dismissed')`
+    ),
+    check(
+      'forapp_deposits_amount_rial_safe',
+      sql`${table.amountRial} >= 0 AND ${table.amountRial} <= 9007199254740991`
+    ),
+    check(
+      'forapp_deposits_amount_toman_safe',
+      sql`${table.amountToman} IS NULL OR (${table.amountToman} >= 0 AND ${table.amountToman} <= 9007199254740991)`
+    ),
+    check(
+      'forapp_deposits_matched_admin_safe',
+      sql`${table.matchedByAdminId} IS NULL OR (${table.matchedByAdminId} > 0 AND ${table.matchedByAdminId} <= 9007199254740991)`
+    ),
+    index('forapp_deposits_status_created_idx').on(table.status, table.createdAt),
+    index('forapp_deposits_amount_toman_idx')
+      .on(table.amountToman)
+      .where(sql`${table.status} = 'unmatched'`),
+    index('forapp_deposits_matched_order_idx')
+      .on(table.matchedOrderId)
+      .where(sql`${table.matchedOrderId} IS NOT NULL`),
+  ]
+);
+
+export type ForAppDepositRow = typeof forappDeposits.$inferSelect;
+export type NewForAppDepositRow = typeof forappDeposits.$inferInsert;

@@ -1,11 +1,15 @@
 import crypto from 'node:crypto';
-import { and, eq, gte, inArray, isNotNull, or } from 'drizzle-orm';
+import { and, eq, gt, gte, inArray, isNotNull, or } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
-import { topupReceipts } from '../../infra/schema.js';
+import { paymentOrders, topupReceipts } from '../../infra/schema.js';
 import type { TranslationService } from './TranslationService.js';
 import type { WalletService } from './WalletService.js';
 import { logger } from '../../infra/logger.js';
-import { walletTransferEnabled, walletTransferMinAmount } from './FeatureSettings.js';
+import {
+  nowpaymentsEnabled,
+  walletTransferEnabled,
+  walletTransferMinAmount,
+} from './FeatureSettings.js';
 
 export type PaymentMethodType = 'manual' | 'automated';
 
@@ -75,6 +79,12 @@ export interface PaymentInstructions {
   bankName?: string;
   instructions?: string;
   amount: number;
+  orderId?: string;
+  expiresAt?: string;
+  paymentUrl?: string;
+  fiatAmountUsd?: string;
+  exchangeRateTomanPerUsd?: number;
+  payableAmountRial?: number;
 }
 
 export interface PaymentProvider {
@@ -523,6 +533,49 @@ export class CardToCardPaymentProvider implements PaymentProvider {
   }
 }
 
+export class NowPaymentsPaymentProvider implements PaymentProvider {
+  readonly id = 'nowpayments';
+  readonly type: PaymentMethodType = 'automated';
+
+  constructor(
+    private readonly translationService: TranslationService,
+    private readonly invoiceInstructionFactory?: (params: {
+      amount: number;
+      telegramId: number;
+    }) => Promise<PaymentInstructions>
+  ) {}
+
+  isEnabled(): boolean {
+    if (!nowpaymentsEnabled(this.translationService)) return false;
+    const encryptedKey = this.translationService
+      .getSetting('nowpayments_api_key_encrypted', '')
+      .trim();
+    return encryptedKey.length > 0;
+  }
+
+  getTitleKey(): string {
+    return 'payment_method_nowpayments';
+  }
+
+  getDescriptionKey(): string {
+    return 'payment_method_nowpayments_desc';
+  }
+
+  async getInstructions(params: {
+    amount: number;
+    telegramId: number;
+  }): Promise<PaymentInstructions> {
+    if (this.invoiceInstructionFactory) {
+      return this.invoiceInstructionFactory(params);
+    }
+    return {
+      methodId: this.id,
+      type: this.type,
+      amount: params.amount,
+    };
+  }
+}
+
 export interface PaymentConfiguration {
   cardNumber: string;
   cardHolder: string;
@@ -543,6 +596,7 @@ export class PaymentService {
     this.registerProvider(
       new CardToCardPaymentProvider(translationService, (opts) => this.selectCardForTopup(opts))
     );
+    this.registerProvider(new NowPaymentsPaymentProvider(translationService));
   }
 
   registerProvider(provider: PaymentProvider): void {
@@ -713,6 +767,43 @@ export class PaymentService {
         }
       }
 
+      // Include today's active/completed automated ForApp card orders in daily cap tracking.
+      try {
+        const orderRows = await db
+          .select({
+            cardId: paymentOrders.cardId,
+            cardNumber: paymentOrders.cardNumber,
+            amount: paymentOrders.payableAmount,
+          })
+          .from(paymentOrders)
+          .where(
+            and(
+              eq(paymentOrders.provider, 'forapp_card'),
+              inArray(paymentOrders.status, ['pending', 'completed']),
+              gte(paymentOrders.createdAt, dayStartUtc),
+              or(isNotNull(paymentOrders.cardId), isNotNull(paymentOrders.cardNumber))
+            )
+          );
+
+        for (const row of orderRows) {
+          const amount = Number(row.amount);
+          if (!Number.isFinite(amount) || amount <= 0) continue;
+          const cid = row.cardId?.trim();
+          const cnum = row.cardNumber ? normalizeCardNumber(row.cardNumber) : '';
+          if (cid) {
+            dbById.set(cid, (dbById.get(cid) ?? 0) + amount);
+          }
+          if (cnum) {
+            dbByNumber.set(cnum, (dbByNumber.get(cnum) ?? 0) + amount);
+          }
+        }
+      } catch (orderErr) {
+        logger.debug(
+          { err: orderErr },
+          'Could not query DB for today ForApp card orders; continuing with receipt totals'
+        );
+      }
+
       for (const [key, total] of dbById) {
         merged.set(key, Math.max(merged.get(key) ?? 0, total));
       }
@@ -880,14 +971,43 @@ export class PaymentService {
       Number.isFinite(lookbackHours) && lookbackHours > 0
         ? lookbackHours
         : DEFAULT_PENDING_LOOKBACK_HOURS;
-    const cutoff = new Date(Date.now() - safeHours * 60 * 60 * 1000);
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - safeHours * 60 * 60 * 1000);
+    const amounts: number[] = [];
     try {
       const db = getDb();
       const rows = await db
         .select({ amount: topupReceipts.amount })
         .from(topupReceipts)
         .where(and(eq(topupReceipts.status, 'pending'), gte(topupReceipts.createdAt, cutoff)));
-      return rows.map((row) => row.amount);
+      for (const row of rows) {
+        if (Number.isSafeInteger(row.amount) && row.amount > 0) {
+          amounts.push(row.amount);
+        }
+      }
+      try {
+        const orderRows = await db
+          .select({ amount: paymentOrders.payableAmount })
+          .from(paymentOrders)
+          .where(
+            and(
+              eq(paymentOrders.provider, 'forapp_card'),
+              eq(paymentOrders.status, 'pending'),
+              gt(paymentOrders.expiresAt, now)
+            )
+          );
+        for (const row of orderRows) {
+          if (Number.isSafeInteger(row.amount) && row.amount > 0) {
+            amounts.push(row.amount);
+          }
+        }
+      } catch (orderErr) {
+        logger.debug(
+          { err: orderErr },
+          'Could not load active ForApp pending order amounts; continuing with receipts set'
+        );
+      }
+      return amounts;
     } catch (err) {
       logger.warn(
         { err },

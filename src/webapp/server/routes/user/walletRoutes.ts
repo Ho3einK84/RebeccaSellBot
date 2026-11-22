@@ -14,7 +14,16 @@ import {
   DuplicateReceiptError,
   PendingTopupReceiptError,
 } from '../../../../domain/services/WalletService.js';
-import { sendAdminNewReceiptNotification } from '../../../../telegram/features/admin/adminNotifications.js';
+import {
+  AutomatedPaymentError,
+  formatPaymentOrderShortId,
+} from '../../../../domain/services/AutomatedPaymentService.js';
+import type { PaymentOrderRow } from '../../../../infra/schema.js';
+import {
+  sendAdminAutomatedTopupReport,
+  sendAdminNewReceiptNotification,
+  sendAutomatedTopupSuccessNotification,
+} from '../../../../telegram/features/admin/adminNotifications.js';
 import {
   sendWebAppWalletTransferNotification,
   uploadReceiptMediaToTelegram,
@@ -406,6 +415,10 @@ export function registerUserWalletRoutes(
           options.paymentService.recordCardDailyUsage(cardId, amount);
         }
 
+        // Prevent double credit if the user fell back from a pending ForApp automated order
+        // to manual receipt upload.
+        await options.automatedPaymentService?.cancelPendingForAppOrdersForUser?.(telegramId);
+
         const cardSummary =
           typeof options.paymentService?.resolveCardDisplayLabel === 'function'
             ? options.paymentService.resolveCardDisplayLabel({
@@ -643,6 +656,256 @@ export function registerUserWalletRoutes(
         }
         throw err;
       }
+    }
+  );
+
+  const serializePaymentOrder = (order: PaymentOrderRow) => ({
+    id: order.id,
+    shortId: formatPaymentOrderShortId(order.id),
+    provider: order.provider,
+    status: order.status,
+    requestedAmount: order.requestedAmount,
+    payableAmount: order.payableAmount,
+    payableAmountRial: order.payableAmountRial ?? null,
+    creditedAmount: order.creditedAmount ?? null,
+    cashbackAmount: order.cashbackAmount ?? 0,
+    cardId: order.cardId ?? null,
+    cardNumber: order.cardNumber ?? null,
+    cardHolder: order.cardHolder ?? null,
+    bankName: order.bankName ?? null,
+    paymentUrl: order.paymentUrl ?? null,
+    fiatAmountUsd: order.fiatAmountUsd ?? null,
+    exchangeRateTomanPerUsd: order.exchangeRateTomanPerUsd ?? null,
+    payCurrency: order.payCurrency ?? null,
+    payAmount: order.payAmount ?? null,
+    actuallyPaid: order.actuallyPaid ?? null,
+    providerStatus: order.providerStatus ?? null,
+    expiresAt:
+      order.expiresAt instanceof Date ? order.expiresAt.toISOString() : String(order.expiresAt),
+    completedAt:
+      order.completedAt instanceof Date
+        ? order.completedAt.toISOString()
+        : order.completedAt
+          ? String(order.completedAt)
+          : null,
+    createdAt:
+      order.createdAt instanceof Date ? order.createdAt.toISOString() : String(order.createdAt),
+  });
+
+  // POST /api/user/topup/forapp-order — create automated ForApp card-to-card order
+  userScope.post<{
+    Body?: { amount?: number };
+  }>(
+    '/api/user/topup/forapp-order',
+    {
+      config: { rateLimit: limits.action10 },
+    },
+    async (request, reply) => {
+      const telegramId = request.userSession?.telegramId;
+      if (!telegramId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      if (!options.automatedPaymentService) {
+        return reply
+          .code(503)
+          .send({ error: 'Automated payment service unavailable', code: 'SERVICE_UNAVAILABLE' });
+      }
+
+      const profile = await options.userService.findProfile(String(telegramId));
+      if (!profile) {
+        await options.walletService.getOrCreateUser(telegramId);
+      }
+
+      const locale = await resolveUserLocale(telegramId, options);
+      try {
+        const order = await options.automatedPaymentService.createForAppOrder({
+          telegramId,
+          requestedAmount: Number(request.body?.amount),
+          locale,
+        });
+        return reply.code(201).send({
+          order: serializePaymentOrder(order),
+          nativeUploadEnabled: Boolean(options.botApi),
+        });
+      } catch (err) {
+        if (err instanceof AutomatedPaymentError) {
+          const statusMap: Record<string, number> = {
+            FORAPP_DISABLED: 403,
+            INVALID_TOPUP_AMOUNT: 400,
+            ALL_CARDS_CAP_REACHED: 503,
+            NO_BANK_CARD: 503,
+            NO_UNIQUE_AMOUNT_AVAILABLE: 503,
+          };
+          return reply
+            .code(statusMap[err.code] ?? 400)
+            .send({ error: err.message, code: err.code });
+        }
+        throw err;
+      }
+    }
+  );
+
+  // POST /api/user/topup/nowpayments-order — create NOWPayments crypto invoice
+  userScope.post<{
+    Body?: { amount?: number };
+  }>(
+    '/api/user/topup/nowpayments-order',
+    {
+      config: { rateLimit: limits.action10 },
+    },
+    async (request, reply) => {
+      const telegramId = request.userSession?.telegramId;
+      if (!telegramId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      if (!options.automatedPaymentService) {
+        return reply
+          .code(503)
+          .send({ error: 'Automated payment service unavailable', code: 'SERVICE_UNAVAILABLE' });
+      }
+
+      const profile = await options.userService.findProfile(String(telegramId));
+      if (!profile) {
+        await options.walletService.getOrCreateUser(telegramId);
+      }
+
+      try {
+        const order = await options.automatedPaymentService.createNowPaymentsOrder({
+          telegramId,
+          amountToman: Number(request.body?.amount),
+        });
+        return reply.code(201).send({ order: serializePaymentOrder(order) });
+      } catch (err) {
+        if (err instanceof AutomatedPaymentError) {
+          const statusMap: Record<string, number> = {
+            NOWPAYMENTS_DISABLED: 403,
+            NOWPAYMENTS_NOT_CONFIGURED: 503,
+            INVALID_TOPUP_AMOUNT: 400,
+            AMOUNT_TOO_SMALL_USD: 400,
+          };
+          return reply
+            .code(statusMap[err.code] ?? 400)
+            .send({ error: err.message, code: err.code });
+        }
+        return reply.code(502).send({
+          error: err instanceof Error ? err.message : 'Failed to create NOWPayments invoice',
+          code: 'NOWPAYMENTS_INVOICE_FAILED',
+        });
+      }
+    }
+  );
+
+  // GET /api/user/topup/orders — list user's automated payment orders
+  userScope.get<{
+    Querystring: { page?: string; limit?: string };
+  }>(
+    '/api/user/topup/orders',
+    {
+      config: { rateLimit: limits.standard },
+    },
+    async (request, reply) => {
+      const telegramId = request.userSession?.telegramId;
+      if (!telegramId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      if (!options.automatedPaymentService) {
+        return reply.code(200).send({ orders: [], total: 0, page: 1, totalPages: 1 });
+      }
+      const page = clampPositiveInt(request.query.page, 1, 10_000);
+      const limit = clampPositiveInt(request.query.limit, 10, 50);
+      const res = await options.automatedPaymentService.listOrdersForUser(telegramId, page, limit);
+      return reply.code(200).send({
+        orders: res.orders.map(serializePaymentOrder),
+        total: res.total,
+        page: res.page,
+        totalPages: res.totalPages,
+      });
+    }
+  );
+
+  // GET /api/user/topup/orders/:id/status — poll or verify automated order status
+  userScope.get<{
+    Params: { id: string };
+  }>(
+    '/api/user/topup/orders/:id/status',
+    {
+      config: { rateLimit: limits.action30 },
+    },
+    async (request, reply) => {
+      const telegramId = request.userSession?.telegramId;
+      if (!telegramId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      if (!options.automatedPaymentService) {
+        return reply.code(503).send({ error: 'Automated payment service unavailable' });
+      }
+
+      const checked = await options.automatedPaymentService.checkOrderStatusForUser({
+        orderId: request.params.id,
+        telegramId,
+      });
+      if (!checked) {
+        return reply.code(404).send({ error: 'Payment order not found', code: 'ORDER_NOT_FOUND' });
+      }
+
+      if (checked.newlyCompleted && options.botApi && options.translationService) {
+        const notifyServices = {
+          userService: options.userService,
+          translationService: options.translationService,
+          adminIds: options.adminService?.adminIds ?? options.adminIds ?? [],
+        };
+        const provider =
+          checked.order.provider === 'nowpayments' ? 'nowpayments' : ('forapp_card' as const);
+        const creditedAmount = checked.order.creditedAmount ?? checked.order.payableAmount;
+        void sendAutomatedTopupSuccessNotification(options.botApi, notifyServices, {
+          telegramId,
+          amount: creditedAmount,
+          cashbackAmount: checked.order.cashbackAmount,
+          balanceAfter: checked.balanceAfter,
+          provider,
+          orderId: checked.order.id,
+        });
+        void sendAdminAutomatedTopupReport(options.botApi, notifyServices, {
+          telegramId,
+          amount: creditedAmount,
+          cashbackAmount: checked.order.cashbackAmount,
+          provider,
+          orderId: checked.order.id,
+          payCurrency: checked.order.payCurrency,
+        });
+      }
+
+      return reply.code(200).send({
+        order: serializePaymentOrder(checked.order),
+        newlyCompleted: checked.newlyCompleted,
+      });
+    }
+  );
+
+  // POST /api/user/topup/orders/:id/cancel — cancel user's pending automated order
+  userScope.post<{
+    Params: { id: string };
+  }>(
+    '/api/user/topup/orders/:id/cancel',
+    {
+      config: { rateLimit: limits.action30 },
+    },
+    async (request, reply) => {
+      const telegramId = request.userSession?.telegramId;
+      if (!telegramId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      if (!options.automatedPaymentService) {
+        return reply.code(503).send({ error: 'Automated payment service unavailable' });
+      }
+      const cancelled = await options.automatedPaymentService.cancelOrderForUser(
+        request.params.id,
+        telegramId
+      );
+      if (!cancelled) {
+        return reply.code(404).send({ error: 'Pending order not found', code: 'ORDER_NOT_FOUND' });
+      }
+      return reply.code(200).send({ success: true, order: serializePaymentOrder(cancelled) });
     }
   );
 }

@@ -16,6 +16,8 @@ import {
 import {
   customServiceNameEnabled,
   expiredCleanupGraceDays,
+  forappEnabled,
+  nowpaymentsEnabled,
   onHoldDefaultEnabled,
   renewalRolloverEnabled,
   uniqueTopupAmountEnabled,
@@ -375,6 +377,10 @@ export async function renderPaymentSettingsScreen(
   const notifyAdminsRaw = ts.getSetting('receipt_notify_admins', '').trim();
   const isAllAdmins = !notifyAdminsRaw || notifyAdminsRaw === 'all';
   const notifyCount = isAllAdmins ? 0 : notifyAdminsRaw.split(',').filter(Boolean).length;
+  const forappOn = forappEnabled(ts);
+  const nowpaymentsOn = nowpaymentsEnabled(ts);
+  const unmatchedCount =
+    (await ctx.services.automatedPaymentService?.getForAppUnmatchedCount?.().catch(() => 0)) ?? 0;
 
   const text = buildAdminScreen({
     emoji: '💳',
@@ -397,6 +403,23 @@ export async function renderPaymentSettingsScreen(
           {
             label: t(ctx, 'admin_setting_unique_topup_amount_enabled'),
             value: buildStatusBadge(ctx, uniqueOn ? 'active' : 'inactive'),
+          },
+        ],
+      },
+      {
+        emoji: '⚡',
+        title: t(ctx, 'admin_auto_pay_section'),
+        fields: [
+          {
+            label: t(ctx, 'admin_forapp_title'),
+            value:
+              unmatchedCount > 0
+                ? `${buildStatusBadge(ctx, forappOn ? 'active' : 'inactive')} · ${localizedNumber(unmatchedCount, ctx)} ${t(ctx, 'admin_forapp_unmatched_label')}`
+                : buildStatusBadge(ctx, forappOn ? 'active' : 'inactive'),
+          },
+          {
+            label: t(ctx, 'admin_nowpayments_title'),
+            value: buildStatusBadge(ctx, nowpaymentsOn ? 'active' : 'inactive'),
           },
         ],
       },
@@ -451,9 +474,13 @@ export async function renderPaymentSettingsScreen(
     configuredCards.length > 0
       ? ` (${localizedNumber(activeCardsCount, ctx)}/${localizedNumber(configuredCards.length, ctx)})`
       : '';
+  const unmatchedBadge = unmatchedCount > 0 ? ` (${localizedNumber(unmatchedCount, ctx)})` : '';
 
   const kb = new InlineKeyboard()
     .text(`${t(ctx, 'admin_sales_bank_cards_button')}${cardsBadge}`, 'adm:bc:p:1')
+    .row()
+    .text(`${t(ctx, 'admin_forapp_button')}${unmatchedBadge}`, 'adm:pg:fa')
+    .text(t(ctx, 'admin_nowpayments_button'), 'adm:pg:np')
     .row()
     .text(
       `${t(ctx, 'admin_setting_unique_topup_amount_enabled')}: ${uniqueOn ? '🟢' : '⚪'}`,

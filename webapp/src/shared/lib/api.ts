@@ -58,6 +58,14 @@ import type {
   CreateAdminBankCardPayload,
   UpdateAdminBankCardPayload,
   UpdateAdminBankCardSettingsPayload,
+  AdminPaymentGatewaysResponse,
+  AdminForAppConfigDto,
+  AdminNowPaymentsConfigDto,
+  UpdateAdminForAppPayload,
+  AdminRotateForAppKeyResponse,
+  AdminForAppDepositsResponse,
+  UpdateAdminNowPaymentsPayload,
+  TestNowPaymentsResponse,
 } from '@/shared/types/admin.js';
 import type {
   UserProfileResponse,
@@ -68,6 +76,10 @@ import type {
   UserReceiptsResponse,
   PrepareTopupResponse,
   SubmitTopupReceiptResponse,
+  CreateForAppOrderResponse,
+  CreateNowPaymentsOrderResponse,
+  CheckPaymentOrderStatusResponse,
+  CancelPaymentOrderResponse,
   WalletTransferPreviewResponse,
   WalletTransferResponse,
   CustomVolumeQuoteResponse,
@@ -349,6 +361,76 @@ export const api = {
   deleteAdminBankCard: (id: string): Promise<AdminBankCardsResponse> =>
     request<AdminBankCardsResponse>(`/api/admin/bank-cards/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+    }),
+
+  // Admin Automated Payment Gateways (ForApp & NOWPayments)
+  getAdminPaymentGateways: (): Promise<AdminPaymentGatewaysResponse> =>
+    request<AdminPaymentGatewaysResponse>('/api/admin/payment-gateways'),
+
+  updateAdminForAppConfig: (
+    payload: UpdateAdminForAppPayload
+  ): Promise<{ success: boolean; forapp: AdminForAppConfigDto }> =>
+    request<{ success: boolean; forapp: AdminForAppConfigDto }>(
+      '/api/admin/payment-gateways/forapp',
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  rotateAdminForAppKey: (): Promise<AdminRotateForAppKeyResponse> =>
+    request<AdminRotateForAppKeyResponse>('/api/admin/payment-gateways/forapp/rotate-key', {
+      method: 'POST',
+    }),
+
+  getAdminForAppDeposits: (
+    params: { page?: number; limit?: number; status?: string } = {}
+  ): Promise<AdminForAppDepositsResponse> => {
+    const sp = new URLSearchParams();
+    if (params.page) sp.set('page', String(params.page));
+    if (params.limit) sp.set('limit', String(params.limit));
+    if (params.status) sp.set('status', params.status);
+    const qs = sp.toString();
+    return request<AdminForAppDepositsResponse>(
+      `/api/admin/payment-gateways/forapp/deposits${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  matchAdminForAppDeposit: (
+    id: string,
+    payload: { target: string; overrideAmountToman?: number; note?: string }
+  ): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(
+      `/api/admin/payment-gateways/forapp/deposits/${encodeURIComponent(id)}/match`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  dismissAdminForAppDeposit: (id: string, note?: string): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(
+      `/api/admin/payment-gateways/forapp/deposits/${encodeURIComponent(id)}/dismiss`,
+      {
+        method: 'POST',
+        body: JSON.stringify(note ? { note } : {}),
+      }
+    ),
+
+  updateAdminNowPaymentsConfig: (
+    payload: UpdateAdminNowPaymentsPayload
+  ): Promise<{ success: boolean; nowpayments: AdminNowPaymentsConfigDto }> =>
+    request<{ success: boolean; nowpayments: AdminNowPaymentsConfigDto }>(
+      '/api/admin/payment-gateways/nowpayments',
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  testAdminNowPayments: (): Promise<TestNowPaymentsResponse> =>
+    request<TestNowPaymentsResponse>('/api/admin/payment-gateways/nowpayments/test', {
+      method: 'POST',
     }),
 
   getAdminUsers: (
@@ -767,6 +849,31 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  createUserForAppOrder: (amount: number): Promise<CreateForAppOrderResponse> =>
+    request<CreateForAppOrderResponse>('/api/user/topup/forapp-order', {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
+
+  createUserNowPaymentsOrder: (amount: number): Promise<CreateNowPaymentsOrderResponse> =>
+    request<CreateNowPaymentsOrderResponse>('/api/user/topup/nowpayments-order', {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
+
+  checkUserPaymentOrderStatus: (orderId: string): Promise<CheckPaymentOrderStatusResponse> =>
+    request<CheckPaymentOrderStatusResponse>(
+      `/api/user/topup/orders/${encodeURIComponent(orderId)}/status`
+    ),
+
+  cancelUserPaymentOrder: (orderId: string): Promise<CancelPaymentOrderResponse> =>
+    request<CancelPaymentOrderResponse>(
+      `/api/user/topup/orders/${encodeURIComponent(orderId)}/cancel`,
+      {
+        method: 'POST',
+      }
+    ),
 
   previewWalletTransfer: (recipient: string): Promise<WalletTransferPreviewResponse> =>
     request<WalletTransferPreviewResponse>('/api/user/wallet/transfer/preview', {

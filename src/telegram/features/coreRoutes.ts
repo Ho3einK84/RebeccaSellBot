@@ -24,10 +24,12 @@ import { registerAdminHomeRoutes, renderAdminHomeScreen } from '../admin/adminHo
 import { registerAdminQuickCommands } from '../admin/adminCommands.js';
 import { registerAdminSalesRoutes } from '../admin/adminSalesRoutes.js';
 import { registerAdminSettingsRoutes } from '../admin/adminSettingsRoutes.js';
+import { registerAdminPaymentGatewayRoutes } from '../admin/adminPaymentGatewayRoutes.js';
 import { registerAdminTextsRoutes } from '../admin/adminTextsRoutes.js';
 import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { registerBaseRoutes } from './baseRoutes.js';
 import { registerPurchaseRoutes } from './purchaseRoutes.js';
+import { registerPaymentOrderRoutes } from './paymentOrderRoutes.js';
 import { registerConfigRoutes } from './configRoutes.js';
 import { registerLuckyWheelRoutes } from './luckyWheelRoutes.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
@@ -36,6 +38,7 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
   registerAdminHomeRoutes();
   registerAdminSalesRoutes();
   registerAdminSettingsRoutes();
+  registerAdminPaymentGatewayRoutes();
   registerAdminTextsRoutes();
   registerBaseRoutes(bot, services);
   registerAdminQuickCommands(bot, services);
@@ -50,6 +53,7 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
   registerSubscriptionRoutes(bot);
 
   registerPurchaseRoutes(bot, services);
+  registerPaymentOrderRoutes(bot, services);
   registerConfigRoutes(bot, services);
   registerLuckyWheelRoutes(bot, services);
 

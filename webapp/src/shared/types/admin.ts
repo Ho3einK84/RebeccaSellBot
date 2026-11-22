@@ -523,3 +523,99 @@ export interface UpdateAdminBankCardSettingsPayload {
   cardNumber?: string;
   cardHolder?: string;
 }
+
+export interface AdminForAppConfigDto {
+  enabled: boolean;
+  apiKeyConfigured: boolean;
+  apiKeyMasked: string | null;
+  orderExpiryMinutes: number;
+  webhookUrl: string | null;
+  unmatchedCount: number;
+}
+
+export interface AdminNowPaymentsConfigDto {
+  enabled: boolean;
+  sandbox: boolean;
+  apiKeyConfigured: boolean;
+  ipnSecretConfigured: boolean;
+  rateMode: 'manual' | 'auto';
+  manualUsdRateToman: number;
+  effectiveUsdRateToman: number;
+  effectiveRateSource: 'auto' | 'manual' | 'fallback';
+  minAmountToman: number;
+  maxAmountToman: number;
+  cashbackPercent: number;
+  orderExpiryMinutes: number;
+  webhookUrl: string | null;
+}
+
+export interface AdminPaymentGatewaysResponse {
+  forapp: AdminForAppConfigDto;
+  nowpayments: AdminNowPaymentsConfigDto;
+}
+
+export interface UpdateAdminForAppPayload {
+  enabled?: boolean;
+  orderExpiryMinutes?: number;
+}
+
+export interface AdminRotateForAppKeyResponse {
+  success: boolean;
+  apiKey: string;
+  apiKeyMasked: string;
+  webhookUrl: string | null;
+  forapp: AdminForAppConfigDto;
+}
+
+export interface AdminForAppDepositDto {
+  id: string;
+  idempotencyKey: string;
+  forappMessageId: string | null;
+  amountRial: number;
+  amountToman: number | null;
+  unit: string;
+  isDeposit: boolean | null;
+  bank: string | null;
+  sender: string | null;
+  code: string | null;
+  rawBody: string | null;
+  device: string | null;
+  receivedAt: string | null;
+  status: 'matched' | 'unmatched' | 'ignored' | 'manual_matched' | 'dismissed' | string;
+  matchedOrderId: string | null;
+  matchedTelegramId: number | null;
+  matchedByAdminId: number | null;
+  walletTransactionId: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminForAppDepositsResponse {
+  items: AdminForAppDepositDto[];
+  total: number;
+  unmatchedCount: number;
+  page: number;
+  totalPages: number;
+}
+
+export interface UpdateAdminNowPaymentsPayload {
+  enabled?: boolean;
+  sandbox?: boolean;
+  apiKey?: string | null;
+  ipnSecret?: string | null;
+  rateMode?: 'manual' | 'auto';
+  manualUsdRateToman?: number;
+  minAmountToman?: number;
+  maxAmountToman?: number;
+  cashbackPercent?: number;
+  orderExpiryMinutes?: number;
+}
+
+export interface TestNowPaymentsResponse {
+  ok: boolean;
+  message: string;
+  sandbox: boolean;
+  rateToman: number;
+  rateSource: 'auto' | 'manual' | 'fallback';
+}

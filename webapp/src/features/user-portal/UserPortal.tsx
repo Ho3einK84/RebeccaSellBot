@@ -295,6 +295,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
   const trial = profileData?.trial ?? null;
   const luckyWheel = profileData?.luckyWheel ?? null;
   const pendingReceipt = profileData?.pendingReceipt ?? null;
+  const activePaymentOrder = profileData?.activePaymentOrder ?? null;
   const configs = configsData?.configs ?? [];
   const packages = packagesData?.packages ?? [];
   const categories = packagesData?.categories ?? [];
@@ -611,6 +612,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
               settings={settings}
               transactions={transactions}
               pendingReceipt={pendingReceipt}
+              activePaymentOrder={activePaymentOrder}
               deficitContext={walletDeficit}
               onClearDeficit={() => setWalletDeficit(null)}
               onNotify={(msg, type) => notify(msg, type ?? 'success')}

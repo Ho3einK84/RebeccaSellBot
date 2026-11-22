@@ -8,6 +8,7 @@ import { PanelsTab } from './panels/PanelsTab.js';
 import { PackagesTab } from './packages/PackagesTab.js';
 import { ModulesTab } from './modules/ModulesTab.js';
 import { BankCardsModal } from './bankCards/BankCardsModal.js';
+import { PaymentGatewaysModal } from './paymentGateways/PaymentGatewaysModal.js';
 import { ReceiptSettingsModal } from './receipts/components/ReceiptSettingsModal.js';
 import { AdminHeader } from './components/AdminHeader.js';
 import { AdminDesktopNav } from './components/AdminDesktopNav.js';
@@ -41,6 +42,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [tabHistory, setTabHistory] = useState<TabType[]>(['overview']);
   const [inspectingUserId, setInspectingUserId] = useState<number | null>(null);
   const [isBankCardsModalOpen, setIsBankCardsModalOpen] = useState(false);
+  const [isPaymentGatewaysModalOpen, setIsPaymentGatewaysModalOpen] = useState(false);
   const [isReceiptSettingsModalOpen, setIsReceiptSettingsModalOpen] = useState(false);
 
   // Single lightweight query drives both dashboard stats, pending badge count, and panel health indicator.
@@ -213,12 +215,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <ModulesTab
           botUsername={botUsername}
           onOpenBankCards={() => setIsBankCardsModalOpen(true)}
+          onOpenPaymentGateways={() => setIsPaymentGatewaysModalOpen(true)}
           onOpenReceiptSettings={() => setIsReceiptSettingsModalOpen(true)}
         />
       )}
       <BankCardsModal
         isOpen={isBankCardsModalOpen}
         onClose={() => setIsBankCardsModalOpen(false)}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
+      <PaymentGatewaysModal
+        isOpen={isPaymentGatewaysModalOpen}
+        onClose={() => setIsPaymentGatewaysModalOpen(false)}
         onNotify={(msg, type) => notify(msg, type ?? 'success')}
       />
       <ReceiptSettingsModal

@@ -19,6 +19,7 @@ import { ConfigReconciliationService } from './domain/services/ConfigReconciliat
 import { BroadcastService } from './domain/services/BroadcastService.js';
 import { PackageCategoryService } from './domain/services/PackageCategoryService.js';
 import { PaymentService } from './domain/services/PaymentService.js';
+import { AutomatedPaymentService } from './domain/services/AutomatedPaymentService.js';
 import { BackupService } from './domain/services/BackupService.js';
 import { LuckyWheelService } from './domain/services/LuckyWheelService.js';
 import { CatalogDiscountService } from './domain/services/CatalogDiscountService.js';
@@ -382,6 +383,18 @@ async function main() {
   const broadcastService = new BroadcastService();
   const packageCategoryService = new PackageCategoryService(translationService);
   const paymentService = new PaymentService(translationService, walletService);
+  let currentWebAppUrl: string | undefined;
+  const automatedPaymentService = new AutomatedPaymentService({
+    translationService,
+    paymentService,
+    walletService,
+    credentialSecret: config.PANEL_CREDENTIALS_KEY ?? config.BOT_TOKEN,
+    resolvePublicBaseUrl: () =>
+      currentWebAppUrl ||
+      translationService.getSetting('webapp_url', '').trim() ||
+      config.WEBAPP_URL ||
+      config.WEBHOOK_URL,
+  });
   const backupService = new BackupService(translationService, {
     databaseUrl: config.DATABASE_URL,
     instanceName: config.INSTANCE_NAME,
@@ -407,7 +420,7 @@ async function main() {
     storedWebAppUrl
   );
 
-  let currentWebAppUrl: string | undefined = startupWebApp.webAppUrl;
+  currentWebAppUrl = startupWebApp.webAppUrl;
 
   // On startup, register any active WebApp domain (whether from .env or DB) in the shared mesh registry
   if (startupWebApp.shouldRegisterMesh && currentWebAppUrl) {
@@ -497,6 +510,7 @@ async function main() {
     pricingService,
     packageCategoryService,
     paymentService,
+    automatedPaymentService,
     purchaseCheckoutService,
     promoService,
     referralService,

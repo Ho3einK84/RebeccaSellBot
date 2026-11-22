@@ -14,7 +14,19 @@ import {
   normalizeCardNumber,
   type BankCardConfig,
 } from '../../../domain/services/PaymentService.js';
-import { uniqueTopupAmountEnabled } from '../../../domain/services/FeatureSettings.js';
+import {
+  nowpaymentsCashbackPercent,
+  nowpaymentsMaxAmountToman,
+  nowpaymentsMinAmountToman,
+  uniqueTopupAmountEnabled,
+} from '../../../domain/services/FeatureSettings.js';
+import { AutomatedPaymentError } from '../../../domain/services/AutomatedPaymentService.js';
+import {
+  buildForAppOrderInvoiceScreen,
+  buildForAppOrderKeyboard,
+  buildNowPaymentsOrderInvoiceScreen,
+  buildNowPaymentsOrderKeyboard,
+} from '../../features/paymentOrderRoutes.js';
 import {
   sendAdminNewReceiptNotification,
   sendBalanceAdjustmentNotification,
@@ -267,14 +279,34 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     return;
   }
 
-  const initialCardState = await conversation.external(async (outsideCtx) => {
+  const manualFallback = await conversation.external((outsideCtx) => {
+    const fallback = outsideCtx?.session?.manualFallbackOrder;
+    if (!fallback) return undefined;
+    delete outsideCtx.session.manualFallbackOrder;
+    const isFresh = Date.now() - fallback.createdAt <= 30 * 60 * 1000;
+    return isFresh ? fallback : undefined;
+  });
+
+  const initialState = await conversation.external(async (outsideCtx) => {
     const targetServices = (outsideCtx?.services ?? ctx.services)!;
     const ts = targetServices.translationService;
     const ps = targetServices.paymentService;
+    const aps = targetServices.automatedPaymentService;
     const locale = resolveContextLocale(outsideCtx?.services ? outsideCtx : ctx);
     const minimum = ts.getSettingNum('topup_min_amount', 10_000);
     const maximum = ts.getSettingNum('topup_max_amount', 10_000_000);
     const uniqueEnabled = uniqueTopupAmountEnabled(ts);
+
+    const forappAutoEnabled = Boolean(aps?.isForAppEnabled?.());
+    const nowpaymentsAutoEnabled = Boolean(aps?.isNowPaymentsEnabled?.());
+    const npMin = nowpaymentsMinAmountToman(ts);
+    const npMax = nowpaymentsMaxAmountToman(ts);
+    const npCashback = nowpaymentsCashbackPercent(ts);
+    let npUsdRate = 0;
+    if (nowpaymentsAutoEnabled && typeof aps?.resolveUsdToTomanRate === 'function') {
+      const resolved = await aps.resolveUsdToTomanRate().catch(() => null);
+      npUsdRate = resolved?.rateToman ?? 0;
+    }
 
     const hasCardSelection =
       typeof ps?.selectCardForTopupWithDailyCaps === 'function' ||
@@ -299,6 +331,12 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
           maximum,
           uniqueEnabled,
           hasCardSelection: true,
+          forappAutoEnabled,
+          nowpaymentsAutoEnabled,
+          npMin,
+          npMax,
+          npCashback,
+          npUsdRate,
         };
       }
 
@@ -314,6 +352,12 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
         maximum,
         uniqueEnabled,
         hasCardSelection: true,
+        forappAutoEnabled,
+        nowpaymentsAutoEnabled,
+        npMin,
+        npMax,
+        npCashback,
+        npUsdRate,
       };
     }
 
@@ -329,41 +373,14 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       maximum,
       uniqueEnabled,
       hasCardSelection: false,
+      forappAutoEnabled,
+      nowpaymentsAutoEnabled,
+      npMin,
+      npMax,
+      npCashback,
+      npUsdRate,
     };
   });
-
-  if (initialCardState.status === 'no_card' || initialCardState.status === 'all_capped') {
-    await replyInConversation(
-      conversation,
-      ctx,
-      buildUserEmptyState(
-        '💳',
-        t(
-          ctx,
-          initialCardState.status === 'all_capped'
-            ? 'topup_cards_daily_cap_reached_title'
-            : 'topup_no_card_title'
-        ),
-        t(
-          ctx,
-          initialCardState.status === 'all_capped'
-            ? 'topup_cards_daily_cap_reached_body'
-            : 'topup_no_card_body'
-        )
-      ),
-      {
-        parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:main'),
-      }
-    );
-    return;
-  }
-
-  let selectedCardId = initialCardState.cardId;
-  let cardNumber = initialCardState.cardNumber;
-  let cardHolder = initialCardState.cardHolder;
-  let bankName = initialCardState.bankName;
-  const { minimum, maximum, uniqueEnabled, hasCardSelection } = initialCardState;
 
   const pendingTopupDeficit = await conversation.external((outsideCtx) => {
     const intent = outsideCtx?.session?.pendingTopupIntent;
@@ -378,193 +395,494 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       : undefined;
   });
 
-  const presets = buildTopupPresets(minimum, maximum);
-  const presetKeyboard = new InlineKeyboard();
-  if (
-    pendingTopupDeficit !== undefined &&
-    pendingTopupDeficit >= minimum &&
-    pendingTopupDeficit <= maximum
-  ) {
-    presetKeyboard
-      .text(
-        t(ctx, 'topup_exact_deficit_button', {
-          amount: localizedNumber(pendingTopupDeficit, ctx),
+  let selectedMethod: 'card' | 'nowpayments' = 'card';
+  if (!manualFallback && initialState.nowpaymentsAutoEnabled) {
+    if (initialState.status === 'ok') {
+      const cardLabel = initialState.forappAutoEnabled
+        ? t(ctx, 'payment_method_forapp_auto')
+        : t(ctx, 'payment_method_card_to_card');
+      const npLabel =
+        initialState.npCashback > 0
+          ? `${t(ctx, 'payment_method_nowpayments')} (+${localizedNumber(initialState.npCashback, ctx)}%)`
+          : t(ctx, 'payment_method_nowpayments');
+      const methodKb = new InlineKeyboard()
+        .text(cardLabel, 'topup:method:card')
+        .row()
+        .text(npLabel, 'topup:method:nowpayments')
+        .row()
+        .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildUserScreen({
+          emoji: '💳',
+          title: t(ctx, 'topup_choose_method_title'),
+          subtitle: t(ctx, 'topup_choose_method_subtitle'),
+          footer: t(ctx, 'topup_choose_method_footer'),
         }),
-        `amount:${pendingTopupDeficit}`
-      )
-      .row();
-  }
-  for (let i = 0; i < presets.length; i += 2) {
-    presetKeyboard.text(
-      `${localizedNumber(presets[i]!, ctx)} ${t(ctx, 'currency_toman')}`,
-      `amount:${presets[i]}`
-    );
-    if (presets[i + 1] !== undefined) {
-      presetKeyboard.text(
-        `${localizedNumber(presets[i + 1]!, ctx)} ${t(ctx, 'currency_toman')}`,
-        `amount:${presets[i + 1]}`
+        { parse_mode: 'Markdown', reply_markup: methodKb }
       );
-    }
-    presetKeyboard.row();
-  }
-  presetKeyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
-  await promptInConversation(
-    conversation,
-    ctx,
-    buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
-      bankName,
-      footer: t(ctx, 'topup_choose_amount_hint'),
-    }),
-    { parse_mode: 'Markdown', reply_markup: presetKeyboard }
-  );
-
-  let amountToman: number | undefined;
-  let payableAmount: number | undefined;
-  let isUniqueAmount = false;
-
-  const ownerId = await conversationOwnerId(conversation);
-  while (amountToman === undefined) {
-    const input = await conversation.wait();
-    if (!(await acceptConversationOwner(input, ownerId))) continue;
-    if (await handleConversationCancel(conversation, input)) return;
-    await forwardConversationNavigation(conversation, input);
-
-    let candidateAmount: number | undefined;
-    if (input.callbackQuery) {
-      const callbackData = input.callbackQuery.data ?? '';
-      if (callbackData.startsWith('amount:')) {
-        await input.answerCallbackQuery();
-        const val = Number(callbackData.slice('amount:'.length));
-        if (Number.isSafeInteger(val) && val >= minimum && val <= maximum) {
-          candidateAmount = val;
-        }
-      } else {
-        await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
-        continue;
-      }
+      const methodPick = await waitForCallbackInput(conversation, [
+        'topup:method:card',
+        'topup:method:nowpayments',
+      ]);
+      if (methodPick === undefined) return;
+      selectedMethod = methodPick === 'topup:method:nowpayments' ? 'nowpayments' : 'card';
     } else {
-      const textInput = input.message && 'text' in input.message ? input.message.text : undefined;
-      if (textInput) {
-        await deleteConsumedInputMessage(input);
-        const parsed = parsePositiveSafeInteger(textInput);
-        if (parsed !== undefined && parsed >= minimum && parsed <= maximum) {
-          candidateAmount = parsed;
+      selectedMethod = 'nowpayments';
+    }
+  }
+
+  // ── NOWPayments Crypto Invoice Path ────────────────────────────────────────
+  if (!manualFallback && selectedMethod === 'nowpayments') {
+    const npMin = initialState.npMin;
+    const npMax = initialState.npMax;
+    const npPresets = buildTopupPresets(npMin, npMax);
+    const npKeyboard = new InlineKeyboard();
+    if (
+      pendingTopupDeficit !== undefined &&
+      pendingTopupDeficit >= npMin &&
+      pendingTopupDeficit <= npMax
+    ) {
+      npKeyboard
+        .text(
+          t(ctx, 'topup_exact_deficit_button', {
+            amount: localizedNumber(pendingTopupDeficit, ctx),
+          }),
+          `amount:${pendingTopupDeficit}`
+        )
+        .row();
+    }
+    for (let i = 0; i < npPresets.length; i += 2) {
+      npKeyboard.text(
+        `${localizedNumber(npPresets[i]!, ctx)} ${t(ctx, 'currency_toman')}`,
+        `amount:${npPresets[i]}`
+      );
+      if (npPresets[i + 1] !== undefined) {
+        npKeyboard.text(
+          `${localizedNumber(npPresets[i + 1]!, ctx)} ${t(ctx, 'currency_toman')}`,
+          `amount:${npPresets[i + 1]}`
+        );
+      }
+      npKeyboard.row();
+    }
+    npKeyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+
+    const baseNpFooter = [
+      t(ctx, 'nowpayments_amount_prompt_hint', {
+        min: localizedNumber(npMin, ctx),
+        max: localizedNumber(npMax, ctx),
+        rate: localizedNumber(initialState.npUsdRate, ctx),
+      }),
+      ...(initialState.npCashback > 0
+        ? [
+            t(ctx, 'nowpayments_cashback_promo_hint', {
+              percent: localizedNumber(initialState.npCashback, ctx),
+            }),
+          ]
+        : []),
+    ].join('\n');
+
+    await promptInConversation(
+      conversation,
+      ctx,
+      buildUserScreen({
+        emoji: '🪙',
+        title: t(ctx, 'nowpayments_amount_prompt_title'),
+        subtitle: t(ctx, 'nowpayments_amount_prompt_subtitle'),
+        footer: baseNpFooter,
+      }),
+      { parse_mode: 'Markdown', reply_markup: npKeyboard }
+    );
+
+    const ownerId = await conversationOwnerId(conversation);
+    for (;;) {
+      const input = await conversation.wait();
+      if (!(await acceptConversationOwner(input, ownerId))) continue;
+      if (await handleConversationCancel(conversation, input)) return;
+      await forwardConversationNavigation(conversation, input);
+
+      let candidateAmount: number | undefined;
+      if (input.callbackQuery) {
+        const callbackData = input.callbackQuery.data ?? '';
+        if (callbackData.startsWith('amount:')) {
+          await input.answerCallbackQuery();
+          const val = Number(callbackData.slice('amount:'.length));
+          if (Number.isSafeInteger(val) && val >= npMin && val <= npMax) {
+            candidateAmount = val;
+          }
+        } else {
+          await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
+          continue;
         }
       } else {
+        const textInput = input.message && 'text' in input.message ? input.message.text : undefined;
         await deleteConsumedInputMessage(input);
+        if (textInput) {
+          const parsed = parsePositiveSafeInteger(textInput);
+          if (parsed !== undefined && parsed >= npMin && parsed <= npMax) {
+            candidateAmount = parsed;
+          }
+        }
       }
-    }
 
-    if (candidateAmount !== undefined) {
-      const resolvedAllocation = await conversation.external(async (outsideCtx) => {
-        const targetServices = (outsideCtx?.services ?? ctx.services)!;
-        const ps = targetServices.paymentService;
-        const ts = targetServices.translationService;
-        const locale = resolveContextLocale(outsideCtx?.services ? outsideCtx : ctx);
-
-        let nextCardId = selectedCardId;
-        let nextCardNumber = cardNumber;
-        let nextCardHolder = cardHolder;
-        let nextBankName = bankName;
-
-        if (hasCardSelection && ps) {
-          const usageMap =
-            typeof ps.getTodayCardUsageMap === 'function'
-              ? await ps.getTodayCardUsageMap()
-              : undefined;
-          const activeCards =
-            typeof ps.getActiveBankCards === 'function' ? ps.getActiveBankCards() : [];
-          const currentCard = nextCardId
-            ? activeCards.find((card) => card.id === nextCardId)
-            : undefined;
-          const currentFits =
-            currentCard && typeof ps.canCardAcceptAmount === 'function'
-              ? ps.canCardAcceptAmount(currentCard, candidateAmount, usageMap)
-              : false;
-
-          if (!currentFits) {
-            const replacement =
-              typeof ps.selectCardForTopup === 'function'
-                ? ps.selectCardForTopup({
-                    amountToman: candidateAmount,
-                    ...(usageMap ? { dailyUsageByCardId: usageMap } : {}),
-                  })
-                : null;
-            if (!replacement) {
-              return { status: 'cap_exceeded' as const };
-            }
-            nextCardId = replacement.id;
-            nextCardNumber = replacement.cardNumber;
-            nextCardHolder = replacement.cardHolder || ts.getSetting('card_holder', '—');
-            nextBankName =
-              replacement.bankName || detectIranianBankName(replacement.cardNumber, locale);
-          }
-        }
-
-        let finalAmount = candidateAmount;
-        let uniqueFlag = false;
-        if (uniqueEnabled && typeof ps?.allocateUniquePayableAmount === 'function') {
-          try {
-            const alloc = await ps.allocateUniquePayableAmount(candidateAmount);
-            if (alloc.payableAmount > 0) {
-              finalAmount = alloc.payableAmount;
-              uniqueFlag = alloc.offset !== 0;
-            }
-          } catch (err) {
-            logger.warn({ err }, 'Unique payable amount allocation failed; using requested amount');
-          }
-        }
-
-        return {
-          status: 'ok' as const,
-          cardId: nextCardId,
-          cardNumber: nextCardNumber,
-          cardHolder: nextCardHolder,
-          bankName: nextBankName,
-          payableAmount: finalAmount,
-          isUniqueAmount: uniqueFlag,
-        };
-      });
-
-      if (resolvedAllocation.status === 'cap_exceeded') {
+      if (candidateAmount === undefined) {
         await promptInConversation(
           conversation,
           ctx,
-          buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
-            bankName,
-            footer: t(ctx, 'topup_amount_exceeds_card_cap'),
+          buildUserScreen({
+            emoji: '🪙',
+            title: t(ctx, 'nowpayments_amount_prompt_title'),
+            subtitle: t(ctx, 'nowpayments_amount_prompt_subtitle'),
+            footer: `⚠️ ${t(ctx, 'topup_amount_invalid_range', {
+              min: localizedNumber(npMin, ctx),
+              max: localizedNumber(npMax, ctx),
+            })}`,
           }),
-          { parse_mode: 'Markdown', reply_markup: presetKeyboard }
+          { parse_mode: 'Markdown', reply_markup: npKeyboard }
         );
         continue;
       }
 
-      selectedCardId = resolvedAllocation.cardId;
-      cardNumber = resolvedAllocation.cardNumber;
-      cardHolder = resolvedAllocation.cardHolder;
-      bankName = resolvedAllocation.bankName;
-      amountToman = candidateAmount;
-      payableAmount = resolvedAllocation.payableAmount;
-      isUniqueAmount = resolvedAllocation.isUniqueAmount;
-      break;
+      const created = await conversation.external(async (outsideCtx) => {
+        const aps = (outsideCtx?.services ?? ctx.services)?.automatedPaymentService;
+        if (!aps) return { ok: false as const, code: 'UNAVAILABLE' };
+        try {
+          const order = await aps.createNowPaymentsOrder({
+            telegramId,
+            amountToman: candidateAmount,
+          });
+          return { ok: true as const, order };
+        } catch (err) {
+          const code = err instanceof AutomatedPaymentError ? err.code : 'ORDER_CREATE_FAILED';
+          logger.warn(
+            { err, telegramId, amount: candidateAmount },
+            'NOWPayments invoice creation failed'
+          );
+          return { ok: false as const, code };
+        }
+      });
+
+      if (!created.ok) {
+        const errMsg =
+          created.code === 'AMOUNT_TOO_SMALL_USD'
+            ? t(ctx, 'nowpayments_amount_too_small_usd')
+            : t(ctx, 'auto_pay_order_create_failed');
+        await promptInConversation(
+          conversation,
+          ctx,
+          buildUserScreen({
+            emoji: '⚠️',
+            title: t(ctx, 'nowpayments_amount_prompt_title'),
+            footer: errMsg,
+          }),
+          { parse_mode: 'Markdown', reply_markup: npKeyboard }
+        );
+        continue;
+      }
+
+      await sendArtifactInConversation(
+        conversation,
+        ctx,
+        buildNowPaymentsOrderInvoiceScreen(ctx, created.order, initialState.npCashback),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: buildNowPaymentsOrderKeyboard(
+            ctx,
+            created.order.id,
+            created.order.paymentUrl
+          ),
+        }
+      );
+      return;
     }
+  }
+
+  // ── Card-to-Card Paths (Manual or ForApp Automated) ────────────────────────
+  if (
+    !manualFallback &&
+    (initialState.status === 'no_card' || initialState.status === 'all_capped')
+  ) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUserEmptyState(
+        '💳',
+        t(
+          ctx,
+          initialState.status === 'all_capped'
+            ? 'topup_cards_daily_cap_reached_title'
+            : 'topup_no_card_title'
+        ),
+        t(
+          ctx,
+          initialState.status === 'all_capped'
+            ? 'topup_cards_daily_cap_reached_body'
+            : 'topup_no_card_body'
+        )
+      ),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:main'),
+      }
+    );
+    return;
+  }
+
+  let selectedCardId = manualFallback ? manualFallback.cardId : initialState.cardId;
+  let cardNumber = manualFallback ? manualFallback.cardNumber : initialState.cardNumber;
+  let cardHolder = manualFallback ? manualFallback.cardHolder : initialState.cardHolder;
+  let bankName = manualFallback ? manualFallback.bankName : initialState.bankName;
+  const { minimum, maximum, uniqueEnabled, hasCardSelection, forappAutoEnabled } = initialState;
+
+  let amountToman: number | undefined = manualFallback?.amount;
+  let payableAmount: number | undefined = manualFallback?.amount;
+  let isUniqueAmount = Boolean(manualFallback);
+
+  if (!manualFallback) {
+    const presets = buildTopupPresets(minimum, maximum);
+    const presetKeyboard = new InlineKeyboard();
+    if (
+      pendingTopupDeficit !== undefined &&
+      pendingTopupDeficit >= minimum &&
+      pendingTopupDeficit <= maximum
+    ) {
+      presetKeyboard
+        .text(
+          t(ctx, 'topup_exact_deficit_button', {
+            amount: localizedNumber(pendingTopupDeficit, ctx),
+          }),
+          `amount:${pendingTopupDeficit}`
+        )
+        .row();
+    }
+    for (let i = 0; i < presets.length; i += 2) {
+      presetKeyboard.text(
+        `${localizedNumber(presets[i]!, ctx)} ${t(ctx, 'currency_toman')}`,
+        `amount:${presets[i]}`
+      );
+      if (presets[i + 1] !== undefined) {
+        presetKeyboard.text(
+          `${localizedNumber(presets[i + 1]!, ctx)} ${t(ctx, 'currency_toman')}`,
+          `amount:${presets[i + 1]}`
+        );
+      }
+      presetKeyboard.row();
+    }
+    presetKeyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
     await promptInConversation(
       conversation,
       ctx,
       buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
         bankName,
-        footer: `⚠️ ${t(ctx, 'topup_amount_invalid_range', {
-          min: localizedNumber(minimum, ctx),
-          max: localizedNumber(maximum, ctx),
-        })}`,
+        footer: forappAutoEnabled
+          ? t(ctx, 'forapp_choose_amount_hint')
+          : t(ctx, 'topup_choose_amount_hint'),
       }),
       { parse_mode: 'Markdown', reply_markup: presetKeyboard }
     );
+
+    const ownerId = await conversationOwnerId(conversation);
+    while (amountToman === undefined) {
+      const input = await conversation.wait();
+      if (!(await acceptConversationOwner(input, ownerId))) continue;
+      if (await handleConversationCancel(conversation, input)) return;
+      await forwardConversationNavigation(conversation, input);
+
+      let candidateAmount: number | undefined;
+      if (input.callbackQuery) {
+        const callbackData = input.callbackQuery.data ?? '';
+        if (callbackData.startsWith('amount:')) {
+          await input.answerCallbackQuery();
+          const val = Number(callbackData.slice('amount:'.length));
+          if (Number.isSafeInteger(val) && val >= minimum && val <= maximum) {
+            candidateAmount = val;
+          }
+        } else {
+          await input.answerCallbackQuery({ text: t(input, 'button_action_failed') });
+          continue;
+        }
+      } else {
+        const textInput = input.message && 'text' in input.message ? input.message.text : undefined;
+        if (textInput) {
+          await deleteConsumedInputMessage(input);
+          const parsed = parsePositiveSafeInteger(textInput);
+          if (parsed !== undefined && parsed >= minimum && parsed <= maximum) {
+            candidateAmount = parsed;
+          }
+        } else {
+          await deleteConsumedInputMessage(input);
+        }
+      }
+
+      if (candidateAmount !== undefined) {
+        if (forappAutoEnabled) {
+          const createdForApp = await conversation.external(async (outsideCtx) => {
+            const targetServices = (outsideCtx?.services ?? ctx.services)!;
+            const aps = targetServices.automatedPaymentService;
+            const locale = resolveContextLocale(outsideCtx?.services ? outsideCtx : ctx);
+            if (!aps) return { ok: false as const, code: 'UNAVAILABLE' };
+            try {
+              const order = await aps.createForAppOrder({
+                telegramId,
+                requestedAmount: candidateAmount,
+                locale,
+              });
+              return { ok: true as const, order };
+            } catch (err) {
+              const code = err instanceof AutomatedPaymentError ? err.code : 'ORDER_CREATE_FAILED';
+              logger.warn(
+                { err, telegramId, amount: candidateAmount },
+                'ForApp order creation failed'
+              );
+              return { ok: false as const, code };
+            }
+          });
+
+          if (!createdForApp.ok) {
+            const retryFooter =
+              createdForApp.code === 'ALL_CARDS_CAP_REACHED'
+                ? t(ctx, 'topup_amount_exceeds_card_cap')
+                : t(ctx, 'auto_pay_order_create_failed');
+            await promptInConversation(
+              conversation,
+              ctx,
+              buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
+                bankName,
+                footer: retryFooter,
+              }),
+              { parse_mode: 'Markdown', reply_markup: presetKeyboard }
+            );
+            continue;
+          }
+
+          await sendArtifactInConversation(
+            conversation,
+            ctx,
+            buildForAppOrderInvoiceScreen(ctx, createdForApp.order),
+            {
+              parse_mode: 'Markdown',
+              reply_markup: buildForAppOrderKeyboard(ctx, createdForApp.order.id),
+            }
+          );
+          return;
+        }
+
+        const resolvedAllocation = await conversation.external(async (outsideCtx) => {
+          const targetServices = (outsideCtx?.services ?? ctx.services)!;
+          const ps = targetServices.paymentService;
+          const ts = targetServices.translationService;
+          const locale = resolveContextLocale(outsideCtx?.services ? outsideCtx : ctx);
+
+          let nextCardId = selectedCardId;
+          let nextCardNumber = cardNumber;
+          let nextCardHolder = cardHolder;
+          let nextBankName = bankName;
+
+          if (hasCardSelection && ps) {
+            const usageMap =
+              typeof ps.getTodayCardUsageMap === 'function'
+                ? await ps.getTodayCardUsageMap()
+                : undefined;
+            const activeCards =
+              typeof ps.getActiveBankCards === 'function' ? ps.getActiveBankCards() : [];
+            const currentCard = nextCardId
+              ? activeCards.find((card) => card.id === nextCardId)
+              : undefined;
+            const currentFits =
+              currentCard && typeof ps.canCardAcceptAmount === 'function'
+                ? ps.canCardAcceptAmount(currentCard, candidateAmount, usageMap)
+                : false;
+
+            if (!currentFits) {
+              const replacement =
+                typeof ps.selectCardForTopup === 'function'
+                  ? ps.selectCardForTopup({
+                      amountToman: candidateAmount,
+                      ...(usageMap ? { dailyUsageByCardId: usageMap } : {}),
+                    })
+                  : null;
+              if (!replacement) {
+                return { status: 'cap_exceeded' as const };
+              }
+              nextCardId = replacement.id;
+              nextCardNumber = replacement.cardNumber;
+              nextCardHolder = replacement.cardHolder || ts.getSetting('card_holder', '—');
+              nextBankName =
+                replacement.bankName || detectIranianBankName(replacement.cardNumber, locale);
+            }
+          }
+
+          let finalAmount = candidateAmount;
+          let uniqueFlag = false;
+          if (uniqueEnabled && typeof ps?.allocateUniquePayableAmount === 'function') {
+            try {
+              const alloc = await ps.allocateUniquePayableAmount(candidateAmount);
+              if (alloc.payableAmount > 0) {
+                finalAmount = alloc.payableAmount;
+                uniqueFlag = alloc.offset !== 0;
+              }
+            } catch (err) {
+              logger.warn(
+                { err },
+                'Unique payable amount allocation failed; using requested amount'
+              );
+            }
+          }
+
+          return {
+            status: 'ok' as const,
+            cardId: nextCardId,
+            cardNumber: nextCardNumber,
+            cardHolder: nextCardHolder,
+            bankName: nextBankName,
+            payableAmount: finalAmount,
+            isUniqueAmount: uniqueFlag,
+          };
+        });
+
+        if (resolvedAllocation.status === 'cap_exceeded') {
+          await promptInConversation(
+            conversation,
+            ctx,
+            buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
+              bankName,
+              footer: t(ctx, 'topup_amount_exceeds_card_cap'),
+            }),
+            { parse_mode: 'Markdown', reply_markup: presetKeyboard }
+          );
+          continue;
+        }
+
+        selectedCardId = resolvedAllocation.cardId;
+        cardNumber = resolvedAllocation.cardNumber;
+        cardHolder = resolvedAllocation.cardHolder;
+        bankName = resolvedAllocation.bankName;
+        amountToman = candidateAmount;
+        payableAmount = resolvedAllocation.payableAmount;
+        isUniqueAmount = resolvedAllocation.isUniqueAmount;
+        break;
+      }
+
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
+          bankName,
+          footer: `⚠️ ${t(ctx, 'topup_amount_invalid_range', {
+            min: localizedNumber(minimum, ctx),
+            max: localizedNumber(maximum, ctx),
+          })}`,
+        }),
+        { parse_mode: 'Markdown', reply_markup: presetKeyboard }
+      );
+    }
   }
 
-  const finalAmountToman = payableAmount ?? amountToman;
+  const finalAmountToman = payableAmount ?? amountToman!;
 
   let mediaInput: TopupReceiptMediaInput | undefined;
   while (!mediaInput) {
@@ -676,6 +994,9 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
         if (selectedCardId && typeof ps?.recordCardDailyUsage === 'function') {
           ps.recordCardDailyUsage(selectedCardId, finalAmountToman);
         }
+        await targetCtx.services?.automatedPaymentService
+          ?.cancelPendingForAppOrdersForUser?.(telegramId)
+          .catch(() => {});
 
         const cardSummary =
           selectedCardId || normalizedSubmittedCardNumber

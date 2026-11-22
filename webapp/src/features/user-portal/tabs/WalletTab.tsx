@@ -16,6 +16,10 @@ import {
   ArrowLeftRight,
   ArrowRight,
   FileImage,
+  Zap,
+  Coins,
+  RefreshCw,
+  Clock,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
@@ -45,6 +49,7 @@ import type {
   UserPortalSettings,
   UserTransactionRecord,
   PendingReceiptInfo,
+  UserPaymentOrderDto,
   WalletDeficitContext,
   PrepareTopupResponse,
   TransactionFilterType,
@@ -55,9 +60,17 @@ interface WalletTabProps {
   settings: UserPortalSettings | null;
   transactions: UserTransactionRecord[];
   pendingReceipt?: PendingReceiptInfo | null;
+  activePaymentOrder?: UserPaymentOrderDto | null;
   deficitContext?: WalletDeficitContext | null;
   onClearDeficit?: () => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
+}
+
+function formatCountdown(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 const TOPUP_PRESETS = [50_000, 100_000, 200_000, 500_000];
@@ -126,6 +139,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   settings,
   transactions,
   pendingReceipt,
+  activePaymentOrder,
   deficitContext,
   onClearDeficit,
   onNotify,
@@ -140,6 +154,16 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const [txFilter, setTxFilter] = useState<TransactionFilterType>('all');
   const [page, setPage] = useState<number>(1);
   const [receiptsPage, setReceiptsPage] = useState<number>(1);
+
+  // Payment method & Automated Order state
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'crypto'>('card');
+  const [activeOrder, setActiveOrder] = useState<UserPaymentOrderDto | null>(
+    activePaymentOrder ?? null
+  );
+  const [showManualFallbackOnOrder, setShowManualFallbackOnOrder] = useState(false);
+  const [isCheckingOrder, setIsCheckingOrder] = useState(false);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
 
   // Native Top-Up Wizard state
   const [amountInput, setAmountInput] = useState<string>('');
@@ -164,11 +188,88 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const availableBalance = profile?.availableBalance ?? 0;
   const cardNumber = settings?.cardNumber || '';
   const cardHolder = settings?.cardHolder || '';
-  const minAmount = settings?.topupMinAmount ?? 10_000;
-  const maxAmount = settings?.topupMaxAmount ?? 10_000_000;
+  const forappEnabled = Boolean(settings?.forappEnabled);
+  const nowpaymentsEnabled = Boolean(settings?.nowpaymentsEnabled);
+  const npMinAmount = settings?.nowpaymentsMinAmountToman ?? 100_000;
+  const npMaxAmount = settings?.nowpaymentsMaxAmountToman ?? 50_000_000;
+  const npCashbackPercent = settings?.nowpaymentsCashbackPercent ?? 0;
+  const npUsdRate = settings?.nowpaymentsUsdRateToman ?? 80_000;
+  const minAmount = paymentMethod === 'crypto' ? npMinAmount : (settings?.topupMinAmount ?? 10_000);
+  const maxAmount =
+    paymentMethod === 'crypto' ? npMaxAmount : (settings?.topupMaxAmount ?? 10_000_000);
   const allCardsCapReached = Boolean(settings?.allCardsCapReached);
   const canTransferBalance = settings?.walletTransferEnabled !== false;
   const transferMinAmount = settings?.walletTransferMinAmount ?? 5_000;
+
+  // Sync active order from profile load
+  useEffect(() => {
+    if (activePaymentOrder && !activeOrder) {
+      setActiveOrder(activePaymentOrder);
+      if (activePaymentOrder.provider === 'nowpayments') {
+        setPaymentMethod('crypto');
+      }
+    }
+  }, [activePaymentOrder, activeOrder]);
+
+  // If no bank card is available but NOWPayments is enabled, default to crypto
+  useEffect(() => {
+    if (nowpaymentsEnabled && (!cardNumber || allCardsCapReached) && !activeOrder) {
+      setPaymentMethod('crypto');
+    }
+  }, [nowpaymentsEnabled, cardNumber, allCardsCapReached, activeOrder]);
+
+  // Live countdown timer for active automated order
+  useEffect(() => {
+    if (!activeOrder || (activeOrder.status !== 'pending' && activeOrder.status !== 'confirming')) {
+      setRemainingSeconds(0);
+      return;
+    }
+    const updateRemaining = () => {
+      const diffMs = new Date(activeOrder.expiresAt).getTime() - Date.now();
+      setRemainingSeconds(Math.max(0, Math.floor(diffMs / 1000)));
+    };
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 1000);
+    return () => clearInterval(timer);
+  }, [activeOrder]);
+
+  // Background auto-poll every 10s while automated order is pending/confirming
+  useEffect(() => {
+    if (!activeOrder || (activeOrder.status !== 'pending' && activeOrder.status !== 'confirming')) {
+      return;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await api.checkUserPaymentOrderStatus(activeOrder.id);
+        if (cancelled) return;
+        if (res.order.status === 'completed') {
+          setActiveOrder(null);
+          setShowManualFallbackOnOrder(false);
+          setAmountInput('');
+          onClearDeficit?.();
+          await queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+          await queryClient.invalidateQueries({ queryKey: ['user', 'transactions'] });
+          triggerHaptic('success');
+          onNotify(
+            t('user.wallet.orderCompletedToast')
+              .replace('{amount}', formatToman(res.order.creditedAmount ?? res.order.payableAmount))
+              .replace('{currency}', currency),
+            'success'
+          );
+        } else if (res.order.status !== activeOrder.status) {
+          setActiveOrder(res.order);
+        }
+      } catch {
+        // Silent background poll failure
+      }
+    };
+    const interval = setInterval(() => void poll(), 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeOrder, currency, formatToman, onClearDeficit, onNotify, queryClient, t, triggerHaptic]);
 
   // Auto-fill deposit input when navigated here with a checkout shortfall
   useEffect(() => {
@@ -251,25 +352,108 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     triggerHaptic('medium');
 
     try {
-      const res = await api.prepareUserTopup(parsedAmount);
-      setPreparedTopup(res);
-      setSelectedFile(null);
-      triggerHaptic('success');
+      if (paymentMethod === 'crypto' && nowpaymentsEnabled) {
+        const res = await api.createUserNowPaymentsOrder(parsedAmount);
+        setActiveOrder(res.order);
+        setShowManualFallbackOnOrder(false);
+        triggerHaptic('success');
+      } else if (paymentMethod === 'card' && forappEnabled) {
+        const res = await api.createUserForAppOrder(parsedAmount);
+        setActiveOrder(res.order);
+        setShowManualFallbackOnOrder(false);
+        setSelectedFile(null);
+        triggerHaptic('success');
+      } else {
+        const res = await api.prepareUserTopup(parsedAmount);
+        setPreparedTopup(res);
+        setSelectedFile(null);
+        triggerHaptic('success');
+      }
     } catch (err: unknown) {
       triggerHaptic('error');
       let msg = t('common.error');
       if (err instanceof ApiClientError) {
         if (err.code === 'ALL_CARDS_CAP_REACHED') msg = t('user.wallet.allCardsCapDesc');
         else if (err.code === 'NO_BANK_CARD') msg = t('user.wallet.cardTopupUnavailableDesc');
+        else if (err.code === 'AMOUNT_TOO_SMALL_USD')
+          msg = t('user.wallet.cryptoAmountTooSmallUsd');
         else if (err.code === 'PENDING_RECEIPT_EXISTS') {
           msg = t('user.wallet.pendingReceiptSubtitle');
           void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
         } else if (err.code === 'INVALID_TOPUP_AMOUNT') msg = t('common.invalidAmount');
+        else if (err.message) msg = err.message;
       }
       setTopupError(msg);
     } finally {
       setIsPreparingTopup(false);
     }
+  };
+
+  const handleCheckActiveOrderStatus = async () => {
+    if (!activeOrder || isCheckingOrder) return;
+    setIsCheckingOrder(true);
+    triggerHaptic('light');
+    try {
+      const res = await api.checkUserPaymentOrderStatus(activeOrder.id);
+      if (res.order.status === 'completed') {
+        setActiveOrder(null);
+        setShowManualFallbackOnOrder(false);
+        setAmountInput('');
+        onClearDeficit?.();
+        await queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+        await queryClient.invalidateQueries({ queryKey: ['user', 'transactions'] });
+        triggerHaptic('success');
+        onNotify(
+          t('user.wallet.orderCompletedToast')
+            .replace('{amount}', formatToman(res.order.creditedAmount ?? res.order.payableAmount))
+            .replace('{currency}', currency),
+          'success'
+        );
+      } else {
+        setActiveOrder(res.order);
+        if (res.order.status === 'confirming') {
+          onNotify(t('user.wallet.orderConfirmingToast'), 'success');
+        } else if (res.order.status === 'expired') {
+          onNotify(t('user.wallet.orderExpired'), 'error');
+        } else if (res.order.status === 'partially_paid') {
+          onNotify(t('user.wallet.cryptoPartialPaidWarning'), 'error');
+        } else {
+          onNotify(t('user.wallet.orderPendingToast'), 'error');
+        }
+      }
+    } catch {
+      onNotify(t('common.error'), 'error');
+    } finally {
+      setIsCheckingOrder(false);
+    }
+  };
+
+  const handleCancelActiveOrder = async () => {
+    if (!activeOrder || isCancellingOrder) return;
+    setIsCancellingOrder(true);
+    triggerHaptic('medium');
+    try {
+      await api.cancelUserPaymentOrder(activeOrder.id);
+      setActiveOrder(null);
+      setShowManualFallbackOnOrder(false);
+      setSelectedFile(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+      onNotify(t('user.wallet.orderCancelledToast'), 'success');
+    } catch {
+      onNotify(t('common.error'), 'error');
+    } finally {
+      setIsCancellingOrder(false);
+    }
+  };
+
+  const handleOpenExternalGateway = (url: string) => {
+    triggerHaptic('medium');
+    const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
+    if (tg && typeof tg.openLink === 'function') {
+      tg.openLink(url);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -290,16 +474,19 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   };
 
   const handleSubmitReceipt = async () => {
-    if (!preparedTopup || !selectedFile || isSubmittingReceipt) return;
+    const targetAmount = preparedTopup?.payableAmount ?? activeOrder?.payableAmount;
+    const targetCardId = preparedTopup?.card.id ?? activeOrder?.cardId ?? undefined;
+    const targetCardNumber = preparedTopup?.card.cardNumber ?? activeOrder?.cardNumber ?? undefined;
+    if (!targetAmount || !selectedFile || isSubmittingReceipt) return;
     setIsSubmittingReceipt(true);
     setTopupError(null);
     triggerHaptic('medium');
 
     try {
       const res = await api.submitUserTopupReceipt({
-        amount: preparedTopup.payableAmount,
-        cardId: preparedTopup.card.id,
-        cardNumber: preparedTopup.card.cardNumber,
+        amount: targetAmount,
+        cardId: targetCardId,
+        cardNumber: targetCardNumber,
         fileBase64: selectedFile.base64,
         fileName: selectedFile.name,
       });
@@ -311,6 +498,8 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         'success'
       );
       setPreparedTopup(null);
+      setActiveOrder(null);
+      setShowManualFallbackOnOrder(false);
       setSelectedFile(null);
       setAmountInput('');
       onClearDeficit?.();
@@ -527,10 +716,472 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         </Card>
       )}
 
-      {/* Main Split: Native Card Topup & Gift Code vs Ledger / Receipts */}
+      {/* Main Split: Native Card/Crypto Topup & Gift Code vs Ledger / Receipts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         <div className="lg:col-span-7 flex flex-col gap-4">
-          {allCardsCapReached && !preparedTopup ? (
+          {/* Payment Method Selector when NOWPayments Crypto is active */}
+          {nowpaymentsEnabled && !activeOrder && !preparedTopup && (
+            <SegmentedControl
+              value={paymentMethod}
+              onChange={(next) => {
+                triggerHaptic('selection');
+                setPaymentMethod(next);
+                setTopupError(null);
+              }}
+              ariaLabel={t('user.wallet.title')}
+              options={[
+                {
+                  id: 'card',
+                  label: forappEnabled
+                    ? `${t('user.wallet.methodCard')} · ${t('user.wallet.methodCardAutoBadge')}`
+                    : t('user.wallet.methodCard'),
+                  icon: forappEnabled ? Zap : CreditCard,
+                  tone: 'warn',
+                },
+                {
+                  id: 'crypto',
+                  label:
+                    npCashbackPercent > 0
+                      ? `${t('user.wallet.methodCrypto')} (+${formatNumber(npCashbackPercent)}%)`
+                      : t('user.wallet.methodCrypto'),
+                  icon: Coins,
+                  tone: 'brand',
+                },
+              ]}
+            />
+          )}
+
+          {/* Active Automated Payment Order (ForApp or NOWPayments) */}
+          {activeOrder ? (
+            <Card padding="lg" className="flex flex-col gap-4 text-start anim-pop">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  {activeOrder.provider === 'nowpayments' ? (
+                    <Coins className="w-4 h-4 text-brand-fg shrink-0" />
+                  ) : (
+                    <Zap className="w-4 h-4 text-ok-fg shrink-0" />
+                  )}
+                  <h3 className="text-sm font-semibold text-ink m-0">
+                    {activeOrder.provider === 'nowpayments'
+                      ? t('user.wallet.cryptoActiveInvoiceTitle')
+                      : t('user.wallet.forappActiveInvoiceTitle')}
+                  </h3>
+                </div>
+                <Badge
+                  variant={
+                    remainingSeconds > 0 && activeOrder.status !== 'expired'
+                      ? activeOrder.status === 'partially_paid'
+                        ? 'error'
+                        : 'warning'
+                      : 'error'
+                  }
+                  size="xs"
+                >
+                  <Clock className="w-3 h-3 me-1 inline" />
+                  {activeOrder.status === 'expired' || remainingSeconds === 0
+                    ? t('user.wallet.orderExpired')
+                    : t('user.wallet.orderExpiresIn').replace(
+                        '{time}',
+                        formatCountdown(remainingSeconds)
+                      )}
+                </Badge>
+              </div>
+
+              {activeOrder.provider === 'forapp_card' ? (
+                <>
+                  {/* Bank Card for ForApp Auto Transfer */}
+                  <div className="rounded-card rs-hero-bank text-obsidian-ink p-4 sm:p-5 flex flex-col justify-between gap-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-white/80">
+                        <ShieldCheck className="w-4 h-4 text-sky-400" />
+                        <span>{activeOrder.bankName || t('user.wallet.bankCard')}</span>
+                      </div>
+                      <Badge variant="success" size="xs">
+                        {t('user.wallet.methodCardAutoBadge')}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-col gap-1 my-1">
+                      <span className="text-[11px] text-white/65">
+                        {t('user.wallet.cardNumber')}
+                      </span>
+                      <bdi
+                        dir="ltr"
+                        className="font-mono text-lg sm:text-xl font-semibold tracking-wider text-amber-300 text-start select-all"
+                      >
+                        {formatCardNumberSpaced(activeOrder.cardNumber || cardNumber)}
+                      </bdi>
+                    </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-white/10 gap-3">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[11px] text-white/65">
+                          {t('user.wallet.cardHolder')}
+                        </span>
+                        <span className="text-xs sm:text-sm font-semibold text-white truncate">
+                          {activeOrder.cardHolder || cardHolder || '—'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyCard(activeOrder.cardNumber || cardNumber)}
+                        className={`h-10 px-3 rounded-ctl font-medium text-xs inline-flex items-center gap-1.5 press rs-focus cursor-pointer shrink-0 border transition-colors ${
+                          isCopied('bank-card')
+                            ? 'bg-ok border-ok text-white'
+                            : 'bg-white/12 hover:bg-white/20 text-white border-white/20'
+                        }`}
+                      >
+                        {isCopied('bank-card') ? (
+                          <Check className="w-3.5 h-3.5" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {isCopied('bank-card')
+                            ? t('user.wallet.cardCopied')
+                            : t('user.wallet.copyCard')}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Exact Unique Amount + Rial */}
+                  <div className="rounded-tile border border-ok/35 bg-ok-soft/40 p-3.5 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-medium text-ink-soft">
+                          {t('user.wallet.uniqueAmountTitle')}
+                        </span>
+                        <div className="flex items-baseline gap-1.5 mt-0.5">
+                          <bdi dir="ltr" className="text-lg font-bold tnum text-ink">
+                            {formatToman(activeOrder.payableAmount)}
+                          </bdi>
+                          <span className="text-xs font-medium text-ink-muted">{currency}</span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isCopied('forapp-amt') ? 'success' : 'secondary'}
+                        onClick={async () => {
+                          if (await copy(String(activeOrder.payableAmount), 'forapp-amt')) {
+                            onNotify(t('user.wallet.payableAmountCopied'), 'success');
+                          }
+                        }}
+                      >
+                        {isCopied('forapp-amt') ? (
+                          <Check className="w-3.5 h-3.5" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                        <span>{t('user.wallet.copyPayableAmount')}</span>
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-ink-soft m-0 leading-relaxed tnum">
+                      {t('user.wallet.forappExactRial').replace(
+                        '{rial}',
+                        formatNumber(
+                          activeOrder.payableAmountRial ?? activeOrder.payableAmount * 10
+                        )
+                      )}
+                    </p>
+                    <p className="text-[11px] text-ok-fg m-0 leading-relaxed">
+                      {t('user.wallet.forappNoReceiptNeeded')}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      type="button"
+                      size="md"
+                      variant="primary"
+                      className="flex-1"
+                      loading={isCheckingOrder}
+                      onClick={() => void handleCheckActiveOrderStatus()}
+                    >
+                      <RefreshCw className="w-4 h-4 shrink-0" />
+                      <span>
+                        {isCheckingOrder
+                          ? t('user.wallet.orderCheckingStatus')
+                          : t('user.wallet.orderCheckStatusBtn')}
+                      </span>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="md"
+                      variant="secondary"
+                      loading={isCancellingOrder}
+                      onClick={() => void handleCancelActiveOrder()}
+                    >
+                      <X className="w-4 h-4 shrink-0" />
+                      <span>{t('user.wallet.orderCancelBtn')}</span>
+                    </Button>
+                  </div>
+
+                  {/* Optional Manual Receipt Fallback */}
+                  {settings?.nativeReceiptUploadEnabled && (
+                    <div className="pt-2 border-t border-line space-y-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowManualFallbackOnOrder((v) => !v)}
+                        className="text-xs font-medium text-brand-fg hover:underline cursor-pointer"
+                      >
+                        {showManualFallbackOnOrder
+                          ? t('user.wallet.forappManualFallbackHide')
+                          : t('user.wallet.forappManualFallbackToggle')}
+                      </button>
+
+                      {showManualFallbackOnOrder && (
+                        <div className="flex flex-col gap-2.5">
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,application/pdf"
+                            onChange={(e) => void handleFileChange(e)}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isSubmittingReceipt}
+                            className={`w-full p-3.5 rounded-tile border-2 border-dashed flex flex-col items-center justify-center gap-1 text-center cursor-pointer transition-colors ${
+                              selectedFile
+                                ? 'border-ok/50 bg-ok-soft/50 text-ok-fg'
+                                : 'border-line-strong bg-surface-2 hover:bg-surface-3 text-ink-soft'
+                            }`}
+                          >
+                            {selectedFile ? (
+                              <>
+                                <FileImage className="w-5 h-5" />
+                                <span className="text-xs font-semibold truncate max-w-full px-2">
+                                  {selectedFile.name}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-5 h-5 text-brand-fg" />
+                                <span className="text-xs font-semibold text-ink">
+                                  {t('user.wallet.uploadReceiptLabel')}
+                                </span>
+                              </>
+                            )}
+                          </button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            block
+                            loading={isSubmittingReceipt}
+                            disabled={!selectedFile || isSubmittingReceipt}
+                            onClick={() => void handleSubmitReceipt()}
+                          >
+                            <Upload className="w-4 h-4 shrink-0" />
+                            <span>
+                              {isSubmittingReceipt
+                                ? t('user.wallet.submittingReceipt')
+                                : t('user.wallet.submitReceiptButton')}
+                            </span>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* NOWPayments Active Crypto Invoice */
+                <>
+                  {activeOrder.status === 'partially_paid' && (
+                    <div className="rounded-tile border border-danger/35 bg-danger-soft p-3 text-xs text-danger-fg flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{t('user.wallet.cryptoPartialPaidWarning')}</span>
+                    </div>
+                  )}
+
+                  <div className="rounded-tile border border-brand/25 bg-brand-soft/40 p-3.5 space-y-2 text-xs tnum">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-ink-muted">{t('common.amount')}</span>
+                      <span className="font-bold text-sm text-ink">
+                        <bdi dir="ltr">{formatToman(activeOrder.payableAmount)}</bdi> {currency}
+                      </span>
+                    </div>
+                    {activeOrder.fiatAmountUsd && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-ink-muted">USD</span>
+                        <bdi dir="ltr" className="font-mono font-semibold text-brand-fg">
+                          ${activeOrder.fiatAmountUsd} USD
+                        </bdi>
+                      </div>
+                    )}
+                    {activeOrder.exchangeRateTomanPerUsd && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-ink-muted">
+                          {t('user.wallet.cryptoRateBadge')
+                            .replace('{rate}', formatToman(activeOrder.exchangeRateTomanPerUsd))
+                            .replace('{currency}', currency)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {activeOrder.paymentUrl && (
+                    <Button
+                      type="button"
+                      size="md"
+                      variant="primary"
+                      block
+                      onClick={() => handleOpenExternalGateway(activeOrder.paymentUrl!)}
+                    >
+                      <ExternalLink className="w-4 h-4 shrink-0" />
+                      <span>{t('user.wallet.cryptoOpenGatewayBtn')}</span>
+                    </Button>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      type="button"
+                      size="md"
+                      variant="secondary"
+                      className="flex-1"
+                      loading={isCheckingOrder}
+                      onClick={() => void handleCheckActiveOrderStatus()}
+                    >
+                      <RefreshCw className="w-4 h-4 shrink-0" />
+                      <span>
+                        {isCheckingOrder
+                          ? t('user.wallet.orderCheckingStatus')
+                          : t('user.wallet.orderCheckStatusBtn')}
+                      </span>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="md"
+                      variant="secondary"
+                      loading={isCancellingOrder}
+                      onClick={() => void handleCancelActiveOrder()}
+                    >
+                      <X className="w-4 h-4 shrink-0" />
+                      <span>{t('user.wallet.orderCancelBtn')}</span>
+                    </Button>
+                  </div>
+                </>
+              )}
+            </Card>
+          ) : paymentMethod === 'crypto' && nowpaymentsEnabled ? (
+            /* NOWPayments Crypto Amount Selection Form */
+            <Card padding="lg" className="flex flex-col gap-4 text-start">
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-brand-fg shrink-0" />
+                    <h3 className="text-sm font-semibold text-ink m-0">
+                      {t('user.wallet.cryptoTopupTitle')}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="info" size="xs">
+                      {t('user.wallet.cryptoRateBadge')
+                        .replace('{rate}', formatToman(npUsdRate))
+                        .replace('{currency}', currency)}
+                    </Badge>
+                    {npCashbackPercent > 0 && (
+                      <Badge variant="success" size="xs">
+                        {t('user.wallet.cryptoCashbackBadge').replace(
+                          '{percent}',
+                          formatNumber(npCashbackPercent)
+                        )}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <span className="text-[11px] text-ink-muted tnum">
+                  {t('user.wallet.topupMinMaxHint')
+                    .replace('{min}', formatToman(npMinAmount))
+                    .replace('{max}', formatToman(npMaxAmount))
+                    .replaceAll('{currency}', currency)}
+                </span>
+              </div>
+
+              <form onSubmit={(e) => void handlePrepareTopup(e)} className="flex flex-col gap-3.5">
+                <p className="text-xs leading-relaxed text-ink-muted m-0">
+                  {t('user.wallet.cryptoTopupDesc')}
+                </p>
+
+                {validPresets.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {validPresets.map((val) => {
+                      const selected = parsedAmount === val;
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => {
+                            triggerHaptic('selection');
+                            setAmountInput(String(val));
+                            if (topupError) setTopupError(null);
+                          }}
+                          className={`h-9 px-2 rounded-ctl text-xs font-semibold border press rs-focus cursor-pointer tnum transition-colors ${
+                            selected
+                              ? 'bg-brand border-brand text-brand-ink'
+                              : 'bg-surface-2 border-line text-ink-soft hover:border-line-strong'
+                          }`}
+                        >
+                          <bdi dir="ltr">{formatToman(val)}</bdi>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-ink-soft">
+                    {t('user.wallet.enterAmountLabel').replace('{currency}', currency)}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    dir="ltr"
+                    value={amountInput}
+                    onChange={(e) => {
+                      setAmountInput(e.target.value);
+                      if (topupError) setTopupError(null);
+                    }}
+                    placeholder={String(npMinAmount)}
+                    disabled={isPreparingTopup}
+                    className="w-full min-h-11 px-3 rounded-ctl border border-line bg-surface-2 text-sm font-mono font-semibold text-ink tnum rs-focus"
+                  />
+                  {parsedAmount > 0 && npUsdRate > 0 && (
+                    <span className="text-[11px] text-brand-fg font-medium tnum">
+                      {t('user.wallet.cryptoEstimatedUsd').replace(
+                        '{usd}',
+                        (parsedAmount / npUsdRate).toFixed(2)
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                {topupError && (
+                  <div className="rounded-tile border border-danger/30 bg-danger-soft p-2.5 text-xs text-danger-fg flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{topupError}</span>
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  size="md"
+                  variant="primary"
+                  block
+                  loading={isPreparingTopup}
+                  disabled={!isAmountValid || isPreparingTopup}
+                >
+                  <Coins className="w-4 h-4 shrink-0" />
+                  <span>
+                    {isPreparingTopup
+                      ? t('user.wallet.preparingTopup')
+                      : t('user.wallet.cryptoCreateInvoiceBtn')}
+                  </span>
+                </Button>
+              </form>
+            </Card>
+          ) : allCardsCapReached && !preparedTopup ? (
             <Card padding="lg" className="flex flex-col items-center text-center gap-3.5">
               <IconTile tone="warn" size="lg">
                 <CreditCard />
@@ -549,9 +1200,15 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-warn-fg shrink-0" />
+                    {forappEnabled ? (
+                      <Zap className="w-4 h-4 text-ok-fg shrink-0" />
+                    ) : (
+                      <CreditCard className="w-4 h-4 text-warn-fg shrink-0" />
+                    )}
                     <h3 className="text-sm font-semibold text-ink m-0">
-                      {t('user.wallet.cardTopupTitle')}
+                      {forappEnabled
+                        ? t('user.wallet.forappAutoTitle')
+                        : t('user.wallet.cardTopupTitle')}
                     </h3>
                   </div>
                   {preparedTopup && (
@@ -584,7 +1241,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   className="flex flex-col gap-3.5"
                 >
                   <p className="text-xs leading-relaxed text-ink-muted m-0">
-                    {t('user.wallet.step1Desc')}
+                    {forappEnabled ? t('user.wallet.forappAutoDesc') : t('user.wallet.step1Desc')}
                   </p>
 
                   {validPresets.length > 0 && (
@@ -651,7 +1308,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                       <span>
                         {isPreparingTopup
                           ? t('user.wallet.preparingTopup')
-                          : t('user.wallet.prepareTopupButton')}
+                          : forappEnabled
+                            ? t('user.wallet.forappCreateOrderBtn')
+                            : t('user.wallet.prepareTopupButton')}
                       </span>
                       <ArrowRight className="w-4 h-4 rtl:rotate-180 shrink-0" />
                     </Button>

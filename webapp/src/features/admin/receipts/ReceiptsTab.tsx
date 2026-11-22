@@ -13,6 +13,7 @@ import {
   Square,
   CreditCard,
   Ban,
+  Zap,
 } from 'lucide-react';
 import { useAdminReceipts } from './hooks/useAdminReceipts.js';
 import { ReceiptCard } from './components/ReceiptCard.js';
@@ -24,6 +25,7 @@ import { ReceiptDetailModal } from './components/ReceiptDetailModal.js';
 import { BatchApproveModal } from './components/BatchApproveModal.js';
 import { ReceiptSettingsModal } from './components/ReceiptSettingsModal.js';
 import { BankCardsModal } from '../bankCards/BankCardsModal.js';
+import { PaymentGatewaysModal } from '../paymentGateways/PaymentGatewaysModal.js';
 import { Pagination } from '@/shared/components/ui/Pagination.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
@@ -93,6 +95,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isBankCardsModalOpen, setIsBankCardsModalOpen] = useState(false);
+  const [isGatewaysModalOpen, setIsGatewaysModalOpen] = useState(false);
 
   const handlePhotoError = useCallback(() => {
     onNotify(t('admin.receipts.noPhoto'), 'error');
@@ -246,6 +249,16 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
         />
 
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setIsGatewaysModalOpen(true)}
+            title={t('admin.receipts.paymentGatewaysBtn')}
+          >
+            <Zap className="w-3.5 h-3.5 text-ok-fg shrink-0" />
+            <span className="hidden sm:inline">{t('admin.receipts.paymentGatewaysBtn')}</span>
+          </Button>
+
           <Button
             size="sm"
             variant="secondary"
@@ -495,6 +508,12 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
       <BankCardsModal
         isOpen={isBankCardsModalOpen}
         onClose={() => setIsBankCardsModalOpen(false)}
+        onNotify={onNotify}
+      />
+
+      <PaymentGatewaysModal
+        isOpen={isGatewaysModalOpen}
+        onClose={() => setIsGatewaysModalOpen(false)}
         onNotify={onNotify}
       />
     </div>

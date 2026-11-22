@@ -58,6 +58,8 @@ const fetchAllowlist = new Set([
   'src/infra/RebeccaApiClient.ts',
   'src/infra/networkProbe.ts',
   'src/infra/telegramFiles.ts',
+  'src/infra/NowPaymentsClient.ts',
+  'src/infra/ExchangeRateClient.ts',
 ]);
 
 async function listTypeScriptFiles(directory) {

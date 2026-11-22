@@ -5,6 +5,9 @@ export const queryKeys = {
   ) => ['admin', 'receipts', params] as const,
   receiptSettings: ['admin', 'receipts', 'settings'] as const,
   bankCards: ['admin', 'bankCards'] as const,
+  paymentGateways: ['admin', 'paymentGateways'] as const,
+  forappDeposits: (params?: { page?: number; status?: string }) =>
+    ['admin', 'forappDeposits', params ?? { page: 1, status: 'unmatched' }] as const,
   users: (page?: number, search?: string, filter?: string, sort?: string) =>
     ['admin', 'users', { page, search, filter, sort }] as const,
   userDossier: (telegramId: number) => ['admin', 'userDossier', telegramId] as const,

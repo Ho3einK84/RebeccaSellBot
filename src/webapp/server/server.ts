@@ -16,10 +16,14 @@ import { PackageCategoryService } from '../../domain/services/PackageCategorySer
 import { PricingService } from '../../domain/services/PricingService.js';
 import { CatalogDiscountService } from '../../domain/services/CatalogDiscountService.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
+import { AutomatedPaymentService } from '../../domain/services/AutomatedPaymentService.js';
+import { PaymentService } from '../../domain/services/PaymentService.js';
 import { logger } from '../../infra/logger.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
 import { registerAdminRoutes } from './routes/adminRoutes.js';
 import { registerAdminPackageRoutes } from './routes/adminPackageRoutes.js';
+import { registerAdminPaymentRoutes } from './routes/adminPaymentRoutes.js';
+import { registerPaymentWebhookRoutes } from './routes/paymentWebhookRoutes.js';
 import { registerUserRoutes } from './routes/userRoutes.js';
 
 export interface WebAppServerHandle {
@@ -478,6 +482,47 @@ export async function createWebAppServer(
       botToken: config.BOT_TOKEN,
     });
 
+  const resolvedPaymentService =
+    services.paymentService && typeof services.paymentService.registerProvider === 'function'
+      ? services.paymentService
+      : hasTranslationService
+        ? new PaymentService(services.translationService, services.walletService)
+        : undefined;
+
+  const resolvedAutomatedPaymentService =
+    services.automatedPaymentService ??
+    (hasTranslationService && resolvedPaymentService
+      ? new AutomatedPaymentService({
+          translationService: services.translationService,
+          paymentService: resolvedPaymentService,
+          walletService: services.walletService,
+          credentialSecret: config.PANEL_CREDENTIALS_KEY ?? config.BOT_TOKEN,
+          resolvePublicBaseUrl: () =>
+            services.webAppUrl ||
+            services.translationService?.getSetting('webapp_url', '').trim() ||
+            config.WEBAPP_URL ||
+            config.WEBHOOK_URL,
+        })
+      : undefined);
+
+  registerPaymentWebhookRoutes(app, {
+    automatedPaymentService: resolvedAutomatedPaymentService,
+    userService: services.userService,
+    translationService: services.translationService,
+    adminService: services.adminService,
+    adminIds: services.adminIds,
+    botApi: services.botApi,
+  });
+
+  registerAdminPaymentRoutes(app, {
+    automatedPaymentService: resolvedAutomatedPaymentService,
+    userService: services.userService,
+    adminService: services.adminService,
+    adminIds: services.adminIds,
+    translationService: services.translationService,
+    botApi: services.botApi,
+  });
+
   registerUserRoutes(app, {
     userService: services.userService,
     walletService: services.walletService,
@@ -486,6 +531,7 @@ export async function createWebAppServer(
     packageCategoryService: resolvedCategoryService,
     promoService: services.promoService,
     paymentService: services.paymentService,
+    automatedPaymentService: resolvedAutomatedPaymentService,
     translationService: services.translationService,
     botUsername: services.botUsername,
     botApi: services.botApi,

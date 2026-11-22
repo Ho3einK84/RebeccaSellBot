@@ -461,3 +461,384 @@ export async function sendBalanceAdjustmentNotification(
     );
   }
 }
+
+function resolveNotificationAdminIds(services: AdminNotificationServices): number[] {
+  const ts = services.translationService;
+  const notifyEnabled =
+    typeof ts.getSettingBool === 'function'
+      ? ts.getSettingBool('receipt_notify_enabled', true)
+      : true;
+  if (!notifyEnabled) return [];
+
+  const notifyAdminsSetting =
+    typeof ts.getSetting === 'function' ? ts.getSetting('receipt_notify_admins', '').trim() : '';
+  let targetAdminIds = services.adminIds ?? [];
+  if (notifyAdminsSetting && notifyAdminsSetting !== 'all') {
+    const configuredIds = notifyAdminsSetting
+      .split(',')
+      .map((id) => Number(id.trim()))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+    if (configuredIds.length > 0) {
+      targetAdminIds = configuredIds;
+    }
+  }
+  return targetAdminIds;
+}
+
+export async function sendAutomatedTopupSuccessNotification(
+  api: Api,
+  services: AdminNotificationServices,
+  params: {
+    telegramId: number;
+    amount: number;
+    cashbackAmount?: number;
+    balanceAfter?: number;
+    provider: 'forapp_card' | 'nowpayments';
+    orderId: string;
+  }
+): Promise<void> {
+  try {
+    const ts = services.translationService;
+    const locale =
+      (await services.userService.getLocale(params.telegramId)) ?? resolveServiceLocale(ts);
+    const currency = tForLocale(ts, locale, 'currency_toman');
+    const providerLabel =
+      params.provider === 'nowpayments'
+        ? tForLocale(ts, locale, 'payment_method_nowpayments')
+        : tForLocale(ts, locale, 'payment_method_forapp_auto');
+    const shortId = defaultShortId(params.orderId);
+
+    const fields: Array<{ label: string; value: string }> = [
+      {
+        label: tForLocale(ts, locale, 'auto_pay_method_label'),
+        value: escapeTelegramMarkdown(providerLabel),
+      },
+      {
+        label: tForLocale(ts, locale, 'auto_pay_order_id_label'),
+        value: `\`#${shortId}\``,
+      },
+    ];
+    if (params.cashbackAmount && params.cashbackAmount > 0) {
+      fields.push({
+        label: tForLocale(ts, locale, 'auto_pay_cashback_label'),
+        value: `+${localizedNumberForLocale(params.cashbackAmount, locale)} ${currency}`,
+      });
+    }
+    if (params.balanceAfter !== undefined) {
+      fields.push({
+        label: tForLocale(ts, locale, 'wallet_available_balance'),
+        value: `${localizedNumberForLocale(params.balanceAfter, locale)} ${currency}`,
+      });
+    }
+
+    await api.sendMessage(
+      params.telegramId,
+      buildUserScreen({
+        emoji: '✅',
+        title: tForLocale(ts, locale, 'auto_pay_credited_title'),
+        subtitle: tForLocale(ts, locale, 'auto_pay_credited_subtitle'),
+        primary: {
+          label: tForLocale(ts, locale, 'receipt_result_amount_label'),
+          value: `+${localizedNumberForLocale(params.amount, locale)} ${currency}`,
+          emphasizeValue: true,
+        },
+        sections: [{ fields }],
+        footer: tForLocale(ts, locale, 'receipt_result_next_hint'),
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(tForLocale(ts, locale, 'receipt_approved_shop_button'), 'nav:shop')
+          .text(tForLocale(ts, locale, 'receipt_approved_services_button'), 'subs:page:1')
+          .row()
+          .text(tForLocale(ts, locale, 'menu_wallet'), 'nav:wallet'),
+      }
+    );
+  } catch (err) {
+    logger.warn(
+      { err, telegramId: params.telegramId, orderId: params.orderId },
+      'Failed to deliver automated top-up success notification to user'
+    );
+  }
+}
+
+export async function sendAdminAutomatedTopupReport(
+  api: Api,
+  services: AdminNotificationServices,
+  params: {
+    telegramId: number;
+    amount: number;
+    cashbackAmount?: number;
+    provider: 'forapp_card' | 'nowpayments';
+    orderId: string;
+    bank?: string | null;
+    payCurrency?: string | null;
+  }
+): Promise<void> {
+  const ts = services.translationService;
+  const targetAdminIds = resolveNotificationAdminIds(services);
+  const shortId = defaultShortId(params.orderId);
+
+  for (const adminId of targetAdminIds) {
+    try {
+      const adminLocale =
+        (await services.userService.getLocale(adminId)) ?? resolveServiceLocale(ts);
+      const currency = tForLocale(ts, adminLocale, 'currency_toman');
+      const providerLabel =
+        params.provider === 'nowpayments'
+          ? tForLocale(ts, adminLocale, 'payment_method_nowpayments')
+          : tForLocale(ts, adminLocale, 'payment_method_forapp_auto');
+
+      const fields: Array<{ label: string; value: string }> = [
+        {
+          label: tForLocale(ts, adminLocale, 'admin_receipt_user_label'),
+          value: `\`${params.telegramId}\``,
+        },
+        {
+          label: tForLocale(ts, adminLocale, 'auto_pay_method_label'),
+          value: escapeTelegramMarkdown(providerLabel),
+        },
+        {
+          label: tForLocale(ts, adminLocale, 'auto_pay_order_id_label'),
+          value: `\`#${shortId}\``,
+        },
+      ];
+      if (params.bank) {
+        fields.push({
+          label: tForLocale(ts, adminLocale, 'topup_card_bank_label'),
+          value: escapeTelegramMarkdown(params.bank),
+        });
+      }
+      if (params.payCurrency) {
+        fields.push({
+          label: tForLocale(ts, adminLocale, 'auto_pay_crypto_currency_label'),
+          value: `\`${params.payCurrency.toUpperCase()}\``,
+        });
+      }
+      if (params.cashbackAmount && params.cashbackAmount > 0) {
+        fields.push({
+          label: tForLocale(ts, adminLocale, 'auto_pay_cashback_label'),
+          value: `+${localizedNumberForLocale(params.cashbackAmount, adminLocale)} ${currency}`,
+        });
+      }
+
+      const screen = buildAdminScreen({
+        emoji: '⚡',
+        title: tForLocale(ts, adminLocale, 'admin_auto_pay_report_title'),
+        primary: {
+          emoji: '💰',
+          label: tForLocale(ts, adminLocale, 'admin_receipt_amount_label'),
+          value: `${localizedNumberForLocale(params.amount, adminLocale)} ${currency}`,
+          inline: true,
+          emphasizeValue: true,
+        },
+        sections: [{ fields }],
+      });
+
+      await api.sendMessage(adminId, screen, {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(
+            tForLocale(ts, adminLocale, 'admin_receipt_view_user_button'),
+            `adm:usr:v:${params.telegramId}`
+          )
+          .text(tForLocale(ts, adminLocale, 'menu_close'), 'ui:dismiss'),
+      });
+    } catch (err) {
+      logger.warn(
+        { err, adminId, orderId: params.orderId },
+        'Failed to deliver automated top-up report to admin'
+      );
+    }
+  }
+}
+
+export async function sendAdminForAppUnmatchedDepositAlert(
+  api: Api,
+  services: AdminNotificationServices,
+  params: {
+    depositId: string;
+    amountRial: number;
+    amountToman: number | null;
+    bank?: string | null;
+    sender?: string | null;
+    note?: string | null;
+  }
+): Promise<void> {
+  const ts = services.translationService;
+  const targetAdminIds = resolveNotificationAdminIds(services);
+  const shortId = defaultShortId(params.depositId);
+
+  for (const adminId of targetAdminIds) {
+    try {
+      const adminLocale =
+        (await services.userService.getLocale(adminId)) ?? resolveServiceLocale(ts);
+      const currency = tForLocale(ts, adminLocale, 'currency_toman');
+      const rialLabel = tForLocale(ts, adminLocale, 'currency_rial');
+      const amountDisplay =
+        params.amountToman !== null
+          ? `${localizedNumberForLocale(params.amountToman, adminLocale)} ${currency} (${localizedNumberForLocale(params.amountRial, adminLocale)} ${rialLabel})`
+          : `${localizedNumberForLocale(params.amountRial, adminLocale)} ${rialLabel}`;
+
+      const fields: Array<{ label: string; value: string }> = [
+        {
+          label: tForLocale(ts, adminLocale, 'auto_pay_order_id_label'),
+          value: `\`#${shortId}\``,
+        },
+      ];
+      if (params.bank) {
+        fields.push({
+          label: tForLocale(ts, adminLocale, 'topup_card_bank_label'),
+          value: escapeTelegramMarkdown(params.bank),
+        });
+      }
+      if (params.sender) {
+        fields.push({
+          label: tForLocale(ts, adminLocale, 'admin_forapp_sender_label'),
+          value: `\`${params.sender}\``,
+        });
+      }
+
+      const screen = buildAdminScreen({
+        emoji: '⚠️',
+        title: tForLocale(ts, adminLocale, 'admin_forapp_unmatched_alert_title'),
+        subtitle: tForLocale(ts, adminLocale, 'admin_forapp_unmatched_alert_subtitle'),
+        primary: {
+          emoji: '💰',
+          label: tForLocale(ts, adminLocale, 'admin_receipt_amount_label'),
+          value: amountDisplay,
+          inline: true,
+        },
+        sections: [{ fields }],
+      });
+
+      await api.sendMessage(adminId, screen, {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(
+            tForLocale(ts, adminLocale, 'admin_forapp_open_unmatched_button'),
+            `adm:pg:fad:v:${params.depositId}`
+          )
+          .row()
+          .text(tForLocale(ts, adminLocale, 'menu_close'), 'ui:dismiss'),
+      });
+    } catch (err) {
+      logger.warn(
+        { err, adminId, depositId: params.depositId },
+        'Failed to deliver ForApp unmatched deposit alert to admin'
+      );
+    }
+  }
+}
+
+export async function sendNowPaymentsPartialPaymentNotification(
+  api: Api,
+  services: AdminNotificationServices,
+  params: {
+    telegramId: number;
+    orderId: string;
+    expectedAmountToman: number;
+    payCurrency?: string | null;
+    payAmount?: string | null;
+    actuallyPaid?: string | null;
+  }
+): Promise<void> {
+  const ts = services.translationService;
+  const shortId = defaultShortId(params.orderId);
+
+  try {
+    const userLocale =
+      (await services.userService.getLocale(params.telegramId)) ?? resolveServiceLocale(ts);
+    const currency = tForLocale(ts, userLocale, 'currency_toman');
+    await api.sendMessage(
+      params.telegramId,
+      buildUserScreen({
+        emoji: '⚠️',
+        title: tForLocale(ts, userLocale, 'nowpayments_partially_paid_title'),
+        subtitle: tForLocale(ts, userLocale, 'nowpayments_partially_paid_subtitle'),
+        primary: {
+          label: tForLocale(ts, userLocale, 'auto_pay_order_id_label'),
+          value: `\`#${shortId}\``,
+          inline: true,
+        },
+        sections: [
+          {
+            fields: [
+              {
+                label: tForLocale(ts, userLocale, 'receipt_result_amount_label'),
+                value: `${localizedNumberForLocale(params.expectedAmountToman, userLocale)} ${currency}`,
+              },
+              ...(params.actuallyPaid
+                ? [
+                    {
+                      label: tForLocale(ts, userLocale, 'nowpayments_actually_paid_label'),
+                      value: `\`${params.actuallyPaid}${params.payCurrency ? ` ${params.payCurrency.toUpperCase()}` : ''}\``,
+                    },
+                  ]
+                : []),
+            ],
+          },
+        ],
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard().text(
+          tForLocale(ts, userLocale, 'menu_wallet'),
+          'nav:wallet'
+        ),
+      }
+    );
+  } catch (err) {
+    logger.warn(
+      { err, telegramId: params.telegramId, orderId: params.orderId },
+      'Failed to deliver NOWPayments partial payment notice to user'
+    );
+  }
+
+  const targetAdminIds = resolveNotificationAdminIds(services);
+  for (const adminId of targetAdminIds) {
+    try {
+      const adminLocale =
+        (await services.userService.getLocale(adminId)) ?? resolveServiceLocale(ts);
+      await api.sendMessage(
+        adminId,
+        buildAdminScreen({
+          emoji: '⚠️',
+          title: tForLocale(ts, adminLocale, 'nowpayments_partially_paid_title'),
+          sections: [
+            {
+              fields: [
+                {
+                  label: tForLocale(ts, adminLocale, 'admin_receipt_user_label'),
+                  value: `\`${params.telegramId}\``,
+                },
+                {
+                  label: tForLocale(ts, adminLocale, 'auto_pay_order_id_label'),
+                  value: `\`#${shortId}\``,
+                },
+                {
+                  label: tForLocale(ts, adminLocale, 'nowpayments_actually_paid_label'),
+                  value: `\`${params.actuallyPaid ?? '—'} / ${params.payAmount ?? '—'}${params.payCurrency ? ` ${params.payCurrency.toUpperCase()}` : ''}\``,
+                },
+              ],
+            },
+          ],
+        }),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard()
+            .text(
+              tForLocale(ts, adminLocale, 'admin_receipt_view_user_button'),
+              `adm:usr:v:${params.telegramId}`
+            )
+            .text(tForLocale(ts, adminLocale, 'menu_close'), 'ui:dismiss'),
+        }
+      );
+    } catch (err) {
+      logger.warn(
+        { err, adminId, orderId: params.orderId },
+        'Failed to deliver NOWPayments partial payment alert to admin'
+      );
+    }
+  }
+}

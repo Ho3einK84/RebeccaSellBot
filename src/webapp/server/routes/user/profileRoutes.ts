@@ -8,6 +8,11 @@ import { parseVolumePricingTiersJson } from '../../../../domain/services/Pricing
 import {
   customServiceNameEnabled,
   customVolumeEnabled,
+  forappOrderExpiryMinutes,
+  nowpaymentsCashbackPercent,
+  nowpaymentsManualUsdRateToman,
+  nowpaymentsMaxAmountToman,
+  nowpaymentsMinAmountToman,
   onHoldDefaultEnabled,
   renewalRolloverEnabled,
   requirePhoneForTrial,
@@ -15,6 +20,7 @@ import {
   walletTransferEnabled,
   walletTransferMinAmount,
 } from '../../../../domain/services/FeatureSettings.js';
+import { formatPaymentOrderShortId } from '../../../../domain/services/AutomatedPaymentService.js';
 import type { ContactVerificationService } from '../../../../domain/services/ContactVerificationService.js';
 import { sendWebAppConfigArtifact } from '../../../../telegram/webappNotifications.js';
 import {
@@ -168,6 +174,81 @@ export function registerUserProfileRoutes(
       const isUniqueTopupEnabled = ts ? uniqueTopupAmountEnabled(ts) : false;
       const isWalletTransferEnabled = ts ? walletTransferEnabled(ts) : true;
       const walletTransferMin = ts ? walletTransferMinAmount(ts) : 5_000;
+      const isForAppEnabled = Boolean(options.automatedPaymentService?.isForAppEnabled?.());
+      const forAppExpiryMin = ts ? forappOrderExpiryMinutes(ts) : 20;
+      const isNowPaymentsEnabled = Boolean(
+        options.automatedPaymentService?.isNowPaymentsEnabled?.()
+      );
+      const npMinAmount = ts ? nowpaymentsMinAmountToman(ts) : 100_000;
+      const npMaxAmount = ts ? nowpaymentsMaxAmountToman(ts) : 50_000_000;
+      const npCashback = ts ? nowpaymentsCashbackPercent(ts) : 0;
+      let npUsdRate = ts ? nowpaymentsManualUsdRateToman(ts) : 80_000;
+      if (
+        isNowPaymentsEnabled &&
+        typeof options.automatedPaymentService?.resolveUsdToTomanRate === 'function'
+      ) {
+        try {
+          const resolved = await options.automatedPaymentService.resolveUsdToTomanRate();
+          npUsdRate = resolved.rateToman;
+        } catch {
+          // keep fallback rate
+        }
+      }
+
+      let activePaymentOrder: {
+        id: string;
+        shortId: string;
+        provider: string;
+        status: string;
+        requestedAmount: number;
+        payableAmount: number;
+        payableAmountRial: number | null;
+        cardId: string | null;
+        cardNumber: string | null;
+        cardHolder: string | null;
+        bankName: string | null;
+        paymentUrl: string | null;
+        fiatAmountUsd: string | null;
+        exchangeRateTomanPerUsd: number | null;
+        cashbackAmount: number;
+        expiresAt: string;
+        createdAt: string;
+      } | null = null;
+      if (typeof options.automatedPaymentService?.getActivePendingOrderForUser === 'function') {
+        try {
+          const activeOrderRow =
+            await options.automatedPaymentService.getActivePendingOrderForUser(telegramId);
+          if (activeOrderRow) {
+            activePaymentOrder = {
+              id: activeOrderRow.id,
+              shortId: formatPaymentOrderShortId(activeOrderRow.id),
+              provider: activeOrderRow.provider,
+              status: activeOrderRow.status,
+              requestedAmount: activeOrderRow.requestedAmount,
+              payableAmount: activeOrderRow.payableAmount,
+              payableAmountRial: activeOrderRow.payableAmountRial ?? null,
+              cardId: activeOrderRow.cardId ?? null,
+              cardNumber: activeOrderRow.cardNumber ?? null,
+              cardHolder: activeOrderRow.cardHolder ?? null,
+              bankName: activeOrderRow.bankName ?? null,
+              paymentUrl: activeOrderRow.paymentUrl ?? null,
+              fiatAmountUsd: activeOrderRow.fiatAmountUsd ?? null,
+              exchangeRateTomanPerUsd: activeOrderRow.exchangeRateTomanPerUsd ?? null,
+              cashbackAmount: activeOrderRow.cashbackAmount ?? 0,
+              expiresAt:
+                activeOrderRow.expiresAt instanceof Date
+                  ? activeOrderRow.expiresAt.toISOString()
+                  : String(activeOrderRow.expiresAt),
+              createdAt:
+                activeOrderRow.createdAt instanceof Date
+                  ? activeOrderRow.createdAt.toISOString()
+                  : String(activeOrderRow.createdAt),
+            };
+          }
+        } catch {
+          activePaymentOrder = null;
+        }
+      }
       const botEnabled =
         typeof ts?.getSettingBool === 'function' ? ts.getSettingBool('bot_enabled', true) : true;
       const isAdmin =
@@ -303,6 +384,13 @@ export function registerUserProfileRoutes(
           allCardsCapReached,
           uniqueTopupAmountEnabled: isUniqueTopupEnabled,
           nativeReceiptUploadEnabled: Boolean(options.botApi),
+          forappEnabled: isForAppEnabled,
+          forappOrderExpiryMinutes: forAppExpiryMin,
+          nowpaymentsEnabled: isNowPaymentsEnabled,
+          nowpaymentsMinAmountToman: npMinAmount,
+          nowpaymentsMaxAmountToman: npMaxAmount,
+          nowpaymentsCashbackPercent: npCashback,
+          nowpaymentsUsdRateToman: npUsdRate,
           walletTransferEnabled: isWalletTransferEnabled,
           walletTransferMinAmount: walletTransferMin,
           supportUsername: support.supportUsername,
@@ -340,6 +428,7 @@ export function registerUserProfileRoutes(
         },
         luckyWheel: luckyWheelSummary,
         pendingReceipt,
+        activePaymentOrder,
       });
     }
   );

@@ -82,6 +82,13 @@ export interface UserPortalSettings {
   botUsername: string;
   topupMinAmount?: number;
   topupMaxAmount?: number;
+  forappEnabled?: boolean;
+  forappOrderExpiryMinutes?: number;
+  nowpaymentsEnabled?: boolean;
+  nowpaymentsMinAmountToman?: number;
+  nowpaymentsMaxAmountToman?: number;
+  nowpaymentsCashbackPercent?: number;
+  nowpaymentsUsdRateToman?: number;
   referralBonusToman?: number;
   cashbackPercent?: number;
   maintenanceMode?: boolean;
@@ -144,12 +151,66 @@ export interface LuckyWheelSpinResponse {
   nextSpinAt: string | null;
 }
 
+export interface UserPaymentOrderDto {
+  id: string;
+  shortId: string;
+  provider: 'forapp_card' | 'nowpayments' | string;
+  status:
+    | 'pending'
+    | 'confirming'
+    | 'completed'
+    | 'partially_paid'
+    | 'expired'
+    | 'cancelled'
+    | 'failed'
+    | string;
+  requestedAmount: number;
+  payableAmount: number;
+  payableAmountRial?: number | null;
+  creditedAmount?: number | null;
+  cashbackAmount?: number;
+  cardId?: string | null;
+  cardNumber?: string | null;
+  cardHolder?: string | null;
+  bankName?: string | null;
+  paymentUrl?: string | null;
+  fiatAmountUsd?: string | null;
+  exchangeRateTomanPerUsd?: number | null;
+  payCurrency?: string | null;
+  payAmount?: string | null;
+  actuallyPaid?: string | null;
+  providerStatus?: string | null;
+  expiresAt: string;
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+export interface CreateForAppOrderResponse {
+  order: UserPaymentOrderDto;
+  nativeUploadEnabled: boolean;
+}
+
+export interface CreateNowPaymentsOrderResponse {
+  order: UserPaymentOrderDto;
+}
+
+export interface CheckPaymentOrderStatusResponse {
+  order: UserPaymentOrderDto;
+  newlyCompleted: boolean;
+}
+
+export interface CancelPaymentOrderResponse {
+  success: boolean;
+  order: UserPaymentOrderDto;
+}
+
 export interface UserProfileResponse {
   user: UserPortalProfile;
   settings: UserPortalSettings;
   trial?: UserTrialStatus | null;
   luckyWheel?: LuckyWheelSummary | null;
   pendingReceipt?: PendingReceiptInfo | null;
+  activePaymentOrder?: UserPaymentOrderDto | null;
 }
 
 export interface UserConfigRecord {

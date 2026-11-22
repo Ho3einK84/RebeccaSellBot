@@ -760,6 +760,7 @@ export function clearTransientConversationSession(session: SessionData | undefin
   delete session.bankCardsReturnTo;
   delete session.pendingCustomNamePurchase;
   delete session.phoneVerifyReturnAction;
+  delete session.manualFallbackOrder;
 }
 
 /** Admin variant of explicit conversation cancellation. */

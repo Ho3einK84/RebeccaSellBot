@@ -92,6 +92,13 @@
       "when": 1795283000000,
       "tag": "0012_add_topup_receipt_card_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795400000000,
+      "tag": "0013_automated_wallet_payments",
+      "breakpoints": true
     }
   ]
 }

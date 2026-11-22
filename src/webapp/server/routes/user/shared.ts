@@ -9,6 +9,7 @@ import type { PricingService } from '../../../../domain/services/PricingService.
 import type { PackageCategoryService } from '../../../../domain/services/PackageCategoryService.js';
 import type { PromoService } from '../../../../domain/services/PromoService.js';
 import type { PaymentService } from '../../../../domain/services/PaymentService.js';
+import type { AutomatedPaymentService } from '../../../../domain/services/AutomatedPaymentService.js';
 import type {
   SupportedLocale,
   TranslationService,
@@ -32,6 +33,7 @@ export interface UserRoutesOptions {
   packageCategoryService?: PackageCategoryService;
   promoService?: PromoService;
   paymentService?: PaymentService;
+  automatedPaymentService?: AutomatedPaymentService;
   translationService?: TranslationService;
   purchaseCheckoutService?: PurchaseCheckoutService;
   catalogDiscountService?: CatalogDiscountService;

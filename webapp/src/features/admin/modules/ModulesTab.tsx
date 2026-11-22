@@ -15,6 +15,7 @@ import {
   FileText,
   ShieldCheck,
   ExternalLink,
+  Zap,
 } from 'lucide-react';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile, type TileTone } from '@/shared/components/ui/IconTile.js';
@@ -29,6 +30,7 @@ interface ModulesTabProps {
   botUsername?: string;
   onSwitchTab?: (tab: TabType) => void;
   onOpenBankCards?: () => void;
+  onOpenPaymentGateways?: () => void;
   onOpenReceiptSettings?: () => void;
 }
 
@@ -53,6 +55,7 @@ interface ComingSoonModuleItem {
 export const ModulesTab: React.FC<ModulesTabProps> = ({
   botUsername,
   onOpenBankCards,
+  onOpenPaymentGateways,
   onOpenReceiptSettings,
 }) => {
   const { t } = useLanguage();
@@ -74,6 +77,14 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
       title: t('admin.modules.gateways'),
       desc: t('admin.modules.gatewaysSub'),
       onOpen: onOpenBankCards,
+    },
+    {
+      id: 'auto-gateways',
+      icon: Zap,
+      tone: 'ok',
+      title: t('admin.modules.autoGateways'),
+      desc: t('admin.modules.autoGatewaysSub'),
+      onOpen: onOpenPaymentGateways,
     },
     {
       id: 'receipt-notify',

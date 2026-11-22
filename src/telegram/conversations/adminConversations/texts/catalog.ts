@@ -168,6 +168,9 @@ const ADMIN_SALES_PROMOS_PREFIXES = [
   'admin_category_',
   'admin_sales_',
   'admin_bank_cards_',
+  'admin_auto_pay_',
+  'admin_forapp_',
+  'admin_nowpayments_',
   'admin_stats_',
   'admin_promo_',
   'admin_invalid_promo_',
@@ -239,6 +242,7 @@ const USER_HOME_NAV_EXACT = new Set([
   'user_unit',
   'panel_origin_down_user_notice',
   'currency_toman',
+  'currency_rial',
   'service_unit',
   'days_unit',
   'hours_unit',
@@ -274,6 +278,9 @@ const USER_WALLET_PREFIXES = [
   'payment_method_',
   'receipt_',
   'tx_type_',
+  'forapp_',
+  'auto_pay_',
+  'nowpayments_',
 ] as const;
 
 const USER_WALLET_EXACT = new Set(['direct_topup_button']);
@@ -430,6 +437,12 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     en: 'Transaction or discount amount',
     sampleFa: '۵۰٬۰۰۰',
     sampleEn: '50,000',
+  },
+  api_key: {
+    fa: 'کلید امنیتی API درگاه',
+    en: 'Gateway API secret key',
+    sampleFa: 'fa_sample_key_1234',
+    sampleEn: 'fa_sample_key_1234',
   },
   approved: {
     fa: 'تعداد رسیدهای تأییدشده',
@@ -803,6 +816,18 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     sampleFa: '۱۲۰٬۰۰۰',
     sampleEn: '120,000',
   },
+  rate: {
+    fa: 'نرخ تبدیل ارز',
+    en: 'Currency exchange rate',
+    sampleFa: '۸۵٬۰۰۰',
+    sampleEn: '85,000',
+  },
+  reason: {
+    fa: 'علت یا جزئیات خطا',
+    en: 'Reason or error message',
+    sampleFa: 'خطای اتصال به درگاه',
+    sampleEn: 'Gateway connection error',
+  },
   rejected: {
     fa: 'تعداد موارد ردشده',
     en: 'Rejected items count',
@@ -910,6 +935,12 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     en: 'Package volume with unit',
     sampleFa: '۵۰ گیگ',
     sampleEn: '50 GB',
+  },
+  webhook_url: {
+    fa: 'آدرس Webhook درگاه',
+    en: 'Gateway Webhook URL',
+    sampleFa: 'https://app.example.com/api/webhooks/forapp',
+    sampleEn: 'https://app.example.com/api/webhooks/forapp',
   },
 };
 
