@@ -1261,25 +1261,32 @@ export function registerAdminSalesRoutes(): void {
     };
   });
 
-  // Package category assignment (paginated)
+  // Package category assignment (paginated; compact index callbacks stay <= 64 bytes)
   registerAdminRoute(/^adm:pkg:cat:([a-z0-9_-]{1,64}):(\d+)$/u, async (ctx, match) => {
     if (!ctx.services) return;
     const pkgId = match![1]!;
     const reqPage = Number(match?.[2]) || 1;
+    const pkgs = loadPackages(ctx);
+    const pkgIdx = pkgs.findIndex((p) => p.id === pkgId);
+    if (pkgIdx < 0) {
+      await renderPackagesListScreen(ctx, 1);
+      return;
+    }
     const cats = (await ctx.services.packageCategoryService?.listCategories(true)) ?? [];
     const totalPages = Math.max(1, Math.ceil(cats.length / CAT_PAGE_SIZE));
     const page = Math.min(Math.max(1, reqPage), totalPages);
-    const visible = cats.slice((page - 1) * CAT_PAGE_SIZE, page * CAT_PAGE_SIZE);
+    const startIdx = (page - 1) * CAT_PAGE_SIZE;
+    const visible = cats.slice(startIdx, startIdx + CAT_PAGE_SIZE);
 
     const kb = new InlineKeyboard()
-      .text(t(ctx, 'admin_pkg_no_category'), `adm:pkg:setcat:${pkgId}:none`)
+      .text(t(ctx, 'admin_pkg_no_category'), `adm:pkg:sc:${pkgIdx}:n`)
       .row();
-    for (const c of visible) {
+    visible.forEach((c, offset) => {
       kb.text(
         truncateButtonLabel(`${c.icon ? `${c.icon} ` : ''}${c.name}`),
-        `adm:pkg:setcat:${pkgId}:${c.id}`
+        `adm:pkg:sc:${pkgIdx}:${startIdx + offset}`
       ).row();
-    }
+    });
     appendAdminPagination(kb, ctx, {
       page,
       totalPages,
@@ -1297,6 +1304,28 @@ export function registerAdminSalesRoutes(): void {
     );
   });
 
+  registerAdminRoute(/^adm:pkg:sc:(\d+):(n|\d+)$/u, async (ctx, match) => {
+    if (!ctx.services) return;
+    const pkgIdx = Number(match![1]);
+    const pkgs = loadPackages(ctx);
+    const targetPkg = pkgs[pkgIdx];
+    if (!targetPkg) {
+      await renderPackagesListScreen(ctx, 1);
+      return;
+    }
+    let catId: string | undefined;
+    if (match![2] !== 'n') {
+      const cats = (await ctx.services.packageCategoryService?.listCategories(true)) ?? [];
+      catId = cats[Number(match![2])]?.id;
+    }
+    const next = pkgs.map((p) => (p.id === targetPkg.id ? { ...p, categoryId: catId } : p));
+    await savePackages(ctx, next);
+    await renderPackageDetailScreen(ctx, targetPkg.id, {
+      tone: 'success',
+      text: t(ctx, 'admin_setting_saved_title'),
+    });
+  });
+
   registerAdminRoute(
     /^adm:pkg:setcat:([a-z0-9_-]{1,64}):([a-z0-9_-]{1,64})$/u,
     async (ctx, match) => {
@@ -1311,28 +1340,61 @@ export function registerAdminSalesRoutes(): void {
     }
   );
 
-  // Package target panel/service picker
+  // Package target panel/service picker (compact index callbacks stay <= 64 bytes)
   registerAdminRoute(/^adm:pkg:tgt:([a-z0-9_-]{1,64})$/u, async (ctx, match) => {
     if (!ctx.services) return;
     const pkgId = match![1]!;
+    const pkgs = loadPackages(ctx);
+    const pkgIdx = pkgs.findIndex((p) => p.id === pkgId);
+    if (pkgIdx < 0) {
+      await renderPackagesListScreen(ctx, 1);
+      return;
+    }
     const panels = ctx.services.panelRegistry.listPanels();
     const kb = new InlineKeyboard()
-      .text(t(ctx, 'admin_pkg_target_default'), `adm:pkg:settgt:${pkgId}:default:0`)
+      .text(t(ctx, 'admin_pkg_target_default'), `adm:pkg:st:${pkgIdx}:d:0`)
       .row();
-    for (const panel of panels) {
+    panels.forEach((panel, panelIdx) => {
       for (const svc of panel.services) {
         kb.text(
           truncateButtonLabel(`${panel.enabled ? '🟢' : '⚪'} ${panel.name} · ${svc.name}`),
-          `adm:pkg:settgt:${pkgId}:${panel.id}:${svc.serviceId}`
+          `adm:pkg:st:${pkgIdx}:${panelIdx}:${svc.serviceId}`
         ).row();
       }
-    }
+    });
     appendAdminFooterNav(kb, ctx, { backCallback: `adm:pkg:v:${pkgId}` });
     await renderScreen(
       ctx,
       buildAdminScreen({ emoji: '🖥️', title: t(ctx, 'admin_pkg_target_label') }),
       { parse_mode: 'Markdown', reply_markup: kb }
     );
+  });
+
+  registerAdminRoute(/^adm:pkg:st:(\d+):(d|\d+):(\d+)$/u, async (ctx, match) => {
+    if (!ctx.services) return;
+    const pkgIdx = Number(match![1]);
+    const pkgs = loadPackages(ctx);
+    const targetPkg = pkgs[pkgIdx];
+    if (!targetPkg) {
+      await renderPackagesListScreen(ctx, 1);
+      return;
+    }
+    let panelId: string | undefined;
+    let serviceId: number | undefined;
+    if (match![2] !== 'd') {
+      const panels = ctx.services.panelRegistry.listPanels();
+      const panel = panels[Number(match![2])];
+      if (panel) {
+        panelId = panel.id;
+        serviceId = Number(match![3]);
+      }
+    }
+    const next = pkgs.map((p) => (p.id === targetPkg.id ? { ...p, panelId, serviceId } : p));
+    await savePackages(ctx, next);
+    await renderPackageDetailScreen(ctx, targetPkg.id, {
+      tone: 'success',
+      text: t(ctx, 'admin_setting_saved_title'),
+    });
   });
 
   registerAdminRoute(

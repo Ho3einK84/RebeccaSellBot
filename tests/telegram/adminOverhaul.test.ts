@@ -523,6 +523,84 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
     const detailText = String(harness.callsFor('editMessageText').at(-1)?.payload.text ?? '');
     expect(detailText).toContain('onboarding_welcome');
   });
+
+  it('keeps package category and target picker callbacks strictly within Telegram 64-byte limit', async () => {
+    const longPkgId = 'pkg_enterprise_unlimited_monthly_bundle';
+    const longCatId = 'cat_high_speed_premium_residential_plans_a1b2c3';
+    const longPanelId = 'rp_a1b2c3d4e5f6';
+    const packages = [
+      { id: longPkgId, name: 'Enterprise Plan', gbAmount: 100, durationDays: 30, price: 250_000 },
+    ];
+    const settingsStore = new Map<string, string>([['packages_json', JSON.stringify(packages)]]);
+    const realTs = new TranslationService();
+    const services = createMockServices({
+      adminIds: [1],
+      isAdmin: vi.fn((id) => id === 1),
+      translationService: {
+        resolveLocale: vi.fn(() => 'en'),
+        get: vi.fn((key: string, locale?: string, vars?: Record<string, string | number>) =>
+          realTs.get(key, (locale as 'fa' | 'en') ?? 'en', vars)
+        ),
+        getSetting: vi.fn((key: string, fallback = '') => settingsStore.get(key) ?? fallback),
+        getSettingBool: vi.fn((_key: string, fallback = false) => fallback),
+        getSettingNum: vi.fn((_key: string, fallback = 0) => fallback),
+        updateSetting: vi.fn(async (key: string, value: string) => {
+          settingsStore.set(key, value);
+        }),
+      },
+      packageCategoryService: {
+        listCategories: vi
+          .fn()
+          .mockResolvedValue([
+            { id: longCatId, name: 'Premium Residential', icon: '⚡', enabled: true },
+          ]),
+      },
+      panelRegistry: {
+        listPanels: vi.fn(() => [
+          {
+            id: longPanelId,
+            name: 'EU Primary',
+            enabled: true,
+            services: [{ serviceId: 7, name: 'SkyLink' }],
+          },
+        ]),
+        getPanel: vi.fn(() => undefined),
+        healthSummary: vi.fn().mockResolvedValue({ configured: 1, healthy: 1 }),
+      },
+    });
+
+    const harness = createBotHarness({ services, defaultLocale: 'en' });
+    registerCoreRoutes(harness.bot, services);
+    registerAdminSalesRoutes();
+
+    await harness.sendCallback(`adm:pkg:cat:${longPkgId}:1`, { userId: 1 });
+    const catCbs = extractCallbackDataList(
+      harness.callsFor('editMessageText').at(-1)?.payload.reply_markup
+    );
+    expect(catCbs.every((cb) => Buffer.byteLength(cb, 'utf8') <= 64)).toBe(true);
+    expect(catCbs).toContain('adm:pkg:sc:0:0');
+
+    await harness.sendCallback('adm:pkg:sc:0:0', { userId: 1 });
+    const afterCat = JSON.parse(settingsStore.get('packages_json') ?? '[]') as Array<{
+      categoryId?: string;
+    }>;
+    expect(afterCat[0]?.categoryId).toBe(longCatId);
+
+    await harness.sendCallback(`adm:pkg:tgt:${longPkgId}`, { userId: 1 });
+    const tgtCbs = extractCallbackDataList(
+      harness.callsFor('editMessageText').at(-1)?.payload.reply_markup
+    );
+    expect(tgtCbs.every((cb) => Buffer.byteLength(cb, 'utf8') <= 64)).toBe(true);
+    expect(tgtCbs).toContain('adm:pkg:st:0:0:7');
+
+    await harness.sendCallback('adm:pkg:st:0:0:7', { userId: 1 });
+    const afterTgt = JSON.parse(settingsStore.get('packages_json') ?? '[]') as Array<{
+      panelId?: string;
+      serviceId?: number;
+    }>;
+    expect(afterTgt[0]?.panelId).toBe(longPanelId);
+    expect(afterTgt[0]?.serviceId).toBe(7);
+  });
 });
 
 // Keep reference used in type validation
