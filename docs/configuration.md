@@ -8,14 +8,14 @@ This reference covers all environment variables (`.env`) validated by [`src/infr
 
 ### Core Runtime
 
-| Variable         | Type      | Default       | Description                                                                                    |
-| :--------------- | :-------- | :------------ | :--------------------------------------------------------------------------------------------- |
-| `NODE_ENV`       | Enum      | `development` | Runtime mode: `production`, `development`, or `test`.                                          |
-| `BOT_TOKEN`      | String    | _Required_    | Telegram Bot API token from `@BotFather`.                                                      |
-| `ADMIN_IDS`      | CSV Ints  | `[]`          | Comma-separated positive integer Telegram user IDs used to bootstrap `bot_admins`.             |
-| `DEFAULT_LOCALE` | Enum      | `fa`          | Initial language for newly observed users (`fa` or `en`).                                      |
-| `INSTANCE_NAME`  | String    | `main`        | Alphanumeric instance identifier (`[a-z0-9_-]`) for multi-instance isolation and mesh routing. |
-| `SUPPORT_URL`    | HTTPS URL | —             | Optional support link override (`https://...`); defaults to the primary admin chat.            |
+| Variable         | Type      | Default       | Description                                                                                                                                                 |
+| :--------------- | :-------- | :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`       | Enum      | `development` | Runtime mode: `production`, `development`, or `test`.                                                                                                       |
+| `BOT_TOKEN`      | String    | _Required_    | Telegram Bot API token from `@BotFather`.                                                                                                                   |
+| `ADMIN_IDS`      | CSV Ints  | `[]`          | Comma-separated positive integer Telegram user IDs used to bootstrap `bot_admins`.                                                                          |
+| `DEFAULT_LOCALE` | Enum      | `fa`          | Initial language for newly observed users (`fa` or `en`).                                                                                                   |
+| `INSTANCE_NAME`  | String    | `main`        | Alphanumeric instance identifier (`[a-z0-9_-]`) for multi-instance isolation and mesh routing.                                                              |
+| `SUPPORT_URL`    | HTTPS URL | —             | Optional support link override (`https://...`); resolved uniformly across Telegram and WebApp via `SupportDestination.ts` (defaults to primary admin chat). |
 
 ### Database & Encryption
 
@@ -74,23 +74,23 @@ This reference covers all environment variables (`.env`) validated by [`src/infr
 
 ## 2. In-Bot Runtime Settings (`/admin` → Settings & Sales)
 
-Runtime settings are persisted in the PostgreSQL `settings` table ([`TranslationCatalog.ts`](../src/domain/services/TranslationCatalog.ts) & [`FeatureSettings.ts`](../src/domain/services/FeatureSettings.ts)) and take effect immediately without restarting containers. All sections below are managed via stateless `/admin` hubs (`adm:cfg` and `adm:sales`).
+Runtime settings are persisted in the PostgreSQL `settings` table ([`TranslationCatalog.ts`](../src/domain/services/TranslationCatalog.ts) & [`FeatureSettings.ts`](../src/domain/services/FeatureSettings.ts)) and take effect immediately across both the Telegram Bot and Mini App without restarting containers. All sections below are managed via stateless `/admin` hubs (`adm:cfg` and `adm:sales`).
 
 ### General & Security (`adm:cfg:gen`)
 
-| Key                          | Default   | Description                                                                                                |
-| :--------------------------- | :-------- | :--------------------------------------------------------------------------------------------------------- |
-| `bot_enabled`                | `'true'`  | Enables customer access. When `'false'`, non-admin users see the maintenance screen.                       |
-| `language_selection_enabled` | `'true'`  | Allows users to switch between Persian (`fa`) and English (`en`).                                          |
-| `default_locale`             | `'fa'`    | Fallback locale (`'fa'` or `'en'`) for users without an explicit preference.                               |
-| `require_phone_for_purchase` | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before paid checkouts.                       |
-| `require_phone_for_trial`    | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before claiming a free trial.                |
-| `phone_verify_iran_only`     | `'true'`  | Restricts phone verification to Iranian (`+98`) mobile numbers.                                            |
-| `first_use_nudge_enabled`    | `'true'`  | Sends a one-time connection guide 24–72h after purchase if live traffic is still `0`.                      |
-| `expired_cleanup_enabled`    | `'false'` | Enables automated staged cleanup of long-expired subscriptions.                                            |
-| `expired_cleanup_grace_days` | `'14'`    | Days after expiration (`1–365`) before an unrenewed expired service is deleted.                            |
-| `expired_cleanup_warn_days`  | `'3,1'`   | Comma-separated warning thresholds (`firstWarn,lastWarn` days before deletion; `first > last`, `< grace`). |
-| `expired_cleanup_enabled_at` | `''`      | ISO timestamp auto-stamped when cleanup is toggled ON (safety floor for pre-existing expired configs).     |
+| Key                          | Default   | Description                                                                                                                                                                  |
+| :--------------------------- | :-------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bot_enabled`                | `'true'`  | Enables customer access across both Telegram Bot and Mini App. When `'false'`, non-admin users see the maintenance screen (`503 MAINTENANCE_MODE` in WebApp; admins bypass). |
+| `language_selection_enabled` | `'true'`  | Allows users to switch between Persian (`fa`) and English (`en`) in both Telegram and Mini App.                                                                              |
+| `default_locale`             | `'fa'`    | Fallback locale (`'fa'` or `'en'`) for users without an explicit preference.                                                                                                 |
+| `require_phone_for_purchase` | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before new paid service purchases (`new_config`; does not block renewals) in Telegram and Mini App.            |
+| `require_phone_for_trial`    | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before claiming a free trial in Telegram and Mini App.                                                         |
+| `phone_verify_iran_only`     | `'true'`  | Restricts phone verification to Iranian (`+98`) mobile numbers.                                                                                                              |
+| `first_use_nudge_enabled`    | `'true'`  | Sends a one-time connection guide 24–72h after purchase if live traffic is still `0`.                                                                                        |
+| `expired_cleanup_enabled`    | `'false'` | Enables automated staged cleanup of long-expired subscriptions.                                                                                                              |
+| `expired_cleanup_grace_days` | `'14'`    | Days after expiration (`1–365`) before an unrenewed expired service is deleted.                                                                                              |
+| `expired_cleanup_warn_days`  | `'3,1'`   | Comma-separated warning thresholds (`firstWarn,lastWarn` days before deletion; `first > last`, `< grace`).                                                                   |
+| `expired_cleanup_enabled_at` | `''`      | ISO timestamp auto-stamped when cleanup is toggled ON (safety floor for pre-existing expired configs).                                                                       |
 
 ### Web Mini App (`adm:cfg:web`)
 

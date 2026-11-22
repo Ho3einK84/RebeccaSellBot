@@ -24,7 +24,7 @@ flowchart TD
     subgraph Core["RebeccaSellBot Application Core"]
         subgraph Delivery["Telegram Delivery Layer (src/telegram)"]
             UI["UI Engine & Design System\n(AsyncLocalStorage)"]
-            Routes["Stateless Admin Router (adm:*)\nFeature Routes & Conversations"]
+            Routes["Stateless Admin Router (adm:*)\nFeature Routes, Conversations & webappNotifications"]
         end
 
         subgraph Domain["Domain Layer (src/domain/services)"]
@@ -114,7 +114,7 @@ If a process crashes or a network timeout occurs during Phase 2, the intent tran
 
 ### Receipt Security, Payment Void & Multi-Card Rotation
 
-- **Duplicate Receipt Fingerprinting (`WalletService`):** Top-up receipts record both Telegram's `file_unique_id` (`fileUniqueId`) and the downloaded media's `SHA-256` digest (`fileSha256`). Depending on `receipt_duplicate_policy`:
+- **Duplicate Receipt Fingerprinting (`WalletService`):** Top-up receipts record both Telegram's `file_unique_id` (`fileUniqueId`) and the media's `SHA-256` digest (`fileSha256`), plus the selected card metadata (`cardId` / `cardNumber`). WebApp uploads (`POST /api/user/topup/receipt`) validate binary magic bytes (`JPEG`, `PNG`, `WEBP`, `PDF`, `≤ 5 MiB`) and stream media directly through Telegram Bot API (`InputFile`) to obtain genuine `file_id` / `file_unique_id` without local disk persistence. Depending on `receipt_duplicate_policy`:
   - `'warn'` (default): Accepts the submission, links `duplicateOfReceiptId`, and displays a duplicate warning banner across admin Telegram alerts, receipt review queues, and WebApp `/api/admin/receipts`.
   - `'block'`: Rejects duplicate receipt submissions immediately with `DuplicateReceiptError`.
 - **Atomic Approved-Receipt Voiding (`WalletService.voidApprovedTopup`):**
@@ -139,14 +139,14 @@ If a process crashes or a network timeout occurs during Phase 2, the intent tran
 
 - **Zero Raw Phone Persistence:** Normalizes shared Telegram contact numbers, enforces optional Iranian `+98` prefix validation (`phone_verify_iran_only`, default `true`), and computes an `HMAC-SHA256` digest using a domain-separated key derived from `BOT_TOKEN`.
 - Only `phoneHash` (enforced unique via partial index `users_phone_hash_unique`) and `phoneVerifiedAt` are stored in `users`.
-- Configurable verification gates protect free trials (`require_phone_for_trial`) and paid checkouts (`require_phone_for_purchase`) across both Telegram (`verifyPhoneConversation` verifying `contact.user_id === ctx.from.id`) and WebApp (`403 PHONE_VERIFICATION_REQUIRED`).
+- Configurable verification gates protect free trials (`require_phone_for_trial`) and new paid service checkouts (`require_phone_for_purchase`, scoped to `new_config` so renewals are never blocked) across both Telegram (`verifyPhoneConversation` and non-conversation `message:contact` handler for Mini App `WebApp.requestContact()`, both verifying `contact.user_id === ctx.from.id`) and WebApp (`403 PHONE_VERIFICATION_REQUIRED`).
 
-### Rebecca Lifecycle & Service Customization
+### Rebecca Lifecycle, Support Resolution & Service Customization
 
 - **Start-on-First-Use (`on_hold_default_enabled`):** Provisions new subscriptions in Rebecca's `on_hold` status so duration countdown begins on first connection.
-- **Renewal Rollover (`renewal_rollover_enabled`):** Preserves remaining data quota and remaining validity when renewing an active subscription.
-- **Custom Service Names (`custom_service_name_enabled`):** Allows buyers to specify an English service label (`3–20` chars, `[a-z0-9_]`) verified for uniqueness before checkout.
-- **Client Deep-Links & Sub Rotation:** Renders 1-tap import links (Happ, v2rayNG, Streisand, Hiddify, Sing-box/Clash) and allows users to rotate compromised subscription URLs (`ConfigService.revokeSubscription`).
+- **Renewal Rollover (`renewal_rollover_enabled`) & Auto-Renewal:** Preserves remaining data quota and remaining validity when renewing an active subscription. `autoRenewal` evaluates both preset packages and custom-volume plans (`custom_XXgb_YYd`) within configured bounds and the user's approved price ceiling.
+- **Custom Service Names (`custom_service_name_enabled`):** Allows buyers to specify an English service label (`3–20` chars, `[a-z0-9_]`) verified for uniqueness before checkout across Telegram and WebApp.
+- **Client Deep-Links, Sub Rotation & Unified Support:** Renders 1-tap import links (v2rayNG, Hiddify, Streisand, Happ, Clash/Sing-box), rotates compromised subscription URLs (`ConfigService.revokeSubscription`), and resolves support links uniformly via `SupportDestination.ts` across Telegram and WebApp (including `403 USER_BANNED` responses).
 
 ---
 
@@ -187,14 +187,14 @@ Public HTTPS (*.yourdomain.com)
  Serve Local    Proxy over `rsbot_mesh` (loop-guarded via `x-rsbot-proxy-hops`)
 ```
 
-- **Backend (`src/webapp/server/`):** Fastify 5 server validating Telegram WebApp `initData` (`HMAC-SHA256`), issuing HTTP-only admin JWT cookies (`ADMIN_SESSION_SECRET`), enforcing per-route rate limits, and serving `/api/user/*` and `/api/admin/*`.
-- **Frontend (`webapp/src/`):** React 19 + Tailwind CSS v4 + DaisyUI v5 + TanStack Query SPA providing customer subscription/shop views and a full admin dashboard (stats, receipt review/voiding, user management, packages, panels).
+- **Backend (`src/webapp/server/`):** Fastify 5 server validating Telegram WebApp `initData` (`HMAC-SHA256`, with profile upsert and first-touch `start_param` referral capture), issuing HTTP-only JWT cookies (`ADMIN_SESSION_SECRET`), enforcing centralized `userGuard` (`403 USER_BANNED` with support CTA & `503 MAINTENANCE_MODE` with admin bypass) and per-route rate limits, and serving modular `/api/user/*` (`routes/user/{shared,profileRoutes,configRoutes,shopRoutes,walletRoutes}.ts`) plus `/api/admin/*`.
+- **Frontend (`webapp/src/`):** React 19 + Tailwind CSS v4 + DaisyUI v5 + TanStack Query SPA delivering full customer parity (Dashboard, Services with Sync All / Claim / per-node usage / P2P transfer / self-refund / SmartConnect, Shop with flash-sale countdowns & volume tiers, Wallet 2.0 with native top-up & receipt upload / P2P transfer / filters, Rewards Hub with interactive SVG Lucky Wheel & Free Trial) alongside the full Admin Portal, synchronized with Telegram chat via `src/telegram/webappNotifications.ts`. See [docs/webapp-architecture.md](webapp-architecture.md) for the full Mini App reference.
 
 ---
 
 ## 6. Database Schema Overview (`src/infra/schema.ts`)
 
-PostgreSQL 16 schema managed via Drizzle ORM (`drizzle/0000_*.sql` through `drizzle/0011_*.sql`) plus idempotent startup guards in `src/infra/migrate.ts`:
+PostgreSQL 16 schema managed via Drizzle ORM (`drizzle/0000_*.sql` through `drizzle/0012_*.sql`) plus idempotent startup guards in `src/infra/migrate.ts`:
 
 | Category                | Tables                                                                                                                                                               |
 | :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

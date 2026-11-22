@@ -32,11 +32,11 @@ Incoming Telegram Update
   │      ├─ conversationContextMiddleware  (Re-hydrates services & locale on replay)
   │      └─ Registered User & Admin Conversations
   │
-  ├─► 5. Rate Limit & Cooldown Guards      (rateLimitMiddleware + actionCooldown)
+  ├─► 5. Rate Limit & Cooldown Guards      (rateLimitMiddleware w/ next-expiry pruning + actionCooldown)
   │
   └─► 6. Stateless Admin & Feature Routers
          ├─ admin/* (`adm:*` router)       (1-tap Command Center, Sales Hub, Settings Hub, Texts, Quick Commands)
-         ├─ coreRoutes & baseRoutes        (/start, /admin, /lang, trial claims, phone gate)
+         ├─ coreRoutes & baseRoutes        (/start incl. ref_* & topup_<amt>, /admin, /lang, trial, native contact)
          ├─ purchaseRoutes & configRoutes  (Storefront, flash-sale checkouts, custom volume)
          ├─ subscriptions/routes           (Live status, QR popover, client links, sub rotation)
          ├─ luckyWheelRoutes               (Daily spin & prize ledger)
@@ -151,3 +151,13 @@ src/telegram/conversations/
 
 - **64-Byte UTF-8 Callback Guard ([`callbackData.ts`](../src/telegram/callbackData.ts)):** Enforces Telegram's 64-byte `callback_data` ceiling at construction time. Compact prefixes (`adm:*`, `buy:confirm:<id>`, `r:p:<cfg>:<idx>:<hash>`, `renew:open:<id>`, `ui:dismiss`) keep payloads safely under the limit.
 - **100% Bilingual Catalog Parity & Zero Dead Keys:** Every key in [`TranslationCatalog.fa.ts`](../src/domain/services/TranslationCatalog.fa.ts) has an exact counterpart, matching `{placeholder}` set, deterministic text-editor category, and active production reference in [`TranslationCatalog.en.ts`](../src/domain/services/TranslationCatalog.en.ts), enforced on every run by [`tests/domain/TranslationService.test.ts`](../tests/domain/TranslationService.test.ts) and [`tests/telegram/adminPackageAndTextEditors.test.ts`](../tests/telegram/adminPackageAndTextEditors.test.ts).
+
+---
+
+## 6. Mini App ↔ Telegram Synchronization (`src/telegram/webappNotifications.ts`)
+
+Actions triggered inside the Telegram Mini App stay synchronized with Telegram chat delivery through three bridges:
+
+- **Permanent Chat Artifacts (`sendWebAppConfigArtifact`):** WebApp new purchases, renewals, free trial claims, and subscription URL revocations automatically send a permanent chat message with the subscription link, plan details, and a deep-link button back to the Mini App service view.
+- **P2P Transfer Notices (`sendWebAppWalletTransferNotification` / `sendWebAppConfigTransferNotification`):** Recipients of Mini App wallet or service transfers receive instant localized DMs in Telegram with deep-links to open their updated wallet or service.
+- **Native Contact & Deep-Link Bridges:** `bot.on('message:contact')` in [`src/telegram/features/coreRoutes.ts`](../src/telegram/features/coreRoutes.ts) handles contacts shared via Mini App `Telegram.WebApp.requestContact()` outside active conversations (strictly enforcing `contact.user_id === from.id`), while [`src/telegram/features/baseRoutes.ts`](../src/telegram/features/baseRoutes.ts) parses `?start=topup_<amount>` deep links into `session.pendingTopupIntent`. Mini App receipt uploads (`uploadReceiptMediaToTelegram`) stream binary buffers straight to Telegram via `InputFile` so zero receipt files touch local disk. See [docs/webapp-architecture.md](webapp-architecture.md) for the complete Mini App guide.

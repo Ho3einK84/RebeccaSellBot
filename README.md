@@ -27,26 +27,27 @@
 
 ## Documentation
 
-| Document                                                    | Scope                                                                                                    |
-| :---------------------------------------------------------- | :------------------------------------------------------------------------------------------------------- |
-| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga, 24-table PostgreSQL schema, and background workers.         |
-| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, stateless `adm:*` admin router, non-blocking input engine, and callback guards. |
-| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                            |
-| 🚀 **[Deployment & Operations](docs/deployment.md)**        | Interactive/unattended installation, `rsbot` CLI, Caddy On-Demand TLS mesh, and backups.                 |
-| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, and database integrity rules.                            |
+| Document                                                    | Scope                                                                                                             |
+| :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------- |
+| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga, 24-table PostgreSQL schema, and background workers.                  |
+| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, stateless `adm:*` admin router, non-blocking input engine, and callback guards.          |
+| 📱 **[Mini App Architecture](docs/webapp-architecture.md)** | Unified User & Admin Mini App (`Fastify 5` + `React 19`), modular `/api/user/*` routes, guards, and chat sync.    |
+| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                                     |
+| 🚀 **[Deployment & Operations](docs/deployment.md)**        | Interactive/unattended installation, `rsbot` CLI, Caddy On-Demand TLS mesh, and backups.                          |
+| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, Mini App upload/auth controls, and database integrity guarantees. |
 
 ---
 
 ## Capabilities
 
-| Customer Experience                                                                                                                                              | Administration & Backoffice                                                                                                                                            |
-| :--------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🛒 **Instant Storefront:** Fixed packages, categorized plans, custom GB/day ordering, and optional buyer-chosen service names.                                   | 🌐 **Multi-Panel Fleet:** Connect multiple Rebecca panels at runtime (`AES-256-GCM` vault) and bind packages to specific services.                                     |
-| 🔥 **Flash Sales & Promos:** Timed catalog discounts (strikethrough pricing + countdowns) and single/multi-use promo vouchers.                                   | 🛡️ **Receipt Security & Voiding:** `SHA-256` + `file_unique_id` duplicate receipt detection (`warn`/`block`), atomic receipt voiding, and multi-card rotation.         |
-| 💳 **Wallet & P2P Transfers:** Card-to-card top-ups, unique payable amounts, and peer-to-peer balance or subscription transfers.                                 | 📊 **Telegram & Mini App CRM:** 1-tap stateless `/admin` command center (`/r`, `/u`, `/stats`), filterable dossiers, broadcast job monitor, and orphan reconciliation. |
-| 📊 **Subscription Portal:** Live traffic/expiry gauges, QR codes, 1-tap client import links (Happ, v2rayNG, Streisand, Hiddify, Sing-box), and sub URL rotation. | 📢 **Growth & Retention:** Throttled segmented broadcasts, 24h first-use connection nudges, and staged expired-config cleanup with renewal warnings.                   |
-| 🔄 **Lifecycle & Safeguards:** Start-on-first-use (`on_hold`), renewal quota/time rollover, auto-renewal, and unused-plan refunds.                               | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` Telegram contact verification for trials and purchases (zero raw phone storage).                               |
-| 🎰 **Loyalty & Bilingual UX:** Daily Lucky Wheel, referral bonuses, lifetime purchase cashback, and full Persian (`fa`) / English (`en`) localization.           | 📦 **Multi-Instance Operations:** Run isolated instances with automated Caddy On-Demand TLS mesh routing and transactional backups.                                    |
+| Customer Experience (Telegram Bot + Mini App Parity)                                                                                                                                     | Administration & Backoffice                                                                                                                                            |
+| :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🛒 **Instant Storefront:** Fixed packages, categorized plans, custom GB/day ordering (with tiered price tables), optional buyer-chosen service names, and live flash-sale countdowns.    | 🌐 **Multi-Panel Fleet:** Connect multiple Rebecca panels at runtime (`AES-256-GCM` vault) and bind packages to specific services.                                     |
+| 🎁 **Free Trial & Interactive Lucky Wheel:** One-tap trial claiming with QR & SmartConnect delivery plus an animated 8-slice SVG Lucky Wheel with haptics, cooldowns, and spin history.  | 🛡️ **Receipt Security & Voiding:** `SHA-256` + `file_unique_id` duplicate receipt detection (`warn`/`block`), atomic receipt voiding, and multi-card rotation.         |
+| 💳 **Wallet 2.0 & P2P Transfers:** Native in-app 2-step card-to-card top-ups, Telegram-hosted receipt uploads, receipt history, category filters, and exact-match P2P balance transfers. | 📊 **Telegram & Mini App CRM:** 1-tap stateless `/admin` command center (`/r`, `/u`, `/stats`), filterable dossiers, broadcast job monitor, and orphan reconciliation. |
+| 📊 **Subscription Portal:** Sync All, external sub-link claim, per-node usage & `onlineAt`, QR codes, 1-tap VPN SmartConnect links (v2rayNG, Hiddify, Streisand, Happ, Clash), & revoke. | 📢 **Growth & Retention:** Throttled segmented broadcasts, 24h first-use connection nudges, and staged expired-config cleanup with renewal warnings.                   |
+| 🔄 **Lifecycle & Safeguards:** Start-on-first-use (`on_hold`), quota/time rollover, preset & custom-volume auto-renewal, P2P service transfer, self-refund quotes, and chat artifacts.   | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` contact verification via bot or native Mini App `WebApp.requestContact()` (zero raw phone storage).            |
+| 🌐 **Unified UX & Localization:** Full Persian (`fa`) / English (`en`) parity, Persian digit normalization, bi-directional deep links, and maintenance mode with admin bypass.           | 📦 **Multi-Instance Operations:** Run isolated instances with automated Caddy On-Demand TLS mesh routing and transactional backups.                                    |
 
 ---
 
@@ -139,16 +140,18 @@ See [docs/configuration.md](docs/configuration.md) for all environment variables
 npm ci
 cp .env.example .env
 npm run dev          # Start bot + watcher in development mode
-npm run verify       # Full CI gate: architecture, typecheck, lint, format, test, build
+npm run verify       # Parallel CI gate (scripts/verify.mjs): architecture, typecheck, lint, format, test, build
+npm run verify:fast  # Fast local gate: cached static checks + changed tests only
+npm run verify:cold  # Cold CI gate without incremental tool caches
 ```
 
-| Script                          | Check                                                                                            |
-| :------------------------------ | :----------------------------------------------------------------------------------------------- |
-| `npm run architecture:check`    | Static layer isolation and import boundary verification (`scripts/check-architecture.mjs`).      |
-| `npm run typecheck`             | Strict TypeScript checks across backend (`tsconfig.json`) and Mini App (`webapp/tsconfig.json`). |
-| `npm run lint` / `format:check` | ESLint 10 static analysis and Prettier formatting checks.                                        |
-| `npm test`                      | Vitest unit and subsystem suite (domain, infra, jobs, telegram, webapp).                         |
-| `npm run build`                 | Production Vite frontend build + esbuild backend bundle.                                         |
+| Script                          | Check                                                                                                           |
+| :------------------------------ | :-------------------------------------------------------------------------------------------------------------- |
+| `npm run architecture:check`    | Static layer isolation and import boundary verification (`scripts/check-architecture.mjs`).                     |
+| `npm run typecheck`             | Parallel incremental TypeScript checks across backend (`tsconfig.json`) and Mini App (`webapp/tsconfig.json`).  |
+| `npm run lint` / `format:check` | Cached ESLint 10 static analysis and Prettier formatting checks.                                                |
+| `npm test` / `test:changed`     | Two-project Vitest suite (`shared` thread pool + `isolated` fork pool across domain, infra, jobs, bot, webapp). |
+| `npm run build`                 | Production Vite frontend build (`dist/webapp`) + esbuild backend bundle (`dist/index.js`).                      |
 
 ---
 
