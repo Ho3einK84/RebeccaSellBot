@@ -797,7 +797,13 @@ describe('WebApp User Routes (/api/user/*)', () => {
         });
 
         expect(res.statusCode).toBe(200);
-        expect(res.json()).toEqual({ success: true, autoRenewEnabled: true });
+        expect(res.json()).toEqual({
+          success: true,
+          autoRenewEnabled: true,
+          packageId: 'pkg_10gb_10d',
+          packageName: '10 GB - 10 Days',
+          price: 40_000,
+        });
         expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(
           55555,
           'cfg_1',
@@ -817,7 +823,13 @@ describe('WebApp User Routes (/api/user/*)', () => {
         });
 
         expect(res.statusCode).toBe(200);
-        expect(res.json()).toEqual({ success: true, autoRenewEnabled: true });
+        expect(res.json()).toEqual({
+          success: true,
+          autoRenewEnabled: true,
+          packageId: 'pkg_10gb_10d',
+          packageName: '10 GB - 10 Days',
+          price: 40_000,
+        });
         // Price must be server-side 40_000, NOT the client's 1!
         expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(
           55555,
@@ -851,7 +863,13 @@ describe('WebApp User Routes (/api/user/*)', () => {
         });
 
         expect(res.statusCode).toBe(200);
-        expect(res.json()).toEqual({ success: true, autoRenewEnabled: true });
+        expect(res.json()).toEqual({
+          success: true,
+          autoRenewEnabled: true,
+          packageId: 'pkg_30gb_30d',
+          packageName: '30 GB - 30 Days',
+          price: 120_000,
+        });
         expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(
           55555,
           'cfg_1',
@@ -882,7 +900,13 @@ describe('WebApp User Routes (/api/user/*)', () => {
         });
 
         expect(res.statusCode).toBe(200);
-        expect(res.json()).toEqual({ success: true, autoRenewEnabled: true });
+        expect(res.json()).toEqual({
+          success: true,
+          autoRenewEnabled: true,
+          packageId: 'pkg_30gb_30d',
+          packageName: '30 GB - 30 Days',
+          price: 120_000,
+        });
         expect(mockConfigService.setAutoRenew).toHaveBeenCalledWith(
           55555,
           'cfg_1',
@@ -1217,6 +1241,188 @@ describe('WebApp User Routes (/api/user/*)', () => {
 
         expect(res.statusCode).toBe(400);
         expect(res.json().code).toBe('INVALID_REQUEST');
+      });
+    });
+
+    describe('Native Renewal, Promo Quote/Redeem & Categories Routes', () => {
+      it('GET /api/user/configs/:id/renewal-options returns compatible packages and rollover metrics with ownership check', async () => {
+        const token = getUserToken(55555);
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/user/configs/cfg_1/renewal-options',
+          cookies: { session: token },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body.config.id).toBe('cfg_1');
+        expect(body.config.configUsername).toBe('u55555_srv1');
+        expect(typeof body.config.currentRemainingGb).toBe('number');
+        expect(typeof body.config.currentRemainingDays).toBe('number');
+        expect(body.packages.length).toBeGreaterThanOrEqual(1);
+        expect(body.defaultRolloverEnabled).toBe(true);
+        expect(body.customVolumeEnabled).toBe(true);
+
+        const forbidden = await app.inject({
+          method: 'GET',
+          url: '/api/user/configs/cfg_other_user/renewal-options',
+          cookies: { session: token },
+        });
+        expect(forbidden.statusCode).toBe(403);
+        expect(forbidden.json().code).toBe('OWNER_MISMATCH');
+
+        const missing = await app.inject({
+          method: 'GET',
+          url: '/api/user/configs/cfg_unknown/renewal-options',
+          cookies: { session: token },
+        });
+        expect(missing.statusCode).toBe(404);
+        expect(missing.json().code).toBe('CONFIG_NOT_FOUND');
+      });
+
+      it('POST /api/user/promo/quote & /api/user/promo/redeem validate purchase promos and gift credit codes', async () => {
+        const promoService = {
+          quoteForPurchase: vi.fn(
+            async (_tid: number, code: string, amount: number, gb: number) => {
+              if (code === 'BONUS10') {
+                return {
+                  code: 'BONUS10',
+                  type: 'gift_gb',
+                  value: 10,
+                  finalAmount: amount,
+                  finalGbAmount: gb + 10,
+                };
+              }
+              return {
+                code: 'SAVE10',
+                type: 'percent',
+                value: 10,
+                finalAmount: Math.round(amount * 0.9),
+                finalGbAmount: gb,
+              };
+            }
+          ),
+          redeemCode: vi.fn(async (_tid: number, code: string) => {
+            if (code === 'GIFT50K') {
+              return {
+                success: true,
+                code: 'GIFT50K',
+                codeType: 'gift_credit',
+                value: 50_000,
+                messageKey: 'promo_gift_redeemed',
+              };
+            }
+            return {
+              success: true,
+              code: 'SAVE10',
+              codeType: 'percent',
+              value: 10,
+              messageKey: 'promo_valid',
+            };
+          }),
+        };
+        const promoApp = await createWebAppServer(mockConfig, {
+          ...mockServices,
+          promoService: promoService as any,
+        });
+        try {
+          const token = promoApp.jwt.sign({ telegramId: 55555, role: 'user' });
+          const quoteRes = await promoApp.inject({
+            method: 'POST',
+            url: '/api/user/promo/quote',
+            cookies: { session: token },
+            payload: { code: 'BONUS10', packageId: 'pkg_10gb_10d' },
+          });
+          expect(quoteRes.statusCode).toBe(200);
+          expect(quoteRes.json()).toMatchObject({
+            valid: true,
+            code: 'BONUS10',
+            bonusGb: 10,
+            finalGb: 20,
+            finalAmount: 40_000,
+          });
+
+          const redeemGift = await promoApp.inject({
+            method: 'POST',
+            url: '/api/user/promo/redeem',
+            cookies: { session: token },
+            payload: { code: 'GIFT50K' },
+          });
+          expect(redeemGift.statusCode).toBe(200);
+          expect(redeemGift.json()).toMatchObject({
+            success: true,
+            type: 'gift_credit',
+            value: 50_000,
+          });
+
+          const redeemPurchaseCode = await promoApp.inject({
+            method: 'POST',
+            url: '/api/user/promo/redeem',
+            cookies: { session: token },
+            payload: { code: 'SAVE10' },
+          });
+          expect(redeemPurchaseCode.statusCode).toBe(400);
+          expect(redeemPurchaseCode.json().code).toBe('PROMO_PURCHASE_ONLY');
+        } finally {
+          await promoApp.close();
+        }
+      });
+
+      it('POST /api/user/checkout & confirm execute native renew_config with rollover preview', async () => {
+        mockPurchaseCheckoutService.claim.mockResolvedValueOnce({
+          id: 'co_renew_native_1',
+          telegramId: 55555,
+          kind: 'renew_config',
+          configId: 'cfg_1',
+          packageId: 'pkg_10gb_10d',
+          packageName: '10 GB - 10 Days',
+          panelId: 'panel_1',
+          serviceId: 1,
+          amount: 40_000,
+          quotedAmount: 40_000,
+          gbAmount: 10,
+          durationDays: 10,
+          promoCode: null,
+          status: 'processing',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          claimedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        const token = getUserToken(55555);
+        const createRes = await app.inject({
+          method: 'POST',
+          url: '/api/user/checkout',
+          cookies: { session: token },
+          payload: {
+            kind: 'renew_config',
+            configId: 'cfg_1',
+            packageId: 'pkg_10gb_10d',
+          },
+        });
+        expect(createRes.statusCode).toBe(201);
+        const created = createRes.json();
+        expect(created.kind).toBe('renew_config');
+        expect(created.configId).toBe('cfg_1');
+        expect(created.rolloverPreview?.enabled).toBe(true);
+        expect(created.rolloverPreview?.projectedTotalGb).toBeGreaterThan(10);
+
+        const confirmRes = await app.inject({
+          method: 'POST',
+          url: '/api/user/checkout/co_renew_native_1/confirm',
+          cookies: { session: token },
+        });
+        expect(confirmRes.statusCode).toBe(200);
+        const confirmed = confirmRes.json();
+        expect(confirmed.success).toBe(true);
+        expect(confirmed.kind).toBe('renew_config');
+        expect(confirmed.configUsername).toBe('u55555_srv1');
+        expect(mockWalletService.executePurchaseSaga).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'renew_config',
+            configUsername: 'u55555_srv1',
+          })
+        );
       });
     });
   });

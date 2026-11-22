@@ -1,5 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Wifi, Copy, Check, QrCode, ShieldCheck, ShoppingBag, Settings2 } from 'lucide-react';
+import {
+  Wifi,
+  Copy,
+  Check,
+  QrCode,
+  ShieldCheck,
+  ShoppingBag,
+  Settings2,
+  RefreshCw,
+} from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -22,20 +31,47 @@ import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 interface ServicesTabProps {
   configs: UserConfigRecord[];
   botUsername?: string;
+  currency?: string;
   initialConfigId?: string | null;
   onClearInitialConfig?: () => void;
   onOpenQr: (subUrl: string, configUsername: string) => void;
   onGoToShop: () => void;
+  onRenewConfig?: (config: UserConfigRecord) => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
+}
+
+function isServiceUrgentForRenewal(config: UserConfigRecord): boolean {
+  if (config.panelStatus === 'expired' || config.panelStatus === 'limited') {
+    return true;
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (
+    typeof config.panelExpire === 'number' &&
+    config.panelExpire > 0 &&
+    config.panelExpire - nowSec <= 3 * 86_400
+  ) {
+    return true;
+  }
+  if (
+    typeof config.panelDataLimit === 'number' &&
+    config.panelDataLimit > 0 &&
+    typeof config.panelUsedTraffic === 'number' &&
+    config.panelUsedTraffic / config.panelDataLimit >= 0.8
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export const ServicesTab: React.FC<ServicesTabProps> = ({
   configs,
   botUsername,
+  currency,
   initialConfigId,
   onClearInitialConfig,
   onOpenQr,
   onGoToShop,
+  onRenewConfig,
   onNotify,
 }) => {
   const { t, locale } = useLanguage();
@@ -75,6 +111,11 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
     setSelectedConfigId(configId);
   };
 
+  const handleRenewClick = (config: UserConfigRecord) => {
+    triggerHaptic('medium');
+    onRenewConfig?.(config);
+  };
+
   return (
     <div className="w-full flex flex-col gap-4 pb-6">
       <div className="flex items-center justify-between gap-3">
@@ -111,12 +152,15 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 anim-stagger">
           {configs.map((c) => {
             const isSubCopied = isCopied(`sub-${c.id}`);
+            const urgent = isServiceUrgentForRenewal(c);
 
             return (
               <Card
                 key={c.id}
                 padding="md"
-                className="flex flex-col justify-between gap-3.5 text-start transition-all duration-200 hover:border-line-strong hover:shadow-[var(--shadow-card-hover)]"
+                className={`flex flex-col justify-between gap-3.5 text-start transition-all duration-200 hover:border-line-strong hover:shadow-[var(--shadow-card-hover)] ${
+                  urgent ? 'border-warn/45' : ''
+                }`}
               >
                 <div className="flex flex-col gap-3">
                   {/* Header: Name, Auto-renew, and Status */}
@@ -157,53 +201,80 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                   </div>
                 </div>
 
-                {/* Actions: Copy Link, QR, and Manage Service */}
-                <div className="flex items-center gap-2 pt-0.5">
-                  {c.subUrl && (
-                    <>
-                      <Button
-                        size="md"
-                        variant={isSubCopied ? 'success' : 'secondary'}
-                        onClick={() => void handleCopySub(c.subUrl!, `sub-${c.id}`)}
-                        className="flex-1 min-w-0"
-                      >
-                        {isSubCopied ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 shrink-0 anim-pop" />
-                            <span className="truncate">{t('user.services.linkCopied')}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">{t('user.services.copyLink')}</span>
-                          </>
-                        )}
-                      </Button>
+                {/* Actions: Renew, Copy Link, QR, and Manage Service */}
+                <div className="flex flex-col gap-2 pt-0.5">
+                  {onRenewConfig && urgent && (
+                    <Button size="md" variant="primary" block onClick={() => handleRenewClick(c)}>
+                      <RefreshCw className="w-4 h-4 shrink-0" />
+                      <span>{t('user.services.renewQuick')}</span>
+                    </Button>
+                  )}
 
+                  <div className="flex items-center gap-2">
+                    {c.subUrl && (
+                      <>
+                        <Button
+                          size="md"
+                          variant={isSubCopied ? 'success' : 'secondary'}
+                          onClick={() => void handleCopySub(c.subUrl!, `sub-${c.id}`)}
+                          className="flex-1 min-w-0"
+                        >
+                          {isSubCopied ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 shrink-0 anim-pop" />
+                              <span className="truncate">{t('user.services.linkCopied')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">{t('user.services.copyLink')}</span>
+                            </>
+                          )}
+                        </Button>
+
+                        <Button
+                          size="md"
+                          variant="tonal"
+                          onClick={() => handleQrClick(c.subUrl!, c.configUsername)}
+                          className="w-11 px-0 shrink-0"
+                          title={t('user.services.showQr')}
+                          aria-label={t('user.services.showQr')}
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
+
+                    {onRenewConfig && !urgent && (
                       <Button
                         size="md"
                         variant="tonal"
-                        onClick={() => handleQrClick(c.subUrl!, c.configUsername)}
-                        className="w-11 px-0 shrink-0"
-                        title={t('user.services.showQr')}
-                        aria-label={t('user.services.showQr')}
+                        onClick={() => handleRenewClick(c)}
+                        className="shrink-0"
+                        title={t('user.services.renewNow')}
+                        aria-label={t('user.services.renewNow')}
                       >
-                        <QrCode className="w-4 h-4" />
+                        <RefreshCw className="w-4 h-4 text-brand-fg shrink-0" />
+                        <span>{t('user.services.renewNow')}</span>
                       </Button>
-                    </>
-                  )}
+                    )}
 
-                  <Button
-                    size="md"
-                    variant="outline"
-                    onClick={() => handleManageClick(c.id)}
-                    className={c.subUrl ? 'shrink-0' : 'flex-1'}
-                    title={t('user.services.manage')}
-                    aria-label={t('user.services.manage')}
-                  >
-                    <Settings2 className="w-4 h-4 text-brand-fg shrink-0" />
-                    <span>{t('user.services.manage')}</span>
-                  </Button>
+                    <Button
+                      size="md"
+                      variant="outline"
+                      onClick={() => handleManageClick(c.id)}
+                      className={c.subUrl ? 'shrink-0' : 'flex-1'}
+                      title={t('user.services.manage')}
+                      aria-label={t('user.services.manage')}
+                    >
+                      <Settings2 className="w-4 h-4 text-brand-fg shrink-0" />
+                      <span
+                        className={c.subUrl && onRenewConfig && !urgent ? 'hidden sm:inline' : ''}
+                      >
+                        {t('user.services.manage')}
+                      </span>
+                    </Button>
+                  </div>
                 </div>
               </Card>
             );
@@ -217,7 +288,9 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
         onClose={() => setSelectedConfigId(null)}
         config={selectedConfig}
         botUsername={botUsername}
+        currency={currency}
         onOpenQr={onOpenQr}
+        onRenewConfig={onRenewConfig}
         onNotify={onNotify}
       />
     </div>

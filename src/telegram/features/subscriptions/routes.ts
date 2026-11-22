@@ -40,9 +40,27 @@ import {
   type RebeccaUserDetail,
   RebeccaOriginDownError,
 } from '../../../domain/services/RebeccaService.js';
+import {
+  resolveBestCatalogDiscount,
+  safeListActiveDiscounts,
+  type CatalogDiscountRow,
+  type ResolvedCatalogDiscount,
+} from '../../../domain/services/CatalogDiscountService.js';
+import {
+  formatRemainingDiscountDuration,
+  type PackageOption,
+} from '../../../domain/services/PricingService.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 import { packageCatalogToken } from '../../packageCatalog.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../../checkoutLifecycle.js';
+import {
+  buildInsufficientBalanceKeyboard,
+  buildUnifiedCheckoutScreen,
+  buildUnifiedInsufficientBalanceScreen,
+  computeRolloverPreview,
+  formatCompactDiscountedPackageLabel,
+  type RolloverPreview,
+} from '../../checkoutRenderer.js';
 
 const SUBSCRIPTION_PAGE_SIZE = 4;
 const CONFIG_ID_CAPTURE = '([a-zA-Z0-9_]{3,40})';
@@ -67,19 +85,55 @@ export type DeleteQuote =
     }
   | { eligible: false; reason: string };
 
+function applyPendingPromoToPrice(
+  basePrice: number,
+  pendingPromo?: MenuContext['session']['pendingPromo']
+): number {
+  if (!pendingPromo) return basePrice;
+  if (pendingPromo.minPurchaseAmount && basePrice < pendingPromo.minPurchaseAmount) {
+    return basePrice;
+  }
+  if (pendingPromo.type === 'discount_percent') {
+    let discount = Math.floor((basePrice * pendingPromo.value) / 100);
+    if (
+      pendingPromo.maxDiscountAmount !== undefined &&
+      pendingPromo.maxDiscountAmount !== null &&
+      pendingPromo.maxDiscountAmount > 0
+    ) {
+      discount = Math.min(discount, pendingPromo.maxDiscountAmount);
+    }
+    return Math.max(0, basePrice - discount);
+  }
+  if (pendingPromo.type === 'discount_fixed') {
+    return Math.max(0, basePrice - pendingPromo.value);
+  }
+  return basePrice;
+}
+
 export function buildRenewalSelectionKeyboard(
   ctx: MenuContext,
   configId: string,
   panelId?: string,
-  serviceId?: number
+  serviceId?: number,
+  activeDiscounts: readonly CatalogDiscountRow[] = []
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   const packages = ctx.services!.pricingService.getPackages(panelId, serviceId);
   const catalogToken = packageCatalogToken(packages);
+  const pendingPromo = ctx.session?.pendingPromo;
   for (const [index, pkg] of packages.entries()) {
+    const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
+      packageId: pkg.id,
+      categoryId: pkg.categoryId ?? null,
+      originalPrice: pkg.price,
+    });
+    const effectivePrice = applyPendingPromoToPrice(catalogDiscount.effectivePrice, pendingPromo);
     keyboard
       .text(
-        formatPackageButtonLabel(ctx, pkg),
+        formatCompactDiscountedPackageLabel(ctx, pkg, {
+          effectivePrice,
+          catalogDiscount,
+        }),
         callbackData('r', 'p', configId, index, catalogToken)
       )
       .row();
@@ -92,6 +146,16 @@ export function buildRenewalSelectionKeyboard(
         callbackData('renew', 'custom', configId)
       )
       .row();
+  }
+  if (pendingPromo) {
+    keyboard
+      .text(
+        `${t(ctx, 'shop_clear_promo_button')} · ${pendingPromo.code}`,
+        callbackData('renew', 'clear_promo', configId)
+      )
+      .row();
+  } else {
+    keyboard.text(t(ctx, 'shop_apply_promo_button'), 'shop:apply_promo').row();
   }
   return keyboard.text(t(ctx, 'menu_back'), callbackData('config', 'view', configId));
 }
@@ -207,9 +271,93 @@ export async function renderRenewalSelection(
   config: UserConfigRecord
 ): Promise<void> {
   const packages = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId);
+  const activeDiscounts = await safeListActiveDiscounts(ctx.services!.catalogDiscountService);
   const isCustom = customVolumeEnabled(ctx.services!.translationService);
-  const keyboard = buildRenewalSelectionKeyboard(ctx, config.id, config.panelId, config.serviceId);
+  const keyboard = buildRenewalSelectionKeyboard(
+    ctx,
+    config.id,
+    config.panelId,
+    config.serviceId,
+    activeDiscounts
+  );
   const hasChoices = packages.length > 0 || isCustom;
+
+  const targetTelegramId = config.telegramId;
+  let availableBalance: number | undefined;
+  try {
+    const ws = ctx.services!.walletService;
+    if (typeof ws?.getAvailableBalance === 'function') {
+      availableBalance = await ws.getAvailableBalance(targetTelegramId);
+    } else if (typeof ws?.getBalance === 'function') {
+      availableBalance = await ws.getBalance(targetTelegramId);
+    }
+  } catch {
+    availableBalance = undefined;
+  }
+
+  let featuredDiscount: ResolvedCatalogDiscount | undefined;
+  for (const pkg of packages) {
+    const resolved = resolveBestCatalogDiscount(activeDiscounts, {
+      packageId: pkg.id,
+      categoryId: pkg.categoryId ?? null,
+      originalPrice: pkg.price,
+    });
+    if (
+      resolved.discountAmount > 0 &&
+      (!featuredDiscount || resolved.discountAmount > featuredDiscount.discountAmount)
+    ) {
+      featuredDiscount = resolved;
+    }
+  }
+
+  const traffic = calculateTraffic(undefined, config);
+  const currentFields: Array<{ emoji?: string; label?: string; value: string }> = [];
+  if (availableBalance !== undefined) {
+    currentFields.push({
+      emoji: '💳',
+      label: t(ctx, 'shop_wallet_balance_label'),
+      value: `${localizedNumber(availableBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+    });
+  }
+  if (!traffic.isUnavailable) {
+    const remValue = traffic.isUnlimited
+      ? t(ctx, 'unlimited')
+      : traffic.remainingBytes != null
+        ? `${localizedNumber(Number((traffic.remainingBytes / 1024 ** 3).toFixed(1)), ctx)} ${t(ctx, 'traffic_unit_gb')}`
+        : undefined;
+    if (remValue) {
+      currentFields.push({ label: t(ctx, 'remaining'), value: remValue });
+    }
+  }
+  if (config.panelStatus === 'on_hold' || config.panelExpire != null) {
+    currentFields.push({
+      label: t(ctx, 'expiry'),
+      value:
+        config.panelStatus === 'on_hold'
+          ? formatOnHoldExpiry(ctx, config.panelOnHoldExpireDuration)
+          : formatExpiry(ctx, config.panelExpire),
+    });
+  }
+  if (featuredDiscount?.activeDiscountTitle) {
+    currentFields.push({
+      value: t(ctx, 'shop_discount_banner', {
+        name: escapeTelegramMarkdown(featuredDiscount.activeDiscountTitle),
+        remaining: formatRemainingDiscountDuration(
+          featuredDiscount.discountExpiresAt,
+          resolveContextLocale(ctx)
+        ),
+      }),
+    });
+  }
+  const pendingPromo = ctx.session?.pendingPromo;
+  if (pendingPromo) {
+    currentFields.push({
+      emoji: '🎟️',
+      label: t(ctx, 'shop_promo_section'),
+      value: `\`${sanitizeTelegramInlineCode(pendingPromo.code)}\``,
+    });
+  }
+
   await renderSubscriptionScreen(
     ctx,
     buildUserScreen({
@@ -221,11 +369,192 @@ export async function renderRenewalSelection(
         value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
         inline: true,
       },
+      ...(currentFields.length > 0
+        ? {
+            sections: [
+              {
+                title: t(ctx, 'renewal_current_status_section'),
+                fields: currentFields,
+              },
+            ],
+          }
+        : {}),
       footer: hasChoices
         ? t(ctx, 'renewal_selection_hint')
         : `⚠️ ${t(ctx, 'renewal_selection_empty')}`,
     }),
     keyboard
+  );
+}
+
+/**
+ * Shared renewal checkout preview renderer used both on direct package pick
+ * and when resuming a renewal after applying/clearing a promo code.
+ */
+export async function renderRenewalCheckoutForPackage(
+  ctx: MenuContext,
+  configId: string,
+  packageId: string
+): Promise<boolean> {
+  const config = await ownedConfig(ctx, configId, false);
+  if (!config || !ctx.services) return false;
+  const packages = ctx.services.pricingService.getPackages(config.panelId, config.serviceId);
+  const pkg = packages.find((item) => item.id === packageId);
+  if (!pkg) return false;
+
+  await renderRenewalCheckoutForResolvedPackage(ctx, config, pkg);
+  return true;
+}
+
+async function renderRenewalCheckoutForResolvedPackage(
+  ctx: MenuContext,
+  config: UserConfigRecord,
+  pkg: PackageOption
+): Promise<void> {
+  const targetTelegramId = config.telegramId;
+  const activeDiscounts = await safeListActiveDiscounts(ctx.services!.catalogDiscountService);
+  const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
+    packageId: pkg.id,
+    categoryId: pkg.categoryId ?? null,
+    originalPrice: pkg.price,
+  });
+  const effectivePkg: PackageOption =
+    catalogDiscount.discountAmount > 0 ? { ...pkg, price: catalogDiscount.effectivePrice } : pkg;
+
+  const pendingPromo = await getPendingPromoPricing(
+    ctx,
+    targetTelegramId,
+    effectivePkg.price,
+    pkg.gbAmount
+  );
+  if (pendingPromo.messageKey) {
+    if (ctx.callbackQuery) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable'), show_alert: true });
+    }
+    await renderSubscriptionScreen(
+      ctx,
+      buildUserEmptyState('⚠️', t(ctx, 'renewal_selection_title'), t(ctx, pendingPromo.messageKey)),
+      new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id))
+    );
+    return;
+  }
+
+  const price = pendingPromo.quote?.finalAmount ?? effectivePkg.price;
+  const bonusGb = pendingPromo.quote
+    ? Math.max(0, pendingPromo.quote.finalGbAmount - pkg.gbAmount)
+    : 0;
+  const balance = await ctx.services!.walletService.getAvailableBalance(targetTelegramId);
+
+  if (ctx.session) {
+    ctx.session.promoCheckoutContext = {
+      kind: 'renew_config',
+      configId: config.id,
+      packageId: pkg.id,
+    };
+  }
+
+  if (balance < price) {
+    if (ctx.session) {
+      ctx.session.pendingTopupIntent = {
+        kind: 'renew_config',
+        packageId: pkg.id,
+        configId: config.id,
+        configUsername: config.configUsername,
+        deficitAmount: price - balance,
+        createdAt: Date.now(),
+      };
+    }
+    if (ctx.callbackQuery) {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
+    }
+    await renderSubscriptionScreen(
+      ctx,
+      buildUnifiedInsufficientBalanceScreen(ctx, {
+        packagePrice: price,
+        balance,
+        includePromoHint: true,
+      }),
+      buildInsufficientBalanceKeyboard(ctx, {
+        backLabelKey: 'menu_back',
+        backCallback: callbackData('renew', 'open', config.id),
+        promoCallback: 'shop:apply_promo',
+      })
+    );
+    return;
+  }
+
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery().catch(() => undefined);
+  }
+  const checkout = await ctx.services!.purchaseCheckoutService.create({
+    telegramId: targetTelegramId,
+    kind: 'renew_config',
+    configId: config.id,
+    pkg: effectivePkg,
+    panelId: config.panelId,
+    serviceId: pkg.serviceId ?? config.serviceId,
+    promoCode: pendingPromo.promoCode,
+    quotedAmount: price,
+  });
+
+  const rolloverEnabled =
+    pkg.rolloverQuota ??
+    (typeof ctx.services!.translationService?.getSetting === 'function'
+      ? renewalRolloverEnabled(ctx.services!.translationService)
+      : true);
+
+  let remote: RebeccaUserDetail | undefined;
+  if (rolloverEnabled && typeof ctx.services!.configService?.getRemoteConfigDetail === 'function') {
+    try {
+      remote = await ctx.services!.configService.getRemoteConfigDetail(config);
+    } catch {
+      remote = undefined;
+    }
+  }
+  const rollover = computeRolloverPreview({
+    enabled: rolloverEnabled,
+    addedGb: pkg.gbAmount,
+    addedDays: pkg.durationDays,
+    dataLimitBytes: remote?.data_limit ?? config.panelDataLimit,
+    usedTrafficBytes: remote?.used_traffic ?? config.panelUsedTraffic,
+    expireTimestampSec: remote?.expire ?? config.panelExpire,
+    status: remote?.status ?? config.panelStatus,
+    onHoldExpireDurationSec:
+      remote?.on_hold_expire_duration ?? config.panelOnHoldExpireDuration ?? null,
+  });
+
+  const confirmKeyboard = new InlineKeyboard()
+    .text(t(ctx, 'renew_confirm_button'), callbackData('renew', 'confirm', checkout.id))
+    .row();
+  if (pendingPromo.quote?.code) {
+    confirmKeyboard
+      .text(t(ctx, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
+      .text(t(ctx, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
+      .row();
+  } else {
+    confirmKeyboard.text(t(ctx, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`).row();
+  }
+  confirmKeyboard.text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id));
+
+  await renderSubscriptionScreen(
+    ctx,
+    buildRenewalCheckoutScreen(ctx, {
+      username: config.configUsername,
+      packageName: localizedPackageName(ctx, pkg.id, pkg.name),
+      gbAmount: pkg.gbAmount,
+      bonusGb,
+      durationDays: pkg.durationDays,
+      amount: price,
+      originalPrice: catalogDiscount.originalPrice,
+      effectivePrice: effectivePkg.price,
+      pricePerGb: pkg.gbAmount + bonusGb > 0 ? Math.round(price / (pkg.gbAmount + bonusGb)) : price,
+      walletBalance: balance,
+      catalogDiscount,
+      promoCode: pendingPromo.quote?.code,
+      rolloverEnabled,
+      rollover,
+    }),
+    confirmKeyboard
   );
 }
 
@@ -290,12 +619,19 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     await renderRenewalSelection(ctx, config);
   });
 
+  bot.callbackQuery(new RegExp(`^renew:clear_promo:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
+    const config = await ownedConfig(ctx, ctx.match[1]!);
+    if (!config) return;
+    clearPendingPromo(ctx);
+    await ctx.answerCallbackQuery({ text: t(ctx, 'button_refreshed') });
+    await renderRenewalSelection(ctx, config);
+  });
+
   bot.callbackQuery(
     new RegExp(`^r:p:${CONFIG_ID_CAPTURE}:(\\d+):([0-9a-f]{10})$`, 'u'),
     async (ctx) => {
       const config = await ownedConfig(ctx, ctx.match[1]!);
       if (!config) return;
-      const targetTelegramId = config.telegramId;
       const packageIndex = Number(ctx.match[2]);
       const packages = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId);
       const pkg =
@@ -309,75 +645,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         });
         return;
       }
-      const pendingPromo = await getPendingPromoPricing(
-        ctx,
-        targetTelegramId,
-        pkg.price,
-        pkg.gbAmount
-      );
-      if (pendingPromo.messageKey) {
-        await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable'), show_alert: true });
-        await renderSubscriptionScreen(
-          ctx,
-          buildUserEmptyState(
-            '⚠️',
-            t(ctx, 'renewal_selection_title'),
-            t(ctx, pendingPromo.messageKey)
-          ),
-          backKeyboard(ctx)
-        );
-        return;
-      }
-      const price = pendingPromo.quote?.finalAmount ?? pkg.price;
-      if ((await ctx.services!.walletService.getAvailableBalance(targetTelegramId)) < price) {
-        await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
-        await renderSubscriptionScreen(
-          ctx,
-          buildUserEmptyState(
-            '💳',
-            t(ctx, 'insufficient_balance_title'),
-            t(ctx, 'insufficient_balance'),
-            t(ctx, 'insufficient_balance_hint')
-          ),
-          new InlineKeyboard()
-            .text(t(ctx, 'direct_topup_button'), 'topup:direct')
-            .row()
-            .text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id))
-        );
-        return;
-      }
-      await ctx.answerCallbackQuery();
-      const checkout = await ctx.services!.purchaseCheckoutService.create({
-        telegramId: targetTelegramId,
-        kind: 'renew_config',
-        configId: config.id,
-        pkg,
-        panelId: config.panelId,
-        serviceId: pkg.serviceId ?? config.serviceId,
-        promoCode: pendingPromo.promoCode,
-        quotedAmount: price,
-      });
-      const rolloverEnabled =
-        pkg.rolloverQuota ??
-        (typeof ctx.services!.translationService?.getSetting === 'function'
-          ? renewalRolloverEnabled(ctx.services!.translationService)
-          : true);
-      await renderSubscriptionScreen(
-        ctx,
-        buildRenewalCheckoutScreen(ctx, {
-          username: config.configUsername,
-          gbAmount: pkg.gbAmount,
-          durationDays: pkg.durationDays,
-          amount: price,
-          pricePerGb: pkg.gbAmount > 0 ? Math.round(price / pkg.gbAmount) : price,
-          promoCode: pendingPromo.quote?.code,
-          rolloverEnabled,
-        }),
-        new InlineKeyboard()
-          .text(t(ctx, 'renew_confirm_button'), callbackData('renew', 'confirm', checkout.id))
-          .row()
-          .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
-      );
+      await renderRenewalCheckoutForResolvedPackage(ctx, config, pkg);
     }
   );
 
@@ -428,6 +696,20 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       return;
     }
     await ctx.answerCallbackQuery({ text: t(ctx, 'renewing') });
+    await renderSubscriptionScreen(
+      ctx,
+      buildUserScreen({
+        emoji: '⏳',
+        title: t(ctx, 'renewal_processing_title'),
+        subtitle: t(ctx, 'renewal_processing_subtitle'),
+        primary: {
+          label: t(ctx, 'renewal_selection_service_label'),
+          value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+          inline: true,
+        },
+      }),
+      new InlineKeyboard().text(t(ctx, 'operation_in_progress'), 'purchase:pending')
+    );
     let result: { configUsername: string; subUrl?: string };
     try {
       const resolvedPkg =
@@ -457,10 +739,17 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       const failureMarkup =
         isAdmin && config.telegramId !== ctx.from.id
           ? backToKeyboard(ctx, `admin:user:subscriptions:${config.telegramId}:1`)
-          : backKeyboard(ctx, 'main');
+          : new InlineKeyboard()
+              .text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id))
+              .row()
+              .text(t(ctx, 'menu_back_main'), 'nav:main');
       await renderScreen(
         ctx,
-        purchaseFailureMessage(ctx.services!.translationService, err, resolveContextLocale(ctx)),
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'renewal_failed_title'),
+          purchaseFailureMessage(ctx.services!.translationService, err, resolveContextLocale(ctx))
+        ),
         { parse_mode: 'Markdown', reply_markup: failureMarkup }
       );
       return;
@@ -468,10 +757,74 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
 
     await recordCheckoutCompleted(ctx.services.purchaseCheckoutService, checkout.id);
     if (checkout.promoCode) clearPendingPromo(ctx);
+    if (ctx.session) {
+      delete ctx.session.promoCheckoutContext;
+      delete ctx.session.pendingTopupIntent;
+    }
+
+    let updatedRemote: RebeccaUserDetail | undefined;
+    if (typeof ctx.services.configService?.getRemoteConfigDetail === 'function') {
+      try {
+        updatedRemote = await ctx.services.configService.getRemoteConfigDetail(config);
+      } catch {
+        updatedRemote = undefined;
+      }
+    }
+    let remainingBalance: number | undefined;
+    try {
+      const ws = ctx.services.walletService;
+      if (typeof ws?.getAvailableBalance === 'function') {
+        remainingBalance = await ws.getAvailableBalance(checkout.telegramId);
+      }
+    } catch {
+      remainingBalance = undefined;
+    }
+
+    const successFields: Array<{ label: string; value: string }> = [
+      {
+        label: t(ctx, 'renewal_success_service_label'),
+        value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
+      },
+      {
+        label: t(ctx, 'renewal_success_package_label'),
+        value: escapeTelegramMarkdown(
+          localizedPackageName(ctx, checkout.packageId, checkout.packageName)
+        ),
+      },
+    ];
+    if (updatedRemote) {
+      const updatedTraffic = calculateTraffic(updatedRemote, config);
+      if (
+        !updatedTraffic.isUnavailable &&
+        !updatedTraffic.isUnlimited &&
+        updatedTraffic.remainingBytes != null
+      ) {
+        successFields.push({
+          label: t(ctx, 'renewal_success_new_quota_label'),
+          value: `${localizedNumber(Number((updatedTraffic.remainingBytes / 1024 ** 3).toFixed(1)), ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+        });
+      }
+      if (updatedRemote.expire != null) {
+        successFields.push({
+          label: t(ctx, 'renewal_success_new_expiry_label'),
+          value: formatExpiry(ctx, updatedRemote.expire),
+        });
+      }
+    }
+    if (remainingBalance !== undefined) {
+      successFields.push({
+        label: t(ctx, 'renewal_success_balance_label'),
+        value: `${localizedNumber(remainingBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+      });
+    }
+
     const successMarkup =
       isAdmin && config.telegramId !== ctx.from.id
         ? backToKeyboard(ctx, `admin:user:subscriptions:${config.telegramId}:1`)
-        : backKeyboard(ctx, 'main');
+        : new InlineKeyboard()
+            .text(t(ctx, 'subscription_view_detail'), callbackData('config', 'view', config.id))
+            .row()
+            .text(t(ctx, 'menu_back_main'), 'nav:main');
     await renderSubscriptionScreen(
       ctx,
       buildUserScreen({
@@ -481,18 +834,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         sections: [
           {
             bullet: '',
-            fields: [
-              {
-                label: t(ctx, 'renewal_success_service_label'),
-                value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
-              },
-              {
-                label: t(ctx, 'renewal_success_package_label'),
-                value: escapeTelegramMarkdown(
-                  localizedPackageName(ctx, checkout.packageId, checkout.packageName)
-                ),
-              },
-            ],
+            fields: successFields,
           },
         ],
       }),
@@ -551,7 +893,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           footer: `⚠️ ${t(ctx, 'auto_renew_disable_consequence')}`,
         }),
         new InlineKeyboard()
-          .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'off_confirm', config.id))
+          .text(t(ctx, 'user_confirm_button'), callbackData('autorenew', 'off_confirm', config.id))
           .row()
           .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
       );
@@ -625,7 +967,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           footer: t(ctx, 'auto_renew_review_hint'),
         }),
         new InlineKeyboard()
-          .text(t(ctx, 'admin_confirm_button'), callbackData('autorenew', 'confirm', config.id))
+          .text(t(ctx, 'user_confirm_button'), callbackData('autorenew', 'confirm', config.id))
           .row()
           .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
       );
@@ -772,7 +1114,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         footer: `⚠️ ${t(ctx, 'subscription_revoke_consequence')}`,
       }),
       new InlineKeyboard()
-        .text(t(ctx, 'admin_confirm_button'), callbackData('config', 'revoke_confirm', config.id))
+        .text(t(ctx, 'user_confirm_button'), callbackData('config', 'revoke_confirm', config.id))
         .row()
         .text(t(ctx, 'menu_back'), callbackData('config', 'view', config.id))
     );
@@ -1362,75 +1704,52 @@ export function buildRenewalCheckoutScreen(
   ctx: MenuContext,
   input: {
     username: string;
+    packageName?: string;
     gbAmount: number;
+    bonusGb?: number;
     durationDays: number;
     amount: number;
+    originalPrice?: number;
+    effectivePrice?: number;
     pricePerGb: number;
+    walletBalance?: number;
+    catalogDiscount?: ResolvedCatalogDiscount;
     promoCode?: string;
     rolloverEnabled?: boolean;
+    rollover?: RolloverPreview;
   }
 ): string {
-  return buildUserScreen({
-    emoji: '🧾',
-    title: t(ctx, 'renewal_review_title'),
-    subtitle: t(ctx, 'renewal_review_subtitle'),
-    primary: {
-      label: t(ctx, 'checkout_total_label'),
-      value: `${localizedNumber(input.amount, ctx)} ${t(ctx, 'currency_toman')}`,
-      emphasizeValue: true,
-    },
-    sections: [
-      {
-        title: t(ctx, 'renewal_selection_service_label'),
-        fields: [
-          {
-            label: t(ctx, 'checkout_service_label'),
-            value: `\`${sanitizeTelegramInlineCode(input.username)}\``,
+  const effectivePrice =
+    input.effectivePrice ?? input.catalogDiscount?.effectivePrice ?? input.amount;
+  const rollover: RolloverPreview | undefined =
+    input.rollover ?? (input.rolloverEnabled ? { enabled: true } : { enabled: false });
+  return buildUnifiedCheckoutScreen(ctx, {
+    mode: 'renewal',
+    serviceUsername: input.username,
+    packageName:
+      input.packageName ??
+      t(ctx, 'custom_package_name', {
+        gb: localizedNumber(input.gbAmount, ctx),
+        days: localizedNumber(input.durationDays, ctx),
+      }),
+    gbAmount: input.gbAmount,
+    durationDays: input.durationDays,
+    originalPrice: input.originalPrice ?? input.catalogDiscount?.originalPrice,
+    effectivePrice,
+    finalAmount: input.amount,
+    pricePerGb: input.pricePerGb,
+    walletAvailableBalance: input.walletBalance,
+    catalogDiscount: input.catalogDiscount,
+    rollover,
+    ...(input.promoCode
+      ? {
+          promo: {
+            code: input.promoCode,
+            discountAmount: Math.max(0, effectivePrice - input.amount),
+            bonusGb: input.bonusGb ?? 0,
           },
-        ],
-      },
-      {
-        title: t(ctx, 'checkout_package_section'),
-        fields: [
-          {
-            label: t(ctx, 'checkout_traffic_label'),
-            value: `${localizedNumber(input.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
-          },
-          {
-            label: t(ctx, 'checkout_duration_label'),
-            value: `${localizedNumber(input.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
-          },
-          {
-            label: t(ctx, 'checkout_unit_price_label'),
-            value: `${localizedNumber(input.pricePerGb, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-          ...(input.rolloverEnabled
-            ? [
-                {
-                  emoji: '♻️',
-                  label: t(ctx, 'renewal_rollover_label'),
-                  value: t(ctx, 'renewal_rollover_notice'),
-                },
-              ]
-            : []),
-        ],
-      },
-      ...(input.promoCode
-        ? [
-            {
-              emoji: '🎟️',
-              title: t(ctx, 'checkout_promo_section'),
-              fields: [
-                {
-                  label: t(ctx, 'shop_promo_section'),
-                  value: `\`${sanitizeTelegramInlineCode(input.promoCode)}\``,
-                },
-              ],
-            },
-          ]
-        : []),
-    ],
-    footer: t(ctx, 'checkout_confirmation_hint'),
+        }
+      : {}),
   });
 }
 

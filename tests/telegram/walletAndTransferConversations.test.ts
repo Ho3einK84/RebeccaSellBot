@@ -74,6 +74,44 @@ describe('Topup helpers & hydrated conversation', () => {
     expect(String(adminPhoto?.payload.caption)).toContain('6698253699');
     expect(String(adminPhoto?.payload.caption)).not.toContain('۶٬۶۹۸٬۲۵۳٬۶۹۹');
   });
+
+  it('suggests exact shortfall amount as first quick button in topupConversation when pendingTopupIntent is fresh', async () => {
+    const services = createMockServices({
+      translationService: {
+        get: vi.fn((key: string) => key),
+        getSetting: vi.fn((_k: string, fb: string) => fb),
+        getSettingNum: vi.fn((_k: string, fb: number) => fb),
+      },
+    });
+    const harness = createConversationHarness({
+      services,
+      defaultLocale: 'en',
+      initialSession: {
+        '777:777': {
+          pendingTopupIntent: {
+            kind: 'new_config',
+            packageId: 'pkg_1',
+            deficitAmount: 35_000,
+            createdAt: Date.now(),
+          },
+        },
+      },
+      conversations: [['topupConversation', topupConversation]],
+    });
+    harness.bot.command('topup', async (ctx) => {
+      await ctx.conversation.enter('topupConversation');
+    });
+
+    await harness.sendText('/topup', { userId: 777 });
+    const firstMsg = harness.callsFor('sendMessage')[0]?.payload;
+    const rows = (
+      firstMsg?.reply_markup as {
+        inline_keyboard: Array<Array<{ text: string; callback_data?: string }>>;
+      }
+    ).inline_keyboard;
+    expect(rows[0]?.[0]?.callback_data).toBe('amount:35000');
+    expect(rows[0]?.[0]?.text).toContain('topup_exact_deficit_button');
+  });
 });
 
 describe('transferBalanceConversation & transferConfigConversation', () => {

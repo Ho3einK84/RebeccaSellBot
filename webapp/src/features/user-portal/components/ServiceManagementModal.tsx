@@ -20,6 +20,7 @@ import { Switch } from '@/shared/components/ui/Switch.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { api, ApiClientError } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
 import {
@@ -35,13 +36,16 @@ import {
   ServiceExpiryView,
   formatServiceCreatedDate,
 } from './ServiceStatusTraffic.js';
+import { AutoRenewModal } from './AutoRenewModal.js';
 
 interface ServiceManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
   config: UserConfigRecord | null;
   botUsername?: string;
+  currency?: string;
   onOpenQr: (subUrl: string, configUsername: string) => void;
+  onRenewConfig?: (config: UserConfigRecord) => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
 
@@ -50,17 +54,23 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   onClose,
   config,
   botUsername,
+  currency: propCurrency,
   onOpenQr,
+  onRenewConfig,
   onNotify,
 }) => {
   const { t, locale } = useLanguage();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
+  const { formatToman } = useFormatters();
   const queryClient = useQueryClient();
+
+  const currency = propCurrency || t('common.currency');
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isTogglingAutoRenew, setIsTogglingAutoRenew] = useState(false);
   const [autoRenewOptimistic, setAutoRenewOptimistic] = useState(false);
+  const [isAutoRenewModalOpen, setIsAutoRenewModalOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
 
@@ -76,6 +86,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   useEffect(() => {
     if (!isOpen || !config) {
       setConfirmAction(null);
+      setIsAutoRenewModalOpen(false);
     }
   }, [isOpen, config]);
 
@@ -126,18 +137,21 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
 
   const handleToggleAutoRenew = async (nextValue: boolean) => {
     if (isTogglingAutoRenew) return;
-    setAutoRenewOptimistic(nextValue);
+    if (nextValue) {
+      triggerHaptic('selection');
+      setIsAutoRenewModalOpen(true);
+      return;
+    }
+
+    setAutoRenewOptimistic(false);
     setIsTogglingAutoRenew(true);
     try {
-      await api.toggleAutoRenew(config.id, nextValue);
+      await api.toggleAutoRenew(config.id, false);
       await invalidateConfigQueries();
       triggerHaptic('success');
-      onNotify(
-        nextValue ? t('user.services.autoRenewOn') : t('user.services.autoRenewOff'),
-        'success'
-      );
+      onNotify(t('user.services.autoRenewOff'), 'success');
     } catch {
-      setAutoRenewOptimistic(!nextValue);
+      setAutoRenewOptimistic(true);
       triggerHaptic('error');
       onNotify(t('common.error'), 'error');
     } finally {
@@ -203,10 +217,20 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
     openTelegramLinkAndMinimize(url);
   };
 
+  const handleRenewAction = () => {
+    triggerHaptic('medium');
+    if (onRenewConfig) {
+      onClose();
+      onRenewConfig(config);
+      return;
+    }
+    handleOpenBotAction('renew');
+  };
+
   return (
     <>
       <Modal
-        isOpen={isOpen && confirmAction === null}
+        isOpen={isOpen && confirmAction === null && !isAutoRenewModalOpen}
         onClose={onClose}
         maxWidth="lg"
         title={
@@ -250,11 +274,16 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             </div>
           </div>
 
-          {/* Quick Actions: Copy Link, QR, Refresh Status */}
+          {/* Quick Actions: Native Renew, Copy Link, QR, Refresh Status */}
           <div className="flex flex-col gap-2">
             <h4 className="text-xs font-semibold px-0.5 m-0 text-ink-soft">
               {t('user.services.quickActionsTitle')}
             </h4>
+
+            <Button type="button" size="md" variant="primary" onClick={handleRenewAction} block>
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span>{t('user.services.renewService')}</span>
+            </Button>
 
             {config.subUrl && (
               <div className="grid grid-cols-2 gap-2">
@@ -309,22 +338,45 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             </h4>
 
             {/* Auto-Renew Switch Card */}
-            <div className="p-3.5 rounded-tile border flex items-center justify-between gap-3 bg-surface-2 border-line">
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-xs font-semibold text-ink">
-                  {t('user.services.autoRenewToggle')}
-                </span>
-                <span className="text-[11px] leading-relaxed text-ink-muted">
-                  {t('user.services.autoRenewHint')}
-                </span>
+            <div className="p-3.5 rounded-tile border flex flex-col gap-2 bg-surface-2 border-line">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-xs font-semibold text-ink">
+                    {t('user.services.autoRenewToggle')}
+                  </span>
+                  <span className="text-[11px] leading-relaxed text-ink-muted">
+                    {t('user.services.autoRenewHint')}
+                  </span>
+                </div>
+
+                <Switch
+                  checked={autoRenewOptimistic}
+                  onChange={(checked) => void handleToggleAutoRenew(checked)}
+                  disabled={isTogglingAutoRenew}
+                  ariaLabel={t('user.services.autoRenewToggle')}
+                />
               </div>
 
-              <Switch
-                checked={autoRenewOptimistic}
-                onChange={(checked) => void handleToggleAutoRenew(checked)}
-                disabled={isTogglingAutoRenew}
-                ariaLabel={t('user.services.autoRenewToggle')}
-              />
+              {autoRenewOptimistic && config.autoRenewPackageId && (
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-line text-[11px]">
+                  <span className="text-ink-soft truncate tnum">
+                    {t('user.services.autoRenewPackageInfo')
+                      .replace('{name}', config.autoRenewPackageId)
+                      .replace('{price}', formatToman(config.autoRenewPrice ?? 0))
+                      .replace('{currency}', currency)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setIsAutoRenewModalOpen(true);
+                    }}
+                    className="text-brand-fg font-semibold hover:underline shrink-0 cursor-pointer"
+                  >
+                    {t('user.services.autoRenewChangePlan')}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Disable / Enable Button */}
@@ -376,26 +428,6 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
               {t('user.services.botActionsTitle')}
             </h4>
 
-            {/* Renew in Bot */}
-            <button
-              type="button"
-              onClick={() => handleOpenBotAction('renew')}
-              className="group w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-brand-soft hover:bg-brand/15 text-ink border-brand/25 transition-all duration-200"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <IconTile tone="brand" size="sm">
-                  <RefreshCw />
-                </IconTile>
-                <div className="flex flex-col text-start min-w-0">
-                  <span className="text-xs font-semibold">{t('user.services.renewService')}</span>
-                  <span className="text-[11px] truncate text-ink-muted">
-                    {t('user.services.renewHint')}
-                  </span>
-                </div>
-              </div>
-              <ExternalLink className="w-3.5 h-3.5 text-brand-fg shrink-0" />
-            </button>
-
             {/* Transfer in Bot */}
             <button
               type="button"
@@ -440,6 +472,16 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* Auto-Renew Package Selection Modal */}
+      <AutoRenewModal
+        isOpen={isAutoRenewModalOpen}
+        onClose={() => setIsAutoRenewModalOpen(false)}
+        config={config}
+        currency={currency}
+        onEnabled={() => setAutoRenewOptimistic(true)}
+        onNotify={onNotify}
+      />
 
       {/* Confirmation Sub-Modal for Disable / Enable / Revoke */}
       {confirmAction && (

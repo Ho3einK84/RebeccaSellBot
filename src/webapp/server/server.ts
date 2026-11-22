@@ -473,6 +473,8 @@ export async function createWebAppServer(
     walletService: services.walletService,
     configService: services.configService,
     pricingService: services.pricingService,
+    packageCategoryService: resolvedCategoryService,
+    promoService: services.promoService,
     paymentService: services.paymentService,
     translationService: services.translationService,
     botUsername: services.botUsername,

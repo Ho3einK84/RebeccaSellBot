@@ -46,11 +46,12 @@ import {
   safeListActiveDiscounts,
   type ResolvedCatalogDiscount,
 } from '../../domain/services/CatalogDiscountService.js';
-import { formatRemainingDiscountDuration } from '../../domain/services/PricingService.js';
+import { parseVolumePricingTiersJson } from '../../domain/services/PricingService.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 import {
   customServiceNameEnabled,
   customVolumeEnabled,
+  onHoldDefaultEnabled,
   renewalRolloverEnabled,
   walletTransferEnabled,
   walletTransferMinAmount,
@@ -60,6 +61,14 @@ import {
   PurchaseCheckoutUnavailableError,
   type PurchaseCheckout,
 } from '../../domain/services/PurchaseCheckoutService.js';
+import {
+  buildInsufficientBalanceKeyboard,
+  buildUnifiedCheckoutScreen,
+  buildUnifiedInsufficientBalanceScreen,
+  computeRolloverPreview,
+  type RolloverPreview,
+  type UnifiedCheckoutPromo,
+} from '../checkoutRenderer.js';
 
 async function requireCustomVolume(
   conversation: MyConversation,
@@ -92,13 +101,152 @@ function customPackageName(
   });
 }
 
-function buildCustomVolumeInputScreen(ctx: ConversationContext): string {
-  return buildUserPromptScreen(
-    '✏️',
-    t(ctx, 'custom_volume_title'),
-    t(ctx, 'custom_volume_input_hint'),
-    t(ctx, 'custom_volume_subtitle')
-  );
+const CUSTOM_GB_PRESETS = [10, 20, 30, 50, 100, 200] as const;
+
+function getCustomVolumeBounds(ctx: ConversationContext): { minGb: number; maxGb: number } {
+  const ts = ctx.services?.translationService;
+  const rawMin = typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('custom_min_gb', 5) : 5;
+  const rawMax =
+    typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('custom_max_gb', 500) : 500;
+  const minGb = Number.isSafeInteger(rawMin) && rawMin >= 1 && rawMin <= 10_000 ? rawMin : 5;
+  const maxGb =
+    Number.isSafeInteger(rawMax) && rawMax >= minGb && rawMax <= 10_000
+      ? rawMax
+      : Math.max(minGb, 500);
+  return { minGb, maxGb };
+}
+
+async function promptCustomVolumeGb(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  options: { cancelDestination?: 'home' | 'shop' | 'wallet' } = {}
+): Promise<number | undefined> {
+  const config = await conversation.external((outsideCtx) => {
+    const targetCtx = outsideCtx ?? ctx;
+    const ts = targetCtx.services?.translationService;
+    const bounds = getCustomVolumeBounds(targetCtx);
+    const days = customDurationDays(targetCtx);
+    const pricePerGb =
+      typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('price_per_gb', 5000) : 5000;
+    const rawTiers =
+      typeof ts?.getSetting === 'function'
+        ? ts.getSetting('volume_pricing_tiers_json', '[]')
+        : '[]';
+    const tiers = (parseVolumePricingTiersJson(rawTiers) ?? [])
+      .slice()
+      .sort((a, b) => a.minGb - b.minGb);
+    return { ...bounds, days, pricePerGb, tiers };
+  });
+
+  const { minGb, maxGb, days, pricePerGb, tiers } = config;
+  const gbUnit = t(ctx, 'traffic_unit_gb');
+  const presets = CUSTOM_GB_PRESETS.filter((gb) => gb >= minGb && gb <= maxGb);
+
+  const keyboard = new InlineKeyboard();
+  for (let i = 0; i < presets.length; i += 3) {
+    const row = presets.slice(i, i + 3);
+    for (const gb of row) {
+      keyboard.text(`${localizedNumber(gb, ctx)} ${gbUnit}`, `cv_preset:${gb}`);
+    }
+    keyboard.row();
+  }
+  keyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+
+  const sections = [
+    {
+      bullet: '',
+      fields: [
+        {
+          emoji: '💰',
+          value: t(ctx, 'custom_volume_rate_info', {
+            price: localizedNumber(pricePerGb, ctx),
+            days: localizedNumber(days, ctx),
+          }),
+        },
+      ],
+    },
+    ...(tiers.length > 0
+      ? [
+          {
+            emoji: '💎',
+            title: t(ctx, 'custom_volume_tiers_section'),
+            fields: tiers.map((tier) => ({
+              value:
+                tier.discountPercent !== undefined
+                  ? t(ctx, 'custom_volume_tier_percent', {
+                      min: localizedNumber(tier.minGb, ctx),
+                      percent: localizedNumber(tier.discountPercent, ctx),
+                    })
+                  : t(ctx, 'custom_volume_tier_price', {
+                      min: localizedNumber(tier.minGb, ctx),
+                      price: localizedNumber(tier.pricePerGb ?? pricePerGb, ctx),
+                    }),
+            })),
+          },
+        ]
+      : []),
+  ];
+
+  const promptText = buildUserScreen({
+    emoji: '✏️',
+    title: t(ctx, 'custom_volume_title'),
+    subtitle: t(ctx, 'custom_volume_subtitle'),
+    sections,
+    footer: t(ctx, 'custom_volume_range_hint', {
+      min: localizedNumber(minGb, ctx),
+      max: localizedNumber(maxGb, ctx),
+    }),
+  });
+
+  await promptInConversation(conversation, ctx, promptText, {
+    parse_mode: 'Markdown',
+    reply_markup: keyboard,
+  });
+
+  for (;;) {
+    const input = await waitForTextOrCallbackInput(
+      conversation,
+      ['cv_preset:'],
+      options.cancelDestination ?? 'home'
+    );
+    if (!input) return undefined;
+
+    let val: number;
+    if (input.type === 'callback') {
+      val = Number(input.data.slice('cv_preset:'.length));
+    } else {
+      const trimmed = normalizeInputDigits(input.text).trim();
+      if (!/^[1-9]\d*$/.test(trimmed)) {
+        await promptInConversation(
+          conversation,
+          ctx,
+          buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
+          { parse_mode: 'Markdown', reply_markup: keyboard }
+        );
+        continue;
+      }
+      val = Number(trimmed);
+    }
+
+    if (!Number.isSafeInteger(val) || val < minGb || val > maxGb) {
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'custom_volume_title'),
+          t(ctx, 'custom_gb_invalid_range', {
+            min: localizedNumber(minGb, ctx),
+            max: localizedNumber(maxGb, ctx),
+          })
+        ),
+        { parse_mode: 'Markdown', reply_markup: keyboard }
+      );
+      continue;
+    }
+
+    return val;
+  }
 }
 
 export type CustomNamePromptResult =
@@ -160,124 +308,31 @@ export function buildCustomCheckoutScreen(
     durationDays: number;
     amount: number;
     pricePerGb: number;
+    walletAvailableBalance?: number;
+    startOnFirstUse?: boolean;
     promoCode?: string;
+    promo?: UnifiedCheckoutPromo;
     rolloverEnabled?: boolean;
+    rollover?: RolloverPreview;
     catalogDiscount?: ResolvedCatalogDiscount;
   }
 ): string {
-  const renewal = input.mode === 'renewal';
-  const currency = t(ctx, 'currency_toman');
-  const locale = resolveContextLocale(ctx);
-  const catalogDiscount = input.catalogDiscount;
-  return buildUserScreen({
-    emoji: renewal ? '🔄' : '🧾',
-    title: t(ctx, renewal ? 'renewal_review_title' : 'purchase_review_title'),
-    subtitle: t(ctx, renewal ? 'renewal_review_subtitle' : 'purchase_review_subtitle'),
-    primary: {
-      label: t(ctx, 'checkout_total_label'),
-      value: `${localizedNumber(input.amount, ctx)} ${currency}`,
-      emphasizeValue: true,
-    },
-    sections: [
-      {
-        title: t(ctx, 'checkout_package_section'),
-        fields: [
-          ...(input.username
-            ? [
-                {
-                  label: t(ctx, 'checkout_service_label'),
-                  value: `\`${sanitizeTelegramInlineCode(input.username)}\``,
-                },
-              ]
-            : []),
-          ...(input.requestedUsername
-            ? [
-                {
-                  label: t(ctx, 'checkout_custom_name_label'),
-                  value: `\`${sanitizeTelegramInlineCode(input.requestedUsername)}\``,
-                },
-              ]
-            : []),
-          {
-            label: t(ctx, 'renewal_success_package_label'),
-            value: customPackageName(ctx, input.gbAmount, input.durationDays),
-          },
-          {
-            label: t(ctx, 'checkout_traffic_label'),
-            value: `${localizedNumber(input.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
-          },
-          {
-            label: t(ctx, 'checkout_duration_label'),
-            value: `${localizedNumber(input.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
-          },
-          {
-            label: t(ctx, 'checkout_unit_price_label'),
-            value: `${localizedNumber(input.pricePerGb, ctx)} ${currency}`,
-          },
-          ...(renewal && input.rolloverEnabled
-            ? [
-                {
-                  emoji: '♻️',
-                  label: t(ctx, 'renewal_rollover_label'),
-                  value: t(ctx, 'renewal_rollover_notice'),
-                },
-              ]
-            : []),
-        ],
-      },
-      ...(catalogDiscount && catalogDiscount.discountAmount > 0
-        ? [
-            {
-              emoji: '🔥',
-              title: t(ctx, 'checkout_catalog_discount_label', {
-                name: escapeTelegramMarkdown(catalogDiscount.activeDiscountTitle ?? ''),
-              }),
-              fields: [
-                {
-                  label: t(ctx, 'checkout_original_price_label'),
-                  value: `${localizedNumber(catalogDiscount.originalPrice, ctx)} ${currency}`,
-                },
-                {
-                  label: t(ctx, 'checkout_effective_price_label'),
-                  value: t(ctx, 'shop_discount_price_line', {
-                    price: localizedNumber(catalogDiscount.originalPrice, ctx),
-                    amount: localizedNumber(catalogDiscount.effectivePrice, ctx),
-                    currency,
-                  }),
-                },
-                ...(catalogDiscount.discountExpiresAt
-                  ? [
-                      {
-                        emoji: '⏳',
-                        value: t(ctx, 'shop_discount_time_remaining', {
-                          remaining: formatRemainingDiscountDuration(
-                            catalogDiscount.discountExpiresAt,
-                            locale
-                          ),
-                        }),
-                      },
-                    ]
-                  : []),
-              ],
-            },
-          ]
-        : []),
-      ...(input.promoCode
-        ? [
-            {
-              emoji: '🎟️',
-              title: t(ctx, 'checkout_promo_section'),
-              fields: [
-                {
-                  label: t(ctx, 'shop_promo_section'),
-                  value: `\`${sanitizeTelegramInlineCode(input.promoCode)}\``,
-                },
-              ],
-            },
-          ]
-        : []),
-    ],
-    footer: t(ctx, renewal ? 'checkout_confirmation_hint' : 'purchase_confirmation_hint'),
+  return buildUnifiedCheckoutScreen(ctx, {
+    mode: input.mode,
+    packageName: customPackageName(ctx, input.gbAmount, input.durationDays),
+    gbAmount: input.gbAmount,
+    durationDays: input.durationDays,
+    finalAmount: input.amount,
+    originalPrice: input.catalogDiscount?.originalPrice,
+    effectivePrice: input.catalogDiscount?.effectivePrice,
+    pricePerGb: input.pricePerGb,
+    walletAvailableBalance: input.walletAvailableBalance,
+    serviceUsername: input.username,
+    requestedUsername: input.requestedUsername,
+    startOnFirstUse: input.startOnFirstUse,
+    rollover: input.rollover ?? (input.rolloverEnabled ? { enabled: true } : undefined),
+    catalogDiscount: input.catalogDiscount,
+    promo: input.promo ?? (input.promoCode ? { code: input.promoCode } : undefined),
   });
 }
 
@@ -324,17 +379,23 @@ async function executePurchaseFlow(
     return;
   }
 
-  const { customQuote, catalogDiscount } = await conversation.external(async (outsideCtx) => {
-    const services = outsideCtx?.services ?? ctx.services!;
-    const quote = services.pricingService.getCustomPriceQuote(gbAmount, durationDays);
-    const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
-    const discount = resolveBestCatalogDiscount(activeDiscounts, {
-      packageId: `custom_${gbAmount}gb_${durationDays}d`,
-      categoryId: null,
-      originalPrice: quote.totalPrice,
-    });
-    return { customQuote: quote, catalogDiscount: discount };
-  });
+  const customPkgId = `custom_${gbAmount}gb_${durationDays}d`;
+  const { customQuote, catalogDiscount, startOnFirstUse } = await conversation.external(
+    async (outsideCtx) => {
+      const services = outsideCtx?.services ?? ctx.services!;
+      const quote = services.pricingService.getCustomPriceQuote(gbAmount, durationDays);
+      const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
+      const discount = resolveBestCatalogDiscount(activeDiscounts, {
+        packageId: customPkgId,
+        categoryId: null,
+        originalPrice: quote.totalPrice,
+      });
+      const onHold =
+        typeof services.translationService?.getSetting === 'function' &&
+        onHoldDefaultEnabled(services.translationService);
+      return { customQuote: quote, catalogDiscount: discount, startOnFirstUse: onHold };
+    }
+  );
   const pricePerGb = customQuote.pricePerGb;
   const totalCost = catalogDiscount.effectivePrice;
 
@@ -346,12 +407,37 @@ async function executePurchaseFlow(
     return;
   }
   const displayedCost = pendingPromo.quote?.finalAmount ?? totalCost;
+  const bonusGb = Math.max(0, (pendingPromo.quote?.finalGbAmount ?? gbAmount) - gbAmount);
+  const promoDiscountAmount = Math.max(0, totalCost - displayedCost);
 
   const balance = await conversation.external((outsideCtx) =>
     outsideCtx.services!.walletService.getAvailableBalance(telegramId)
   );
   if (balance < displayedCost) {
-    await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'));
+    const createdAt = await conversation.now();
+    await conversation.external((outsideCtx) => {
+      outsideCtx.session.pendingTopupIntent = {
+        kind: 'new_config',
+        packageId: customPkgId,
+        deficitAmount: Math.max(0, displayedCost - balance),
+        createdAt,
+      };
+    });
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUnifiedInsufficientBalanceScreen(ctx, {
+        packagePrice: displayedCost,
+        balance,
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: buildInsufficientBalanceKeyboard(ctx, {
+          backLabelKey: 'menu_back_shop',
+          backCallback: 'nav:shop',
+        }),
+      }
+    );
     return;
   }
 
@@ -379,7 +465,7 @@ async function executePurchaseFlow(
         telegramId,
         kind: 'new_config',
         pkg: {
-          id: `custom_${gbAmount}gb_${durationDays}d`,
+          id: customPkgId,
           name: packageNameStr,
           gbAmount,
           durationDays,
@@ -411,7 +497,16 @@ async function executePurchaseFlow(
       durationDays,
       amount: displayedCost,
       pricePerGb,
-      promoCode: pendingPromo.quote?.code,
+      walletAvailableBalance: balance,
+      startOnFirstUse,
+      promo: pendingPromo.quote?.code
+        ? {
+            code: pendingPromo.quote.code,
+            type: pendingPromo.quote.type,
+            discountAmount: promoDiscountAmount,
+            bonusGb,
+          }
+        : undefined,
       catalogDiscount,
     }),
     {
@@ -527,6 +622,16 @@ async function executePurchaseFlow(
     await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
   }
 
+  const createdConfig = await conversation.external(async (outsideCtx) => {
+    const cs = outsideCtx.services?.configService;
+    if (typeof cs?.getOwnedConfigByUsername !== 'function') return undefined;
+    try {
+      return await cs.getOwnedConfigByUsername(telegramId, res.configUsername, checkout.panelId);
+    } catch {
+      return undefined;
+    }
+  });
+
   const successText = buildUserScreen({
     emoji: '🎉',
     title: t(ctx, 'purchase_success_title'),
@@ -536,6 +641,22 @@ async function executePurchaseFlow(
       label: t(ctx, 'purchase_success_link_label'),
       value: formatSubscriptionLink(res.subUrl, t(ctx, 'subscription_link_unavailable')),
     },
+    sections: [
+      {
+        bullet: '',
+        fields: [
+          {
+            label: t(ctx, 'purchase_success_service_label'),
+            value: `\`${sanitizeTelegramInlineCode(res.configUsername)}\``,
+          },
+          {
+            label: t(ctx, 'purchase_success_package_label'),
+            value: escapeTelegramMarkdown(packageNameStr),
+          },
+        ],
+      },
+    ],
+    ...(startOnFirstUse ? { footer: t(ctx, 'purchase_success_on_hold_note') } : {}),
   });
   try {
     const createdMsg = await conversation.external(() =>
@@ -555,11 +676,21 @@ async function executePurchaseFlow(
     );
     await sendArtifactInConversation(conversation, ctx, successText, { parse_mode: 'Markdown' });
   }
+
+  const navKeyboard = new InlineKeyboard();
+  if (createdConfig?.id) {
+    navKeyboard
+      .text(t(ctx, 'subscription_qr_button'), `config:qr:${createdConfig.id}`)
+      .text(t(ctx, 'subscription_view_detail'), `config:view:${createdConfig.id}`)
+      .row();
+  }
+  navKeyboard
+    .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
+    .row()
+    .text(t(ctx, 'menu_back_main'), 'nav:main');
+
   await replyInConversation(conversation, ctx, t(ctx, 'navigation_continue_hint'), {
-    reply_markup: new InlineKeyboard()
-      .text(t(ctx, 'menu_my_configs'), 'subs:page:1')
-      .row()
-      .text(t(ctx, 'menu_back_main'), 'nav:main'),
+    reply_markup: navKeyboard,
   });
 }
 
@@ -596,19 +727,26 @@ export async function buyPackageCustomNameConversation(
     return;
   }
 
-  const { catalogDiscount, effectivePkg } = await conversation.external(async (outsideCtx) => {
-    const services = outsideCtx?.services ?? ctx.services!;
-    const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
-    const discount = resolveBestCatalogDiscount(activeDiscounts, {
-      packageId: pkg.id,
-      categoryId: pkg.categoryId ?? null,
-      originalPrice: pkg.price,
-    });
-    return {
-      catalogDiscount: discount,
-      effectivePkg: discount.discountAmount > 0 ? { ...pkg, price: discount.effectivePrice } : pkg,
-    };
-  });
+  const { catalogDiscount, effectivePkg, startOnFirstUse } = await conversation.external(
+    async (outsideCtx) => {
+      const services = outsideCtx?.services ?? ctx.services!;
+      const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
+      const discount = resolveBestCatalogDiscount(activeDiscounts, {
+        packageId: pkg.id,
+        categoryId: pkg.categoryId ?? null,
+        originalPrice: pkg.price,
+      });
+      const defaultOnHold =
+        typeof services.translationService?.getSetting === 'function' &&
+        onHoldDefaultEnabled(services.translationService);
+      return {
+        catalogDiscount: discount,
+        effectivePkg:
+          discount.discountAmount > 0 ? { ...pkg, price: discount.effectivePrice } : pkg,
+        startOnFirstUse: pkg.startOnFirstUse ?? defaultOnHold,
+      };
+    }
+  );
 
   const pendingPromo = await conversation.external((outsideCtx) =>
     getPendingPromoPricing(outsideCtx, telegramId, effectivePkg.price, pkg.gbAmount)
@@ -623,16 +761,41 @@ export async function buyPackageCustomNameConversation(
     return;
   }
   const displayedPrice = pendingPromo.quote?.finalAmount ?? effectivePkg.price;
+  const bonusGb = Math.max(0, (pendingPromo.quote?.finalGbAmount ?? pkg.gbAmount) - pkg.gbAmount);
+  const promoDiscountAmount = Math.max(0, effectivePkg.price - displayedPrice);
+
   const balance = await conversation.external((outsideCtx) =>
     outsideCtx.services!.walletService.getAvailableBalance(telegramId)
   );
   if (balance < displayedPrice) {
-    await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'), {
-      reply_markup: new InlineKeyboard()
-        .text(t(ctx, 'direct_topup_button'), 'topup:direct')
-        .row()
-        .text(t(ctx, 'menu_back_shop'), 'nav:shop'),
+    const createdAt = await conversation.now();
+    await conversation.external((outsideCtx) => {
+      outsideCtx.session.promoCheckoutContext = { kind: 'new_config', packageId: pkg.id };
+      outsideCtx.session.pendingTopupIntent = {
+        kind: 'new_config',
+        packageId: pkg.id,
+        deficitAmount: Math.max(0, displayedPrice - balance),
+        createdAt,
+      };
     });
+    const showPromoButton = !pendingPromo.quote?.code;
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUnifiedInsufficientBalanceScreen(ctx, {
+        packagePrice: displayedPrice,
+        balance,
+        includePromoHint: showPromoButton,
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: buildInsufficientBalanceKeyboard(ctx, {
+          backLabelKey: 'menu_back_shop',
+          backCallback: 'nav:shop',
+          ...(showPromoButton ? { promoCallback: 'shop:apply_promo' } : {}),
+        }),
+      }
+    );
     return;
   }
 
@@ -652,6 +815,13 @@ export async function buyPackageCustomNameConversation(
         quotedAmount: displayedPrice,
       })
     );
+    await conversation.external((outsideCtx) => {
+      outsideCtx.session.promoCheckoutContext = {
+        kind: 'new_config',
+        packageId: pkg.id,
+        ...(requestedUsername ? { requestedUsername } : {}),
+      };
+    });
     trackFunnelEvent('checkout_start');
   } catch {
     await replyInConversation(
@@ -680,115 +850,26 @@ export async function buyPackageCustomNameConversation(
   }
   confirmKeyboard.text(t(ctx, 'menu_back_shop'), 'nav:shop');
 
-  const reviewScreen = buildUserScreen({
-    emoji: '🧾',
-    title: t(ctx, 'purchase_review_title'),
-    subtitle: t(ctx, 'purchase_review_subtitle'),
-    primary: {
-      label: t(ctx, 'checkout_total_label'),
-      value: `${localizedNumber(displayedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
-      emphasizeValue: true,
-    },
-    sections: [
-      {
-        title: t(ctx, 'checkout_package_section'),
-        fields: [
-          {
-            label: t(ctx, 'checkout_package_label'),
-            value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
-          },
-          ...(requestedUsername
-            ? [
-                {
-                  label: t(ctx, 'checkout_custom_name_label'),
-                  value: `\`${sanitizeTelegramInlineCode(requestedUsername)}\``,
-                },
-              ]
-            : []),
-          {
-            label: t(ctx, 'checkout_traffic_label'),
-            value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
-          },
-          {
-            label: t(ctx, 'checkout_duration_label'),
-            value: `${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
-          },
-          {
-            label: t(ctx, 'checkout_unit_price_label'),
-            value: `${localizedNumber(pkg.gbAmount > 0 ? Math.round(displayedPrice / pkg.gbAmount) : displayedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-        ],
-      },
-      {
-        title: t(ctx, 'checkout_wallet_section'),
-        fields: [
-          {
-            label: t(ctx, 'checkout_wallet_balance_label'),
-            value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-          {
-            label: t(ctx, 'checkout_remaining_balance_label'),
-            value: `${localizedNumber(Math.max(0, balance - displayedPrice), ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-        ],
-      },
-      ...(catalogDiscount.discountAmount > 0
-        ? [
-            {
-              emoji: '🔥',
-              title: t(ctx, 'checkout_catalog_discount_label', {
-                name: escapeTelegramMarkdown(catalogDiscount.activeDiscountTitle ?? ''),
-              }),
-              fields: [
-                {
-                  label: t(ctx, 'checkout_original_price_label'),
-                  value: `${localizedNumber(catalogDiscount.originalPrice, ctx)} ${t(ctx, 'currency_toman')}`,
-                },
-                {
-                  label: t(ctx, 'checkout_effective_price_label'),
-                  value: `${localizedNumber(catalogDiscount.effectivePrice, ctx)} ${t(ctx, 'currency_toman')}`,
-                },
-                ...(catalogDiscount.discountExpiresAt
-                  ? [
-                      {
-                        emoji: '⏳',
-                        value: t(ctx, 'shop_discount_time_remaining', {
-                          remaining: formatRemainingDiscountDuration(
-                            catalogDiscount.discountExpiresAt,
-                            resolveContextLocale(ctx)
-                          ),
-                        }),
-                      },
-                    ]
-                  : []),
-              ],
-            },
-          ]
-        : []),
-      ...(pendingPromo.quote?.code
-        ? [
-            {
-              emoji: '🎟️',
-              title: t(ctx, 'checkout_promo_section'),
-              fields: [
-                {
-                  label: t(ctx, 'shop_promo_section'),
-                  value: `\`${sanitizeTelegramInlineCode(pendingPromo.quote.code)}\``,
-                },
-                ...(effectivePkg.price > displayedPrice
-                  ? [
-                      {
-                        label: t(ctx, 'checkout_discount_label'),
-                        value: `${localizedNumber(effectivePkg.price - displayedPrice, ctx)} ${t(ctx, 'currency_toman')}`,
-                      },
-                    ]
-                  : []),
-              ],
-            },
-          ]
-        : []),
-    ],
-    footer: t(ctx, 'purchase_confirmation_hint'),
+  const reviewScreen = buildUnifiedCheckoutScreen(ctx, {
+    mode: 'purchase',
+    packageName: localizedPackageName(ctx, pkg.id, pkg.name),
+    gbAmount: pkg.gbAmount,
+    durationDays: pkg.durationDays,
+    finalAmount: displayedPrice,
+    originalPrice: catalogDiscount.originalPrice,
+    effectivePrice: catalogDiscount.effectivePrice,
+    walletAvailableBalance: balance,
+    requestedUsername,
+    startOnFirstUse,
+    catalogDiscount,
+    promo: pendingPromo.quote?.code
+      ? {
+          code: pendingPromo.quote.code,
+          type: pendingPromo.quote.type,
+          discountAmount: promoDiscountAmount,
+          bonusGb,
+        }
+      : undefined,
   });
 
   await replyInConversation(conversation, ctx, reviewScreen, {
@@ -801,50 +882,7 @@ export async function buyConfigConversation(
   conversation: MyConversation,
   ctx: ConversationContext
 ) {
-  if (!ctx.from?.id || !ctx.services) return;
-  if (!(await requireCustomVolume(conversation, ctx))) return;
-
-  let gbAmount: number | undefined;
-  while (gbAmount === undefined) {
-    await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
-      parse_mode: 'Markdown',
-    });
-    const gbInput = await waitForTextInput(conversation);
-    if (gbInput === undefined) return;
-    const trimmed = normalizeInputDigits(gbInput);
-    if (!/^[1-9]\d*$/.test(trimmed)) {
-      await promptInConversation(
-        conversation,
-        ctx,
-        buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
-        { parse_mode: 'Markdown' }
-      );
-      continue;
-    }
-    const val = Number(trimmed);
-    if (!Number.isSafeInteger(val) || val < 1 || val > 10_000) {
-      await promptInConversation(
-        conversation,
-        ctx,
-        buildUserEmptyState(
-          '⚠️',
-          t(ctx, 'custom_volume_title'),
-          t(ctx, 'custom_gb_invalid_range', {
-            min: localizedNumber(1, ctx),
-            max: localizedNumber(10_000, ctx),
-          })
-        ),
-        { parse_mode: 'Markdown' }
-      );
-      continue;
-    }
-    gbAmount = val;
-  }
-
-  // The custom volume flow no longer asks for a duration. It reuses the
-  // admin-configured default subscription length rather than prompting the
-  // user for a separate duration input.
-  await executePurchaseFlow(conversation, ctx, gbAmount, customDurationDays(ctx));
+  return customAmountConversation(conversation, ctx);
 }
 
 export async function customAmountConversation(
@@ -854,42 +892,8 @@ export async function customAmountConversation(
   if (!ctx.from?.id || !ctx.services) return;
   if (!(await requireCustomVolume(conversation, ctx))) return;
 
-  let gbAmount: number | undefined;
-  while (gbAmount === undefined) {
-    await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
-      parse_mode: 'Markdown',
-    });
-    const gbInput = await waitForTextInput(conversation);
-    if (gbInput === undefined) return;
-    const trimmed = normalizeInputDigits(gbInput);
-    if (!/^[1-9]\d*$/.test(trimmed)) {
-      await promptInConversation(
-        conversation,
-        ctx,
-        buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
-        { parse_mode: 'Markdown' }
-      );
-      continue;
-    }
-    const val = Number(trimmed);
-    if (!Number.isSafeInteger(val) || val < 1 || val > 10_000) {
-      await promptInConversation(
-        conversation,
-        ctx,
-        buildUserEmptyState(
-          '⚠️',
-          t(ctx, 'custom_volume_title'),
-          t(ctx, 'custom_gb_invalid_range', {
-            min: localizedNumber(1, ctx),
-            max: localizedNumber(10_000, ctx),
-          })
-        ),
-        { parse_mode: 'Markdown' }
-      );
-      continue;
-    }
-    gbAmount = val;
-  }
+  const gbAmount = await promptCustomVolumeGb(conversation, ctx, { cancelDestination: 'shop' });
+  if (gbAmount === undefined) return;
 
   // Use the admin-configured default duration instead of asking the user.
   const durationDays = await conversation.external((outsideCtx) => customDurationDays(outsideCtx));
@@ -928,52 +932,27 @@ export async function renewConfigConversation(
 
   const targetTelegramId = config.telegramId;
 
-  // Step 1: prompt for a custom traffic quota in the same structured flow with retry loop.
-  let gbAmount: number | undefined;
-  while (gbAmount === undefined) {
-    await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
-      parse_mode: 'Markdown',
-    });
-    const gbInput = await waitForTextInput(conversation);
-    if (gbInput === undefined) return;
-    const trimmed = normalizeInputDigits(gbInput);
-    if (!/^[1-9]\d*$/.test(trimmed)) {
-      await promptInConversation(
-        conversation,
-        ctx,
-        buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
-        { parse_mode: 'Markdown' }
-      );
-      continue;
-    }
-    const val = Number(trimmed);
-    if (!Number.isSafeInteger(val) || val < 1 || val > 10_000) {
-      await promptInConversation(
-        conversation,
-        ctx,
-        buildUserEmptyState(
-          '⚠️',
-          t(ctx, 'custom_volume_title'),
-          t(ctx, 'custom_gb_invalid_range', {
-            min: localizedNumber(1, ctx),
-            max: localizedNumber(10_000, ctx),
-          })
-        ),
-        { parse_mode: 'Markdown' }
-      );
-      continue;
-    }
-    gbAmount = val;
-  }
+  // Step 1: prompt for a custom traffic quota with quick presets and configured bounds.
+  const gbAmount = await promptCustomVolumeGb(conversation, ctx);
+  if (gbAmount === undefined) return;
 
   // Use the admin-configured default duration instead of prompting for custom days
   const durationDays = await conversation.external((outsideCtx) => customDurationDays(outsideCtx));
+  const customPkgId = `custom_${gbAmount}gb_${durationDays}d`;
 
-  const customQuote = await conversation.external((outsideCtx) =>
-    outsideCtx.services!.pricingService.getCustomPriceQuote(gbAmount, durationDays)
-  );
+  const { customQuote, catalogDiscount } = await conversation.external(async (outsideCtx) => {
+    const services = outsideCtx?.services ?? ctx.services!;
+    const quote = services.pricingService.getCustomPriceQuote(gbAmount, durationDays);
+    const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
+    const discount = resolveBestCatalogDiscount(activeDiscounts, {
+      packageId: customPkgId,
+      categoryId: null,
+      originalPrice: quote.totalPrice,
+    });
+    return { customQuote: quote, catalogDiscount: discount };
+  });
   const pricePerGb = customQuote.pricePerGb;
-  const totalCost = customQuote.totalPrice;
+  const totalCost = catalogDiscount.effectivePrice;
 
   const pendingPromo = await conversation.external((outsideCtx) =>
     getPendingPromoPricing(outsideCtx, targetTelegramId, totalCost, gbAmount)
@@ -983,12 +962,38 @@ export async function renewConfigConversation(
     return;
   }
   const displayedCost = pendingPromo.quote?.finalAmount ?? totalCost;
+  const bonusGb = Math.max(0, (pendingPromo.quote?.finalGbAmount ?? gbAmount) - gbAmount);
+  const promoDiscountAmount = Math.max(0, totalCost - displayedCost);
 
   const balance = await conversation.external((outsideCtx) =>
     outsideCtx.services!.walletService.getAvailableBalance(targetTelegramId)
   );
   if (balance < displayedCost) {
-    await replyInConversation(conversation, ctx, t(ctx, 'insufficient_balance'));
+    const createdAt = await conversation.now();
+    await conversation.external((outsideCtx) => {
+      outsideCtx.session.pendingTopupIntent = {
+        kind: 'renew_config',
+        configId: config.id,
+        configUsername: config.configUsername,
+        deficitAmount: Math.max(0, displayedCost - balance),
+        createdAt,
+      };
+    });
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUnifiedInsufficientBalanceScreen(ctx, {
+        packagePrice: displayedCost,
+        balance,
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: buildInsufficientBalanceKeyboard(ctx, {
+          backLabelKey: 'menu_back',
+          backCallback: `config:view:${config.id}`,
+        }),
+      }
+    );
     return;
   }
 
@@ -1006,7 +1011,7 @@ export async function renewConfigConversation(
         kind: 'renew_config',
         configId: config.id,
         pkg: {
-          id: `custom_${gbAmount}gb_${durationDays}d`,
+          id: customPkgId,
           name: customPackageName(ctx, gbAmount, durationDays),
           gbAmount,
           durationDays,
@@ -1028,6 +1033,16 @@ export async function renewConfigConversation(
       ? renewalRolloverEnabled(outsideCtx.services.translationService)
       : true
   );
+  const rolloverPreview = computeRolloverPreview({
+    enabled: rolloverActive,
+    addedGb: gbAmount,
+    addedDays: durationDays,
+    dataLimitBytes: config.panelDataLimit,
+    usedTrafficBytes: config.panelUsedTraffic,
+    expireTimestampSec: config.panelExpire,
+    status: config.panelStatus,
+    onHoldExpireDurationSec: config.panelOnHoldExpireDuration ?? null,
+  });
 
   await promptInConversation(
     conversation,
@@ -1039,8 +1054,17 @@ export async function renewConfigConversation(
       durationDays,
       amount: displayedCost,
       pricePerGb,
-      promoCode: pendingPromo.quote?.code,
-      rolloverEnabled: rolloverActive,
+      walletAvailableBalance: balance,
+      catalogDiscount,
+      promo: pendingPromo.quote?.code
+        ? {
+            code: pendingPromo.quote.code,
+            type: pendingPromo.quote.type,
+            discountAmount: promoDiscountAmount,
+            bonusGb,
+          }
+        : undefined,
+      rollover: rolloverPreview,
     }),
     { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
   );
@@ -1150,6 +1174,8 @@ export async function renewConfigConversation(
     await conversation.external((outsideCtx) => clearPendingPromo(outsideCtx));
   }
 
+  const currency = t(ctx, 'currency_toman');
+  const balanceAfter = Math.max(0, balance - checkout.quotedAmount);
   const renewalSuccessText = buildUserScreen({
     emoji: '✅',
     title: t(ctx, 'renewal_success_title'),
@@ -1166,15 +1192,39 @@ export async function renewConfigConversation(
             label: t(ctx, 'renewal_success_package_label'),
             value: customPackageName(ctx, gbAmount, durationDays),
           },
+          ...(typeof rolloverPreview.projectedTotalGb === 'number'
+            ? [
+                {
+                  label: t(ctx, 'renewal_success_new_quota_label'),
+                  value: `${localizedNumber(rolloverPreview.projectedTotalGb + bonusGb, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
+                },
+              ]
+            : []),
+          ...(typeof rolloverPreview.projectedTotalDays === 'number'
+            ? [
+                {
+                  label: t(ctx, 'renewal_success_new_expiry_label'),
+                  value: `${localizedNumber(rolloverPreview.projectedTotalDays, ctx)} ${t(ctx, 'days_unit')}`,
+                },
+              ]
+            : []),
+          {
+            label: t(ctx, 'renewal_success_balance_label'),
+            value: `${localizedNumber(balanceAfter, ctx)} ${currency}`,
+          },
         ],
       },
     ],
   });
+  const successMarkup = new InlineKeyboard()
+    .text(t(ctx, 'subscription_view_detail'), `config:view:${config.id}`)
+    .row()
+    .text(t(ctx, 'menu_back'), resolvedBack);
   try {
     await conversation.external(() =>
       ctx.api.editMessageText(ctx.chat!.id, progressMessage.message_id, renewalSuccessText, {
         parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack),
+        reply_markup: successMarkup,
       })
     );
   } catch (err) {
@@ -1184,7 +1234,7 @@ export async function renewConfigConversation(
     );
     await replyInConversation(conversation, ctx, renewalSuccessText, {
       parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard().text(t(ctx, 'menu_back'), resolvedBack),
+      reply_markup: successMarkup,
     });
   }
 }
@@ -1221,43 +1271,9 @@ export async function autoRenewCustomConversation(
     return;
   }
 
-  // Step 1: prompt for a custom traffic quota in the same structured flow with retry loop.
-  let gbAmount: number | undefined;
-  while (gbAmount === undefined) {
-    await promptInConversation(conversation, ctx, buildCustomVolumeInputScreen(ctx), {
-      parse_mode: 'Markdown',
-    });
-    const gbInput = await waitForTextInput(conversation);
-    if (gbInput === undefined) return;
-    const trimmed = normalizeInputDigits(gbInput);
-    if (!/^[1-9]\d*$/.test(trimmed)) {
-      await promptInConversation(
-        conversation,
-        ctx,
-        buildUserEmptyState('⚠️', t(ctx, 'custom_volume_title'), t(ctx, 'custom_gb_invalid')),
-        { parse_mode: 'Markdown' }
-      );
-      continue;
-    }
-    const val = Number(trimmed);
-    if (!Number.isSafeInteger(val) || val < 1 || val > 10_000) {
-      await promptInConversation(
-        conversation,
-        ctx,
-        buildUserEmptyState(
-          '⚠️',
-          t(ctx, 'custom_volume_title'),
-          t(ctx, 'custom_gb_invalid_range', {
-            min: localizedNumber(1, ctx),
-            max: localizedNumber(10_000, ctx),
-          })
-        ),
-        { parse_mode: 'Markdown' }
-      );
-      continue;
-    }
-    gbAmount = val;
-  }
+  // Step 1: prompt for a custom traffic quota with quick presets and configured bounds.
+  const gbAmount = await promptCustomVolumeGb(conversation, ctx);
+  if (gbAmount === undefined) return;
 
   const durationDays = await conversation.external((outsideCtx) => customDurationDays(outsideCtx));
   const customPackageId = `custom_${gbAmount}gb_${durationDays}d`;
@@ -1298,7 +1314,7 @@ export async function autoRenewCustomConversation(
     {
       parse_mode: 'Markdown',
       reply_markup: new InlineKeyboard()
-        .text(t(ctx, 'admin_confirm_button'), 'autorenew:custom_confirm')
+        .text(t(ctx, 'user_confirm_button'), 'autorenew:custom_confirm')
         .row()
         .text(t(ctx, 'menu_cancel'), 'autorenew:custom_cancel'),
     }
@@ -1384,9 +1400,20 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
       maxDiscountAmount: res.maxDiscountAmount,
       selectedAt,
     };
-    await conversation.external((outsideCtx) => {
+    const hasCheckoutContext = await conversation.external((outsideCtx) => {
       outsideCtx.session.pendingPromo = pendingPromo;
+      return Boolean(outsideCtx.session.promoCheckoutContext);
     });
+    const navKeyboard = hasCheckoutContext
+      ? new InlineKeyboard()
+          .text(t(ctx, 'checkout_continue_order_button'), 'checkout:resume')
+          .row()
+          .text(
+            t(ctx, returnDestination === 'shop' ? 'menu_back_shop' : 'menu_back_wallet'),
+            `nav:${returnDestination}`
+          )
+      : backKeyboard(ctx, returnDestination);
+
     await replyInConversation(
       conversation,
       ctx,
@@ -1402,7 +1429,7 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
         },
         footer: text,
       }),
-      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, returnDestination) }
+      { parse_mode: 'Markdown', reply_markup: navKeyboard }
     );
     await finishPromoFlow();
     return;

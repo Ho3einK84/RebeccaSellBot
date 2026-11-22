@@ -21,6 +21,8 @@ import { ServicesTab } from '../../webapp/src/features/user-portal/tabs/Services
 import { ShopTab } from '../../webapp/src/features/user-portal/tabs/ShopTab.js';
 import { WalletTab } from '../../webapp/src/features/user-portal/tabs/WalletTab.js';
 import { ReferralTab } from '../../webapp/src/features/user-portal/tabs/ReferralTab.js';
+import { AutoRenewModal } from '../../webapp/src/features/user-portal/components/AutoRenewModal.js';
+import { CheckoutModal } from '../../webapp/src/features/user-portal/components/CheckoutModal.js';
 import { AdminHeader } from '../../webapp/src/features/admin/components/AdminHeader.js';
 import { OverviewAnalytics } from '../../webapp/src/features/admin/overview/components/OverviewAnalytics.js';
 import { HealthBanner } from '../../webapp/src/features/admin/overview/components/HealthBanner.js';
@@ -298,5 +300,98 @@ describe('Webapp Unified Design System & Portal SSR Smoke Tests', () => {
     expect(adminFaHtml).toContain('dir="ltr"');
     expect(adminFaHtml).toContain('۸۷٪');
     expect(adminFaHtml).toContain('سرویس تست رایگان');
+  });
+
+  it('renders upgraded purchase/renewal UX: categories, flash sale, expired dashboard attention, wallet deficit & gift card, and renewal modal', () => {
+    const expiredConfig: UserConfigRecord = {
+      ...sampleConfigs[0]!,
+      id: 'cfg-expired',
+      configUsername: 'u100200_expired',
+      panelStatus: 'expired',
+    };
+    const discountedPackages: UserPackageItem[] = [
+      {
+        id: 'pkg-50',
+        name: 'پکیج ویژه ۵۰ گیگ',
+        gbAmount: 50,
+        durationDays: 30,
+        price: 150_000,
+        originalPrice: 200_000,
+        discountAmount: 50_000,
+        activeDiscountTitle: 'تخفیف شب یلدا',
+        categoryId: 'cat-vip',
+        startOnFirstUse: true,
+        featured: true,
+      },
+    ];
+
+    const html = renderWithProviders(
+      React.createElement(
+        'div',
+        null,
+        React.createElement(DashboardTab, {
+          profile: sampleProfile,
+          settings: sampleSettings,
+          configs: [expiredConfig],
+          transactions: sampleTransactions,
+          onSwitchTab: () => undefined,
+          onRenewConfig: () => undefined,
+        }),
+        React.createElement(ServicesTab, {
+          configs: [expiredConfig],
+          botUsername: sampleSettings.botUsername,
+          currency: sampleSettings.currency,
+          onOpenQr: () => undefined,
+          onGoToShop: () => undefined,
+          onRenewConfig: () => undefined,
+          onNotify: () => undefined,
+        }),
+        React.createElement(ShopTab, {
+          packages: discountedPackages,
+          categories: [{ id: 'cat-vip', name: 'سرویس VIP', displayOrder: 0 }],
+          currency: sampleSettings.currency,
+          customVolumeSettings: sampleSettings.customVolume,
+          botUsername: sampleSettings.botUsername,
+          onSelectPackage: () => undefined,
+        }),
+        React.createElement(WalletTab, {
+          profile: sampleProfile,
+          settings: sampleSettings,
+          transactions: sampleTransactions,
+          deficitContext: { amount: 45_000, itemName: 'پکیج ویژه ۵۰ گیگ' },
+          onClearDeficit: () => undefined,
+          onNotify: () => undefined,
+        }),
+        React.createElement(AutoRenewModal, {
+          isOpen: true,
+          onClose: () => undefined,
+          config: expiredConfig,
+          currency: sampleSettings.currency,
+          onNotify: () => undefined,
+        }),
+        React.createElement(CheckoutModal, {
+          isOpen: true,
+          onClose: () => undefined,
+          mode: 'renewal',
+          pkg: null,
+          targetConfig: expiredConfig,
+          availableBalance: 450_000,
+          currency: sampleSettings.currency,
+          onGoToWallet: () => undefined,
+          onSuccess: () => undefined,
+        })
+      ),
+      'fa'
+    );
+
+    expect(html).toContain('تخفیف شب یلدا');
+    expect(html).toContain('سرویس VIP');
+    expect(html).toContain('شروع از اولین اتصال');
+    expect(html).toContain('نیازمند تمدید');
+    expect(html).not.toContain('هنوز سرویس فعالی ندارید');
+    expect(html).toContain('کسری موجودی برای تکمیل سفارش');
+    expect(html).toContain('ثبت کد هدیهٔ شارژ');
+    expect(html).toContain('تنظیم تمدید خودکار');
+    expect(html).toContain('تمدید سرویس');
   });
 });

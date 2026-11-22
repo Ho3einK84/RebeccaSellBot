@@ -4,6 +4,7 @@ export type CheckoutStep =
   | 'loading'
   | 'review'
   | 'insufficient_balance'
+  | 'phone_required'
   | 'creation_error'
   | 'expired'
   | 'verifying'
@@ -17,7 +18,13 @@ export interface CheckoutState {
   errorMessage: string;
   deficitAmount: number;
   remainingSeconds: number;
-  successData: { configUsername: string; subUrl?: string } | null;
+  successData: {
+    configUsername: string;
+    subUrl?: string;
+    kind?: 'new_config' | 'renew_config';
+    startOnFirstUse?: boolean;
+    availableBalanceAfter?: number;
+  } | null;
   qrSrc: string;
   activePkgKey: string | null;
 }
@@ -27,14 +34,25 @@ export type CheckoutAction =
   | { type: 'CREATE_START'; pkgKey: string }
   | { type: 'CREATE_SUCCESS'; checkout: UserCheckoutResponse }
   | { type: 'CREATE_INSUFFICIENT_BALANCE'; deficit: number }
+  | { type: 'CREATE_PHONE_REQUIRED' }
   | { type: 'CREATE_ERROR'; message: string }
   | { type: 'TICK_EXPIRY'; nowMs: number }
   | { type: 'CONFIRM_START' }
-  | { type: 'CONFIRM_SUCCESS'; data: { configUsername: string; subUrl?: string } }
+  | {
+      type: 'CONFIRM_SUCCESS';
+      data: {
+        configUsername: string;
+        subUrl?: string;
+        kind?: 'new_config' | 'renew_config';
+        startOnFirstUse?: boolean;
+        availableBalanceAfter?: number;
+      };
+    }
   | { type: 'SET_QR'; qrSrc: string }
   | { type: 'CONFIRM_VERIFYING' }
   | { type: 'CONFIRM_EXPIRED' }
   | { type: 'CONFIRM_INSUFFICIENT_BALANCE'; deficit: number }
+  | { type: 'CONFIRM_PHONE_REQUIRED' }
   | { type: 'CONFIRM_ERROR'; message: string };
 
 export const INITIAL_CHECKOUT_STATE: CheckoutState = {
@@ -122,6 +140,16 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
         deficitAmount: action.deficit,
       };
 
+    case 'CREATE_PHONE_REQUIRED':
+      if (state.step === 'success') {
+        return state;
+      }
+      return {
+        ...state,
+        step: 'phone_required',
+        isProcessing: false,
+      };
+
     case 'CREATE_ERROR':
       if (state.step === 'success') {
         return state;
@@ -203,6 +231,13 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
         step: 'insufficient_balance',
         isProcessing: false,
         deficitAmount: action.deficit,
+      };
+
+    case 'CONFIRM_PHONE_REQUIRED':
+      return {
+        ...state,
+        step: 'phone_required',
+        isProcessing: false,
       };
 
     case 'CONFIRM_ERROR':

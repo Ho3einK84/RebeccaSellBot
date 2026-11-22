@@ -3,6 +3,7 @@ import { TranslationService } from '../../src/domain/services/TranslationService
 import {
   customAmountConversation,
   buyConfigConversation,
+  promoConversation,
 } from '../../src/telegram/conversations/userConversations.js';
 import { registerCoreRoutes } from '../../src/telegram/features/coreRoutes.js';
 import {
@@ -155,6 +156,162 @@ describe('Purchase settlement UI boundary', () => {
 
     await buyConfigConversation(conversation, ctx);
     expect(conversation.external).toHaveBeenCalled();
+  });
+
+  it('supports custom volume preset chips, enforces admin bounds, and shows QR/detail actions on purchase success', async () => {
+    const executePurchaseSaga = vi.fn().mockResolvedValue({
+      success: true,
+      configUsername: 'u42_custom50',
+      subUrl: 'https://sub.example.test/u42_custom50',
+    });
+    const getOwnedConfigByUsername = vi.fn().mockResolvedValue({
+      id: 'cfg_new_50',
+      telegramId: 42,
+      configUsername: 'u42_custom50',
+      panelId: 'p1',
+    });
+    const services = createMockServices({
+      translationService: {
+        get: vi.fn((key: string) => key),
+        getSetting: vi.fn((key: string, fb = '') =>
+          key === 'on_hold_default_enabled' ? 'true' : fb
+        ),
+        getSettingNum: vi.fn((key: string, fb = 0) => {
+          if (key === 'custom_min_gb') return 10;
+          if (key === 'custom_max_gb') return 100;
+          if (key === 'price_per_gb') return 5000;
+          if (key === 'custom_default_days') return 30;
+          return fb;
+        }),
+      },
+      pricingService: {
+        getCustomPriceQuote: vi.fn((gb: number) => ({ pricePerGb: 5000, totalPrice: gb * 5000 })),
+        getCustomVolumeTarget: vi.fn(() => ({ panelId: 'p1', serviceId: 1 })),
+      },
+      walletService: {
+        getAvailableBalance: vi.fn().mockResolvedValue(500_000),
+        getBalance: vi.fn().mockResolvedValue(500_000),
+        executePurchaseSaga,
+      },
+      configService: {
+        generateConfigName: vi.fn().mockResolvedValue('u42_custom50'),
+        getOwnedConfigByUsername,
+      },
+      purchaseCheckoutService: {
+        create: vi.fn().mockResolvedValue({
+          id: 'co_cv_50',
+          telegramId: 42,
+          kind: 'new_config',
+          packageId: 'custom_50gb_30d',
+          packageName: 'Custom 50GB',
+          panelId: 'p1',
+          serviceId: 1,
+          amount: 250_000,
+          quotedAmount: 250_000,
+          gbAmount: 50,
+          durationDays: 30,
+          promoCode: null,
+        }),
+        claim: vi.fn().mockResolvedValue({
+          id: 'co_cv_50',
+          telegramId: 42,
+          kind: 'new_config',
+          packageId: 'custom_50gb_30d',
+          packageName: 'Custom 50GB',
+          panelId: 'p1',
+          serviceId: 1,
+          amount: 250_000,
+          quotedAmount: 250_000,
+          gbAmount: 50,
+          durationDays: 30,
+          promoCode: null,
+        }),
+        complete: vi.fn().mockResolvedValue(undefined),
+        fail: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+    const harness = createConversationHarness({
+      defaultLocale: 'en',
+      conversations: [['customAmountConversation', customAmountConversation]],
+      services,
+    });
+    harness.bot.command('custom', async (ctx) => {
+      await ctx.conversation.enter('customAmountConversation');
+    });
+
+    await harness.sendText('/custom', { userId: 42 });
+    const firstMsg = harness.callsFor('sendMessage')[0]?.payload;
+    const presetButtons = (
+      firstMsg?.reply_markup as { inline_keyboard: Array<Array<{ callback_data?: string }>> }
+    ).inline_keyboard
+      .flat()
+      .map((b) => b.callback_data);
+    expect(presetButtons).toContain('cv_preset:50');
+    expect(presetButtons).not.toContain('cv_preset:200');
+
+    // Out-of-bounds text (5 < minGb=10) triggers range error
+    await harness.sendText('5', { userId: 42 });
+    expect(String(harness.callsFor('sendMessage').at(-1)?.payload.text)).toContain(
+      'custom_gb_invalid_range'
+    );
+
+    // Selecting preset chip advances to unified checkout review with on_hold notice
+    await harness.sendCallback('cv_preset:50', { userId: 42 });
+    const reviewText = String(harness.callsFor('sendMessage').at(-1)?.payload.text);
+    expect(reviewText).toContain('checkout_wallet_section');
+    expect(reviewText).toContain('checkout_on_hold_notice');
+
+    // Confirm purchase -> artifact + QR/Detail buttons
+    await harness.sendCallback('buy_confirm', { userId: 42 });
+    expect(executePurchaseSaga).toHaveBeenCalledOnce();
+    const navButtons = (
+      harness.callsFor('sendMessage').at(-1)?.payload.reply_markup as {
+        inline_keyboard: Array<Array<{ callback_data?: string }>>;
+      }
+    ).inline_keyboard
+      .flat()
+      .map((b) => b.callback_data);
+    expect(navButtons).toContain('config:qr:cfg_new_50');
+    expect(navButtons).toContain('config:view:cfg_new_50');
+  });
+
+  it('offers Continue Selected Order CTA in promoConversation when promoCheckoutContext is set', async () => {
+    const services = createMockServices({
+      promoService: {
+        redeemCode: vi.fn().mockResolvedValue({
+          success: true,
+          code: 'SAVE20',
+          codeType: 'percent',
+          value: 20,
+          messageKey: 'promo_valid',
+        }),
+      },
+    });
+    const harness = createConversationHarness({
+      defaultLocale: 'en',
+      conversations: [['promoConversation', promoConversation]],
+      initialSession: {
+        '42:42': {
+          promoReturnDestination: 'shop',
+          promoCheckoutContext: { kind: 'new_config', packageId: 'pkg_basic' },
+        },
+      },
+      services,
+    });
+    harness.bot.command('promo', async (ctx) => {
+      await ctx.conversation.enter('promoConversation');
+    });
+
+    await harness.sendText('/promo', { userId: 42 });
+    await harness.sendText('SAVE20', { userId: 42 });
+
+    const finalMsg = harness.callsFor('sendMessage').at(-1)?.payload;
+    const buttons = (
+      finalMsg?.reply_markup as { inline_keyboard: Array<Array<{ callback_data?: string }>> }
+    ).inline_keyboard
+      .flat()
+      .map((b) => b.callback_data);
+    expect(buttons[0]).toBe('checkout:resume');
   });
 });
 

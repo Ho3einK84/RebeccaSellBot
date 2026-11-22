@@ -6,6 +6,8 @@ import type { WalletService } from '../../../domain/services/WalletService.js';
 import type { ConfigService } from '../../../domain/services/ConfigService.js';
 import { normalizeCustomServiceName } from '../../../domain/services/ConfigService.js';
 import type { PricingService } from '../../../domain/services/PricingService.js';
+import type { PackageCategoryService } from '../../../domain/services/PackageCategoryService.js';
+import { PromoValidationError, type PromoService } from '../../../domain/services/PromoService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import {
   detectIranianBankName,
@@ -27,6 +29,8 @@ import { resolvePurchasePackage } from '../../../domain/services/PurchasePackage
 import {
   customServiceNameEnabled,
   customVolumeEnabled,
+  onHoldDefaultEnabled,
+  renewalRolloverEnabled,
 } from '../../../domain/services/FeatureSettings.js';
 import {
   resolveBestCatalogDiscount,
@@ -39,6 +43,7 @@ import {
   recordCheckoutCompleted,
   recordCheckoutFailed,
 } from '../../../telegram/checkoutLifecycle.js';
+import { computeRolloverPreview } from '../../../telegram/checkoutRenderer.js';
 
 function clampPositiveInt(val: string | number | undefined, fallback: number, max = 1000): number {
   if (val === undefined || val === null || val === '') return fallback;
@@ -75,11 +80,14 @@ async function safeRecordCheckoutFailed(
 }
 
 interface CheckoutRequestBody {
+  kind?: 'new_config' | 'renew_config';
+  configId?: string;
   packageId?: string;
   custom?: {
     gb?: number;
     days?: number;
   };
+  promoCode?: string;
   requestedUsername?: string;
   price?: number;
   quotedAmount?: number;
@@ -92,6 +100,8 @@ export function registerUserRoutes(
     walletService: WalletService;
     configService?: ConfigService;
     pricingService?: PricingService;
+    packageCategoryService?: PackageCategoryService;
+    promoService?: PromoService;
     paymentService?: PaymentService;
     translationService?: TranslationService;
     purchaseCheckoutService?: PurchaseCheckoutService;
@@ -268,6 +278,26 @@ export function registerUserRoutes(
             ? options.translationService.getSettingNum('custom_max_gb', 500)
             : 500;
 
+        const customNameEnabled = options.translationService
+          ? customServiceNameEnabled(options.translationService)
+          : false;
+        const onHoldDefault = options.translationService
+          ? onHoldDefaultEnabled(options.translationService)
+          : false;
+        const rolloverDefault = options.translationService
+          ? renewalRolloverEnabled(options.translationService)
+          : true;
+        let phoneVerificationRequired: boolean;
+        try {
+          phoneVerificationRequired =
+            await contactVerificationService.shouldRequirePhoneForPurchase(
+              telegramId,
+              options.translationService
+            );
+        } catch {
+          phoneVerificationRequired = false;
+        }
+
         return reply.code(200).send({
           user: {
             id: profile.id,
@@ -286,6 +316,7 @@ export function registerUserRoutes(
             referralBonusEarned: profile.referralBonusEarned,
             cashbackEarned: profile.cashbackEarned,
             hasUsedTrial: profile.hasUsedTrial,
+            phoneVerificationRequired,
             createdAt: profile.createdAt,
           },
           settings: {
@@ -299,6 +330,9 @@ export function registerUserRoutes(
             botUsername: options.botUsername || '',
             topupMinAmount,
             topupMaxAmount,
+            customServiceNameEnabled: customNameEnabled,
+            onHoldDefaultEnabled: onHoldDefault,
+            renewalRolloverEnabled: rolloverDefault,
             customVolume: {
               enabled: cvEnabled,
               pricePerGb,
@@ -447,7 +481,13 @@ export function registerUserRoutes(
           selectedPackage.id,
           selectedPackage.price
         );
-        return reply.code(200).send({ success: true, autoRenewEnabled: true });
+        return reply.code(200).send({
+          success: true,
+          autoRenewEnabled: true,
+          packageId: selectedPackage.id,
+          packageName: selectedPackage.name,
+          price: selectedPackage.price,
+        });
       }
     );
 
@@ -651,9 +691,11 @@ export function registerUserRoutes(
       }
     );
 
-    // GET /api/user/packages
-    userScope.get(
-      '/api/user/packages',
+    // GET /api/user/configs/:id/renewal-options
+    userScope.get<{
+      Params: { id: string };
+    }>(
+      '/api/user/configs/:id/renewal-options',
       {
         config: {
           rateLimit: standardUserRateLimit,
@@ -664,14 +706,35 @@ export function registerUserRoutes(
         if (!telegramId) {
           return reply.code(401).send({ error: 'Unauthorized' });
         }
-
-        if (!options.pricingService) {
-          return reply.code(200).send({ packages: [] });
+        if (!options.configService) {
+          return reply
+            .code(503)
+            .send({ error: 'Config service unavailable', code: 'SERVICE_UNAVAILABLE' });
         }
 
+        const config = await options.configService.getOwnedConfigById(
+          telegramId,
+          request.params.id
+        );
+        if (!config) {
+          const anyConfig = await options.configService.getConfigById?.(request.params.id);
+          if (anyConfig) {
+            return reply.code(403).send({ error: 'Forbidden', code: 'OWNER_MISMATCH' });
+          }
+          return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+        }
+
+        const defaultRollover = options.translationService
+          ? renewalRolloverEnabled(options.translationService)
+          : true;
+        const cvEnabled = options.translationService
+          ? customVolumeEnabled(options.translationService)
+          : true;
+
         const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
-        const packages = options.pricingService
-          .getPackages(undefined, undefined, false)
+        const compatiblePackages = (
+          options.pricingService?.getPackages(config.panelId, config.serviceId, false) ?? []
+        )
           .filter((p) => p.enabled !== false)
           .map((p) => {
             const discount = resolveBestCatalogDiscount(activeDiscounts, {
@@ -687,14 +750,277 @@ export function registerUserRoutes(
               price: discount.effectivePrice,
               originalPrice: discount.originalPrice,
               effectivePrice: discount.effectivePrice,
+              discountAmount: discount.discountAmount,
               activeDiscountTitle: discount.activeDiscountTitle,
               discountExpiresAt: discount.discountExpiresAt
                 ? discount.discountExpiresAt.toISOString()
                 : null,
+              categoryId: p.categoryId ?? null,
+              rolloverQuota: p.rolloverQuota ?? defaultRollover,
+              featured: p.id.includes('popular') || p.id.includes('best') || p.id.includes('pro'),
             };
           });
 
-        return reply.code(200).send({ packages });
+        const basePreview = computeRolloverPreview({
+          enabled: true,
+          addedGb: 0,
+          addedDays: 0,
+          dataLimitBytes: config.panelDataLimit,
+          usedTrafficBytes: config.panelUsedTraffic,
+          expireTimestampSec: config.panelExpire,
+          status: config.panelStatus,
+          onHoldExpireDurationSec: config.panelOnHoldExpireDuration ?? null,
+        });
+
+        return reply.code(200).send({
+          config: {
+            id: config.id,
+            configUsername: config.configUsername,
+            panelStatus: config.panelStatus,
+            currentRemainingGb: basePreview.currentRemainingGb ?? null,
+            currentRemainingDays: basePreview.currentRemainingDays ?? null,
+            autoRenewEnabled: config.autoRenewEnabled,
+            autoRenewPackageId: config.autoRenewPackageId ?? null,
+            autoRenewPrice: config.autoRenewPrice ?? null,
+          },
+          packages: compatiblePackages,
+          defaultRolloverEnabled: defaultRollover,
+          customVolumeEnabled: cvEnabled,
+        });
+      }
+    );
+
+    // GET /api/user/packages
+    userScope.get(
+      '/api/user/packages',
+      {
+        config: {
+          rateLimit: standardUserRateLimit,
+        },
+      },
+      async (request, reply) => {
+        const telegramId = request.userSession?.telegramId;
+        if (!telegramId) {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
+
+        if (!options.pricingService) {
+          return reply.code(200).send({ packages: [], categories: [] });
+        }
+
+        const defaultOnHold = options.translationService
+          ? onHoldDefaultEnabled(options.translationService)
+          : false;
+        const defaultRollover = options.translationService
+          ? renewalRolloverEnabled(options.translationService)
+          : true;
+
+        const [activeDiscounts, rawCategories] = await Promise.all([
+          safeListActiveDiscounts(options.catalogDiscountService),
+          (async () => {
+            try {
+              return (await options.packageCategoryService?.listCategories?.(false)) ?? [];
+            } catch {
+              return [];
+            }
+          })(),
+        ]);
+
+        const rawPackages = options.pricingService
+          .getPackages(undefined, undefined, false)
+          .filter((p) => p.enabled !== false);
+
+        const packages = rawPackages.map((p) => {
+          const discount = resolveBestCatalogDiscount(activeDiscounts, {
+            packageId: p.id,
+            categoryId: p.categoryId ?? null,
+            originalPrice: p.price,
+          });
+          return {
+            id: p.id,
+            name: p.name,
+            gbAmount: p.gbAmount,
+            durationDays: p.durationDays,
+            price: discount.effectivePrice,
+            originalPrice: discount.originalPrice,
+            effectivePrice: discount.effectivePrice,
+            discountAmount: discount.discountAmount,
+            activeDiscountTitle: discount.activeDiscountTitle,
+            discountExpiresAt: discount.discountExpiresAt
+              ? discount.discountExpiresAt.toISOString()
+              : null,
+            categoryId: p.categoryId ?? null,
+            startOnFirstUse: p.startOnFirstUse ?? defaultOnHold,
+            rolloverQuota: p.rolloverQuota ?? defaultRollover,
+            featured: p.id.includes('popular') || p.id.includes('best') || p.id.includes('pro'),
+          };
+        });
+
+        const categories = rawCategories
+          .filter((cat) => packages.some((pkg) => pkg.categoryId === cat.id))
+          .map((cat) => ({
+            id: cat.id,
+            name: cat.name,
+            description: cat.description ?? null,
+            icon: cat.icon ?? null,
+            displayOrder: cat.displayOrder,
+          }));
+
+        return reply.code(200).send({ packages, categories });
+      }
+    );
+
+    // POST /api/user/promo/quote
+    userScope.post<{
+      Body: {
+        code?: string;
+        packageId?: string;
+        custom?: { gb?: number; days?: number };
+      };
+    }>(
+      '/api/user/promo/quote',
+      {
+        config: {
+          rateLimit: checkoutRateLimit,
+        },
+      },
+      async (request, reply) => {
+        const telegramId = request.userSession?.telegramId;
+        if (!telegramId) {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
+        if (typeof options.promoService?.quoteForPurchase !== 'function') {
+          return reply
+            .code(503)
+            .send({ error: 'Promo service unavailable', code: 'SERVICE_UNAVAILABLE' });
+        }
+        if (!options.pricingService) {
+          return reply.code(500).send({ error: 'Pricing service unavailable' });
+        }
+
+        const rawCode = typeof request.body?.code === 'string' ? request.body.code.trim() : '';
+        if (!rawCode) {
+          return reply.code(400).send({
+            error: 'Promo code is required',
+            code: 'PROMO_INVALID',
+            messageKey: 'promo_invalid',
+          });
+        }
+
+        const resolved = resolvePurchasePackage({
+          packageId: request.body?.packageId,
+          custom: request.body?.custom,
+          pricingService: options.pricingService,
+          translationService: options.translationService,
+        });
+        if (!resolved.success) {
+          return reply.code(resolved.status).send({ error: resolved.error, code: resolved.code });
+        }
+
+        const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
+        const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
+          packageId: resolved.pkg.id,
+          categoryId: resolved.pkg.categoryId ?? null,
+          originalPrice: resolved.quotedAmount,
+        });
+
+        try {
+          const quote = await options.promoService.quoteForPurchase(
+            telegramId,
+            rawCode,
+            catalogDiscount.effectivePrice,
+            resolved.pkg.gbAmount
+          );
+          return reply.code(200).send({
+            valid: true,
+            code: quote.code,
+            type: quote.type,
+            value: quote.value,
+            originalPrice: catalogDiscount.originalPrice,
+            effectivePrice: catalogDiscount.effectivePrice,
+            finalAmount: quote.finalAmount,
+            discountAmount: Math.max(0, catalogDiscount.effectivePrice - quote.finalAmount),
+            baseGb: resolved.pkg.gbAmount,
+            bonusGb: Math.max(0, quote.finalGbAmount - resolved.pkg.gbAmount),
+            finalGb: quote.finalGbAmount,
+          });
+        } catch (err: unknown) {
+          if (err instanceof PromoValidationError) {
+            return reply.code(400).send({
+              error: err.messageKey,
+              code:
+                err.messageKey === 'promo_not_purchase_code'
+                  ? 'PROMO_GIFT_CREDIT_ONLY'
+                  : 'PROMO_INVALID',
+              messageKey: err.messageKey,
+            });
+          }
+          return reply.code(400).send({
+            error: 'promo_redeem_failed',
+            code: 'PROMO_INVALID',
+            messageKey: 'promo_redeem_failed',
+          });
+        }
+      }
+    );
+
+    // POST /api/user/promo/redeem
+    userScope.post<{
+      Body: { code?: string };
+    }>(
+      '/api/user/promo/redeem',
+      {
+        config: {
+          rateLimit: actionRateLimit10,
+        },
+      },
+      async (request, reply) => {
+        const telegramId = request.userSession?.telegramId;
+        if (!telegramId) {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
+        if (typeof options.promoService?.redeemCode !== 'function') {
+          return reply
+            .code(503)
+            .send({ error: 'Promo service unavailable', code: 'SERVICE_UNAVAILABLE' });
+        }
+
+        const rawCode = typeof request.body?.code === 'string' ? request.body.code.trim() : '';
+        if (!rawCode) {
+          return reply
+            .code(400)
+            .send({ error: 'promo_invalid', code: 'PROMO_INVALID', messageKey: 'promo_invalid' });
+        }
+
+        const res = await options.promoService.redeemCode(telegramId, rawCode);
+        if (!res.success) {
+          return reply.code(400).send({
+            error: res.messageKey,
+            code: 'PROMO_INVALID',
+            messageKey: res.messageKey,
+          });
+        }
+        if (res.codeType !== 'gift_credit') {
+          return reply.code(400).send({
+            error: 'Purchase promo codes must be applied during checkout',
+            code: 'PROMO_PURCHASE_ONLY',
+            messageKey: 'promo_valid',
+            promoType: res.codeType,
+          });
+        }
+
+        const profile = await options.userService.findProfile(String(telegramId));
+        const availableBalance = profile
+          ? Math.max(0, profile.balance - profile.reservedBalance)
+          : undefined;
+        return reply.code(200).send({
+          success: true,
+          code: res.code,
+          type: 'gift_credit',
+          value: res.value ?? 0,
+          messageKey: res.messageKey,
+          ...(availableBalance !== undefined ? { availableBalance } : {}),
+        });
       }
     );
 
@@ -875,11 +1201,22 @@ export function registerUserRoutes(
           return reply.code(500).send({ error: 'Purchase checkout service unavailable' });
         }
 
+        const body = request.body;
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+          return reply
+            .code(400)
+            .send({ error: 'Invalid checkout request', code: 'INVALID_REQUEST' });
+        }
+
+        const kind: 'new_config' | 'renew_config' =
+          body.kind === 'renew_config' ? 'renew_config' : 'new_config';
+
         if (
-          await contactVerificationService.shouldRequirePhoneForPurchase(
+          kind === 'new_config' &&
+          (await contactVerificationService.shouldRequirePhoneForPurchase(
             telegramId,
             options.translationService
-          )
+          ))
         ) {
           return reply.code(403).send({
             error: 'Phone verification is required before purchasing',
@@ -887,11 +1224,27 @@ export function registerUserRoutes(
           });
         }
 
-        const body = request.body;
-        if (!body || typeof body !== 'object' || Array.isArray(body)) {
-          return reply
-            .code(400)
-            .send({ error: 'Invalid checkout request', code: 'INVALID_REQUEST' });
+        let renewConfig:
+          | NonNullable<
+              Awaited<ReturnType<NonNullable<typeof options.configService>['getOwnedConfigById']>>
+            >
+          | undefined;
+        if (kind === 'renew_config') {
+          const configId = typeof body.configId === 'string' ? body.configId.trim() : '';
+          if (!configId || !options.configService) {
+            return reply
+              .code(400)
+              .send({ error: 'configId is required for renewal', code: 'INVALID_REQUEST' });
+          }
+          const owned = await options.configService.getOwnedConfigById(telegramId, configId);
+          if (!owned) {
+            const anyConfig = await options.configService.getConfigById?.(configId);
+            if (anyConfig) {
+              return reply.code(403).send({ error: 'Forbidden', code: 'OWNER_MISMATCH' });
+            }
+            return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+          }
+          renewConfig = owned;
         }
 
         const hasPackageId = typeof body.packageId === 'string' && body.packageId.trim().length > 0;
@@ -921,15 +1274,80 @@ export function registerUserRoutes(
 
         const { pkg, target, quotedAmount: baseQuotedAmount } = resolved;
 
+        if (
+          renewConfig &&
+          !hasCustom &&
+          ((pkg.panelId !== undefined && pkg.panelId !== renewConfig.panelId) ||
+            (pkg.serviceId !== undefined && pkg.serviceId !== renewConfig.serviceId))
+        ) {
+          return reply.code(400).send({
+            error: 'Package does not match target service panel',
+            code: 'PACKAGE_TARGET_MISMATCH',
+          });
+        }
+
         const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
         const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
           packageId: pkg.id,
           categoryId: pkg.categoryId ?? null,
           originalPrice: baseQuotedAmount,
         });
-        const quotedAmount = catalogDiscount.effectivePrice;
+        const afterCatalogPrice = catalogDiscount.effectivePrice;
         const checkoutPkg =
-          catalogDiscount.discountAmount > 0 ? { ...pkg, price: quotedAmount } : pkg;
+          catalogDiscount.discountAmount > 0 ? { ...pkg, price: afterCatalogPrice } : pkg;
+
+        let appliedPromo:
+          | {
+              code: string;
+              type: string;
+              finalAmount: number;
+              discountAmount: number;
+              bonusGb: number;
+              finalGb: number;
+            }
+          | undefined;
+        const rawPromoCode = typeof body.promoCode === 'string' ? body.promoCode.trim() : '';
+        if (rawPromoCode) {
+          if (typeof options.promoService?.quoteForPurchase !== 'function') {
+            return reply
+              .code(503)
+              .send({ error: 'Promo service unavailable', code: 'SERVICE_UNAVAILABLE' });
+          }
+          try {
+            const quote = await options.promoService.quoteForPurchase(
+              telegramId,
+              rawPromoCode,
+              afterCatalogPrice,
+              pkg.gbAmount
+            );
+            appliedPromo = {
+              code: quote.code,
+              type: quote.type,
+              finalAmount: quote.finalAmount,
+              discountAmount: Math.max(0, afterCatalogPrice - quote.finalAmount),
+              bonusGb: Math.max(0, quote.finalGbAmount - pkg.gbAmount),
+              finalGb: quote.finalGbAmount,
+            };
+          } catch (err: unknown) {
+            if (err instanceof PromoValidationError) {
+              return reply.code(400).send({
+                error: err.messageKey,
+                code:
+                  err.messageKey === 'promo_not_purchase_code'
+                    ? 'PROMO_GIFT_CREDIT_ONLY'
+                    : 'PROMO_INVALID',
+                messageKey: err.messageKey,
+              });
+            }
+            return reply.code(400).send({
+              error: 'promo_redeem_failed',
+              code: 'PROMO_INVALID',
+              messageKey: 'promo_redeem_failed',
+            });
+          }
+        }
+
+        const quotedAmount = appliedPromo ? appliedPromo.finalAmount : afterCatalogPrice;
 
         const clientSpecifiedPrice = body.price !== undefined ? body.price : body.quotedAmount;
         if (clientSpecifiedPrice !== undefined && clientSpecifiedPrice !== quotedAmount) {
@@ -957,11 +1375,16 @@ export function registerUserRoutes(
             deficit: quotedAmount - availableBalance,
             availableBalance,
             price: quotedAmount,
+            originalPrice: catalogDiscount.originalPrice,
+            effectivePrice: catalogDiscount.effectivePrice,
+            promoDiscountAmount: appliedPromo?.discountAmount ?? 0,
+            bonusGb: appliedPromo?.bonusGb ?? 0,
           });
         }
 
         let requestedUsername: string | undefined;
         if (
+          kind === 'new_config' &&
           typeof body.requestedUsername === 'string' &&
           body.requestedUsername.trim().length > 0 &&
           options.translationService &&
@@ -977,30 +1400,72 @@ export function registerUserRoutes(
           requestedUsername = normalizedName;
         }
 
+        const resolvedTarget = renewConfig
+          ? { panelId: renewConfig.panelId, serviceId: pkg.serviceId ?? renewConfig.serviceId }
+          : target;
+
         const checkout = await options.purchaseCheckoutService.create({
           telegramId,
-          kind: 'new_config',
+          kind,
+          ...(renewConfig ? { configId: renewConfig.id } : {}),
           pkg: checkoutPkg,
-          ...target,
+          ...resolvedTarget,
+          ...(appliedPromo ? { promoCode: appliedPromo.code } : {}),
           ...(requestedUsername ? { requestedUsername } : {}),
           quotedAmount,
         });
+
+        const defaultOnHold = options.translationService
+          ? onHoldDefaultEnabled(options.translationService)
+          : false;
+        const defaultRollover = options.translationService
+          ? renewalRolloverEnabled(options.translationService)
+          : true;
+        const rolloverEnabled = pkg.rolloverQuota ?? defaultRollover;
+        const finalGb = appliedPromo ? appliedPromo.finalGb : checkout.gbAmount;
+        const rolloverPreview = renewConfig
+          ? computeRolloverPreview({
+              enabled: rolloverEnabled,
+              addedGb: finalGb,
+              addedDays: checkout.durationDays,
+              dataLimitBytes: renewConfig.panelDataLimit,
+              usedTrafficBytes: renewConfig.panelUsedTraffic,
+              expireTimestampSec: renewConfig.panelExpire,
+              status: renewConfig.panelStatus,
+              onHoldExpireDurationSec: renewConfig.panelOnHoldExpireDuration ?? null,
+            })
+          : undefined;
 
         trackFunnelEvent('checkout_start');
 
         return reply.code(201).send({
           checkoutId: checkout.id,
+          kind,
+          ...(renewConfig
+            ? { configId: renewConfig.id, configUsername: renewConfig.configUsername }
+            : {}),
           name: checkout.packageName,
           gb: checkout.gbAmount,
+          bonusGb: appliedPromo?.bonusGb ?? 0,
+          finalGb,
           days: checkout.durationDays,
-          price: checkout.amount,
+          price: checkout.quotedAmount,
+          basePrice: checkout.amount,
           quotedAmount: checkout.quotedAmount,
           originalPrice: catalogDiscount.originalPrice,
           effectivePrice: catalogDiscount.effectivePrice,
+          discountAmount: catalogDiscount.discountAmount,
           activeDiscountTitle: catalogDiscount.activeDiscountTitle,
           discountExpiresAt: catalogDiscount.discountExpiresAt
             ? catalogDiscount.discountExpiresAt.toISOString()
             : null,
+          promoCode: appliedPromo?.code ?? null,
+          promoType: appliedPromo?.type ?? null,
+          promoDiscountAmount: appliedPromo?.discountAmount ?? 0,
+          requestedUsername: requestedUsername ?? null,
+          startOnFirstUse: kind === 'new_config' ? (pkg.startOnFirstUse ?? defaultOnHold) : false,
+          rolloverEnabled: kind === 'renew_config' ? rolloverEnabled : false,
+          ...(rolloverPreview ? { rolloverPreview } : {}),
           availableBalance,
           expiresAt:
             checkout.expiresAt instanceof Date
@@ -1081,14 +1546,33 @@ export function registerUserRoutes(
           : 0;
         if (availableBalance < checkout.quotedAmount) {
           await safeRecordCheckoutFailed(options.purchaseCheckoutService, checkout.id);
-          return reply
-            .code(409)
-            .send({ error: 'Insufficient balance', code: 'INSUFFICIENT_BALANCE' });
+          return reply.code(409).send({
+            error: 'Insufficient balance',
+            code: 'INSUFFICIENT_BALANCE',
+            deficit: checkout.quotedAmount - availableBalance,
+            availableBalance,
+            price: checkout.quotedAmount,
+          });
         }
 
-        // Generate or resolve custom configName
+        const resolvedPkg =
+          typeof options.pricingService?.getPackageById === 'function'
+            ? options.pricingService.getPackageById(checkout.packageId)
+            : undefined;
+        const isRenewal = checkout.kind === 'renew_config';
+
         let configName: string;
-        if (
+        if (isRenewal) {
+          const targetConfig =
+            checkout.configId && options.configService
+              ? await options.configService.getOwnedConfigById(telegramId, checkout.configId)
+              : undefined;
+          if (!targetConfig || targetConfig.panelId !== checkout.panelId) {
+            await safeRecordCheckoutFailed(options.purchaseCheckoutService, checkout.id);
+            return reply.code(403).send({ error: 'Config not owned', code: 'OWNER_MISMATCH' });
+          }
+          configName = targetConfig.configUsername;
+        } else if (
           checkout.requestedUsername &&
           typeof options.configService?.resolveCustomConfigName === 'function'
         ) {
@@ -1105,10 +1589,9 @@ export function registerUserRoutes(
           configName = `u${telegramId}_${Date.now()}`;
         }
 
-        const resolvedPkg =
-          typeof options.pricingService?.getPackageById === 'function'
-            ? options.pricingService.getPackageById(checkout.packageId)
-            : undefined;
+        const defaultOnHold = options.translationService
+          ? onHoldDefaultEnabled(options.translationService)
+          : false;
 
         // Execute saga
         try {
@@ -1116,15 +1599,19 @@ export function registerUserRoutes(
             telegramId,
             amount: checkout.amount,
             maxAmount: checkout.quotedAmount,
-            type: 'new_config',
+            type: isRenewal ? 'renew_config' : 'new_config',
             configUsername: configName,
             gbAmount: checkout.gbAmount,
             durationDays: checkout.durationDays,
             panelId: checkout.panelId,
             serviceId: checkout.serviceId,
             checkoutId: checkout.id,
-            ...(resolvedPkg?.startOnFirstUse !== undefined
+            ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
+            ...(!isRenewal && resolvedPkg?.startOnFirstUse !== undefined
               ? { startOnFirstUse: resolvedPkg.startOnFirstUse }
+              : {}),
+            ...(isRenewal && resolvedPkg?.rolloverQuota !== undefined
+              ? { rolloverQuota: resolvedPkg.rolloverQuota }
               : {}),
           });
 
@@ -1132,8 +1619,12 @@ export function registerUserRoutes(
           trackFunnelEvent('purchase_confirm');
           return reply.code(200).send({
             success: true,
+            kind: isRenewal ? 'renew_config' : 'new_config',
+            ...(checkout.configId ? { configId: checkout.configId } : {}),
             configUsername: result.configUsername,
             subUrl: result.subUrl,
+            startOnFirstUse: !isRenewal && (resolvedPkg?.startOnFirstUse ?? defaultOnHold),
+            availableBalanceAfter: Math.max(0, availableBalance - checkout.quotedAmount),
           });
         } catch (err: unknown) {
           trackFunnelEvent('purchase_failed');

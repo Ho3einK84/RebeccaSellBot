@@ -12,6 +12,7 @@ import {
   History,
   Copy,
   Check,
+  RefreshCw,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -45,6 +46,7 @@ interface DashboardTabProps {
   transactions: UserTransactionRecord[];
   onSwitchTab: (tab: UserTabType) => void;
   onOpenService?: (configId: string) => void;
+  onRenewConfig?: (config: UserConfigRecord) => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -54,6 +56,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   transactions,
   onSwitchTab,
   onOpenService,
+  onRenewConfig,
 }) => {
   const { t } = useLanguage();
   const { triggerHaptic } = useHaptic();
@@ -63,7 +66,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   const currency = settings?.currency || t('common.currency');
   const availableBalance = profile?.availableBalance ?? 0;
-  const activeConfigs = configs.filter((c) => c.panelStatus === 'active');
+  const activeConfigs = configs.filter(
+    (c) => c.panelStatus === 'active' || c.panelStatus === 'on_hold'
+  );
+  const needsAttentionConfigs = configs.filter(
+    (c) => c.panelStatus === 'expired' || c.panelStatus === 'limited'
+  );
+  const displayedConfigs =
+    activeConfigs.length > 0 ? activeConfigs.slice(0, 2) : configs.slice(0, 2);
+  const showingAttentionOnly = activeConfigs.length === 0 && configs.length > 0;
 
   const formatShortRefCode = (code?: string | null) => {
     if (!code) return '—';
@@ -287,14 +298,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <section className="w-full">
           <SectionHeader
             icon={<Activity />}
-            title={t('user.dashboard.activeServices')}
-            count={formatNumber(activeConfigs.length)}
+            title={
+              showingAttentionOnly
+                ? t('user.dashboard.servicesNeedAttention')
+                : t('user.dashboard.activeServices')
+            }
+            count={formatNumber(showingAttentionOnly ? configs.length : activeConfigs.length)}
             actionLabel={configs.length > 0 ? t('common.all') : undefined}
             onAction={configs.length > 0 ? () => handleAction('services') : undefined}
             className="mb-2.5"
           />
 
-          {activeConfigs.length === 0 ? (
+          {configs.length === 0 ? (
             <EmptyState
               icon={<ShieldCheck />}
               tone="brand"
@@ -308,43 +323,73 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             />
           ) : (
             <div className="flex flex-col gap-2.5 anim-stagger">
-              {activeConfigs.slice(0, 2).map((cfg) => (
-                <button
-                  type="button"
-                  key={cfg.id}
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    if (onOpenService) {
-                      onOpenService(cfg.id);
-                    } else {
-                      onSwitchTab('services');
-                    }
-                  }}
-                  className="rs-card-interactive w-full rounded-card border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col gap-2.5 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
-                >
-                  <div className="flex items-center justify-between w-full gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ServiceStatusDot status={cfg.panelStatus} />
-                      <bdi
-                        dir="ltr"
-                        className="text-[13px] font-mono font-medium truncate text-ink"
-                      >
-                        {cfg.configUsername}
-                      </bdi>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <ServiceAutoRenewBadge enabled={cfg.autoRenewEnabled} />
-                      <ServiceStatusBadge status={cfg.panelStatus} />
-                    </div>
-                  </div>
+              {showingAttentionOnly && needsAttentionConfigs.length > 0 && (
+                <div className="rounded-tile border border-warn/30 bg-warn-soft px-3 py-2 text-xs text-warn-fg leading-relaxed">
+                  {t('user.dashboard.expiredServicesNotice')}
+                </div>
+              )}
 
-                  <ServiceTrafficBar
-                    dataLimit={cfg.panelDataLimit}
-                    usedTraffic={cfg.panelUsedTraffic}
-                    compact
-                  />
-                </button>
-              ))}
+              {displayedConfigs.map((cfg) => {
+                const isAttention = cfg.panelStatus === 'expired' || cfg.panelStatus === 'limited';
+                return (
+                  <div
+                    key={cfg.id}
+                    className={`rounded-card border bg-surface p-3.5 flex flex-col gap-2.5 text-start shadow-[var(--shadow-card)] ${
+                      isAttention ? 'border-warn/40' : 'border-line'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        if (onOpenService) {
+                          onOpenService(cfg.id);
+                        } else {
+                          onSwitchTab('services');
+                        }
+                      }}
+                      className="w-full flex flex-col gap-2.5 text-start cursor-pointer rs-focus rounded-ctl"
+                    >
+                      <div className="flex items-center justify-between w-full gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ServiceStatusDot status={cfg.panelStatus} />
+                          <bdi
+                            dir="ltr"
+                            className="text-[13px] font-mono font-medium truncate text-ink"
+                          >
+                            {cfg.configUsername}
+                          </bdi>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <ServiceAutoRenewBadge enabled={cfg.autoRenewEnabled} />
+                          <ServiceStatusBadge status={cfg.panelStatus} />
+                        </div>
+                      </div>
+
+                      <ServiceTrafficBar
+                        dataLimit={cfg.panelDataLimit}
+                        usedTraffic={cfg.panelUsedTraffic}
+                        compact
+                      />
+                    </button>
+
+                    {isAttention && onRenewConfig && (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        block
+                        onClick={() => {
+                          triggerHaptic('medium');
+                          onRenewConfig(cfg);
+                        }}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                        <span>{t('user.services.renewQuick')}</span>
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

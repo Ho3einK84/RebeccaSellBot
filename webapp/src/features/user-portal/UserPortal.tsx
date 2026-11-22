@@ -30,7 +30,12 @@ import {
   useUserTransactions,
 } from './hooks/useUserPortalData.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
-import type { UserTabType, UserPackageItem } from '@/shared/types/userPortal.js';
+import type {
+  UserTabType,
+  UserPackageItem,
+  UserConfigRecord,
+  WalletDeficitContext,
+} from '@/shared/types/userPortal.js';
 
 interface UserPortalProps {
   user: TelegramWebAppUser;
@@ -121,8 +126,12 @@ export const UserPortal: React.FC<UserPortalProps> = ({
 
   const [checkoutModal, setCheckoutModal] = useState<{
     isOpen: boolean;
+    mode: 'purchase' | 'renewal';
     pkg: UserPackageItem | null;
-  }>({ isOpen: false, pkg: null });
+    targetConfig: UserConfigRecord | null;
+  }>({ isOpen: false, mode: 'purchase', pkg: null, targetConfig: null });
+
+  const [walletDeficit, setWalletDeficit] = useState<WalletDeficitContext | null>(null);
 
   // Data fetching
   const {
@@ -243,7 +252,17 @@ export const UserPortal: React.FC<UserPortalProps> = ({
   const pendingReceipt = profileData?.pendingReceipt ?? null;
   const configs = configsData?.configs ?? [];
   const packages = packagesData?.packages ?? [];
+  const categories = packagesData?.categories ?? [];
   const transactions = transactionsData?.transactions ?? [];
+
+  const handleOpenRenewalModal = (config: UserConfigRecord) => {
+    setCheckoutModal({
+      isOpen: true,
+      mode: 'renewal',
+      pkg: null,
+      targetConfig: config,
+    });
+  };
 
   const navItems = useUserNavItems({
     configsCount: configs.length,
@@ -399,6 +418,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
               transactions={transactions}
               onSwitchTab={(tab) => switchTab(tab)}
               onOpenService={handleOpenServiceFromDashboard}
+              onRenewConfig={handleOpenRenewalModal}
             />
           ))}
 
@@ -409,12 +429,14 @@ export const UserPortal: React.FC<UserPortalProps> = ({
             <ServicesTab
               configs={configs}
               botUsername={settings?.botUsername}
+              currency={settings?.currency}
               initialConfigId={focusedConfigId}
               onClearInitialConfig={() => setFocusedConfigId(null)}
               onOpenQr={(subUrl, configUsername) =>
                 setQrModal({ isOpen: true, subUrl, configUsername })
               }
               onGoToShop={() => switchTab('shop')}
+              onRenewConfig={handleOpenRenewalModal}
               onNotify={(msg, type) => notify(msg, type ?? 'success')}
             />
           ))}
@@ -425,10 +447,13 @@ export const UserPortal: React.FC<UserPortalProps> = ({
           ) : (
             <ShopTab
               packages={packages}
+              categories={categories}
               currency={settings?.currency}
               customVolumeSettings={settings?.customVolume}
               botUsername={settings?.botUsername}
-              onSelectPackage={(pkg) => setCheckoutModal({ isOpen: true, pkg })}
+              onSelectPackage={(pkg) =>
+                setCheckoutModal({ isOpen: true, mode: 'purchase', pkg, targetConfig: null })
+              }
             />
           ))}
 
@@ -441,7 +466,9 @@ export const UserPortal: React.FC<UserPortalProps> = ({
               settings={settings}
               transactions={transactions}
               pendingReceipt={pendingReceipt}
-              onNotify={(msg) => notify(msg, 'success')}
+              deficitContext={walletDeficit}
+              onClearDeficit={() => setWalletDeficit(null)}
+              onNotify={(msg, type) => notify(msg, type ?? 'success')}
             />
           ))}
 
@@ -462,16 +489,30 @@ export const UserPortal: React.FC<UserPortalProps> = ({
         configUsername={qrModal.configUsername}
       />
 
-      {/* Checkout Modal */}
+      {/* Checkout & Native Renewal Modal */}
       <CheckoutModal
         isOpen={checkoutModal.isOpen}
-        onClose={() => setCheckoutModal({ isOpen: false, pkg: null })}
+        onClose={() =>
+          setCheckoutModal({ isOpen: false, mode: 'purchase', pkg: null, targetConfig: null })
+        }
+        mode={checkoutModal.mode}
         pkg={checkoutModal.pkg}
+        targetConfig={checkoutModal.targetConfig}
         availableBalance={profile?.availableBalance ?? 0}
         currency={settings?.currency}
+        customServiceNameEnabled={settings?.customServiceNameEnabled}
+        botUsername={settings?.botUsername}
+        customVolumeSettings={settings?.customVolume}
         onGoToWallet={() => switchTab('wallet')}
+        onGoToWalletWithDeficit={(deficit) => {
+          setWalletDeficit(deficit);
+          switchTab('wallet');
+        }}
         onGoToServices={() => switchTab('services')}
-        onSuccess={(msg) => notify(msg, 'success')}
+        onSuccess={(msg) => {
+          setWalletDeficit(null);
+          notify(msg, 'success');
+        }}
       />
     </AppShell>
   );

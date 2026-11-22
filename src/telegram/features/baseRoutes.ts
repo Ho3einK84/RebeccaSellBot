@@ -83,6 +83,12 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       return;
     }
 
+    if (payload === 'verify_phone') {
+      ctx.session.phoneVerifyReturnAction = 'shop';
+      await ctx.conversation.enter('verifyPhoneConversation');
+      return;
+    }
+
     if (payload === 'custom' || payload?.startsWith('custom_')) {
       const phoneService =
         services.contactVerificationService ??

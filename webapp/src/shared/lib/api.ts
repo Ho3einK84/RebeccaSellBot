@@ -70,6 +70,9 @@ import type {
   ToggleConfigStatusResponse,
   RevokeConfigResponse,
   RefreshConfigResponse,
+  UserRenewalOptionsResponse,
+  PromoQuoteResponse,
+  PromoRedeemResponse,
 } from '@/shared/types/userPortal.js';
 
 export class ApiClientError extends Error {
@@ -735,5 +738,26 @@ export const api = {
   refreshConfigStats: (configId: string): Promise<RefreshConfigResponse> =>
     request<RefreshConfigResponse>(`/api/user/configs/${encodeURIComponent(configId)}/refresh`, {
       method: 'POST',
+    }),
+
+  getRenewalOptions: (configId: string): Promise<UserRenewalOptionsResponse> =>
+    request<UserRenewalOptionsResponse>(
+      `/api/user/configs/${encodeURIComponent(configId)}/renewal-options`
+    ),
+
+  quotePromo: (payload: {
+    code: string;
+    packageId?: string;
+    custom?: { gb: number; days: number };
+  }): Promise<PromoQuoteResponse> =>
+    request<PromoQuoteResponse>('/api/user/promo/quote', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  redeemGiftPromo: (code: string): Promise<PromoRedeemResponse> =>
+    request<PromoRedeemResponse>('/api/user/promo/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
     }),
 };

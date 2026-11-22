@@ -228,10 +228,17 @@ export async function sendReceiptApprovalNotification(
       }),
       {
         parse_mode: 'Markdown',
-        reply_markup: new InlineKeyboard().text(
-          tForLocale(services.translationService, locale, 'menu_wallet'),
-          'nav:wallet'
-        ),
+        reply_markup: new InlineKeyboard()
+          .text(
+            tForLocale(services.translationService, locale, 'receipt_approved_shop_button'),
+            'nav:shop'
+          )
+          .text(
+            tForLocale(services.translationService, locale, 'receipt_approved_services_button'),
+            'subs:page:1'
+          )
+          .row()
+          .text(tForLocale(services.translationService, locale, 'menu_wallet'), 'nav:wallet'),
       }
     );
   } catch (err) {

@@ -230,11 +230,116 @@ describe('Subscription cards and action hierarchy', () => {
       show_alert: true,
     });
 
-    // 3. Underfunded renewal offers direct topup
+    // 3. Underfunded renewal offers direct topup and stores pendingTopupIntent deficit
     harness.clearCalls();
     await harness.sendCallback(`r:p:uc_alice_123:0:${token}`, { userId: 42 });
     const rendered = harness.callsFor('editMessageText').at(-1)?.payload;
     expect(extractCallbackDataList(rendered?.reply_markup)).toContain('topup:direct');
+    expect(harness.getSession(42)?.pendingTopupIntent).toMatchObject({
+      kind: 'renew_config',
+      configId: 'uc_alice_123',
+      deficitAmount: 1,
+    });
+
+    // 3b. Active catalog discount applies to renewal checkout and renew:confirm shows config:view button
+    const discountedCreate = vi.fn().mockResolvedValue({
+      id: 'co_renew_disc_1',
+      telegramId: 42,
+      kind: 'renew_config',
+      configId: 'uc_alice_123',
+      packageId: 'pkg_30gb',
+      packageName: '30 GB',
+      panelId: 'main',
+      serviceId: 1,
+      amount: 80_000,
+      quotedAmount: 80_000,
+      gbAmount: 30,
+      durationDays: 30,
+      promoCode: null,
+    });
+    const discountedClaim = vi.fn().mockResolvedValue({
+      id: 'co_renew_disc_1',
+      telegramId: 42,
+      kind: 'renew_config',
+      configId: 'uc_alice_123',
+      packageId: 'pkg_30gb',
+      packageName: '30 GB',
+      panelId: 'main',
+      serviceId: 1,
+      amount: 80_000,
+      quotedAmount: 80_000,
+      gbAmount: 30,
+      durationDays: 30,
+      promoCode: null,
+    });
+    const discountedSaga = vi.fn().mockResolvedValue({
+      success: true,
+      configUsername: 'alice',
+    });
+    const discServices = createMockServices({
+      configService: {
+        getOwnedConfigById: vi.fn().mockResolvedValue({
+          id: 'uc_alice_123',
+          telegramId: 42,
+          configUsername: 'alice',
+          panelId: 'main',
+          serviceId: 1,
+          panelStatus: 'active',
+          panelDataLimit: 20 * 1024 ** 3,
+          panelUsedTraffic: 5 * 1024 ** 3,
+          panelExpire: Math.floor(Date.now() / 1000) + 10 * 86_400,
+        }),
+      },
+      pricingService: { getPackages: vi.fn(() => [pkg]) },
+      catalogDiscountService: {
+        listActiveDiscounts: vi.fn().mockResolvedValue([
+          {
+            id: 'disc_1',
+            title: 'Flash 20%',
+            scope: 'all',
+            targetId: null,
+            discountType: 'percent',
+            value: 20,
+            maxDiscountAmount: null,
+            startsAt: new Date(Date.now() - 60_000),
+            expiresAt: new Date(Date.now() + 3_600_000),
+            active: true,
+          },
+        ]),
+      },
+      walletService: {
+        getAvailableBalance: vi.fn().mockResolvedValue(99_999),
+        getBalance: vi.fn().mockResolvedValue(99_999),
+        executePurchaseSaga: discountedSaga,
+      },
+      purchaseCheckoutService: {
+        create: discountedCreate,
+        claim: discountedClaim,
+        complete: vi.fn().mockResolvedValue(undefined),
+        fail: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+    const discHarness = createBotHarness({ services: discServices });
+    registerSubscriptionRoutes(discHarness.bot);
+
+    await discHarness.sendCallback(`r:p:uc_alice_123:0:${token}`, { userId: 42, messageId: 88 });
+    expect(discountedCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'renew_config',
+        quotedAmount: 80_000,
+      })
+    );
+    const reviewPayload = discHarness.callsFor('editMessageText').at(-1)?.payload;
+    expect(String(reviewPayload?.text)).toContain('checkout_catalog_discount_label');
+    expect(String(reviewPayload?.text)).toContain('renewal_rollover_preview_gb');
+
+    await discHarness.sendCallback('renew:confirm:co_renew_disc_1', { userId: 42, messageId: 88 });
+    expect(discountedSaga).toHaveBeenCalledOnce();
+    const donePayload = discHarness.callsFor('editMessageText').at(-1)?.payload;
+    expect(String(donePayload?.text)).toContain('renewal_success_title');
+    expect(extractCallbackDataList(donePayload?.reply_markup)).toContain(
+      'config:view:uc_alice_123'
+    );
 
     // 4. Cooldown deduplicates rapid config disable
     await harness.sendCallback('config:set:off:uc_alice_123', { userId: 42 });

@@ -9,7 +9,6 @@ import { languageKeyboard } from './language.js';
 import { renderHomeDashboard } from './homeDashboard.js';
 import { getPendingPromoPricing } from '../promoSelection.js';
 import {
-  formatPackageButtonLabel,
   localizedDate,
   localizedNumber,
   localizedPackageName,
@@ -35,10 +34,17 @@ import { renderAdminHome } from './adminMenu.js';
 import {
   customServiceNameEnabled,
   customVolumeEnabled,
+  onHoldDefaultEnabled,
   walletTransferEnabled,
 } from '../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
+import {
+  buildInsufficientBalanceKeyboard,
+  buildUnifiedCheckoutScreen,
+  buildUnifiedInsufficientBalanceScreen,
+  formatCompactDiscountedPackageLabel,
+} from '../checkoutRenderer.js';
 
 // Re-export so conversations can import from one place
 export type { MenuContext, MyConversation };
@@ -124,6 +130,11 @@ function formatShopPromoBadge(
       amount: localizedNumber(pendingPromo.value, ctx),
     })}`;
   }
+  if (pendingPromo.type === 'gift_gb' && pendingPromo.value > 0) {
+    return `${safeCode} ${t(ctx, 'shop_promo_gift_gb_suffix', {
+      gb: localizedNumber(pendingPromo.value, ctx),
+    })}`;
+  }
   return safeCode;
 }
 
@@ -177,11 +188,34 @@ function buildShopDiscountBannerField(
   ];
 }
 
+async function resolveAvailableWalletBalance(
+  ctx: MenuContext,
+  telegramId: number
+): Promise<number | undefined> {
+  const ws = ctx.services?.walletService;
+  if (!ws) return undefined;
+  try {
+    if (typeof ws.getAvailableBalance === 'function') {
+      return await ws.getAvailableBalance(telegramId);
+    }
+    if (typeof ws.getBalance === 'function') {
+      return await ws.getBalance(telegramId);
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 /**
- * Render shop header text with live catalog summary, active category, and promo code if set.
+ * Render shop header text with live catalog summary, active category, wallet balance, and promo code if set.
  */
 export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
   const pendingPromo = ctx.session.pendingPromo;
+  const telegramId = ctx.from?.id;
+  const availableBalance = telegramId
+    ? await resolveAvailableWalletBalance(ctx, telegramId)
+    : undefined;
   const packages = ctx.services?.pricingService?.getPackages?.() ?? [];
   const categories = (await ctx.services?.packageCategoryService?.listCategories?.(false)) ?? [];
   const activeDiscounts = ctx.services
@@ -191,6 +225,16 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
     ? customVolumeEnabled(ctx.services.translationService)
     : false;
   const customPricePerGb = ctx.services?.translationService?.getSettingNum('price_per_gb', 5000);
+  const walletField =
+    availableBalance !== undefined
+      ? [
+          {
+            emoji: '💳',
+            label: t(ctx, 'shop_wallet_balance_label'),
+            value: `${localizedNumber(availableBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+        ]
+      : [];
 
   if (ctx.session.activeShopCategory && ctx.services) {
     const category = await ctx.services.packageCategoryService?.getCategoryById(
@@ -222,6 +266,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           {
             bullet: '',
             fields: [
+              ...walletField,
               ...buildShopDiscountBannerField(ctx, featuredCategoryDiscount),
               {
                 label: t(ctx, 'shop_available_plans_label'),
@@ -250,6 +295,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
   ).length;
 
   const catalogFields = [
+    ...walletField,
     ...buildShopDiscountBannerField(ctx, featuredDiscount),
     ...(packages.length > 0
       ? [
@@ -307,157 +353,55 @@ function buildInsufficientBalanceScreen(
   packagePrice: number,
   balance: number
 ): string {
-  const deficit = packagePrice - balance;
-  return buildUserScreen({
-    emoji: '💳',
-    title: t(ctx, 'insufficient_balance_title'),
-    subtitle: t(ctx, 'insufficient_balance_subtitle'),
-    primary: {
-      emoji: '🔻',
-      label: t(ctx, 'insufficient_balance_deficit_label'),
-      value: `${localizedNumber(deficit, ctx)} ${t(ctx, 'currency_toman')}`,
-      emphasizeValue: true,
-    },
-    sections: [
-      {
-        title: t(ctx, 'insufficient_balance_wallet_section'),
-        fields: [
-          {
-            label: t(ctx, 'insufficient_balance_price_label'),
-            value: `${localizedNumber(packagePrice, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-          {
-            label: t(ctx, 'insufficient_balance_balance_label'),
-            value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
-          },
-        ],
-      },
-    ],
-    footer: t(ctx, 'insufficient_balance_hint'),
+  return buildUnifiedInsufficientBalanceScreen(ctx, {
+    packagePrice,
+    balance,
+    includePromoHint: true,
   });
 }
 
 export function buildPurchaseCheckoutScreen(
   ctx: MenuContext,
-  pkg: { name: string; gbAmount: number; durationDays: number; price: number; id: string },
+  pkg: {
+    name: string;
+    gbAmount: number;
+    durationDays: number;
+    price: number;
+    id: string;
+    startOnFirstUse?: boolean;
+  },
   amount: number,
   promoCode?: string,
   walletBalance?: number,
-  catalogDiscount?: ResolvedCatalogDiscount
+  catalogDiscount?: ResolvedCatalogDiscount,
+  options?: { bonusGb?: number; requestedUsername?: string }
 ): string {
-  const hasCatalogDiscount = Boolean(catalogDiscount && catalogDiscount.discountAmount > 0);
-  const currency = t(ctx, 'currency_toman');
-  const locale = resolveContextLocale(ctx);
-
-  return buildUserScreen({
-    emoji: '🧾',
-    title: t(ctx, 'purchase_review_title'),
-    subtitle: t(ctx, 'purchase_review_subtitle'),
-    primary: {
-      label: t(ctx, 'checkout_total_label'),
-      value: `${localizedNumber(amount, ctx)} ${currency}`,
-      emphasizeValue: true,
-    },
-    sections: [
-      {
-        title: t(ctx, 'checkout_package_section'),
-        fields: [
-          {
-            label: t(ctx, 'checkout_package_label'),
-            value: escapeTelegramMarkdown(localizedPackageName(ctx, pkg.id, pkg.name)),
+  const defaultOnHold =
+    typeof ctx.services?.translationService?.getSetting === 'function'
+      ? onHoldDefaultEnabled(ctx.services.translationService)
+      : false;
+  const effectivePrice = catalogDiscount?.effectivePrice ?? pkg.price;
+  return buildUnifiedCheckoutScreen(ctx, {
+    mode: 'purchase',
+    packageName: localizedPackageName(ctx, pkg.id, pkg.name),
+    gbAmount: pkg.gbAmount,
+    durationDays: pkg.durationDays,
+    originalPrice: catalogDiscount?.originalPrice ?? pkg.price,
+    effectivePrice,
+    finalAmount: amount,
+    walletAvailableBalance: walletBalance,
+    requestedUsername: options?.requestedUsername,
+    startOnFirstUse: pkg.startOnFirstUse ?? defaultOnHold,
+    catalogDiscount,
+    ...(promoCode
+      ? {
+          promo: {
+            code: promoCode,
+            discountAmount: Math.max(0, effectivePrice - amount),
+            bonusGb: options?.bonusGb ?? 0,
           },
-          {
-            label: t(ctx, 'checkout_traffic_label'),
-            value: `${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}`,
-          },
-          {
-            label: t(ctx, 'checkout_duration_label'),
-            value: `${localizedNumber(pkg.durationDays, ctx)} ${t(ctx, 'days_unit')}`,
-          },
-          {
-            label: t(ctx, 'checkout_unit_price_label'),
-            value: `${localizedNumber(pkg.gbAmount > 0 ? Math.round(amount / pkg.gbAmount) : amount, ctx)} ${currency}`,
-          },
-        ],
-      },
-      ...(hasCatalogDiscount && catalogDiscount
-        ? [
-            {
-              emoji: '🔥',
-              title: t(ctx, 'checkout_catalog_discount_label', {
-                name: escapeTelegramMarkdown(catalogDiscount.activeDiscountTitle ?? ''),
-              }),
-              fields: [
-                {
-                  label: t(ctx, 'checkout_original_price_label'),
-                  value: `${localizedNumber(catalogDiscount.originalPrice, ctx)} ${currency}`,
-                },
-                {
-                  label: t(ctx, 'checkout_effective_price_label'),
-                  value: t(ctx, 'shop_discount_price_line', {
-                    price: localizedNumber(catalogDiscount.originalPrice, ctx),
-                    amount: localizedNumber(catalogDiscount.effectivePrice, ctx),
-                    currency,
-                  }),
-                },
-                ...(catalogDiscount.discountExpiresAt
-                  ? [
-                      {
-                        emoji: '⏳',
-                        value: t(ctx, 'shop_discount_time_remaining', {
-                          remaining: formatRemainingDiscountDuration(
-                            catalogDiscount.discountExpiresAt,
-                            locale
-                          ),
-                        }),
-                      },
-                    ]
-                  : []),
-              ],
-            },
-          ]
-        : []),
-      ...(walletBalance !== undefined
-        ? [
-            {
-              title: t(ctx, 'checkout_wallet_section'),
-              fields: [
-                {
-                  label: t(ctx, 'checkout_wallet_balance_label'),
-                  value: `${localizedNumber(walletBalance, ctx)} ${currency}`,
-                },
-                {
-                  label: t(ctx, 'checkout_remaining_balance_label'),
-                  value: `${localizedNumber(Math.max(0, walletBalance - amount), ctx)} ${currency}`,
-                },
-              ],
-            },
-          ]
-        : []),
-      ...(promoCode
-        ? [
-            {
-              emoji: '🎟️',
-              title: t(ctx, 'checkout_promo_section'),
-              fields: [
-                {
-                  label: t(ctx, 'shop_promo_section'),
-                  value: `\`${sanitizeTelegramInlineCode(promoCode)}\``,
-                },
-                ...((catalogDiscount?.effectivePrice ?? pkg.price) > amount
-                  ? [
-                      {
-                        label: t(ctx, 'checkout_discount_label'),
-                        value: `${localizedNumber((catalogDiscount?.effectivePrice ?? pkg.price) - amount, ctx)} ${currency}`,
-                      },
-                    ]
-                  : []),
-              ],
-            },
-          ]
-        : []),
-    ],
-    footer: t(ctx, 'purchase_confirmation_hint'),
+        }
+      : {}),
   });
 }
 
@@ -490,9 +434,40 @@ export function resolveSupportInfo(ctx: MenuContext): {
 // ── Main Menu ────────────────────────────────────────────────────────────────
 
 export const mainMenu = new Menu<MenuContext>('main-menu')
-  .dynamic((ctx, range) => {
+  .dynamic(async (ctx, range) => {
     if (ctx.services?.webAppUrl) {
       range.webApp((c) => t(c, 'menu_webapp_launch'), ctx.services.webAppUrl).row();
+    }
+    const telegramId = ctx.from?.id;
+    if (telegramId && typeof ctx.services?.configService?.listConfigsForOwner === 'function') {
+      try {
+        const configs = await ctx.services.configService.listConfigsForOwner(telegramId);
+        const now = Math.floor(Date.now() / 1000);
+        const urgent = configs
+          .filter(
+            (cfg) =>
+              cfg.panelStatus === 'expired' ||
+              cfg.panelStatus === 'limited' ||
+              (cfg.panelStatus === 'active' &&
+                cfg.panelExpire != null &&
+                cfg.panelExpire - now <= 3 * 86_400)
+          )
+          .sort((a, b) => (a.panelExpire ?? 0) - (b.panelExpire ?? 0))[0];
+        if (urgent) {
+          range
+            .text(
+              (c) => t(c, 'home_quick_renew_button', { username: urgent.configUsername }),
+              async (c) => {
+                const { renderRenewalSelection } =
+                  await import('../features/subscriptions/routes.js');
+                await renderRenewalSelection(c, urgent);
+              }
+            )
+            .row();
+        }
+      } catch {
+        // Quick-renew shortcut is optional; never block main menu rendering.
+      }
     }
   })
   .text(
@@ -807,19 +782,11 @@ function renderPackageButtons(
             { price: basePrice, gbAmount: pkg.gbAmount },
             c.session.pendingPromo
           );
-          if (catalogDiscount.discountAmount > 0) {
-            const locale = resolveContextLocale(c);
-            const label = formatPackageButtonLabel(c, pkg, {
-              effectivePrice,
-              tag: `${tag}🔥 `,
-            });
-            const origPrice = localizedNumber(catalogDiscount.originalPrice, c);
-            const remaining = catalogDiscount.discountExpiresAt
-              ? ` · ⏳ ${formatRemainingDiscountDuration(catalogDiscount.discountExpiresAt, locale)}`
-              : '';
-            return `${label} (${origPrice})${remaining}`;
-          }
-          return formatPackageButtonLabel(c, pkg, { effectivePrice, tag });
+          return formatCompactDiscountedPackageLabel(c, pkg, {
+            effectivePrice,
+            tag,
+            catalogDiscount,
+          });
         },
         async (c) => {
           const telegramId = c.from?.id;
@@ -853,17 +820,28 @@ function renderPackageButtons(
                 t(c, 'purchase_review_title'),
                 t(c, pendingPromo.messageKey)
               ),
-              { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
+              { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'shop') }
             );
             return;
           }
           const displayedPrice = pendingPromo.quote?.finalAmount ?? effectivePkg.price;
-          const balance = await c.services.walletService.getBalance(telegramId);
+          const bonusGb = pendingPromo.quote
+            ? Math.max(0, pendingPromo.quote.finalGbAmount - pkg.gbAmount)
+            : 0;
+          const balance = (await resolveAvailableWalletBalance(c, telegramId)) ?? 0;
           if (balance < displayedPrice) {
-            const insufficientKeyboard = new InlineKeyboard()
-              .text(t(c, 'direct_topup_button'), 'topup:direct')
-              .row()
-              .text(t(c, 'menu_back_shop'), 'nav:shop');
+            c.session.promoCheckoutContext = { kind: 'new_config', packageId: pkg.id };
+            c.session.pendingTopupIntent = {
+              kind: 'new_config',
+              packageId: pkg.id,
+              deficitAmount: displayedPrice - balance,
+              createdAt: Date.now(),
+            };
+            const insufficientKeyboard = buildInsufficientBalanceKeyboard(c, {
+              backLabelKey: 'menu_back_shop',
+              backCallback: 'nav:shop',
+              promoCallback: 'shop:apply_promo',
+            });
 
             await renderScreen(c, buildInsufficientBalanceScreen(c, displayedPrice, balance), {
               parse_mode: 'Markdown',
@@ -899,11 +877,12 @@ function renderPackageButtons(
                 t(c, 'purchase_review_title'),
                 t(c, 'purchase_target_unavailable')
               ),
-              { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'main') }
+              { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'shop') }
             );
             return;
           }
 
+          c.session.promoCheckoutContext = { kind: 'new_config', packageId: pkg.id };
           const confirmKeyboard = new InlineKeyboard()
             .text(t(c, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
             .row();
@@ -927,7 +906,8 @@ function renderPackageButtons(
               displayedPrice,
               pendingPromo.quote?.code,
               balance,
-              liveDiscount
+              liveDiscount,
+              { bonusGb }
             ),
             {
               parse_mode: 'Markdown',
@@ -1040,6 +1020,17 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
               parse_mode: 'Markdown',
               reply_markup: shopMenu,
             });
+          }
+        )
+        .row();
+    } else {
+      range
+        .text(
+          (c) => t(c, 'shop_apply_promo_button'),
+          async (c) => {
+            delete c.session.promoCheckoutContext;
+            c.session.promoReturnDestination = 'shop';
+            await c.conversation.enter('promoConversation');
           }
         )
         .row();

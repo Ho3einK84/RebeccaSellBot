@@ -257,10 +257,16 @@ export async function runNotifierSweep(
         const reasons = notificationTypes
           .map((type) => notificationReason(type, assessment, translationService, locale))
           .join('\n');
-        const keyboard = new InlineKeyboard().text(
-          tForLocale(translationService, locale, 'renewal_button'),
-          `renew:open:${cfg.configId}`
-        );
+        const keyboard = new InlineKeyboard()
+          .text(
+            tForLocale(translationService, locale, 'renewal_button'),
+            `renew:open:${cfg.configId}`
+          )
+          .row()
+          .text(
+            tForLocale(translationService, locale, 'subscription_view_detail'),
+            `config:view:${cfg.configId}`
+          );
         await telegramApi.sendMessage(
           cfg.telegramId,
           buildUserScreen({
@@ -410,9 +416,10 @@ function notificationReason(
 ): string {
   if (type === 'low_traffic') {
     const remainingGb = Math.max(0, assessment.remainingBytes ?? 0) / BYTES_PER_GB;
+    const unit = tForLocale(translationService, locale, 'traffic_unit_gb');
     return escapeTelegramMarkdown(
       tForLocale(translationService, locale, 'renewal_reason_low_traffic', {
-        remaining: `${formatNotificationNumber(Number(remainingGb.toFixed(2)), locale)} GB`,
+        remaining: `${formatNotificationNumber(Number(remainingGb.toFixed(2)), locale)} ${unit}`,
       })
     );
   }

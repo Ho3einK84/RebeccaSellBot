@@ -493,6 +493,19 @@ describe('Checkout State Machine (checkoutState.ts)', () => {
 
     state = checkoutReducer(state, { type: 'SET_QR', qrSrc: 'data:image/png;base64,abc' });
     expect(state.qrSrc).toBe('data:image/png;base64,abc');
+
+    state = checkoutReducer(INITIAL_CHECKOUT_STATE, { type: 'CREATE_PHONE_REQUIRED' });
+    expect(state.step).toBe('phone_required');
+
+    state = checkoutReducer(state, { type: 'CONFIRM_PHONE_REQUIRED' });
+    expect(state.step).toBe('phone_required');
+
+    // Phone required never overrides an already-succeeded checkout
+    const succeeded = checkoutReducer(INITIAL_CHECKOUT_STATE, {
+      type: 'CONFIRM_SUCCESS',
+      data: { configUsername: 'u1_done' },
+    });
+    expect(checkoutReducer(succeeded, { type: 'CREATE_PHONE_REQUIRED' })).toBe(succeeded);
   });
 
   it('computes expiry countdown safely without NaN and transitions to expired when deadline elapses', () => {

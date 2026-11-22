@@ -8,7 +8,11 @@ import {
   History,
   ShieldCheck,
   ExternalLink,
+  Gift,
+  AlertCircle,
+  X,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
@@ -17,6 +21,8 @@ import {
   openTelegramLinkAndMinimize,
   minimizeOrCloseWebApp,
 } from '@/shared/lib/telegramNavigation.js';
+import { api, ApiClientError } from '@/shared/lib/api.js';
+import { queryKeys } from '@/shared/lib/queryKeys.js';
 import { TransactionItem } from '@/features/user-portal/components/TransactionItem.js';
 import { formatCardNumberSpaced } from '@/shared/lib/formatters.js';
 import { useUserTransactions } from '../hooks/useUserPortalData.js';
@@ -32,6 +38,7 @@ import type {
   UserPortalSettings,
   UserTransactionRecord,
   PendingReceiptInfo,
+  WalletDeficitContext,
 } from '@/shared/types/userPortal.js';
 
 interface WalletTabProps {
@@ -39,7 +46,9 @@ interface WalletTabProps {
   settings: UserPortalSettings | null;
   transactions: UserTransactionRecord[];
   pendingReceipt?: PendingReceiptInfo | null;
-  onNotify: (message: string) => void;
+  deficitContext?: WalletDeficitContext | null;
+  onClearDeficit?: () => void;
+  onNotify: (message: string, type?: 'success' | 'error') => void;
 }
 
 export const WalletTab: React.FC<WalletTabProps> = ({
@@ -47,14 +56,23 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   settings,
   transactions,
   pendingReceipt,
+  deficitContext,
+  onClearDeficit,
   onNotify,
 }) => {
   const { t } = useLanguage();
   const { formatToman, formatNumber } = useFormatters();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
+  const queryClient = useQueryClient();
 
   const [page, setPage] = useState<number>(1);
+  const [giftCode, setGiftCode] = useState('');
+  const [isRedeemingGift, setIsRedeemingGift] = useState(false);
+  const [giftFeedback, setGiftFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const { data: txQueryData, isFetching: isFetchingTx } = useUserTransactions(page, 10);
   const isLoadingPage = page > 1 && isFetchingTx && !txQueryData;
@@ -74,7 +92,16 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     triggerHaptic('light');
     const ok = await copy(cardNumber.replace(/\s+/g, ''), 'bank-card');
     if (ok) {
-      onNotify(t('user.wallet.cardCopied'));
+      onNotify(t('user.wallet.cardCopied'), 'success');
+    }
+  };
+
+  const handleCopyDeficit = async () => {
+    if (!deficitContext || deficitContext.amount <= 0) return;
+    triggerHaptic('light');
+    const ok = await copy(String(deficitContext.amount), 'deficit-amount');
+    if (ok) {
+      onNotify(t('user.wallet.deficitCopied'), 'success');
     }
   };
 
@@ -87,6 +114,34 @@ export const WalletTab: React.FC<WalletTabProps> = ({
       return;
     }
     minimizeOrCloseWebApp();
+  };
+
+  const handleRedeemGiftCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = giftCode.trim();
+    if (!trimmed || isRedeemingGift) return;
+    setIsRedeemingGift(true);
+    setGiftFeedback(null);
+    triggerHaptic('medium');
+    try {
+      await api.redeemGiftPromo(trimmed);
+      setGiftCode('');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+      void queryClient.invalidateQueries({ queryKey: ['user', 'transactions'] });
+      triggerHaptic('success');
+      const msg = t('user.wallet.giftCodeSuccess');
+      setGiftFeedback({ type: 'success', message: msg });
+      onNotify(msg, 'success');
+    } catch (err: unknown) {
+      triggerHaptic('error');
+      let msg = t('user.shop.promoInvalid');
+      if (err instanceof ApiClientError && err.code === 'PROMO_PURCHASE_ONLY') {
+        msg = t('user.wallet.giftCodeNotCredit');
+      }
+      setGiftFeedback({ type: 'error', message: msg });
+    } finally {
+      setIsRedeemingGift(false);
+    }
   };
 
   return (
@@ -120,6 +175,56 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           </div>
         ) : null}
       </Card>
+
+      {/* Deficit Context Banner from Checkout */}
+      {deficitContext && deficitContext.amount > 0 && (
+        <Card tone="warn" padding="md" className="flex flex-col gap-2.5 text-start">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertCircle className="w-4 h-4 text-warn-fg shrink-0" />
+              <h3 className="text-xs sm:text-sm font-semibold text-ink m-0 truncate">
+                {t('user.wallet.deficitBannerTitle')}
+              </h3>
+            </div>
+            {onClearDeficit && (
+              <button
+                type="button"
+                onClick={onClearDeficit}
+                className="w-7 h-7 rounded-ctl inline-flex items-center justify-center text-ink-muted hover:text-ink cursor-pointer shrink-0"
+                aria-label={t('common.close')}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-ink-soft m-0 leading-relaxed tnum">
+            {t('user.wallet.deficitBannerDesc')
+              .replace('{item}', deficitContext.itemName)
+              .replace('{amount}', formatToman(deficitContext.amount))
+              .replace('{currency}', currency)}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={isCopied('deficit-amount') ? 'success' : 'secondary'}
+              onClick={() => void handleCopyDeficit()}
+            >
+              {isCopied('deficit-amount') ? (
+                <>
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span>{t('user.wallet.deficitCopied')}</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 shrink-0" />
+                  <span>{t('user.wallet.copyDeficit')}</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Pending Receipt Status Banner */}
       {pendingReceipt && (
@@ -161,7 +266,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   triggerHaptic('light');
                   const ok = await copy(pendingReceipt.id, 'receipt-id');
                   if (ok) {
-                    onNotify(t('common.copied'));
+                    onNotify(t('common.copied'), 'success');
                   }
                 }}
                 className="h-9 inline-flex items-center gap-1.5 text-xs font-mono text-brand-fg hover:underline cursor-pointer px-1.5 rounded-ctl rs-focus"
@@ -183,9 +288,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
         </Card>
       )}
 
-      {/* Main Split: Card-to-Card Topup & Transaction Ledger */}
+      {/* Main Split: Card-to-Card Topup & Gift Code vs Transaction Ledger */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        <div className="lg:col-span-7">
+        <div className="lg:col-span-7 flex flex-col gap-4">
           {cardNumber ? (
             <Card padding="lg" className="flex flex-col gap-4 text-start">
               <div className="flex flex-col gap-1">
@@ -286,26 +391,16 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 ))}
               </Card>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
+              {/* Single Clear Action Button */}
+              <div className="pt-1">
                 <Button
                   size="md"
                   variant="primary"
+                  block
                   onClick={() => handleOpenBotForReceipt('receipt')}
-                  className="w-full sm:flex-1"
                 >
                   <Send className="w-4 h-4 shrink-0" />
                   <span>{t('user.wallet.sendReceiptDirect')}</span>
-                </Button>
-
-                <Button
-                  size="md"
-                  variant="secondary"
-                  onClick={() => handleOpenBotForReceipt('topup')}
-                  className="w-full sm:w-auto shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4 shrink-0" />
-                  <span>{t('user.wallet.openBotTopup')}</span>
                 </Button>
               </div>
             </Card>
@@ -328,6 +423,55 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               </Button>
             </Card>
           )}
+
+          {/* Gift Credit Redemption Card */}
+          <Card padding="md" className="flex flex-col gap-3 text-start">
+            <div className="flex items-center gap-2">
+              <Gift className="w-4 h-4 text-brand-fg shrink-0" />
+              <h3 className="text-sm font-semibold text-ink m-0">
+                {t('user.wallet.giftCodeTitle')}
+              </h3>
+            </div>
+            <p className="text-xs text-ink-muted m-0 leading-relaxed">
+              {t('user.wallet.giftCodeDesc')}
+            </p>
+            <form
+              onSubmit={(e) => void handleRedeemGiftCode(e)}
+              className="flex items-center gap-2"
+            >
+              <input
+                type="text"
+                dir="ltr"
+                value={giftCode}
+                onChange={(e) => {
+                  setGiftCode(e.target.value);
+                  if (giftFeedback) setGiftFeedback(null);
+                }}
+                placeholder={t('user.wallet.giftCodePlaceholder')}
+                aria-label={t('user.wallet.giftCodeTitle')}
+                className="flex-1 h-10 px-3 rounded-ctl border border-line bg-surface-2 text-xs font-mono text-ink placeholder:text-ink-muted rs-focus"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="secondary"
+                disabled={!giftCode.trim() || isRedeemingGift}
+                loading={isRedeemingGift}
+                className="h-10 shrink-0"
+              >
+                {t('user.wallet.giftCodeRedeem')}
+              </Button>
+            </form>
+            {giftFeedback && (
+              <p
+                className={`text-xs m-0 ${
+                  giftFeedback.type === 'success' ? 'text-ok-fg' : 'text-danger-fg'
+                }`}
+              >
+                {giftFeedback.message}
+              </p>
+            )}
+          </Card>
         </div>
 
         {/* Transaction History Ledger */}

@@ -45,6 +45,19 @@ export interface SessionData {
   };
   /** Screen that launched promo entry so the flow returns to the same context. */
   promoReturnDestination?: 'shop' | 'wallet';
+  /** Checkout item waiting to resume with an updated quote after promo apply/clear. */
+  promoCheckoutContext?:
+    | { kind: 'new_config'; packageId: string; requestedUsername?: string }
+    | { kind: 'renew_config'; configId: string; packageId: string };
+  /** Shortfall context captured on insufficient balance to pre-suggest exact top-up amount. */
+  pendingTopupIntent?: {
+    kind: 'new_config' | 'renew_config';
+    packageId?: string;
+    configId?: string;
+    configUsername?: string;
+    deficitAmount: number;
+    createdAt: number;
+  };
   /** Bot messages that belong to the current private-chat UI screen. */
   uiMessageIds?: number[];
   /** Ephemeral prompt message IDs created during interactive step inputs. */

@@ -365,8 +365,35 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
   let bankName = initialCardState.bankName;
   const { minimum, maximum, uniqueEnabled, hasCardSelection } = initialCardState;
 
+  const pendingTopupDeficit = await conversation.external((outsideCtx) => {
+    const intent = outsideCtx?.session?.pendingTopupIntent;
+    if (!intent) return undefined;
+    const isFresh = Date.now() - intent.createdAt <= 30 * 60 * 1000;
+    if (!isFresh) {
+      delete outsideCtx.session.pendingTopupIntent;
+      return undefined;
+    }
+    return Number.isSafeInteger(intent.deficitAmount) && intent.deficitAmount > 0
+      ? intent.deficitAmount
+      : undefined;
+  });
+
   const presets = buildTopupPresets(minimum, maximum);
   const presetKeyboard = new InlineKeyboard();
+  if (
+    pendingTopupDeficit !== undefined &&
+    pendingTopupDeficit >= minimum &&
+    pendingTopupDeficit <= maximum
+  ) {
+    presetKeyboard
+      .text(
+        t(ctx, 'topup_exact_deficit_button', {
+          amount: localizedNumber(pendingTopupDeficit, ctx),
+        }),
+        `amount:${pendingTopupDeficit}`
+      )
+      .row();
+  }
   for (let i = 0; i < presets.length; i += 2) {
     presetKeyboard.text(
       `${localizedNumber(presets[i]!, ctx)} ${t(ctx, 'currency_toman')}`,
@@ -712,6 +739,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     );
     await replyInConversation(conversation, ctx, t(ctx, 'navigation_continue_hint'), {
       reply_markup: new InlineKeyboard()
+        .text(t(ctx, 'receipt_approved_shop_button'), 'nav:shop')
         .text(t(ctx, 'menu_wallet'), 'nav:wallet')
         .row()
         .text(t(ctx, 'menu_back_main'), 'nav:main'),

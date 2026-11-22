@@ -243,6 +243,7 @@ const USER_HOME_NAV_EXACT = new Set([
   'remaining',
   'expiry',
   'renewing',
+  'user_confirm_button',
 ]);
 
 const USER_SHOP_OFFERS_PREFIXES = [
@@ -412,6 +413,12 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     en: 'Active count or status',
     sampleFa: 'فعال',
     sampleEn: 'Active',
+  },
+  added: {
+    fa: 'مقدار اضافه‌شده در تمدید (حجم یا روز)',
+    en: 'Added traffic or days in renewal',
+    sampleFa: '۳۰',
+    sampleEn: '30',
   },
   amount: {
     fa: 'مبلغ تراکنش یا تخفیف',

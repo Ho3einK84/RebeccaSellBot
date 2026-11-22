@@ -270,7 +270,10 @@ export async function runAutoRenewalSweep(
         continue;
       }
 
-      const balance = await walletService.getBalance(config.telegramId);
+      const balance =
+        typeof walletService.getAvailableBalance === 'function'
+          ? await walletService.getAvailableBalance(config.telegramId)
+          : await walletService.getBalance(config.telegramId);
       if (balance < selectedPackage.price) {
         const reserved = await deliveryStore.reserve(config, 'auto_renew_low_balance', now);
         if (reserved) {
@@ -375,11 +378,18 @@ export async function runAutoRenewalSweep(
                 fields: [
                   {
                     label: tForLocale(translationService, locale, 'auto_renew_package_label'),
-                    value: escapeTelegramMarkdown(selectedPackage.name),
+                    value: escapeTelegramMarkdown(
+                      formatAutoRenewalPackageName(
+                        translationService,
+                        locale,
+                        selectedPackage.id,
+                        selectedPackage.name
+                      )
+                    ),
                   },
                   {
                     label: tForLocale(translationService, locale, 'auto_renew_quota_label'),
-                    value: `${formatAutoRenewalNumber(selectedPackage.gbAmount, locale)} GB`,
+                    value: `${formatAutoRenewalNumber(selectedPackage.gbAmount, locale)} ${tForLocale(translationService, locale, 'traffic_unit_gb')}`,
                   },
                   {
                     label: tForLocale(translationService, locale, 'auto_renew_expiry_label'),
@@ -427,6 +437,24 @@ function normalizeLocale(locale: string): SupportedLocale | undefined {
 
 function formatAutoRenewalNumber(value: number, locale: SupportedLocale): string {
   return value.toLocaleString(locale === 'fa' ? 'fa-IR' : 'en-US');
+}
+
+function formatAutoRenewalPackageName(
+  translationService: TranslationService,
+  locale: SupportedLocale,
+  packageId: string,
+  fallback: string
+): string {
+  if (fallback.includes('|')) {
+    const parts = fallback.split('|').map((s) => s.trim());
+    return locale === 'fa' ? parts[0] || fallback : parts[1] || parts[0] || fallback;
+  }
+  const translatedKey = `package_${packageId}_name`;
+  const translated = tForLocale(translationService, locale, translatedKey);
+  if (translated !== translatedKey) {
+    return translated;
+  }
+  return locale === 'fa' ? fallback.replace(/\b(\d+)\s*GB\b/gi, '$1 گیگ') : fallback;
 }
 
 function formatAutoRenewalCurrency(

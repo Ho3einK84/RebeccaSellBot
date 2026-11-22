@@ -17,6 +17,7 @@ export interface UserPortalProfile {
   referralBonusEarned: number;
   cashbackEarned: number;
   hasUsedTrial: boolean;
+  phoneVerificationRequired?: boolean;
   createdAt: string;
 }
 
@@ -40,6 +41,10 @@ export interface CustomVolumeQuoteResponse {
   gbAmount: number;
   durationDays: number;
   totalPrice: number;
+  originalPrice?: number;
+  effectivePrice?: number;
+  activeDiscountTitle?: string | null;
+  discountExpiresAt?: string | null;
   pricePerGb: number;
   pricePerDay: number;
 }
@@ -55,6 +60,9 @@ export interface UserPortalSettings {
   botUsername: string;
   topupMinAmount?: number;
   topupMaxAmount?: number;
+  customServiceNameEnabled?: boolean;
+  onHoldDefaultEnabled?: boolean;
+  renewalRolloverEnabled?: boolean;
   customVolume?: CustomVolumeSettings;
 }
 
@@ -83,6 +91,9 @@ export interface UserConfigRecord {
 export interface ToggleAutoRenewResponse {
   success: boolean;
   autoRenewEnabled: boolean;
+  packageId?: string;
+  packageName?: string;
+  price?: number;
 }
 
 export interface ToggleConfigStatusResponse {
@@ -111,16 +122,86 @@ export interface UserConfigsResponse {
   configs: UserConfigRecord[];
 }
 
+export interface UserCategoryItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  displayOrder: number;
+}
+
 export interface UserPackageItem {
   id: string;
   name: string;
   gbAmount: number;
   durationDays: number;
   price: number;
+  originalPrice?: number;
+  effectivePrice?: number;
+  discountAmount?: number;
+  activeDiscountTitle?: string | null;
+  discountExpiresAt?: string | null;
+  categoryId?: string | null;
+  startOnFirstUse?: boolean;
+  rolloverQuota?: boolean;
+  featured?: boolean;
 }
 
 export interface UserPackagesResponse {
   packages: UserPackageItem[];
+  categories?: UserCategoryItem[];
+}
+
+export interface RolloverPreviewDto {
+  enabled: boolean;
+  currentRemainingGb?: number | null;
+  currentRemainingDays?: number | null;
+  projectedTotalGb?: number | null;
+  projectedTotalDays?: number | null;
+}
+
+export interface UserRenewalOptionsResponse {
+  config: {
+    id: string;
+    configUsername: string;
+    panelStatus: string | null;
+    currentRemainingGb: number | null;
+    currentRemainingDays: number | null;
+    autoRenewEnabled: boolean;
+    autoRenewPackageId: string | null;
+    autoRenewPrice: number | null;
+  };
+  packages: UserPackageItem[];
+  defaultRolloverEnabled: boolean;
+  customVolumeEnabled: boolean;
+}
+
+export interface PromoQuoteResponse {
+  valid: boolean;
+  code: string;
+  type: 'percent' | 'fixed' | 'gift_gb' | string;
+  value: number;
+  originalPrice: number;
+  effectivePrice: number;
+  finalAmount: number;
+  discountAmount: number;
+  baseGb: number;
+  bonusGb: number;
+  finalGb: number;
+}
+
+export interface PromoRedeemResponse {
+  success: boolean;
+  code?: string;
+  type: 'gift_credit';
+  value: number;
+  messageKey: string;
+  availableBalance?: number;
+}
+
+export interface WalletDeficitContext {
+  amount: number;
+  itemName: string;
 }
 
 export interface UserTransactionRecord {
@@ -140,26 +221,51 @@ export interface UserTransactionsResponse {
 }
 
 export interface CreateCheckoutPayload {
+  kind?: 'new_config' | 'renew_config';
+  configId?: string;
   packageId?: string;
   custom?: {
     gb: number;
     days: number;
   };
+  promoCode?: string;
+  requestedUsername?: string;
 }
 
 export interface UserCheckoutResponse {
   checkoutId: string;
+  kind?: 'new_config' | 'renew_config';
+  configId?: string;
+  configUsername?: string;
   name: string;
   gb: number;
+  bonusGb?: number;
+  finalGb?: number;
   days: number;
   price: number;
+  basePrice?: number;
   quotedAmount: number;
+  originalPrice?: number;
+  effectivePrice?: number;
+  discountAmount?: number;
+  activeDiscountTitle?: string | null;
+  discountExpiresAt?: string | null;
+  promoCode?: string | null;
+  promoType?: string | null;
+  promoDiscountAmount?: number;
+  requestedUsername?: string | null;
+  startOnFirstUse?: boolean;
+  rolloverEnabled?: boolean;
+  rolloverPreview?: RolloverPreviewDto;
   availableBalance: number;
   expiresAt: string;
 }
 
 export interface UserConfirmCheckoutResponse {
   success: boolean;
+  kind?: 'new_config' | 'renew_config';
   configUsername: string;
   subUrl?: string;
+  startOnFirstUse?: boolean;
+  availableBalanceAfter?: number;
 }
