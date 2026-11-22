@@ -28,6 +28,7 @@ import {
   buildNowPaymentsOrderKeyboard,
 } from '../../features/paymentOrderRoutes.js';
 import {
+  deleteOrderTelegramMessages,
   sendAdminNewReceiptNotification,
   sendBalanceAdjustmentNotification,
 } from '../../features/admin/adminNotifications.js';
@@ -583,7 +584,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
         continue;
       }
 
-      await sendArtifactInConversation(
+      const sentNpInvoice = await sendArtifactInConversation(
         conversation,
         ctx,
         buildNowPaymentsOrderInvoiceScreen(ctx, created.order, initialState.npCashback),
@@ -596,6 +597,14 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
           ),
         }
       );
+      if (sentNpInvoice?.message_id) {
+        await conversation.external(async (outsideCtx) => {
+          const aps = (outsideCtx?.services ?? ctx.services)?.automatedPaymentService;
+          await aps
+            ?.attachTelegramMessageId?.(created.order.id, sentNpInvoice.message_id)
+            .catch(() => {});
+        });
+      }
       return;
     }
   }
@@ -726,11 +735,24 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
             const locale = resolveContextLocale(outsideCtx?.services ? outsideCtx : ctx);
             if (!aps) return { ok: false as const, code: 'UNAVAILABLE' };
             try {
+              const previousPending = await aps
+                .getActivePendingOrderForUser?.(telegramId)
+                .catch(() => null);
               const order = await aps.createForAppOrder({
                 telegramId,
                 requestedAmount: candidateAmount,
                 locale,
               });
+              if (
+                previousPending &&
+                previousPending.provider === 'forapp_card' &&
+                previousPending.id !== order.id
+              ) {
+                const botApi = targetServices.botApi ?? outsideCtx?.api;
+                if (botApi) {
+                  await deleteOrderTelegramMessages(botApi, telegramId, previousPending.metadata);
+                }
+              }
               return { ok: true as const, order };
             } catch (err) {
               const code = err instanceof AutomatedPaymentError ? err.code : 'ORDER_CREATE_FAILED';
@@ -759,7 +781,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
             continue;
           }
 
-          await sendArtifactInConversation(
+          const sentForAppInvoice = await sendArtifactInConversation(
             conversation,
             ctx,
             buildForAppOrderInvoiceScreen(ctx, createdForApp.order),
@@ -768,6 +790,14 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
               reply_markup: buildForAppOrderKeyboard(ctx, createdForApp.order.id),
             }
           );
+          if (sentForAppInvoice?.message_id) {
+            await conversation.external(async (outsideCtx) => {
+              const aps = (outsideCtx?.services ?? ctx.services)?.automatedPaymentService;
+              await aps
+                ?.attachTelegramMessageId?.(createdForApp.order.id, sentForAppInvoice.message_id)
+                .catch(() => {});
+            });
+          }
           return;
         }
 

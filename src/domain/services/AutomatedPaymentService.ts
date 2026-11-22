@@ -62,6 +62,62 @@ export const NOWPAYMENTS_WEBHOOK_PATH = '/api/webhooks/nowpayments';
 /** Delay after which pending ForApp invoices surface a manual-receipt fallback reminder (5 minutes). */
 export const FORAPP_MANUAL_HINT_DELAY_MS = 5 * 60 * 1000;
 
+const MAX_ORDER_TELEGRAM_MESSAGE_IDS = 10;
+
+export function parseOrderMetadataObject(
+  metadata: string | null | undefined
+): Record<string, unknown> {
+  if (!metadata) return {};
+  try {
+    const parsed: unknown = JSON.parse(metadata);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { ...(parsed as Record<string, unknown>) };
+    }
+  } catch {
+    // Ignore malformed legacy metadata
+  }
+  return {};
+}
+
+/** Extract deduplicated positive Telegram message IDs associated with a pending payment order. */
+export function extractOrderTelegramMessageIds(metadata: string | null | undefined): number[] {
+  const obj = parseOrderMetadataObject(metadata);
+  const raw = obj.telegramMessageIds;
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<number>();
+  const result: number[] = [];
+  for (const item of raw) {
+    if (typeof item === 'number' && Number.isSafeInteger(item) && item > 0 && !seen.has(item)) {
+      seen.add(item);
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+/** Merge metadata fields onto a payment order without clobbering existing keys. */
+export function mergeOrderMetadata(
+  existing: string | null | undefined,
+  patch: { addTelegramMessageId?: number; manualHintSentAt?: string }
+): string {
+  const obj = parseOrderMetadataObject(existing);
+  if (
+    typeof patch.addTelegramMessageId === 'number' &&
+    Number.isSafeInteger(patch.addTelegramMessageId) &&
+    patch.addTelegramMessageId > 0
+  ) {
+    const ids = extractOrderTelegramMessageIds(existing);
+    if (!ids.includes(patch.addTelegramMessageId)) {
+      ids.push(patch.addTelegramMessageId);
+    }
+    obj.telegramMessageIds = ids.slice(-MAX_ORDER_TELEGRAM_MESSAGE_IDS);
+  }
+  if (patch.manualHintSentAt) {
+    obj.manualHintSentAt = patch.manualHintSentAt;
+  }
+  return JSON.stringify(obj);
+}
+
 const MIN_NOWPAYMENTS_USD = 0.5;
 const MAX_SAFE_INT = Number.MAX_SAFE_INTEGER;
 
@@ -1772,5 +1828,29 @@ export class AutomatedPaymentService {
       balanceAfter: finalBalance,
       alreadyProcessed: false,
     };
+  }
+
+  /**
+   * Attach a temporary Telegram invoice/nudge message ID onto `payment_orders.metadata`
+   * so it can be cleanly deleted once the order is confirmed, cancelled, or superseded.
+   */
+  async attachTelegramMessageId(orderId: string, messageId: number): Promise<void> {
+    if (!orderId || !Number.isSafeInteger(messageId) || messageId <= 0) return;
+    const now = new Date();
+    const db = getDb();
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ id: paymentOrders.id, metadata: paymentOrders.metadata })
+        .from(paymentOrders)
+        .where(eq(paymentOrders.id, orderId))
+        .for('update')
+        .limit(1);
+      if (!row) return;
+      const nextMetadata = mergeOrderMetadata(row.metadata, { addTelegramMessageId: messageId });
+      await tx
+        .update(paymentOrders)
+        .set({ metadata: nextMetadata, updatedAt: now })
+        .where(eq(paymentOrders.id, orderId));
+    });
   }
 }

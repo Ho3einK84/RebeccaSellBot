@@ -18,6 +18,7 @@ import { and, eq, gt, isNull, lte, notExists, or, sql } from 'drizzle-orm';
 import {
   FORAPP_MANUAL_HINT_DELAY_MS,
   formatPaymentOrderShortId,
+  mergeOrderMetadata,
 } from '../domain/services/AutomatedPaymentService.js';
 import { forappEnabled } from '../domain/services/FeatureSettings.js';
 import type { SupportedLocale, TranslationService } from '../domain/services/TranslationService.js';
@@ -45,6 +46,8 @@ export interface ForAppFallbackNudgeStore {
    * the order is still pending and has not yet been nudged.
    */
   claimManualHint(orderId: string, existingMetadata: string | null, now: Date): Promise<boolean>;
+  /** Persist the sent reminder message ID so it is cleaned up when the order completes/cancels. */
+  recordSentMessageId?(orderId: string, messageId: number, now: Date): Promise<void>;
 }
 
 export interface ForAppFallbackNudgeDeps {
@@ -61,19 +64,7 @@ export interface ForAppFallbackNudgeSummary {
 }
 
 export function buildClaimedMetadataJson(existingMetadata: string | null, now: Date): string {
-  let base: Record<string, unknown> = {};
-  if (existingMetadata) {
-    try {
-      const parsed: unknown = JSON.parse(existingMetadata);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        base = { ...(parsed as Record<string, unknown>) };
-      }
-    } catch {
-      base = {};
-    }
-  }
-  base.manualHintSentAt = now.toISOString();
-  return JSON.stringify(base);
+  return mergeOrderMetadata(existingMetadata, { manualHintSentAt: now.toISOString() });
 }
 
 export class PostgresForAppFallbackNudgeStore implements ForAppFallbackNudgeStore {
@@ -142,6 +133,24 @@ export class PostgresForAppFallbackNudgeStore implements ForAppFallbackNudgeStor
       )
       .returning({ id: paymentOrders.id });
     return claimed !== undefined;
+  }
+
+  async recordSentMessageId(orderId: string, messageId: number, now: Date): Promise<void> {
+    if (!Number.isSafeInteger(messageId) || messageId <= 0) return;
+    await getDb().transaction(async (tx) => {
+      const [row] = await tx
+        .select({ metadata: paymentOrders.metadata })
+        .from(paymentOrders)
+        .where(eq(paymentOrders.id, orderId))
+        .for('update')
+        .limit(1);
+      if (!row) return;
+      const nextMetadata = mergeOrderMetadata(row.metadata, { addTelegramMessageId: messageId });
+      await tx
+        .update(paymentOrders)
+        .set({ metadata: nextMetadata, updatedAt: now })
+        .where(eq(paymentOrders.id, orderId));
+    });
   }
 }
 
@@ -235,10 +244,13 @@ export async function runForAppFallbackNudgeCycle(
       .text(tForLocale(deps.translationService, locale, 'menu_close'), 'ui:dismiss');
 
     try {
-      await deps.telegramApi.sendMessage(candidate.telegramId, messageText, {
+      const sent = await deps.telegramApi.sendMessage(candidate.telegramId, messageText, {
         parse_mode: 'Markdown',
         reply_markup: keyboard,
       });
+      if (sent?.message_id && store.recordSentMessageId) {
+        await store.recordSentMessageId(candidate.id, sent.message_id, now).catch(() => {});
+      }
       summary.nudged += 1;
       logger.info(
         { telegramId: candidate.telegramId, orderId: candidate.id },

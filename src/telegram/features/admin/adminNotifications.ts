@@ -1,4 +1,5 @@
 import { InlineKeyboard, type Api } from 'grammy';
+import { extractOrderTelegramMessageIds } from '../../../domain/services/AutomatedPaymentService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type {
   SupportedLocale,
@@ -485,6 +486,31 @@ function resolveNotificationAdminIds(services: AdminNotificationServices): numbe
   return targetAdminIds;
 }
 
+/**
+ * Best-effort deletion of temporary pending invoice / reminder messages linked
+ * to an automated payment order once it completes, cancels, or is superseded.
+ * Never deletes the permanent completion receipt message.
+ */
+export async function deleteOrderTelegramMessages(
+  api: Pick<Api, 'deleteMessage'> | { deleteMessage?: Api['deleteMessage'] },
+  telegramId: number,
+  metadata: string | null | undefined,
+  extraMessageIds: readonly number[] = []
+): Promise<void> {
+  if (typeof api.deleteMessage !== 'function') return;
+  const ids = new Set<number>(extractOrderTelegramMessageIds(metadata));
+  for (const id of extraMessageIds) {
+    if (Number.isSafeInteger(id) && id > 0) ids.add(id);
+  }
+  for (const msgId of ids) {
+    try {
+      await api.deleteMessage(telegramId, msgId);
+    } catch {
+      // Message may already be deleted or older than Telegram's 48h delete window
+    }
+  }
+}
+
 export async function sendAutomatedTopupSuccessNotification(
   api: Api,
   services: AdminNotificationServices,
@@ -495,9 +521,13 @@ export async function sendAutomatedTopupSuccessNotification(
     balanceAfter?: number;
     provider: 'forapp_card' | 'nowpayments';
     orderId: string;
+    orderMetadata?: string | null;
   }
 ): Promise<void> {
   try {
+    // Delete stale pending invoice/nudge messages before delivering the durable receipt.
+    await deleteOrderTelegramMessages(api, params.telegramId, params.orderMetadata);
+
     const ts = services.translationService;
     const locale =
       (await services.userService.getLocale(params.telegramId)) ?? resolveServiceLocale(ts);

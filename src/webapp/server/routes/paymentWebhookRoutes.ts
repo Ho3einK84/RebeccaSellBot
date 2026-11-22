@@ -72,6 +72,7 @@ export function registerPaymentWebhookRoutes(
             balanceAfter: result.balanceAfter,
             provider: 'forapp_card',
             orderId: result.order.id,
+            orderMetadata: result.order.metadata,
           });
           void sendAdminAutomatedTopupReport(options.botApi, notifyServices, {
             telegramId: result.order.telegramId,
@@ -144,6 +145,7 @@ export function registerPaymentWebhookRoutes(
             balanceAfter: result.balanceAfter,
             provider: 'nowpayments',
             orderId: result.order.id,
+            orderMetadata: result.order.metadata,
           });
           void sendAdminAutomatedTopupReport(options.botApi, notifyServices, {
             telegramId: result.order.telegramId,

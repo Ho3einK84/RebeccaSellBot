@@ -94,7 +94,7 @@ describe('Telegram paymentOrderRoutes UX lifecycle', () => {
     expect(session.uiMessageIds).toContain(811);
   });
 
-  it('preserves completed invoice artifact on cancel or check and strips stale buttons', async () => {
+  it('deletes stale pending invoice on check completion while preserving durable receipt artifact', async () => {
     const { bot, dispatch } = createFakeBotHarness();
     const automatedPaymentService = {
       cancelOrderForUser: vi.fn(async () => null),
@@ -112,6 +112,7 @@ describe('Telegram paymentOrderRoutes UX lifecycle', () => {
           payableAmount: 50_000,
           creditedAmount: 50_000,
           cashbackAmount: 0,
+          metadata: JSON.stringify({ telegramMessageIds: [900] }),
         },
         newlyCompleted: false,
         balanceAfter: 100_000,
@@ -134,15 +135,16 @@ describe('Telegram paymentOrderRoutes UX lifecycle', () => {
     expect(cancelCase.ctx.editMessageReplyMarkup).toHaveBeenCalledWith({ reply_markup: undefined });
     expect(cancelCase.session.artifactMessageIds).toContain(901);
 
-    // Check status on completed order keeps invoice message and remembers completion receipt artifact
+    // Check status on completed order deletes stale pending invoice(s) and preserves new completion receipt
     const checkCase = createCallbackContext(services, {
       messageId: 902,
-      session: { artifactMessageIds: [902] },
+      session: { artifactMessageIds: [900, 902] },
     });
     await dispatch('porder:check:po_done_1', checkCase.ctx);
-    expect(checkCase.api.deleteMessage).not.toHaveBeenCalled();
-    expect(checkCase.ctx.editMessageReplyMarkup).toHaveBeenCalledWith({ reply_markup: undefined });
-    expect(checkCase.session.artifactMessageIds).toContain(902);
+    expect(checkCase.api.deleteMessage).toHaveBeenCalledWith(55555, 900);
+    expect(checkCase.api.deleteMessage).toHaveBeenCalledWith(55555, 902);
+    expect(checkCase.session.artifactMessageIds).not.toContain(900);
+    expect(checkCase.session.artifactMessageIds).not.toContain(902);
     expect(checkCase.session.artifactMessageIds).toContain(903);
   });
 

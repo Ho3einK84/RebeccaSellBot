@@ -6,6 +6,7 @@ import { InlineKeyboard, type Bot } from 'grammy';
 import type { BotServices, ConversationContext, MenuContext } from '../types.js';
 import {
   FORAPP_MANUAL_HINT_DELAY_MS,
+  extractOrderTelegramMessageIds,
   formatPaymentOrderShortId,
   type AutomatedPaymentService,
 } from '../../domain/services/AutomatedPaymentService.js';
@@ -20,7 +21,10 @@ import {
   renderScreen,
   safelyDeleteMessage,
 } from '../ui.js';
-import { sendAdminAutomatedTopupReport } from './admin/adminNotifications.js';
+import {
+  deleteOrderTelegramMessages,
+  sendAdminAutomatedTopupReport,
+} from './admin/adminNotifications.js';
 
 function formatCardGrouped(rawCard: string): string {
   const digits = normalizeCardNumber(rawCard).replace(/\D/g, '');
@@ -194,8 +198,20 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
 
     if (order.status === 'completed') {
       await ctx.answerCallbackQuery({ text: t(ctx, 'auto_pay_credited_title') });
-      // Preserve completed invoice artifact text; remove stale pending action buttons.
-      await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+      // Remove stale pending invoice / reminder message(s); the durable completion receipt below is preserved.
+      const callbackMsgId = ctx.callbackQuery?.message?.message_id;
+      const trackedIds = extractOrderTelegramMessageIds(order.metadata);
+      const allPendingMsgIds = new Set<number>(trackedIds);
+      if (callbackMsgId !== undefined) allPendingMsgIds.add(callbackMsgId);
+      for (const msgId of allPendingMsgIds) {
+        if (ctx.session) forgetUiMessage(ctx.session, msgId);
+      }
+      await deleteOrderTelegramMessages(
+        ctx.api,
+        telegramId,
+        order.metadata,
+        callbackMsgId !== undefined ? [callbackMsgId] : []
+      );
       const currency = t(ctx, 'currency_toman');
       const credited = order.creditedAmount ?? order.payableAmount;
       const fields: Array<{ label: string; value: string }> = [
@@ -362,11 +378,20 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
       return;
     }
 
-    // Remove the unpaid cancelled invoice message so stale card/buttons do not linger in chat.
+    // Remove the unpaid cancelled invoice (and any 5-minute reminder) so stale buttons do not linger.
+    const cancelledIds = extractOrderTelegramMessageIds(cancelled.metadata);
+    for (const msgId of cancelledIds) {
+      if (ctx.session) forgetUiMessage(ctx.session, msgId);
+    }
     if (callbackMsgId !== undefined) {
       if (ctx.session) forgetUiMessage(ctx.session, callbackMsgId);
-      await safelyDeleteMessage(ctx, callbackMsgId);
     }
+    await deleteOrderTelegramMessages(
+      ctx.api,
+      telegramId,
+      cancelled.metadata,
+      callbackMsgId !== undefined ? [callbackMsgId] : []
+    );
 
     await ctx.answerCallbackQuery({ text: t(ctx, 'auto_pay_status_cancelled') });
     await renderScreen(ctx, buildUserEmptyState('↩️', t(ctx, 'auto_pay_status_cancelled'), ''), {
@@ -399,10 +424,19 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
     }
 
     const callbackMsgId = ctx.callbackQuery?.message?.message_id;
+    const trackedIds = extractOrderTelegramMessageIds(order.metadata);
+    for (const msgId of trackedIds) {
+      if (ctx.session) forgetUiMessage(ctx.session, msgId);
+    }
     if (callbackMsgId !== undefined) {
       if (ctx.session) forgetUiMessage(ctx.session, callbackMsgId);
-      await safelyDeleteMessage(ctx, callbackMsgId);
     }
+    await deleteOrderTelegramMessages(
+      ctx.api,
+      telegramId,
+      order.metadata,
+      callbackMsgId !== undefined ? [callbackMsgId] : []
+    );
 
     ctx.session.manualFallbackOrder = {
       orderId: order.id,

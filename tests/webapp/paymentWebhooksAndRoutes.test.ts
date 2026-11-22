@@ -13,14 +13,20 @@ describe('WebApp Automated Payment Webhooks, User & Admin Routes', () => {
   let adminToken: string;
   let userToken: string;
   let rateLimitStore: ReturnType<typeof createResettableRateLimitStore>;
-  let mockBotApi: { sendMessage: ReturnType<typeof vi.fn> };
+  let mockBotApi: {
+    sendMessage: ReturnType<typeof vi.fn>;
+    deleteMessage: ReturnType<typeof vi.fn>;
+  };
   let mockAutomatedPaymentService: Record<string, ReturnType<typeof vi.fn>>;
 
   beforeAll(async () => {
     rateLimitStore = createResettableRateLimitStore();
     const { mockServices, mockUserService, mockTranslationService, mockWalletService } =
       createMockAdminServices();
-    mockBotApi = { sendMessage: vi.fn(async () => ({ message_id: 1 })) };
+    mockBotApi = {
+      sendMessage: vi.fn(async () => ({ message_id: 1 })),
+      deleteMessage: vi.fn(async () => true),
+    };
 
     // Supply methods required by notification formatting and user-portal routes
     (mockTranslationService as Record<string, unknown>).get = vi.fn((key: string) => key);
@@ -245,7 +251,12 @@ describe('WebApp Automated Payment Webhooks, User & Admin Routes', () => {
       outcome: 'matched',
       creditedAmount: 99_876,
       balanceAfter: 174_876,
-      order: { id: 'po_fa_1', telegramId: 55555, bankName: 'ملی' },
+      order: {
+        id: 'po_fa_1',
+        telegramId: 55555,
+        bankName: 'ملی',
+        metadata: JSON.stringify({ offset: 124, telegramMessageIds: [4101, 4105] }),
+      },
       deposit: { id: 'fad_1', bank: 'ملی' },
     });
     const matched = await app.inject({
@@ -257,6 +268,8 @@ describe('WebApp Automated Payment Webhooks, User & Admin Routes', () => {
     expect(matched.statusCode).toBe(200);
     expect(matched.json()).toMatchObject({ ok: true, outcome: 'matched', orderId: 'po_fa_1' });
     await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(mockBotApi.deleteMessage).toHaveBeenCalledWith(55555, 4101);
+    expect(mockBotApi.deleteMessage).toHaveBeenCalledWith(55555, 4105);
     expect(mockBotApi.sendMessage).toHaveBeenCalled();
   });
 
