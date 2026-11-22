@@ -367,25 +367,25 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
   return (
     <div className="w-full flex flex-col gap-5 pb-6">
-      {/* Top Wallet Summary + P2P Transfer CTA */}
-      <Card padding="lg" className="flex items-center justify-between gap-3 flex-wrap text-start">
-        <div className="flex items-center gap-3.5">
-          <IconTile tone="brand" size="lg">
+      {/* Top Wallet Summary + P2P Transfer CTA (single compact row, button pinned left) */}
+      <Card padding="md" className="flex items-center justify-between gap-2.5 text-start sm:p-5">
+        <div className="flex items-center gap-3 min-w-0">
+          <IconTile tone="brand" size="md">
             <Wallet />
           </IconTile>
-          <div className="flex flex-col">
+          <div className="flex flex-col min-w-0">
             <span className="text-xs text-ink-muted">{t('user.wallet.currentBalance')}</span>
-            <div className="flex items-baseline gap-2 mt-1">
+            <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
               <bdi
                 dir="ltr"
-                className="text-2xl sm:text-3xl tnum font-bold tracking-tight leading-none text-ink"
+                className="text-xl sm:text-2xl tnum font-bold tracking-tight leading-none text-ink"
               >
                 {formatToman(availableBalance)}
               </bdi>
               <span className="text-xs text-ink-muted font-medium">{currency}</span>
             </div>
             {profile?.reservedBalance && profile.reservedBalance > 0 ? (
-              <div className="flex items-center gap-2 text-[11px] text-ink-muted tnum mt-0.5">
+              <div className="flex items-center gap-2 text-[11px] text-ink-muted tnum mt-0.5 flex-wrap">
                 <span>{t('user.wallet.totalLabel').replace('{amount}', formatToman(balance))}</span>
                 <span className="text-warn-fg font-medium">
                   {t('user.wallet.reservedLabel').replace(
@@ -407,7 +407,7 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               triggerHaptic('selection');
               setIsTransferModalOpen(true);
             }}
-            className="shrink-0"
+            className="shrink-0 ms-auto"
           >
             <ArrowLeftRight className="w-3.5 h-3.5 text-brand-fg shrink-0" />
             <span>{t('user.wallet.transferBalanceButton')}</span>

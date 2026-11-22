@@ -48,8 +48,6 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
     }
   };
 
-  const showFooter = balance !== undefined || Boolean(isAdminView && onSwitchToAdmin);
-
   return (
     <TopBar
       icon={
@@ -72,39 +70,35 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
         ) : null
       }
       subtitle={
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {user.username ? (
-            <bdi dir="ltr" className="tnum text-[11px] font-medium text-brand-fg">
-              @{user.username}
-            </bdi>
-          ) : (
-            <span className="text-[11px] text-ink-muted">{t('user.userPortalBadge')}</span>
-          )}
-          <span className="text-ink-muted/40" aria-hidden="true">
-            ·
-          </span>
-          <button
-            type="button"
-            onClick={() => void handleCopyId()}
-            className="press rs-focus inline-flex h-5 items-center gap-1 rounded-full bg-surface-2 hover:bg-surface-3 px-2 tnum text-[10.5px] font-medium text-ink-soft hover:text-ink cursor-pointer shrink-0 border border-line"
-            title={t('common.copy')}
-            aria-label={t('common.copy')}
-          >
-            <bdi dir="ltr" className="tnum text-ink-soft">
-              #{formatId(user.id)}
-            </bdi>
-            {isCopied('portal-header-id') ? (
-              <Check className="h-2.5 w-2.5 text-ok-fg shrink-0" />
-            ) : (
-              <Copy className="h-2.5 w-2.5 opacity-60 shrink-0" />
-            )}
-          </button>
-        </div>
+        user.username ? (
+          <bdi dir="ltr" className="tnum text-[11px] font-medium text-brand-fg">
+            @{user.username}
+          </bdi>
+        ) : (
+          <span className="text-[11px] text-ink-muted">{t('user.userPortalBadge')}</span>
+        )
       }
       actions={<HeaderUtilityActions onRefresh={onRefresh} isRefreshing={isRefreshing} />}
       footer={
-        showFooter ? (
-          <>
+        <>
+          <div className="flex min-w-0 flex-1 items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => void handleCopyId()}
+              className="press rs-focus inline-flex h-7 items-center gap-1 rounded-full border border-line bg-surface-2 px-2.5 tnum text-[11px] font-medium text-ink-soft hover:border-line-strong hover:text-ink cursor-pointer shrink-0"
+              title={t('common.copy')}
+              aria-label={t('common.copy')}
+            >
+              <bdi dir="ltr" className="tnum text-ink">
+                #{formatId(user.id)}
+              </bdi>
+              {isCopied('portal-header-id') ? (
+                <Check className="h-3 w-3 text-ok-fg shrink-0" />
+              ) : (
+                <Copy className="h-3 w-3 opacity-60 shrink-0" />
+              )}
+            </button>
+
             {balance !== undefined ? (
               <button
                 type="button"
@@ -112,7 +106,7 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
                   triggerHaptic('selection');
                   onOpenWallet?.();
                 }}
-                className="press rs-focus inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 text-[11px] font-medium text-ink hover:border-line-strong hover:bg-surface-3 cursor-pointer shrink-0"
+                className="press rs-focus inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 text-[11px] font-medium text-ink hover:border-line-strong hover:bg-surface-3 cursor-pointer shrink-0"
                 title={t('user.dashboard.walletBalance')}
               >
                 <Wallet className="h-3 w-3 text-ok-fg shrink-0" />
@@ -121,28 +115,26 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
                 </bdi>
                 <span className="text-ink-muted">{displayCurrency}</span>
               </button>
-            ) : (
-              <span />
-            )}
-
-            {isAdminView && onSwitchToAdmin ? (
-              <div className="ms-auto flex items-center shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    onSwitchToAdmin();
-                  }}
-                  title={t('user.backToAdmin')}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-brand/25 bg-brand-soft px-3 text-xs font-medium text-brand-fg hover:bg-brand/20 rs-focus press cursor-pointer shrink-0"
-                >
-                  <Shield className="w-3.5 h-3.5 shrink-0" />
-                  <span>{t('user.backToAdmin')}</span>
-                </button>
-              </div>
             ) : null}
-          </>
-        ) : undefined
+          </div>
+
+          {isAdminView && onSwitchToAdmin ? (
+            <div className="ms-auto flex items-center shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onSwitchToAdmin();
+                }}
+                title={t('user.backToAdmin')}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full border border-brand/25 bg-brand-soft px-2.5 text-[11px] font-medium text-brand-fg hover:bg-brand/20 rs-focus press cursor-pointer shrink-0"
+              >
+                <Shield className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('user.backToAdmin')}</span>
+              </button>
+            </div>
+          ) : null}
+        </>
       }
     />
   );

@@ -206,19 +206,51 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       <div className="lg:col-span-7 flex flex-col gap-4">
         <section
           aria-label={t('user.dashboard.walletBalance')}
-          className="relative overflow-hidden rounded-card rs-hero-obsidian text-obsidian-ink p-5 sm:p-6"
+          className="relative overflow-hidden rounded-card rs-hero-obsidian text-obsidian-ink p-4 sm:p-5"
         >
-          {/* Subtle Apple titanium specular sheen overlay */}
-          <div
+          {/* Signature Geometric Orbital Radar Artwork */}
+          <svg
             aria-hidden="true"
-            className="pointer-events-none absolute -top-20 -end-16 w-56 h-56 rounded-full bg-white/[0.04] blur-2xl"
-          />
+            viewBox="0 0 160 160"
+            className="pointer-events-none absolute -bottom-8 -end-8 w-44 h-44 sm:w-48 sm:h-48 text-white/[0.07]"
+            fill="none"
+          >
+            <circle cx="80" cy="80" r="72" stroke="currentColor" strokeWidth="1" />
+            <circle
+              cx="80"
+              cy="80"
+              r="56"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeDasharray="3 4"
+            />
+            <circle cx="80" cy="80" r="40" stroke="currentColor" strokeWidth="1" />
+            <circle
+              cx="80"
+              cy="80"
+              r="24"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeDasharray="2 3"
+            />
+            <circle cx="80" cy="80" r="8" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M4 80h152M80 4v152" stroke="currentColor" strokeWidth="1" />
+            <path
+              d="M26 26l108 108M134 26L26 134"
+              stroke="currentColor"
+              strokeWidth="0.75"
+              strokeOpacity="0.65"
+            />
+            <circle cx="80" cy="24" r="2.5" fill="currentColor" fillOpacity="0.8" />
+            <circle cx="40" cy="80" r="2" fill="currentColor" fillOpacity="0.7" />
+            <circle cx="119" cy="41" r="2" fill="currentColor" fillOpacity="0.6" />
+          </svg>
 
-          <div className="relative z-10 flex flex-col justify-between min-h-[152px]">
+          <div className="relative z-10 flex flex-col justify-between min-h-[138px]">
             {/* Top row */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-6 rounded-[7px] bg-white/[0.1] border border-white/15 flex items-center justify-center shrink-0">
+                <span className="w-8 h-6 rounded-[7px] bg-white/[0.09] border border-white/15 flex items-center justify-center shrink-0">
                   <CreditCard className="w-3.5 h-3.5 text-white/85" aria-hidden="true" />
                 </span>
                 <span className="text-xs font-medium text-white/80">
@@ -226,7 +258,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </span>
               </div>
 
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.09] border border-white/15 text-[11px] font-medium text-white/90 tnum backdrop-blur-md">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.09] border border-white/15 text-[11px] font-medium text-white/90 tnum backdrop-blur-md">
                 <span
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     activeConfigs.length > 0
@@ -244,56 +276,59 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
 
             {/* Balance Figure */}
-            <div className="my-5 text-start">
-              <div className="flex items-baseline gap-2.5 flex-wrap">
+            <div className="my-3.5 text-start">
+              <div className="flex items-baseline gap-2 flex-wrap">
                 <bdi
                   dir="ltr"
-                  className="text-[34px] sm:text-[40px] font-bold tracking-tight leading-none tnum text-white"
+                  className="text-2xl sm:text-3xl font-bold tracking-tight leading-none tnum text-white"
                 >
                   {formatToman(availableBalance)}
                 </bdi>
-                <span className="text-xs sm:text-sm font-medium text-white/60">{currency}</span>
+                <span className="text-xs sm:text-sm font-medium text-white/65">{currency}</span>
               </div>
             </div>
 
-            {/* Bottom Toolbar: Invite Code Pill & Apple White Pill CTA */}
-            <div className="flex items-center justify-between gap-3 pt-3.5 border-t border-white/10 flex-wrap">
-              <div className="flex items-center gap-2 min-w-0 text-start">
-                <span className="text-[11px] text-white/60 shrink-0">
-                  {t('user.referral.yourCode')}:
+            {/* Bottom Toolbar: Stacked Referral Code on Right, Top-up CTA on Left */}
+            <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-white/10">
+              <div className="flex flex-col min-w-0 text-start">
+                <span className="text-[11px] text-white/60 leading-tight mb-1">
+                  {t('user.referral.yourCode')}
                 </span>
-                {inviteLink ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyReferral()}
-                    className="h-8 px-2.5 rounded-full bg-white/[0.09] hover:bg-white/[0.15] border border-white/12 inline-flex items-center gap-1.5 press rs-focus text-white/90 shrink-0 cursor-pointer transition-colors"
-                    title={t('user.referral.copyLink')}
-                    aria-label={t('user.referral.copyLink')}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <bdi
+                    dir="ltr"
+                    className="text-xs font-mono font-medium text-white/90 truncate"
+                    title={inviteLink}
                   >
-                    <bdi dir="ltr" className="text-[11.5px] font-mono font-medium truncate">
-                      {formatShortRefCode(profile?.referralCode)}
-                    </bdi>
-                    {isCopied('dashboard-ref-code') ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400 anim-pop shrink-0" />
-                    ) : (
-                      <Copy className="w-3 h-3 opacity-75 shrink-0" />
-                    )}
-                  </button>
-                ) : (
-                  <bdi dir="ltr" className="text-xs font-mono font-medium text-white/85 truncate">
                     {formatShortRefCode(profile?.referralCode)}
                   </bdi>
-                )}
+                  {inviteLink && (
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyReferral()}
+                      className="w-7 h-7 rounded-ctl bg-white/10 hover:bg-white/16 border border-white/10 flex items-center justify-center press rs-focus text-white/85 shrink-0 cursor-pointer"
+                      title={t('user.referral.copyLink')}
+                      aria-label={t('user.referral.copyLink')}
+                    >
+                      {isCopied('dashboard-ref-code') ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400 anim-pop" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <button
-                type="button"
+              <Button
+                size="sm"
+                variant="primary"
                 onClick={() => handleAction('wallet')}
-                className="h-9 px-4 rounded-full bg-white hover:bg-white/92 text-[#0e131d] text-xs font-semibold inline-flex items-center justify-center gap-1.5 shadow-[0_4px_14px_rgba(0,0,0,0.28)] press rs-focus cursor-pointer shrink-0 transition-all"
+                className="shrink-0 ms-auto"
               >
-                <Wallet className="w-3.5 h-3.5 text-[#007aff] shrink-0" />
+                <Wallet className="w-3.5 h-3.5 shrink-0" />
                 <span>{t('user.dashboard.quickTopup')}</span>
-              </button>
+              </Button>
             </div>
           </div>
         </section>
