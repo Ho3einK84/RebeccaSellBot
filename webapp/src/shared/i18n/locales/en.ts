@@ -127,6 +127,10 @@ export const en: DeepPartial<TranslationSchema> = {
       phoneRequiredDesc:
         'To prevent abuse, please verify your Telegram phone number once before claiming your free trial.',
       verifyAndClaim: 'Verify Phone & Claim Trial',
+      phoneCancelledHint:
+        'Verification was cancelled. Try again or verify directly inside the Telegram bot.',
+      phoneTimeoutHint:
+        'Syncing verification status... If you already shared your contact in the bot, refresh or tap again.',
     },
     wheel: {
       title: 'Lucky Wheel',

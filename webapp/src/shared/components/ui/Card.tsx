@@ -20,11 +20,11 @@ const paddingClasses: Record<CardPadding, string> = {
 
 const toneSurfaceClasses: Record<Exclude<CardTone, 'default'>, string> = {
   subtle: 'bg-surface-2 border-line',
-  brand: 'bg-brand-soft border-brand/30',
-  accent: 'bg-accent-soft border-accent/25',
-  ok: 'bg-ok-soft border-ok/25',
-  danger: 'bg-danger-soft border-danger/30',
-  warn: 'bg-warn-soft border-warn/30',
+  brand: 'bg-brand-soft border-brand/20 shadow-[var(--shadow-card)]',
+  accent: 'bg-accent-soft border-accent/20 shadow-[var(--shadow-card)]',
+  ok: 'bg-ok-soft border-ok/20 shadow-[var(--shadow-card)]',
+  danger: 'bg-danger-soft border-danger/25 shadow-[var(--shadow-card)]',
+  warn: 'bg-warn-soft border-warn/25 shadow-[var(--shadow-card)]',
 };
 
 export const Card: React.FC<CardProps> = ({

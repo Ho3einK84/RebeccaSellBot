@@ -23,14 +23,14 @@ const SLICE_COUNT = 8;
 const SLICE_ANGLE = 360 / SLICE_COUNT;
 
 const SLICE_PALETTE = [
-  '#2563eb',
-  '#7c3aed',
-  '#059669',
-  '#d97706',
-  '#0284c7',
-  '#9333ea',
-  '#0d9488',
-  '#e11d48',
+  '#0a84ff',
+  '#5e5ce6',
+  '#30d158',
+  '#ff9f0a',
+  '#007aff',
+  '#bf5af2',
+  '#00c7be',
+  '#ff375f',
 ];
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
@@ -262,26 +262,44 @@ export const LuckyWheelSection: React.FC<LuckyWheelSectionProps> = ({
         </Badge>
       </div>
 
-      {/* Interactive SVG Wheel */}
-      <div className="relative flex flex-col items-center justify-center py-2">
-        {/* Top pointer */}
-        <div aria-hidden="true" className="z-20 -mb-3 flex flex-col items-center drop-shadow-sm">
-          <div className="w-0 h-0 border-l-[11px] border-r-[11px] border-t-[18px] border-l-transparent border-r-transparent border-t-amber-400" />
+      {/* Interactive Apple Precision Wheel */}
+      <div className="relative flex flex-col items-center justify-center py-3">
+        {/* Top precision ticker */}
+        <div
+          aria-hidden="true"
+          className="z-20 -mb-2.5 flex flex-col items-center drop-shadow-[0_3px_8px_rgba(0,0,0,0.45)]"
+        >
+          <div className="w-3.5 h-5 rounded-full bg-white dark:bg-amber-300 border-2 border-slate-900 shadow-md" />
         </div>
 
         {/* Wheel wrapper */}
         <div className="relative w-64 h-64 sm:w-72 sm:h-72 select-none">
           <svg
             viewBox="0 0 240 240"
-            className="w-full h-full drop-shadow-md"
+            className="w-full h-full drop-shadow-[0_14px_30px_rgba(0,0,0,0.32)]"
             style={{
               transform: `rotate(${rotationDeg}deg)`,
               transition: isSpinning ? 'transform 4.2s cubic-bezier(0.12, 0.85, 0.16, 1)' : 'none',
             }}
             aria-label={t('user.wheel.title')}
           >
-            {/* Outer Rim */}
-            <circle cx="120" cy="120" r="116" fill="#0f172a" stroke="#fbbf24" strokeWidth="4" />
+            <defs>
+              <radialGradient id="wheelSheen" cx="35%" cy="28%" r="70%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
+                <stop offset="55%" stopColor="rgba(255,255,255,0.03)" />
+                <stop offset="100%" stopColor="rgba(0,0,0,0.18)" />
+              </radialGradient>
+            </defs>
+
+            {/* Outer Brushed Bezel */}
+            <circle
+              cx="120"
+              cy="120"
+              r="116"
+              fill="#15171e"
+              stroke="rgba(255,255,255,0.28)"
+              strokeWidth="3.5"
+            />
 
             {sliceValues.map((val, idx) => {
               const startAngle = idx * SLICE_ANGLE;
@@ -292,10 +310,10 @@ export const LuckyWheelSection: React.FC<LuckyWheelSectionProps> = ({
               return (
                 <g key={idx}>
                   <path
-                    d={buildSlicePath(120, 120, 108, startAngle, endAngle)}
+                    d={buildSlicePath(120, 120, 107, startAngle, endAngle)}
                     fill={SLICE_PALETTE[idx % SLICE_PALETTE.length]}
-                    stroke="rgba(255,255,255,0.22)"
-                    strokeWidth="1.5"
+                    stroke="rgba(255,255,255,0.26)"
+                    strokeWidth="1.25"
                   />
                   <text
                     x={labelPos.x}
@@ -309,13 +327,23 @@ export const LuckyWheelSection: React.FC<LuckyWheelSectionProps> = ({
                   >
                     {formatCompactPrize(val, locale)}
                   </text>
-                  <circle cx={pinPos.x} cy={pinPos.y} r="2.5" fill="#fde68a" />
+                  <circle cx={pinPos.x} cy={pinPos.y} r="2.2" fill="rgba(255,255,255,0.88)" />
                 </g>
               );
             })}
 
+            {/* Glossy Apple glass sheen overlay */}
+            <circle cx="120" cy="120" r="107" fill="url(#wheelSheen)" pointerEvents="none" />
+
             {/* Center hub */}
-            <circle cx="120" cy="120" r="24" fill="#0f172a" stroke="#fbbf24" strokeWidth="3" />
+            <circle
+              cx="120"
+              cy="120"
+              r="25"
+              fill="#14161d"
+              stroke="rgba(255,255,255,0.45)"
+              strokeWidth="2.5"
+            />
           </svg>
 
           {/* Center Spin Trigger Overlay */}
@@ -324,9 +352,9 @@ export const LuckyWheelSection: React.FC<LuckyWheelSectionProps> = ({
             onClick={() => void handleSpin()}
             disabled={!wheelData.canSpin || isSpinning}
             aria-label={t('user.wheel.spinButton')}
-            className="absolute inset-0 m-auto w-12 h-12 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center justify-center shadow-lg press rs-focus cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+            className="absolute inset-0 m-auto w-13 h-13 rounded-full bg-white text-[#111318] hover:scale-105 font-bold text-xs flex items-center justify-center shadow-[0_6px_18px_rgba(0,0,0,0.4)] ring-2 ring-white/30 press rs-focus cursor-pointer disabled:opacity-65 disabled:cursor-not-allowed transition-transform"
           >
-            <Gift className={`w-5 h-5 ${isSpinning ? 'animate-bounce' : ''}`} />
+            <Gift className={`w-5 h-5 text-[#007aff] ${isSpinning ? 'animate-bounce' : ''}`} />
           </button>
         </div>
       </div>

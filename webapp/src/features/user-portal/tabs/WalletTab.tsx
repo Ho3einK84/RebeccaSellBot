@@ -375,8 +375,11 @@ export const WalletTab: React.FC<WalletTabProps> = ({
           </IconTile>
           <div className="flex flex-col">
             <span className="text-xs text-ink-muted">{t('user.wallet.currentBalance')}</span>
-            <div className="flex items-baseline gap-1.5 mt-0.5">
-              <bdi dir="ltr" className="text-xl sm:text-2xl tnum font-semibold text-ink">
+            <div className="flex items-baseline gap-2 mt-1">
+              <bdi
+                dir="ltr"
+                className="text-2xl sm:text-3xl tnum font-bold tracking-tight leading-none text-ink"
+              >
                 {formatToman(availableBalance)}
               </bdi>
               <span className="text-xs text-ink-muted font-medium">{currency}</span>
@@ -636,12 +639,12 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                     </div>
                   )}
 
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2.5">
                     <Button
                       type="submit"
                       size="md"
                       variant="primary"
-                      className="flex-1"
+                      className="w-full sm:flex-1"
                       loading={isPreparingTopup}
                       disabled={!isAmountValid || isPreparingTopup || Boolean(pendingReceipt)}
                     >
@@ -657,8 +660,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                       size="md"
                       variant="secondary"
                       onClick={() => handleOpenBotForReceipt()}
+                      className="w-full sm:w-auto shrink-0"
                     >
-                      <Send className="w-3.5 h-3.5 shrink-0" />
+                      <Send className="w-4 h-4 shrink-0 text-brand-fg" />
                       <span>{t('user.wallet.topupInBot')}</span>
                     </Button>
                   </div>
@@ -907,15 +911,15 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                 }}
                 placeholder={t('user.wallet.giftCodePlaceholder')}
                 aria-label={t('user.wallet.giftCodeTitle')}
-                className="flex-1 h-10 px-3 rounded-ctl border border-line bg-surface-2 text-xs font-mono text-ink placeholder:text-ink-muted rs-focus"
+                className="flex-1 h-11 px-3.5 rounded-ctl border border-line bg-surface-2 text-xs sm:text-sm font-mono text-ink placeholder:text-ink-muted rs-focus"
               />
               <Button
                 type="submit"
-                size="sm"
+                size="md"
                 variant="secondary"
                 disabled={!giftCode.trim() || isRedeemingGift}
                 loading={isRedeemingGift}
-                className="h-10 shrink-0"
+                className="shrink-0"
               >
                 {t('user.wallet.giftCodeRedeem')}
               </Button>
@@ -998,10 +1002,12 @@ export const WalletTab: React.FC<WalletTabProps> = ({
                   {t('user.wallet.txEmpty')}
                 </Card>
               ) : (
-                <div className="flex flex-col gap-2 anim-stagger">
-                  {currentTransactions.map((tx) => (
-                    <TransactionItem key={tx.id} tx={tx} currency={currency} />
-                  ))}
+                <div className="flex flex-col gap-3">
+                  <div className="rs-grouped-list divide-y divide-line anim-stagger">
+                    {currentTransactions.map((tx) => (
+                      <TransactionItem key={tx.id} tx={tx} currency={currency} grouped />
+                    ))}
+                  </div>
 
                   <Pagination
                     page={page}
@@ -1027,45 +1033,46 @@ export const WalletTab: React.FC<WalletTabProps> = ({
               {t('user.wallet.receiptsEmpty')}
             </Card>
           ) : (
-            <div className="flex flex-col gap-2 anim-stagger">
-              {receiptsList.map((r) => {
-                const badgeVariant =
-                  r.status === 'approved'
-                    ? 'success'
-                    : r.status === 'rejected' || r.status === 'voided'
-                      ? 'error'
-                      : 'warning';
-                const statusLabel =
-                  r.status === 'approved'
-                    ? t('common.statusApproved')
-                    : r.status === 'rejected'
-                      ? t('common.statusRejected')
-                      : r.status === 'voided'
-                        ? t('common.statusVoided')
-                        : t('common.statusPending');
-                return (
-                  <Card
-                    key={r.id}
-                    padding="md"
-                    className="flex items-center justify-between gap-2.5 text-start"
-                  >
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <bdi dir="ltr" className="text-xs sm:text-sm font-semibold tnum text-ink">
-                          {formatToman(r.amount)} {currency}
-                        </bdi>
-                        <Badge variant={badgeVariant} size="xs">
-                          {statusLabel}
-                        </Badge>
+            <div className="flex flex-col gap-3">
+              <div className="rs-grouped-list divide-y divide-line anim-stagger">
+                {receiptsList.map((r) => {
+                  const badgeVariant =
+                    r.status === 'approved'
+                      ? 'success'
+                      : r.status === 'rejected' || r.status === 'voided'
+                        ? 'error'
+                        : 'warning';
+                  const statusLabel =
+                    r.status === 'approved'
+                      ? t('common.statusApproved')
+                      : r.status === 'rejected'
+                        ? t('common.statusRejected')
+                        : r.status === 'voided'
+                          ? t('common.statusVoided')
+                          : t('common.statusPending');
+                  return (
+                    <div
+                      key={r.id}
+                      className="px-4 py-3 flex items-center justify-between gap-2.5 text-start"
+                    >
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <bdi dir="ltr" className="text-xs sm:text-sm font-semibold tnum text-ink">
+                            {formatToman(r.amount)} {currency}
+                          </bdi>
+                          <Badge variant={badgeVariant} size="xs">
+                            {statusLabel}
+                          </Badge>
+                        </div>
+                        <span className="text-[11px] text-ink-muted tnum truncate">
+                          #{r.shortId} · {formatIsoDate(r.createdAt)}
+                          {r.cardNumber ? ` · ${r.cardNumber}` : ''}
+                        </span>
                       </div>
-                      <span className="text-[11px] text-ink-muted tnum truncate">
-                        #{r.shortId} · {formatIsoDate(r.createdAt)}
-                        {r.cardNumber ? ` · ${r.cardNumber}` : ''}
-                      </span>
                     </div>
-                  </Card>
-                );
-              })}
+                  );
+                })}
+              </div>
 
               <Pagination
                 page={receiptsPage}

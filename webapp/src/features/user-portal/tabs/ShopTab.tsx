@@ -455,7 +455,9 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                     key={pkg.id}
                     padding="md"
                     className={`flex flex-col justify-between gap-4 text-start rs-card-interactive ${
-                      pkg.featured ? 'border-brand/40 shadow-[var(--shadow-card-hover)]' : ''
+                      pkg.featured
+                        ? 'border-brand/35 ring-1 ring-brand/15 bg-gradient-to-b from-brand-soft/45 via-surface to-surface shadow-[var(--shadow-card-hover)]'
+                        : ''
                     }`}
                   >
                     <div className="flex flex-col gap-2.5">

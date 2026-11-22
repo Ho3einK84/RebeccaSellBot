@@ -202,41 +202,36 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   return (
     <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start pb-6">
-      {/* Left column: Anodized Balance Instrument, Trial/Wheel Growth Cards, Quick Actions, Support */}
+      {/* Left column: Apple Card Balance Hero, Trial/Wheel Cards, Control Center Quick Actions, Support */}
       <div className="lg:col-span-7 flex flex-col gap-4">
         <section
           aria-label={t('user.dashboard.walletBalance')}
           className="relative overflow-hidden rounded-card rs-hero-obsidian text-obsidian-ink p-5 sm:p-6"
         >
-          <svg
+          {/* Subtle Apple titanium specular sheen overlay */}
+          <div
             aria-hidden="true"
-            viewBox="0 0 120 120"
-            className="pointer-events-none absolute -bottom-5 -end-5 w-36 h-36 text-white/[0.045]"
-            fill="none"
-          >
-            <circle cx="60" cy="60" r="54" stroke="currentColor" strokeWidth="1" />
-            <circle cx="60" cy="60" r="36" stroke="currentColor" strokeWidth="1" />
-            <path d="M6 60h108M60 6v108" stroke="currentColor" strokeWidth="1" />
-          </svg>
+            className="pointer-events-none absolute -top-20 -end-16 w-56 h-56 rounded-full bg-white/[0.04] blur-2xl"
+          />
 
-          <div className="relative z-10 flex flex-col justify-between min-h-[144px]">
+          <div className="relative z-10 flex flex-col justify-between min-h-[152px]">
             {/* Top row */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-6 rounded-md bg-white/[0.08] border border-white/15 flex items-center justify-center shrink-0">
-                  <CreditCard className="w-3.5 h-3.5 text-white/80" aria-hidden="true" />
+                <span className="w-8 h-6 rounded-[7px] bg-white/[0.1] border border-white/15 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-3.5 h-3.5 text-white/85" aria-hidden="true" />
                 </span>
-                <span className="text-xs font-medium text-white/75">
+                <span className="text-xs font-medium text-white/80">
                   {t('user.dashboard.walletBalance')}
                 </span>
               </div>
 
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.08] border border-white/15 text-[11px] font-medium text-white/85 tnum">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.09] border border-white/15 text-[11px] font-medium text-white/90 tnum backdrop-blur-md">
                 <span
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     activeConfigs.length > 0
-                      ? 'bg-emerald-400 ring-2 ring-emerald-400/25'
-                      : 'bg-white/45'
+                      ? 'bg-emerald-400 ring-2 ring-emerald-400/30 anim-breathe'
+                      : 'bg-sky-400 ring-2 ring-sky-400/25'
                   }`}
                   aria-hidden="true"
                 />
@@ -249,56 +244,56 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
 
             {/* Balance Figure */}
-            <div className="my-4 text-start">
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <bdi dir="ltr" className="text-2xl sm:text-3xl font-semibold tnum text-white">
+            <div className="my-5 text-start">
+              <div className="flex items-baseline gap-2.5 flex-wrap">
+                <bdi
+                  dir="ltr"
+                  className="text-[34px] sm:text-[40px] font-bold tracking-tight leading-none tnum text-white"
+                >
                   {formatToman(availableBalance)}
                 </bdi>
-                <span className="text-xs sm:text-sm font-medium text-white/65">{currency}</span>
+                <span className="text-xs sm:text-sm font-medium text-white/60">{currency}</span>
               </div>
             </div>
 
-            {/* Bottom Toolbar: Invite Link Copy & Top-up */}
+            {/* Bottom Toolbar: Invite Code Pill & Apple White Pill CTA */}
             <div className="flex items-center justify-between gap-3 pt-3.5 border-t border-white/10 flex-wrap">
-              <div className="flex flex-col min-w-0 text-start">
-                <span className="text-[11px] text-white/60 leading-tight mb-1">
-                  {t('user.referral.yourCode')}
+              <div className="flex items-center gap-2 min-w-0 text-start">
+                <span className="text-[11px] text-white/60 shrink-0">
+                  {t('user.referral.yourCode')}:
                 </span>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <bdi
-                    dir="ltr"
-                    className="text-xs font-mono font-medium text-white/90 truncate"
-                    title={inviteLink}
+                {inviteLink ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyReferral()}
+                    className="h-8 px-2.5 rounded-full bg-white/[0.09] hover:bg-white/[0.15] border border-white/12 inline-flex items-center gap-1.5 press rs-focus text-white/90 shrink-0 cursor-pointer transition-colors"
+                    title={t('user.referral.copyLink')}
+                    aria-label={t('user.referral.copyLink')}
                   >
+                    <bdi dir="ltr" className="text-[11.5px] font-mono font-medium truncate">
+                      {formatShortRefCode(profile?.referralCode)}
+                    </bdi>
+                    {isCopied('dashboard-ref-code') ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400 anim-pop shrink-0" />
+                    ) : (
+                      <Copy className="w-3 h-3 opacity-75 shrink-0" />
+                    )}
+                  </button>
+                ) : (
+                  <bdi dir="ltr" className="text-xs font-mono font-medium text-white/85 truncate">
                     {formatShortRefCode(profile?.referralCode)}
                   </bdi>
-                  {inviteLink && (
-                    <button
-                      type="button"
-                      onClick={() => void handleCopyReferral()}
-                      className="w-7 h-7 rounded-ctl bg-white/10 hover:bg-white/15 flex items-center justify-center press rs-focus text-white/85 shrink-0 cursor-pointer"
-                      title={t('user.referral.copyLink')}
-                      aria-label={t('user.referral.copyLink')}
-                    >
-                      {isCopied('dashboard-ref-code') ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400 anim-pop" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
 
-              <Button
-                size="sm"
-                variant="primary"
+              <button
+                type="button"
                 onClick={() => handleAction('wallet')}
-                className="shrink-0"
+                className="h-9 px-4 rounded-full bg-white hover:bg-white/92 text-[#0e131d] text-xs font-semibold inline-flex items-center justify-center gap-1.5 shadow-[0_4px_14px_rgba(0,0,0,0.28)] press rs-focus cursor-pointer shrink-0 transition-all"
               >
-                <Wallet className="w-3.5 h-3.5 shrink-0" />
+                <Wallet className="w-3.5 h-3.5 text-[#007aff] shrink-0" />
                 <span>{t('user.dashboard.quickTopup')}</span>
-              </Button>
+              </button>
             </div>
           </div>
         </section>
@@ -316,17 +311,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             type="button"
             onClick={() => handleAction('referral')}
-            className={`group rs-card-interactive w-full rounded-tile border p-3.5 flex items-center justify-between gap-3 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)] ${
+            className={`group rs-card-interactive w-full rounded-card border p-4 flex items-center justify-between gap-3 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)] ${
               luckyWheel.canSpin
-                ? 'border-ok/35 bg-gradient-to-l from-ok-soft via-surface to-accent-soft/40'
+                ? 'border-ok/25 bg-gradient-to-l from-ok-soft via-surface to-accent-soft/35'
                 : 'border-line bg-surface hover:bg-surface-2'
             }`}
           >
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
               <IconTile tone={luckyWheel.canSpin ? 'ok' : 'accent'} size="md">
                 <Sparkles />
               </IconTile>
-              <div className="flex flex-col min-w-0 gap-0.5">
+              <div className="flex flex-col min-w-0 gap-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[13px] font-semibold text-ink">
                     {luckyWheel.canSpin
@@ -339,7 +334,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </Badge>
                   )}
                 </div>
-                <span className="text-xs leading-snug text-ink-muted truncate">
+                <span className="text-xs leading-relaxed text-ink-soft">
                   {luckyWheel.canSpin
                     ? t('user.dashboard.wheelBannerReadyDesc')
                         .replace('{max}', formatToman(luckyWheel.maxPrize))
@@ -351,67 +346,73 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </span>
               </div>
             </div>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-fg shrink-0">
+            <span
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 ${
+                luckyWheel.canSpin
+                  ? 'bg-ok-soft text-ok-fg border border-ok/20'
+                  : 'bg-brand-soft text-brand-fg border border-brand/20'
+              }`}
+            >
               <span>
                 {luckyWheel.canSpin
                   ? t('user.dashboard.wheelBannerCta')
                   : t('user.dashboard.wheelBannerView')}
               </span>
-              <ChevronLeft className="w-4 h-4 ltr:rotate-180" aria-hidden="true" />
+              <ChevronLeft className="w-3.5 h-3.5 ltr:rotate-180" aria-hidden="true" />
             </span>
           </button>
         )}
 
-        {/* Quick Action Grid */}
+        {/* Quick Action Grid (Apple Control Center Style) */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 anim-stagger">
           <button
             type="button"
             onClick={() => handleAction('shop')}
-            className="group rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group rs-card-interactive rounded-card border border-line bg-surface hover:bg-surface-2 py-4 px-3 flex flex-col items-center justify-center gap-2.5 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             <IconTile tone="brand" size="md">
               <ShoppingBag />
             </IconTile>
-            <span className="text-xs font-medium text-ink">{t('user.dashboard.buyService')}</span>
+            <span className="text-xs font-semibold text-ink">{t('user.dashboard.buyService')}</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleAction('services')}
-            className="group rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group rs-card-interactive rounded-card border border-line bg-surface hover:bg-surface-2 py-4 px-3 flex flex-col items-center justify-center gap-2.5 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             <IconTile tone="ok" size="md">
               <Wifi />
             </IconTile>
-            <span className="text-xs font-medium text-ink">{t('user.dashboard.myConfigs')}</span>
+            <span className="text-xs font-semibold text-ink">{t('user.dashboard.myConfigs')}</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleAction('wallet')}
-            className="group rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group rs-card-interactive rounded-card border border-line bg-surface hover:bg-surface-2 py-4 px-3 flex flex-col items-center justify-center gap-2.5 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             <IconTile tone="warn" size="md">
               <Wallet />
             </IconTile>
-            <span className="text-xs font-medium text-ink">{t('user.tabs.wallet')}</span>
+            <span className="text-xs font-semibold text-ink">{t('user.tabs.wallet')}</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleAction('referral')}
-            className="group relative rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group relative rs-card-interactive rounded-card border border-line bg-surface hover:bg-surface-2 py-4 px-3 flex flex-col items-center justify-center gap-2.5 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             {luckyWheel?.canSpin && (
               <span
-                className="absolute top-2.5 end-2.5 w-2 h-2 rounded-full bg-ok ring-2 ring-ok/25"
+                className="absolute top-3 end-3 w-2 h-2 rounded-full bg-ok ring-2 ring-ok/25"
                 aria-hidden="true"
               />
             )}
             <IconTile tone="accent" size="md">
               <Gift />
             </IconTile>
-            <span className="text-xs font-medium text-ink">{t('user.dashboard.inviteEarn')}</span>
+            <span className="text-xs font-semibold text-ink">{t('user.dashboard.inviteEarn')}</span>
           </button>
         </section>
 
@@ -420,7 +421,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             type="button"
             onClick={handleSupportClick}
-            className="group rs-card-interactive w-full rounded-tile border border-brand/25 bg-gradient-to-l from-brand-soft via-brand-soft/80 to-accent-soft/45 p-3.5 flex items-center justify-between gap-3 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group rs-card-interactive w-full rounded-card border border-line bg-surface hover:bg-surface-2 p-3.5 flex items-center justify-between gap-3 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
             <div className="flex items-center gap-3 min-w-0">
               <IconTile tone="brand" size="md">
@@ -436,7 +437,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
             </div>
             <ChevronLeft
-              className="w-4 h-4 shrink-0 text-brand-fg ltr:rotate-180 transition-transform duration-200 group-hover:-translate-x-0.5 ltr:group-hover:translate-x-0.5"
+              className="w-4 h-4 shrink-0 text-ink-muted group-hover:text-brand-fg ltr:rotate-180 transition-all duration-200 group-hover:-translate-x-0.5 ltr:group-hover:translate-x-0.5"
               aria-hidden="true"
             />
           </button>
@@ -565,9 +566,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               {t('user.dashboard.noRecentActivity')}
             </Card>
           ) : (
-            <div className="flex flex-col gap-2 anim-stagger">
+            <div className="rs-grouped-list divide-y divide-line anim-stagger">
               {transactions.slice(0, 3).map((tx) => (
-                <TransactionItem key={tx.id} tx={tx} currency={currency} />
+                <TransactionItem key={tx.id} tx={tx} currency={currency} grouped />
               ))}
             </div>
           )}

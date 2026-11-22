@@ -9,6 +9,7 @@ import {
   deleteConsumedInputMessage,
   rememberUiMessage,
   renderScreen,
+  stripLeadingEmoji,
 } from '../ui.js';
 import { t, tForLocale } from '../locale.js';
 import { mainMenu, renderHomeDashboard } from '../keyboards/mainMenu.js';
@@ -98,7 +99,7 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
           buildUserScreen({
             emoji: '✅',
             title: t(ctx, 'onboarding_phone_verify_title'),
-            footer: t(ctx, 'onboarding_phone_verified_success'),
+            footer: stripLeadingEmoji(t(ctx, 'onboarding_phone_verified_success')),
           }),
           { parse_mode: 'Markdown', reply_markup: { remove_keyboard: true } }
         );

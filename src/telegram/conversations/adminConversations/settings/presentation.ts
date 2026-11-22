@@ -6,7 +6,7 @@ import { previewConfigName } from '../../../../domain/services/ConfigService.js'
 import type { ConversationContext } from '../../../types.js';
 import { localizedNumber, t, tm } from '../../../locale.js';
 import { callbackData } from '../../../callbackData.js';
-import { escapeTelegramMarkdown } from '../../../rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../../rendering.js';
 import { buildPromptScreen, buildScreen } from '../../../ui.js';
 import {
   GENERAL_SETTING_GROUPS,
@@ -246,7 +246,7 @@ export function buildSettingsOverviewScreen(ctx: ConversationContext): string {
           {
             label: t(ctx, 'admin_setting_support_enabled'),
             value: supportEnabled
-              ? `${onBadge} (\`${escapeTelegramMarkdown(supportDest)}\`)`
+              ? `${onBadge} (\`${sanitizeTelegramInlineCode(supportDest)}\`)`
               : offBadge,
           },
         ],

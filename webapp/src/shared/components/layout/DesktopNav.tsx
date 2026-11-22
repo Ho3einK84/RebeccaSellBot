@@ -59,9 +59,9 @@ export function DesktopNav<T extends string>({
             type="button"
             aria-current={active ? 'page' : undefined}
             onClick={() => onSelect(item.id)}
-            className={`group relative inline-flex h-11 items-center gap-2 px-3.5 text-[13px] whitespace-nowrap rounded-t-ctl rs-focus cursor-pointer transition-all duration-200 ${
+            className={`group relative inline-flex h-11 items-center gap-2 px-3.5 text-[13px] whitespace-nowrap rounded-ctl rs-focus cursor-pointer transition-all duration-200 ${
               active
-                ? 'font-semibold text-ink bg-brand-soft/60'
+                ? 'font-semibold text-brand-fg bg-brand-soft'
                 : 'font-medium text-ink-soft hover:text-ink hover:bg-surface-2/80'
             }`}
           >

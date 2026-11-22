@@ -39,6 +39,7 @@ export const HeaderUtilityActions: React.FC<HeaderUtilityActionsProps> = ({
         label={t('common.themeToggle')}
         title={isDark ? t('common.themeLight') : t('common.themeDark')}
         onClick={toggleTheme}
+        className="rounded-full"
       >
         {isDark ? (
           <Sun key="sun" className="h-4 w-4 text-warn-fg anim-pop" />
@@ -53,10 +54,11 @@ export const HeaderUtilityActions: React.FC<HeaderUtilityActionsProps> = ({
           label={t('common.language')}
           title={t('common.switchLang')}
           onClick={() => void handleToggleLanguage()}
+          className="!w-auto px-2.5 rounded-full"
         >
-          <span className="flex items-center gap-0.5">
+          <span className="flex items-center gap-1">
             <Globe className="h-3.5 w-3.5 opacity-75" />
-            <span className="text-[10px] font-semibold leading-none tracking-normal">
+            <span className="text-[11px] font-semibold leading-none tracking-normal">
               {locale === 'fa' ? 'EN' : 'FA'}
             </span>
           </span>
@@ -69,6 +71,7 @@ export const HeaderUtilityActions: React.FC<HeaderUtilityActionsProps> = ({
           label={t('common.refresh')}
           onClick={onRefresh}
           disabled={isRefreshing}
+          className="rounded-full"
         >
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-brand-fg' : ''}`} />
         </IconButton>

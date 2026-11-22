@@ -20,19 +20,19 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const sizeClasses = {
-  xs: 'text-[11px] px-2 h-5 gap-1.5',
+  xs: 'text-[11px] px-2.5 h-5 gap-1.5',
   sm: 'text-[11px] px-2.5 h-6 gap-1.5',
   md: 'text-xs px-3 h-7 gap-1.5',
 } as const;
 
 const variantClasses: Record<BadgeVariant, string> = {
   neutral: 'bg-surface-2 border-line text-ink-soft',
-  success: 'bg-ok-soft border-ok/25 text-ok-fg',
-  warning: 'bg-warn-soft border-warn/25 text-warn-fg',
-  error: 'bg-danger-soft border-danger/25 text-danger-fg',
-  primary: 'bg-brand-soft border-brand/25 text-brand-fg',
-  accent: 'bg-accent-soft border-accent/25 text-accent-fg',
-  info: 'bg-info-soft border-info/25 text-info-fg',
+  success: 'bg-ok-soft border-ok/20 text-ok-fg',
+  warning: 'bg-warn-soft border-warn/20 text-warn-fg',
+  error: 'bg-danger-soft border-danger/20 text-danger-fg',
+  primary: 'bg-brand-soft border-brand/20 text-brand-fg',
+  accent: 'bg-accent-soft border-accent/20 text-accent-fg',
+  info: 'bg-info-soft border-info/20 text-info-fg',
   secondary: 'bg-surface-2 border-line-strong text-ink-soft',
   outline: 'bg-transparent border-line-strong text-ink-soft',
 };

@@ -28,33 +28,31 @@ export const TopBar: React.FC<TopBarProps> = ({
   className = '',
 }) => (
   <header
-    className={`rounded-card border border-line bg-surface/92 rs-backdrop-blur px-3.5 py-3 sm:px-4 sm:py-3.5 shadow-[var(--shadow-card)] transition-shadow duration-200 ${className}`}
+    className={`rounded-card border border-line bg-surface/94 rs-backdrop-blur px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-[var(--shadow-card)] transition-shadow duration-200 ${className}`}
   >
     <div className="flex items-center justify-between gap-2.5">
-      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         {icon}
         <div className="min-w-0 flex-1 text-start">
           <div className="flex items-center gap-2 min-w-0">
-            <h1 className="truncate font-semibold text-sm sm:text-base text-ink leading-[1.4] m-0">
+            <h1 className="truncate font-semibold text-sm sm:text-[15px] text-ink leading-[1.35] m-0">
               {title}
             </h1>
             {badge}
           </div>
           {subtitle ? (
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-muted">
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
               {subtitle}
             </div>
           ) : null}
         </div>
       </div>
 
-      {actions ? (
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">{actions}</div>
-      ) : null}
+      {actions ? <div className="flex items-center gap-1.5 shrink-0">{actions}</div> : null}
     </div>
 
     {footer ? (
-      <div className="mt-3 pt-2.5 border-t border-line flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div className="mt-2.5 pt-2.5 border-t border-line flex flex-wrap items-center justify-between gap-2 text-xs">
         {footer}
       </div>
     ) : null}

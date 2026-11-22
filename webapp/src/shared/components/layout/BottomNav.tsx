@@ -45,9 +45,9 @@ export function BottomNav<T extends string>({
   return (
     <nav
       aria-label={ariaLabel}
-      className={`fixed inset-x-0 bottom-0 z-40 md:hidden border-t border-line bg-surface/84 rs-backdrop-blur shadow-[var(--shadow-nav)] safe-bottom ${className}`}
+      className={`fixed inset-x-0 bottom-0 z-40 md:hidden border-t border-line bg-surface/94 dark:bg-[#0d0f15]/92 rs-backdrop-blur shadow-[var(--shadow-nav)] safe-bottom ${className}`}
     >
-      <div className="mx-auto grid h-16 max-w-xl grid-flow-col auto-cols-fr items-stretch px-1">
+      <div className="mx-auto grid h-[66px] max-w-xl grid-flow-col auto-cols-fr items-stretch px-1.5">
         {items.map((item) => {
           const Icon = item.icon;
           const active = item.id === activeId;
@@ -75,43 +75,36 @@ export function BottomNav<T extends string>({
               type="button"
               aria-current={active ? 'page' : undefined}
               onClick={() => onSelect(item.id)}
-              className={`relative flex flex-col items-center justify-center gap-0.5 min-w-0 min-h-11 px-0.5 rs-focus press cursor-pointer select-none ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 min-w-0 min-h-11 px-0.5 rs-focus press cursor-pointer select-none transition-colors duration-150 ${
                 active ? 'text-brand-fg' : 'text-ink-muted hover:text-ink-soft'
               }`}
             >
-              {active ? (
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none absolute top-0 ${isDense ? 'inset-x-2' : 'inset-x-3.5'} h-[2.5px] rounded-b-full bg-brand anim-pop`}
-                />
-              ) : null}
-
               <span
-                className={`relative flex h-7 ${isDense ? 'w-9' : 'w-10'} items-center justify-center rounded-ctl`}
+                className={`relative flex h-7 ${isDense ? 'w-11' : 'w-12'} items-center justify-center rounded-full transition-colors duration-200`}
               >
                 {active ? (
                   <span
                     aria-hidden="true"
-                    className="absolute inset-0 rounded-ctl bg-brand-soft shadow-[var(--shadow-xs)] anim-pop"
+                    className="absolute inset-0 rounded-full bg-brand-soft anim-pop"
                   />
                 ) : null}
 
                 <Icon
-                  className={`relative w-[18px] h-[18px] transition-transform duration-200 ease-[var(--ease-spring)] ${
-                    active ? 'scale-105 stroke-[2.2]' : 'stroke-[1.75]'
+                  className={`relative w-[19px] h-[19px] transition-transform duration-200 ease-[var(--ease-spring)] ${
+                    active ? 'scale-105 stroke-[2.25]' : 'stroke-[1.75]'
                   }`}
                 />
 
                 {countStr !== null ? (
                   <bdi
                     dir="ltr"
-                    className={`tnum absolute -top-1 end-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ring-2 ring-surface ${badgeBg}`}
+                    className={`tnum absolute -top-0.5 end-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ring-2 ring-surface ${badgeBg}`}
                   >
                     {countStr}
                   </bdi>
                 ) : item.dot ? (
                   <span
-                    className={`absolute top-0.5 end-1 w-2 h-2 rounded-full ring-2 ring-surface ${dotBg}`}
+                    className={`absolute top-0.5 end-1.5 w-2 h-2 rounded-full ring-2 ring-surface ${dotBg}`}
                     aria-hidden="true"
                   />
                 ) : null}

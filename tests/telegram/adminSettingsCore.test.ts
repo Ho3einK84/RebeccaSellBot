@@ -340,7 +340,7 @@ describe('Admin settings presentation & selection keyboards', () => {
 
     const overview = buildSettingsOverviewScreen(ctx);
     expect(overview).toContain('admin_overview_bot_status');
-    expect(overview).toContain('@support\\_admin');
+    expect(overview).toContain('`@support_admin`');
     expect(overview).toContain('admin_overview_naming');
     expect(overview).not.toContain('admin_setting_trial_enabled');
 

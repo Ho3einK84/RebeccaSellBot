@@ -232,21 +232,21 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
       {/* Search & Status Filter Controls (shown when user has multiple services) */}
       {configs.length >= 2 && (
         <div className="flex flex-col sm:flex-row gap-2.5">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-ink-muted absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <div className="relative w-full sm:flex-1">
+            <Search className="w-4 h-4 text-ink-muted absolute start-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('user.services.searchPlaceholder')}
-              className="w-full h-9 ps-9 pe-8 rounded-ctl border border-line bg-surface text-xs text-ink placeholder:text-ink-muted rs-focus"
+              className="w-full h-10 ps-10 pe-9 rounded-ctl border border-line bg-surface text-xs sm:text-[13px] text-ink placeholder:text-ink-muted shadow-[var(--shadow-xs)] rs-focus"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
                 aria-label={t('common.clearSearch')}
-                className="absolute end-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-ctl flex items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
+                className="absolute end-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-surface-2 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -386,47 +386,47 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                     </Button>
                   )}
 
+                  {c.subUrl && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="md"
+                        variant={isSubCopied ? 'success' : 'secondary'}
+                        onClick={() => void handleCopySub(c.subUrl!, `sub-${c.id}`)}
+                        className="flex-1 min-w-0"
+                      >
+                        {isSubCopied ? (
+                          <>
+                            <Check className="w-4 h-4 shrink-0 anim-pop" />
+                            <span className="truncate">{t('user.services.linkCopied')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4 shrink-0" />
+                            <span className="truncate">{t('user.services.copyLink')}</span>
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        size="md"
+                        variant="tonal"
+                        onClick={() => handleQrClick(c.subUrl!, c.configUsername)}
+                        className="w-11 px-0 shrink-0"
+                        title={t('user.services.showQr')}
+                        aria-label={t('user.services.showQr')}
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2">
-                    {c.subUrl && (
-                      <>
-                        <Button
-                          size="md"
-                          variant={isSubCopied ? 'success' : 'secondary'}
-                          onClick={() => void handleCopySub(c.subUrl!, `sub-${c.id}`)}
-                          className="flex-1 min-w-0"
-                        >
-                          {isSubCopied ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 shrink-0 anim-pop" />
-                              <span className="truncate">{t('user.services.linkCopied')}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5 shrink-0" />
-                              <span className="truncate">{t('user.services.copyLink')}</span>
-                            </>
-                          )}
-                        </Button>
-
-                        <Button
-                          size="md"
-                          variant="tonal"
-                          onClick={() => handleQrClick(c.subUrl!, c.configUsername)}
-                          className="w-11 px-0 shrink-0"
-                          title={t('user.services.showQr')}
-                          aria-label={t('user.services.showQr')}
-                        >
-                          <QrCode className="w-4 h-4" />
-                        </Button>
-                      </>
-                    )}
-
                     {onRenewConfig && !urgent && (
                       <Button
                         size="md"
                         variant="tonal"
                         onClick={() => handleRenewClick(c)}
-                        className="shrink-0"
+                        className="flex-1"
                         title={t('user.services.renewNow')}
                         aria-label={t('user.services.renewNow')}
                       >
@@ -439,16 +439,12 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                       size="md"
                       variant="outline"
                       onClick={() => handleManageClick(c.id)}
-                      className={c.subUrl ? 'shrink-0' : 'flex-1'}
+                      className="flex-1"
                       title={t('user.services.manage')}
                       aria-label={t('user.services.manage')}
                     >
                       <Settings2 className="w-4 h-4 text-brand-fg shrink-0" />
-                      <span
-                        className={c.subUrl && onRenewConfig && !urgent ? 'hidden sm:inline' : ''}
-                      >
-                        {t('user.services.manage')}
-                      </span>
+                      <span className="truncate">{t('user.services.manage')}</span>
                     </Button>
                   </div>
                 </div>

@@ -17,25 +17,28 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 /**
  * Token-driven control scale on 4px grid:
- * xs 32px · sm 36px · md 44px · lg 48px (`md` & `lg` meet 44px touch target minimum).
+ * xs 32px · sm 36px · md 44px · lg 48px (`md` & `lg` meet Apple 44pt touch target).
+ * Explicit `min-h-*` guards prevent flex-basis collapse if placed in column stacks.
  */
 const sizeClasses: Record<ButtonSize, string> = {
-  xs: 'text-xs px-2.5 h-8 rounded-ctl gap-1.5',
-  sm: 'text-xs px-3 h-9 rounded-ctl gap-1.5',
-  md: 'text-[13px] px-4 h-11 rounded-ctl gap-2',
-  lg: 'text-sm px-5 h-12 rounded-tile gap-2',
+  xs: 'text-xs px-3 h-8 min-h-8 rounded-ctl gap-1.5',
+  sm: 'text-xs px-3.5 h-9 min-h-9 rounded-ctl gap-1.5',
+  md: 'text-[13px] px-4 h-11 min-h-11 rounded-ctl gap-2',
+  lg: 'text-sm px-5 h-12 min-h-12 rounded-tile gap-2',
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-brand hover:bg-brand-hover text-brand-ink border border-transparent rs-btn-primary',
-  tonal: 'bg-brand-soft hover:bg-brand/20 text-brand-fg border border-brand/25',
+  primary:
+    'bg-brand hover:bg-brand-hover text-brand-ink border border-white/10 font-semibold rs-btn-primary',
+  tonal: 'bg-brand-soft hover:bg-brand/20 text-brand-fg border border-brand/20 font-semibold',
   secondary:
-    'bg-surface-2 hover:bg-surface-3 border border-line-strong text-ink shadow-[var(--shadow-xs)]',
+    'bg-surface-2 hover:bg-surface-3 border border-line text-ink shadow-[var(--shadow-xs)] font-medium',
   outline:
-    'bg-surface hover:bg-surface-2 border border-line-strong text-ink shadow-[var(--shadow-xs)]',
-  ghost: 'bg-transparent hover:bg-surface-2 border border-transparent text-ink-soft hover:text-ink',
-  danger: 'bg-danger-soft hover:bg-danger/20 border border-danger/25 text-danger-fg',
-  success: 'bg-ok hover:bg-ok/90 border border-transparent text-white rs-btn-success',
+    'bg-surface hover:bg-surface-2 border border-line-strong text-ink shadow-[var(--shadow-xs)] font-medium',
+  ghost:
+    'bg-transparent hover:bg-surface-2 border border-transparent text-ink-soft hover:text-ink font-medium',
+  danger: 'bg-danger-soft hover:bg-danger/20 border border-danger/25 text-danger-fg font-semibold',
+  success: 'bg-ok hover:bg-ok/90 border border-white/10 text-white font-semibold rs-btn-success',
 };
 
 export const Button: React.FC<ButtonProps> = ({

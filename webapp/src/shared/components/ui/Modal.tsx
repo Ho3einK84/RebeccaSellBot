@@ -114,12 +114,12 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {/* Mobile sheet grab handle */}
         <div className="flex sm:hidden justify-center pt-2.5 pb-1 shrink-0" aria-hidden="true">
-          <div className="w-10 h-1 rounded-full bg-line-strong" />
+          <div className="w-9 h-1 rounded-full bg-ink-muted/35" />
         </div>
 
         {/* Sticky Modal Header */}
         {hasHeader && (
-          <div className="flex items-start justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-line bg-surface/92 rs-backdrop-blur shrink-0 text-start">
+          <div className="flex items-start justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-line bg-surface/94 rs-backdrop-blur shrink-0 text-start">
             {customHeader ? (
               <div className="min-w-0 flex-1">{customHeader}</div>
             ) : (

@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createWebAppServer } from '../../src/webapp/server/server.js';
 import { resolveSupportDestination } from '../../src/domain/services/SupportDestination.js';
 import { RefundOutcomePendingError } from '../../src/domain/services/RefundService.js';
+import {
+  sendWebAppConfigArtifact,
+  sendWebAppConfigTransferNotification,
+} from '../../src/telegram/webappNotifications.js';
 import { api, type ApiClientError } from '../../webapp/src/shared/lib/api.js';
 import { formatTransactionDescription } from '../../webapp/src/shared/lib/transactionFormatters.js';
 import {
@@ -813,6 +817,73 @@ describe('User Portal Unification (Phases 0-4): P0/P1 Fixes, Wheel, Trial, Nativ
         expect(html).toContain('u55555_srv1');
         expect(html).toContain('Happ');
       }
+
+      // Verify phone-gated trial button never collapses inside flex-col on mobile
+      const phoneGateHtml = renderWithProviders(
+        React.createElement(FreeTrialBanner, {
+          trial: {
+            enabled: true,
+            eligible: true,
+            hasUsedTrial: false,
+            gb: 1,
+            days: 2,
+            requirePhone: true,
+            phoneVerificationRequired: true,
+          },
+          botUsername: 'SkyLink000Bot',
+          onNotify: () => undefined,
+        }),
+        'fa'
+      );
+      expect(phoneGateHtml).toContain('w-full sm:flex-1');
+      expect(phoneGateHtml).toContain('min-h-11');
+      expect(phoneGateHtml).toMatch(/<button[^>]*min-h-11[^>]*w-full sm:flex-1/);
+    });
+
+    it('formats WebApp trial & transfer usernames without backslash escapes in Telegram inline code', async () => {
+      const sentMessages: Array<{ chatId: number; text: string }> = [];
+      const mockApi = {
+        sendMessage: vi.fn(async (chatId: number, text: string) => {
+          sentMessages.push({ chatId, text });
+          return { message_id: 1 };
+        }),
+      };
+      const base = createMockUserServices();
+
+      await sendWebAppConfigArtifact(
+        mockApi as any,
+        {
+          userService: base.mockUserService as any,
+          translationService: base.mockTranslationService as any,
+        },
+        {
+          telegramId: 8952385122,
+          kind: 'trial',
+          configUsername: 'h_8952385122_0f8a',
+          subUrl: 'https://sub.example.com/trial',
+          gbAmount: 1,
+          durationDays: 2,
+        }
+      );
+
+      await sendWebAppConfigTransferNotification(
+        mockApi as any,
+        {
+          userService: base.mockUserService as any,
+          translationService: base.mockTranslationService as any,
+        },
+        {
+          fromTelegramId: 111,
+          toTelegramId: 222,
+          configUsername: 'h_8952385122_0f8a',
+        }
+      );
+
+      expect(sentMessages).toHaveLength(2);
+      expect(sentMessages[0]?.text).toContain('`h_8952385122_0f8a`');
+      expect(sentMessages[0]?.text).not.toContain('\\_');
+      expect(sentMessages[1]?.text).toContain('`h_8952385122_0f8a`');
+      expect(sentMessages[1]?.text).not.toContain('\\_');
     });
   });
 });

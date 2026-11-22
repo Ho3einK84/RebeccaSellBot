@@ -4,19 +4,19 @@ export type TileTone = 'brand' | 'accent' | 'ok' | 'warn' | 'danger' | 'info' | 
 export type TileSize = 'sm' | 'md' | 'lg';
 
 const toneClasses: Record<TileTone, string> = {
-  brand: 'bg-brand-soft text-brand-fg border-brand/20',
-  accent: 'bg-accent-soft text-accent-fg border-accent/25',
-  ok: 'bg-ok-soft text-ok-fg border-ok/20',
-  warn: 'bg-warn-soft text-warn-fg border-warn/20',
-  danger: 'bg-danger-soft text-danger-fg border-danger/20',
-  info: 'bg-info-soft text-info-fg border-info/20',
+  brand: 'bg-brand-soft text-brand-fg border-brand/15',
+  accent: 'bg-accent-soft text-accent-fg border-accent/15',
+  ok: 'bg-ok-soft text-ok-fg border-ok/15',
+  warn: 'bg-warn-soft text-warn-fg border-warn/15',
+  danger: 'bg-danger-soft text-danger-fg border-danger/15',
+  info: 'bg-info-soft text-info-fg border-info/15',
   neutral: 'bg-surface-2 text-ink-soft border-line',
 };
 
 const sizeClasses: Record<TileSize, string> = {
-  sm: 'w-8 h-8 rounded-ctl [&>svg]:w-4 [&>svg]:h-4',
-  md: 'w-10 h-10 rounded-tile [&>svg]:w-[18px] [&>svg]:h-[18px]',
-  lg: 'w-12 h-12 rounded-tile [&>svg]:w-5 [&>svg]:h-5',
+  sm: 'w-8 h-8 rounded-[10px] [&>svg]:w-4 [&>svg]:h-4',
+  md: 'w-10 h-10 rounded-[13px] [&>svg]:w-[19px] [&>svg]:h-[19px]',
+  lg: 'w-12 h-12 rounded-[15px] [&>svg]:w-5 [&>svg]:h-5',
 };
 
 interface IconTileProps {

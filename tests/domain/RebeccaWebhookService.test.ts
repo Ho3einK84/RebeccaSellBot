@@ -153,7 +153,8 @@ describe('RebeccaWebhookService & TelegramFormatting', () => {
     expect(retry.actionsPerformed).toEqual(['notified_user_user_limited:cfg-101']);
     const [chatId, text, options] = telegramSender.sendMessage.mock.calls[1]!;
     expect(chatId).toBe(987654321);
-    expect(text).toContain('vip\\_user\\_01');
+    expect(text).toContain('`vip_user_01`');
+    expect(text).not.toContain('\\_');
     expect(options.reply_markup).toEqual({
       inline_keyboard: [[{ text: 'webhook_renew_button', callback_data: 'sub:detail:cfg-101' }]],
     });

@@ -7,8 +7,8 @@ import { InlineKeyboard, InputFile, type Api } from 'grammy';
 import type { UserService } from '../domain/services/UserService.js';
 import type { TranslationService } from '../domain/services/TranslationService.js';
 import { logger } from '../infra/logger.js';
-import { buildUserScreen } from './designSystem.js';
-import { escapeTelegramMarkdown } from './rendering.js';
+import { buildUserScreen, stripLeadingEmoji } from './designSystem.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from './rendering.js';
 import {
   formatSubscriptionLink,
   localizedNumberForLocale,
@@ -110,7 +110,7 @@ export async function sendWebAppConfigArtifact(
       {
         emoji: '🆔',
         label: currencyAwareFa ? 'نام سرویس' : 'Service',
-        value: `\`${escapeTelegramMarkdown(params.configUsername)}\``,
+        value: `\`${sanitizeTelegramInlineCode(params.configUsername)}\``,
       },
     ];
 
@@ -163,9 +163,14 @@ export async function sendWebAppConfigArtifact(
         : '⏱ Validity starts upon your first connection.'
       : undefined;
 
+    const subtitleRaw =
+      params.kind === 'trial' && canTranslate
+        ? stripLeadingEmoji(tForLocale(ts, locale, 'trial_success'))
+        : undefined;
     const text = buildUserScreen({
       emoji,
       title,
+      ...(subtitleRaw ? { subtitle: subtitleRaw } : {}),
       primary,
       sections: [{ fields }],
       footer,
@@ -317,7 +322,7 @@ export async function sendWebAppConfigTransferNotification(
       primary: {
         emoji: '🆔',
         label: isFa ? 'نام سرویس' : 'Service',
-        value: `\`${escapeTelegramMarkdown(params.configUsername)}\``,
+        value: `\`${sanitizeTelegramInlineCode(params.configUsername)}\``,
         emphasizeValue: true,
       },
       sections: [

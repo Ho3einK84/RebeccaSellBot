@@ -50,9 +50,9 @@ export const SmartConnectButtons: React.FC<SmartConnectButtonsProps> = ({
             key={item.id}
             type="button"
             onClick={() => handleOpen(item.url, item.id === 'browser')}
-            className={`min-h-10 px-2.5 py-2 rounded-tile border text-xs font-medium flex items-center justify-between gap-1.5 press rs-focus cursor-pointer transition-colors ${
+            className={`min-h-11 px-3 py-2 rounded-tile border text-xs font-medium flex items-center justify-between gap-1.5 press rs-focus cursor-pointer transition-colors ${
               item.recommended
-                ? 'bg-brand-soft/60 border-brand/35 text-ink hover:bg-brand-soft'
+                ? 'bg-brand-soft/75 border-brand/25 text-ink hover:bg-brand-soft shadow-[var(--shadow-xs)]'
                 : 'bg-surface-2 border-line text-ink-soft hover:bg-surface-3 hover:text-ink'
             }`}
           >

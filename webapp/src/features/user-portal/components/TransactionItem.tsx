@@ -12,9 +12,15 @@ import {
 interface TransactionItemProps {
   tx: UserTransactionRecord;
   currency?: string;
+  /** Renders as a borderless inset grouped row inside `.rs-grouped-list`. */
+  grouped?: boolean;
 }
 
-export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }) => {
+export const TransactionItem: React.FC<TransactionItemProps> = ({
+  tx,
+  currency,
+  grouped = false,
+}) => {
   const { t, locale, isRtl } = useLanguage();
   const { formatToman } = useFormatters();
 
@@ -29,7 +35,13 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ tx, currency }
     : parsedCreatedAt.toLocaleDateString(isRtl ? 'fa-IR' : 'en-US');
 
   return (
-    <div className="p-3.5 rounded-tile border border-line bg-surface shadow-[var(--shadow-xs)] hover:border-line-strong hover:shadow-[var(--shadow-card)] flex items-center justify-between text-start gap-3 transition-all duration-200">
+    <div
+      className={
+        grouped
+          ? 'px-4 py-3 flex items-center justify-between text-start gap-3 hover:bg-surface-2/60 transition-colors'
+          : 'p-3.5 rounded-tile border border-line bg-surface shadow-[var(--shadow-xs)] hover:border-line-strong hover:shadow-[var(--shadow-card)] flex items-center justify-between text-start gap-3 transition-all duration-200'
+      }
+    >
       <div className="flex items-center gap-3 min-w-0">
         <IconTile tone={isCredit ? 'ok' : 'danger'} size="sm">
           <Icon />

@@ -92,16 +92,16 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
     <Card
       tone="brand"
       padding={compact ? 'md' : 'lg'}
-      className="flex flex-col gap-3 text-start relative overflow-hidden"
+      className="rs-editorial-trial flex flex-col gap-3.5 text-start relative overflow-hidden"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
-          <IconTile tone="brand" size={compact ? 'sm' : 'md'}>
+          <IconTile tone="brand" size={compact ? 'sm' : 'md'} className="shadow-sm">
             <Gift />
           </IconTile>
-          <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-xs sm:text-sm font-semibold text-ink m-0">
+              <h3 className="text-[13px] sm:text-sm font-semibold text-ink m-0">
                 {t('user.trial.title')}
               </h3>
               <Badge variant="primary" size="xs">
@@ -120,18 +120,30 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
         </div>
       </div>
 
+      {showPhonePrompt && phoneVerify.statusMessage === 'cancelled' && (
+        <p className="text-[11px] text-warn-fg bg-warn-soft border border-warn/20 rounded-ctl px-3 py-2 m-0 leading-relaxed">
+          {t('user.trial.phoneCancelledHint')}
+        </p>
+      )}
+
+      {showPhonePrompt && phoneVerify.statusMessage === 'timeout' && (
+        <p className="text-[11px] text-info-fg bg-info-soft border border-info/20 rounded-ctl px-3 py-2 m-0 leading-relaxed">
+          {t('user.trial.phoneTimeoutHint')}
+        </p>
+      )}
+
       {showPhonePrompt ? (
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col sm:flex-row gap-2.5 pt-0.5">
           <Button
             type="button"
             variant="primary"
-            size="sm"
+            size="md"
             loading={phoneVerify.isVerifying || isClaiming}
             disabled={phoneVerify.isVerifying || isClaiming}
             onClick={phoneVerify.startVerification}
-            className="flex-1"
+            className="w-full sm:flex-1"
           >
-            <Phone className="w-3.5 h-3.5 shrink-0" />
+            <Phone className="w-4 h-4 shrink-0" />
             <span>
               {phoneVerify.isVerifying
                 ? t('user.shop.verifyPhoneWaiting')
@@ -142,10 +154,11 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
             <Button
               type="button"
               variant="secondary"
-              size="sm"
+              size="md"
               onClick={phoneVerify.openBotFallback}
+              className="w-full sm:w-auto shrink-0"
             >
-              <Send className="w-3.5 h-3.5 shrink-0" />
+              <Send className="w-4 h-4 shrink-0 text-brand-fg" />
               <span>{t('user.shop.verifyPhoneInBot')}</span>
             </Button>
           )}
@@ -154,13 +167,13 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
         <Button
           type="button"
           variant="primary"
-          size="sm"
+          size="md"
           loading={isClaiming}
           disabled={isClaiming}
           onClick={() => void executeClaim()}
           block
         >
-          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <Sparkles className="w-4 h-4 shrink-0" />
           <span>{isClaiming ? t('user.trial.claiming') : t('user.trial.claimCta')}</span>
         </Button>
       )}

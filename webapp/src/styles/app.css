@@ -55,12 +55,12 @@
     ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Monaco, Consolas, 'Vazirmatn',
     monospace;
 
-  /* Nested squircle geometry scale (inner radius = outer radius - padding step) */
-  --radius-ctl: 0.5625rem;
-  --radius-tile: 0.8125rem;
-  --radius-item: 0.8125rem;
-  --radius-card: 1.0625rem;
-  --radius-sheet: 1.5rem;
+  /* Apple Continuous Squircle Geometry Scale */
+  --radius-ctl: 0.75rem;
+  --radius-tile: 1rem;
+  --radius-item: 0.875rem;
+  --radius-card: 1.375rem;
+  --radius-sheet: 1.75rem;
 }
 
 @theme inline {
@@ -110,53 +110,53 @@
 
 :root {
   color-scheme: light;
-  --rs-canvas: #f3f5f9;
+  --rs-canvas: #f2f2f7;
   --rs-surface: #ffffff;
-  --rs-surface-2: #eef1f7;
-  --rs-surface-3: #e3e8f1;
+  --rs-surface-2: #f4f4f8;
+  --rs-surface-3: #e5e5ea;
 
-  --rs-ink: #0e131d;
-  --rs-ink-soft: #445066;
-  --rs-ink-muted: #5d6a81;
+  --rs-ink: #111318;
+  --rs-ink-soft: #3c4252;
+  --rs-ink-muted: #6c7385;
 
-  --rs-line: rgba(15, 23, 42, 0.08);
-  --rs-line-strong: rgba(15, 23, 42, 0.14);
+  --rs-line: rgba(17, 19, 24, 0.065);
+  --rs-line-strong: rgba(17, 19, 24, 0.125);
 
-  --rs-brand: #0a66e8;
-  --rs-brand-hover: #0052cc;
-  --rs-brand-fg: #0958d0;
-  --rs-brand-soft: rgba(10, 102, 232, 0.09);
+  --rs-brand: #007aff;
+  --rs-brand-hover: #0066d6;
+  --rs-brand-fg: #0062d1;
+  --rs-brand-soft: rgba(0, 122, 255, 0.1);
   --rs-brand-ink: #ffffff;
 
-  --rs-accent: #635bff;
-  --rs-accent-fg: #4f46e5;
-  --rs-accent-soft: rgba(99, 91, 255, 0.1);
+  --rs-accent: #5856d6;
+  --rs-accent-fg: #4b49c6;
+  --rs-accent-soft: rgba(88, 86, 214, 0.1);
 
-  --rs-ok: #0d9668;
-  --rs-ok-fg: #047857;
-  --rs-ok-soft: rgba(13, 150, 104, 0.1);
+  --rs-ok: #1ea952;
+  --rs-ok-fg: #15803d;
+  --rs-ok-soft: rgba(30, 169, 82, 0.11);
 
-  --rs-warn: #d97706;
-  --rs-warn-fg: #9a4a06;
-  --rs-warn-soft: rgba(217, 119, 6, 0.11);
+  --rs-warn: #f59e0b;
+  --rs-warn-fg: #a15507;
+  --rs-warn-soft: rgba(245, 158, 11, 0.12);
   --rs-warn-ink: #ffffff;
 
-  --rs-danger: #e02438;
-  --rs-danger-fg: #be123c;
-  --rs-danger-soft: rgba(224, 36, 56, 0.09);
+  --rs-danger: #ff3b30;
+  --rs-danger-fg: #d7261c;
+  --rs-danger-soft: rgba(255, 59, 48, 0.1);
 
   --rs-info: #0284c7;
   --rs-info-fg: #0369a1;
   --rs-info-soft: rgba(2, 132, 199, 0.1);
 
-  --rs-obsidian: #111622;
-  --rs-obsidian-line: rgba(255, 255, 255, 0.11);
-  --rs-obsidian-ink: #f5f7fb;
+  --rs-obsidian: #15171e;
+  --rs-obsidian-line: rgba(255, 255, 255, 0.12);
+  --rs-obsidian-ink: #f5f5f7;
 
-  /* Subtle atmospheric canvas glaze */
+  /* Subtle atmospheric Apple light glaze */
   --rs-canvas-ambient:
-    radial-gradient(900px 420px at 50% -140px, rgba(10, 102, 232, 0.055), transparent 68%),
-    radial-gradient(640px 360px at 90% 0%, rgba(99, 91, 255, 0.035), transparent 62%);
+    radial-gradient(900px 420px at 50% -150px, rgba(0, 122, 255, 0.055), transparent 68%),
+    radial-gradient(640px 360px at 90% 0%, rgba(88, 86, 214, 0.03), transparent 62%);
 
   /* Compat aliases */
   --bg-primary: var(--rs-canvas);
@@ -165,7 +165,7 @@
   --text-secondary: var(--rs-ink-soft);
   --border-color: var(--rs-line);
 
-  --nav-h: 4rem;
+  --nav-h: 4.125rem;
   --rs-safe-top: max(
     env(safe-area-inset-top, 0px),
     calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px))
@@ -175,80 +175,80 @@
     calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px))
   );
 
-  /* Motion timing functions */
+  /* Motion timing functions (Apple Spring & Ease Curves) */
   --ease-out-calm: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.38, 0.64, 1);
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* Multi-layered elevation shadows */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.03);
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.045), 0 6px 18px -8px rgba(15, 23, 42, 0.09);
-  --shadow-card-hover: 0 2px 6px rgba(15, 23, 42, 0.06), 0 14px 28px -12px rgba(15, 23, 42, 0.14);
+  /* Diffuse Apple Elevation Shadows */
+  --shadow-xs: 0 1px 2px rgba(17, 19, 24, 0.045), 0 1px 1px rgba(17, 19, 24, 0.025);
+  --shadow-card: 0 1px 2px rgba(17, 19, 24, 0.03), 0 6px 20px -10px rgba(17, 19, 24, 0.08);
+  --shadow-card-hover: 0 3px 10px rgba(17, 19, 24, 0.055), 0 14px 30px -12px rgba(17, 19, 24, 0.12);
   --shadow-float:
-    0 14px 34px -10px rgba(15, 23, 42, 0.28), 0 4px 12px -4px rgba(15, 23, 42, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    0 18px 40px -12px rgba(17, 19, 24, 0.28), 0 4px 12px -4px rgba(17, 19, 24, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
   --shadow-popover:
-    0 20px 44px -12px rgba(15, 23, 42, 0.18), 0 4px 14px -4px rgba(15, 23, 42, 0.07);
-  --shadow-nav: 0 -8px 28px -10px rgba(15, 23, 42, 0.12), 0 -1px 0 rgba(15, 23, 42, 0.05);
+    0 24px 52px -12px rgba(17, 19, 24, 0.18), 0 4px 14px -4px rgba(17, 19, 24, 0.07);
+  --shadow-nav: 0 -8px 28px -12px rgba(17, 19, 24, 0.1), 0 -0.5px 0 rgba(17, 19, 24, 0.06);
   --shadow-brand:
-    0 1px 2px rgba(10, 102, 232, 0.22), 0 6px 16px -6px rgba(10, 102, 232, 0.44),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    0 1px 2px rgba(0, 122, 255, 0.2), 0 8px 18px -6px rgba(0, 122, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26);
   --shadow-ok:
-    0 1px 2px rgba(13, 150, 104, 0.22), 0 6px 16px -6px rgba(13, 150, 104, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  --shadow-inset-track: inset 0 1px 2px rgba(15, 23, 42, 0.06);
-  --rs-specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    0 1px 2px rgba(30, 169, 82, 0.2), 0 8px 18px -6px rgba(30, 169, 82, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  --shadow-inset-track: inset 0 1px 2px rgba(17, 19, 24, 0.055);
+  --rs-specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .dark,
 [data-theme='dark'] {
   color-scheme: dark;
-  --rs-canvas: #080b11;
-  --rs-surface: #111621;
-  --rs-surface-2: #171e2c;
-  --rs-surface-3: #212a3b;
+  --rs-canvas: #000000;
+  --rs-surface: #14161d;
+  --rs-surface-2: #1c1f29;
+  --rs-surface-3: #262a37;
 
-  --rs-ink: #f2f5fa;
-  --rs-ink-soft: #a6b2c6;
-  --rs-ink-muted: #7f8ca4;
+  --rs-ink: #f5f5f7;
+  --rs-ink-soft: #aeaeb2;
+  --rs-ink-muted: #86868b;
 
   --rs-line: rgba(255, 255, 255, 0.075);
-  --rs-line-strong: rgba(255, 255, 255, 0.135);
+  --rs-line-strong: rgba(255, 255, 255, 0.14);
 
-  --rs-brand: #2f81f7;
-  --rs-brand-hover: #4391ff;
-  --rs-brand-fg: #6cb0ff;
-  --rs-brand-soft: rgba(47, 129, 247, 0.15);
+  --rs-brand: #0a84ff;
+  --rs-brand-hover: #3399ff;
+  --rs-brand-fg: #409cff;
+  --rs-brand-soft: rgba(10, 132, 255, 0.16);
   --rs-brand-ink: #ffffff;
 
-  --rs-accent: #818cf8;
-  --rs-accent-fg: #a5b4fc;
-  --rs-accent-soft: rgba(129, 140, 248, 0.15);
+  --rs-accent: #5e5ce6;
+  --rs-accent-fg: #8c8bff;
+  --rs-accent-soft: rgba(94, 92, 230, 0.16);
 
-  --rs-ok: #12b886;
-  --rs-ok-fg: #3ee0a4;
-  --rs-ok-soft: rgba(18, 184, 134, 0.15);
+  --rs-ok: #30d158;
+  --rs-ok-fg: #34d965;
+  --rs-ok-soft: rgba(48, 209, 88, 0.15);
 
-  --rs-warn: #f59e0b;
-  --rs-warn-fg: #fbbf24;
-  --rs-warn-soft: rgba(245, 158, 11, 0.15);
-  --rs-warn-ink: #0d1118;
+  --rs-warn: #ff9f0a;
+  --rs-warn-fg: #ffb340;
+  --rs-warn-soft: rgba(255, 159, 10, 0.16);
+  --rs-warn-ink: #111318;
 
-  --rs-danger: #f43f5e;
-  --rs-danger-fg: #fb7185;
-  --rs-danger-soft: rgba(244, 63, 94, 0.15);
+  --rs-danger: #ff453a;
+  --rs-danger-fg: #ff6961;
+  --rs-danger-soft: rgba(255, 69, 58, 0.15);
 
-  --rs-info: #0ea5e9;
-  --rs-info-fg: #38bdf8;
-  --rs-info-soft: rgba(14, 165, 233, 0.15);
+  --rs-info: #64d2ff;
+  --rs-info-fg: #70d7ff;
+  --rs-info-soft: rgba(100, 210, 255, 0.15);
 
-  --rs-obsidian: #131926;
+  --rs-obsidian: #15171e;
   --rs-obsidian-line: rgba(255, 255, 255, 0.11);
-  --rs-obsidian-ink: #f5f7fb;
+  --rs-obsidian-ink: #f5f5f7;
 
   --rs-canvas-ambient:
-    radial-gradient(860px 400px at 50% -150px, rgba(47, 129, 247, 0.085), transparent 68%),
-    radial-gradient(600px 320px at 90% -20px, rgba(129, 140, 248, 0.055), transparent 64%);
+    radial-gradient(880px 380px at 50% -180px, rgba(10, 132, 255, 0.11), transparent 70%),
+    radial-gradient(600px 300px at 90% -30px, rgba(94, 92, 230, 0.06), transparent 64%);
 
   --bg-primary: var(--rs-canvas);
   --bg-secondary: var(--rs-surface);
@@ -256,28 +256,28 @@
   --text-secondary: var(--rs-ink-soft);
   --border-color: var(--rs-line);
 
-  --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --shadow-card:
-    0 2px 6px rgba(0, 0, 0, 0.34), 0 10px 26px -12px rgba(0, 0, 0, 0.56),
-    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+    0 2px 8px rgba(0, 0, 0, 0.36), 0 12px 28px -12px rgba(0, 0, 0, 0.56),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --shadow-card-hover:
-    0 4px 12px rgba(0, 0, 0, 0.44), 0 18px 34px -12px rgba(0, 0, 0, 0.68),
-    inset 0 1px 0 rgba(255, 255, 255, 0.095);
+    0 4px 14px rgba(0, 0, 0, 0.45), 0 18px 34px -12px rgba(0, 0, 0, 0.68),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   --shadow-float:
-    0 18px 42px -12px rgba(0, 0, 0, 0.72), 0 4px 14px -4px rgba(0, 0, 0, 0.44),
-    inset 0 1px 0 rgba(255, 255, 255, 0.11);
+    0 20px 44px -12px rgba(0, 0, 0, 0.78), 0 4px 14px -4px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.13);
   --shadow-popover:
-    0 24px 54px -14px rgba(0, 0, 0, 0.78), 0 4px 16px -4px rgba(0, 0, 0, 0.48),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  --shadow-nav: 0 -10px 32px -10px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 28px 60px -14px rgba(0, 0, 0, 0.85), 0 4px 16px -4px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  --shadow-nav: 0 -10px 32px -10px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --shadow-brand:
-    0 1px 3px rgba(0, 0, 0, 0.36), 0 8px 20px -6px rgba(47, 129, 247, 0.46),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    0 1px 3px rgba(0, 0, 0, 0.36), 0 8px 20px -6px rgba(10, 132, 255, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
   --shadow-ok:
-    0 1px 3px rgba(0, 0, 0, 0.36), 0 8px 20px -6px rgba(18, 184, 134, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  --shadow-inset-track: inset 0 1px 3px rgba(0, 0, 0, 0.35);
-  --rs-specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.065);
+    0 1px 3px rgba(0, 0, 0, 0.36), 0 8px 20px -6px rgba(48, 209, 88, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  --shadow-inset-track: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+  --rs-specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.075);
 }
 
 /* ==========================================================================
@@ -339,8 +339,8 @@ body {
 }
 
 .rs-backdrop-blur {
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(190%);
+  -webkit-backdrop-filter: blur(26px) saturate(190%);
 }
 
 .rs-card-surface {
@@ -366,28 +366,51 @@ body {
 }
 
 .rs-card-interactive:active:not(:disabled) {
-  transform: scale(0.986);
+  transform: scale(0.982);
   box-shadow: var(--shadow-xs);
 }
 
+/* Apple Wallet / Titanium Obsidian Hero Card */
 .rs-hero-obsidian {
-  background-color: var(--rs-obsidian);
+  background-color: #161922;
   background-image:
-    radial-gradient(280px 180px at 88% 0%, rgba(56, 139, 253, 0.22), transparent 72%),
-    radial-gradient(240px 160px at 8% 100%, rgba(129, 140, 248, 0.14), transparent 70%),
-    linear-gradient(155deg, #1b2436 0%, #111724 54%, #0c101a 100%);
-  border: 1px solid var(--rs-obsidian-line);
-  box-shadow: var(--shadow-float);
+    radial-gradient(320px 210px at 92% -8%, rgba(10, 132, 255, 0.28), transparent 70%),
+    radial-gradient(280px 180px at 8% 108%, rgba(94, 92, 230, 0.22), transparent 68%),
+    linear-gradient(148deg, #252936 0%, #161923 48%, #0e1017 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    var(--shadow-float),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
+/* Apple Titanium Bank Deposit Card */
 .rs-hero-bank {
-  background-color: var(--rs-obsidian);
+  background-color: #181a23;
   background-image:
-    radial-gradient(260px 170px at 14% 0%, rgba(251, 191, 36, 0.14), transparent 72%),
-    radial-gradient(240px 160px at 90% 100%, rgba(56, 189, 248, 0.13), transparent 72%),
-    linear-gradient(148deg, #1d2433 0%, #121723 56%, #0c1019 100%);
-  border: 1px solid var(--rs-obsidian-line);
-  box-shadow: var(--shadow-float);
+    radial-gradient(290px 190px at 14% -5%, rgba(255, 191, 71, 0.2), transparent 72%),
+    radial-gradient(260px 170px at 90% 108%, rgba(10, 132, 255, 0.16), transparent 72%),
+    linear-gradient(148deg, #262936 0%, #161821 52%, #0e1016 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    var(--shadow-float),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Apple Editorial Feature Surface (Free Trial) */
+.rs-editorial-trial {
+  background-image:
+    radial-gradient(260px 160px at 85% 0%, rgba(10, 132, 255, 0.14), transparent 72%),
+    radial-gradient(220px 140px at 10% 100%, rgba(94, 92, 230, 0.11), transparent 72%);
+  box-shadow: var(--shadow-card);
+}
+
+/* Apple Grouped Row Container */
+.rs-grouped-list {
+  background-color: var(--rs-surface);
+  border: 1px solid var(--rs-line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
 }
 
 .rs-btn-primary {
@@ -580,17 +603,17 @@ body {
   -webkit-appearance: none;
   appearance: none;
   position: relative;
-  width: 44px;
-  height: 24px;
+  width: 48px;
+  height: 28px;
   border-radius: 9999px;
   background-color: var(--rs-surface-3);
-  border: 1px solid var(--rs-line-strong);
+  border: 1px solid var(--rs-line);
   box-shadow: var(--shadow-inset-track);
   cursor: pointer;
   flex-shrink: 0;
   transition:
-    background-color 200ms var(--ease-out-calm),
-    border-color 200ms var(--ease-out-calm);
+    background-color 220ms var(--ease-out-calm),
+    border-color 220ms var(--ease-out-calm);
 }
 
 .rs-switch::after {
@@ -598,20 +621,20 @@ body {
   position: absolute;
   top: 2px;
   inset-inline-start: 2px;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 9999px;
   background-color: #ffffff;
   box-shadow:
-    0 2px 5px rgba(15, 23, 42, 0.24),
-    0 1px 2px rgba(15, 23, 42, 0.14);
-  transition: transform 220ms var(--ease-spring);
+    0 2px 6px rgba(15, 23, 42, 0.22),
+    0 1px 2px rgba(15, 23, 42, 0.12);
+  transition: transform 240ms var(--ease-spring);
 }
 
 .rs-switch:checked,
 .rs-switch[aria-checked='true'] {
-  background-color: var(--rs-brand);
-  border-color: var(--rs-brand);
+  background-color: var(--rs-ok);
+  border-color: var(--rs-ok);
 }
 
 [dir='ltr'] .rs-switch:checked::after,
