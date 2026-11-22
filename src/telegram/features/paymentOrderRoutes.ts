@@ -14,8 +14,10 @@ import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering
 import {
   buildUserEmptyState,
   buildUserScreen,
+  forgetUiMessage,
   rememberArtifactMessage,
   renderScreen,
+  safelyDeleteMessage,
 } from '../ui.js';
 import { sendAdminAutomatedTopupReport } from './admin/adminNotifications.js';
 
@@ -191,6 +193,8 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
 
     if (order.status === 'completed') {
       await ctx.answerCallbackQuery({ text: t(ctx, 'auto_pay_credited_title') });
+      // Preserve completed invoice artifact text; remove stale pending action buttons.
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
       const currency = t(ctx, 'currency_toman');
       const credited = order.creditedAmount ?? order.payableAmount;
       const fields: Array<{ label: string; value: string }> = [
@@ -262,6 +266,10 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
                 ? 'auto_pay_status_failed'
                 : 'auto_pay_status_pending';
 
+    if (order.status === 'expired' || order.status === 'cancelled' || order.status === 'failed') {
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+    }
+
     await ctx.answerCallbackQuery({ text: t(ctx, statusKey), show_alert: true });
   });
 
@@ -276,11 +284,68 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
       return;
     }
 
+    const callbackMsgId = ctx.callbackQuery?.message?.message_id;
     const cancelled = await services.automatedPaymentService.cancelOrderForUser(
       orderId,
       telegramId
     );
     if (!cancelled) {
+      const existing = await services.automatedPaymentService.getOrderByIdForUser(
+        orderId,
+        telegramId
+      );
+      if (existing && existing.status === 'completed') {
+        // Completed transactions must NEVER be deleted — only remove stale buttons.
+        await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+        await ctx.answerCallbackQuery({
+          text: t(ctx, 'auto_pay_cancel_unavailable'),
+          show_alert: true,
+        });
+        return;
+      }
+      if (
+        existing &&
+        (existing.status === 'cancelled' ||
+          existing.status === 'expired' ||
+          existing.status === 'failed')
+      ) {
+        if (callbackMsgId !== undefined) {
+          if (ctx.session) forgetUiMessage(ctx.session, callbackMsgId);
+          await safelyDeleteMessage(ctx, callbackMsgId);
+        }
+        await ctx.answerCallbackQuery({
+          text: t(
+            ctx,
+            existing.status === 'expired'
+              ? 'auto_pay_status_expired'
+              : existing.status === 'failed'
+                ? 'auto_pay_status_failed'
+                : 'auto_pay_status_cancelled'
+          ),
+        });
+        await renderScreen(
+          ctx,
+          buildUserEmptyState(
+            '↩️',
+            t(
+              ctx,
+              existing.status === 'expired'
+                ? 'auto_pay_status_expired'
+                : 'auto_pay_status_cancelled'
+            ),
+            ''
+          ),
+          {
+            parse_mode: 'Markdown',
+            preferEdit: false,
+            reply_markup: new InlineKeyboard()
+              .text(t(ctx, 'menu_wallet'), 'nav:wallet')
+              .text(t(ctx, 'menu_back_main'), 'nav:main'),
+          }
+        );
+        return;
+      }
+
       await ctx.answerCallbackQuery({
         text: t(ctx, 'auto_pay_cancel_unavailable'),
         show_alert: true,
@@ -288,9 +353,16 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
       return;
     }
 
+    // Remove the unpaid cancelled invoice message so stale card/buttons do not linger in chat.
+    if (callbackMsgId !== undefined) {
+      if (ctx.session) forgetUiMessage(ctx.session, callbackMsgId);
+      await safelyDeleteMessage(ctx, callbackMsgId);
+    }
+
     await ctx.answerCallbackQuery({ text: t(ctx, 'auto_pay_status_cancelled') });
     await renderScreen(ctx, buildUserEmptyState('↩️', t(ctx, 'auto_pay_status_cancelled'), ''), {
       parse_mode: 'Markdown',
+      preferEdit: false,
       reply_markup: new InlineKeyboard()
         .text(t(ctx, 'menu_wallet'), 'nav:wallet')
         .text(t(ctx, 'menu_back_main'), 'nav:main'),
@@ -315,6 +387,12 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
         show_alert: true,
       });
       return;
+    }
+
+    const callbackMsgId = ctx.callbackQuery?.message?.message_id;
+    if (callbackMsgId !== undefined) {
+      if (ctx.session) forgetUiMessage(ctx.session, callbackMsgId);
+      await safelyDeleteMessage(ctx, callbackMsgId);
     }
 
     ctx.session.manualFallbackOrder = {
