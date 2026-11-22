@@ -40,10 +40,10 @@ COPY --from=builder --chown=node:node /app/docker-compose.yml ./docker-compose.y
 
 USER node
 
-# Internal health check runs on 3001. Webhook mode listens on port 3000 by default.
-EXPOSE 3000
+# Internal health check runs on 3001 by default. Webhook mode listens on 3000 and Mini App on 3002.
+EXPOSE 3000 3002
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --start-interval=5s --retries=4 \
-  CMD node -e "fetch('http://127.0.0.1:3001/readyz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+  CMD node -e "const p=process.env.HEALTH_CHECK_PORT||process.env.PORT||3001;fetch('http://127.0.0.1:'+p+'/readyz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "dist/index.js"]

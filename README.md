@@ -1,7 +1,7 @@
 # ✦ RebeccaSellBot
 
 <p align="center">
-  <strong>Resilient, multi-panel Telegram commerce and subscription platform for Rebecca Panel.</strong>
+  <strong>Resilient, multi-panel Telegram commerce and Mini App platform for Rebecca Panel.</strong>
   <br />
   Automate sales, renewals, wallet accounting, flash sales, and multi-panel fleets across Telegram and Mini App.
 </p>
@@ -33,7 +33,7 @@
 | 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, stateless `adm:*` admin router, non-blocking input engine, and callback guards.          |
 | 📱 **[Mini App Architecture](docs/webapp-architecture.md)** | Unified User & Admin Mini App (`Fastify 5` + `React 19`), modular `/api/user/*` routes, guards, and chat sync.    |
 | ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                                     |
-| 🚀 **[Deployment & Operations](docs/deployment.md)**        | Interactive/unattended installation, `rsbot` CLI, Caddy On-Demand TLS mesh, and backups.                          |
+| 🚀 **[Deployment & Operations](docs/deployment.md)**        | 1-command installation, `rsbot` lifecycle CLI, Caddy On-Demand TLS mesh, and transactional disaster recovery.     |
 | 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, Mini App upload/auth controls, and database integrity guarantees. |
 
 ---
@@ -71,47 +71,56 @@ Checkout ──► [1. Reserve Wallet Funds] ──► [2. Provision on Rebecca 
 
 ## Quick Start
 
-### 1. Guided Interactive Install (Recommended)
+### 1. Guided 1-Command Install (Recommended)
 
-On a clean **Ubuntu 22.04 / 24.04 LTS** server:
+On any **Ubuntu 22.04 / 24.04 LTS** or **Debian 12+** server:
 
 ```bash
-git clone https://github.com/Ho3einK84/RebeccaSellBot.git
-cd RebeccaSellBot
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh | sudo bash
 ```
 
-The installer verifies Docker & Compose, generates encryption keys, provisions PostgreSQL, runs migrations, and installs the `/usr/local/bin/rsbot` CLI. Connect your Rebecca panels afterward via `/admin` → **Panels**.
+Or from a local clone:
 
-### 2. Unattended 1-Command Install
+```bash
+git clone https://github.com/Ho3einK84/RebeccaSellBot.git && cd RebeccaSellBot && ./install.sh
+```
+
+The installer verifies Docker & Compose v2, asks only for your **Bot Token** and **Admin ID(s)**, auto-provisions PostgreSQL 16 + `AES-256-GCM` & JWT secrets, runs Drizzle migrations, and installs `/usr/local/bin/rsbot`. Afterward, send `/admin` → **Panels** to your bot in Telegram to connect your Rebecca panel(s).
+
+### 2. Unattended Provisioning (`--env-file`)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
   | sudo bash -s -- --instance main --env-file /root/rsbot.env --non-interactive --yes
 ```
 
-### 3. Server-to-Server Migration (`--from-backup`)
+### 3. Server Migration (`--from-backup`)
 
 ```bash
 # Source server: create full snapshot (database.dump + .env + docker-compose.yml + manifest.txt)
-rsbot main backup
+rsbot backup
 
 # Target server: bootstrap directly from archive
-./install.sh --from-backup /path/to/manual_backup_main_YYYYMMDD_HHMMSS.tar.gz --non-interactive --yes
+curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh \
+  | sudo bash -s -- --from-backup /root/backup_main_YYYYMMDD_HHMMSS.tar.gz --non-interactive --yes
 ```
 
 ---
 
-## Instance CLI (`rsbot`)
+## Lifecycle & Multi-Instance CLI (`rsbot`)
+
+`rsbot` automatically targets the `main` (or sole installed) instance when `<instance>` is omitted, or accepts an explicit instance name (or `all` for fleet-wide operations):
 
 ```bash
-rsbot list                        # List all instances, states, ports, and delivery modes
-rsbot <instance> status           # Container status and readiness probes
-rsbot <instance> verify           # Deep diagnostics (containers, DB, ports, /readyz)
-rsbot <instance> logs -f          # Follow structured service logs
-rsbot <instance> update           # Git pull, rebuild, migrate schema, and restart
-rsbot <instance> backup           # Create compressed 0600 backup bundle (.tar.gz)
-rsbot <instance> restore <file>   # Transactional restore with automatic rollback snapshot
+rsbot status                      # Container status (or: rsbot <instance> status)
+rsbot verify                      # Deep 6-stage health, DB, & port isolation audit
+rsbot env                         # Display sanitized configuration & published ports
+rsbot logs -f                     # Follow live container logs
+rsbot update                      # Git pull, rebuild, migrate schema, and restart
+rsbot backup                      # Create compressed 0600 backup bundle (.tar.gz)
+rsbot restore <file>              # Transactional restore with automatic rollback snapshot
+rsbot list                        # List all installed instances, states, and ports
+rsbot all update                  # Update all instances on the server sequentially
 ```
 
 See [docs/deployment.md](docs/deployment.md) for the complete CLI and reverse-proxy reference.
@@ -120,15 +129,16 @@ See [docs/deployment.md](docs/deployment.md) for the complete CLI and reverse-pr
 
 ## Essential Environment (`.env`)
 
-| Variable                | Description                                                    | Default     |
-| :---------------------- | :------------------------------------------------------------- | :---------- |
-| `BOT_TOKEN`             | Telegram Bot API token from `@BotFather`.                      | _Required_  |
-| `ADMIN_IDS`             | Comma-separated initial admin Telegram user IDs.               | `123456789` |
-| `DATABASE_URL`          | PostgreSQL 16 connection string.                               | _Required_  |
-| `PANEL_CREDENTIALS_KEY` | 32–512 char key for `AES-256-GCM` panel credential encryption. | Generated   |
-| `DEFAULT_LOCALE`        | Default locale for new users (`fa` or `en`).                   | `fa`        |
-| `BOT_DELIVERY_MODE`     | Telegram update transport (`polling` or `webhook`).            | `polling`   |
-| `WEBAPP_URL`            | Public HTTPS URL enabling the Fastify + React 19 Mini App.     | —           |
+| Variable                | Description                                                    | Default          |
+| :---------------------- | :------------------------------------------------------------- | :--------------- |
+| `BOT_TOKEN`             | Telegram Bot API token from `@BotFather`.                      | _Required_       |
+| `ADMIN_IDS`             | Comma-separated initial admin Telegram user IDs.               | _Required_       |
+| `DATABASE_URL`          | PostgreSQL 16 connection string.                               | Auto-provisioned |
+| `PANEL_CREDENTIALS_KEY` | 32–512 char key for `AES-256-GCM` panel credential encryption. | Auto-generated   |
+| `ADMIN_SESSION_SECRET`  | 32+ char secret for Mini App admin JWT session cookies.        | Auto-generated   |
+| `DEFAULT_LOCALE`        | Default locale for new users (`fa` or `en`).                   | `fa`             |
+| `BOT_DELIVERY_MODE`     | Telegram update transport (`polling` or `webhook`).            | `polling`        |
+| `WEBAPP_URL`            | Public HTTPS URL enabling the Fastify + React 19 Mini App.     | —                |
 
 See [docs/configuration.md](docs/configuration.md) for all environment variables and in-bot `/admin` settings.
 

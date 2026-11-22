@@ -462,11 +462,22 @@ export class BackupService {
       `WEBHOOK_URL=${process.env.WEBHOOK_URL ?? ''}`,
       `WEBHOOK_SECRET_TOKEN=${process.env.WEBHOOK_SECRET_TOKEN ?? ''}`,
       `WEBHOOK_PORT=${process.env.WEBHOOK_PORT ?? '3000'}`,
+      `WEBHOOK_PATH=${process.env.WEBHOOK_PATH ?? '/webhook'}`,
+      `WEBHOOK_BIND_HOST=${process.env.WEBHOOK_BIND_HOST ?? '127.0.0.1'}`,
       `WEBHOOK_HOST_PORT=${process.env.WEBHOOK_HOST_PORT ?? process.env.WEBHOOK_PORT ?? '3000'}`,
       `WEBAPP_URL=${process.env.WEBAPP_URL ?? ''}`,
       `WEBAPP_PORT=${process.env.WEBAPP_PORT ?? '3002'}`,
+      `WEBAPP_HOST=${process.env.WEBAPP_HOST ?? '0.0.0.0'}`,
+      `WEBAPP_BIND_HOST=${process.env.WEBAPP_BIND_HOST ?? '127.0.0.1'}`,
       `WEBAPP_HOST_PORT=${process.env.WEBAPP_HOST_PORT ?? process.env.WEBAPP_PORT ?? '3002'}`,
+      `ADMIN_SESSION_SECRET=${process.env.ADMIN_SESSION_SECRET ?? ''}`,
     ];
+    if (process.env.REBECCA_WEBHOOK_SECRET) {
+      lines.push(`REBECCA_WEBHOOK_SECRET=${process.env.REBECCA_WEBHOOK_SECRET}`);
+    }
+    if (process.env.REBECCA_WEBHOOK_PATH) {
+      lines.push(`REBECCA_WEBHOOK_PATH=${process.env.REBECCA_WEBHOOK_PATH}`);
+    }
 
     return lines.join('\n') + '\n';
   }

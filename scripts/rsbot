@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Instance-aware lifecycle manager. It never assumes the current directory and
-# always loads the selected instance's .env for Compose interpolation.
+# rsbot — RebeccaSellBot multi-instance lifecycle manager
+# Supports both `rsbot <command>` (auto-resolves 'main' or single instance),
+# `rsbot <instance> <command>`, and `rsbot all <command>` batch operations.
 
 readonly BASE_PATH="${RSBOT_BASE_PATH:-/opt/RebeccaSellBot}"
 readonly BACKUP_FORMAT_VERSION="1"
@@ -10,6 +11,14 @@ readonly DEFAULT_BACKUP_RETENTION=14
 
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
+
+if [[ -t 1 ]]; then
+  readonly BOLD=$'\033[1m' DIM=$'\033[2m' RESET=$'\033[0m'
+  readonly CYAN=$'\033[38;5;51m' GREEN=$'\033[38;5;42m'
+  readonly YELLOW=$'\033[38;5;220m' RED=$'\033[38;5;203m' PURPLE=$'\033[38;5;141m'
+else
+  readonly BOLD="" DIM="" RESET="" CYAN="" GREEN="" YELLOW="" RED="" PURPLE=""
+fi
 
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 
@@ -19,7 +28,9 @@ rsbot — RebeccaSellBot multi-instance manager
 
 Usage:
   rsbot list
-  rsbot <instance> <command> [options]
+  rsbot <command> [options]             (targets 'main' or sole installed instance)
+  rsbot <instance> <command> [options]  (targets a specific instance)
+  rsbot all <command>                   (runs status/verify/update/backup/restart across all)
 
 Commands:
   up                 Build/start the instance and wait for health
@@ -27,6 +38,7 @@ Commands:
   restart            Restart the instance containers
   status             Show container and service status
   verify             Run deep stack diagnostics and health verification
+  env                Display sanitized instance configuration and ports
   logs [-f]          Show logs (use -f to follow)
   update             Pull, rebuild, run Drizzle migrations, and start
   backup             Create a complete compressed backup (database + .env)
@@ -39,8 +51,34 @@ HELP
 
 validate_instance() { [[ "$1" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ ]]; }
 
+is_known_command() {
+  case "${1:-}" in
+    up|down|restart|status|verify|env|logs|update|backup|backups|prune-backups|restore|uninstall)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+discover_installed_instances() {
+  [[ -d "$BASE_PATH" ]] || return 0
+  shopt -s nullglob
+  local dirs=("$BASE_PATH"/*)
+  shopt -u nullglob
+  local d name
+  for d in "${dirs[@]}"; do
+    name="$(basename "$d")"
+    [[ -d "$d" && -f "$d/.env" && -f "$d/docker-compose.yml" ]] || continue
+    validate_instance "$name" || continue
+    printf '%s\n' "$name"
+  done
+}
+
 env_value_from_file() {
   local file="$1" key="$2" raw_value value cr=$'\r' sq="'"
+  [[ -f "$file" ]] || return 1
   raw_value="$(sed -n "s/^${key}=//p" "$file" | head -n 1)"
   [[ -n "$raw_value" ]] || return 1
   value="${raw_value%"$cr"}"
@@ -65,7 +103,7 @@ else
   die "Docker is unavailable and sudo is not installed."
 fi
 
-if [[ "${1:-}" == "list" ]]; then
+if [[ "${1:-}" == "list" || "${1:-}" == "ls" ]]; then
   printf 'Installed RebeccaSellBot instances in %s:\n' "$BASE_PATH"
   if [[ ! -d "$BASE_PATH" ]]; then
     printf '  No instances found.\n'
@@ -97,10 +135,50 @@ if [[ "${1:-}" == "list" ]]; then
   exit 0
 fi
 
-[[ $# -ge 2 ]] || { show_help >&2; exit 1; }
-INSTANCE="$1"
-COMMAND="$2"
-shift 2
+# Fleet-wide batch execution: `rsbot all <command> [args...]`
+if [[ "${1:-}" == "all" ]]; then
+  [[ $# -ge 2 ]] || die "Usage: rsbot all <status|verify|update|backup|restart|up|down|prune-backups>"
+  batch_cmd="$2"
+  shift 2
+  case "$batch_cmd" in
+    status|verify|update|backup|backups|restart|up|down|prune-backups|env) ;;
+    *) die "Batch execution ('rsbot all') is not supported for '$batch_cmd'." ;;
+  esac
+  mapfile -t all_instances < <(discover_installed_instances)
+  [[ ${#all_instances[@]} -gt 0 ]] || die "No installed instances found in $BASE_PATH."
+  overall_rc=0
+  for inst in "${all_instances[@]}"; do
+    printf '%s━━ Instance: %s ━━%s\n' "$BOLD$PURPLE" "$inst" "$RESET"
+    if ! "$0" "$inst" "$batch_cmd" "$@"; then
+      overall_rc=1
+    fi
+  done
+  exit "$overall_rc"
+fi
+
+# Shorthand resolution: allow `rsbot <command> [args...]` when $1 is a known command
+# and not an existing instance directory.
+if is_known_command "${1:-}" && [[ ! -d "$BASE_PATH/$1" ]]; then
+  COMMAND="$1"
+  shift 1
+  if [[ -d "$BASE_PATH/main" && -f "$BASE_PATH/main/.env" ]]; then
+    INSTANCE="main"
+  else
+    mapfile -t installed_list < <(discover_installed_instances)
+    if [[ ${#installed_list[@]} -eq 1 ]]; then
+      INSTANCE="${installed_list[0]}"
+    elif [[ ${#installed_list[@]} -eq 0 ]]; then
+      INSTANCE="main"
+    else
+      die "Multiple instances installed (${installed_list[*]}). Specify one: rsbot <instance> $COMMAND"
+    fi
+  fi
+else
+  [[ $# -ge 2 ]] || { show_help >&2; exit 1; }
+  INSTANCE="$1"
+  COMMAND="$2"
+  shift 2
+fi
 
 validate_instance "$INSTANCE" || die "Invalid instance name: $INSTANCE"
 readonly INSTANCE
@@ -144,6 +222,31 @@ ensure_mesh_resources() {
   fi
 }
 
+ensure_env_defaults() {
+  [[ -f "$ENV_FILE" && -w "$ENV_FILE" ]] || return 0
+  local p_key a_key
+  p_key="$(env_value_from_file "$ENV_FILE" PANEL_CREDENTIALS_KEY 2>/dev/null || true)"
+  if [[ -z "$p_key" ]] && command -v openssl >/dev/null 2>&1; then
+    printf 'PANEL_CREDENTIALS_KEY=%s\n' "$(openssl rand -hex 32)" >> "$ENV_FILE"
+  fi
+  a_key="$(env_value_from_file "$ENV_FILE" ADMIN_SESSION_SECRET 2>/dev/null || true)"
+  if [[ -z "$a_key" ]] && command -v openssl >/dev/null 2>&1; then
+    printf 'ADMIN_SESSION_SECRET=%s\n' "$(openssl rand -hex 32)" >> "$ENV_FILE"
+  fi
+  chmod 0600 "$ENV_FILE" 2>/dev/null || true
+}
+
+sync_global_cli() {
+  local src="$INSTANCE_DIR/scripts/rsbot"
+  local dst="/usr/local/bin/rsbot"
+  [[ -f "$src" ]] || return 0
+  if [[ -w "$dst" || ( ! -e "$dst" && -w /usr/local/bin ) ]]; then
+    install -m 0755 "$src" "$dst" 2>/dev/null || true
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo -n install -m 0755 "$src" "$dst" 2>/dev/null || true
+  fi
+}
+
 wait_for_stack() {
   ensure_mesh_resources
   if ! dc up -d --wait "$@"; then
@@ -156,6 +259,50 @@ env_value() {
   local key="$1" value
   value="$(env_value_from_file "$ENV_FILE" "$key")" || die "$key is missing from $ENV_FILE."
   printf '%s' "$value"
+}
+
+mask_secret() {
+  local val="${1:-}"
+  if [[ -z "$val" ]]; then
+    printf '(not set)'
+  elif (( ${#val} <= 10 )); then
+    printf '********'
+  else
+    printf '%s...%s (%s chars)' "${val:0:4}" "${val: -4}" "${#val}"
+  fi
+}
+
+show_instance_env() {
+  local mode w_url w_port w_bind h_url h_port h_bind hc_port db_user db_name locale sup_url tok p_key a_key git_rev
+  mode="$(env_value_from_file "$ENV_FILE" BOT_DELIVERY_MODE 2>/dev/null || printf 'polling')"
+  w_url="$(env_value_from_file "$ENV_FILE" WEBAPP_URL 2>/dev/null || true)"
+  w_port="$(env_value_from_file "$ENV_FILE" WEBAPP_HOST_PORT 2>/dev/null || env_value_from_file "$ENV_FILE" WEBAPP_PORT 2>/dev/null || printf '3002')"
+  w_bind="$(env_value_from_file "$ENV_FILE" WEBAPP_BIND_HOST 2>/dev/null || printf '127.0.0.1')"
+  h_url="$(env_value_from_file "$ENV_FILE" WEBHOOK_URL 2>/dev/null || true)"
+  h_port="$(env_value_from_file "$ENV_FILE" WEBHOOK_HOST_PORT 2>/dev/null || env_value_from_file "$ENV_FILE" WEBHOOK_PORT 2>/dev/null || printf '3000')"
+  h_bind="$(env_value_from_file "$ENV_FILE" WEBHOOK_BIND_HOST 2>/dev/null || printf '127.0.0.1')"
+  hc_port="$(env_value_from_file "$ENV_FILE" HEALTH_CHECK_PORT 2>/dev/null || printf '3001')"
+  db_user="$(env_value_from_file "$ENV_FILE" DB_USER 2>/dev/null || printf 'rsbot_user')"
+  db_name="$(env_value_from_file "$ENV_FILE" DB_NAME 2>/dev/null || printf 'rsbot_db')"
+  locale="$(env_value_from_file "$ENV_FILE" DEFAULT_LOCALE 2>/dev/null || printf 'fa')"
+  sup_url="$(env_value_from_file "$ENV_FILE" SUPPORT_URL 2>/dev/null || true)"
+  tok="$(env_value_from_file "$ENV_FILE" BOT_TOKEN 2>/dev/null || true)"
+  p_key="$(env_value_from_file "$ENV_FILE" PANEL_CREDENTIALS_KEY 2>/dev/null || true)"
+  a_key="$(env_value_from_file "$ENV_FILE" ADMIN_SESSION_SECRET 2>/dev/null || true)"
+  git_rev="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+
+  printf "Configuration Summary for '%s' (%s):\n\n" "$INSTANCE" "$INSTANCE_DIR"
+  printf "  %-24s %s\n" "Git Commit:" "$git_rev"
+  printf "  %-24s %s\n" "Default Locale:" "$locale"
+  printf "  %-24s %s\n" "Delivery Mode:" "$mode"
+  printf "  %-24s %s:%s%s\n" "Mini App Endpoint:" "$w_bind" "$w_port" "${w_url:+ ($w_url)}"
+  printf "  %-24s %s:%s%s\n" "Webhook Endpoint:" "$h_bind" "$h_port" "${h_url:+ ($h_url)}"
+  printf "  %-24s 127.0.0.1:%s/readyz\n" "Internal Health Probe:" "$hc_port"
+  printf "  %-24s %s (user: %s)\n" "PostgreSQL Database:" "$db_name" "$db_user"
+  printf "  %-24s %s\n" "Support Destination:" "${sup_url:-(default admin chat)}"
+  printf "  %-24s %s\n" "BOT_TOKEN:" "$(mask_secret "$tok")"
+  printf "  %-24s %s\n" "PANEL_CREDENTIALS_KEY:" "$(mask_secret "$p_key")"
+  printf "  %-24s %s\n\n" "ADMIN_SESSION_SECRET:" "$(mask_secret "$a_key")"
 }
 
 validate_database_dump() {
@@ -575,6 +722,7 @@ verify_instance() {
 case "$COMMAND" in
   up)
     printf "Starting '%s'...\n" "$INSTANCE"
+    ensure_env_defaults
     ensure_mesh_resources
     if ! dc up -d --build --wait; then
       show_failure_diagnostics
@@ -595,18 +743,29 @@ case "$COMMAND" in
   verify)
     verify_instance
     ;;
+  env)
+    show_instance_env
+    ;;
   logs)
     dc logs --tail=100 "$@"
     ;;
   update)
     [[ -d "$INSTANCE_DIR/.git" ]] || die "Instance repository is not a Git checkout."
     printf "Updating '%s'...\n" "$INSTANCE"
+    old_commit="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
     git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" pull --ff-only
-    dc build bot
-    wait_for_stack
-    if [[ -w /usr/local/bin/rsbot || ( ! -e /usr/local/bin/rsbot && -w /usr/local/bin ) ]]; then
-      install -m 0755 "$INSTANCE_DIR/scripts/rsbot" /usr/local/bin/rsbot 2>/dev/null || true
+    new_commit="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+    sync_global_cli
+    ensure_env_defaults
+    if [[ "$old_commit" != "$new_commit" && "$old_commit" != "unknown" ]]; then
+      printf "Revision: %s -> %s\n" "$old_commit" "$new_commit"
+      git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" log --oneline -n 5 "${old_commit}..${new_commit}" 2>/dev/null || true
     fi
+    dc build bot
+    wait_for_stack db
+    dc run --rm --no-deps bot npm run db:migrate
+    wait_for_stack
+    "${DOCKER[@]}" image prune -f >/dev/null 2>&1 || true
     printf "Updated '%s' successfully.\n" "$INSTANCE"
     ;;
   backup)
@@ -732,6 +891,7 @@ case "$COMMAND" in
 
     if [[ "$bundle_restore" == true && -f "$restore_workspace/.env" ]]; then
       atomic_install_env "$restore_workspace/.env"
+      ensure_env_defaults
       printf 'Restored .env from the backup bundle.\n'
     elif [[ "$bundle_restore" == true ]]; then
       printf 'Backup bundle contained no .env; current .env was preserved.\n'

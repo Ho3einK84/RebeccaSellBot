@@ -187,6 +187,40 @@ describe('scripts/rsbot — full CLI execution under set -Eeuo pipefail', () => 
       'alpha (running) — webapp:4002 webhook:4000 [webhook] (https://alpha.example.com)'
     );
     expect(stdout).toContain('beta (running) — webapp:3002 webhook:3000 [polling]');
+
+    // Verify default instance shorthand (`rsbot env` auto-selects sole/main instance) and `rsbot all env`
+    const allEnv = await execFileAsync('bash', [RSBOT_PATH, 'all', 'env'], {
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH ?? '/usr/bin:/bin'}`,
+        RSBOT_BASE_PATH: baseDir,
+      },
+    });
+    expect(allEnv.stdout).toContain("Configuration Summary for 'alpha'");
+    expect(allEnv.stdout).toContain("Configuration Summary for 'beta'");
+  });
+
+  it('auto-resolves default instance (`main` or sole installed instance) when <instance> is omitted', async () => {
+    const baseDir = await makeTempDir('rsbot-shorthand-');
+    const instMain = path.join(baseDir, 'main');
+    await fs.mkdir(instMain, { recursive: true });
+    await fs.writeFile(
+      path.join(instMain, '.env'),
+      'BOT_TOKEN=123456789:ABCDEF_secret_token_1234567890\nDB_USER=rsbot_main\nDB_NAME=rsbot_main\nWEBAPP_HOST_PORT=3002\n',
+      { mode: 0o600 }
+    );
+    await fs.writeFile(path.join(instMain, 'docker-compose.yml'), 'services: {}\n');
+
+    const binDir = await createDockerStubBin();
+    const { stdout } = await execFileAsync('bash', [RSBOT_PATH, 'env'], {
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH ?? '/usr/bin:/bin'}`,
+        RSBOT_BASE_PATH: baseDir,
+      },
+    });
+    expect(stdout).toContain("Configuration Summary for 'main'");
+    expect(stdout).toContain('1234...7890');
   });
 
   it('runs `rsbot <instance> verify` end-to-end for healthy instance (custom HEALTH_CHECK_PORT) and cleanly reports non-zero errors without early set -e crash', async () => {
@@ -287,8 +321,13 @@ describe('install.sh — backup validation, config loading, and port discovery u
       cfgFile,
       [
         '# comment',
-        '  BOT_TOKEN = "123:abc"  ',
+        'NODE_ENV=production',
+        'INSTANCE_NAME=custom_inst',
+        '  BOT_TOKEN = "12345678:abcDEF_12345678901234567890"  ',
         "ADMIN_IDS='1001, 2002'",
+        'DATABASE_URL=postgres://pg_custom:secret_pass_1234@localhost:5432/db_custom',
+        'PANEL_CREDENTIALS_KEY=replace_with_a_random_64_character_hex_value',
+        'HEALTH_CHECK_PORT=3001',
         'WEBAPP_PORT=3002',
         'WEBAPP_HOST_PORT=13002\r',
       ].join('\n')
@@ -305,18 +344,23 @@ describe('install.sh — backup validation, config loading, and port discovery u
         INSTANCE_INPUT=""
         MANIFEST_INSTANCE="legacy_prod"
         load_config_file "${cfgFile}"
-        printf 'BOT=%s|ADMINS=%s|WHOST=%s|INST=%s|FREE=%s\\n' \
-          "$BOT_TOKEN" "$ADMIN_IDS" "$WEBAPP_HOST_PORT" "$(resolve_instance_name)" "$(find_next_safe_port ${occupiedPort} 1)"
+        printf 'BOT=%s|ADMINS=%s|WHOST=%s|INST=%s|DBU=%s|DBN=%s|PCK=%s|FREE=%s\\n' \
+          "$BOT_TOKEN" "$ADMIN_IDS" "$WEBAPP_HOST_PORT" "$(resolve_instance_name)" "$DB_USER" "$DB_NAME" "\${PANEL_CREDENTIALS_KEY:-empty}" "$(find_next_safe_port ${occupiedPort} 1)"
       `);
       const match = stdout
         .trim()
-        .match(/^BOT=(.*)\|ADMINS=(.*)\|WHOST=(.*)\|INST=(.*)\|FREE=(\d+)$/);
+        .match(
+          /^BOT=(.*)\|ADMINS=(.*)\|WHOST=(.*)\|INST=(.*)\|DBU=(.*)\|DBN=(.*)\|PCK=(.*)\|FREE=(\d+)$/
+        );
       expect(match).not.toBeNull();
-      expect(match![1]).toBe('123:abc');
+      expect(match![1]).toBe('12345678:abcDEF_12345678901234567890');
       expect(match![2]).toBe('1001, 2002');
       expect(match![3]).toBe('13002');
-      expect(match![4]).toBe('legacy_prod');
-      expect(Number(match![5])).toBeGreaterThan(occupiedPort);
+      expect(match![4]).toBe('custom_inst');
+      expect(match![5]).toBe('pg_custom');
+      expect(match![6]).toBe('db_custom');
+      expect(match![7]).toBe('empty');
+      expect(Number(match![8])).toBeGreaterThan(occupiedPort);
     } finally {
       await new Promise<void>((resolve) => blocker.close(() => resolve()));
     }

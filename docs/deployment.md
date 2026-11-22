@@ -1,12 +1,12 @@
 # RebeccaSellBot — Deployment & Operations Guide
 
-This guide covers production installation, multi-instance management with `rsbot`, reverse proxy integration (Caddy On-Demand TLS mesh and Nginx), and transactional disaster recovery.
+This guide covers production installation, single and multi-instance lifecycle management with `rsbot`, reverse proxy integration (Caddy On-Demand TLS mesh and static proxies), and transactional disaster recovery.
 
 ---
 
 ## 1. Prerequisites
 
-- **OS:** Ubuntu 22.04 LTS or 24.04 LTS (recommended)
+- **OS:** Ubuntu 22.04 LTS, Ubuntu 24.04 LTS (recommended), or Debian 12+
 - **Runtime:** Docker Engine 24+ and Docker Compose v2 (installed automatically by `install.sh` if absent)
 - **Resources:** 1 GB RAM minimum (2 GB recommended), 10 GB free disk
 - **Network:**
@@ -17,7 +17,15 @@ This guide covers production installation, multi-instance management with `rsbot
 
 ## 2. Installation
 
-### Option A: Interactive Setup (Recommended)
+### Option A: Guided 1-Command Setup (Recommended)
+
+Run directly via `curl` (interactive prompts automatically attach to `/dev/tty`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/install.sh | sudo bash
+```
+
+Or clone and run locally:
 
 ```bash
 git clone https://github.com/Ho3einK84/RebeccaSellBot.git
@@ -25,7 +33,7 @@ cd RebeccaSellBot
 ./install.sh
 ```
 
-The installer validates dependencies, prompts for `BOT_TOKEN` and `ADMIN_IDS`, generates `PANEL_CREDENTIALS_KEY` (`AES-256-GCM`), provisions the instance under `/opt/RebeccaSellBot/<instance>`, runs Drizzle migrations, and installs `/usr/local/bin/rsbot`.
+The installer verifies dependencies, prompts only for essential inputs (`BOT_TOKEN`, `ADMIN_IDS`, `DEFAULT_LOCALE`, and optional `WEBAPP_URL`), auto-generates database credentials and cryptographic secrets (`PANEL_CREDENTIALS_KEY`, `ADMIN_SESSION_SECRET`), provisions the instance under `/opt/RebeccaSellBot/<instance>`, runs Drizzle migrations, and installs `/usr/local/bin/rsbot`.
 
 ### Option B: Unattended Provisioning
 
@@ -33,9 +41,6 @@ The installer validates dependencies, prompts for `BOT_TOKEN` and `ADMIN_IDS`, g
 cat << 'EOF' > /root/rsbot.env
 BOT_TOKEN=123456789:AAExampleTelegramBotTokenHere
 ADMIN_IDS=123456789
-DB_USER=rsbot_main
-DB_PASSWORD=ChooseAStrong16CharPassword
-DB_NAME=rsbot_main
 DEFAULT_LOCALE=fa
 BOT_DELIVERY_MODE=polling
 EOF
@@ -47,48 +52,53 @@ curl -fsSL https://raw.githubusercontent.com/Ho3einK84/RebeccaSellBot/main/insta
 
 #### `install.sh` Options
 
-| Flag                      | Description                                                          | Default                 |
-| :------------------------ | :------------------------------------------------------------------- | :---------------------- |
-| `--instance <name>`       | Instance identifier (`[a-z0-9][a-z0-9_-]{0,31}`).                    | `main`                  |
-| `--from-backup <path>`    | Bootstrap and restore directly from a `.tar.gz` backup bundle.       | —                       |
-| `--env-file <path>`       | Pre-populated `KEY=value` environment file.                          | —                       |
-| `--repository <url>`      | Git repository URL (HTTPS or SSH).                                   | Official repo           |
-| `--access-method <m>`     | Repository auth mode: `public`, `ssh`, or `pat`.                     | `public`                |
-| `--ssh-key <path>`        | Private SSH deploy key path (when `--access-method ssh`).            | —                       |
-| `--webhook`               | Enable Telegram Webhook delivery mode.                               | Polling                 |
-| `--webhook-url <url>`     | Public HTTPS URL for Telegram webhook updates.                       | —                       |
-| `--webhook-secret <tok>`  | `X-Telegram-Bot-Api-Secret-Token` value.                             | Auto-generated          |
-| `--webhook-port <port>`   | Internal container webhook port.                                     | `3000`                  |
-| `--webhook-host-port <p>` | Host published webhook port for reverse proxy.                       | Auto-resolved (`3000`+) |
-| `--webapp-url <url>`      | Public HTTPS URL for the Telegram Mini App.                          | —                       |
-| `--webapp-port <port>`    | Internal container Fastify port.                                     | `3002`                  |
-| `--webapp-host-port <p>`  | Host published Mini App port.                                        | Auto-resolved (`3002`+) |
-| `--webapp-bind-host <ip>` | Host IP bound by published Mini App port.                            | `127.0.0.1`             |
-| `--admin-session-secret`  | 32+ char secret for Mini App admin JWT cookies.                      | Auto-generated          |
-| `--non-interactive`       | Never prompt; exit non-zero if required inputs are missing.          | `false`                 |
-| `--yes`                   | Overwrite existing instance `.env` without interactive confirmation. | `false`                 |
+| Flag                      | Description                                                           | Default                 |
+| :------------------------ | :-------------------------------------------------------------------- | :---------------------- |
+| `--instance <name>`       | Instance identifier (`[a-z0-9][a-z0-9_-]{0,31}`).                     | `main`                  |
+| `--env-file <path>`       | Pre-populated `KEY=value` environment file.                           | —                       |
+| `--from-backup <path>`    | Bootstrap and restore directly from a `.tar.gz` backup bundle.        | —                       |
+| `--update`                | Update an existing instance (delegates to `rsbot <instance> update`). | —                       |
+| `--uninstall`             | Uninstall an existing instance and its volumes.                       | —                       |
+| `--repository <url>`      | Git repository URL (HTTPS or SSH).                                    | Official repo           |
+| `--access-method <m>`     | Repository auth mode: `public`, `ssh`, or `pat`.                      | Auto-detected           |
+| `--ssh-key <path>`        | Private SSH deploy key path (when `--access-method ssh`).             | —                       |
+| `--webhook`               | Enable Telegram Webhook delivery mode.                                | Polling                 |
+| `--webhook-url <url>`     | Public HTTPS URL for Telegram webhook updates.                        | —                       |
+| `--webhook-secret <tok>`  | `X-Telegram-Bot-Api-Secret-Token` value.                              | Auto-generated          |
+| `--webhook-port <port>`   | Internal container webhook port.                                      | `3000`                  |
+| `--webhook-host-port <p>` | Host published webhook port for reverse proxy.                        | Auto-resolved (`3000`+) |
+| `--webapp-url <url>`      | Public HTTPS URL for the Telegram Mini App.                           | —                       |
+| `--webapp-port <port>`    | Internal container Fastify port.                                      | `3002`                  |
+| `--webapp-host-port <p>`  | Host published Mini App port.                                         | Auto-resolved (`3002`+) |
+| `--webapp-bind-host <ip>` | Host IP bound by published Mini App port.                             | `127.0.0.1`             |
+| `--admin-session-secret`  | 32+ char secret for Mini App admin JWT cookies.                       | Auto-generated          |
+| `--non-interactive`       | Never prompt; exit non-zero if required inputs are missing.           | `false`                 |
+| `--yes`, `-y`             | Overwrite existing instance `.env` without interactive confirmation.  | `false`                 |
 
 ---
 
-## 3. Multi-Instance Management (`rsbot`)
+## 3. Lifecycle & Multi-Instance Management (`rsbot`)
 
-All installed instances under `/opt/RebeccaSellBot/<instance>` are managed through `/usr/local/bin/rsbot`:
+All instances under `/opt/RebeccaSellBot/<instance>` are managed through `/usr/local/bin/rsbot`.
+When `<instance>` is omitted (e.g. `rsbot update`), `rsbot` automatically targets `main` (or the sole installed instance). Pass `all` as the instance name (e.g. `rsbot all update`) to run a command across every installed instance.
 
 | Command                            | Action                                                                                                              |
 | :--------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
 | `rsbot list`                       | List all instances, running state, published ports, delivery mode, and WebApp URL.                                  |
-| `rsbot <name> up`                  | Ensure mesh resources, build/start containers, and wait for health checks.                                          |
-| `rsbot <name> down`                | Stop containers while preserving PostgreSQL volumes and `.env`.                                                     |
-| `rsbot <name> restart`             | Restart instance containers and verify readiness.                                                                   |
-| `rsbot <name> status`              | Display container states and health status.                                                                         |
-| `rsbot <name> verify`              | Deep diagnostics: `.env` permissions (`0600`), port collisions, PostgreSQL readiness, and `/readyz` HTTP 200 probe. |
-| `rsbot <name> logs [-f]`           | View or follow (`-f`) container logs.                                                                               |
-| `rsbot <name> update`              | Pull latest Git commits, rebuild container image, apply SQL migrations, and verify `/readyz`.                       |
-| `rsbot <name> backup`              | Create a compressed `0600` backup bundle in `/opt/RebeccaSellBot/backups/<name>/`.                                  |
-| `rsbot <name> backups`             | List available backup archives with timestamps and sizes.                                                           |
-| `rsbot <name> prune-backups [N]`   | Retain the newest `N` backups (default: `14`) and remove older archives.                                            |
-| `rsbot <name> restore <file> [-y]` | Validate and restore a `.tar.gz` bundle (or legacy `.dump`) with automatic pre-restore rollback protection.         |
-| `rsbot <name> uninstall`           | Permanently remove the instance directory, containers, and database volume.                                         |
+| `rsbot [name] up`                  | Ensure `.env` defaults & mesh resources, build/start containers, and wait for health checks.                        |
+| `rsbot [name] down`                | Stop containers while preserving PostgreSQL volumes and `.env`.                                                     |
+| `rsbot [name] restart`             | Restart instance containers and verify readiness.                                                                   |
+| `rsbot [name] status`              | Display container states and health status.                                                                         |
+| `rsbot [name] verify`              | Deep diagnostics: `.env` permissions (`0600`), port collisions, PostgreSQL readiness, and `/readyz` HTTP 200 probe. |
+| `rsbot [name] env`                 | Display sanitized instance configuration, commit SHA, ports, and masked secret indicators.                          |
+| `rsbot [name] logs [-f]`           | View or follow (`-f`) container logs.                                                                               |
+| `rsbot [name] update`              | Pull latest Git commits, sync `/usr/local/bin/rsbot`, rebuild image, apply SQL migrations, and verify `/readyz`.    |
+| `rsbot [name] backup`              | Create a compressed `0600` backup bundle in `/opt/RebeccaSellBot/backups/<name>/`.                                  |
+| `rsbot [name] backups`             | List available backup archives with timestamps, git commits, and sizes.                                             |
+| `rsbot [name] prune-backups [N]`   | Retain the newest `N` backups (default: `14`) and remove older archives.                                            |
+| `rsbot [name] restore <file> [-y]` | Validate and restore a `.tar.gz` bundle (or legacy `.dump`) with automatic pre-restore rollback protection.         |
+| `rsbot [name] uninstall`           | Permanently remove the instance directory, containers, and database volume.                                         |
+| `rsbot all <cmd>`                  | Run `status`, `verify`, `update`, `backup`, `restart`, `up`, `down`, or `env` across all installed instances.       |
 
 ---
 
@@ -131,7 +141,7 @@ bot.example.com {
 
 ### Backup Bundle Layout (`.tar.gz`, mode `0600`)
 
-Every archive created by `rsbot <instance> backup` (or the automated in-bot backup job) contains:
+Every archive created by `rsbot backup` (or the automated in-bot backup job) contains:
 
 - `database.dump` — PostgreSQL custom-format dump (`pg_dump -Fc --no-owner --no-privileges`)
 - `.env` — Instance environment configuration (when `backup_include_env = true`)
@@ -140,7 +150,7 @@ Every archive created by `rsbot <instance> backup` (or the automated in-bot back
 
 ### Transactional Restore Flow
 
-Running `rsbot <instance> restore <bundle.tar.gz> -y`:
+Running `rsbot [instance] restore <bundle.tar.gz> -y`:
 
 1. **Archive Security Check:** Rejects archives containing symlinks, special device nodes, absolute paths, or `..` traversal, and verifies `manifest.txt` + `database.dump`.
 2. **Pre-Restore Safety Snapshot:** Automatically creates a `pre_restore_<instance>_<timestamp>.tar.gz` bundle before modifying any state.
