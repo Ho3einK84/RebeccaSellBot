@@ -72,35 +72,50 @@ This reference covers all environment variables (`.env`) validated by [`src/infr
 
 ---
 
-## 2. In-Bot Runtime Settings (`/admin` → Settings)
+## 2. In-Bot Runtime Settings (`/admin` → Settings & Sales)
 
-Runtime settings are persisted in the PostgreSQL `settings` table ([`TranslationCatalog.ts`](../src/domain/services/TranslationCatalog.ts) & [`FeatureSettings.ts`](../src/domain/services/FeatureSettings.ts)) and take effect immediately without restarting containers.
+Runtime settings are persisted in the PostgreSQL `settings` table ([`TranslationCatalog.ts`](../src/domain/services/TranslationCatalog.ts) & [`FeatureSettings.ts`](../src/domain/services/FeatureSettings.ts)) and take effect immediately without restarting containers. All sections below are managed via stateless `/admin` hubs (`adm:cfg` and `adm:sales`).
 
-### System, Language & Mini App (`system`)
+### General & Security (`adm:cfg:gen`)
 
-| Key                          | Default   | Description                                                                          |
-| :--------------------------- | :-------- | :----------------------------------------------------------------------------------- |
-| `bot_enabled`                | `'true'`  | Enables customer access. When `'false'`, non-admin users see the maintenance screen. |
-| `language_selection_enabled` | `'true'`  | Allows users to switch between Persian (`fa`) and English (`en`).                    |
-| `default_locale`             | `'fa'`    | Fallback locale (`'fa'` or `'en'`) for users without an explicit preference.         |
-| `webapp_enabled`             | `'false'` | Dynamically starts/stops the Mini App server and toggles the WebApp launch button.   |
-| `webapp_url`                 | `''`      | Public HTTPS URL registered in the multi-instance mesh registry when enabled in-bot. |
-| `require_phone_for_purchase` | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before paid checkouts. |
-| `phone_verify_iran_only`     | `'true'`  | Restricts phone verification to Iranian (`+98`) mobile numbers.                      |
+| Key                          | Default   | Description                                                                                                |
+| :--------------------------- | :-------- | :--------------------------------------------------------------------------------------------------------- |
+| `bot_enabled`                | `'true'`  | Enables customer access. When `'false'`, non-admin users see the maintenance screen.                       |
+| `language_selection_enabled` | `'true'`  | Allows users to switch between Persian (`fa`) and English (`en`).                                          |
+| `default_locale`             | `'fa'`    | Fallback locale (`'fa'` or `'en'`) for users without an explicit preference.                               |
+| `require_phone_for_purchase` | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before paid checkouts.                       |
+| `require_phone_for_trial`    | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before claiming a free trial.                |
+| `phone_verify_iran_only`     | `'true'`  | Restricts phone verification to Iranian (`+98`) mobile numbers.                                            |
+| `first_use_nudge_enabled`    | `'true'`  | Sends a one-time connection guide 24–72h after purchase if live traffic is still `0`.                      |
+| `expired_cleanup_enabled`    | `'false'` | Enables automated staged cleanup of long-expired subscriptions.                                            |
+| `expired_cleanup_grace_days` | `'14'`    | Days after expiration (`1–365`) before an unrenewed expired service is deleted.                            |
+| `expired_cleanup_warn_days`  | `'3,1'`   | Comma-separated warning thresholds (`firstWarn,lastWarn` days before deletion; `first > last`, `< grace`). |
+| `expired_cleanup_enabled_at` | `''`      | ISO timestamp auto-stamped when cleanup is toggled ON (safety floor for pre-existing expired configs).     |
 
-### Pricing, Lifecycle & Thresholds (`pricing`)
+### Web Mini App (`adm:cfg:web`)
 
-| Key                        | Default         | Description                                                                                                              |
-| :------------------------- | :-------------- | :----------------------------------------------------------------------------------------------------------------------- |
-| `packages_json`            | 4 starter plans | JSON array of fixed packages (`id`, `name`, `gbAmount`, `durationDays`, `price`, `categoryId`, `panelId`, `serviceId`).  |
-| `package_display_mode`     | `'specs'`       | Storefront package button label style.                                                                                   |
-| `on_hold_default_enabled`  | `'false'`       | Provisions new purchases in Rebecca `on_hold` mode (validity starts on first connection).                                |
-| `renewal_rollover_enabled` | `'true'`        | Carries remaining traffic quota and validity days over into renewed subscriptions.                                       |
-| `low_traffic_threshold_gb` | `'2'`           | Remaining quota threshold (GB) that triggers an automated low-traffic notification.                                      |
-| `expiry_warning_days`      | `'3'`           | Days before expiration that triggers an automated near-expiry notification.                                              |
-| `refund_window_hours`      | `'0'`           | Hours after purchase during which an unused subscription (`0` traffic) can be self-refunded (`0` disables self-refunds). |
+| Key              | Default   | Description                                                                                                                 |
+| :--------------- | :-------- | :-------------------------------------------------------------------------------------------------------------------------- |
+| `webapp_enabled` | `'false'` | Managed exclusively in **Settings → Web Mini App** (`adm:cfg:web`); dynamically starts/stops Fastify and toggles WebApp UI. |
+| `webapp_url`     | `''`      | Public HTTPS origin registered in the multi-instance mesh registry (includes pre-flight DNS check & dedicated SSL report).  |
 
-### Custom-Volume Plans (`custom_volume`)
+### Naming & Service Rules (`adm:cfg:svc` & `adm:pkg:*`)
+
+| Key                           | Default                              | Description                                                                                                               |
+| :---------------------------- | :----------------------------------- | :------------------------------------------------------------------------------------------------------------------------ |
+| `packages_json`               | 4 starter plans                      | JSON array of fixed packages managed via **Sales → Packages** (`adm:pkg:p:1`).                                            |
+| `package_display_mode`        | `'specs'`                            | Storefront package button label style (`'specs'` or `'name'`).                                                            |
+| `on_hold_default_enabled`     | `'false'`                            | Provisions new purchases in Rebecca `on_hold` mode (validity starts on first connection).                                 |
+| `renewal_rollover_enabled`    | `'true'`                             | Carries remaining traffic quota and validity days over into renewed subscriptions.                                        |
+| `low_traffic_threshold_gb`    | `'2'`                                | Remaining quota threshold (GB) that triggers an automated low-traffic notification.                                       |
+| `expiry_warning_days`         | `'3'`                                | Days before expiration that triggers an automated near-expiry notification.                                               |
+| `refund_window_hours`         | `'0'`                                | Hours after purchase during which an unused subscription (`0` traffic) can be self-refunded (`0` = **unlimited** window). |
+| `naming_mode`                 | `'custom'`                           | Username generation strategy (`'prefix_number'`, `'prefix_random'`, `'custom'`, etc.).                                    |
+| `naming_prefix`               | `'rebecca'`                          | Prefix token (`{prefix}`) injected into generated panel usernames.                                                        |
+| `custom_naming_template`      | `'{prefix}_{telegram_id}_{counter}'` | Pattern for generated usernames (with 6 one-tap presets and live preview).                                                |
+| `custom_service_name_enabled` | `'false'`                            | Prompts buyers to choose a custom English username (or skip for auto-generation) at checkout.                             |
+
+### Custom-Volume Plans (`adm:cv`)
 
 | Key                               | Default         | Description                                                                |
 | :-------------------------------- | :-------------- | :------------------------------------------------------------------------- |
@@ -113,63 +128,44 @@ Runtime settings are persisted in the PostgreSQL `settings` table ([`Translation
 | `custom_price_overrides_json`     | `'[]'`          | Exact GB/day price override rules JSON.                                    |
 | `custom_volume_target_json`       | `'{}'`          | Target Rebecca `panelId` and `serviceId` binding for custom-volume orders. |
 
-### Payments, Multi-Card & Receipt Security (`payment`)
+### Payments, Multi-Card & Receipt Security (`adm:cfg:pay` & `adm:bc:*`)
 
 | Key                                     | Default                  | Description                                                                                                      |
 | :-------------------------------------- | :----------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| `card_number`                           | `'6037997900000000'`     | Primary/fallback 16-digit bank card number for card-to-card top-ups.                                             |
+| `bank_cards_json`                       | `'[]'`                   | Multi-card rotation pool managed via `adm:bc:p:1` (`[{ id, cardNumber, cardHolder, enabled, dailyCapToman }]`).  |
+| `card_number`                           | `'6037997900000000'`     | Primary/fallback 16-digit bank card number for card-to-card top-ups (importable 1-tap into multi-card pool).     |
 | `card_holder`                           | `'Name'`                 | Cardholder name displayed alongside `card_number`.                                                               |
-| `bank_cards_json`                       | `'[]'`                   | Multi-card rotation pool (`[{ id, cardNumber, cardHolder, enabled, dailyCapToman }]`).                           |
+| `unique_topup_amount_enabled`           | `'false'`                | Adds a small collision-free offset to card top-up amounts to disambiguate concurrent transfers.                  |
 | `topup_min_amount` / `topup_max_amount` | `'10000'` / `'10000000'` | Minimum and maximum wallet top-up bounds in Tomans.                                                              |
 | `receipt_duplicate_policy`              | `'warn'`                 | Action on duplicate receipt (`SHA-256` or `file_unique_id` match): `'warn'` (flag banner) or `'block'` (reject). |
 | `wallet_transfer_enabled`               | `'true'`                 | Enables peer-to-peer wallet balance transfers between users.                                                     |
 | `wallet_transfer_min_amount`            | `'5000'`                 | Minimum peer-to-peer balance transfer amount in Tomans.                                                          |
 | `receipt_notify_enabled`                | `'true'`                 | Sends instant Telegram notifications to admins when a receipt is submitted.                                      |
-| `receipt_notify_mode`                   | `'full'`                 | Admin notification format (`'full'` media card or compact alert).                                                |
-| `receipt_notify_admins`                 | `''`                     | Optional subset of admin Telegram IDs to receive receipt alerts (empty = all admins).                            |
+| `receipt_notify_mode`                   | `'full'`                 | Admin notification format (`'full'` media card or `'simple'` compact alert).                                     |
+| `receipt_notify_admins`                 | `''`                     | Optional subset of admins (selected by name/username in `adm:cfg:pay:adm`; empty = all admins).                  |
 
-### Free Trial (`trial`)
+### Free Trial (`adm:trl`)
 
-| Key                       | Default   | Description                                                             |
-| :------------------------ | :-------- | :---------------------------------------------------------------------- |
-| `trial_enabled`           | `'true'`  | Enables one-time free trial claims for new users.                       |
-| `trial_gb`                | `'1'`     | Traffic quota (GB) allocated to trial subscriptions.                    |
-| `trial_days`              | `'3'`     | Validity duration (days) allocated to trial subscriptions.              |
-| `require_phone_for_trial` | `'false'` | Requires `HMAC-SHA256` phone verification before claiming a free trial. |
+| Key             | Default  | Description                                                                                         |
+| :-------------- | :------- | :-------------------------------------------------------------------------------------------------- |
+| `trial_enabled` | `'true'` | Enables one-time free trial claims for new users. (Phone verification gate lives in `adm:cfg:gen`.) |
+| `trial_gb`      | `'1'`    | Traffic quota (GB) allocated to trial subscriptions.                                                |
+| `trial_days`    | `'3'`    | Validity duration (days) allocated to trial subscriptions.                                          |
 
-### Service Naming (`naming`)
+### Growth & Rewards, Support & Backups (`adm:grw`, `adm:cfg:adm`, `adm:cfg:bak`)
 
-| Key                           | Default                              | Description                                                                                   |
-| :---------------------------- | :----------------------------------- | :-------------------------------------------------------------------------------------------- |
-| `naming_mode`                 | `'custom'`                           | Username generation strategy (`'prefix_number'`, `'random'`, `'custom'`, etc.).               |
-| `naming_prefix`               | `'rebecca'`                          | Prefix token (`{prefix}`) injected into generated panel usernames.                            |
-| `custom_naming_template`      | `'{prefix}_{telegram_id}_{counter}'` | Pattern for generated usernames.                                                              |
-| `custom_service_name_enabled` | `'false'`                            | Prompts buyers to choose a custom English username (or skip for auto-generation) at checkout. |
-
-### Retention & Expired Cleanup (`retention`)
-
-| Key                          | Default   | Description                                                                                            |
-| :--------------------------- | :-------- | :----------------------------------------------------------------------------------------------------- |
-| `first_use_nudge_enabled`    | `'true'`  | Sends a one-time connection guide 24–72h after purchase if live traffic is still `0`.                  |
-| `expired_cleanup_enabled`    | `'false'` | Enables automated staged cleanup of long-expired subscriptions.                                        |
-| `expired_cleanup_grace_days` | `'14'`    | Days after expiration (`1–365`) before an unrenewed expired service is deleted.                        |
-| `expired_cleanup_warn_days`  | `'3,1'`   | Comma-separated warning thresholds (`firstWarn,lastWarn` days before deletion).                        |
-| `expired_cleanup_enabled_at` | `''`      | ISO timestamp auto-stamped when cleanup is toggled ON (safety floor for pre-existing expired configs). |
-
-### Referral, Lucky Wheel, Support & Backups (`referral`, `lucky_wheel`, `support`, `backup`)
-
-| Key                                       | Default              | Description                                                                            |
-| :---------------------------------------- | :------------------- | :------------------------------------------------------------------------------------- |
-| `referral_bonus_toman`                    | `'10000'`            | Fixed bonus (Tomans) credited when a referred user completes their first purchase.     |
-| `cashback_percent`                        | `'5'`                | Percentage (`0–100`) of purchase amounts credited to the referrer.                     |
-| `lucky_wheel_enabled`                     | `'true'`             | Enables the gamified Lucky Wheel feature.                                              |
-| `lucky_wheel_min_amount` / `max_amount`   | `'1000'` / `'50000'` | Minimum and maximum wallet credit reward bounds on a winning spin.                     |
-| `lucky_wheel_base_luck_percent`           | `'50'`               | Base win probability (`1–100%`) on the first spin.                                     |
-| `lucky_wheel_decay_percent`               | `'10'`               | Win probability reduction (`0–100%`) per subsequent spin.                              |
-| `lucky_wheel_cooldown_hours`              | `'24'`               | Hours between spins (`1–720`).                                                         |
-| `lucky_wheel_max_spins`                   | `'5'`                | Maximum total spins allowed per user (`1–1000`).                                       |
-| `support_enabled` / `support_destination` | `'true'` / `''`      | Toggles the support button and sets the target `@username` or `https://t.me/...` link. |
-| `backup_enabled`                          | `'false'`            | Enables scheduled PostgreSQL + `.env` snapshot delivery via Telegram.                  |
-| `backup_interval_hours`                   | `'24'`               | Hours between automated backups (`1–720`).                                             |
-| `backup_target_chat_id`                   | `''`                 | Destination Telegram chat ID, supergroup ID, or `@channel` for backup archives.        |
-| `backup_include_env`                      | `'true'`             | Includes `.env` inside automated backup bundles.                                       |
+| Key                                       | Default              | Description                                                                             |
+| :---------------------------------------- | :------------------- | :-------------------------------------------------------------------------------------- |
+| `referral_bonus_toman`                    | `'10000'`            | Fixed bonus (Tomans) credited when a referred user completes their first purchase.      |
+| `cashback_percent`                        | `'5'`                | Percentage (`0–100`) of purchase amounts credited to the referrer.                      |
+| `lucky_wheel_enabled`                     | `'true'`             | Enables the gamified Lucky Wheel feature (managed inside **Sales → Growth & Rewards**). |
+| `lucky_wheel_min_amount` / `max_amount`   | `'1000'` / `'50000'` | Minimum and maximum wallet credit reward bounds on a winning spin.                      |
+| `lucky_wheel_base_luck_percent`           | `'50'`               | Base win probability (`1–100%`) on the first spin.                                      |
+| `lucky_wheel_decay_percent`               | `'10'`               | Win probability reduction (`0–100%`) per subsequent spin.                               |
+| `lucky_wheel_cooldown_hours`              | `'24'`               | Hours between spins (`1–720`).                                                          |
+| `lucky_wheel_max_spins`                   | `'5'`                | Maximum total spins allowed per user (`1–1000`).                                        |
+| `support_enabled` / `support_destination` | `'true'` / `''`      | Toggles the support button and sets the target `@username` or `https://t.me/...` link.  |
+| `backup_enabled`                          | `'false'`            | Enables scheduled PostgreSQL + `.env` snapshot delivery via Telegram.                   |
+| `backup_interval_hours`                   | `'24'`               | Hours between automated backups (`1–720`).                                              |
+| `backup_target_chat_id`                   | `''`                 | Destination Telegram chat ID, supergroup ID, or `@channel` for backup archives.         |
+| `backup_include_env`                      | `'true'`             | Includes `.env` inside automated backup bundles.                                        |

@@ -18,48 +18,104 @@ Incoming Telegram Update
   │      ├─ Service Injection              (Attaches BotServices to ctx.services)
   │      ├─ Private Chat Gate              (Blocks non-private chats from user/financial flows)
   │      ├─ User Upsert & Locale Sync      (Caches ban status in WeakMap; resolves fa/en locale)
-  │      ├─ Admin Callback Firewall        (Blocks non-admins from admin:* / trial:* admin routes)
+  │      ├─ Admin Callback Firewall        (Blocks non-admins from adm:* and legacy admin callbacks)
   │      ├─ PostgresSessionAdapter         (Hydrates session from grammy_sessions)
   │      ├─ cleanChatUiMiddleware()        (Sweeps stale screens/prompts; protects artifacts)
   │      ├─ Ban Guard                      (Drops updates from banned users)
   │      └─ Maintenance Guard              (Shows maintenance notice when bot_enabled = false)
   │
-  ├─► 3. Conversation Engine (@grammyjs/conversations)
+  ├─► 3. Non-Blocking Pre-Conversation Layer
+  │      ├─ Early `ui:dismiss` Handler     (1-tap popover close even during active inputs/wizards)
+  │      └─ registerAdminInputMiddleware() (Postgres-backed `session.adminInput`, 5m TTL, auto-clears on nav)
+  │
+  ├─► 4. Conversation Engine (@grammyjs/conversations)
   │      ├─ conversationContextMiddleware  (Re-hydrates services & locale on replay)
   │      └─ Registered User & Admin Conversations
   │
-  ├─► 4. Rate Limit & Cooldown Guards      (rateLimitMiddleware + actionCooldown)
+  ├─► 5. Rate Limit & Cooldown Guards      (rateLimitMiddleware + actionCooldown)
   │
-  └─► 5. Feature Routers
+  └─► 6. Stateless Admin & Feature Routers
+         ├─ admin/* (`adm:*` router)       (1-tap Command Center, Sales Hub, Settings Hub, Texts, Quick Commands)
          ├─ coreRoutes & baseRoutes        (/start, /admin, /lang, trial claims, phone gate)
          ├─ purchaseRoutes & configRoutes  (Storefront, flash-sale checkouts, custom volume)
          ├─ subscriptions/routes           (Live status, QR popover, client links, sub rotation)
          ├─ luckyWheelRoutes               (Daily spin & prize ledger)
-         └─ admin/*                        (Receipts/voiding, users, panels, promos, broadcasts)
+         └─ features/admin/*               (Receipts/voiding, users, panels, orphans, promos, broadcasts)
 ```
 
 ---
 
-## 2. Clean-Chat UI Engine (`src/telegram/ui.ts`)
+## 2. Clean-Chat UI & Unified Design System (`src/telegram/ui.ts` & `designSystem.ts`)
 
 To prevent chat clutter while guaranteeing zero loss of payment or subscription records, every outbound message is tagged with one of four roles via `AsyncLocalStorage`:
 
-| Role               | Lifecycle Policy                                                                                   | Examples                                                                    |
-| :----------------- | :------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- |
-| **`screen`**       | Edited in-place via `renderUiScreen` (`editMessageText`) or replaced on navigation.                | Home dashboard, storefront catalog, admin menus.                            |
-| **`prompt`**       | Automatically deleted once the owning conversation step completes or cancels.                      | "Enter custom GB", "Send receipt photo", "Share contact".                   |
-| **`artifact`**     | **Immutable & Permanent (`rememberArtifactMessage`):** Never deleted or overwritten by UI cleanup. | Subscription links, QR codes, transaction receipts, trial credentials.      |
-| **`notification`** | Durable asynchronous alerts tracked separately from interactive screen navigation.                 | Low quota alerts, first-use nudges, expired-cleanup warnings, void notices. |
+| Role               | Lifecycle Policy                                                                                   | Examples                                                                                     |
+| :----------------- | :------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- |
+| **`screen`**       | Edited in-place via `renderScreen` (`editMessageText`) or replaced on navigation.                  | Home dashboard, storefront catalog, stateless `adm:*` screens.                               |
+| **`prompt`**       | Automatically deleted once the owning input or conversation step completes or cancels.             | "Enter custom GB", "Send receipt photo", "Share contact", `adminInput` prompts.              |
+| **`artifact`**     | **Immutable & Permanent (`rememberArtifactMessage`):** Never deleted or overwritten by UI cleanup. | Subscription links, QR codes, receipt push alerts, bulk promo code batches, test broadcasts. |
+| **`notification`** | Durable asynchronous alerts tracked separately from interactive screen navigation.                 | Low quota alerts, first-use nudges, expired-cleanup warnings, void notices.                  |
 
 ### UX Invariants
 
-- **Single-Tap Popover Dismiss (`ui:dismiss`):** Temporary overlays (e.g., QR code popovers or admin outage alerts) close in a single tap without sweeping the underlying screen.
-- **Digit Normalization (`normalizeInputDigits`):** All numeric inputs (amounts, GB, days, card numbers, phone numbers, warn days) automatically normalize Persian (`۰–۹`) and Arabic (`٠–٩`) numerals to ASCII (`0–9`).
-- **Zero Duplicate Status Emojis:** Status formatters emit a single canonical badge per state (`active`, `on_hold`, `limited`, `expired`, `disabled`).
+- **Unified Design System (`buildUserScreen` & `buildAdminScreen`):** Both user and admin screens share the same minimal RTL-safe layout (no Persian-breaking italic wrappers, Markdown-escaped `buildBreadcrumb`, inline `AdminScreenNotice` feedback banners, and vertically stacked destructive confirmation keyboards).
+- **Single-Tap Popover Dismiss (`ui:dismiss`):** Mounted ahead of `conversations()` and `adminInput` so temporary overlays (QR popovers, outage alerts, test broadcasts) always close in one tap without disturbing the active screen or prompt.
+- **Digit Normalization (`normalizeInputDigits`):** All numeric inputs (amounts, GB, days, card numbers, phone numbers, expiry dates, warn days) automatically normalize Persian (`۰–۹`) and Arabic (`٠–٩`) numerals to ASCII (`0–9`).
+- **Zero Duplicate Status Emojis:** Status formatters and empty-state builders strip duplicate leading emojis and emit a single canonical badge per state (`active`, `on_hold`, `limited`, `expired`, `disabled`, `healthy`, `warning`, `error`).
 
 ---
 
-## 3. Conversations Architecture (`src/telegram/conversations/`)
+## 3. Stateless Telegram Admin Architecture (`src/telegram/admin/`)
+
+All day-to-day administration runs on restart-proof, stateless `adm:*` routes backed by PostgreSQL session state instead of long-lived in-memory conversation loops:
+
+```text
+src/telegram/admin/
+├── adminNav.ts            (64-byte admCb builder, bounded adminNavStack [max 8], pagination & confirm keyboards)
+├── adminRouter.ts         (Stateless adm:* route registry, adm:back, adm:in:cancel, admin-aware fallback)
+├── adminInput.ts          (Non-blocking session.adminInput text engine — 5m TTL, inline retry, /cancel return)
+├── adminHome.ts           (1-tap Command Center adm:home, 60s cached panel health w/ 1.5s timeout,
+│                           adm:stats, 3×2 adm:sales hub, 7-item adm:cfg hub, adm:msg hub)
+├── adminCommands.ts       (BotCommandScopeChat sync for admins: /admin, /r, /u [query], /stats, /cancel)
+├── adminSalesRoutes.ts    (Stateless Packages & Categories, Custom Volume, Free Trial,
+│                           unified Growth & Rewards [Referral + Cashback + Lucky Wheel], Flash Discounts)
+├── adminSettingsRoutes.ts (Stateless General & Security w/ unified phone gate & cleanup preview,
+│                           Payment & named receipt notify admins, Bank Cards adm:bc:*,
+│                           Naming & Service Rules, Web Mini App w/ dedicated DNS/SSL screen,
+│                           Auto Backup, Admins & Support)
+└── adminTextsRoutes.ts    (Stateless FA/EN Bot Texts browser, search, live preview, inline editor)
+```
+
+### Key Admin Route Families (`adm:*`)
+
+| Route Prefix                   | Module & Capabilities                                                                                       |
+| :----------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| `adm:home` · `adm:stats`       | 1-tap Command Center with live KPIs/alerts, cached panel health, and real-time DB/panel latency stats.      |
+| `adm:rcpt:*`                   | Pending receipt queue (1-click approve, reject reasons, batch approve), searchable approved history & void. |
+| `adm:usr:*`                    | Paginated user list with filter tabs (`all`, `active_subs`, `has_balance`, `banned`), search, CRM & wallet. |
+| `adm:sales` · `adm:pkg:*`      | 3×2 Sales Hub, stateless Packages & Categories CRUD, Custom Volume (`adm:cv`), Free Trial (`adm:trl`).      |
+| `adm:prm:*` · `adm:dsc:*`      | Filterable Promo Center + single-card quick editor (`adm:prm:edit:*`); Flash Discounts w/ confirm guards.   |
+| `adm:grw` · `adm:grw:wheel`    | Unified Growth & Rewards card (Referral bonus, Cashback %, Lucky Wheel toggle & detailed odds settings).    |
+| `adm:pnl:*` · `adm:orp:*`      | Panel registry with direct orphan queue shortcut, live-panel disable confirm, note-aware Quick Assign.      |
+| `adm:msg` · `adm:msg:jobs:<p>` | Messaging Hub with active/recent broadcast job monitor, sleek progress bars, and confirmed cancellation.    |
+| `adm:cfg:*` · `adm:bc:*`       | 7-section unified Settings Hub (zero overlap for WebApp & phone verification) + stateless Bank Cards pool.  |
+| `adm:txt:*`                    | Stateless bilingual text catalog browser with current-value copy view, placeholder checks & live preview.   |
+
+### Power-Admin Quick Commands (`BotCommandScopeChat`)
+
+On startup (`syncAdminBotCommands` in [`src/index.ts`](../src/index.ts)), RebeccaSellBot registers an admin-only command menu for each ID in `adminIds` (while regular users only see `/start`):
+
+- `/admin` — Open the 1-tap Admin Command Center (clearing any stale transient input/secret state)
+- `/r` — Jump directly to the pending receipts queue (`adm:rcpt:q:1`)
+- `/u [query]` — Open a matching customer profile directly or launch user omnisearch
+- `/stats` — Open live revenue, subscriber, and panel health statistics (`adm:stats`)
+- `/cancel` — Cancel an active `adminInput` prompt and return directly to its parent screen
+
+---
+
+## 4. Conversations Architecture (`src/telegram/conversations/`)
+
+Interactive customer checkouts and select multi-step creation wizards continue to use `@grammyjs/conversations`:
 
 ```text
 src/telegram/conversations/
@@ -72,37 +128,26 @@ src/telegram/conversations/
 │   ├── promoConversation                (Promo & gift code redemption)
 │   ├── transferConfigConversation       (Peer-to-peer subscription ownership transfer)
 │   ├── transferBalanceConversation      (Peer-to-peer wallet balance transfer)
-│   └── verifyPhoneConversation          (requestContact flow with contact.user_id === ctx.from.id check)
+│   └── verifyPhoneConversation          (requestContact flow with ReplyKeyboard cleanup on exit)
 │
-└── adminConversations/
-    ├── wallet.ts
-    │   ├── topupConversation            (Card top-up receipt upload + SHA-256 & file_unique_id hashing)
-    │   └── adminSetBalanceConversation  (Admin credit/debit/set balance with audit reason)
-    ├── catalogDiscounts.ts              (Timed flash-sale CRUD + 1-tap Broadcast launch)
+└── adminConversations/                  (Multi-step creation flows & legacy callback compatibility)
+    ├── wallet.ts                        (topupConversation + adminSetBalanceConversation)
+    ├── promos.ts                        (Single & bulk promo creation w/ durable artifact output)
+    ├── messaging.ts                     (Segmented broadcast composer w/ artifact test & DM wizard)
     ├── lifecycle.ts                     (Admin subscription quota/expiry/service editors)
-    ├── promos.ts                        (Single/bulk promo creation, editing & search)
-    ├── messaging.ts                     (Segmented broadcasts, direct DMs, admin management)
-    ├── panels.ts                        (Multi-panel registry & service synchronization)
-    ├── texts.ts                         (In-bot FA/EN translation override editor)
-    └── settings/                        (Modular Admin Settings Center)
-        ├── catalog.ts & validation.ts   (11 typed groups: system, pricing, custom_volume, payment,
-        │                                 support, trial, referral, lucky_wheel, naming, retention, backup)
-        ├── packageManager.ts            (Packages & categories CRUD + panel/service binding)
-        ├── payment.ts                   (Primary card, multi-card pool bank_cards_json, duplicate policy)
-        ├── customVolume.ts              (Per-GB rates, tiers, bounds & target panel)
-        ├── trial.ts & referral.ts       (Trial quotas/phone gate & referral/cashback rates)
-        ├── luckyWheel.ts & naming.ts    (Spin odds/decay & username templates/custom naming)
-        └── backup.ts & webapp.ts        (Automated backup delivery & live Mini App activation)
+    ├── panels.ts & catalogDiscounts.ts  (Panel creation wizard & legacy discount compatibility)
+    ├── texts/                           (Shared catalog classifier, placeholder metadata & live preview)
+    └── settings/                        (Shared validation/catalog definitions & legacy compatibility)
 ```
 
 ### Zero-Secret Replay Rule
 
 > [!CAUTION]
-> `@grammyjs/conversations` serializes replay logs into `grammy_sessions`. Panel API keys and admin passwords are **never** read inside a conversation; they are captured by a dedicated one-shot handler in [`src/telegram/features/admin/panelRoutes.ts`](../src/telegram/features/admin/panelRoutes.ts), encrypted immediately with `CredentialCipher` (`AES-256-GCM`), and the user's plaintext message is deleted via `ctx.deleteMessage()`.
+> `@grammyjs/conversations` serializes replay logs into `grammy_sessions`. Panel API keys and admin passwords are **never** read inside a conversation; they are captured by a dedicated one-shot handler in [`src/telegram/features/admin/panelRoutes.ts`](../src/telegram/features/admin/panelRoutes.ts) (cleared automatically on `/admin`, `/start`, or 5-minute timeout), encrypted immediately with `CredentialCipher` (`AES-256-GCM`), and the plaintext message is deleted via `ctx.deleteMessage()`.
 
 ---
 
-## 4. Callback Data & Bilingual Localization
+## 5. Callback Data & Bilingual Localization
 
-- **64-Byte UTF-8 Callback Guard ([`callbackData.ts`](../src/telegram/callbackData.ts)):** Enforces Telegram's 64-byte `callback_data` ceiling at construction time. Compact prefixes (`buy:confirm:<id>`, `r:p:<cfg>:<idx>:<hash>`, `renew:open:<id>`, `ui:dismiss`) keep payloads well under the limit.
-- **100% Bilingual Catalog Parity:** Every key in [`TranslationCatalog.fa.ts`](../src/domain/services/TranslationCatalog.fa.ts) has an exact counterpart and matching `{placeholder}` set in [`TranslationCatalog.en.ts`](../src/domain/services/TranslationCatalog.en.ts), verified on every test run by [`tests/domain/TranslationService.test.ts`](../tests/domain/TranslationService.test.ts).
+- **64-Byte UTF-8 Callback Guard ([`callbackData.ts`](../src/telegram/callbackData.ts)):** Enforces Telegram's 64-byte `callback_data` ceiling at construction time. Compact prefixes (`adm:*`, `buy:confirm:<id>`, `r:p:<cfg>:<idx>:<hash>`, `renew:open:<id>`, `ui:dismiss`) keep payloads safely under the limit.
+- **100% Bilingual Catalog Parity & Zero Dead Keys:** Every key in [`TranslationCatalog.fa.ts`](../src/domain/services/TranslationCatalog.fa.ts) has an exact counterpart, matching `{placeholder}` set, deterministic text-editor category, and active production reference in [`TranslationCatalog.en.ts`](../src/domain/services/TranslationCatalog.en.ts), enforced on every run by [`tests/domain/TranslationService.test.ts`](../tests/domain/TranslationService.test.ts) and [`tests/telegram/adminPackageAndTextEditors.test.ts`](../tests/telegram/adminPackageAndTextEditors.test.ts).

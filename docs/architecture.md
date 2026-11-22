@@ -23,8 +23,8 @@ flowchart TD
 
     subgraph Core["RebeccaSellBot Application Core"]
         subgraph Delivery["Telegram Delivery Layer (src/telegram)"]
-            UI["UI Engine & Screen Manager\n(AsyncLocalStorage)"]
-            Routes["Feature Routes & Conversations"]
+            UI["UI Engine & Design System\n(AsyncLocalStorage)"]
+            Routes["Stateless Admin Router (adm:*)\nFeature Routes & Conversations"]
         end
 
         subgraph Domain["Domain Layer (src/domain/services)"]
@@ -133,7 +133,7 @@ If a process crashes or a network timeout occurs during Phase 2, the intent tran
 
 - Manages scheduled flash sales in `catalog_discounts` scoped to `'all'`, `'category'`, or `'package'` with `'percent'` or `'fixed'` reductions, optional `maxDiscountAmount` ceilings, and `startsAt` / `expiresAt` windows.
 - `PricingService` resolves the highest-savings active discount for both fixed packages and custom-volume quotes, returning `originalPrice`, `effectivePrice`, `activeDiscountTitle`, and `discountExpiresAt` across Telegram menus, checkout screens, and WebApp endpoints (`/api/user/packages`, `/api/user/quote`, `/api/user/checkout`).
-- Administrators can launch segmented broadcast announcements directly from the discount creation flow.
+- Administrators can edit individual discount fields (`CatalogDiscountService.updateDiscount`) and launch confirmed broadcast announcements directly from the discount detail screen (`adm:dsc:*`).
 
 ### HMAC-SHA256 Phone Verification (`ContactVerificationService.ts`)
 

@@ -27,26 +27,26 @@
 
 ## Documentation
 
-| Document                                                    | Scope                                                                                            |
-| :---------------------------------------------------------- | :----------------------------------------------------------------------------------------------- |
-| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga, 24-table PostgreSQL schema, and background workers. |
-| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, message roles, conversation flows, and callback routing.                |
-| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                    |
-| 🚀 **[Deployment & Operations](docs/deployment.md)**        | Interactive/unattended installation, `rsbot` CLI, Caddy On-Demand TLS mesh, and backups.         |
-| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, and database integrity rules.                    |
+| Document                                                    | Scope                                                                                                    |
+| :---------------------------------------------------------- | :------------------------------------------------------------------------------------------------------- |
+| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga, 24-table PostgreSQL schema, and background workers.         |
+| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, stateless `adm:*` admin router, non-blocking input engine, and callback guards. |
+| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                            |
+| 🚀 **[Deployment & Operations](docs/deployment.md)**        | Interactive/unattended installation, `rsbot` CLI, Caddy On-Demand TLS mesh, and backups.                 |
+| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, and database integrity rules.                            |
 
 ---
 
 ## Capabilities
 
-| Customer Experience                                                                                                                                              | Administration & Backoffice                                                                                                                                    |
-| :--------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🛒 **Instant Storefront:** Fixed packages, categorized plans, custom GB/day ordering, and optional buyer-chosen service names.                                   | 🌐 **Multi-Panel Fleet:** Connect multiple Rebecca panels at runtime (`AES-256-GCM` vault) and bind packages to specific services.                             |
-| 🔥 **Flash Sales & Promos:** Timed catalog discounts (strikethrough pricing + countdowns) and single/multi-use promo vouchers.                                   | 🛡️ **Receipt Security & Voiding:** `SHA-256` + `file_unique_id` duplicate receipt detection (`warn`/`block`), atomic receipt voiding, and multi-card rotation. |
-| 💳 **Wallet & P2P Transfers:** Card-to-card top-ups, unique payable amounts, and peer-to-peer balance or subscription transfers.                                 | 📊 **Telegram & Mini App CRM:** Real-time stats, user dossiers, balance adjustments, orphan reconciliation, and audit trails.                                  |
-| 📊 **Subscription Portal:** Live traffic/expiry gauges, QR codes, 1-tap client import links (Happ, v2rayNG, Streisand, Hiddify, Sing-box), and sub URL rotation. | 📢 **Growth & Retention:** Throttled segmented broadcasts, 24h first-use connection nudges, and staged expired-config cleanup with renewal warnings.           |
-| 🔄 **Lifecycle & Safeguards:** Start-on-first-use (`on_hold`), renewal quota/time rollover, auto-renewal, and unused-plan refunds.                               | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` Telegram contact verification for trials and purchases (zero raw phone storage).                       |
-| 🎰 **Loyalty & Bilingual UX:** Daily Lucky Wheel, referral bonuses, lifetime purchase cashback, and full Persian (`fa`) / English (`en`) localization.           | 📦 **Multi-Instance Operations:** Run isolated instances with automated Caddy On-Demand TLS mesh routing and transactional backups.                            |
+| Customer Experience                                                                                                                                              | Administration & Backoffice                                                                                                                                            |
+| :--------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🛒 **Instant Storefront:** Fixed packages, categorized plans, custom GB/day ordering, and optional buyer-chosen service names.                                   | 🌐 **Multi-Panel Fleet:** Connect multiple Rebecca panels at runtime (`AES-256-GCM` vault) and bind packages to specific services.                                     |
+| 🔥 **Flash Sales & Promos:** Timed catalog discounts (strikethrough pricing + countdowns) and single/multi-use promo vouchers.                                   | 🛡️ **Receipt Security & Voiding:** `SHA-256` + `file_unique_id` duplicate receipt detection (`warn`/`block`), atomic receipt voiding, and multi-card rotation.         |
+| 💳 **Wallet & P2P Transfers:** Card-to-card top-ups, unique payable amounts, and peer-to-peer balance or subscription transfers.                                 | 📊 **Telegram & Mini App CRM:** 1-tap stateless `/admin` command center (`/r`, `/u`, `/stats`), filterable dossiers, broadcast job monitor, and orphan reconciliation. |
+| 📊 **Subscription Portal:** Live traffic/expiry gauges, QR codes, 1-tap client import links (Happ, v2rayNG, Streisand, Hiddify, Sing-box), and sub URL rotation. | 📢 **Growth & Retention:** Throttled segmented broadcasts, 24h first-use connection nudges, and staged expired-config cleanup with renewal warnings.                   |
+| 🔄 **Lifecycle & Safeguards:** Start-on-first-use (`on_hold`), renewal quota/time rollover, auto-renewal, and unused-plan refunds.                               | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` Telegram contact verification for trials and purchases (zero raw phone storage).                               |
+| 🎰 **Loyalty & Bilingual UX:** Daily Lucky Wheel, referral bonuses, lifetime purchase cashback, and full Persian (`fa`) / English (`en`) localization.           | 📦 **Multi-Instance Operations:** Run isolated instances with automated Caddy On-Demand TLS mesh routing and transactional backups.                                    |
 
 ---
 
@@ -80,7 +80,7 @@ cd RebeccaSellBot
 ./install.sh
 ```
 
-The installer verifies Docker & Compose, generates encryption keys, provisions PostgreSQL, runs migrations, and installs the `/usr/local/bin/rsbot` CLI. Connect your Rebecca panels afterward via `/admin` → **Rebecca panels**.
+The installer verifies Docker & Compose, generates encryption keys, provisions PostgreSQL, runs migrations, and installs the `/usr/local/bin/rsbot` CLI. Connect your Rebecca panels afterward via `/admin` → **Panels**.
 
 ### 2. Unattended 1-Command Install
 
