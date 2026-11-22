@@ -34,6 +34,22 @@ export function useAdminUsers() {
     onSuccess: (_data, variables) => {
       triggerHaptic('success');
       void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'receipts'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.userDossier(variables.telegramId),
+      });
+    },
+    onError: () => {
+      triggerHaptic('error');
+    },
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: ({ telegramId, message }: { telegramId: number; message: string }) =>
+      api.sendAdminUserMessage(telegramId, { message }),
+    onSuccess: (_data, variables) => {
+      triggerHaptic('success');
       void queryClient.invalidateQueries({
         queryKey: queryKeys.userDossier(variables.telegramId),
       });
@@ -215,6 +231,8 @@ export function useAdminUsers() {
     dossierError: dossierQuery.error,
     adjustBalanceMutation,
     isAdjustingBalance: adjustBalanceMutation.isPending,
+    sendMessageMutation,
+    isSendingMessage: sendMessageMutation.isPending,
     banUserMutation,
     isBanningUser: banUserMutation.isPending,
     toggleConfigMutation,

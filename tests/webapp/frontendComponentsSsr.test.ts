@@ -27,6 +27,8 @@ import { AdminHeader } from '../../webapp/src/features/admin/components/AdminHea
 import { OverviewAnalytics } from '../../webapp/src/features/admin/overview/components/OverviewAnalytics.js';
 import { HealthBanner } from '../../webapp/src/features/admin/overview/components/HealthBanner.js';
 import { ModulesTab } from '../../webapp/src/features/admin/modules/ModulesTab.js';
+import { ReceiptCard } from '../../webapp/src/features/admin/receipts/components/ReceiptCard.js';
+import { PanelCard } from '../../webapp/src/features/admin/panels/components/PanelCard.js';
 import type { TelegramWebAppUser } from '../../webapp/src/shared/types/telegram.js';
 import type {
   UserConfigRecord,
@@ -286,11 +288,47 @@ describe('Webapp Unified Design System & Portal SSR Smoke Tests', () => {
           onSwitchToUserPortal: () => undefined,
         }),
         React.createElement(HealthBanner, {
-          panelHealth: { configured: 2, healthy: 2 },
+          panelHealth: { configured: 2, healthy: 2, latencyMs: 42 },
+          dbLatencyMs: 8,
           onSwitchToPanels: () => undefined,
         }),
         React.createElement(OverviewAnalytics, { stats: sampleStats }),
-        React.createElement(ModulesTab, { onSwitchTab: () => undefined })
+        React.createElement(ModulesTab, {
+          botUsername: 'rebecca_test_bot',
+          onOpenBankCards: () => undefined,
+          onOpenReceiptSettings: () => undefined,
+        }),
+        React.createElement(ReceiptCard, {
+          receipt: {
+            id: 'rec_1791234567890_a1b2c3',
+            telegramId: 55555,
+            amount: 100_000,
+            status: 'voided',
+            createdAt: '2026-11-22T10:00:00.000Z',
+            duplicateOfReceiptId: 'rec_1791234000000_x9y8z7',
+            voidReason: 'شارژ اشتباه',
+          },
+          onInspectUser: () => undefined,
+        }),
+        React.createElement(PanelCard, {
+          panel: {
+            id: 'panel_1',
+            name: 'DE Main',
+            baseUrl: 'https://panel.example.com',
+            enabled: true,
+            isDefault: true,
+            credentialConfigured: true,
+            credentialMode: 'api_key',
+            services: [{ serviceId: 1, name: 'Main', isDefault: true }],
+          },
+          onTest: () => undefined,
+          onEdit: () => undefined,
+          onManageServices: () => undefined,
+          onToggle: () => undefined,
+          onSetDefault: () => undefined,
+          onDelete: () => undefined,
+          isTesting: false,
+        })
       ),
       'fa'
     );
@@ -300,6 +338,13 @@ describe('Webapp Unified Design System & Portal SSR Smoke Tests', () => {
     expect(adminFaHtml).toContain('dir="ltr"');
     expect(adminFaHtml).toContain('۸۷٪');
     expect(adminFaHtml).toContain('سرویس تست رایگان');
+    expect(adminFaHtml).toContain('باز کردن در ربات');
+    expect(adminFaHtml).toContain('باطل‌شده');
+    expect(adminFaHtml).not.toContain('در انتظار بررسی');
+    expect(adminFaHtml).toContain('رسید تکراری');
+    expect(adminFaHtml).toContain('کلید API');
+    expect(adminFaHtml).not.toContain('>api_key<');
+    expect(adminFaHtml).toContain('۴۲ms');
   });
 
   it('renders upgraded purchase/renewal UX: categories, flash sale, expired dashboard attention, wallet deficit & gift card, and renewal modal', () => {

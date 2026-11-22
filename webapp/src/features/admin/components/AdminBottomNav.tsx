@@ -10,6 +10,8 @@ export interface TabConfig {
   icon: React.ComponentType<{ className?: string }>;
   count?: number;
   badgeTone?: 'brand' | 'warn' | 'danger';
+  dot?: boolean;
+  dotTone?: 'ok' | 'warn' | 'danger';
 }
 
 interface AdminBottomNavProps {
@@ -21,12 +23,17 @@ interface AdminBottomNavProps {
 /** Admin mobile navigation — thin adapter over the shared `BottomNav`. */
 export const AdminBottomNav: React.FC<AdminBottomNavProps> = ({ tabs, activeTab, onSelectTab }) => {
   const { t } = useLanguage();
-  const mobileItems = tabs.map(({ id, label, mobileLabel, icon, count }) => ({
-    id,
-    label: mobileLabel ?? label,
-    icon,
-    count,
-  }));
+  const mobileItems = tabs.map(
+    ({ id, label, mobileLabel, icon, count, badgeTone, dot, dotTone }) => ({
+      id,
+      label: mobileLabel ?? label,
+      icon,
+      count,
+      badgeTone,
+      dot,
+      dotTone,
+    })
+  );
 
   return (
     <BottomNav

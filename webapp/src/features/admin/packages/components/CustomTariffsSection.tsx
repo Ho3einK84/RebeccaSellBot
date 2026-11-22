@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   Info,
   Layers,
   Pencil,
@@ -109,6 +110,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
     refundWindowHours: String(policies.refundWindowHours),
   });
   const [policyIssues, setPolicyIssues] = useState<ValidationIssue[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     setCustomForm({
@@ -369,36 +371,43 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
             <p className="text-xs text-danger-fg m-0">{customError('defaultDays')}</p>
           )}
 
-          {/* Price per day — dashed & dimmed because buyers cannot select custom days yet */}
-          <div className="p-3 rounded-tile border border-dashed border-line-strong bg-surface-2/45 opacity-90 space-y-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <label htmlFor="custom-per-day" className="text-xs font-semibold text-ink-soft">
-                {t('admin.packages.custom.pricePerDayLabel')}
-              </label>
-              <Badge variant="outline" size="xs" className="border-dashed">
-                {t('admin.packages.custom.fixedDaysStatusBadge')}
-              </Badge>
+          {/* Price per day — shown inside Advanced mode (or when non-zero / invalid) */}
+          {(showAdvanced ||
+            settings.pricePerDay > 0 ||
+            customForm.pricePerDay.trim() !== '0' ||
+            Boolean(customError('pricePerDay'))) && (
+            <div className="p-3 rounded-tile border border-dashed border-line-strong bg-surface-2/45 opacity-90 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label htmlFor="custom-per-day" className="text-xs font-semibold text-ink-soft">
+                  {t('admin.packages.custom.pricePerDayLabel')}
+                </label>
+                <Badge variant="outline" size="xs" className="border-dashed">
+                  {t('admin.packages.custom.fixedDaysStatusBadge')}
+                </Badge>
+              </div>
+              <Input
+                id="custom-per-day"
+                dir="ltr"
+                inputMode="numeric"
+                className="tnum"
+                value={customForm.pricePerDay}
+                onChange={(e) =>
+                  setCustomForm((prev) => ({ ...prev, pricePerDay: e.target.value }))
+                }
+              />
+              {customError('pricePerDay') && (
+                <p className="text-xs text-danger-fg mt-1 m-0">{customError('pricePerDay')}</p>
+              )}
+              <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed m-0">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
+                <span>
+                  {t('admin.packages.custom.pricePerDayExplain', {
+                    days: formatNumber(effectiveDefaultDays),
+                  })}
+                </span>
+              </p>
             </div>
-            <Input
-              id="custom-per-day"
-              dir="ltr"
-              inputMode="numeric"
-              className="tnum"
-              value={customForm.pricePerDay}
-              onChange={(e) => setCustomForm((prev) => ({ ...prev, pricePerDay: e.target.value }))}
-            />
-            {customError('pricePerDay') && (
-              <p className="text-xs text-danger-fg mt-1 m-0">{customError('pricePerDay')}</p>
-            )}
-            <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed m-0">
-              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
-              <span>
-                {t('admin.packages.custom.pricePerDayExplain', {
-                  days: formatNumber(effectiveDefaultDays),
-                })}
-              </span>
-            </p>
-          </div>
+          )}
 
           {(livePerGb === 0 && livePerDay === 0) ||
           settings.warnings.includes('ZERO_BASE_RATES') ? (
@@ -509,408 +518,447 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
         </form>
       </Card>
 
-      {/* 2. Live Quote Simulator */}
-      <QuoteSimulatorCard
-        defaultGb={settings.minGb}
-        defaultDays={settings.defaultDays}
-        basePricePerGb={settings.pricePerGb}
-        basePricePerDay={settings.pricePerDay}
-        isSimulating={isSimulatingQuote}
-        result={quoteResult}
-        onSimulate={onSimulateQuote}
-      />
-
-      {/* 3. Volume Pricing Tiers */}
-      <Card padding="md" className="space-y-3 text-start">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0">
-            <IconTile tone="brand" size="sm">
-              <Layers />
-            </IconTile>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-ink m-0">
-                  {t('admin.packages.tiers.title')}
-                </h3>
-                <Badge variant="success" size="xs" dot>
-                  {t('admin.packages.tiers.liveBadge')}
-                </Badge>
-              </div>
-              <p className="text-[11px] text-ink-muted m-0">{t('admin.packages.tiers.subtitle')}</p>
-            </div>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={tiers.length >= maxRules}
-            onClick={onAddTier}
-          >
-            <Plus className="w-4 h-4" />
-            <span>{t('admin.packages.tiers.addButton')}</span>
-          </Button>
-        </div>
-
-        <AlertBanner tone="neutral">{t('admin.packages.tiers.sortNotice')}</AlertBanner>
-
-        {tiers.length === 0 ? (
-          <EmptyState
-            tone="brand"
-            icon={<Layers />}
-            title={t('admin.packages.tiers.emptyTitle')}
-            description={t('admin.packages.tiers.emptyDesc')}
-          />
-        ) : (
-          <div className="space-y-2">
-            {tiers.map((tier) => {
-              const effectivePerGb = computeTierEffectivePricePerGb(
-                {
-                  pricePerGb: tier.pricePerGb ?? undefined,
-                  discountPercent: tier.discountPercent ?? undefined,
-                },
-                settings.pricePerGb
-              );
-              const rangeLabel =
-                tier.maxGb != null
-                  ? t('admin.packages.tiers.rangeFormat', {
-                      min: formatNumber(tier.minGb),
-                      max: formatNumber(tier.maxGb),
-                    })
-                  : t('admin.packages.tiers.rangeOpenFormat', {
-                      min: formatNumber(tier.minGb),
-                    });
-
-              return (
-                <div
-                  key={tier.id}
-                  className="p-3 rounded-tile bg-surface-2 border border-line flex items-center justify-between gap-2 flex-wrap"
-                >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-ink tnum">{rangeLabel}</span>
-                      {tier.pricePerGb != null ? (
-                        <Badge variant="info" size="xs">
-                          {t('admin.packages.tiers.fixedRateBadge', {
-                            price: formatMoney(tier.pricePerGb),
-                          })}
-                        </Badge>
-                      ) : (
-                        <Badge variant="success" size="xs">
-                          {t('admin.packages.tiers.discountBadge', {
-                            percent: formatNumber(tier.discountPercent ?? 0),
-                          })}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-ink-muted flex-wrap">
-                      <span dir="ltr" className="font-mono">
-                        {tier.id}
-                      </span>
-                      <span className="tnum">
-                        → {formatMoney(effectivePerGb)} {t('admin.packages.card.perGbSuffix')}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 ms-auto">
-                    <Button variant="ghost" size="xs" onClick={() => onEditTier(tier)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="xs"
-                      onClick={() => onDeleteRule({ kind: 'tier', id: tier.id })}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      {/* 4. Custom Price Overrides */}
-      <Card padding="md" className="space-y-3 text-start">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0">
-            <IconTile tone="brand" size="sm">
-              <Sliders />
-            </IconTile>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-ink m-0">
-                  {t('admin.packages.overrides.title')}
-                </h3>
-                <Badge variant="outline" size="xs" className="border-dashed">
-                  {t('admin.packages.overrides.partialActiveBadge')}
-                </Badge>
-              </div>
-              <p className="text-[11px] text-ink-muted m-0">
-                {t('admin.packages.overrides.subtitle')}
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={overrides.length >= maxRules}
-            onClick={onAddOverride}
-          >
-            <Plus className="w-4 h-4" />
-            <span>{t('admin.packages.overrides.addButton')}</span>
-          </Button>
-        </div>
-
-        <AlertBanner tone="neutral" dashed>
-          {t('admin.packages.overrides.fixedDaysScopeNote', {
-            days: formatNumber(settings.defaultDays),
-          })}
-        </AlertBanner>
-
-        <AlertBanner tone="info">{t('admin.packages.overrides.priorityNotice')}</AlertBanner>
-
-        {overrides.length === 0 ? (
-          <EmptyState
-            tone="brand"
-            icon={<Sliders />}
-            title={t('admin.packages.overrides.emptyTitle')}
-            description={t('admin.packages.overrides.emptyDesc')}
-          />
-        ) : (
-          <div className="space-y-2">
-            {overrides.map((rule, idx) => {
-              const gbCond = formatOverrideRange(rule.minGb, rule.maxGb);
-              const daysCond = formatOverrideRange(rule.minDays, rule.maxDays);
-
-              return (
-                <div
-                  key={rule.id}
-                  className="p-3 rounded-tile bg-surface-2 border border-line flex items-start justify-between gap-2 flex-wrap"
-                >
-                  <div className="min-w-0 space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-surface-3 text-ink-soft tnum">
-                        #{formatNumber(idx + 1)}
-                      </span>
-                      <span dir="ltr" className="text-xs font-mono font-semibold text-ink">
-                        {rule.id}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <Badge variant="outline" size="xs">
-                        {gbCond
-                          ? t('admin.packages.overrides.gbRange', { range: gbCond })
-                          : t('admin.packages.overrides.conditionAllGb')}
-                      </Badge>
-                      <Badge variant="outline" size="xs" className="border-dashed opacity-75">
-                        {daysCond
-                          ? t('admin.packages.overrides.daysRange', { range: daysCond })
-                          : t('admin.packages.overrides.conditionAllDays')}
-                      </Badge>
-                      {rule.price != null && (
-                        <Badge variant="warning" size="xs">
-                          {t('admin.packages.overrides.fixedTotalBadge', {
-                            price: formatMoney(rule.price),
-                          })}
-                        </Badge>
-                      )}
-                      {rule.pricePerGb != null && (
-                        <Badge variant="info" size="xs">
-                          {t('admin.packages.overrides.ratePerGbBadge', {
-                            price: formatMoney(rule.pricePerGb),
-                          })}
-                        </Badge>
-                      )}
-                      {rule.pricePerDay != null && (
-                        <Badge variant="outline" size="xs" className="border-dashed opacity-80">
-                          {t('admin.packages.overrides.ratePerDayBadge', {
-                            price: formatMoney(rule.pricePerDay),
-                          })}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 ms-auto">
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      disabled={idx === 0 || isReorderingOverrides}
-                      onClick={() => onMoveOverride(rule, 'up')}
-                      aria-label={t('admin.packages.actions.moveUp')}
-                    >
-                      <ArrowUp className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      disabled={idx === overrides.length - 1 || isReorderingOverrides}
-                      onClick={() => onMoveOverride(rule, 'down')}
-                      aria-label={t('admin.packages.actions.moveDown')}
-                    >
-                      <ArrowDown className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="xs" onClick={() => onEditOverride(rule)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="xs"
-                      onClick={() => onDeleteRule({ kind: 'override', id: rule.id })}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      {/* 5. Storefront Display & Subscription Policies */}
-      <Card padding="md" className="space-y-4 text-start">
-        <div className="flex items-start gap-2.5">
-          <IconTile tone="ok" size="sm">
-            <ShieldCheck />
+      {/* Progressive Disclosure Accordion for Advanced Pricing Tools & Policies */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced((prev) => !prev)}
+        aria-expanded={showAdvanced}
+        className="w-full flex items-center justify-between gap-3 rounded-card border border-line bg-surface hover:bg-surface-2 px-4 py-3 text-start cursor-pointer rs-focus transition-colors shadow-[var(--shadow-card)]"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <IconTile tone="neutral" size="sm">
+            <Sliders />
           </IconTile>
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-bold text-ink m-0">
-                {t('admin.packages.policies.title')}
-              </h3>
-              <Badge variant="success" size="xs" dot>
-                {t('admin.packages.policies.liveBadge')}
-              </Badge>
+            <div className="text-xs sm:text-sm font-semibold text-ink truncate">
+              {t('admin.packages.custom.advancedToggle')}
             </div>
-            <p className="text-[11px] text-ink-muted mt-0.5 m-0">
-              {t('admin.packages.policies.subtitle')}
-            </p>
+            <div className="text-[11px] text-ink-muted tnum">
+              {t('admin.packages.custom.advancedSummary', {
+                tiers: formatNumber(tiers.length),
+                overrides: formatNumber(overrides.length),
+              })}
+            </div>
           </div>
         </div>
+        <ChevronDown
+          className={`w-4 h-4 text-ink-muted shrink-0 transition-transform duration-200 ${
+            showAdvanced ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
 
-        <form onSubmit={(e) => void handlePoliciesSubmit(e)} className="space-y-3.5">
-          <div>
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5">
-              <span className="text-xs font-semibold text-ink-soft">
-                {t('admin.packages.policies.displayModeLabel')}
-              </span>
-              <Badge variant="outline" size="xs">
-                {t('admin.packages.policies.telegramOnlyBadge')}
-              </Badge>
-            </div>
-            <SegmentedControl
-              options={displayModeOptions}
-              value={policiesForm.packageDisplayMode}
-              onChange={(mode) =>
-                setPoliciesForm((prev) => ({ ...prev, packageDisplayMode: mode }))
-              }
-              role="group"
-              ariaLabel={t('admin.packages.policies.displayModeLabel')}
-            />
-            <p className="text-[11px] text-ink-muted mt-1 m-0">
-              {t('admin.packages.policies.displayModeHint')}
-            </p>
-          </div>
+      {showAdvanced && (
+        <div className="space-y-4">
+          {/* 2. Live Quote Simulator */}
+          <QuoteSimulatorCard
+            defaultGb={settings.minGb}
+            defaultDays={settings.defaultDays}
+            basePricePerGb={settings.pricePerGb}
+            basePricePerDay={settings.pricePerDay}
+            isSimulating={isSimulatingQuote}
+            result={quoteResult}
+            onSimulate={onSimulateQuote}
+          />
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label
-                htmlFor="policy-low-traffic"
-                className="block text-xs font-semibold text-ink-soft mb-1"
+          {/* 3. Volume Pricing Tiers */}
+          <Card padding="md" className="space-y-3 text-start">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 min-w-0">
+                <IconTile tone="brand" size="sm">
+                  <Layers />
+                </IconTile>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-ink m-0">
+                      {t('admin.packages.tiers.title')}
+                    </h3>
+                    <Badge variant="success" size="xs" dot>
+                      {t('admin.packages.tiers.liveBadge')}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-ink-muted m-0">
+                    {t('admin.packages.tiers.subtitle')}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={tiers.length >= maxRules}
+                onClick={onAddTier}
               >
-                {t('admin.packages.policies.lowTrafficLabel')}
-              </label>
-              <Input
-                id="policy-low-traffic"
-                dir="ltr"
-                inputMode="decimal"
-                className="tnum"
-                value={policiesForm.lowTrafficThresholdGb}
-                onChange={(e) =>
-                  setPoliciesForm((prev) => ({ ...prev, lowTrafficThresholdGb: e.target.value }))
-                }
-              />
-              <p className="text-[11px] text-ink-muted mt-1 m-0">
-                {t('admin.packages.policies.lowTrafficHint')}
-              </p>
-              {policyError('lowTrafficThresholdGb') && (
-                <p className="text-xs text-danger-fg mt-1 m-0">
-                  {policyError('lowTrafficThresholdGb')}
-                </p>
-              )}
+                <Plus className="w-4 h-4" />
+                <span>{t('admin.packages.tiers.addButton')}</span>
+              </Button>
             </div>
 
-            <div>
-              <label
-                htmlFor="policy-expiry-days"
-                className="block text-xs font-semibold text-ink-soft mb-1"
-              >
-                {t('admin.packages.policies.expiryWarningLabel')}
-              </label>
-              <Input
-                id="policy-expiry-days"
-                dir="ltr"
-                inputMode="numeric"
-                className="tnum"
-                value={policiesForm.expiryWarningDays}
-                onChange={(e) =>
-                  setPoliciesForm((prev) => ({ ...prev, expiryWarningDays: e.target.value }))
-                }
-              />
-              <p className="text-[11px] text-ink-muted mt-1 m-0">
-                {t('admin.packages.policies.expiryWarningHint')}
-              </p>
-              {policyError('expiryWarningDays') && (
-                <p className="text-xs text-danger-fg mt-1 m-0">
-                  {policyError('expiryWarningDays')}
-                </p>
-              )}
-            </div>
+            <AlertBanner tone="neutral">{t('admin.packages.tiers.sortNotice')}</AlertBanner>
 
-            <div>
-              <label
-                htmlFor="policy-refund-hours"
-                className="block text-xs font-semibold text-ink-soft mb-1"
-              >
-                {t('admin.packages.policies.refundWindowLabel')}
-              </label>
-              <Input
-                id="policy-refund-hours"
-                dir="ltr"
-                inputMode="numeric"
-                className="tnum"
-                value={policiesForm.refundWindowHours}
-                onChange={(e) =>
-                  setPoliciesForm((prev) => ({ ...prev, refundWindowHours: e.target.value }))
-                }
+            {tiers.length === 0 ? (
+              <EmptyState
+                tone="brand"
+                icon={<Layers />}
+                title={t('admin.packages.tiers.emptyTitle')}
+                description={t('admin.packages.tiers.emptyDesc')}
               />
-              <p className="text-[11px] text-ink-muted mt-1 m-0">
-                {t('admin.packages.policies.refundWindowHint')}
-              </p>
-              {policyError('refundWindowHours') && (
-                <p className="text-xs text-danger-fg mt-1 m-0">
-                  {policyError('refundWindowHours')}
-                </p>
-              )}
-            </div>
-          </div>
+            ) : (
+              <div className="space-y-2">
+                {tiers.map((tier) => {
+                  const effectivePerGb = computeTierEffectivePricePerGb(
+                    {
+                      pricePerGb: tier.pricePerGb ?? undefined,
+                      discountPercent: tier.discountPercent ?? undefined,
+                    },
+                    settings.pricePerGb
+                  );
+                  const rangeLabel =
+                    tier.maxGb != null
+                      ? t('admin.packages.tiers.rangeFormat', {
+                          min: formatNumber(tier.minGb),
+                          max: formatNumber(tier.maxGb),
+                        })
+                      : t('admin.packages.tiers.rangeOpenFormat', {
+                          min: formatNumber(tier.minGb),
+                        });
 
-          <div className="flex items-center justify-end gap-2.5 flex-wrap">
-            {isPoliciesDirty && (
-              <Badge variant="warning" size="xs">
-                {t('admin.packages.policies.dirtyNotice')}
-              </Badge>
+                  return (
+                    <div
+                      key={tier.id}
+                      className="p-3 rounded-tile bg-surface-2 border border-line flex items-center justify-between gap-2 flex-wrap"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-ink tnum">{rangeLabel}</span>
+                          {tier.pricePerGb != null ? (
+                            <Badge variant="info" size="xs">
+                              {t('admin.packages.tiers.fixedRateBadge', {
+                                price: formatMoney(tier.pricePerGb),
+                              })}
+                            </Badge>
+                          ) : (
+                            <Badge variant="success" size="xs">
+                              {t('admin.packages.tiers.discountBadge', {
+                                percent: formatNumber(tier.discountPercent ?? 0),
+                              })}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-ink-muted flex-wrap">
+                          <span dir="ltr" className="font-mono">
+                            {tier.id}
+                          </span>
+                          <span className="tnum">
+                            → {formatMoney(effectivePerGb)} {t('admin.packages.card.perGbSuffix')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 ms-auto">
+                        <Button variant="ghost" size="xs" onClick={() => onEditTier(tier)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="xs"
+                          onClick={() => onDeleteRule({ kind: 'tier', id: tier.id })}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
-            <Button type="submit" variant="primary" size="sm" loading={isUpdatingPolicies}>
-              <Save className="w-4 h-4" />
-              <span>{t('admin.packages.policies.savePolicies')}</span>
-            </Button>
-          </div>
-        </form>
-      </Card>
+          </Card>
+
+          {/* 4. Custom Price Overrides */}
+          <Card padding="md" className="space-y-3 text-start">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 min-w-0">
+                <IconTile tone="brand" size="sm">
+                  <Sliders />
+                </IconTile>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-ink m-0">
+                      {t('admin.packages.overrides.title')}
+                    </h3>
+                    <Badge variant="outline" size="xs" className="border-dashed">
+                      {t('admin.packages.overrides.partialActiveBadge')}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-ink-muted m-0">
+                    {t('admin.packages.overrides.subtitle')}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={overrides.length >= maxRules}
+                onClick={onAddOverride}
+              >
+                <Plus className="w-4 h-4" />
+                <span>{t('admin.packages.overrides.addButton')}</span>
+              </Button>
+            </div>
+
+            <AlertBanner tone="neutral" dashed>
+              {t('admin.packages.overrides.fixedDaysScopeNote', {
+                days: formatNumber(settings.defaultDays),
+              })}
+            </AlertBanner>
+
+            <AlertBanner tone="info">{t('admin.packages.overrides.priorityNotice')}</AlertBanner>
+
+            {overrides.length === 0 ? (
+              <EmptyState
+                tone="brand"
+                icon={<Sliders />}
+                title={t('admin.packages.overrides.emptyTitle')}
+                description={t('admin.packages.overrides.emptyDesc')}
+              />
+            ) : (
+              <div className="space-y-2">
+                {overrides.map((rule, idx) => {
+                  const gbCond = formatOverrideRange(rule.minGb, rule.maxGb);
+                  const daysCond = formatOverrideRange(rule.minDays, rule.maxDays);
+
+                  return (
+                    <div
+                      key={rule.id}
+                      className="p-3 rounded-tile bg-surface-2 border border-line flex items-start justify-between gap-2 flex-wrap"
+                    >
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-surface-3 text-ink-soft tnum">
+                            #{formatNumber(idx + 1)}
+                          </span>
+                          <span dir="ltr" className="text-xs font-mono font-semibold text-ink">
+                            {rule.id}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge variant="outline" size="xs">
+                            {gbCond
+                              ? t('admin.packages.overrides.gbRange', { range: gbCond })
+                              : t('admin.packages.overrides.conditionAllGb')}
+                          </Badge>
+                          <Badge variant="outline" size="xs" className="border-dashed opacity-75">
+                            {daysCond
+                              ? t('admin.packages.overrides.daysRange', { range: daysCond })
+                              : t('admin.packages.overrides.conditionAllDays')}
+                          </Badge>
+                          {rule.price != null && (
+                            <Badge variant="warning" size="xs">
+                              {t('admin.packages.overrides.fixedTotalBadge', {
+                                price: formatMoney(rule.price),
+                              })}
+                            </Badge>
+                          )}
+                          {rule.pricePerGb != null && (
+                            <Badge variant="info" size="xs">
+                              {t('admin.packages.overrides.ratePerGbBadge', {
+                                price: formatMoney(rule.pricePerGb),
+                              })}
+                            </Badge>
+                          )}
+                          {rule.pricePerDay != null && (
+                            <Badge variant="outline" size="xs" className="border-dashed opacity-80">
+                              {t('admin.packages.overrides.ratePerDayBadge', {
+                                price: formatMoney(rule.pricePerDay),
+                              })}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 ms-auto">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={idx === 0 || isReorderingOverrides}
+                          onClick={() => onMoveOverride(rule, 'up')}
+                          aria-label={t('admin.packages.actions.moveUp')}
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={idx === overrides.length - 1 || isReorderingOverrides}
+                          onClick={() => onMoveOverride(rule, 'down')}
+                          aria-label={t('admin.packages.actions.moveDown')}
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="xs" onClick={() => onEditOverride(rule)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="xs"
+                          onClick={() => onDeleteRule({ kind: 'override', id: rule.id })}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          {/* 5. Storefront Display & Subscription Policies */}
+          <Card padding="md" className="space-y-4 text-start">
+            <div className="flex items-start gap-2.5">
+              <IconTile tone="ok" size="sm">
+                <ShieldCheck />
+              </IconTile>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-ink m-0">
+                    {t('admin.packages.policies.title')}
+                  </h3>
+                  <Badge variant="success" size="xs" dot>
+                    {t('admin.packages.policies.liveBadge')}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-ink-muted mt-0.5 m-0">
+                  {t('admin.packages.policies.subtitle')}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={(e) => void handlePoliciesSubmit(e)} className="space-y-3.5">
+              <div>
+                <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5">
+                  <span className="text-xs font-semibold text-ink-soft">
+                    {t('admin.packages.policies.displayModeLabel')}
+                  </span>
+                  <Badge variant="outline" size="xs">
+                    {t('admin.packages.policies.telegramOnlyBadge')}
+                  </Badge>
+                </div>
+                <SegmentedControl
+                  options={displayModeOptions}
+                  value={policiesForm.packageDisplayMode}
+                  onChange={(mode) =>
+                    setPoliciesForm((prev) => ({ ...prev, packageDisplayMode: mode }))
+                  }
+                  role="group"
+                  ariaLabel={t('admin.packages.policies.displayModeLabel')}
+                />
+                <p className="text-[11px] text-ink-muted mt-1 m-0">
+                  {t('admin.packages.policies.displayModeHint')}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label
+                    htmlFor="policy-low-traffic"
+                    className="block text-xs font-semibold text-ink-soft mb-1"
+                  >
+                    {t('admin.packages.policies.lowTrafficLabel')}
+                  </label>
+                  <Input
+                    id="policy-low-traffic"
+                    dir="ltr"
+                    inputMode="decimal"
+                    className="tnum"
+                    value={policiesForm.lowTrafficThresholdGb}
+                    onChange={(e) =>
+                      setPoliciesForm((prev) => ({
+                        ...prev,
+                        lowTrafficThresholdGb: e.target.value,
+                      }))
+                    }
+                  />
+                  <p className="text-[11px] text-ink-muted mt-1 m-0">
+                    {t('admin.packages.policies.lowTrafficHint')}
+                  </p>
+                  {policyError('lowTrafficThresholdGb') && (
+                    <p className="text-xs text-danger-fg mt-1 m-0">
+                      {policyError('lowTrafficThresholdGb')}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="policy-expiry-days"
+                    className="block text-xs font-semibold text-ink-soft mb-1"
+                  >
+                    {t('admin.packages.policies.expiryWarningLabel')}
+                  </label>
+                  <Input
+                    id="policy-expiry-days"
+                    dir="ltr"
+                    inputMode="numeric"
+                    className="tnum"
+                    value={policiesForm.expiryWarningDays}
+                    onChange={(e) =>
+                      setPoliciesForm((prev) => ({ ...prev, expiryWarningDays: e.target.value }))
+                    }
+                  />
+                  <p className="text-[11px] text-ink-muted mt-1 m-0">
+                    {t('admin.packages.policies.expiryWarningHint')}
+                  </p>
+                  {policyError('expiryWarningDays') && (
+                    <p className="text-xs text-danger-fg mt-1 m-0">
+                      {policyError('expiryWarningDays')}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="policy-refund-hours"
+                    className="block text-xs font-semibold text-ink-soft mb-1"
+                  >
+                    {t('admin.packages.policies.refundWindowLabel')}
+                  </label>
+                  <Input
+                    id="policy-refund-hours"
+                    dir="ltr"
+                    inputMode="numeric"
+                    className="tnum"
+                    value={policiesForm.refundWindowHours}
+                    onChange={(e) =>
+                      setPoliciesForm((prev) => ({ ...prev, refundWindowHours: e.target.value }))
+                    }
+                  />
+                  <p className="text-[11px] text-ink-muted mt-1 m-0">
+                    {t('admin.packages.policies.refundWindowHint')}
+                  </p>
+                  {policyError('refundWindowHours') && (
+                    <p className="text-xs text-danger-fg mt-1 m-0">
+                      {policyError('refundWindowHours')}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 flex-wrap">
+                {isPoliciesDirty && (
+                  <Badge variant="warning" size="xs">
+                    {t('admin.packages.policies.dirtyNotice')}
+                  </Badge>
+                )}
+                <Button type="submit" variant="primary" size="sm" loading={isUpdatingPolicies}>
+                  <Save className="w-4 h-4" />
+                  <span>{t('admin.packages.policies.savePolicies')}</span>
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

@@ -25,7 +25,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatNumber, formatId } = useFormatters();
+  const { formatMoney, formatNumber, formatId, sanitizeDisplayName } = useFormatters();
 
   const [operation, setOperation] = useState<BalanceOperation>('add');
   const [amountStr, setAmountStr] = useState<string>('');
@@ -96,7 +96,7 @@ export const BalanceModal: React.FC<BalanceModalProps> = ({
       }
       subtitle={
         <div className="flex items-center gap-1.5 flex-wrap tnum text-brand-fg">
-          <span>{[user.firstName, user.lastName].filter(Boolean).join(' ') || '—'}</span>
+          <span>{sanitizeDisplayName(user.firstName, user.lastName, '—').displayName}</span>
           {user.username && <bdi dir="ltr">(@{user.username})</bdi>}
           <span className="opacity-40">·</span>
           <bdi dir="ltr">#{formatId(user.telegramId)}</bdi>

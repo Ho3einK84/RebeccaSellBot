@@ -45,8 +45,24 @@ export function formatCardNumberSpaced(raw: string): string {
   return cleaned.replace(/(\d{4})/g, '$1 ').trim();
 }
 
+/**
+ * Strip invisible/blank filler characters commonly used in Telegram display names
+ * (Hangul filler \u3164, Braille blank \u2800, zero-width & directional marks)
+ * so blank-looking names fall back cleanly just like the Telegram admin UI.
+ */
+const INVISIBLE_NAME_CHARS_RE =
+  /(?:\p{Cc}|\p{Cf}|\p{Zl}|\p{Zp}|\u034F|\u115F|\u1160|\u17B4|\u17B5|\u2800|\u3000|\u3164|\uFFA0)+/gu;
+
+export function formatReceiptShortId(receiptId: string): string {
+  const match = receiptId.match(/_([a-zA-Z0-9]{4,8})$/u);
+  if (match) return match[1]!;
+  return receiptId.length > 8 ? receiptId.slice(-6) : receiptId;
+}
+
 export function getAvatarChar(name?: string | null, username?: string | null): string {
-  const raw = (name || username || '').trim();
+  const cleanName = (name ?? '').replace(INVISIBLE_NAME_CHARS_RE, ' ').trim();
+  const cleanUsername = (username ?? '').replace(INVISIBLE_NAME_CHARS_RE, ' ').trim();
+  const raw = cleanName || cleanUsername;
   if (!raw) return '👤';
   const clean = raw.replace(/[\u200B-\u200F\uFEFF\u00AD\u2060-\u206F\uFFF0-\uFFFF]/g, '').trim();
   if (!clean) return '👤';
@@ -61,12 +77,18 @@ export function sanitizeDisplayName(
   lastName?: string | null,
   fallback = 'کاربر'
 ): { displayName: string; isMeaningful: boolean; initials: string } {
-  const rawName = [firstName, lastName].filter(Boolean).join(' ').trim();
+  const cleanFirst = (firstName ?? '')
+    .replace(INVISIBLE_NAME_CHARS_RE, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  const cleanLast = (lastName ?? '')
+    .replace(INVISIBLE_NAME_CHARS_RE, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  const rawName = [cleanFirst, cleanLast].filter(Boolean).join(' ').trim();
   const isMeaningful = rawName.replace(/[\s.,_\-!?:;~*#@^&()[\]{}|/\\]/g, '').length > 0;
   const displayName = isMeaningful ? rawName : fallback;
-  const initials = isMeaningful
-    ? ((firstName?.trim()?.[0] || '') + (lastName?.trim()?.[0] || '')).toUpperCase()
-    : '';
+  const initials = isMeaningful ? ((cleanFirst[0] || '') + (cleanLast[0] || '')).toUpperCase() : '';
 
   return { displayName, isMeaningful, initials };
 }

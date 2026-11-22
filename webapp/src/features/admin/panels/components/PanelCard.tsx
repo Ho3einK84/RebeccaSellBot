@@ -162,11 +162,15 @@ export const PanelCard: React.FC<PanelCardProps> = ({
           <span className={`block text-[11px] font-medium ${textMuted}`}>
             {t('admin.panels.authMode')}
           </span>
-          <div className="flex items-center gap-1.5 tnum">
+          <div className="flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-brand-fg shrink-0" />
-            <bdi dir="ltr" className={`font-mono ${textPrimary}`}>
-              {panel.credentialMode}
-            </bdi>
+            <span className={`font-medium ${textPrimary}`}>
+              {panel.credentialMode === 'api_key'
+                ? t('admin.panels.authModeApiKey')
+                : panel.credentialMode === 'password'
+                  ? t('admin.panels.authModePassword')
+                  : t('admin.panels.authModeNone')}
+            </span>
           </div>
         </Card>
       </div>

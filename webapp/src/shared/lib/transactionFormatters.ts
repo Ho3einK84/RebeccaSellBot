@@ -4,9 +4,13 @@ export type TransactionTypeTranslationKey =
   | 'user.wallet.typeRenewal'
   | 'user.wallet.typePurchase'
   | 'user.wallet.typeTopup'
+  | 'user.wallet.typeTopupVoid'
   | 'user.wallet.typeRefund'
   | 'user.wallet.typeCashback'
   | 'user.wallet.typeReferral'
+  | 'user.wallet.typePromo'
+  | 'user.wallet.typeLuckyWheel'
+  | 'user.wallet.typeTrial'
   | 'user.wallet.typeAdminAdjustment'
   | 'user.wallet.typeTransferSent'
   | 'user.wallet.typeTransferReceived'
@@ -36,12 +40,20 @@ export function getTransactionTypeLabel(
   switch (type) {
     case 'topup':
       return t('user.wallet.typeTopup');
+    case 'topup_void':
+      return t('user.wallet.typeTopupVoid');
     case 'refund':
       return t('user.wallet.typeRefund');
     case 'cashback':
       return t('user.wallet.typeCashback');
     case 'referral_bonus':
       return t('user.wallet.typeReferral');
+    case 'promo':
+      return t('user.wallet.typePromo');
+    case 'lucky_wheel':
+      return t('user.wallet.typeLuckyWheel');
+    case 'trial':
+      return t('user.wallet.typeTrial');
     case 'admin_adjustment':
       return t('user.wallet.typeAdminAdjustment');
     case 'transfer_sent':
@@ -147,10 +159,13 @@ export function formatTransactionDescription(
     return isFa ? `اعتبار هدیه با کد تخفیف: ${code}` : `Gift promo code credit: ${code}`;
   }
 
-  // 6. Top-up receipt approved
+  // 6. Top-up receipt approved / voided
   // e.g. "Top-up receipt approved by admin 123"
   if (/Top-up receipt approved/i.test(desc)) {
     return isFa ? 'تأیید فیش واریزی توسط پشتیبانی' : 'Deposit receipt approved by support';
+  }
+  if (/Void approved top-up receipt/i.test(desc)) {
+    return isFa ? 'ابطال رسید تأییدشده توسط مدیریت' : 'Approved receipt voided by admin';
   }
 
   // 7. Lucky wheel spin

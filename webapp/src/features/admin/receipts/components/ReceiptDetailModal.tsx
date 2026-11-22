@@ -9,6 +9,8 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertCircle,
+  AlertTriangle,
+  Ban,
   FileText,
   CreditCard,
 } from 'lucide-react';
@@ -20,6 +22,7 @@ import { Badge } from '@/shared/components/ui/Badge.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface ReceiptDetailModalProps {
@@ -27,6 +30,7 @@ interface ReceiptDetailModalProps {
   onClose: () => void;
   onApprove?: (receipt: TopupReceipt) => void;
   onReject?: (receipt: TopupReceipt) => void;
+  onVoid?: (receipt: TopupReceipt) => void;
   onViewPhoto?: (receipt: TopupReceipt) => void;
   onInspectUser?: (telegramId: number) => void;
   loading?: boolean;
@@ -37,12 +41,14 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   onClose,
   onApprove,
   onReject,
+  onVoid,
   onViewPhoto,
   onInspectUser,
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatId, formatIsoDate } = useFormatters();
+  const { formatMoney, formatId, formatIsoDate, formatReceiptShortId, sanitizeDisplayName } =
+    useFormatters();
   const { textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!receipt) return null;
@@ -50,11 +56,20 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   const isPending = receipt.status === 'pending';
   const isApproved = receipt.status === 'approved';
   const isRejected = receipt.status === 'rejected';
+  const isVoided = receipt.status === 'voided';
 
-  const userDisplayName =
-    [receipt.user?.firstName, receipt.user?.lastName].filter(Boolean).join(' ') ||
-    receipt.user?.username ||
-    `${t('common.idLabel')} ${formatId(receipt.telegramId)}`;
+  const { displayName: userDisplayName } = sanitizeDisplayName(
+    receipt.user?.firstName,
+    receipt.user?.lastName,
+    receipt.user?.username
+      ? `@${receipt.user.username}`
+      : `${t('common.idLabel')} ${formatId(receipt.telegramId)}`
+  );
+
+  const duplicateShortId = receipt.duplicateOfReceiptId
+    ? formatReceiptShortId(receipt.duplicateOfReceiptId)
+    : null;
+  const hasDuplicateWarning = Boolean(receipt.duplicateOfReceiptId || receipt.duplicateWarning);
 
   return (
     <Modal
@@ -63,7 +78,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
       title={t('admin.receipts.detailModalTitle')}
       subtitle={
         <bdi dir="ltr" className="tnum font-medium text-brand-fg">
-          #{formatId(receipt.id.slice(-8))}
+          #{formatReceiptShortId(receipt.id)}
         </bdi>
       }
       icon={
@@ -99,6 +114,29 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               <span>{t('admin.receipts.approve')}</span>
             </Button>
           </div>
+        ) : isApproved && onVoid ? (
+          <div className="flex gap-2.5">
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              className="flex-1"
+              onClick={() => onVoid(receipt)}
+              disabled={loading}
+            >
+              <Ban className="w-3.5 h-3.5" />
+              <span>{t('admin.receipts.voidBtn')}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="flex-1"
+              onClick={onClose}
+            >
+              {t('common.close')}
+            </Button>
+          </div>
         ) : (
           <Button type="button" variant="secondary" size="sm" block onClick={onClose}>
             {t('common.close')}
@@ -114,7 +152,9 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               ? 'bg-ok-soft border-ok/25'
               : isRejected
                 ? 'bg-danger-soft border-danger/25'
-                : 'bg-warn-soft border-warn/25'
+                : isVoided
+                  ? 'bg-surface-2 border-line-strong'
+                  : 'bg-warn-soft border-warn/25'
           }`}
         >
           <div className="space-y-1">
@@ -123,7 +163,13 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               <bdi
                 dir="ltr"
                 className={`text-xl sm:text-2xl font-bold tnum ${
-                  isApproved ? 'text-ok-fg' : isRejected ? 'text-danger-fg' : 'text-warn-fg'
+                  isApproved
+                    ? 'text-ok-fg'
+                    : isRejected
+                      ? 'text-danger-fg'
+                      : isVoided
+                        ? 'text-ink-muted line-through'
+                        : 'text-warn-fg'
                 }`}
               >
                 {formatMoney(receipt.amount)}
@@ -133,7 +179,9 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
           </div>
 
           <Badge
-            variant={isApproved ? 'success' : isRejected ? 'error' : 'warning'}
+            variant={
+              isApproved ? 'success' : isRejected ? 'error' : isVoided ? 'neutral' : 'warning'
+            }
             dot
             className="text-xs px-3 py-1 font-semibold"
           >
@@ -141,9 +189,19 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               ? t('common.statusApproved')
               : isRejected
                 ? t('common.statusRejected')
-                : t('common.statusPending')}
+                : isVoided
+                  ? t('common.statusVoided')
+                  : t('common.statusPending')}
           </Badge>
         </div>
+
+        {hasDuplicateWarning && (
+          <AlertBanner tone="warn" icon={<AlertTriangle />}>
+            {duplicateShortId
+              ? `${t('admin.receipts.duplicateWarningBadge')} — ${t('admin.receipts.duplicateOfLabel', { id: duplicateShortId })}`
+              : receipt.duplicateWarning || t('admin.receipts.duplicateWarningBadge')}
+          </AlertBanner>
+        )}
 
         {/* User Information Card */}
         <Card subCard padding="md" className="space-y-2.5 text-xs">
@@ -271,6 +329,38 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
               <span className="text-danger-fg text-xs bg-danger-soft border border-danger/20 p-2 rounded-ctl">
                 {receipt.rejectReason}
               </span>
+            </div>
+          )}
+
+          {isVoided && (receipt.voidedBy || receipt.voidedAt || receipt.voidReason) && (
+            <div className="flex flex-col gap-1.5 pt-2 border-t border-line">
+              {receipt.voidedBy && (
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className={`flex items-center gap-1.5 ${textMuted}`}>
+                    <Ban className="w-3.5 h-3.5 text-danger-fg" />
+                    <span>{t('admin.receipts.voidedBy')}</span>
+                  </span>
+                  <bdi dir="ltr" className={`tnum font-medium ${textPrimary}`}>
+                    #{formatId(receipt.voidedBy)}
+                  </bdi>
+                </div>
+              )}
+              {receipt.voidedAt && (
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className={`flex items-center gap-1.5 ${textMuted}`}>
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{t('admin.receipts.voidedAt')}</span>
+                  </span>
+                  <bdi dir="ltr" className={`tnum ${textSecondary}`}>
+                    {formatIsoDate(receipt.voidedAt)}
+                  </bdi>
+                </div>
+              )}
+              {receipt.voidReason && (
+                <span className="text-ink-soft text-xs bg-surface border border-line p-2 rounded-ctl">
+                  {t('admin.receipts.voidReason')}: {receipt.voidReason}
+                </span>
+              )}
             </div>
           )}
         </Card>

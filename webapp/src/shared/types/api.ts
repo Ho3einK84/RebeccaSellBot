@@ -9,6 +9,7 @@ import type {
   UserReceiptItem,
   UserConfigItem,
   UserTransactionItem,
+  UserAuditLogItem,
   PanelSummary,
   FleetSummary,
   BalanceOperation,
@@ -22,11 +23,13 @@ export interface AuthResponse {
   user: TelegramWebAppUser;
   locale?: SupportedLocale;
   languageSelectionEnabled?: boolean;
+  botUsername?: string;
 }
 
 export interface StatsResponse {
   stats: DashboardStats;
   panelHealth: PanelHealth;
+  dbLatencyMs?: number;
 }
 
 export interface ReceiptsResponse {
@@ -38,8 +41,9 @@ export interface ReceiptsResponse {
 }
 
 export interface ReceiptActionPayload {
-  action: 'approve' | 'reject';
+  action: 'approve' | 'reject' | 'void';
   reason?: string;
+  disablePurchasedConfigs?: boolean;
 }
 
 export interface BatchReceiptActionPayload {
@@ -56,10 +60,20 @@ export interface UsersResponse {
 
 export interface UserDossierResponse {
   summary: UserReportSummary;
+  isAdmin?: boolean;
   orders: UserOrder[];
   receipts: UserReceiptItem[];
   configs: UserConfigItem[];
   transactions: UserTransactionItem[];
+  auditLogs?: UserAuditLogItem[];
+}
+
+export interface SendUserMessagePayload {
+  message: string;
+}
+
+export interface SendUserMessageResponse {
+  success: boolean;
 }
 
 export interface BanUserPayload {

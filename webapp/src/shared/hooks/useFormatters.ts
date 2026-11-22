@@ -6,6 +6,7 @@ import {
   formatId as formatIdUtil,
   formatIsoDate as formatIsoDateUtil,
   formatBytes as formatBytesUtil,
+  formatReceiptShortId as formatReceiptShortIdUtil,
   getAvatarChar as getAvatarCharUtil,
   sanitizeDisplayName as sanitizeDisplayNameUtil,
   toPersianDigits as toPersianDigitsUtil,
@@ -46,6 +47,11 @@ export function useFormatters() {
     []
   );
 
+  const formatReceiptShortId = useCallback(
+    (receiptId: string) => formatIdUtil(formatReceiptShortIdUtil(receiptId), locale),
+    [locale]
+  );
+
   return {
     formatMoney,
     formatToman: formatMoney,
@@ -53,6 +59,7 @@ export function useFormatters() {
     formatId,
     formatIsoDate,
     formatBytes,
+    formatReceiptShortId,
     getAvatarChar,
     sanitizeDisplayName,
     toPersianDigits,

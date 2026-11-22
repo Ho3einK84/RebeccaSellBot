@@ -19,6 +19,10 @@ import {
   type RebeccaPanelRegistry,
   RebeccaPanelInUseError,
 } from '../../../domain/services/RebeccaPanelRegistry.js';
+import {
+  getCachedPanelHealth,
+  invalidatePanelHealthCache,
+} from '../../../domain/services/PanelHealthCache.js';
 import { RebeccaOriginDownError } from '../../../domain/services/RebeccaService.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
@@ -81,15 +85,32 @@ export function registerAdminRoutes(
     );
 
     // GET /api/admin/stats
-    adminScope.get('/api/admin/stats', async (_request, reply) => {
-      const [stats, panelHealth] = await Promise.all([
+    adminScope.get<{
+      Querystring: { refresh?: string };
+    }>('/api/admin/stats', async (request, reply) => {
+      const forceRefresh = request.query?.refresh === '1' || request.query?.refresh === 'true';
+      const dbStartedAt = performance.now();
+      const [stats, cachedPanelHealth] = await Promise.all([
         services.walletService.getDashboardStats().catch(() => null),
-        services.panelRegistry.healthSummary().catch(() => ({ configured: 0, healthy: 0 })),
+        getCachedPanelHealth(services.panelRegistry, {
+          timeoutMs: 2_500,
+          useCache: !forceRefresh,
+        }),
       ]);
+      const dbLatencyMs = Math.max(0, Math.round(performance.now() - dbStartedAt));
+      const panelHealth = cachedPanelHealth
+        ? {
+            configured: cachedPanelHealth.configured,
+            healthy: cachedPanelHealth.healthy,
+            allHealthy: cachedPanelHealth.allHealthy,
+            latencyMs: cachedPanelHealth.latencyMs,
+          }
+        : { configured: 0, healthy: 0, allHealthy: false, latencyMs: 0 };
 
       return reply.code(200).send({
         stats,
         panelHealth,
+        dbLatencyMs,
       });
     });
 
@@ -200,6 +221,20 @@ export function registerAdminRoutes(
               .filter((n) => Number.isSafeInteger(n) && n > 0);
 
       const allAdmins = services.adminService?.adminIds ?? services.adminIds ?? [];
+      const adminProfiles = await Promise.all(
+        allAdmins.map(async (id) => {
+          const profile =
+            typeof services.userService.findProfile === 'function'
+              ? await services.userService.findProfile(String(id)).catch(() => null)
+              : null;
+          return {
+            telegramId: id,
+            username: profile?.username ?? null,
+            firstName: profile?.firstName ?? null,
+            lastName: profile?.lastName ?? null,
+          };
+        })
+      );
 
       return reply.code(200).send({
         enabled,
@@ -207,6 +242,7 @@ export function registerAdminRoutes(
         duplicatePolicy,
         admins: selectedAdmins,
         allAdmins,
+        adminProfiles,
       });
     });
 
@@ -491,15 +527,6 @@ export function registerAdminRoutes(
           return reply.code(404).send({ error: 'Receipt not found or already processed' });
         }
 
-        await services.userService.recordAdminAction({
-          actorTelegramId: adminId,
-          action: 'topup_receipt_rejected_with_reason',
-          entityType: 'topup_receipt',
-          entityId: id,
-          targetTelegramId: result.telegramId,
-          metadata: { reason: trimmedReason },
-        });
-
         if (services.botApi && services.translationService) {
           try {
             await sendReceiptRejectionNotification(
@@ -594,7 +621,7 @@ export function registerAdminRoutes(
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const [ordersRes, receiptsRes, rawConfigs, txRes] = await Promise.all([
+      const [ordersRes, receiptsRes, rawConfigs, txRes, auditRes] = await Promise.all([
         services.userService.listOrdersForUser(telegramId, 1, 10),
         services.userService.listReceiptsForUser(telegramId, 1, 10),
         services.configService
@@ -603,7 +630,12 @@ export function registerAdminRoutes(
         services.userService
           .listTransactionsForUser(telegramId, 1, 15)
           .catch(() => ({ transactions: [] })),
+        typeof services.userService.listAuditLogsForUser === 'function'
+          ? services.userService.listAuditLogsForUser(telegramId, 1, 15).catch(() => ({ logs: [] }))
+          : Promise.resolve({ logs: [] }),
       ]);
+
+      const isAdmin = Boolean(services.adminService?.isAdmin(telegramId));
 
       const configs = rawConfigs.map((cfg) => {
         const panel = services.panelRegistry.getPanel(cfg.panelId);
@@ -626,11 +658,19 @@ export function registerAdminRoutes(
       });
 
       return reply.code(200).send({
-        summary,
+        summary: {
+          ...summary,
+          user: {
+            ...summary.user,
+            isAdmin,
+          },
+        },
+        isAdmin,
         orders: ordersRes.orders,
         receipts: receiptsRes.receipts,
         configs,
         transactions: txRes.transactions,
+        auditLogs: auditRes.logs,
       });
     });
 
@@ -661,6 +701,13 @@ export function registerAdminRoutes(
         const { isBanned, reason } = request.body;
         const adminId = request.userSession!.telegramId;
 
+        if (isBanned && services.adminService?.isAdmin(telegramId)) {
+          return reply.code(403).send({
+            error: 'Cannot ban an administrator',
+            code: 'CANNOT_BAN_ADMIN',
+          });
+        }
+
         const updated = await services.userService.setBanned(telegramId, isBanned, adminId);
         if (!updated) {
           return reply.code(404).send({ error: 'User not found' });
@@ -678,6 +725,64 @@ export function registerAdminRoutes(
         }
 
         return reply.code(200).send({ success: true, isBanned });
+      }
+    );
+
+    // POST /api/admin/users/:id/message
+    adminScope.post<{
+      Params: { id: string };
+      Body: { message: string };
+    }>(
+      '/api/admin/users/:id/message',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            required: ['message'],
+            properties: {
+              message: { type: 'string', minLength: 1, maxLength: 3800 },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const telegramId = Number(request.params.id);
+        if (!Number.isSafeInteger(telegramId) || telegramId <= 0) {
+          return reply.code(400).send({ error: 'Invalid user ID' });
+        }
+
+        const trimmedMessage = request.body.message?.trim();
+        if (!trimmedMessage) {
+          return reply.code(400).send({ error: 'Message text is required' });
+        }
+
+        if (!services.botApi) {
+          return reply.code(503).send({ error: 'Telegram bot API unavailable' });
+        }
+
+        const summary = await services.userService.getUserReportSummary(telegramId);
+        if (!summary) {
+          return reply.code(404).send({ error: 'User not found' });
+        }
+
+        try {
+          await services.botApi.sendMessage(telegramId, trimmedMessage);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Failed to deliver Telegram message';
+          return reply.code(502).send({ error: message });
+        }
+
+        const adminId = request.userSession!.telegramId;
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_direct_message',
+          entityType: 'telegram_user',
+          entityId: String(telegramId),
+          targetTelegramId: telegramId,
+          metadata: { length: trimmedMessage.length },
+        });
+
+        return reply.code(200).send({ success: true });
       }
     );
 
@@ -944,13 +1049,16 @@ export function registerAdminRoutes(
 
           try {
             if (panel.enabled && typeof services.panelRegistry.testConnection === 'function') {
-              const testRes = await services.panelRegistry.testConnection(panel.id);
+              const testRes = await withTimeout(
+                services.panelRegistry.testConnection(panel.id),
+                3_500
+              );
               healthy = testRes.ok;
               latencyMs = testRes.latencyMs;
             } else if (panel.enabled && typeof services.panelRegistry.getService === 'function') {
               const service = services.panelRegistry.getService(panel.id);
               const start = Date.now();
-              healthy = await service.checkHealth();
+              healthy = await withTimeout(service.checkHealth(), 3_500);
               latencyMs = Date.now() - start;
             } else if (!panel.enabled) {
               healthy = false;
@@ -1062,6 +1170,7 @@ export function registerAdminRoutes(
           serviceId: parsedServiceId,
           serviceName: serviceName?.trim() || 'سرویس اصلی',
         });
+        invalidatePanelHealthCache(services.panelRegistry);
 
         await services.userService.recordAdminAction({
           actorTelegramId: adminId,
@@ -1121,6 +1230,7 @@ export function registerAdminRoutes(
       const adminId = request.userSession!.telegramId;
       try {
         await services.panelRegistry.updatePanel(id, changes);
+        invalidatePanelHealthCache(services.panelRegistry);
         const auditMetadata: Record<string, unknown> = { ...changes };
         if ('apiKey' in auditMetadata) {
           auditMetadata.apiKey = changes.apiKey === null ? '[CLEARED]' : '[REDACTED]';
@@ -1152,6 +1262,7 @@ export function registerAdminRoutes(
       const adminId = request.userSession!.telegramId;
       try {
         await services.panelRegistry.setPanelEnabled(id, enabled);
+        invalidatePanelHealthCache(services.panelRegistry);
         await services.userService.recordAdminAction({
           actorTelegramId: adminId,
           action: 'admin_toggle_panel',
@@ -1198,6 +1309,7 @@ export function registerAdminRoutes(
       const adminId = request.userSession!.telegramId;
       try {
         await services.panelRegistry.deletePanel(id);
+        invalidatePanelHealthCache(services.panelRegistry);
         await services.userService.recordAdminAction({
           actorTelegramId: adminId,
           action: 'admin_delete_panel',
@@ -1219,6 +1331,7 @@ export function registerAdminRoutes(
       Params: { id: string };
     }>('/api/admin/panels/:id/test', async (request, reply) => {
       const { id } = request.params;
+      invalidatePanelHealthCache(services.panelRegistry);
       try {
         if (typeof services.panelRegistry.testConnection === 'function') {
           const testRes = await services.panelRegistry.testConnection(id);
@@ -1254,6 +1367,7 @@ export function registerAdminRoutes(
 
     // POST /api/admin/panels/test-all
     adminScope.post('/api/admin/panels/test-all', async (_request, reply) => {
+      invalidatePanelHealthCache(services.panelRegistry);
       const panels = services.panelRegistry.listPanels();
       const results: Record<string, { healthy: boolean; latencyMs?: number; error?: string }> = {};
 
@@ -1839,4 +1953,18 @@ function clampPositiveInt(raw: string | undefined, fallback: number, max: number
   const truncated = Math.trunc(parsed);
   if (!Number.isSafeInteger(truncated) || truncated < 1) return fallback;
   return Math.min(truncated, max);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('PANEL_HEALTH_TIMEOUT')), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 }

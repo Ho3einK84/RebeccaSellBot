@@ -19,6 +19,8 @@ import type {
   ApiErrorResponse,
   BanUserPayload,
   BanUserResponse,
+  SendUserMessagePayload,
+  SendUserMessageResponse,
   ToggleConfigResponse,
   RevokeSubUrlResponse,
   BatchReceiptActionPayload,
@@ -211,13 +213,14 @@ export const api = {
 
   fetchBlob: (url: string, options: RequestInit = {}): Promise<Blob> => requestBlob(url, options),
 
-  getAdminStats: (): Promise<StatsResponse> => request<StatsResponse>('/api/admin/stats'),
+  getAdminStats: (options?: { refresh?: boolean }): Promise<StatsResponse> =>
+    request<StatsResponse>(options?.refresh ? '/api/admin/stats?refresh=1' : '/api/admin/stats'),
 
   getAdminReceipts: (
     params: {
       page?: number;
       limit?: number;
-      status?: 'pending' | 'approved' | 'rejected' | 'all';
+      status?: 'pending' | 'approved' | 'rejected' | 'voided' | 'all';
       search?: string;
     } = {}
   ): Promise<ReceiptsResponse> => {
@@ -233,11 +236,14 @@ export const api = {
   performReceiptAction: (
     receiptId: string,
     payload: ReceiptActionPayload
-  ): Promise<{ success: boolean }> =>
-    request<{ success: boolean }>(`/api/admin/receipts/${encodeURIComponent(receiptId)}/action`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  ): Promise<{ success: boolean; result?: unknown }> =>
+    request<{ success: boolean; result?: unknown }>(
+      `/api/admin/receipts/${encodeURIComponent(receiptId)}/action`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
 
   performBatchReceiptAction: (
     payload: BatchReceiptActionPayload
@@ -253,6 +259,7 @@ export const api = {
   updateReceiptSettings: (payload: {
     enabled?: boolean;
     mode?: 'full' | 'simple';
+    duplicatePolicy?: 'warn' | 'block';
     admins?: number[];
   }): Promise<{ success: boolean }> =>
     request<{ success: boolean }>('/api/admin/receipts/settings', {
@@ -342,6 +349,15 @@ export const api = {
 
   banUser: (telegramId: number, payload: BanUserPayload): Promise<BanUserResponse> =>
     request<BanUserResponse>(`/api/admin/users/${telegramId}/ban`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  sendAdminUserMessage: (
+    telegramId: number,
+    payload: SendUserMessagePayload
+  ): Promise<SendUserMessageResponse> =>
+    request<SendUserMessageResponse>(`/api/admin/users/${telegramId}/message`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

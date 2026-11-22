@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Receipt, Users, Server, Package, Layers } from 'lucide-react';
+import { LayoutDashboard, Receipt, Users, Server, Package, Settings2 } from 'lucide-react';
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { OverviewTab } from './overview/OverviewTab.js';
 import { ReceiptsTab } from './receipts/ReceiptsTab.js';
@@ -8,27 +8,31 @@ import { PanelsTab } from './panels/PanelsTab.js';
 import { PackagesTab } from './packages/PackagesTab.js';
 import { ModulesTab } from './modules/ModulesTab.js';
 import { BankCardsModal } from './bankCards/BankCardsModal.js';
+import { ReceiptSettingsModal } from './receipts/components/ReceiptSettingsModal.js';
 import { AdminHeader } from './components/AdminHeader.js';
 import { AdminDesktopNav } from './components/AdminDesktopNav.js';
 import { AdminBottomNav, type TabConfig } from './components/AdminBottomNav.js';
-import { useAdminReceipts } from './receipts/hooks/useAdminReceipts.js';
 import { useAdminStats } from './overview/hooks/useAdminStats.js';
-import { useAdminPanels } from './panels/hooks/useAdminPanels.js';
 import { AppShell } from '@/shared/components/layout/AppShell.js';
 import { useToast } from '@/shared/components/ui/Toast.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
-import { minimizeOrCloseWebApp } from '@/shared/lib/telegramNavigation.js';
+import { queryKeys } from '@/shared/lib/queryKeys.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
 import type { TabType } from '@/shared/types/admin.js';
 
 interface AdminLayoutProps {
   user: TelegramWebAppUser;
+  botUsername?: string;
   onSwitchToUserPortal?: () => void;
 }
 
-export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPortal }) => {
+export const AdminLayout: React.FC<AdminLayoutProps> = ({
+  user,
+  botUsername,
+  onSwitchToUserPortal,
+}) => {
   const { t } = useLanguage();
   const { triggerHaptic } = useHaptic();
   const { notify } = useToast();
@@ -37,18 +41,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
   const [tabHistory, setTabHistory] = useState<TabType[]>(['overview']);
   const [inspectingUserId, setInspectingUserId] = useState<number | null>(null);
   const [isBankCardsModalOpen, setIsBankCardsModalOpen] = useState(false);
+  const [isReceiptSettingsModalOpen, setIsReceiptSettingsModalOpen] = useState(false);
 
-  // Queries for badge count and refresh handling
-  const { pendingCount, refetch: refetchReceipts } = useAdminReceipts();
-  const { refetch: refetchStats } = useAdminStats();
-  const { refetch: refetchPanels } = useAdminPanels();
+  // Single lightweight query drives both dashboard stats, pending badge count, and panel health indicator.
+  const { stats, panelHealth, forceRefresh: forceRefreshStats } = useAdminStats();
+  const pendingCount = stats?.pendingReceipts ?? 0;
+  const hasConfiguredPanels = Boolean(panelHealth && panelHealth.configured > 0);
+  const allPanelsHealthy = Boolean(
+    panelHealth && panelHealth.configured > 0 && panelHealth.healthy === panelHealth.configured
+  );
+
   const queryClient = useQueryClient();
   const isFetchingAdmin = useIsFetching({ queryKey: ['admin'] }) > 0;
-
-  const handleClose = () => {
-    triggerHaptic('medium');
-    minimizeOrCloseWebApp();
-  };
 
   const switchTab = (tab: TabType) => {
     if (tab === activeTab) return;
@@ -95,9 +99,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
 
   const handleRefresh = () => {
     triggerHaptic('light');
-    if (activeTab === 'overview') void refetchStats();
-    if (activeTab === 'receipts') void refetchReceipts();
-    if (activeTab === 'panels') void refetchPanels();
+    if (activeTab === 'overview') void forceRefreshStats();
+    if (activeTab === 'receipts') {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'receipts'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    }
+    if (activeTab === 'panels') {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+      void forceRefreshStats();
+    }
     if (activeTab === 'users') void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     if (activeTab === 'packages') {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'packages'] });
@@ -109,7 +119,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
     }
   };
 
-  const tabsConfig: TabConfig[] = [
+  // 5 primary operational tabs in mobile dock (matching UserPortal comfort);
+  // "More & Settings" lives cleanly in the mobile header icon & as the 6th desktop tab.
+  const primaryTabs: TabConfig[] = [
     {
       id: 'overview',
       label: t('admin.tabs.overview'),
@@ -131,22 +143,28 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
       icon: Users,
     },
     {
-      id: 'panels',
-      label: t('admin.tabs.panels'),
-      mobileLabel: t('admin.tabs.panelsShort'),
-      icon: Server,
-    },
-    {
       id: 'packages',
       label: t('admin.tabs.packages'),
       mobileLabel: t('admin.tabs.packagesShort'),
       icon: Package,
     },
     {
+      id: 'panels',
+      label: t('admin.tabs.panels'),
+      mobileLabel: t('admin.tabs.panelsShort'),
+      icon: Server,
+      dot: hasConfiguredPanels,
+      dotTone: allPanelsHealthy ? 'ok' : 'danger',
+    },
+  ];
+
+  const desktopTabs: TabConfig[] = [
+    ...primaryTabs,
+    {
       id: 'coming-soon',
       label: t('admin.tabs.comingSoon'),
       mobileLabel: t('admin.tabs.comingSoonShort'),
-      icon: Layers,
+      icon: Settings2,
     },
   ];
 
@@ -158,15 +176,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
           user={user}
           onRefresh={handleRefresh}
           isRefreshing={isFetchingAdmin}
-          onClose={handleClose}
           onSwitchToUserPortal={onSwitchToUserPortal}
+          onOpenMore={() => switchTab('coming-soon')}
+          isMoreActive={activeTab === 'coming-soon'}
         />
       }
       desktopNav={
-        <AdminDesktopNav tabs={tabsConfig} activeTab={activeTab} onSelectTab={switchTab} />
+        <AdminDesktopNav tabs={desktopTabs} activeTab={activeTab} onSelectTab={switchTab} />
       }
       transitionKey={activeTab}
-      bottomNav={<AdminBottomNav tabs={tabsConfig} activeTab={activeTab} onSelectTab={switchTab} />}
+      bottomNav={
+        <AdminBottomNav tabs={primaryTabs} activeTab={activeTab} onSelectTab={switchTab} />
+      }
     >
       {activeTab === 'overview' && <OverviewTab onSwitchTab={switchTab} />}
       {activeTab === 'receipts' && (
@@ -189,11 +210,20 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ user, onSwitchToUserPo
         <PackagesTab onNotify={(msg, type) => notify(msg, type ?? 'success')} />
       )}
       {activeTab === 'coming-soon' && (
-        <ModulesTab onSwitchTab={switchTab} onOpenBankCards={() => setIsBankCardsModalOpen(true)} />
+        <ModulesTab
+          botUsername={botUsername}
+          onOpenBankCards={() => setIsBankCardsModalOpen(true)}
+          onOpenReceiptSettings={() => setIsReceiptSettingsModalOpen(true)}
+        />
       )}
       <BankCardsModal
         isOpen={isBankCardsModalOpen}
         onClose={() => setIsBankCardsModalOpen(false)}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
+      <ReceiptSettingsModal
+        isOpen={isReceiptSettingsModalOpen}
+        onClose={() => setIsReceiptSettingsModalOpen(false)}
         onNotify={(msg, type) => notify(msg, type ?? 'success')}
       />
     </AppShell>

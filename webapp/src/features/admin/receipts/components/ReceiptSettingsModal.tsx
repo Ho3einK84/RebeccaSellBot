@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, Save, Check, Users, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Bell, Save, Check, Users, Loader2, ShieldAlert } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -22,12 +22,13 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
   onNotify,
 }) => {
   const { t } = useLanguage();
-  const { formatId } = useFormatters();
+  const { formatId, sanitizeDisplayName } = useFormatters();
   const { textPrimary, textSecondary, textMuted } = useThemeTokens();
   const { settings, isLoading, updateSettings, isUpdating } = useReceiptSettings(isOpen);
 
   const [enabled, setEnabled] = useState(true);
   const [mode, setMode] = useState<'full' | 'simple'>('full');
+  const [duplicatePolicy, setDuplicatePolicy] = useState<'warn' | 'block'>('warn');
   const [isAllAdmins, setIsAllAdmins] = useState(true);
   const [selectedAdmins, setSelectedAdmins] = useState<number[]>([]);
 
@@ -35,11 +36,17 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
     if (settings) {
       setEnabled(settings.enabled);
       setMode(settings.mode);
+      setDuplicatePolicy(settings.duplicatePolicy ?? 'warn');
       const hasSpecific = settings.admins && settings.admins.length > 0;
       setIsAllAdmins(!hasSpecific);
       setSelectedAdmins(settings.admins || []);
     }
   }, [settings, isOpen]);
+
+  const adminProfilesById = useMemo(
+    () => new Map((settings?.adminProfiles ?? []).map((p) => [p.telegramId, p])),
+    [settings?.adminProfiles]
+  );
 
   if (!isOpen) return null;
 
@@ -70,6 +77,7 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
       await updateSettings({
         enabled,
         mode,
+        duplicatePolicy,
         admins: isAllAdmins ? [] : selectedAdmins,
       });
       onNotify(t('admin.receipts.settingsSaveSuccess'), 'success');
@@ -189,6 +197,54 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
             </Card>
 
             <Card subCard padding="md" className="space-y-2.5">
+              <span className={`text-xs font-semibold flex items-center gap-1.5 ${textPrimary}`}>
+                <ShieldAlert className="w-3.5 h-3.5 text-warn-fg" />
+                <span>{t('admin.receipts.settingsDuplicatePolicyTitle')}</span>
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className={`p-3 rounded-tile border text-start cursor-pointer flex flex-col gap-1 rs-focus ${
+                    duplicatePolicy === 'warn'
+                      ? 'bg-warn-soft border-warn/35 text-warn-fg'
+                      : 'bg-surface border-line text-ink-soft hover:border-line-strong'
+                  }`}
+                  onClick={() => setDuplicatePolicy('warn')}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold">
+                      {t('admin.receipts.settingsDuplicateWarnTitle')}
+                    </span>
+                    {duplicatePolicy === 'warn' && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                  <span className="text-[11px] opacity-80">
+                    {t('admin.receipts.settingsDuplicateWarn')}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`p-3 rounded-tile border text-start cursor-pointer flex flex-col gap-1 rs-focus ${
+                    duplicatePolicy === 'block'
+                      ? 'bg-danger-soft border-danger/35 text-danger-fg'
+                      : 'bg-surface border-line text-ink-soft hover:border-line-strong'
+                  }`}
+                  onClick={() => setDuplicatePolicy('block')}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold">
+                      {t('admin.receipts.settingsDuplicateBlockTitle')}
+                    </span>
+                    {duplicatePolicy === 'block' && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                  <span className="text-[11px] opacity-80">
+                    {t('admin.receipts.settingsDuplicateBlock')}
+                  </span>
+                </button>
+              </div>
+            </Card>
+
+            <Card subCard padding="md" className="space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className={`text-xs font-semibold flex items-center gap-1.5 ${textPrimary}`}>
                   <Users className="w-3.5 h-3.5 text-brand-fg" />
@@ -214,22 +270,39 @@ export const ReceiptSettingsModal: React.FC<ReceiptSettingsModalProps> = ({
               <div className="space-y-1.5 pt-1">
                 {allAdmins.map((adminId) => {
                   const isChecked = !isAllAdmins && selectedAdmins.includes(adminId);
+                  const profile = adminProfilesById.get(adminId);
+                  const { displayName, isMeaningful } = sanitizeDisplayName(
+                    profile?.firstName,
+                    profile?.lastName,
+                    ''
+                  );
+                  const primaryLabel = profile?.username
+                    ? `@${profile.username}`
+                    : isMeaningful
+                      ? displayName
+                      : `#${formatId(adminId)}`;
+                  const showSubId = Boolean(profile?.username || isMeaningful);
                   return (
                     <button
                       type="button"
                       key={adminId}
-                      className={`w-full p-2.5 rounded-tile border flex items-center justify-between text-xs cursor-pointer rs-focus ${
+                      className={`w-full p-2.5 rounded-tile border flex items-center justify-between gap-2 text-xs cursor-pointer rs-focus ${
                         isChecked
                           ? 'bg-brand-soft border-brand/30 text-brand-fg font-semibold'
                           : 'bg-surface border-line text-ink-soft hover:border-line-strong'
                       }`}
                       onClick={() => handleToggleAdmin(adminId)}
                     >
-                      <bdi dir="ltr" className="tnum font-medium text-xs">
-                        #{formatId(adminId)}
-                      </bdi>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate font-medium text-xs">{primaryLabel}</span>
+                        {showSubId && (
+                          <bdi dir="ltr" className="tnum text-[11px] text-ink-muted shrink-0">
+                            #{formatId(adminId)}
+                          </bdi>
+                        )}
+                      </div>
                       <span
-                        className={`w-4 h-4 rounded-xs border flex items-center justify-center ${
+                        className={`w-4 h-4 rounded-xs border flex items-center justify-center shrink-0 ${
                           isChecked
                             ? 'bg-brand border-brand text-brand-ink'
                             : 'border-line-strong bg-surface-2'

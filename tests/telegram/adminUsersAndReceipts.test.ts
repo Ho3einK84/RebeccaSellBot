@@ -207,7 +207,11 @@ describe('Receipt rejection reasons: routes, i18n keys & 64-byte callbacks', () 
 
     await harness.sendCallback('rcpt:rej:rcpt_live_1:1:a', { userId: 1 });
 
-    expect(rejectTopup).toHaveBeenCalledWith('rcpt_live_1', 1);
+    expect(rejectTopup).toHaveBeenCalledWith(
+      'rcpt_live_1',
+      1,
+      'admin_receipt_reject_reason_amount_mismatch'
+    );
     const userNotice = harness.callsFor('sendMessage').find((c) => c.payload.chat_id === 555);
     expect(String(userNotice?.payload.text)).toContain(
       'receipt_result_rejected_reason_amount_mismatch'

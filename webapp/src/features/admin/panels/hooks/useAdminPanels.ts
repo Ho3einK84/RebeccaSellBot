@@ -20,6 +20,13 @@ export function useAdminPanels() {
     queryFn: () => api.getAdminPanels(),
   });
 
+  const invalidatePanelSurface = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'packages'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.customPricing });
+  };
+
   const testMutation = useMutation({
     mutationFn: (panelId: string) => {
       setTestingPanelId(panelId);
@@ -51,6 +58,7 @@ export function useAdminPanels() {
           };
         }
       );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
     },
     onError: () => {
       triggerHaptic('error');
@@ -88,6 +96,7 @@ export function useAdminPanels() {
         );
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
     },
     onError: () => {
       triggerHaptic('error');
@@ -101,8 +110,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');
@@ -116,7 +124,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');
@@ -130,8 +138,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');
@@ -145,7 +152,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');
@@ -159,8 +166,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');
@@ -174,7 +180,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');
@@ -188,7 +194,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');
@@ -202,7 +208,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');
@@ -216,7 +222,7 @@ export function useAdminPanels() {
     },
     onSuccess: () => {
       triggerHaptic('success');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
+      invalidatePanelSurface();
     },
     onError: () => {
       triggerHaptic('error');

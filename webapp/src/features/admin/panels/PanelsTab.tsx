@@ -10,6 +10,7 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  Power,
 } from 'lucide-react';
 import { useAdminPanels } from './hooks/useAdminPanels.js';
 import { PanelCard } from './components/PanelCard.js';
@@ -21,6 +22,7 @@ import { Card } from '@/shared/components/ui/Card.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { Modal } from '@/shared/components/ui/Modal.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/SegmentedControl.js';
 import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
@@ -76,6 +78,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
   const [editingPanel, setEditingPanel] = useState<PanelSummary | null>(null);
   const [servicesPanel, setServicesPanel] = useState<PanelSummary | null>(null);
   const [deletingPanel, setDeletingPanel] = useState<PanelSummary | null>(null);
+  const [disablingPanel, setDisablingPanel] = useState<PanelSummary | null>(null);
 
   // Filter state
   const [filter, setFilter] = useState<PanelFilter>('all');
@@ -477,7 +480,13 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
               onTest={(id) => void handleTestPanel(id)}
               onEdit={(target) => setEditingPanel(target)}
               onManageServices={(target) => setServicesPanel(target)}
-              onToggle={(id, enabled) => void handleToggle(id, enabled)}
+              onToggle={(id, enabled) => {
+                if (!enabled) {
+                  setDisablingPanel(p);
+                } else {
+                  void handleToggle(id, true);
+                }
+              }}
               onSetDefault={(id) => void handleSetDefault(id)}
               onDelete={(target) => setDeletingPanel(target)}
               isTesting={testingPanelId === p.id}
@@ -522,6 +531,50 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
         onConfirm={handleDeletePanel}
         loading={isDeleting}
       />
+
+      <Modal
+        isOpen={Boolean(disablingPanel)}
+        onClose={() => setDisablingPanel(null)}
+        maxWidth="sm"
+        closeOnBackdrop={togglingPanelId !== disablingPanel?.id}
+        title={t('admin.panels.disableConfirmTitle')}
+        icon={
+          <IconTile tone="warn" size="sm">
+            <Power />
+          </IconTile>
+        }
+        footer={
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setDisablingPanel(null)}
+              disabled={togglingPanelId === disablingPanel?.id}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              className="flex-1"
+              loading={togglingPanelId === disablingPanel?.id}
+              onClick={async () => {
+                if (!disablingPanel) return;
+                await handleToggle(disablingPanel.id, false);
+                setDisablingPanel(null);
+              }}
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span>{t('admin.panels.disableConfirmBtn')}</span>
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-xs leading-relaxed text-ink-soft m-0">
+          {t('admin.panels.disableConfirmBody', { name: disablingPanel?.name ?? '' })}
+        </p>
+      </Modal>
     </div>
   );
 };

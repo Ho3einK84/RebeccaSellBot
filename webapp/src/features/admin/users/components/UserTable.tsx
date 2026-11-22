@@ -27,7 +27,7 @@ export const UserTable: React.FC<UserTableProps> = ({
   isInspecting = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatNumber, formatId } = useFormatters();
+  const { formatMoney, formatNumber, formatId, sanitizeDisplayName } = useFormatters();
 
   return (
     <Card className="hidden md:block overflow-x-auto">
@@ -77,7 +77,15 @@ export const UserTable: React.FC<UserTableProps> = ({
                 </td>
                 <td className="py-3 px-4 font-medium text-ink">
                   <div className="flex items-center gap-2">
-                    <span>{[u.firstName, u.lastName].filter(Boolean).join(' ') || '—'}</span>
+                    <span>
+                      {
+                        sanitizeDisplayName(
+                          u.firstName,
+                          u.lastName,
+                          u.username ? `@${u.username}` : '—'
+                        ).displayName
+                      }
+                    </span>
                     {u.isBanned && (
                       <Badge variant="error" size="xs" className="shrink-0">
                         {t('admin.users.bannedBadge')}

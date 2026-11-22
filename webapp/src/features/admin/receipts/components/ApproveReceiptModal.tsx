@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Check } from 'lucide-react';
+import { CheckCircle2, Check, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useThemeTokens } from '@/shared/theme/useThemeTokens.js';
@@ -7,6 +7,7 @@ import { Modal } from '@/shared/components/ui/Modal.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import type { TopupReceipt } from '@/shared/types/admin.js';
 
 interface ApproveReceiptModalProps {
@@ -23,10 +24,15 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatId } = useFormatters();
+  const { formatMoney, formatId, formatReceiptShortId } = useFormatters();
   const { textPrimary, textSecondary, textMuted } = useThemeTokens();
 
   if (!receipt) return null;
+
+  const duplicateShortId = receipt.duplicateOfReceiptId
+    ? formatReceiptShortId(receipt.duplicateOfReceiptId)
+    : null;
+  const hasDuplicateWarning = Boolean(receipt.duplicateOfReceiptId || receipt.duplicateWarning);
 
   return (
     <Modal
@@ -66,6 +72,14 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
       }
     >
       <div className="space-y-4">
+        {hasDuplicateWarning && (
+          <AlertBanner tone="warn" icon={<AlertTriangle />}>
+            {duplicateShortId
+              ? `${t('admin.receipts.duplicateWarningBadge')} — ${t('admin.receipts.duplicateOfLabel', { id: duplicateShortId })}`
+              : receipt.duplicateWarning || t('admin.receipts.duplicateWarningBadge')}
+          </AlertBanner>
+        )}
+
         <p className={`text-xs leading-relaxed m-0 ${textSecondary}`}>
           {t('admin.receipts.approveConfirmBody', {
             amount: `${formatMoney(receipt.amount)} ${t('common.currency')}`,
@@ -82,7 +96,7 @@ export const ApproveReceiptModal: React.FC<ApproveReceiptModalProps> = ({
           <div className="flex justify-between gap-2">
             <span className={textMuted}>{t('common.receiptCode')}</span>
             <bdi dir="ltr" className={`tnum font-medium truncate ${textPrimary}`}>
-              #{formatId(receipt.id)}
+              #{formatReceiptShortId(receipt.id)}
             </bdi>
           </div>
         </Card>

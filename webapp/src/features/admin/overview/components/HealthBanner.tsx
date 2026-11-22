@@ -7,11 +7,16 @@ import type { PanelHealth } from '@/shared/types/admin.js';
 
 interface HealthBannerProps {
   panelHealth: PanelHealth | null;
+  dbLatencyMs?: number;
   onSwitchToPanels: () => void;
 }
 
 /** Compact matte health status bar that links directly to the Panels view. */
-export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitchToPanels }) => {
+export const HealthBanner: React.FC<HealthBannerProps> = ({
+  panelHealth,
+  dbLatencyMs,
+  onSwitchToPanels,
+}) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
 
@@ -21,6 +26,18 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
   const isHealthOk = !isUnconfigured && panelHealth.healthy === panelHealth.configured;
 
   const tone = isUnconfigured ? 'neutral' : isHealthOk ? 'ok' : 'danger';
+  const hasPanelLatency = typeof panelHealth.latencyMs === 'number' && panelHealth.latencyMs >= 0;
+  const hasDbLatency = typeof dbLatencyMs === 'number' && dbLatencyMs >= 0;
+  const latencyText = hasPanelLatency
+    ? hasDbLatency
+      ? t('admin.overview.latencyInfo', {
+          panelMs: formatNumber(panelHealth.latencyMs!),
+          dbMs: formatNumber(dbLatencyMs!),
+        })
+      : t('admin.overview.latencyPanelOnly', {
+          panelMs: formatNumber(panelHealth.latencyMs!),
+        })
+    : null;
 
   return (
     <button
@@ -61,11 +78,19 @@ export const HealthBanner: React.FC<HealthBannerProps> = ({ panelHealth, onSwitc
                 : t('admin.overview.panelHealthError')}
           </span>
         </span>
-        <span className="mt-0.5 block truncate text-xs text-ink-muted tnum">
-          {t('admin.overview.panelHealthSub', {
-            healthy: formatNumber(panelHealth.healthy),
-            configured: formatNumber(panelHealth.configured),
-          })}
+        <span className="mt-0.5 flex items-center gap-2 flex-wrap text-xs text-ink-muted tnum">
+          <span className="truncate">
+            {t('admin.overview.panelHealthSub', {
+              healthy: formatNumber(panelHealth.healthy),
+              configured: formatNumber(panelHealth.configured),
+            })}
+          </span>
+          {latencyText ? (
+            <>
+              <span className="opacity-40">·</span>
+              <span className="text-[11px] text-ink-muted/90">{latencyText}</span>
+            </>
+          ) : null}
         </span>
       </span>
 

@@ -136,7 +136,8 @@ describe('WebApp Server & Admin Routes', () => {
       expect(mockWalletService.approveTopup).toHaveBeenCalledWith('rec_1001', 12345);
     });
 
-    it('POST /api/admin/receipts/:id/action rejects receipt and records audit action', async () => {
+    it('POST /api/admin/receipts/:id/action rejects receipt via WalletService without duplicate audit action', async () => {
+      mockUserService.recordAdminAction.mockClear();
       const response = await app.inject({
         method: 'POST',
         url: '/api/admin/receipts/rec_1001/action',
@@ -150,7 +151,7 @@ describe('WebApp Server & Admin Routes', () => {
         12345,
         'Unreadable receipt screenshot'
       );
-      expect(mockUserService.recordAdminAction).toHaveBeenCalled();
+      expect(mockUserService.recordAdminAction).not.toHaveBeenCalled();
     });
 
     it('POST /api/admin/receipts/:id/action rejects without reason returns 400', async () => {
@@ -1103,6 +1104,150 @@ describe('WebApp Server & Admin Routes', () => {
       });
       expect(deleteRes.statusCode).toBe(200);
       expect(deleteRes.json().cards).toHaveLength(1);
+    });
+
+    it('blocks banning administrators with 403 CANNOT_BAN_ADMIN', async () => {
+      mockUserService.setBanned.mockClear();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users/12345/ban',
+        cookies: { session: getAdminToken() },
+        payload: { isBanned: true, reason: 'Self-ban attempt' },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({
+        error: 'Cannot ban an administrator',
+        code: 'CANNOT_BAN_ADMIN',
+      });
+      expect(mockUserService.setBanned).not.toHaveBeenCalled();
+    });
+
+    it('caches panelHealth on GET /api/admin/stats, exposes latencies, and refreshes on ?refresh=1', async () => {
+      mockPanelRegistry.healthSummary.mockClear();
+
+      const first = await app.inject({
+        method: 'GET',
+        url: '/api/admin/stats?refresh=1',
+        cookies: { session: getAdminToken() },
+      });
+      expect(first.statusCode).toBe(200);
+      const firstBody = first.json();
+      expect(typeof firstBody.dbLatencyMs).toBe('number');
+      expect(typeof firstBody.panelHealth.latencyMs).toBe('number');
+      expect(firstBody.panelHealth.allHealthy).toBe(true);
+      expect(mockPanelRegistry.healthSummary).toHaveBeenCalledTimes(1);
+
+      // Second call without refresh=1 reuses shared TTL cache
+      const cached = await app.inject({
+        method: 'GET',
+        url: '/api/admin/stats',
+        cookies: { session: getAdminToken() },
+      });
+      expect(cached.statusCode).toBe(200);
+      expect(mockPanelRegistry.healthSummary).toHaveBeenCalledTimes(1);
+
+      // Explicit ?refresh=1 bypasses cache
+      const forced = await app.inject({
+        method: 'GET',
+        url: '/api/admin/stats?refresh=1',
+        cookies: { session: getAdminToken() },
+      });
+      expect(forced.statusCode).toBe(200);
+      expect(mockPanelRegistry.healthSummary).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns named adminProfiles and duplicatePolicy in receipt settings and persists duplicatePolicy', async () => {
+      const getRes = await app.inject({
+        method: 'GET',
+        url: '/api/admin/receipts/settings',
+        cookies: { session: getAdminToken() },
+      });
+      expect(getRes.statusCode).toBe(200);
+      const data = getRes.json();
+      expect(data.duplicatePolicy).toBe('warn');
+      expect(Array.isArray(data.adminProfiles)).toBe(true);
+      expect(data.adminProfiles[0]).toMatchObject({ telegramId: 12345 });
+
+      const putRes = await app.inject({
+        method: 'PUT',
+        url: '/api/admin/receipts/settings',
+        cookies: { session: getAdminToken() },
+        payload: { duplicatePolicy: 'block' },
+      });
+      expect(putRes.statusCode).toBe(200);
+      expect(mockTranslationService.updateSetting).toHaveBeenCalledWith(
+        'receipt_duplicate_policy',
+        'block'
+      );
+    });
+
+    it('returns isAdmin and auditLogs in user dossier and delivers direct messages via POST /api/admin/users/:id/message', async () => {
+      (mockUserService as unknown as { listAuditLogsForUser?: unknown }).listAuditLogsForUser =
+        vi.fn(async () => ({
+          logs: [
+            {
+              id: 'audit_1',
+              actorTelegramId: 12345,
+              action: 'admin_balance_adjustment',
+              entityType: 'user_wallet',
+              entityId: '55555',
+              targetTelegramId: 55555,
+              metadata: null,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          total: 1,
+          totalPages: 1,
+          page: 1,
+        }));
+
+      const dossierRes = await app.inject({
+        method: 'GET',
+        url: '/api/admin/users/55555',
+        cookies: { session: getAdminToken() },
+      });
+      expect(dossierRes.statusCode).toBe(200);
+      const dossier = dossierRes.json();
+      expect(dossier.isAdmin).toBe(false);
+      expect(dossier.auditLogs).toHaveLength(1);
+      expect(dossier.auditLogs[0].action).toBe('admin_balance_adjustment');
+
+      // Without botApi configured, returns 503
+      const noBotRes = await app.inject({
+        method: 'POST',
+        url: '/api/admin/users/55555/message',
+        cookies: { session: getAdminToken() },
+        payload: { message: 'Hello from admin' },
+      });
+      expect(noBotRes.statusCode).toBe(503);
+
+      const sendMessage = vi.fn().mockResolvedValue({ message_id: 99 });
+      mockUserService.recordAdminAction.mockClear();
+      const dmApp = await createWebAppServer(mockConfig, {
+        ...mockServices,
+        botApi: { sendMessage } as unknown as NonNullable<typeof mockServices.botApi>,
+      });
+      try {
+        const dmToken = dmApp.jwt.sign({ telegramId: 12345, role: 'admin' });
+        const dmRes = await dmApp.inject({
+          method: 'POST',
+          url: '/api/admin/users/55555/message',
+          cookies: { session: dmToken },
+          payload: { message: 'سلام، سرویس شما بررسی شد.' },
+        });
+        expect(dmRes.statusCode).toBe(200);
+        expect(dmRes.json()).toEqual({ success: true });
+        expect(sendMessage).toHaveBeenCalledWith(55555, 'سلام، سرویس شما بررسی شد.');
+        expect(mockUserService.recordAdminAction).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'admin_direct_message',
+            targetTelegramId: 55555,
+          })
+        );
+      } finally {
+        await dmApp.close();
+      }
     });
   });
 });

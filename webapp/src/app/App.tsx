@@ -31,6 +31,7 @@ export const App: React.FC = () => {
             adminViewMode === 'admin' ? (
               <AdminLayout
                 user={authData.user}
+                botUsername={authData.botUsername}
                 onSwitchToUserPortal={() => setAdminViewMode('user')}
               />
             ) : (

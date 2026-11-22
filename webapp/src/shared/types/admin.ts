@@ -16,6 +16,8 @@ export interface DashboardStats {
 export interface PanelHealth {
   configured: number;
   healthy: number;
+  allHealthy?: boolean;
+  latencyMs?: number;
 }
 
 export interface TopupReceipt {
@@ -29,6 +31,11 @@ export interface TopupReceipt {
   mediaType?: string;
   reviewedBy?: number | null;
   rejectReason?: string | null;
+  duplicateOfReceiptId?: string | null;
+  duplicateWarning?: string | null;
+  voidedAt?: string | null;
+  voidedBy?: number | null;
+  voidReason?: string | null;
   cardId?: string | null;
   cardNumber?: string | null;
   cardSummary?: string | null;
@@ -40,11 +47,20 @@ export interface TopupReceipt {
   } | null;
 }
 
+export interface ReceiptAdminProfile {
+  telegramId: number;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+}
+
 export interface ReceiptSettings {
   enabled: boolean;
   mode: 'full' | 'simple';
+  duplicatePolicy?: 'warn' | 'block';
   admins: number[];
   allAdmins: number[];
+  adminProfiles?: ReceiptAdminProfile[];
 }
 
 export interface UserProfile {
@@ -53,9 +69,27 @@ export interface UserProfile {
   firstName: string | null;
   lastName: string | null;
   balance: number;
+  reservedBalance?: number;
   totalSpend: number;
   activeSubscriptionCount: number;
   isBanned?: boolean;
+  isAdmin?: boolean;
+  hasUsedTrial?: boolean;
+  referralCode?: string | null;
+  referredUserCount?: number;
+  referralBonusEarned?: number;
+  cashbackEarned?: number;
+  createdAt: string;
+}
+
+export interface UserAuditLogItem {
+  id: string;
+  actorTelegramId: number;
+  action: string;
+  entityType: string;
+  entityId: string;
+  targetTelegramId?: number | null;
+  metadata?: string | null;
   createdAt: string;
 }
 
@@ -170,6 +204,8 @@ export interface AdminPackageDto {
   panelId?: string;
   serviceId?: number;
   categoryId?: string;
+  startOnFirstUse?: boolean;
+  rolloverQuota?: boolean;
 }
 
 export interface AdminCategoryDto {
@@ -237,6 +273,8 @@ export interface CreateAdminPackagePayload {
   panelId?: string | null;
   serviceId?: number | null;
   categoryId?: string | null;
+  startOnFirstUse?: boolean;
+  rolloverQuota?: boolean;
 }
 
 export interface UpdateAdminPackagePayload {
@@ -248,6 +286,8 @@ export interface UpdateAdminPackagePayload {
   panelId?: string | null;
   serviceId?: number | null;
   categoryId?: string | null;
+  startOnFirstUse?: boolean | null;
+  rolloverQuota?: boolean | null;
 }
 
 export interface AdminPackageMutationResponse {

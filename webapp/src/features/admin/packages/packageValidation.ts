@@ -27,6 +27,8 @@ export interface ValidationResult<T> {
   parsed?: T;
 }
 
+export type OverrideTriState = 'default' | 'true' | 'false';
+
 export interface PackageFormValues {
   id: string;
   name: string;
@@ -37,6 +39,8 @@ export interface PackageFormValues {
   panelId: string;
   serviceId: string;
   enabled: boolean;
+  startOnFirstUse?: OverrideTriState;
+  rolloverQuota?: OverrideTriState;
 }
 
 export interface ParsedPackageInput {
@@ -49,6 +53,8 @@ export interface ParsedPackageInput {
   panelId?: string;
   serviceId?: number;
   enabled: boolean;
+  startOnFirstUse?: boolean;
+  rolloverQuota?: boolean;
 }
 
 export interface CategoryFormValues {
@@ -468,6 +474,10 @@ export function validatePackageForm(
   }
 
   const categoryId = form.categoryId.trim() || undefined;
+  const startOnFirstUse =
+    form.startOnFirstUse === 'true' ? true : form.startOnFirstUse === 'false' ? false : undefined;
+  const rolloverQuota =
+    form.rolloverQuota === 'true' ? true : form.rolloverQuota === 'false' ? false : undefined;
   return {
     valid: true,
     errors: [],
@@ -482,6 +492,8 @@ export function validatePackageForm(
       panelId: target.panelId,
       serviceId: target.serviceId,
       enabled: form.enabled,
+      ...(startOnFirstUse !== undefined ? { startOnFirstUse } : {}),
+      ...(rolloverQuota !== undefined ? { rolloverQuota } : {}),
     },
   };
 }

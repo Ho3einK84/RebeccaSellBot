@@ -6,7 +6,7 @@ import { useHaptic } from '@/shared/hooks/useHaptic.js';
 export interface UseAdminReceiptsOptions {
   page?: number;
   limit?: number;
-  status?: 'pending' | 'approved' | 'rejected' | 'all';
+  status?: 'pending' | 'approved' | 'rejected' | 'voided' | 'all';
   search?: string;
 }
 
@@ -34,15 +34,19 @@ export function useAdminReceipts(options: number | UseAdminReceiptsOptions = 20)
       id,
       action,
       reason,
+      disablePurchasedConfigs,
     }: {
       id: string;
-      action: 'approve' | 'reject';
+      action: 'approve' | 'reject' | 'void';
       reason?: string;
-    }) => api.performReceiptAction(id, { action, reason }),
+      disablePurchasedConfigs?: boolean;
+    }) => api.performReceiptAction(id, { action, reason, disablePurchasedConfigs }),
     onSuccess: (_, variables) => {
       triggerHaptic(variables.action === 'approve' ? 'success' : 'warning');
       void queryClient.invalidateQueries({ queryKey: ['admin', 'receipts'] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'userDossier'] });
     },
     onError: () => {
       triggerHaptic('error');
@@ -56,6 +60,7 @@ export function useAdminReceipts(options: number | UseAdminReceiptsOptions = 20)
       triggerHaptic('success');
       void queryClient.invalidateQueries({ queryKey: ['admin', 'receipts'] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
     onError: () => {
       triggerHaptic('error');
@@ -90,8 +95,12 @@ export function useReceiptSettings(enabled = true) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { enabled?: boolean; mode?: 'full' | 'simple'; admins?: number[] }) =>
-      api.updateReceiptSettings(payload),
+    mutationFn: (payload: {
+      enabled?: boolean;
+      mode?: 'full' | 'simple';
+      duplicatePolicy?: 'warn' | 'block';
+      admins?: number[];
+    }) => api.updateReceiptSettings(payload),
     onSuccess: () => {
       triggerHaptic('success');
       void queryClient.invalidateQueries({ queryKey: queryKeys.receiptSettings });

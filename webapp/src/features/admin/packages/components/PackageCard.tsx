@@ -120,6 +120,22 @@ export const PackageCard: React.FC<PackageCardProps> = ({
                 {t('admin.packages.card.uncategorized')}
               </span>
             )}
+
+            {pkg.startOnFirstUse !== undefined && (
+              <Badge variant={pkg.startOnFirstUse ? 'warning' : 'neutral'} size="xs">
+                {pkg.startOnFirstUse
+                  ? t('admin.packages.card.onHoldOn')
+                  : t('admin.packages.card.onHoldOff')}
+              </Badge>
+            )}
+
+            {pkg.rolloverQuota !== undefined && (
+              <Badge variant={pkg.rolloverQuota ? 'success' : 'neutral'} size="xs">
+                {pkg.rolloverQuota
+                  ? t('admin.packages.card.rolloverOn')
+                  : t('admin.packages.card.rolloverOff')}
+              </Badge>
+            )}
           </div>
         </div>
 

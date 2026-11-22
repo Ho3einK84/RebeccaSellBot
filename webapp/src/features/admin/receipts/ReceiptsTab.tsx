@@ -12,12 +12,14 @@ import {
   CheckSquare,
   Square,
   CreditCard,
+  Ban,
 } from 'lucide-react';
 import { useAdminReceipts } from './hooks/useAdminReceipts.js';
 import { ReceiptCard } from './components/ReceiptCard.js';
 import { ReceiptPhotoModal } from './components/ReceiptPhotoModal.js';
 import { ApproveReceiptModal } from './components/ApproveReceiptModal.js';
 import { RejectReceiptModal } from './components/RejectReceiptModal.js';
+import { VoidReceiptModal } from './components/VoidReceiptModal.js';
 import { ReceiptDetailModal } from './components/ReceiptDetailModal.js';
 import { BatchApproveModal } from './components/BatchApproveModal.js';
 import { ReceiptSettingsModal } from './components/ReceiptSettingsModal.js';
@@ -38,7 +40,7 @@ interface ReceiptsTabProps {
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
 
-type ReceiptStatusFilter = 'pending' | 'approved' | 'rejected' | 'all';
+type ReceiptStatusFilter = 'pending' | 'approved' | 'rejected' | 'voided' | 'all';
 
 export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotify }) => {
   const { t } = useLanguage();
@@ -86,6 +88,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
   const [photoTarget, setPhotoTarget] = useState<TopupReceipt | null>(null);
   const [approveTarget, setApproveTarget] = useState<TopupReceipt | null>(null);
   const [rejectTarget, setRejectTarget] = useState<TopupReceipt | null>(null);
+  const [voidTarget, setVoidTarget] = useState<TopupReceipt | null>(null);
   const [detailTarget, setDetailTarget] = useState<TopupReceipt | null>(null);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -149,6 +152,12 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
         tone: 'danger',
       },
       {
+        id: 'voided',
+        label: t('admin.receipts.tabVoided'),
+        icon: Ban,
+        tone: 'brand',
+      },
+      {
         id: 'all',
         label: t('admin.receipts.tabAll'),
         icon: Layers,
@@ -184,6 +193,25 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
         next.delete(receipt.id);
         return next;
       });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.notifications.receiptActionFailed');
+      onNotify(msg, 'error');
+    }
+  };
+
+  const handleConfirmVoid = async (
+    receipt: TopupReceipt,
+    options: { reason?: string; disablePurchasedConfigs: boolean }
+  ) => {
+    try {
+      await actionMutation.mutateAsync({
+        id: receipt.id,
+        action: 'void',
+        reason: options.reason,
+        disablePurchasedConfigs: options.disablePurchasedConfigs,
+      });
+      onNotify(t('admin.notifications.receiptVoided'), 'success');
+      setVoidTarget(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('admin.notifications.receiptActionFailed');
       onNotify(msg, 'error');
@@ -417,6 +445,13 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
         loading={isProcessingAction}
       />
 
+      <VoidReceiptModal
+        receipt={voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onConfirm={(r, opts) => void handleConfirmVoid(r, opts)}
+        loading={isProcessingAction}
+      />
+
       <ReceiptDetailModal
         receipt={detailTarget}
         onClose={() => setDetailTarget(null)}
@@ -427,6 +462,10 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ onInspectUser, onNotif
         onReject={(r) => {
           setDetailTarget(null);
           setRejectTarget(r);
+        }}
+        onVoid={(r) => {
+          setDetailTarget(null);
+          setVoidTarget(r);
         }}
         onViewPhoto={(r) => {
           setDetailTarget(null);

@@ -21,6 +21,7 @@ import {
   parsePositiveIntInput,
   suggestPackageId,
   validatePackageForm,
+  type OverrideTriState,
   type PackageFormValues,
   type ValidationIssue,
 } from '../packageValidation.js';
@@ -38,6 +39,9 @@ interface PackageFormModalProps {
   onUpdate: (id: string, payload: UpdateAdminPackagePayload) => Promise<void>;
 }
 
+const toTriState = (val?: boolean): OverrideTriState =>
+  val === true ? 'true' : val === false ? 'false' : 'default';
+
 const DEFAULT_VALUES: PackageFormValues = {
   id: '',
   name: '',
@@ -48,6 +52,8 @@ const DEFAULT_VALUES: PackageFormValues = {
   panelId: '',
   serviceId: '',
   enabled: true,
+  startOnFirstUse: 'default',
+  rolloverQuota: 'default',
 };
 
 export const PackageFormModal: React.FC<PackageFormModalProps> = ({
@@ -82,6 +88,8 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
         panelId: initialPackage.panelId ?? '',
         serviceId: initialPackage.serviceId !== undefined ? String(initialPackage.serviceId) : '',
         enabled: initialPackage.enabled,
+        startOnFirstUse: toTriState(initialPackage.startOnFirstUse),
+        rolloverQuota: toTriState(initialPackage.rolloverQuota),
       });
     } else {
       const existingIds = new Set(existingPackages.map((p) => p.id));
@@ -175,6 +183,10 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
           categoryId: parsed.categoryId ?? null,
           panelId: parsed.panelId ?? null,
           serviceId: parsed.serviceId ?? null,
+          ...(parsed.startOnFirstUse !== undefined
+            ? { startOnFirstUse: parsed.startOnFirstUse }
+            : {}),
+          ...(parsed.rolloverQuota !== undefined ? { rolloverQuota: parsed.rolloverQuota } : {}),
         });
         onClose();
         return;
@@ -204,6 +216,13 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
       if (parsed.panelId !== prevPanel || parsed.serviceId !== prevService) {
         patch.panelId = parsed.panelId ?? null;
         patch.serviceId = parsed.serviceId ?? null;
+      }
+
+      if (parsed.startOnFirstUse !== initialPackage.startOnFirstUse) {
+        patch.startOnFirstUse = parsed.startOnFirstUse ?? null;
+      }
+      if (parsed.rolloverQuota !== initialPackage.rolloverQuota) {
+        patch.rolloverQuota = parsed.rolloverQuota ?? null;
       }
 
       if (Object.keys(patch).length === 0) {
@@ -517,6 +536,71 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
         {fieldError('target') && (
           <p className="text-xs text-danger-fg m-0">{fieldError('target')}</p>
         )}
+
+        {/* Subscription Lifecycle Overrides (synced with Telegram adm:pkg:oh / adm:pkg:ro) */}
+        <div className="p-3 rounded-tile bg-surface-2 border border-line space-y-3">
+          <div className="text-xs font-semibold text-ink">
+            {t('admin.packages.form.lifecycleTitle')}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-medium text-ink-soft">
+                {t('admin.packages.form.startOnFirstUseLabel')}
+              </span>
+              <div className="grid grid-cols-3 gap-1">
+                {(
+                  [
+                    { val: 'default', label: t('admin.packages.form.overrideSystemDefault') },
+                    { val: 'true', label: t('admin.packages.form.overrideEnable') },
+                    { val: 'false', label: t('admin.packages.form.overrideDisable') },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => setValues((prev) => ({ ...prev, startOnFirstUse: opt.val }))}
+                    className={`h-8 px-1.5 rounded-ctl border text-[11px] font-medium cursor-pointer transition-colors truncate ${
+                      (values.startOnFirstUse ?? 'default') === opt.val
+                        ? 'bg-brand-soft border-brand/40 text-brand-fg font-semibold'
+                        : 'bg-surface border-line text-ink-muted hover:text-ink'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-medium text-ink-soft">
+                {t('admin.packages.form.rolloverQuotaLabel')}
+              </span>
+              <div className="grid grid-cols-3 gap-1">
+                {(
+                  [
+                    { val: 'default', label: t('admin.packages.form.overrideSystemDefault') },
+                    { val: 'true', label: t('admin.packages.form.overrideEnable') },
+                    { val: 'false', label: t('admin.packages.form.overrideDisable') },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => setValues((prev) => ({ ...prev, rolloverQuota: opt.val }))}
+                    className={`h-8 px-1.5 rounded-ctl border text-[11px] font-medium cursor-pointer transition-colors truncate ${
+                      (values.rolloverQuota ?? 'default') === opt.val
+                        ? 'bg-brand-soft border-brand/40 text-brand-fg font-semibold'
+                        : 'bg-surface border-line text-ink-muted hover:text-ink'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Enabled Toggle */}
         <div className="flex items-center justify-between gap-3 p-3 rounded-tile bg-surface-2 border border-line">

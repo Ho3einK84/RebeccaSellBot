@@ -59,6 +59,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     dossierError,
     adjustBalanceMutation,
     isAdjustingBalance,
+    sendMessageMutation,
     banUserMutation,
     toggleConfigMutation,
     resetUsageMutation,
@@ -117,6 +118,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
   const handleBanUser = async (telegramId: number, isBanned: boolean, reason?: string) => {
     await banUserMutation.mutateAsync({ telegramId, isBanned, reason });
+  };
+
+  const handleSendMessage = async (telegramId: number, message: string) => {
+    await sendMessageMutation.mutateAsync({ telegramId, message });
   };
 
   const handleToggleConfig = async (
@@ -245,6 +250,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         isCopied={isCopied}
         onNotify={onNotify}
         onBanUser={handleBanUser}
+        onSendMessage={handleSendMessage}
         onToggleConfig={handleToggleConfig}
         onResetConfigUsage={handleResetConfigUsage}
         onRevokeConfigSubUrl={handleRevokeConfigSubUrl}

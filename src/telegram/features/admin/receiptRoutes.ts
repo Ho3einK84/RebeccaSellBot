@@ -388,7 +388,8 @@ async function executeRejectWithReason(
   protectPushNotificationMedia(ctx);
   await ctx.answerCallbackQuery({ text: t(ctx, 'operation_in_progress') }).catch(() => {});
 
-  const result = await ctx.services.walletService.rejectTopup(receiptId, ctx.from.id);
+  const reasonLabel = t(ctx, `admin_receipt_reject_reason_${reason}`);
+  const result = await ctx.services.walletService.rejectTopup(receiptId, ctx.from.id, reasonLabel);
   if (result) {
     await notifyReceiptResult(ctx, result.telegramId, false, undefined, receiptId, reason);
     await renderReceiptResult(ctx, 'reject', page, reason, undefined, result.telegramId);

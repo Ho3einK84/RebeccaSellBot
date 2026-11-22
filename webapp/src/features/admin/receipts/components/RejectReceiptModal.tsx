@@ -23,7 +23,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
   loading = false,
 }) => {
   const { t } = useLanguage();
-  const { formatId } = useFormatters();
+  const { formatId, formatReceiptShortId } = useFormatters();
   const { textPrimary, textSecondary } = useThemeTokens();
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [reason, setReason] = useState<string>('');
@@ -110,7 +110,7 @@ export const RejectReceiptModal: React.FC<RejectReceiptModalProps> = ({
       <div className="space-y-4">
         <p className={`text-xs m-0 leading-relaxed ${textSecondary}`}>
           {t('admin.modals.rejectConfirm', {
-            id: formatId(receipt.id),
+            id: `#${formatReceiptShortId(receipt.id)}`,
             userId: formatId(receipt.telegramId),
           })}
         </p>

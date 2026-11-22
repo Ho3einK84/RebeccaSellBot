@@ -38,7 +38,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
   onErrorNotify,
 }) => {
   const { t } = useLanguage();
-  const { formatId } = useFormatters();
+  const { formatReceiptShortId } = useFormatters();
   const { notify } = useToast();
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -140,7 +140,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
       subtitle={
         receiptId ? (
           <bdi dir="ltr" className="tnum font-medium text-brand-fg">
-            #{formatId(receiptId.slice(-8))}
+            #{formatReceiptShortId(receiptId)}
           </bdi>
         ) : undefined
       }
@@ -177,7 +177,7 @@ export const ReceiptPhotoModal: React.FC<ReceiptPhotoModalProps> = ({
                 <Copy className="w-3.5 h-3.5 opacity-60 shrink-0" />
               )}
               <bdi dir="ltr" className="tnum font-medium">
-                #{formatId(receiptId.slice(-8))}
+                #{formatReceiptShortId(receiptId)}
               </bdi>
             </button>
           )}

@@ -13,6 +13,8 @@ import {
   ArrowDownLeft,
   Image as ImageIcon,
   Loader2,
+  Send,
+  History,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -25,6 +27,7 @@ import { ProgressBar } from '@/shared/components/ui/ProgressBar.js';
 import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/SegmentedControl.js';
 import { UserConfigQrModal } from './UserConfigQrModal.js';
 import { UserConfirmModal } from './UserConfirmModal.js';
+import { UserDirectMessageModal } from './UserDirectMessageModal.js';
 import { ReceiptPhotoModal } from '@/features/admin/receipts/components/ReceiptPhotoModal.js';
 import {
   getTransactionTypeLabel,
@@ -33,7 +36,7 @@ import {
 import type { UserDossierResponse } from '@/shared/types/api.js';
 import type { UserProfile, UserConfigItem } from '@/shared/types/admin.js';
 
-type DossierTabId = 'finances' | 'configs' | 'orders' | 'receipts' | 'transactions';
+type DossierTabId = 'finances' | 'configs' | 'orders' | 'receipts' | 'transactions' | 'audit';
 
 interface UserDossierModalProps {
   dossier: UserDossierResponse | null;
@@ -43,6 +46,7 @@ interface UserDossierModalProps {
   isCopied?: (key: string) => boolean;
   onNotify?: (message: string, type?: 'success' | 'error') => void;
   onBanUser?: (telegramId: number, isBanned: boolean, reason?: string) => Promise<void>;
+  onSendMessage?: (telegramId: number, message: string) => Promise<void>;
   onToggleConfig?: (telegramId: number, configUsername: string, panelId?: string) => Promise<void>;
   onResetConfigUsage?: (
     telegramId: number,
@@ -65,14 +69,22 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   isCopied = () => false,
   onNotify,
   onBanUser,
+  onSendMessage,
   onToggleConfig,
   onResetConfigUsage,
   onRevokeConfigSubUrl,
   onSyncConfig,
 }) => {
   const { t, locale } = useLanguage();
-  const { formatMoney, formatNumber, formatId, formatIsoDate, formatBytes, sanitizeDisplayName } =
-    useFormatters();
+  const {
+    formatMoney,
+    formatNumber,
+    formatId,
+    formatIsoDate,
+    formatBytes,
+    formatReceiptShortId,
+    sanitizeDisplayName,
+  } = useFormatters();
 
   const [activeTab, setActiveTab] = useState<DossierTabId>('finances');
 
@@ -82,6 +94,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     type: 'ban' | 'unban' | 'reset-usage' | 'revoke';
     config?: UserConfigItem;
   } | null>(null);
+  const [isDmModalOpen, setIsDmModalOpen] = useState(false);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [photoTarget, setPhotoTarget] = useState<{ id: string; mediaType?: string } | null>(null);
@@ -102,6 +115,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     setActiveTab('finances');
     setQrModalConfig(null);
     setConfirmModal(null);
+    setIsDmModalOpen(false);
     setActionLoading(null);
     setPhotoTarget(null);
   }, [dossier?.summary?.user?.telegramId]);
@@ -110,6 +124,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   const receiptsCount = dossier?.receipts?.length ?? 0;
   const configsCount = dossier?.configs?.length ?? 0;
   const transactionsCount = dossier?.transactions?.length ?? 0;
+  const auditLogsCount = dossier?.auditLogs?.length ?? dossier?.summary?.auditEventsCount ?? 0;
 
   const tabOptions: SegmentedOption<DossierTabId>[] = useMemo(
     () => [
@@ -122,15 +137,43 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
       },
       { id: 'orders', label: t('admin.users.tabOrders'), count: formatNumber(ordersCount) },
       { id: 'receipts', label: t('admin.users.tabReceipts'), count: formatNumber(receiptsCount) },
+      { id: 'audit', label: t('admin.users.tabAudit'), count: formatNumber(auditLogsCount) },
     ],
-    [t, formatNumber, configsCount, transactionsCount, ordersCount, receiptsCount]
+    [t, formatNumber, configsCount, transactionsCount, ordersCount, receiptsCount, auditLogsCount]
   );
 
   if (!dossier) return null;
 
-  const { summary, orders = [], receipts = [], configs = [], transactions = [] } = dossier;
+  const {
+    summary,
+    orders = [],
+    receipts = [],
+    configs = [],
+    transactions = [],
+    auditLogs = [],
+  } = dossier;
   const user = summary.user;
-  const { displayName } = sanitizeDisplayName(user.firstName, user.lastName, t('user.guestUser'));
+  const isTargetAdmin = Boolean(dossier.isAdmin || user.isAdmin);
+  const { displayName } = sanitizeDisplayName(
+    user.firstName,
+    user.lastName,
+    user.username ? `@${user.username}` : t('user.guestUser')
+  );
+
+  const handleSendDirectMessage = async (message: string) => {
+    if (!onSendMessage) return;
+    setActionLoading('dm');
+    try {
+      await onSendMessage(user.telegramId, message);
+      notifyAction(t('admin.users.dmSuccess'), 'success');
+      setIsDmModalOpen(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.dmFailed');
+      notifyAction(msg, 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   // Action handlers
   const handleConfirmAction = async (reason?: string) => {
@@ -216,6 +259,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               {t('admin.users.activeBadge')}
             </Badge>
           )}
+          {isTargetAdmin && (
+            <Badge variant="info" size="xs">
+              {t('admin.users.adminBadge')}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-xs mt-1 flex-wrap">
@@ -250,8 +298,8 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   );
 
   const dossierFooter = (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2 flex-1 min-w-0">
+    <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
         <Button
           type="button"
           variant="primary"
@@ -263,7 +311,20 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           <span className="truncate">{t('admin.users.btnChangeBalance')}</span>
         </Button>
 
-        {onBanUser && (
+        {onSendMessage && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsDmModalOpen(true)}
+            className="flex-1 sm:flex-initial"
+          >
+            <Send className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{t('admin.users.btnSendMessage')}</span>
+          </Button>
+        )}
+
+        {onBanUser && (!isTargetAdmin || user.isBanned) && (
           <Button
             type="button"
             variant={user.isBanned ? 'success' : 'danger'}
@@ -382,6 +443,50 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   {formatNumber(summary.auditEventsCount)}
                 </div>
               </div>
+
+              {(user.reservedBalance ?? 0) > 0 && (
+                <div className="p-3.5 rounded-tile border border-warn/25 bg-warn-soft">
+                  <span className="text-[11px] font-medium block text-warn-fg">
+                    {t('admin.users.userReservedBalance')}
+                  </span>
+                  <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
+                    <bdi dir="ltr" className="text-base sm:text-lg font-bold tnum text-warn-fg">
+                      {formatMoney(user.reservedBalance ?? 0)}
+                    </bdi>
+                    <span className="text-[11px] font-normal text-warn-fg/80">
+                      {t('common.currency')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {user.hasUsedTrial !== undefined && (
+                <div className="p-3.5 rounded-tile border border-line bg-surface-2">
+                  <span className="text-[11px] font-medium block text-ink-muted">
+                    {t('admin.users.userTrialStatus')}
+                  </span>
+                  <div className="text-sm font-semibold mt-1.5 text-ink">
+                    {user.hasUsedTrial
+                      ? t('admin.users.userTrialUsed')
+                      : t('admin.users.userTrialUnused')}
+                  </div>
+                </div>
+              )}
+
+              {(user.referredUserCount !== undefined || summary.totalReferralBonus > 0) && (
+                <div className="p-3.5 rounded-tile border border-line bg-surface-2">
+                  <span className="text-[11px] font-medium block text-ink-muted">
+                    {t('admin.users.userReferralSummary')}
+                  </span>
+                  <div className="text-xs font-semibold mt-1.5 text-ink tnum">
+                    {t('admin.users.userReferralCount', {
+                      count: formatNumber(user.referredUserCount ?? 0),
+                      bonus: formatMoney(summary.totalReferralBonus),
+                      currency: t('common.currency'),
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -720,7 +825,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                         </span>
                       </div>
                       <div className="text-[11px] tnum text-ink-muted">
-                        {t('common.idLabel')} <bdi dir="ltr">#{formatId(rec.id)}</bdi>
+                        {t('common.idLabel')} <bdi dir="ltr">#{formatReceiptShortId(rec.id)}</bdi>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -743,7 +848,9 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                             ? 'success'
                             : rec.status === 'rejected'
                               ? 'error'
-                              : 'warning'
+                              : rec.status === 'voided'
+                                ? 'neutral'
+                                : 'warning'
                         }
                         dot
                         size="xs"
@@ -752,7 +859,9 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                           ? t('common.statusApproved')
                           : rec.status === 'rejected'
                             ? t('common.statusRejected')
-                            : t('common.statusPending')}
+                            : rec.status === 'voided'
+                              ? t('common.statusVoided')
+                              : t('common.statusPending')}
                       </Badge>
                       <span dir="ltr" className="text-[10px] tnum text-ink-muted">
                         {formatIsoDate(rec.createdAt)}
@@ -763,8 +872,59 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               )}
             </div>
           )}
+
+          {/* Sub-tab 6: Audit Logs */}
+          {activeTab === 'audit' && (
+            <div className="space-y-2">
+              {auditLogs.length === 0 ? (
+                <p className="text-xs text-center py-8 m-0 text-ink-muted">
+                  {t('admin.users.noAuditLogs')}
+                </p>
+              ) : (
+                auditLogs.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="p-3 sm:p-3.5 rounded-tile border border-line bg-surface-2 flex items-start justify-between gap-2.5 text-xs"
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <IconTile tone="neutral" size="sm">
+                        <History />
+                      </IconTile>
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="font-mono text-[11px] font-semibold text-ink break-all">
+                          {entry.action}
+                        </div>
+                        <div className="text-[11px] text-ink-muted flex items-center gap-1.5 flex-wrap tnum">
+                          <span>
+                            {t('admin.users.auditActor', {
+                              id: formatId(entry.actorTelegramId),
+                            })}
+                          </span>
+                          <span className="opacity-40">·</span>
+                          <bdi dir="ltr" className="font-mono">
+                            {entry.entityType}:{entry.entityId}
+                          </bdi>
+                        </div>
+                      </div>
+                    </div>
+                    <bdi dir="ltr" className="text-[10px] tnum text-ink-muted shrink-0">
+                      {formatIsoDate(entry.createdAt)}
+                    </bdi>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </Modal>
+
+      <UserDirectMessageModal
+        user={user}
+        isOpen={isDmModalOpen}
+        onClose={() => setIsDmModalOpen(false)}
+        onSend={handleSendDirectMessage}
+        loading={actionLoading === 'dm'}
+      />
 
       {/* QR Code Modal for user subscription links */}
       <UserConfigQrModal

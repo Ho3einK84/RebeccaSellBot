@@ -33,6 +33,20 @@ import {
   safelyDeleteMessage,
 } from '../ui.js';
 
+const ADMIN_DEEP_LINK_ROUTES: Readonly<Record<string, string>> = {
+  adm_home: 'adm:home',
+  adm_promos: 'adm:prm:p:1',
+  adm_discounts: 'adm:dsc:p:1',
+  adm_trial: 'adm:trl',
+  adm_growth: 'adm:grw',
+  adm_broadcast: 'adm:msg',
+  adm_orphans: 'adm:orp:p:1',
+  adm_settings: 'adm:cfg',
+  adm_backup: 'adm:cfg:bak',
+  adm_texts: 'adm:txt:hub',
+  adm_admins: 'adm:cfg:adm',
+};
+
 export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   // Menus (register submenus before registering the tree)
   try {
@@ -81,6 +95,24 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
         });
         return;
       }
+    }
+
+    if (payload?.startsWith('adm_')) {
+      if (!services.isAdmin(telegramId)) {
+        await renderScreen(
+          ctx,
+          buildUserEmptyState('🔒', t(ctx, 'admin_menu_title'), t(ctx, 'admin_access_denied')),
+          { parse_mode: 'Markdown', reply_markup: mainMenu }
+        );
+        return;
+      }
+      markAdminContext(ctx);
+      const targetRoute = ADMIN_DEEP_LINK_ROUTES[payload];
+      const handled = targetRoute ? await dispatchAdminRoute(ctx, targetRoute) : false;
+      if (!handled) {
+        await renderAdminHomeScreen(ctx);
+      }
+      return;
     }
 
     if (payload === 'topup' || payload === 'receipt') {

@@ -644,6 +644,70 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
       })
     ).toBe('#123456');
   });
+
+  it('routes /start adm_* deep-links directly to Telegram admin hubs for admins and denies non-admins', async () => {
+    const promoHit = vi.fn(async (ctx: MenuContext) => {
+      await ctx.reply('PROMO_HUB_OPENED');
+    });
+    const services = createMockServices({
+      adminIds: [1],
+      isAdmin: vi.fn((id) => id === 1),
+      userService: {
+        exists: vi.fn().mockResolvedValue(true),
+      },
+      walletService: {
+        getOrCreateUser: vi.fn().mockResolvedValue({
+          telegramId: 1,
+          locale: 'fa',
+          balance: 0,
+        }),
+        getPendingReceiptCount: vi.fn().mockResolvedValue(0),
+        getDashboardStats: vi.fn().mockResolvedValue({
+          pendingReceipts: 0,
+          dailyRevenue: 0,
+          weeklyRevenue: 0,
+          monthlyRevenue: 0,
+          totalUsers: 1,
+          totalSales: 0,
+          activeSubscriptions: 0,
+          inactiveSubscriptions: 0,
+          totalReferralBonus: 0,
+          totalCashback: 0,
+        }),
+      },
+      panelRegistry: {
+        healthSummary: vi.fn().mockResolvedValue({ configured: 1, healthy: 1 }),
+        listPanels: vi.fn(() => []),
+      },
+      configReconciliationService: {
+        getQueueSummary: vi
+          .fn()
+          .mockResolvedValue({ openTotal: 0, remoteUnbound: 0, localMissing: 0, ignoredTotal: 0 }),
+      },
+    });
+    const harness = createBotHarness({ services });
+    registerAdminHomeRoutes();
+    registerAdminRoute('adm:prm:p:1', promoHit);
+    registerBaseRoutes(harness.bot, services);
+
+    // Non-admin receives access denied
+    await harness.sendText('/start adm_promos', { userId: 999 });
+    expect(promoHit).not.toHaveBeenCalled();
+    const deniedText = String(harness.callsFor('sendMessage').at(-1)?.payload.text ?? '');
+    expect(deniedText).toContain('admin_access_denied');
+
+    // Admin opens mapped deep-link directly
+    await harness.sendText('/start adm_promos', { userId: 1 });
+    expect(promoHit).toHaveBeenCalledTimes(1);
+    expect(String(harness.callsFor('sendMessage').at(-1)?.payload.text ?? '')).toBe(
+      'PROMO_HUB_OPENED'
+    );
+
+    // Unknown adm_* deep-link falls back gracefully to admin home screen
+    await harness.sendText('/start adm_unknown_hub', { userId: 1 });
+    const homeText = String(harness.callsFor('sendMessage').at(-1)?.payload.text ?? '');
+    expect(homeText).toContain('admin_home_title');
+  });
 });
 
 // Keep reference used in type validation

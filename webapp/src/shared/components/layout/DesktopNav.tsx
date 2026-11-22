@@ -7,7 +7,7 @@ interface DesktopNavProps<T extends string> {
   activeId: T;
   onSelect: (id: T) => void;
   ariaLabel: string;
-  badgeTone?: 'brand' | 'danger';
+  badgeTone?: 'brand' | 'warn' | 'danger';
 }
 
 /**
@@ -41,12 +41,17 @@ export function DesktopNav<T extends string>({
               : formatNumber(item.count)
             : null;
 
+        const itemTone = item.badgeTone ?? badgeTone;
         const badgeClass =
-          badgeTone === 'danger'
+          itemTone === 'danger'
             ? 'bg-danger-soft text-danger-fg border border-danger/25'
-            : active
-              ? 'bg-brand-soft text-brand-fg border border-brand/25'
-              : 'bg-surface-2 text-ink-soft border border-line';
+            : itemTone === 'warn'
+              ? 'bg-warn-soft text-warn-fg border border-warn/30'
+              : active
+                ? 'bg-brand-soft text-brand-fg border border-brand/25'
+                : 'bg-surface-2 text-ink-soft border border-line';
+        const dotBg =
+          item.dotTone === 'ok' ? 'bg-ok' : item.dotTone === 'danger' ? 'bg-danger' : 'bg-warn';
 
         return (
           <button
@@ -73,7 +78,7 @@ export function DesktopNav<T extends string>({
                 {countStr}
               </span>
             ) : item.dot ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-warn shrink-0" aria-hidden="true" />
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotBg}`} aria-hidden="true" />
             ) : null}
             {active ? (
               <span

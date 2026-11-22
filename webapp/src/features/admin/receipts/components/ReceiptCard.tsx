@@ -10,6 +10,9 @@ import {
   Wallet,
   Copy,
   Eye,
+  AlertTriangle,
+  CreditCard,
+  Ban,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -44,24 +47,35 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
   disabled = false,
 }) => {
   const { t } = useLanguage();
-  const { formatMoney, formatId, formatIsoDate, sanitizeDisplayName } = useFormatters();
+  const { formatMoney, formatId, formatIsoDate, formatReceiptShortId, sanitizeDisplayName } =
+    useFormatters();
   const { copy, isCopied } = useCopy();
   const { notify } = useToast();
 
   const isPending = receipt.status === 'pending';
   const isApproved = receipt.status === 'approved';
   const isRejected = receipt.status === 'rejected';
+  const isVoided = receipt.status === 'voided';
 
   const badgeVariant = isApproved
     ? ('success' as const)
     : isRejected
       ? ('error' as const)
-      : ('warning' as const);
+      : isVoided
+        ? ('neutral' as const)
+        : ('warning' as const);
   const statusLabel = isApproved
     ? t('common.statusApproved')
     : isRejected
       ? t('common.statusRejected')
-      : t('common.statusPending');
+      : isVoided
+        ? t('common.statusVoided')
+        : t('common.statusPending');
+
+  const duplicateShortId = receipt.duplicateOfReceiptId
+    ? formatReceiptShortId(receipt.duplicateOfReceiptId)
+    : null;
+  const hasDuplicateWarning = Boolean(receipt.duplicateOfReceiptId || receipt.duplicateWarning);
 
   const { displayName } = sanitizeDisplayName(
     receipt.user?.firstName,
@@ -152,13 +166,25 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
           <div className="flex items-center gap-1.5 min-w-0">
             <Wallet
               className={`w-4 h-4 shrink-0 ${
-                isApproved ? 'text-ok-fg' : isRejected ? 'text-danger-fg' : 'text-warn-fg'
+                isApproved
+                  ? 'text-ok-fg'
+                  : isRejected
+                    ? 'text-danger-fg'
+                    : isVoided
+                      ? 'text-ink-muted'
+                      : 'text-warn-fg'
               }`}
             />
             <bdi
               dir="ltr"
               className={`font-semibold text-sm tnum ${
-                isApproved ? 'text-ok-fg' : isRejected ? 'text-danger-fg' : 'text-warn-fg'
+                isApproved
+                  ? 'text-ok-fg'
+                  : isRejected
+                    ? 'text-danger-fg'
+                    : isVoided
+                      ? 'text-ink-muted line-through'
+                      : 'text-warn-fg'
               }`}
             >
               {formatMoney(receipt.amount)}
@@ -171,11 +197,22 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
           </Badge>
         </Card>
 
+        {hasDuplicateWarning && (
+          <div className="flex items-center gap-2 rounded-ctl border border-warn/35 bg-warn-soft px-2.5 py-1.5 text-[11px] font-medium text-warn-fg">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">
+              {duplicateShortId
+                ? `${t('admin.receipts.duplicateWarningBadge')} · ${t('admin.receipts.duplicateOfLabel', { id: duplicateShortId })}`
+                : receipt.duplicateWarning || t('admin.receipts.duplicateWarningBadge')}
+            </span>
+          </div>
+        )}
+
         {/* Meta Footer */}
         <div className="pt-2 border-t border-line text-[11px] text-ink-muted flex flex-col gap-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <bdi dir="ltr" className="tnum font-medium">
-              #{formatId(receipt.id.slice(0, 8))}
+              #{formatReceiptShortId(receipt.id)}
             </bdi>
 
             <span className="opacity-40">·</span>
@@ -188,6 +225,13 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
             </div>
           </div>
 
+          {(receipt.cardSummary || receipt.cardNumber) && (
+            <div className="flex items-center gap-1 text-[11px] text-ink-soft">
+              <CreditCard className="w-3 h-3 text-warn-fg shrink-0" />
+              <span className="truncate">{receipt.cardSummary || receipt.cardNumber}</span>
+            </div>
+          )}
+
           {receipt.reviewedBy && (
             <div className="flex items-center gap-1 text-[11px] text-brand-fg">
               <ShieldCheck className="w-3.5 h-3.5 text-ok-fg shrink-0" />
@@ -196,6 +240,17 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
                 <bdi dir="ltr" className="tnum font-medium">
                   #{formatId(receipt.reviewedBy)}
                 </bdi>
+              </span>
+            </div>
+          )}
+
+          {isVoided && (receipt.voidedBy || receipt.voidReason) && (
+            <div className="flex items-center gap-1 text-[11px] text-ink-soft">
+              <Ban className="w-3.5 h-3.5 text-danger-fg shrink-0" />
+              <span className="truncate">
+                {receipt.voidReason
+                  ? `${t('admin.receipts.voidReason')}: ${receipt.voidReason}`
+                  : `${t('admin.receipts.voidedBy')}: #${formatId(receipt.voidedBy)}`}
               </span>
             </div>
           )}

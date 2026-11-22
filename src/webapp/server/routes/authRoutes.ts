@@ -90,6 +90,7 @@ export function registerAuthRoutes(
         user: validated.user,
         locale,
         languageSelectionEnabled,
+        botUsername: options.botUsername,
       });
     }
   );

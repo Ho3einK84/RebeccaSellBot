@@ -6,6 +6,7 @@ import {
   formatNumber,
   formatBytes,
   formatCardNumberSpaced,
+  formatReceiptShortId,
   getAvatarChar,
   sanitizeDisplayName,
   formatIsoDate,
@@ -114,6 +115,15 @@ describe('Webapp Formatters & Locales', () => {
       isMeaningful: false,
       initials: '',
     });
+    expect(sanitizeDisplayName('\u3164\u2800', '\u200B', '@fallback')).toEqual({
+      displayName: '@fallback',
+      isMeaningful: false,
+      initials: '',
+    });
+    expect(getAvatarChar('\u3164\u2800', 'ali')).toBe('A');
+    expect(formatReceiptShortId('rec_1791234567890_a1b2c3')).toBe('a1b2c3');
+    expect(formatReceiptShortId('rec_1001')).toBe('1001');
+    expect(formatReceiptShortId('longreceiptidwithoutunderscore')).toBe('rscore');
     expect(getAvatarChar('\u200Breza', 'u1')).toBe('R');
     expect(getAvatarChar('', 'admin')).toBe('A');
     expect(getAvatarChar('', '')).toBe('👤');
@@ -214,6 +224,10 @@ describe('transactionFormatters', () => {
 
     it('maps all standard transaction types', () => {
       expect(getTransactionTypeLabel('topup', '', tFa)).toBe('افزایش موجودی');
+      expect(getTransactionTypeLabel('topup_void', '', tFa)).toBe('ابطال رسید');
+      expect(getTransactionTypeLabel('promo', '', tFa)).toBe('کد هدیه / تخفیف');
+      expect(getTransactionTypeLabel('lucky_wheel', '', tFa)).toBe('گردونه شانس');
+      expect(getTransactionTypeLabel('trial', '', tFa)).toBe('سرویس تست');
       expect(getTransactionTypeLabel('refund', '', tFa)).toBe('بازگشت وجه');
       expect(getTransactionTypeLabel('cashback', '', tFa)).toBe('کش‌بک خرید');
       expect(getTransactionTypeLabel('referral_bonus', '', tFa)).toBe('پاداش دعوت');
@@ -223,6 +237,10 @@ describe('transactionFormatters', () => {
       expect(getTransactionTypeLabel('other_unknown', '', tFa)).toBe('تراکنش کیف پول');
 
       expect(getTransactionTypeLabel('topup', '', tEn)).toBe('Deposit');
+      expect(getTransactionTypeLabel('topup_void', '', tEn)).toBe('Receipt Void');
+      expect(getTransactionTypeLabel('promo', '', tEn)).toBe('Promo Credit');
+      expect(getTransactionTypeLabel('lucky_wheel', '', tEn)).toBe('Lucky Wheel');
+      expect(getTransactionTypeLabel('trial', '', tEn)).toBe('Free Trial');
       expect(getTransactionTypeLabel('refund', '', tEn)).toBe('Refund');
       expect(getTransactionTypeLabel('cashback', '', tEn)).toBe('Cashback');
       expect(getTransactionTypeLabel('referral_bonus', '', tEn)).toBe('Referral Bonus');
@@ -288,6 +306,14 @@ describe('transactionFormatters', () => {
       expect(formatTransactionDescription(receipt, 'fa')).toBe('تأیید فیش واریزی توسط پشتیبانی');
       expect(formatTransactionDescription(receipt, 'en')).toBe(
         'Deposit receipt approved by support'
+      );
+
+      const voidedReceipt = 'Void approved top-up receipt rec_1001 by admin 12345';
+      expect(formatTransactionDescription(voidedReceipt, 'fa')).toBe(
+        'ابطال رسید تأییدشده توسط مدیریت'
+      );
+      expect(formatTransactionDescription(voidedReceipt, 'en')).toBe(
+        'Approved receipt voided by admin'
       );
 
       const wheel = 'Lucky wheel spin #3 prize (+10000 Toman, Luck: 50%)';

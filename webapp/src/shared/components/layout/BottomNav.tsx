@@ -8,8 +8,12 @@ export interface BottomNavItem<T extends string> {
   icon: React.ComponentType<{ className?: string }>;
   /** Numeric badge (e.g. pending receipts or service count). */
   count?: number;
+  /** Optional per-item numeric badge accent colour override. */
+  badgeTone?: 'brand' | 'warn' | 'danger';
   /** Dot badge for quiet attention state without a count. */
   dot?: boolean;
+  /** Optional dot colour tone. */
+  dotTone?: 'ok' | 'warn' | 'danger';
 }
 
 interface BottomNavProps<T extends string> {
@@ -18,7 +22,7 @@ interface BottomNavProps<T extends string> {
   onSelect: (id: T) => void;
   ariaLabel: string;
   /** Optional accent colour override kept subtle for unread counts. */
-  badgeTone?: 'brand' | 'danger';
+  badgeTone?: 'brand' | 'warn' | 'danger';
   className?: string;
 }
 
@@ -36,7 +40,6 @@ export function BottomNav<T extends string>({
 }: BottomNavProps<T>) {
   const { locale } = useLanguage();
   const { formatNumber } = useFormatters();
-  const badgeBg = badgeTone === 'danger' ? 'bg-danger text-white' : 'bg-brand text-brand-ink';
   const isDense = items.length >= 6;
 
   return (
@@ -48,6 +51,15 @@ export function BottomNav<T extends string>({
         {items.map((item) => {
           const Icon = item.icon;
           const active = item.id === activeId;
+          const itemTone = item.badgeTone ?? badgeTone;
+          const badgeBg =
+            itemTone === 'danger'
+              ? 'bg-danger text-white'
+              : itemTone === 'warn'
+                ? 'bg-warn-soft text-warn-fg border border-warn/40'
+                : 'bg-brand text-brand-ink';
+          const dotBg =
+            item.dotTone === 'ok' ? 'bg-ok' : item.dotTone === 'danger' ? 'bg-danger' : 'bg-warn';
           const countStr =
             item.count !== undefined && item.count > 0
               ? item.count > 99
@@ -99,7 +111,7 @@ export function BottomNav<T extends string>({
                   </bdi>
                 ) : item.dot ? (
                   <span
-                    className="absolute top-0.5 end-1 w-2 h-2 rounded-full bg-warn ring-2 ring-surface"
+                    className={`absolute top-0.5 end-1 w-2 h-2 rounded-full ring-2 ring-surface ${dotBg}`}
                     aria-hidden="true"
                   />
                 ) : null}
