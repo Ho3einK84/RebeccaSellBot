@@ -173,6 +173,8 @@ describe('AutomatedPaymentService', () => {
     expect(order.provider).toBe('forapp_card');
     expect(order.payableAmountRial).toBe(order.payableAmount * 10);
     const insertedOrder = mock.state.insertCalls[0]?.values as Record<string, unknown>;
+    expect(Number(insertedOrder.payableAmount)).toBeGreaterThan(100_000);
+    expect(Number(insertedOrder.payableAmount)).toBeLessThanOrEqual(100_999);
     expect(insertedOrder.payableAmountRial).toBe(Number(insertedOrder.payableAmount) * 10);
   });
 

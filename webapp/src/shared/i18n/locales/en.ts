@@ -1023,7 +1023,7 @@ export const en: DeepPartial<TranslationSchema> = {
       luhnWarning: 'Luhn checksum is non-standard; please double-check the digits.',
       uniqueAmountLabel: 'Unique Card-to-Card Amount',
       uniqueAmountDesc:
-        'Offset each transfer by a small unique amount for instant receipt matching',
+        'Add a small unique offset (+1–999 Toman) to each transfer for instant matching without leaving users short of a plan price',
       saveBtn: 'Save Card',
       editBtn: 'Edit',
       cancelBtn: 'Cancel',

@@ -567,7 +567,21 @@ describe('Multi-Card Rotation & Unique Payable Amount (PaymentService)', () => {
     expect(['card_a', 'card_b']).toContain(instructions.cardId);
   });
 
-  it('allocates unique payable amounts avoiding pending collisions and always stays positive', async () => {
+  it('allocates unique payable amounts avoiding pending collisions and rounds upward by default', async () => {
+    // Default mode adds +1..+999 Toman so users never fall short of their target package price
+    const defaultUp = computeUniquePayableAmount(50_000, [50_001, 50_002], {
+      minOffset: 1,
+      maxOffset: 5,
+      step: 1,
+      random: () => 0,
+    });
+    expect(defaultUp).toEqual({
+      requestedAmount: 50_000,
+      payableAmount: 50_003,
+      offset: 3,
+      isUnique: true,
+    });
+
     const blocked = [99_999, 99_998, 99_997];
     const alloc = computeUniquePayableAmount(100_000, blocked, {
       minOffset: 1,

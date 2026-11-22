@@ -677,7 +677,7 @@ export class AutomatedPaymentService {
     await this.cancelPendingForAppOrdersForUser(params.telegramId);
 
     const allocation = await this.paymentService.allocateUniquePayableAmount(amount, {
-      mode: 'deduct',
+      mode: 'add',
       minOffset: 1,
       maxOffset: 999,
     });

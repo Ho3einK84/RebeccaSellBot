@@ -338,8 +338,9 @@ export function serializeBankCardsJson(cards: readonly BankCardConfig[]): string
 /**
  * Pure, collision-avoiding payable-amount allocator.
  *
- * Applies a small randomized offset/deduction (default 1..999 Toman) so each
- * pending manual card-to-card transfer has an easily distinguishable amount.
+ * Applies a small randomized upward offset (default +1..+999 Toman) so each
+ * pending card-to-card transfer has an easily distinguishable amount without
+ * ever leaving the customer short of their target package price or deficit.
  * Guarantees `payableAmount > 0` and avoids collisions with `existingPendingAmounts`.
  */
 export function computeUniquePayableAmount(
@@ -371,7 +372,7 @@ export function computeUniquePayableAmount(
       ? options.step
       : DEFAULT_UNIQUE_STEP;
 
-  const preferredMode = options.mode ?? 'deduct';
+  const preferredMode = options.mode ?? 'add';
   const effectiveMode: 'deduct' | 'add' =
     preferredMode === 'deduct' && requestedAmount <= minOffset ? 'add' : preferredMode;
 
