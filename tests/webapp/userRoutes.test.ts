@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createWebAppServer } from '../../src/webapp/server/server.js';
 import { PurchaseCheckoutUnavailableError } from '../../src/domain/services/PurchaseCheckoutService.js';
@@ -8,10 +8,15 @@ import {
 } from '../../src/domain/services/WalletService.js';
 import { RebeccaOriginDownError } from '../../src/domain/services/RebeccaService.js';
 import { normalizeSupportUsername } from '../../src/webapp/server/routes/userRoutes.js';
-import { createMockUserServices, createTestConfig } from './helpers/webappTestHarness.js';
+import {
+  createMockUserServices,
+  createResettableRateLimitStore,
+  createTestConfig,
+} from './helpers/webappTestHarness.js';
 
 describe('WebApp User Routes (/api/user/*)', () => {
   let app: FastifyInstance;
+  const rateLimits = createResettableRateLimitStore();
   const {
     mockServices,
     mockWalletService,
@@ -22,14 +27,27 @@ describe('WebApp User Routes (/api/user/*)', () => {
     mockTranslationService,
   } = createMockUserServices();
   const mockConfig = createTestConfig();
+  const defaultGetSetting = mockTranslationService.getSetting.getMockImplementation();
+  const defaultGetPendingReceiptForUser = mockWalletService.getPendingReceiptForUser;
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    app = await createWebAppServer(mockConfig, mockServices);
+  beforeAll(async () => {
+    app = await createWebAppServer(mockConfig, mockServices, {
+      serveStatic: false,
+      rateLimitStore: rateLimits.Store,
+    });
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     if (app) await app.close();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    if (defaultGetSetting) {
+      mockTranslationService.getSetting.mockImplementation(defaultGetSetting);
+    }
+    mockWalletService.getPendingReceiptForUser = defaultGetPendingReceiptForUser;
+    rateLimits.reset();
   });
 
   const getUserToken = (telegramId = 55555) => {
@@ -1320,10 +1338,14 @@ describe('WebApp User Routes (/api/user/*)', () => {
             };
           }),
         };
-        const promoApp = await createWebAppServer(mockConfig, {
-          ...mockServices,
-          promoService: promoService as any,
-        });
+        const promoApp = await createWebAppServer(
+          mockConfig,
+          {
+            ...mockServices,
+            promoService: promoService as any,
+          },
+          { serveStatic: false }
+        );
         try {
           const token = promoApp.jwt.sign({ telegramId: 55555, role: 'user' });
           const quoteRes = await promoApp.inject({

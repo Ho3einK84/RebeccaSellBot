@@ -16,7 +16,14 @@ export const queryKeys = {
   user: {
     profile: ['user', 'profile'] as const,
     configs: ['user', 'configs'] as const,
+    configUsage: (configId: string) => ['user', 'configs', 'usage', configId] as const,
     packages: ['user', 'packages'] as const,
-    transactions: (page?: number) => ['user', 'transactions', page] as const,
+    transactions: (page?: number, filter?: string) =>
+      filter && filter !== 'all'
+        ? (['user', 'transactions', page, filter] as const)
+        : (['user', 'transactions', page] as const),
+    receipts: (page?: number) => ['user', 'receipts', page] as const,
+    wheel: ['user', 'wheel'] as const,
+    trial: ['user', 'trial'] as const,
   },
 };

@@ -115,7 +115,17 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       return;
     }
 
-    if (payload === 'topup' || payload === 'receipt') {
+    if (payload === 'topup' || payload === 'receipt' || payload?.startsWith('topup_')) {
+      if (payload?.startsWith('topup_')) {
+        const rawAmt = Number(payload.slice('topup_'.length).trim());
+        if (Number.isSafeInteger(rawAmt) && rawAmt > 0) {
+          ctx.session.pendingTopupIntent = {
+            kind: 'new_config',
+            deficitAmount: rawAmt,
+            createdAt: Date.now(),
+          };
+        }
+      }
       await ctx.conversation.enter('topupConversation');
       return;
     }

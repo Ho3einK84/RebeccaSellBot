@@ -16,6 +16,7 @@ export interface TelegramWebApp {
     user?: TelegramWebAppUser;
     auth_date?: string;
     hash?: string;
+    start_param?: string;
   };
   version: string;
   platform: string;
@@ -42,6 +43,7 @@ export interface TelegramWebApp {
   sendData: (data: string) => void;
   openTelegramLink?: (url: string) => void;
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
+  requestContact?: (callback?: (sent: boolean) => void) => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
   setBottomBarColor?: (color: string) => void;

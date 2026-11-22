@@ -64,6 +64,12 @@ import type {
   UserConfigsResponse,
   UserPackagesResponse,
   UserTransactionsResponse,
+  TransactionFilterType,
+  UserReceiptsResponse,
+  PrepareTopupResponse,
+  SubmitTopupReceiptResponse,
+  WalletTransferPreviewResponse,
+  WalletTransferResponse,
   CustomVolumeQuoteResponse,
   CreateCheckoutPayload,
   UserCheckoutResponse,
@@ -72,9 +78,20 @@ import type {
   ToggleConfigStatusResponse,
   RevokeConfigResponse,
   RefreshConfigResponse,
+  SyncAllConfigsResponse,
+  ClaimSubLinkResponse,
+  UserConfigUsageResponse,
+  ConfigRefundQuoteResponse,
+  ConfigDeleteResponse,
+  ConfigTransferPreviewResponse,
+  ConfigTransferResponse,
   UserRenewalOptionsResponse,
   PromoQuoteResponse,
   PromoRedeemResponse,
+  UserTrialStatus,
+  TrialClaimResponse,
+  LuckyWheelStatusResponse,
+  LuckyWheelSpinResponse,
 } from '@/shared/types/userPortal.js';
 
 export class ApiClientError extends Error {
@@ -170,7 +187,25 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     throw await parseErrorResponse(response);
   }
-  return response.json() as Promise<T>;
+  const data = (await response.json()) as T;
+  // HTTP 202 with pending-outcome code (e.g. PURCHASE_OUTCOME_PENDING / REFUND_OUTCOME_PENDING)
+  // has response.ok === true; surface it as ApiClientError(202) so callers transition cleanly
+  // to the verification/reconciliation state instead of hanging in processing.
+  if (
+    response.status === 202 &&
+    data &&
+    typeof data === 'object' &&
+    (data as { success?: unknown }).success !== true
+  ) {
+    const body = data as { error?: string; message?: string; code?: string };
+    throw new ApiClientError(
+      body.error || body.message || 'Operation pending verification',
+      202,
+      body.code,
+      data
+    );
+  }
+  return data;
 }
 
 async function requestBlob(url: string, options: RequestInit = {}): Promise<Blob> {
@@ -700,8 +735,71 @@ export const api = {
   getUserPackages: (): Promise<UserPackagesResponse> =>
     request<UserPackagesResponse>('/api/user/packages'),
 
-  getUserTransactions: (page = 1, limit = 10): Promise<UserTransactionsResponse> =>
-    request<UserTransactionsResponse>(`/api/user/transactions?page=${page}&limit=${limit}`),
+  getUserTransactions: (
+    page = 1,
+    limit = 10,
+    filter: TransactionFilterType = 'all'
+  ): Promise<UserTransactionsResponse> => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (filter && filter !== 'all') {
+      params.set('type', filter);
+    }
+    return request<UserTransactionsResponse>(`/api/user/transactions?${params.toString()}`);
+  },
+
+  getUserReceipts: (page = 1, limit = 10): Promise<UserReceiptsResponse> =>
+    request<UserReceiptsResponse>(`/api/user/receipts?page=${page}&limit=${limit}`),
+
+  prepareUserTopup: (amount: number): Promise<PrepareTopupResponse> =>
+    request<PrepareTopupResponse>('/api/user/topup/prepare', {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
+
+  submitUserTopupReceipt: (payload: {
+    amount: number;
+    cardId?: string;
+    cardNumber?: string;
+    fileBase64: string;
+    fileName?: string;
+  }): Promise<SubmitTopupReceiptResponse> =>
+    request<SubmitTopupReceiptResponse>('/api/user/topup/receipt', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  previewWalletTransfer: (recipient: string): Promise<WalletTransferPreviewResponse> =>
+    request<WalletTransferPreviewResponse>('/api/user/wallet/transfer/preview', {
+      method: 'POST',
+      body: JSON.stringify({ recipient }),
+    }),
+
+  executeWalletTransfer: (payload: {
+    recipient?: string;
+    toTelegramId?: number;
+    amount: number;
+    note?: string;
+  }): Promise<WalletTransferResponse> =>
+    request<WalletTransferResponse>('/api/user/wallet/transfer', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getUserTrialStatus: (): Promise<UserTrialStatus> =>
+    request<UserTrialStatus>('/api/user/trial/status'),
+
+  claimUserTrial: (): Promise<TrialClaimResponse> =>
+    request<TrialClaimResponse>('/api/user/trial/claim', {
+      method: 'POST',
+    }),
+
+  getUserWheelStatus: (): Promise<LuckyWheelStatusResponse> =>
+    request<LuckyWheelStatusResponse>('/api/user/wheel/status'),
+
+  spinUserWheel: (): Promise<LuckyWheelSpinResponse> =>
+    request<LuckyWheelSpinResponse>('/api/user/wheel/spin', {
+      method: 'POST',
+    }),
 
   getUserQuote: (gb: number, days: number): Promise<CustomVolumeQuoteResponse> =>
     request<CustomVolumeQuoteResponse>(`/api/user/quote?gb=${gb}&days=${days}`),
@@ -724,13 +822,14 @@ export const api = {
     configId: string,
     enabled: boolean,
     packageId?: string,
-    price?: number
+    price?: number,
+    custom?: { gb: number; days: number }
   ): Promise<ToggleAutoRenewResponse> =>
     request<ToggleAutoRenewResponse>(
       `/api/user/configs/${encodeURIComponent(configId)}/auto-renew`,
       {
         method: 'POST',
-        body: JSON.stringify({ enabled, packageId, price }),
+        body: JSON.stringify({ enabled, packageId, price, ...(custom ? { custom } : {}) }),
       }
     ),
 
@@ -754,6 +853,52 @@ export const api = {
   refreshConfigStats: (configId: string): Promise<RefreshConfigResponse> =>
     request<RefreshConfigResponse>(`/api/user/configs/${encodeURIComponent(configId)}/refresh`, {
       method: 'POST',
+    }),
+
+  syncAllUserConfigs: (): Promise<SyncAllConfigsResponse> =>
+    request<SyncAllConfigsResponse>('/api/user/configs/sync-all', {
+      method: 'POST',
+    }),
+
+  claimUserSubLink: (subUrl: string): Promise<ClaimSubLinkResponse> =>
+    request<ClaimSubLinkResponse>('/api/user/configs/claim', {
+      method: 'POST',
+      body: JSON.stringify({ subUrl }),
+    }),
+
+  getUserConfigUsage: (configId: string): Promise<UserConfigUsageResponse> =>
+    request<UserConfigUsageResponse>(`/api/user/configs/${encodeURIComponent(configId)}/usage`),
+
+  getUserConfigRefundQuote: (configId: string): Promise<ConfigRefundQuoteResponse> =>
+    request<ConfigRefundQuoteResponse>(
+      `/api/user/configs/${encodeURIComponent(configId)}/refund-quote`
+    ),
+
+  deleteUserConfig: (configId: string, withRefund = false): Promise<ConfigDeleteResponse> =>
+    request<ConfigDeleteResponse>(`/api/user/configs/${encodeURIComponent(configId)}/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ withRefund }),
+    }),
+
+  previewUserConfigTransfer: (
+    configId: string,
+    recipient: string
+  ): Promise<ConfigTransferPreviewResponse> =>
+    request<ConfigTransferPreviewResponse>(
+      `/api/user/configs/${encodeURIComponent(configId)}/transfer/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ recipient }),
+      }
+    ),
+
+  transferUserConfig: (
+    configId: string,
+    payload: { recipient?: string; toTelegramId?: number }
+  ): Promise<ConfigTransferResponse> =>
+    request<ConfigTransferResponse>(`/api/user/configs/${encodeURIComponent(configId)}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 
   getRenewalOptions: (configId: string): Promise<UserRenewalOptionsResponse> =>

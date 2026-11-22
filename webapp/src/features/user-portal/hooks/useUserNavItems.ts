@@ -1,4 +1,4 @@
-import { LayoutDashboard, Wifi, ShoppingBag, Wallet, Users } from 'lucide-react';
+import { LayoutDashboard, Wifi, ShoppingBag, Wallet, Gift } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import type { BottomNavItem } from '@/shared/components/layout/BottomNav.js';
 import type { UserTabType } from '@/shared/types/userPortal.js';
@@ -10,6 +10,7 @@ import type { UserTabType } from '@/shared/types/userPortal.js';
 export function useUserNavItems(options?: {
   configsCount?: number;
   hasPendingReceipt?: boolean;
+  wheelReady?: boolean;
 }): BottomNavItem<UserTabType>[] {
   const { t } = useLanguage();
   const configsCount = options?.configsCount ?? 0;
@@ -29,6 +30,11 @@ export function useUserNavItems(options?: {
       icon: Wallet,
       dot: options?.hasPendingReceipt,
     },
-    { id: 'referral', label: t('user.tabs.referral'), icon: Users },
+    {
+      id: 'referral',
+      label: t('user.tabs.referral'),
+      icon: Gift,
+      dot: options?.wheelReady,
+    },
   ];
 }

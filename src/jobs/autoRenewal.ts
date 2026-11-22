@@ -190,17 +190,50 @@ export async function runAutoRenewalSweep(
         pricingService.getPackages?.(config.panelId, config.serviceId, false) ?? [];
       let selectedPackage = availablePackages.find((pkg) => pkg.id === config.autoRenewPackageId);
 
-      // Check fallback via getPackageById, ensuring enabled, matching panel/service, and non-synthetic
-      if (!selectedPackage && pricingService.getPackageById) {
-        const candidatePkg = pricingService.getPackageById(config.autoRenewPackageId);
-        if (
-          candidatePkg &&
-          candidatePkg.enabled !== false &&
-          (candidatePkg.panelId === undefined || candidatePkg.panelId === config.panelId) &&
-          (candidatePkg.serviceId === undefined || candidatePkg.serviceId === config.serviceId) &&
-          !/^custom_(\d+)gb_(\d+)d$/i.test(candidatePkg.id)
-        ) {
-          selectedPackage = candidatePkg;
+      // Check fallback via getPackageById:
+      // - Static packages: must be enabled and match panel/service.
+      // - Custom packages (`custom_XXgb_YYd`): allowed only when custom volume is enabled
+      //   and bounds still hold; price ceiling is still enforced below.
+      if (!selectedPackage && pricingService.getPackageById && config.autoRenewPackageId) {
+        const customMatch = /^custom_(\d+)gb_(\d+)d$/i.exec(config.autoRenewPackageId);
+        if (customMatch) {
+          const cvEnabled =
+            typeof translationService.getSetting === 'function'
+              ? translationService
+                  .getSetting('custom_volume_enabled', 'true')
+                  .trim()
+                  .toLowerCase() !== 'false' &&
+                translationService
+                  .getSetting('custom_volume_enabled', 'true')
+                  .trim()
+                  .toLowerCase() !== '0'
+              : true;
+          const gb = Number(customMatch[1]);
+          const days = Number(customMatch[2]);
+          const minGb =
+            typeof translationService.getSettingNum === 'function'
+              ? translationService.getSettingNum('custom_min_gb', 5)
+              : 5;
+          const maxGb =
+            typeof translationService.getSettingNum === 'function'
+              ? translationService.getSettingNum('custom_max_gb', 500)
+              : 500;
+          if (cvEnabled && gb >= minGb && gb <= maxGb && days >= 1 && days <= 365) {
+            const candidatePkg = pricingService.getPackageById(config.autoRenewPackageId);
+            if (candidatePkg && candidatePkg.enabled !== false) {
+              selectedPackage = candidatePkg;
+            }
+          }
+        } else {
+          const candidatePkg = pricingService.getPackageById(config.autoRenewPackageId);
+          if (
+            candidatePkg &&
+            candidatePkg.enabled !== false &&
+            (candidatePkg.panelId === undefined || candidatePkg.panelId === config.panelId) &&
+            (candidatePkg.serviceId === undefined || candidatePkg.serviceId === config.serviceId)
+          ) {
+            selectedPackage = candidatePkg;
+          }
         }
       }
 

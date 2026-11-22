@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { FastifyRateLimitStore, FastifyRateLimitStoreCtor } from '@fastify/rate-limit';
 import { vi } from 'vitest';
 import type { Config } from '../../../src/infra/config.js';
 import type { BotServices } from '../../../src/telegram/types.js';
@@ -70,6 +71,75 @@ export function createTestConfig(overrides: Partial<Config> = {}): Config {
     ADMIN_SESSION_SECRET: TEST_ADMIN_SESSION_SECRET,
     ...overrides,
   } as unknown as Config;
+}
+
+/**
+ * Creates an in-memory @fastify/rate-limit store whose route buckets can all be
+ * cleared in O(1) between tests, allowing test suites to reuse one Fastify
+ * instance per describe block without rate-limit leakage.
+ */
+export function createResettableRateLimitStore(): {
+  Store: FastifyRateLimitStoreCtor;
+  reset: () => void;
+} {
+  const buckets = new Set<Map<string, { current: number; iterationStartMs: number }>>();
+
+  class ResettableRateLimitStore implements FastifyRateLimitStore {
+    private readonly entries = new Map<string, { current: number; iterationStartMs: number }>();
+
+    constructor() {
+      buckets.add(this.entries);
+    }
+
+    incr(
+      key: string,
+      callback: (error: Error | null, result?: { current: number; ttl: number }) => void,
+      timeWindow: number
+    ): void {
+      const now = Date.now();
+      let entry = this.entries.get(key);
+      if (!entry || entry.iterationStartMs + timeWindow <= now) {
+        entry = { current: 1, iterationStartMs: now };
+      } else {
+        entry.current += 1;
+      }
+      this.entries.set(key, entry);
+      callback(null, {
+        current: entry.current,
+        ttl: timeWindow - (now - entry.iterationStartMs),
+      });
+    }
+
+    read(
+      key: string,
+      callback: (error: Error | null, result?: { current: number; ttl: number }) => void,
+      timeWindow: number
+    ): void {
+      const now = Date.now();
+      const entry = this.entries.get(key);
+      if (!entry || entry.iterationStartMs + timeWindow <= now) {
+        callback(null, { current: 0, ttl: 0 });
+        return;
+      }
+      callback(null, {
+        current: entry.current,
+        ttl: timeWindow - (now - entry.iterationStartMs),
+      });
+    }
+
+    child(): FastifyRateLimitStore {
+      return new ResettableRateLimitStore();
+    }
+  }
+
+  return {
+    Store: ResettableRateLimitStore,
+    reset: () => {
+      for (const bucket of buckets) {
+        bucket.clear();
+      }
+    },
+  };
 }
 
 export function createMockBaseServices(overrides: Partial<BotServices> = {}) {

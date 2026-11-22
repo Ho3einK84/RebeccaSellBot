@@ -161,10 +161,11 @@ export function formatTransactionDescription(
 
   // 6. Top-up receipt approved / voided
   // e.g. "Top-up receipt approved by admin 123"
+  // e.g. "Top-up receipt rec_123 voided by admin 456"
   if (/Top-up receipt approved/i.test(desc)) {
     return isFa ? 'تأیید فیش واریزی توسط پشتیبانی' : 'Deposit receipt approved by support';
   }
-  if (/Void approved top-up receipt/i.test(desc)) {
+  if (/Void approved top-up receipt/i.test(desc) || /Top-up receipt\s+\S+\s+voided/i.test(desc)) {
     return isFa ? 'ابطال رسید تأییدشده توسط مدیریت' : 'Approved receipt voided by admin';
   }
 
@@ -205,12 +206,28 @@ export function formatTransactionDescription(
     return `Free trial config: ${username} (${details})`;
   }
 
-  // 11. Transfer to user
+  // 11. Transfer to user (matches both legacy "Transfer to user" and WalletService "Transfer to <id>[: note]")
+  if ((m = desc.match(/^Transfer to\s+(\d+)(?::\s*(.*))?$/i))) {
+    const targetId = isFa ? toPersianDigits(m[1]!) : m[1]!;
+    const note = m[2]?.trim();
+    if (isFa) {
+      return note ? `انتقال به کاربر ${targetId} (${note})` : `انتقال موجودی به کاربر ${targetId}`;
+    }
+    return note ? `Transfer to user ${targetId} (${note})` : `Transfer to user ${targetId}`;
+  }
   if (/Transfer to user/i.test(desc)) {
     return isFa ? 'انتقال موجودی به کاربر' : 'Balance transfer to user';
   }
 
-  // 12. Transfer received from user
+  // 12. Transfer received from user (matches both legacy and WalletService "Transfer from <id>[: note]")
+  if ((m = desc.match(/^Transfer from\s+(\d+)(?::\s*(.*))?$/i))) {
+    const senderId = isFa ? toPersianDigits(m[1]!) : m[1]!;
+    const note = m[2]?.trim();
+    if (isFa) {
+      return note ? `دریافت از کاربر ${senderId} (${note})` : `دریافت موجودی از کاربر ${senderId}`;
+    }
+    return note ? `Transfer from user ${senderId} (${note})` : `Transfer from user ${senderId}`;
+  }
   if (/Transfer received from user/i.test(desc)) {
     return isFa ? 'انتقال موجودی دریافتی از کاربر' : 'Balance transfer received';
   }

@@ -7,10 +7,11 @@ import {
   RefreshCw,
   Send,
   Trash2,
-  ExternalLink,
   AlertTriangle,
   ShieldAlert,
   RotateCcw,
+  Activity,
+  Server,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/shared/components/ui/Modal.js';
@@ -23,11 +24,8 @@ import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { api, ApiClientError } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
-import {
-  openTelegramLinkAndMinimize,
-  minimizeOrCloseWebApp,
-} from '@/shared/lib/telegramNavigation.js';
-import type { UserConfigRecord } from '@/shared/types/userPortal.js';
+import { useUserConfigUsage } from '../hooks/useUserPortalData.js';
+import type { CustomVolumeSettings, UserConfigRecord } from '@/shared/types/userPortal.js';
 import {
   ServiceStatusDot,
   ServiceStatusBadge,
@@ -37,6 +35,9 @@ import {
   formatServiceCreatedDate,
 } from './ServiceStatusTraffic.js';
 import { AutoRenewModal } from './AutoRenewModal.js';
+import { SmartConnectButtons } from './SmartConnectButtons.js';
+import { ConfigTransferModal } from './ConfigTransferModal.js';
+import { ConfigDeleteRefundModal } from './ConfigDeleteRefundModal.js';
 
 interface ServiceManagementModalProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ interface ServiceManagementModalProps {
   config: UserConfigRecord | null;
   botUsername?: string;
   currency?: string;
+  customVolumeSettings?: CustomVolumeSettings;
   onOpenQr: (subUrl: string, configUsername: string) => void;
   onRenewConfig?: (config: UserConfigRecord) => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
@@ -53,8 +55,8 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   isOpen,
   onClose,
   config,
-  botUsername,
   currency: propCurrency,
+  customVolumeSettings,
   onOpenQr,
   onRenewConfig,
   onNotify,
@@ -62,7 +64,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   const { t, locale } = useLanguage();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
-  const { formatToman } = useFormatters();
+  const { formatToman, formatIsoDate, formatBytes } = useFormatters();
   const queryClient = useQueryClient();
 
   const currency = propCurrency || t('common.currency');
@@ -71,11 +73,15 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   const [isTogglingAutoRenew, setIsTogglingAutoRenew] = useState(false);
   const [autoRenewOptimistic, setAutoRenewOptimistic] = useState(false);
   const [isAutoRenewModalOpen, setIsAutoRenewModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
 
   // Sub-confirmation modal state: 'disable' | 'enable' | 'revoke' | null
   const [confirmAction, setConfirmAction] = useState<'disable' | 'enable' | 'revoke' | null>(null);
+
+  const { data: usageData } = useUserConfigUsage(config?.id ?? null, isOpen);
 
   useEffect(() => {
     if (config) {
@@ -87,6 +93,8 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
     if (!isOpen || !config) {
       setConfirmAction(null);
       setIsAutoRenewModalOpen(false);
+      setIsTransferModalOpen(false);
+      setIsDeleteModalOpen(false);
     }
   }, [isOpen, config]);
 
@@ -94,9 +102,12 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
 
   const isSubCopied = isCopied(`modal-sub-${config.id}`);
   const isDisabled = config.panelStatus === 'disabled';
+  const hasSubModalOpen =
+    confirmAction !== null || isAutoRenewModalOpen || isTransferModalOpen || isDeleteModalOpen;
 
   const invalidateConfigQueries = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.user.configUsage(config.id) });
   };
 
   const handleCopySub = async () => {
@@ -205,32 +216,20 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
     }
   };
 
-  const handleOpenBotAction = (action: 'renew' | 'transfer' | 'delete') => {
-    triggerHaptic('selection');
-    const cleanBot = (botUsername || '').replace(/^@/, '').trim();
-    onClose();
-    if (!cleanBot) {
-      minimizeOrCloseWebApp();
-      return;
-    }
-    const url = `https://t.me/${cleanBot}?start=${action}_${config.id}`;
-    openTelegramLinkAndMinimize(url);
-  };
-
   const handleRenewAction = () => {
     triggerHaptic('medium');
-    if (onRenewConfig) {
-      onClose();
-      onRenewConfig(config);
-      return;
-    }
-    handleOpenBotAction('renew');
+    onClose();
+    onRenewConfig?.(config);
   };
+
+  const autoRenewPlanDisplay = config.autoRenewPackageName || config.autoRenewPackageId || '';
+  const totalNodeBytes =
+    usageData?.nodes.reduce((sum, item) => sum + Math.max(0, item.usedTraffic), 0) ?? 0;
 
   return (
     <>
       <Modal
-        isOpen={isOpen && confirmAction === null && !isAutoRenewModalOpen}
+        isOpen={isOpen && !hasSubModalOpen}
         onClose={onClose}
         maxWidth="lg"
         title={
@@ -241,7 +240,11 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             </bdi>
           </div>
         }
-        subtitle={t('user.services.manageTitle')}
+        subtitle={
+          config.panelName
+            ? `${t('user.services.manageTitle')} · ${config.panelName}`
+            : t('user.services.manageTitle')
+        }
       >
         <div className="flex flex-col gap-4 text-start">
           {/* Status & Timing Overview */}
@@ -272,18 +275,81 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 {formatServiceCreatedDate(config.createdAt, locale, t)}
               </span>
             </div>
+
+            {config.lastSyncedAt && (
+              <div className="text-[10px] text-ink-muted tnum">
+                {t('user.services.lastSyncedLabel').replace(
+                  '{time}',
+                  formatIsoDate(config.lastSyncedAt)
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Quick Actions: Native Renew, Copy Link, QR, Refresh Status */}
+          {/* Live Online Status & Per-Node Breakdown */}
+          {usageData && (
+            <div className="p-3 rounded-tile border border-line bg-surface-2 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-semibold text-ink-soft inline-flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-brand-fg shrink-0" />
+                  <span>{t('user.services.usageBreakdownTitle')}</span>
+                </span>
+                <span className="text-[11px] text-ink-muted tnum">
+                  {t('user.services.lastOnlineLabel')}{' '}
+                  <strong className="text-ink font-medium">
+                    {usageData.onlineAt
+                      ? formatIsoDate(usageData.onlineAt)
+                      : t('user.services.neverConnected')}
+                  </strong>
+                </span>
+              </div>
+
+              {usageData.nodes.length > 0 ? (
+                <div className="flex flex-col gap-1.5 pt-1 border-t border-line">
+                  {usageData.nodes.slice(0, 6).map((node, idx) => {
+                    const pct =
+                      totalNodeBytes > 0
+                        ? Math.max(4, Math.round((node.usedTraffic / totalNodeBytes) * 100))
+                        : 0;
+                    return (
+                      <div key={`${node.nodeId ?? idx}`} className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[11px] gap-2">
+                          <span className="inline-flex items-center gap-1.5 text-ink-soft truncate">
+                            <Server className="w-3 h-3 opacity-60 shrink-0" />
+                            <span className="truncate">{node.nodeName}</span>
+                          </span>
+                          <bdi dir="ltr" className="font-mono text-ink tnum shrink-0">
+                            {formatBytes(node.usedTraffic)}
+                          </bdi>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-surface-3 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-brand"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span className="text-[11px] text-ink-muted">{t('user.services.noNodeUsage')}</span>
+              )}
+            </div>
+          )}
+
+          {/* Quick Actions: Native Renew, Copy Link, QR, Refresh Status, Smart Connect */}
           <div className="flex flex-col gap-2">
             <h4 className="text-xs font-semibold px-0.5 m-0 text-ink-soft">
               {t('user.services.quickActionsTitle')}
             </h4>
 
-            <Button type="button" size="md" variant="primary" onClick={handleRenewAction} block>
-              <RefreshCw className="w-4 h-4 shrink-0" />
-              <span>{t('user.services.renewService')}</span>
-            </Button>
+            {onRenewConfig && (
+              <Button type="button" size="md" variant="primary" onClick={handleRenewAction} block>
+                <RefreshCw className="w-4 h-4 shrink-0" />
+                <span>{t('user.services.renewService')}</span>
+              </Button>
+            )}
 
             {config.subUrl && (
               <div className="grid grid-cols-2 gap-2">
@@ -329,6 +395,15 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 {isRefreshing ? t('user.services.refreshing') : t('user.services.refresh')}
               </span>
             </Button>
+
+            {config.subUrl && (
+              <div className="pt-2">
+                <SmartConnectButtons
+                  subUrl={config.subUrl}
+                  configUsername={config.configUsername}
+                />
+              </div>
+            )}
           </div>
 
           {/* Service Controls: Auto-Renew Toggle, Status Toggle, Revoke Link */}
@@ -357,11 +432,11 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                 />
               </div>
 
-              {autoRenewOptimistic && config.autoRenewPackageId && (
+              {autoRenewOptimistic && autoRenewPlanDisplay && (
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-line text-[11px]">
                   <span className="text-ink-soft truncate tnum">
                     {t('user.services.autoRenewPackageInfo')
-                      .replace('{name}', config.autoRenewPackageId)
+                      .replace('{name}', autoRenewPlanDisplay)
                       .replace('{price}', formatToman(config.autoRenewPrice ?? 0))
                       .replace('{currency}', currency)}
                   </span>
@@ -422,16 +497,19 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             </button>
           </div>
 
-          {/* Bot Hand-off Actions */}
+          {/* Native Ownership & Deletion Actions */}
           <div className="flex flex-col gap-2 pt-3 border-t border-line">
             <h4 className="text-xs font-semibold px-0.5 m-0 text-ink-soft">
               {t('user.services.botActionsTitle')}
             </h4>
 
-            {/* Transfer in Bot */}
+            {/* Native Transfer */}
             <button
               type="button"
-              onClick={() => handleOpenBotAction('transfer')}
+              onClick={() => {
+                triggerHaptic('selection');
+                setIsTransferModalOpen(true);
+              }}
               className="group w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-surface-2 hover:bg-surface-3 text-ink border-line transition-all duration-200"
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -447,13 +525,15 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   </span>
                 </div>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-ink-muted shrink-0" />
             </button>
 
-            {/* Delete / Refund in Bot */}
+            {/* Native Delete / Refund */}
             <button
               type="button"
-              onClick={() => handleOpenBotAction('delete')}
+              onClick={() => {
+                triggerHaptic('warning');
+                setIsDeleteModalOpen(true);
+              }}
               className="group w-full min-h-11 p-3 rounded-tile border flex items-center justify-between gap-2.5 press rs-focus cursor-pointer bg-danger-soft hover:bg-danger/15 text-danger-fg border-danger/25 transition-all duration-200"
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -467,7 +547,6 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
                   </span>
                 </div>
               </div>
-              <ExternalLink className="w-3.5 h-3.5 text-danger-fg shrink-0" />
             </button>
           </div>
         </div>
@@ -479,78 +558,121 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
         onClose={() => setIsAutoRenewModalOpen(false)}
         config={config}
         currency={currency}
+        customVolumeSettings={customVolumeSettings}
         onEnabled={() => setAutoRenewOptimistic(true)}
         onNotify={onNotify}
       />
 
-      {/* Confirmation Sub-Modal for Disable / Enable / Revoke */}
-      {confirmAction && (
-        <Modal
-          isOpen={true}
-          onClose={() => setConfirmAction(null)}
-          maxWidth="sm"
-          closeOnBackdrop={!isTogglingStatus && !isRevoking}
-          title={
-            confirmAction === 'revoke'
-              ? t('user.services.revokeTitle')
-              : confirmAction === 'disable'
-                ? t('user.services.disableServiceTitle')
-                : t('user.services.enableServiceTitle')
-          }
-          icon={
-            <IconTile
-              tone={
-                confirmAction === 'revoke' ? 'danger' : confirmAction === 'disable' ? 'warn' : 'ok'
-              }
-              size="sm"
-            >
-              {confirmAction === 'revoke' ? <ShieldAlert /> : <Power />}
-            </IconTile>
-          }
-          footer={
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="flex-1"
-                onClick={() => setConfirmAction(null)}
-                disabled={isTogglingStatus || isRevoking}
-              >
-                {t('common.cancel')}
-              </Button>
+      {/* Native Service Ownership Transfer Modal */}
+      <ConfigTransferModal
+        isOpen={isTransferModalOpen}
+        config={config}
+        onClose={() => setIsTransferModalOpen(false)}
+        onTransferred={() => {
+          setIsTransferModalOpen(false);
+          onClose();
+        }}
+        onNotify={onNotify}
+      />
 
-              <Button
-                type="button"
-                variant={confirmAction === 'enable' ? 'success' : 'danger'}
-                className="flex-1"
-                onClick={() =>
-                  void (confirmAction === 'revoke'
-                    ? handleExecuteRevoke()
-                    : handleExecuteStatusToggle())
-                }
-                disabled={isTogglingStatus || isRevoking}
-                loading={isTogglingStatus || isRevoking}
-              >
-                <span>
-                  {confirmAction === 'revoke'
-                    ? t('user.services.revokeConfirm')
-                    : confirmAction === 'disable'
-                      ? t('user.services.disableService')
-                      : t('user.services.enableService')}
-                </span>
-              </Button>
-            </div>
-          }
-        >
-          <p className="text-xs leading-relaxed m-0 text-ink-soft">
-            {confirmAction === 'revoke'
-              ? t('user.services.revokeWarning')
-              : confirmAction === 'disable'
-                ? t('user.services.disableServiceDesc')
-                : t('user.services.enableServiceDesc')}
-          </p>
-        </Modal>
-      )}
+      {/* Native Delete & Refund Modal */}
+      <ConfigDeleteRefundModal
+        isOpen={isDeleteModalOpen}
+        config={config}
+        currency={currency}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onDeleted={() => {
+          setIsDeleteModalOpen(false);
+          onClose();
+        }}
+        onNotify={onNotify}
+      />
+
+      {/* Sub-modal: Confirm Enable/Disable */}
+      <Modal
+        isOpen={confirmAction === 'disable' || confirmAction === 'enable'}
+        onClose={() => setConfirmAction(null)}
+        maxWidth="sm"
+        title={
+          confirmAction === 'enable'
+            ? t('user.services.enableServiceTitle')
+            : t('user.services.disableServiceTitle')
+        }
+        icon={
+          <IconTile tone={confirmAction === 'enable' ? 'ok' : 'warn'} size="sm">
+            <Power />
+          </IconTile>
+        }
+        footer={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setConfirmAction(null)}
+              disabled={isTogglingStatus}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant={confirmAction === 'enable' ? 'primary' : 'danger'}
+              className="flex-1"
+              onClick={() => void handleExecuteStatusToggle()}
+              loading={isTogglingStatus}
+              disabled={isTogglingStatus}
+            >
+              {t('common.confirm')}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-xs leading-relaxed text-ink-soft m-0 text-start">
+          {confirmAction === 'enable'
+            ? t('user.services.enableServiceDesc')
+            : t('user.services.disableServiceDesc')}
+        </p>
+      </Modal>
+
+      {/* Sub-modal: Confirm Revoke Link */}
+      <Modal
+        isOpen={confirmAction === 'revoke'}
+        onClose={() => setConfirmAction(null)}
+        maxWidth="sm"
+        title={t('user.services.revokeTitle')}
+        icon={
+          <IconTile tone="danger" size="sm">
+            <ShieldAlert />
+          </IconTile>
+        }
+        footer={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setConfirmAction(null)}
+              disabled={isRevoking}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              className="flex-1"
+              onClick={() => void handleExecuteRevoke()}
+              loading={isRevoking}
+              disabled={isRevoking}
+            >
+              {t('user.services.revokeConfirm')}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-xs leading-relaxed text-ink-soft m-0 text-start">
+          {t('user.services.revokeWarning')}
+        </p>
+      </Modal>
     </>
   );
 };

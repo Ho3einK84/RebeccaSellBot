@@ -41,6 +41,8 @@ import { api, ApiClientError } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
 import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import { openTelegramLinkAndMinimize } from '@/shared/lib/telegramNavigation.js';
+import { useTelegramContactVerification } from '@/shared/hooks/useTelegramContactVerification.js';
+import { SmartConnectButtons } from './SmartConnectButtons.js';
 import type {
   CustomVolumeQuoteResponse,
   CustomVolumeSettings,
@@ -79,7 +81,7 @@ const RENEW_CUSTOM_PRESETS = [10, 20, 30, 50, 100, 200];
 const CUSTOM_NAME_REGEX = /^[a-z][a-z0-9_]{2,20}$/;
 
 function normalizeClientCustomName(raw: string): string {
-  return raw.trim().toLowerCase();
+  return normalizeInputDigits(raw).trim().toLowerCase();
 }
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
@@ -445,6 +447,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           ...(normalizedCustomName ? { requestedUsername: normalizedCustomName } : {}),
         });
         activeCheckoutId = refreshed.checkoutId;
+        dispatch({ type: 'CREATE_SUCCESS', checkout: refreshed });
+        dispatch({ type: 'CONFIRM_START' });
       }
 
       const res = await api.confirmCheckout(activeCheckoutId);
@@ -478,6 +482,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         }
 
         onSuccess(isRenewal ? t('user.services.renewSuccessTitle') : t('user.shop.orderSuccess'));
+      } else {
+        // Defensive fallback if server returned 2xx without `success: true`
+        const raw = res as unknown as { code?: string; error?: string; message?: string };
+        if (raw?.code === 'PURCHASE_OUTCOME_PENDING') {
+          void queryClient.invalidateQueries({ queryKey: ['user'] });
+          dispatch({ type: 'CONFIRM_VERIFYING' });
+        } else {
+          dispatch({
+            type: 'CONFIRM_ERROR',
+            message: raw?.error || raw?.message || t('user.shop.checkoutErrorGeneric'),
+          });
+        }
       }
     } catch (err: unknown) {
       triggerHaptic('error');
@@ -605,6 +621,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     onGoToWallet();
   };
 
+  const phoneVerify = useTelegramContactVerification({
+    botUsername,
+    onVerified: () => {
+      triggerHaptic('success');
+      void createCheckoutSession();
+    },
+    onFallbackOpened: () => {
+      onClose();
+    },
+  });
+
   const handleOpenPhoneVerifyInBot = () => {
     triggerHaptic('medium');
     const cleanBot = (botUsername || '').replace(/^@/, '').trim();
@@ -629,9 +656,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setRenewTypedGb(String(clamped));
   };
 
+  const renewPricePerDay = customVolumeSettings?.pricePerDay ?? 0;
+
   const handleSelectRenewCustom = () => {
     triggerHaptic('medium');
-    const price = renewCustomQuote?.totalPrice ?? renewCustomGb * basePricePerGb;
+    const price =
+      renewCustomQuote?.totalPrice ??
+      Math.max(0, renewCustomGb * basePricePerGb + defaultDays * renewPricePerDay);
     setSelectedRenewalPkg({
       id: 'custom',
       name: t('user.shop.customPackageName')
@@ -739,7 +770,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       ? Math.min(100, Math.max(0, ((renewCustomGb - minGb) / (maxGb - minGb)) * 100))
       : 0;
   const renewCustomDisplayPrice =
-    renewCustomQuote?.totalPrice ?? Math.max(0, renewCustomGb * basePricePerGb);
+    renewCustomQuote?.totalPrice ??
+    Math.max(0, renewCustomGb * basePricePerGb + defaultDays * renewPricePerDay);
 
   return (
     <Modal
@@ -1294,7 +1326,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {t('user.shop.insufficientBalance')}
               </h3>
               <p className="text-xs text-ink-muted m-0">
-                {t('user.shop.chargeNeeded').replace('{amount}', formatToman(deficitAmount))}
+                {t('user.shop.chargeNeeded')
+                  .replace('{amount}', formatToman(deficitAmount))
+                  .replace('{currency}', displayCurrency)}
               </p>
             </div>
 
@@ -1367,17 +1401,49 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             <div className="w-full flex flex-col gap-2 mt-1">
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                block
-                onClick={handleOpenPhoneVerifyInBot}
-              >
-                <Smartphone className="w-4 h-4 shrink-0" />
-                <span>{t('user.shop.verifyPhoneInBot')}</span>
-                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-              </Button>
+              {phoneVerify.supportsNativeRequestContact ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    block
+                    loading={phoneVerify.isVerifying}
+                    disabled={phoneVerify.isVerifying}
+                    onClick={phoneVerify.startVerification}
+                  >
+                    <Smartphone className="w-4 h-4 shrink-0" />
+                    <span>
+                      {phoneVerify.isVerifying
+                        ? t('user.shop.verifyPhoneWaiting')
+                        : t('user.shop.verifyPhoneNative')}
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="tonal"
+                    size="md"
+                    block
+                    disabled={phoneVerify.isVerifying}
+                    onClick={handleOpenPhoneVerifyInBot}
+                  >
+                    <span>{t('user.shop.verifyPhoneInBot')}</span>
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  block
+                  onClick={handleOpenPhoneVerifyInBot}
+                >
+                  <Smartphone className="w-4 h-4 shrink-0" />
+                  <span>{t('user.shop.verifyPhoneInBot')}</span>
+                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                </Button>
+              )}
 
               <Button type="button" variant="secondary" size="md" block onClick={handleClose}>
                 {t('common.cancel')}
@@ -1584,6 +1650,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                   <span>{t('user.services.openLink')}</span>
                 </Button>
+                <div className="pt-2">
+                  <SmartConnectButtons
+                    subUrl={successData.subUrl}
+                    configUsername={successData.configUsername}
+                  />
+                </div>
               </div>
             )}
 

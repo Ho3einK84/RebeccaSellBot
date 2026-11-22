@@ -1359,12 +1359,13 @@ export class WalletService {
   }
 
   /**
-   * List paginated wallet transactions for a specific user.
+   * List paginated wallet transactions for a specific user with optional category filtering.
    */
   async listTransactionsForUser(
     telegramId: number,
     page = 1,
-    pageSize = 5
+    pageSize = 5,
+    filter?: 'all' | 'topup' | 'purchase' | 'rewards' | 'transfer'
   ): Promise<{
     transactions: Array<typeof walletTransactions.$inferSelect>;
     total: number;
@@ -1373,10 +1374,25 @@ export class WalletService {
   }> {
     const db = getDb();
     const safePageSize = Math.max(1, Math.min(Math.trunc(pageSize) || 5, 50));
+
+    const typeGroups: Record<string, string[]> = {
+      topup: ['topup', 'topup_void', 'admin_credit', 'admin_debit', 'admin_adjustment'],
+      purchase: ['purchase', 'refund'],
+      rewards: ['lucky_wheel', 'referral_bonus', 'cashback', 'promo_credit'],
+      transfer: ['transfer_sent', 'transfer_received'],
+    };
+    const allowedTypes = filter && filter !== 'all' ? typeGroups[filter] : undefined;
+    const whereClause = allowedTypes
+      ? and(
+          eq(walletTransactions.telegramId, telegramId),
+          inArray(walletTransactions.type, allowedTypes)
+        )
+      : eq(walletTransactions.telegramId, telegramId);
+
     const [countRes] = await db
       .select({ count: sql<number>`count(*)` })
       .from(walletTransactions)
-      .where(eq(walletTransactions.telegramId, telegramId));
+      .where(whereClause);
     const total = Number(countRes?.count ?? 0);
     const totalPages = Math.max(1, Math.ceil(total / safePageSize));
     const requestedPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1;
@@ -1384,7 +1400,7 @@ export class WalletService {
     const rows = await db
       .select()
       .from(walletTransactions)
-      .where(eq(walletTransactions.telegramId, telegramId))
+      .where(whereClause)
       .orderBy(desc(walletTransactions.createdAt))
       .limit(safePageSize)
       .offset((safePage - 1) * safePageSize);

@@ -1,10 +1,19 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { AlertCircle, ShieldAlert, LogOut, RefreshCw, MessageCircle, Send } from 'lucide-react';
+import {
+  AlertCircle,
+  ShieldAlert,
+  LogOut,
+  RefreshCw,
+  MessageCircle,
+  Send,
+  Wrench,
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { UserPortalHeader } from './components/UserPortalHeader.js';
 import { UserBottomNav } from './components/UserBottomNav.js';
 import { QrCodeModal } from './components/QrCodeModal.js';
 import { CheckoutModal } from './components/CheckoutModal.js';
+import { FreeTrialResultModal } from './components/FreeTrialSection.js';
 import { DashboardTab } from './tabs/DashboardTab.js';
 import { ServicesTab } from './tabs/ServicesTab.js';
 import { ShopTab } from './tabs/ShopTab.js';
@@ -22,6 +31,7 @@ import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { ApiClientError } from '@/shared/lib/api.js';
+import { parseWebAppDeepLink } from '@/shared/lib/deepLinks.js';
 import { minimizeOrCloseWebApp } from '@/shared/lib/telegramNavigation.js';
 import {
   useUserProfile,
@@ -35,12 +45,21 @@ import type {
   UserPackageItem,
   UserConfigRecord,
   WalletDeficitContext,
+  TrialClaimResponse,
 } from '@/shared/types/userPortal.js';
 
 interface UserPortalProps {
   user: TelegramWebAppUser;
+  startParam?: string;
   isAdminView?: boolean;
   onSwitchToAdmin?: () => void;
+}
+
+interface SupportErrorPayload {
+  supportUrl?: string;
+  supportUsername?: string;
+  supportLabel?: string;
+  supportEnabled?: boolean;
 }
 
 const UserPortalSkeleton: React.FC = () => (
@@ -105,6 +124,7 @@ const SectionErrorCard: React.FC<{
 
 export const UserPortal: React.FC<UserPortalProps> = ({
   user,
+  startParam,
   isAdminView = false,
   onSwitchToAdmin,
 }) => {
@@ -113,9 +133,26 @@ export const UserPortal: React.FC<UserPortalProps> = ({
   const { notify } = useToast();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<UserTabType>('dashboard');
-  const [tabHistory, setTabHistory] = useState<UserTabType[]>(['dashboard']);
-  const [focusedConfigId, setFocusedConfigId] = useState<string | null>(null);
+  // Resolve initial deep link from Telegram `start_param` or URL query (`?tab=...&config=...`)
+  const initialDeepLink = useMemo(() => {
+    const rawStart =
+      startParam ??
+      (typeof window !== 'undefined'
+        ? window.Telegram?.WebApp?.initDataUnsafe?.start_param
+        : undefined);
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    return parseWebAppDeepLink(rawStart, search);
+  }, [startParam]);
+
+  const [activeTab, setActiveTab] = useState<UserTabType>(initialDeepLink.tab ?? 'dashboard');
+  const [tabHistory, setTabHistory] = useState<UserTabType[]>(
+    initialDeepLink.tab && initialDeepLink.tab !== 'dashboard'
+      ? ['dashboard', initialDeepLink.tab]
+      : ['dashboard']
+  );
+  const [focusedConfigId, setFocusedConfigId] = useState<string | null>(
+    initialDeepLink.configId ?? null
+  );
 
   // Modals state
   const [qrModal, setQrModal] = useState<{
@@ -131,6 +168,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
     targetConfig: UserConfigRecord | null;
   }>({ isOpen: false, mode: 'purchase', pkg: null, targetConfig: null });
 
+  const [trialResult, setTrialResult] = useState<TrialClaimResponse | null>(null);
   const [walletDeficit, setWalletDeficit] = useState<WalletDeficitContext | null>(null);
 
   // Data fetching
@@ -172,14 +210,21 @@ export const UserPortal: React.FC<UserPortalProps> = ({
 
   const is401 = allErrors.some((err) => err instanceof ApiClientError && err.status === 401);
 
-  const isBanned = allErrors.some(
-    (err) => err instanceof ApiClientError && (err.status === 403 || err.code === 'USER_BANNED')
+  // Strict code matching avoids false positives from non-ban 403 responses
+  const bannedError = allErrors.find(
+    (err): err is ApiClientError => err instanceof ApiClientError && err.code === 'USER_BANNED'
   );
+  const isBanned = Boolean(bannedError);
+
+  const maintenanceError = allErrors.find(
+    (err): err is ApiClientError => err instanceof ApiClientError && err.code === 'MAINTENANCE_MODE'
+  );
+  const isMaintenance = Boolean(maintenanceError);
 
   // Notify on transient API errors once per distinct message
   const lastNotifiedErrorRef = useRef<string | null>(null);
   useEffect(() => {
-    if (is401 || isBanned) return;
+    if (is401 || isBanned || isMaintenance) return;
     const activeError = allErrors[0];
     if (activeError) {
       const msg = activeError instanceof Error ? activeError.message : t('common.networkError');
@@ -190,7 +235,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
     } else {
       lastNotifiedErrorRef.current = null;
     }
-  }, [allErrors, is401, isBanned, notify, t]);
+  }, [allErrors, is401, isBanned, isMaintenance, notify, t]);
 
   const handleRefresh = () => {
     triggerHaptic('light');
@@ -222,8 +267,6 @@ export const UserPortal: React.FC<UserPortalProps> = ({
     switchTab('services');
   };
 
-  // Native Telegram BackButton: navigate back across tabs, or return to Admin Console when in admin view.
-  // On root dashboard for standard users, hide BackButton so Telegram displays its native Close affordance.
   const canNavigateBack =
     tabHistory.length > 1 || activeTab !== 'dashboard' || Boolean(isAdminView && onSwitchToAdmin);
 
@@ -249,11 +292,16 @@ export const UserPortal: React.FC<UserPortalProps> = ({
 
   const profile = profileData?.user ?? null;
   const settings = profileData?.settings ?? null;
+  const trial = profileData?.trial ?? null;
+  const luckyWheel = profileData?.luckyWheel ?? null;
   const pendingReceipt = profileData?.pendingReceipt ?? null;
   const configs = configsData?.configs ?? [];
   const packages = packagesData?.packages ?? [];
   const categories = packagesData?.categories ?? [];
+  const volumePricingTiers =
+    packagesData?.volumePricingTiers ?? settings?.customVolume?.tiers ?? [];
   const transactions = transactionsData?.transactions ?? [];
+  const wheelReady = Boolean(luckyWheel?.enabled && luckyWheel?.canSpin);
 
   const handleOpenRenewalModal = (config: UserConfigRecord) => {
     setCheckoutModal({
@@ -267,7 +315,30 @@ export const UserPortal: React.FC<UserPortalProps> = ({
   const navItems = useUserNavItems({
     configsCount: configs.length,
     hasPendingReceipt: Boolean(pendingReceipt),
+    wheelReady,
   });
+
+  const resolveSupportFromError = (err?: ApiClientError) => {
+    const payload = (err?.data ?? {}) as SupportErrorPayload;
+    const url =
+      payload.supportUrl ||
+      settings?.supportUrl ||
+      (payload.supportUsername
+        ? `https://t.me/${payload.supportUsername.replace(/^@/, '')}`
+        : settings?.supportUsername
+          ? `https://t.me/${settings.supportUsername.replace(/^@/, '')}`
+          : '');
+    const label =
+      payload.supportLabel ||
+      settings?.supportLabel ||
+      (payload.supportUsername
+        ? `@${payload.supportUsername.replace(/^@/, '')}`
+        : settings?.supportUsername
+          ? `@${settings.supportUsername.replace(/^@/, '')}`
+          : '');
+    const enabled = payload.supportEnabled ?? settings?.supportEnabled ?? true;
+    return { url: enabled ? url : '', label };
+  };
 
   // Dedicated 401 Session Expired Screen
   if (is401) {
@@ -309,9 +380,9 @@ export const UserPortal: React.FC<UserPortalProps> = ({
     );
   }
 
-  // Dedicated 403 / Account Suspended Screen
+  // Dedicated 403 / Account Suspended Screen (uses support payload returned inside 403 body)
   if (isBanned) {
-    const supportUsername = (settings?.supportUsername || '').replace(/^@/, '').trim();
+    const support = resolveSupportFromError(bannedError);
     return (
       <div className="safe-top safe-bottom relative flex min-h-[100dvh] w-full flex-col items-center justify-center bg-canvas p-4 text-ink">
         <Card
@@ -330,17 +401,69 @@ export const UserPortal: React.FC<UserPortalProps> = ({
             </p>
           </div>
           <div className="w-full flex flex-col gap-2 pt-2 border-t border-line">
-            {supportUsername && (
+            {support.url && (
               <a
-                href={`https://t.me/${supportUsername}`}
+                href={support.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="press rs-focus flex min-h-11 w-full items-center justify-center gap-2 rounded-ctl bg-brand hover:bg-brand-hover px-4 text-xs font-medium text-brand-ink no-underline sm:text-sm"
               >
                 <MessageCircle className="w-4 h-4 shrink-0" />
                 <span>
-                  {t('user.contactSupport')} (<bdi dir="ltr">@{supportUsername}</bdi>)
+                  {t('user.contactSupport')}
+                  {support.label ? (
+                    <>
+                      {' '}
+                      (<bdi dir="ltr">{support.label}</bdi>)
+                    </>
+                  ) : null}
                 </span>
+              </a>
+            )}
+            <Button variant="secondary" size="md" block onClick={minimizeOrCloseWebApp}>
+              <Send className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('user.backToBot')}</span>
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Dedicated 503 Maintenance Mode Screen (mirrors Telegram bot `bot_enabled = false`)
+  if (isMaintenance) {
+    const support = resolveSupportFromError(maintenanceError);
+    return (
+      <div className="safe-top safe-bottom relative flex min-h-[100dvh] w-full flex-col items-center justify-center bg-canvas p-4 text-ink">
+        <Card
+          padding="lg"
+          className="anim-rise relative z-10 flex w-full max-w-sm flex-col items-center gap-4 border-warn/35 text-center"
+        >
+          <IconTile tone="warn" size="lg">
+            <Wrench />
+          </IconTile>
+          <div className="flex flex-col gap-1.5">
+            <h2 className="m-0 text-base font-semibold text-ink sm:text-lg leading-[1.4]">
+              {t('user.maintenanceTitle')}
+            </h2>
+            <p className="m-0 text-xs leading-relaxed text-ink-muted">
+              {t('user.maintenanceDesc')}
+            </p>
+          </div>
+          <div className="w-full flex flex-col gap-2 pt-2 border-t border-line">
+            <Button variant="primary" size="md" block onClick={() => window.location.reload()}>
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span>{t('user.reloadApp')}</span>
+            </Button>
+            {support.url && (
+              <a
+                href={support.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="press rs-focus flex min-h-11 w-full items-center justify-center gap-2 rounded-ctl border border-line bg-surface-2 hover:bg-surface-3 px-4 text-xs font-medium text-ink no-underline sm:text-sm"
+              >
+                <MessageCircle className="w-4 h-4 shrink-0 text-brand-fg" />
+                <span>{t('user.contactSupport')}</span>
               </a>
             )}
             <Button variant="secondary" size="md" block onClick={minimizeOrCloseWebApp}>
@@ -403,10 +526,18 @@ export const UserPortal: React.FC<UserPortalProps> = ({
           onSelectTab={(tab) => switchTab(tab)}
           configsCount={configs.length}
           hasPendingReceipt={Boolean(pendingReceipt)}
+          wheelReady={wheelReady}
         />
       }
     >
       <div className="flex flex-1 flex-col">
+        {settings?.isAdminBypass && (
+          <div className="mb-3 rounded-tile border border-warn/35 bg-warn-soft px-3.5 py-2 text-xs text-warn-fg flex items-center gap-2">
+            <Wrench className="w-3.5 h-3.5 shrink-0" />
+            <span>{t('user.maintenanceAdminNotice')}</span>
+          </div>
+        )}
+
         {activeTab === 'dashboard' &&
           (isProfileError && !profileData ? (
             <SectionErrorCard onRetry={refetchProfile} isRetrying={isRefetchingProfile} />
@@ -414,11 +545,15 @@ export const UserPortal: React.FC<UserPortalProps> = ({
             <DashboardTab
               profile={profile}
               settings={settings}
+              trial={trial}
+              luckyWheel={luckyWheel}
               configs={configs}
               transactions={transactions}
               onSwitchTab={(tab) => switchTab(tab)}
               onOpenService={handleOpenServiceFromDashboard}
               onRenewConfig={handleOpenRenewalModal}
+              onTrialClaimed={(res) => setTrialResult(res)}
+              onNotify={(msg, type) => notify(msg, type ?? 'success')}
             />
           ))}
 
@@ -430,6 +565,8 @@ export const UserPortal: React.FC<UserPortalProps> = ({
               configs={configs}
               botUsername={settings?.botUsername}
               currency={settings?.currency}
+              customVolumeSettings={settings?.customVolume}
+              trial={trial}
               initialConfigId={focusedConfigId}
               onClearInitialConfig={() => setFocusedConfigId(null)}
               onOpenQr={(subUrl, configUsername) =>
@@ -437,6 +574,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
               }
               onGoToShop={() => switchTab('shop')}
               onRenewConfig={handleOpenRenewalModal}
+              onTrialClaimed={(res) => setTrialResult(res)}
               onNotify={(msg, type) => notify(msg, type ?? 'success')}
             />
           ))}
@@ -449,11 +587,18 @@ export const UserPortal: React.FC<UserPortalProps> = ({
               packages={packages}
               categories={categories}
               currency={settings?.currency}
-              customVolumeSettings={settings?.customVolume}
+              customVolumeSettings={
+                settings?.customVolume
+                  ? { ...settings.customVolume, tiers: volumePricingTiers }
+                  : undefined
+              }
+              trial={trial}
               botUsername={settings?.botUsername}
               onSelectPackage={(pkg) =>
                 setCheckoutModal({ isOpen: true, mode: 'purchase', pkg, targetConfig: null })
               }
+              onTrialClaimed={(res) => setTrialResult(res)}
+              onNotify={(msg, type) => notify(msg, type ?? 'success')}
             />
           ))}
 
@@ -476,10 +621,18 @@ export const UserPortal: React.FC<UserPortalProps> = ({
           <ReferralTab
             profile={profile}
             settings={settings}
-            onNotify={(msg) => notify(msg, 'success')}
+            onNotify={(msg, type) => notify(msg, type ?? 'success')}
           />
         )}
       </div>
+
+      {/* Free Trial Claim Success Modal */}
+      <FreeTrialResultModal
+        result={trialResult}
+        onClose={() => setTrialResult(null)}
+        onGoToServices={() => switchTab('services')}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
 
       {/* QR Code Modal */}
       <QrCodeModal

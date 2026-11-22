@@ -377,6 +377,37 @@ export class LuckyWheelService {
     this.invalidationHook?.(telegramId);
     return result;
   }
+
+  /**
+   * Lists the user's most recent lucky wheel spins for history display.
+   */
+  async listSpinsForUser(
+    telegramId: number,
+    limit = 10
+  ): Promise<
+    Array<{
+      id: string;
+      amount: number;
+      spinNumber: number;
+      effectiveLuckPercent: number;
+      createdAt: Date;
+    }>
+  > {
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(Math.trunc(limit), 50)) : 10;
+    const db = getDb();
+    return db
+      .select({
+        id: luckyWheelSpins.id,
+        amount: luckyWheelSpins.amount,
+        spinNumber: luckyWheelSpins.spinNumber,
+        effectiveLuckPercent: luckyWheelSpins.effectiveLuckPercent,
+        createdAt: luckyWheelSpins.createdAt,
+      })
+      .from(luckyWheelSpins)
+      .where(eq(luckyWheelSpins.telegramId, telegramId))
+      .orderBy(desc(luckyWheelSpins.createdAt))
+      .limit(safeLimit);
+  }
 }
 
 const MAX_LUCKY_AMOUNT = 9007199254740991;

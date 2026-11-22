@@ -26,9 +26,9 @@ export const HeaderUtilityActions: React.FC<HeaderUtilityActionsProps> = ({
     const next = locale === 'fa' ? 'en' : 'fa';
     const ok = await setLocale(next);
     if (ok) {
-      notify(t('admin.notifications.langChangeSuccess', undefined, next), 'success');
+      notify(t('common.langChangeSuccess', undefined, next), 'success');
     } else {
-      notify(t('admin.notifications.langChangeFailed'), 'error');
+      notify(t('common.langChangeFailed'), 'error');
     }
   };
 

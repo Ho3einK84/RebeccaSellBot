@@ -29,6 +29,7 @@ import { registerBaseRoutes } from './baseRoutes.js';
 import { registerPurchaseRoutes } from './purchaseRoutes.js';
 import { registerConfigRoutes } from './configRoutes.js';
 import { registerLuckyWheelRoutes } from './luckyWheelRoutes.js';
+import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 
 export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   registerAdminHomeRoutes();
@@ -50,6 +51,81 @@ export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices)
   registerPurchaseRoutes(bot, services);
   registerConfigRoutes(bot, services);
   registerLuckyWheelRoutes(bot, services);
+
+  // Handles contacts shared natively via Telegram Mini App `WebApp.requestContact()`
+  // outside `verifyPhoneConversation`. Verifies strict ownership (`contact.user_id === from.id`)
+  // and persists only the keyed HMAC-SHA256 hash via ContactVerificationService.
+  bot.on('message:contact', async (ctx) => {
+    const telegramId = ctx.from?.id;
+    const contact = ctx.message?.contact;
+    if (!telegramId || !contact?.phone_number) return;
+
+    if (contact.user_id !== telegramId) {
+      await ctx.reply(
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'onboarding_phone_verify_title'),
+          t(ctx, 'onboarding_phone_not_owner')
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+
+    try {
+      await services.walletService.getOrCreateUser(
+        telegramId,
+        ctx.from.username ?? null,
+        ctx.from.first_name ?? null,
+        ctx.from.last_name ?? null,
+        undefined,
+        ctx.userLocale
+      );
+      const phoneService =
+        services.contactVerificationService ??
+        new ContactVerificationService({
+          translationService: services.translationService,
+        });
+      const result = await phoneService.verifyAndBindPhone({
+        telegramId,
+        rawPhoneNumber: contact.phone_number,
+        settings: services.translationService,
+      });
+
+      if (result.ok) {
+        services.walletService.invalidateUserCache?.(telegramId);
+        await ctx.reply(
+          buildUserScreen({
+            emoji: '✅',
+            title: t(ctx, 'onboarding_phone_verify_title'),
+            footer: t(ctx, 'onboarding_phone_verified_success'),
+          }),
+          { parse_mode: 'Markdown', reply_markup: { remove_keyboard: true } }
+        );
+        return;
+      }
+
+      const reasonKey =
+        result.reason === 'iran_only'
+          ? 'onboarding_phone_iran_only'
+          : result.reason === 'already_bound'
+            ? 'onboarding_phone_already_bound'
+            : 'onboarding_phone_invalid';
+      await ctx.reply(
+        buildUserEmptyState('⚠️', t(ctx, 'onboarding_phone_verify_title'), t(ctx, reasonKey)),
+        { parse_mode: 'Markdown', reply_markup: { remove_keyboard: true } }
+      );
+    } catch {
+      await ctx.reply(
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'onboarding_phone_verify_title'),
+          t(ctx, 'operation_failed')
+        ),
+        { parse_mode: 'Markdown', reply_markup: { remove_keyboard: true } }
+      );
+    }
+  });
 
   // Plain text that was not consumed by a conversation, secret-input route, or
   // subscription-link handler remains visible and gets an explicit home state.

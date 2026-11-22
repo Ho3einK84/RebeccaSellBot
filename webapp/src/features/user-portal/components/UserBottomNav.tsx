@@ -9,6 +9,7 @@ interface UserBottomNavProps {
   onSelectTab: (tab: UserTabType) => void;
   configsCount?: number;
   hasPendingReceipt?: boolean;
+  wheelReady?: boolean;
 }
 
 export const UserBottomNav: React.FC<UserBottomNavProps> = ({
@@ -16,9 +17,10 @@ export const UserBottomNav: React.FC<UserBottomNavProps> = ({
   onSelectTab,
   configsCount = 0,
   hasPendingReceipt = false,
+  wheelReady = false,
 }) => {
   const { t } = useLanguage();
-  const items = useUserNavItems({ configsCount, hasPendingReceipt });
+  const items = useUserNavItems({ configsCount, hasPendingReceipt, wheelReady });
 
   return (
     <BottomNav

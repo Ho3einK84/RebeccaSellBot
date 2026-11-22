@@ -3,7 +3,11 @@ import { validateTelegramInitData } from '../auth.js';
 import { resolveRateLimitKey } from '../server.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
-import type { TranslationService } from '../../../domain/services/TranslationService.js';
+import type { WalletService } from '../../../domain/services/WalletService.js';
+import type {
+  SupportedLocale,
+  TranslationService,
+} from '../../../domain/services/TranslationService.js';
 import { authGuard } from '../middleware/adminGuard.js';
 
 interface ValidateRequestBody {
@@ -14,6 +18,24 @@ interface LocaleRequestBody {
   locale: 'fa' | 'en';
 }
 
+function normalizeStartParamReferral(startParam: string | undefined): string | undefined {
+  if (!startParam) return undefined;
+  const trimmed = startParam.trim();
+  if (!trimmed || !trimmed.startsWith('ref_') || trimmed.length > 128) return undefined;
+  return trimmed;
+}
+
+function resolveObservedLocale(
+  languageCode: string | undefined,
+  defaultLocale: SupportedLocale
+): SupportedLocale {
+  if (!languageCode) return defaultLocale;
+  const lower = languageCode.trim().toLowerCase();
+  if (lower === 'fa' || lower.startsWith('fa-')) return 'fa';
+  if (lower === 'en' || lower.startsWith('en-')) return 'en';
+  return defaultLocale;
+}
+
 export function registerAuthRoutes(
   app: FastifyInstance,
   options: {
@@ -21,6 +43,7 @@ export function registerAuthRoutes(
     botUsername?: string;
     adminService: AdminService;
     userService: UserService;
+    walletService?: WalletService;
     translationService: TranslationService;
     secureCookies?: boolean;
   }
@@ -65,6 +88,27 @@ export function registerAuthRoutes(
       const telegramId = validated.user.id;
       const isAdmin = options.adminService.isAdmin(telegramId);
       const role: 'admin' | 'user' = isAdmin ? 'admin' : 'user';
+      const defaultLocale = options.translationService.getDefaultLocale();
+      const startParam = validated.rawParams.start_param?.trim() || undefined;
+      const referralCode = normalizeStartParamReferral(startParam);
+
+      // Persist Telegram profile metadata & first-touch referral attribution when a user
+      // enters via WebApp (e.g. direct `t.me/bot/app?startapp=ref_...` link).
+      if (typeof options.walletService?.getOrCreateUser === 'function') {
+        try {
+          await options.walletService.getOrCreateUser(
+            telegramId,
+            validated.user.username ?? null,
+            validated.user.first_name ?? null,
+            validated.user.last_name ?? null,
+            referralCode,
+            resolveObservedLocale(validated.user.language_code, defaultLocale),
+            referralCode ? 'webapp_referral' : 'webapp'
+          );
+        } catch {
+          // Non-fatal: do not block WebApp auth if profile sync fails in degraded state
+        }
+      }
 
       const token = app.jwt.sign({ telegramId, role }, { expiresIn: '12h' });
 
@@ -77,7 +121,6 @@ export function registerAuthRoutes(
       });
 
       const userLocale = await options.userService.getLocale(telegramId);
-      const defaultLocale = options.translationService.getDefaultLocale();
       const locale = userLocale ?? defaultLocale;
       const languageSelectionEnabled = options.translationService.getSettingBool(
         'language_selection_enabled',
@@ -91,6 +134,7 @@ export function registerAuthRoutes(
         locale,
         languageSelectionEnabled,
         botUsername: options.botUsername,
+        ...(startParam ? { startParam } : {}),
       });
     }
   );
@@ -125,7 +169,25 @@ export function registerAuthRoutes(
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
+      // Ensure local user row exists before updating locale (fixes first-visit race)
+      if (typeof options.walletService?.getOrCreateUser === 'function') {
+        try {
+          await options.walletService.getOrCreateUser(
+            telegramId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            locale,
+            'webapp'
+          );
+        } catch {
+          // Best-effort ensure; updateLocale below still runs
+        }
+      }
+
       await options.userService.updateLocale(telegramId, locale);
+      options.walletService?.invalidateUserCache?.(telegramId);
 
       return reply.code(200).send({
         success: true,

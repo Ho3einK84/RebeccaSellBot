@@ -3,7 +3,7 @@ import {
   Wallet,
   ShoppingBag,
   Wifi,
-  Users,
+  Gift,
   CreditCard,
   MessageCircle,
   ChevronLeft,
@@ -13,6 +13,8 @@ import {
   Copy,
   Check,
   RefreshCw,
+  Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -24,6 +26,9 @@ import type {
   UserConfigRecord,
   UserTransactionRecord,
   UserTabType,
+  UserTrialStatus,
+  LuckyWheelSummary,
+  TrialClaimResponse,
 } from '@/shared/types/userPortal.js';
 import {
   ServiceStatusDot,
@@ -32,49 +37,120 @@ import {
   ServiceTrafficBar,
 } from '@/features/user-portal/components/ServiceStatusTraffic.js';
 import { TransactionItem } from '@/features/user-portal/components/TransactionItem.js';
+import { FreeTrialBanner } from '@/features/user-portal/components/FreeTrialSection.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
+import { Badge } from '@/shared/components/ui/Badge.js';
 import { useToast } from '@/shared/components/ui/Toast.js';
 
 interface DashboardTabProps {
   profile: UserPortalProfile | null;
   settings: UserPortalSettings | null;
+  trial?: UserTrialStatus | null;
+  luckyWheel?: LuckyWheelSummary | null;
   configs: UserConfigRecord[];
   transactions: UserTransactionRecord[];
   onSwitchTab: (tab: UserTabType) => void;
   onOpenService?: (configId: string) => void;
   onRenewConfig?: (config: UserConfigRecord) => void;
+  onTrialClaimed?: (res: TrialClaimResponse) => void;
+  onNotify?: (message: string, type?: 'success' | 'error') => void;
+}
+
+function isConfigTrulyActive(cfg: UserConfigRecord, nowSec: number): boolean {
+  if (cfg.panelStatus === 'on_hold') return true;
+  if (cfg.panelStatus !== 'active') return false;
+  if (typeof cfg.panelExpire === 'number' && cfg.panelExpire > 0 && cfg.panelExpire <= nowSec) {
+    return false;
+  }
+  return true;
+}
+
+function isConfigUrgent(cfg: UserConfigRecord, nowSec: number): boolean {
+  if (cfg.panelStatus === 'expired' || cfg.panelStatus === 'limited') return true;
+  if (
+    cfg.panelStatus === 'active' &&
+    typeof cfg.panelExpire === 'number' &&
+    cfg.panelExpire > 0 &&
+    cfg.panelExpire - nowSec <= 3 * 86_400
+  ) {
+    return true;
+  }
+  if (
+    cfg.panelStatus === 'active' &&
+    typeof cfg.panelDataLimit === 'number' &&
+    cfg.panelDataLimit > 0 &&
+    typeof cfg.panelUsedTraffic === 'number' &&
+    cfg.panelUsedTraffic / cfg.panelDataLimit >= 0.85
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function formatShortCountdown(seconds: number | null, locale: string): string {
+  if (!seconds || seconds <= 0) return locale === 'fa' ? 'به‌زودی' : 'soon';
+  const totalMins = Math.ceil(seconds / 60);
+  const hrs = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  const numLoc = locale === 'fa' ? 'fa-IR' : 'en-US';
+  if (hrs > 0 && mins > 0) {
+    return locale === 'fa'
+      ? `${hrs.toLocaleString(numLoc)} ساعت و ${mins.toLocaleString(numLoc)} دقیقه`
+      : `${hrs}h ${mins}m`;
+  }
+  if (hrs > 0) {
+    return locale === 'fa' ? `${hrs.toLocaleString(numLoc)} ساعت` : `${hrs}h`;
+  }
+  return locale === 'fa' ? `${mins.toLocaleString(numLoc)} دقیقه` : `${mins}m`;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
   profile,
   settings,
+  trial,
+  luckyWheel,
   configs,
   transactions,
   onSwitchTab,
   onOpenService,
   onRenewConfig,
+  onTrialClaimed,
+  onNotify,
 }) => {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const { triggerHaptic } = useHaptic();
   const { formatToman, formatNumber } = useFormatters();
   const { copy, isCopied } = useCopy();
-  const { notify } = useToast();
+  const { notify: toastNotify } = useToast();
 
+  const notify = onNotify ?? toastNotify;
   const currency = settings?.currency || t('common.currency');
   const availableBalance = profile?.availableBalance ?? 0;
-  const activeConfigs = configs.filter(
-    (c) => c.panelStatus === 'active' || c.panelStatus === 'on_hold'
-  );
-  const needsAttentionConfigs = configs.filter(
-    (c) => c.panelStatus === 'expired' || c.panelStatus === 'limited'
-  );
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  const activeConfigs = configs.filter((c) => isConfigTrulyActive(c, nowSec));
+  const urgentConfigs = configs.filter((c) => isConfigUrgent(c, nowSec));
+
+  // Prioritize urgent services first, then active services
   const displayedConfigs =
-    activeConfigs.length > 0 ? activeConfigs.slice(0, 2) : configs.slice(0, 2);
-  const showingAttentionOnly = activeConfigs.length === 0 && configs.length > 0;
+    urgentConfigs.length > 0
+      ? [
+          ...urgentConfigs.slice(0, 2),
+          ...activeConfigs.filter((c) => !urgentConfigs.some((u) => u.id === c.id)),
+        ].slice(0, 2)
+      : activeConfigs.length > 0
+        ? activeConfigs.slice(0, 2)
+        : configs.slice(0, 2);
+
+  const cleanBotUsername = (settings?.botUsername || '').replace(/^@/, '').trim();
+  const inviteLink =
+    profile?.referralCode && cleanBotUsername
+      ? `https://t.me/${cleanBotUsername}?start=${profile.referralCode}`
+      : profile?.referralCode || '';
 
   const formatShortRefCode = (code?: string | null) => {
     if (!code) return '—';
@@ -83,11 +159,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   };
 
   const handleCopyReferral = async () => {
-    if (!profile?.referralCode) return;
+    if (!inviteLink) return;
     triggerHaptic('light');
-    const ok = await copy(profile.referralCode, 'dashboard-ref-code');
+    const ok = await copy(inviteLink, 'dashboard-ref-code');
     if (ok) {
-      notify(t('user.referral.codeCopied'), 'success');
+      notify(
+        cleanBotUsername ? t('user.referral.linkCopied') : t('user.referral.codeCopied'),
+        'success'
+      );
     }
   };
 
@@ -96,33 +175,39 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     onSwitchTab(tab);
   };
 
+  const supportUrl =
+    settings?.supportUrl ||
+    (settings?.supportUsername
+      ? `https://t.me/${settings.supportUsername.replace(/^@/, '').trim()}`
+      : '');
+
   const handleSupportClick = () => {
     triggerHaptic('medium');
-    const supportUser = (settings?.supportUsername || '').trim();
-    if (!supportUser) return;
+    if (!supportUrl) return;
 
-    let url = supportUser;
-    if (!/^https?:\/\//i.test(supportUser)) {
-      const cleanUsername = supportUser.replace(/^@/, '');
-      url = `https://t.me/${cleanUsername}`;
-    }
-
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-      window.Telegram.WebApp.openTelegramLink(url);
+    if (
+      (supportUrl.startsWith('https://t.me/') || supportUrl.startsWith('tg://')) &&
+      window.Telegram?.WebApp?.openTelegramLink
+    ) {
+      window.Telegram.WebApp.openTelegramLink(supportUrl);
+    } else if (window.Telegram?.WebApp?.openLink) {
+      window.Telegram.WebApp.openLink(supportUrl);
     } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.open(supportUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
+  const showWheelShortcut =
+    Boolean(luckyWheel?.enabled) && (luckyWheel?.canSpin || (luckyWheel?.spinsRemaining ?? 0) > 0);
+
   return (
     <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start pb-6">
-      {/* Left column: Anodized Balance Instrument, Quick Actions, Support */}
+      {/* Left column: Anodized Balance Instrument, Trial/Wheel Growth Cards, Quick Actions, Support */}
       <div className="lg:col-span-7 flex flex-col gap-4">
         <section
           aria-label={t('user.dashboard.walletBalance')}
           className="relative overflow-hidden rounded-card rs-hero-obsidian text-obsidian-ink p-5 sm:p-6"
         >
-          {/* Technical hairline corner mark — crisp vector precision, no blur glow */}
           <svg
             aria-hidden="true"
             viewBox="0 0 120 120"
@@ -173,7 +258,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
             </div>
 
-            {/* Bottom Toolbar: Referral Code & Top-up */}
+            {/* Bottom Toolbar: Invite Link Copy & Top-up */}
             <div className="flex items-center justify-between gap-3 pt-3.5 border-t border-white/10 flex-wrap">
               <div className="flex flex-col min-w-0 text-start">
                 <span className="text-[11px] text-white/60 leading-tight mb-1">
@@ -183,17 +268,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <bdi
                     dir="ltr"
                     className="text-xs font-mono font-medium text-white/90 truncate"
-                    title={profile?.referralCode || ''}
+                    title={inviteLink}
                   >
                     {formatShortRefCode(profile?.referralCode)}
                   </bdi>
-                  {profile?.referralCode && (
+                  {inviteLink && (
                     <button
                       type="button"
                       onClick={() => void handleCopyReferral()}
                       className="w-7 h-7 rounded-ctl bg-white/10 hover:bg-white/15 flex items-center justify-center press rs-focus text-white/85 shrink-0 cursor-pointer"
-                      title={t('common.copy')}
-                      aria-label={t('common.copy')}
+                      title={t('user.referral.copyLink')}
+                      aria-label={t('user.referral.copyLink')}
                     >
                       {isCopied('dashboard-ref-code') ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400 anim-pop" />
@@ -217,6 +302,65 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
           </div>
         </section>
+
+        {/* Free Trial Hero CTA (auto-hides once claimed) */}
+        <FreeTrialBanner
+          trial={trial}
+          botUsername={settings?.botUsername}
+          onClaimed={onTrialClaimed}
+          onNotify={notify}
+        />
+
+        {/* Lucky Wheel Shortcut Card */}
+        {showWheelShortcut && luckyWheel && (
+          <button
+            type="button"
+            onClick={() => handleAction('referral')}
+            className={`group rs-card-interactive w-full rounded-tile border p-3.5 flex items-center justify-between gap-3 text-start press rs-focus cursor-pointer shadow-[var(--shadow-card)] ${
+              luckyWheel.canSpin
+                ? 'border-ok/35 bg-gradient-to-l from-ok-soft via-surface to-accent-soft/40'
+                : 'border-line bg-surface hover:bg-surface-2'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <IconTile tone={luckyWheel.canSpin ? 'ok' : 'accent'} size="md">
+                <Sparkles />
+              </IconTile>
+              <div className="flex flex-col min-w-0 gap-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13px] font-semibold text-ink">
+                    {luckyWheel.canSpin
+                      ? t('user.dashboard.wheelBannerReadyTitle')
+                      : t('user.dashboard.wheelBannerCooldownTitle')}
+                  </span>
+                  {luckyWheel.canSpin && (
+                    <Badge variant="success" size="xs">
+                      {t('user.wheel.readyBadge')}
+                    </Badge>
+                  )}
+                </div>
+                <span className="text-xs leading-snug text-ink-muted truncate">
+                  {luckyWheel.canSpin
+                    ? t('user.dashboard.wheelBannerReadyDesc')
+                        .replace('{max}', formatToman(luckyWheel.maxPrize))
+                        .replace('{currency}', currency)
+                    : t('user.dashboard.wheelBannerCooldownDesc').replace(
+                        '{time}',
+                        formatShortCountdown(luckyWheel.secondsRemaining, locale)
+                      )}
+                </span>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-fg shrink-0">
+              <span>
+                {luckyWheel.canSpin
+                  ? t('user.dashboard.wheelBannerCta')
+                  : t('user.dashboard.wheelBannerView')}
+              </span>
+              <ChevronLeft className="w-4 h-4 ltr:rotate-180" aria-hidden="true" />
+            </span>
+          </button>
+        )}
 
         {/* Quick Action Grid */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 anim-stagger">
@@ -256,17 +400,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <button
             type="button"
             onClick={() => handleAction('referral')}
-            className="group rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
+            className="group relative rs-card-interactive rounded-tile border border-line bg-surface hover:bg-surface-2 p-3.5 flex flex-col items-center justify-center gap-2 text-center press rs-focus cursor-pointer shadow-[var(--shadow-card)]"
           >
+            {luckyWheel?.canSpin && (
+              <span
+                className="absolute top-2.5 end-2.5 w-2 h-2 rounded-full bg-ok ring-2 ring-ok/25"
+                aria-hidden="true"
+              />
+            )}
             <IconTile tone="accent" size="md">
-              <Users />
+              <Gift />
             </IconTile>
             <span className="text-xs font-medium text-ink">{t('user.dashboard.inviteEarn')}</span>
           </button>
         </section>
 
         {/* Support Card */}
-        {settings?.supportEnabled !== false && Boolean(settings?.supportUsername) && (
+        {settings?.supportEnabled !== false && Boolean(supportUrl) && (
           <button
             type="button"
             onClick={handleSupportClick}
@@ -293,17 +443,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         )}
       </div>
 
-      {/* Right column: Active Services + Recent Activity Ledger */}
+      {/* Right column: Active/Urgent Services + Recent Activity Ledger */}
       <div className="lg:col-span-5 flex flex-col gap-5">
         <section className="w-full">
           <SectionHeader
             icon={<Activity />}
             title={
-              showingAttentionOnly
+              urgentConfigs.length > 0 && activeConfigs.length === 0
                 ? t('user.dashboard.servicesNeedAttention')
                 : t('user.dashboard.activeServices')
             }
-            count={formatNumber(showingAttentionOnly ? configs.length : activeConfigs.length)}
+            count={formatNumber(activeConfigs.length)}
             actionLabel={configs.length > 0 ? t('common.all') : undefined}
             onAction={configs.length > 0 ? () => handleAction('services') : undefined}
             className="mb-2.5"
@@ -323,14 +473,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             />
           ) : (
             <div className="flex flex-col gap-2.5 anim-stagger">
-              {showingAttentionOnly && needsAttentionConfigs.length > 0 && (
-                <div className="rounded-tile border border-warn/30 bg-warn-soft px-3 py-2 text-xs text-warn-fg leading-relaxed">
-                  {t('user.dashboard.expiredServicesNotice')}
+              {/* Always show urgency notice when ANY config is expired/limited/near-expiry */}
+              {urgentConfigs.length > 0 && (
+                <div className="rounded-tile border border-warn/35 bg-warn-soft px-3 py-2 text-xs text-warn-fg leading-relaxed flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    {t('user.dashboard.expiredServicesNotice').replace(
+                      '{count}',
+                      formatNumber(urgentConfigs.length)
+                    )}
+                  </span>
                 </div>
               )}
 
               {displayedConfigs.map((cfg) => {
-                const isAttention = cfg.panelStatus === 'expired' || cfg.panelStatus === 'limited';
+                const isAttention = isConfigUrgent(cfg, nowSec);
                 return (
                   <div
                     key={cfg.id}

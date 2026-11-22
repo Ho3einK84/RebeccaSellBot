@@ -24,6 +24,7 @@ export interface AuthResponse {
   locale?: SupportedLocale;
   languageSelectionEnabled?: boolean;
   botUsername?: string;
+  startParam?: string;
 }
 
 export interface StatsResponse {

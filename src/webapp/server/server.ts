@@ -7,7 +7,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCookie from '@fastify/cookie';
 import fastifyJwt from '@fastify/jwt';
-import fastifyRateLimit from '@fastify/rate-limit';
+import fastifyRateLimit, { type FastifyRateLimitStoreCtor } from '@fastify/rate-limit';
 import fastifyCors from '@fastify/cors';
 import type { Config } from '../../infra/config.js';
 import type { BotServices } from '../../telegram/types.js';
@@ -152,9 +152,17 @@ export function resolveRateLimitKey(req: FastifyRequest): string {
   return `${route}:${identity}`;
 }
 
+export interface CreateWebAppServerOptions {
+  /** Whether to register @fastify/static for dist/webapp assets. Defaults to true. */
+  serveStatic?: boolean;
+  /** Optional custom @fastify/rate-limit store constructor (e.g. resettable store in tests). */
+  rateLimitStore?: FastifyRateLimitStoreCtor;
+}
+
 export async function createWebAppServer(
   config: Config,
-  services: BotServices
+  services: BotServices,
+  options?: CreateWebAppServerOptions
 ): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false, // Logging is handled via central pino logger without credential leakage
@@ -180,6 +188,7 @@ export async function createWebAppServer(
     timeWindow: '1 minute',
     hook: 'preHandler',
     keyGenerator: resolveRateLimitKey,
+    ...(options?.rateLimitStore ? { store: options.rateLimitStore } : {}),
   });
 
   const domainRegistry =
@@ -417,6 +426,7 @@ export async function createWebAppServer(
     botUsername: services.botUsername,
     adminService: services.adminService,
     userService: services.userService,
+    walletService: services.walletService,
     translationService: services.translationService,
     // `secure: true` cookies are rejected by browsers over plain HTTP, which
     // broke session login on local dev. Only require Secure in production.
@@ -472,12 +482,23 @@ export async function createWebAppServer(
     userService: services.userService,
     walletService: services.walletService,
     configService: services.configService,
-    pricingService: services.pricingService,
+    pricingService: resolvedPricingService,
     packageCategoryService: resolvedCategoryService,
     promoService: services.promoService,
     paymentService: services.paymentService,
     translationService: services.translationService,
     botUsername: services.botUsername,
+    botApi: services.botApi,
+    adminService: services.adminService,
+    adminIds: services.adminIds,
+    supportUrl: services.supportUrl ?? config.SUPPORT_URL,
+    webAppUrl: services.webAppUrl ?? config.WEBAPP_URL,
+    luckyWheelService: services.luckyWheelService,
+    trialService: services.trialService,
+    referralService: services.referralService,
+    refundService: services.refundService,
+    configTransferService: services.configTransferService,
+    panelRegistry: services.panelRegistry,
     purchaseCheckoutService: services.purchaseCheckoutService,
     catalogDiscountService: resolvedCatalogDiscountService,
     contactVerificationService: resolvedContactVerificationService,
@@ -485,7 +506,7 @@ export async function createWebAppServer(
 
   // Static files & SPA fallback
   const staticRoot = path.resolve(process.cwd(), 'dist/webapp');
-  if (fs.existsSync(staticRoot)) {
+  if (options?.serveStatic !== false && fs.existsSync(staticRoot)) {
     await app.register(fastifyStatic, {
       root: staticRoot,
       prefix: '/',

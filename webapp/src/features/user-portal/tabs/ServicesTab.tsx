@@ -8,12 +8,23 @@ import {
   ShoppingBag,
   Settings2,
   RefreshCw,
+  Search,
+  Link2,
+  X,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import type { UserConfigRecord } from '@/shared/types/userPortal.js';
+import { api } from '@/shared/lib/api.js';
+import { queryKeys } from '@/shared/lib/queryKeys.js';
+import type {
+  CustomVolumeSettings,
+  TrialClaimResponse,
+  UserConfigRecord,
+  UserTrialStatus,
+} from '@/shared/types/userPortal.js';
 import {
   ServiceStatusDot,
   ServiceStatusBadge,
@@ -23,6 +34,8 @@ import {
   formatServiceCreatedDate,
 } from '@/features/user-portal/components/ServiceStatusTraffic.js';
 import { ServiceManagementModal } from '@/features/user-portal/components/ServiceManagementModal.js';
+import { ClaimSubLinkModal } from '@/features/user-portal/components/ClaimSubLinkModal.js';
+import { FreeTrialBanner } from '@/features/user-portal/components/FreeTrialSection.js';
 import { Button } from '@/shared/components/ui/Button.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
@@ -32,13 +45,18 @@ interface ServicesTabProps {
   configs: UserConfigRecord[];
   botUsername?: string;
   currency?: string;
+  customVolumeSettings?: CustomVolumeSettings;
+  trial?: UserTrialStatus | null;
   initialConfigId?: string | null;
   onClearInitialConfig?: () => void;
   onOpenQr: (subUrl: string, configUsername: string) => void;
   onGoToShop: () => void;
   onRenewConfig?: (config: UserConfigRecord) => void;
+  onTrialClaimed?: (res: TrialClaimResponse) => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
+
+type ServiceFilterType = 'all' | 'active' | 'attention' | 'inactive';
 
 function isServiceUrgentForRenewal(config: UserConfigRecord): boolean {
   if (config.panelStatus === 'expired' || config.panelStatus === 'limited') {
@@ -67,19 +85,27 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
   configs,
   botUsername,
   currency,
+  customVolumeSettings,
+  trial,
   initialConfigId,
   onClearInitialConfig,
   onOpenQr,
   onGoToShop,
   onRenewConfig,
+  onTrialClaimed,
   onNotify,
 }) => {
   const { t, locale } = useLanguage();
   const { copy, isCopied } = useCopy();
   const { triggerHaptic } = useHaptic();
   const { formatNumber } = useFormatters();
+  const queryClient = useQueryClient();
 
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ServiceFilterType>('all');
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   useEffect(() => {
     if (initialConfigId && configs.some((c) => c.id === initialConfigId)) {
@@ -92,6 +118,25 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
     () => configs.find((c) => c.id === selectedConfigId) ?? null,
     [configs, selectedConfigId]
   );
+
+  const filteredConfigs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return configs.filter((c) => {
+      if (q && !c.configUsername.toLowerCase().includes(q)) return false;
+      if (statusFilter === 'active') {
+        return c.panelStatus === 'active' || c.panelStatus === 'on_hold';
+      }
+      if (statusFilter === 'attention') {
+        return isServiceUrgentForRenewal(c);
+      }
+      if (statusFilter === 'inactive') {
+        return (
+          c.panelStatus === 'disabled' || c.panelStatus === 'expired' || c.panelStatus === 'limited'
+        );
+      }
+      return true;
+    });
+  }, [configs, searchQuery, statusFilter]);
 
   const handleCopySub = async (subUrl: string, id: string) => {
     triggerHaptic('light');
@@ -116,9 +161,29 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
     onRenewConfig?.(config);
   };
 
+  const handleSyncAll = async () => {
+    if (isSyncingAll || configs.length === 0) return;
+    setIsSyncingAll(true);
+    triggerHaptic('light');
+    try {
+      const res = await api.syncAllUserConfigs();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
+      triggerHaptic('success');
+      onNotify(
+        t('user.services.syncAllSuccess').replace('{synced}', formatNumber(res.synced)),
+        'success'
+      );
+    } catch {
+      triggerHaptic('error');
+      onNotify(t('user.services.refreshFailed'), 'error');
+    } finally {
+      setIsSyncingAll(false);
+    }
+  };
+
   return (
     <div className="w-full flex flex-col gap-4 pb-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <SectionHeader
           icon={<Wifi />}
           title={t('user.services.title')}
@@ -126,31 +191,142 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
           className="flex-1 min-w-0"
         />
 
-        {configs.length > 0 && (
-          <Button size="sm" variant="secondary" onClick={onGoToShop} className="shrink-0">
-            <ShoppingBag className="w-3.5 h-3.5 text-brand-fg shrink-0" />
-            <span>{t('user.dashboard.buyService')}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              triggerHaptic('selection');
+              setIsClaimModalOpen(true);
+            }}
+          >
+            <Link2 className="w-3.5 h-3.5 text-brand-fg shrink-0" />
+            <span>{t('user.services.claimLinkButton')}</span>
           </Button>
-        )}
+
+          {configs.length > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void handleSyncAll()}
+              disabled={isSyncingAll}
+              title={t('user.services.syncAll')}
+              aria-label={t('user.services.syncAll')}
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 text-brand-fg shrink-0 ${isSyncingAll ? 'animate-spin' : ''}`}
+              />
+              <span className="hidden sm:inline">{t('user.services.syncAll')}</span>
+            </Button>
+          )}
+
+          {configs.length > 0 && (
+            <Button size="sm" variant="primary" onClick={onGoToShop}>
+              <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">{t('user.dashboard.buyService')}</span>
+            </Button>
+          )}
+        </div>
       </div>
 
+      {/* Search & Status Filter Controls (shown when user has multiple services) */}
+      {configs.length >= 2 && (
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-ink-muted absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('user.services.searchPlaceholder')}
+              className="w-full h-9 ps-9 pe-8 rounded-ctl border border-line bg-surface text-xs text-ink placeholder:text-ink-muted rs-focus"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label={t('common.clearSearch')}
+                className="absolute end-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-ctl flex items-center justify-center text-ink-muted hover:text-ink cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {(
+              [
+                { id: 'all', label: t('user.services.filterAll') },
+                { id: 'active', label: t('user.services.filterActive') },
+                { id: 'attention', label: t('user.services.filterAttention') },
+                { id: 'inactive', label: t('user.services.filterInactive') },
+              ] as const
+            ).map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setStatusFilter(chip.id);
+                }}
+                className={`h-9 px-3 rounded-full text-xs font-medium border shrink-0 press rs-focus cursor-pointer transition-colors ${
+                  statusFilter === chip.id
+                    ? 'bg-brand border-brand text-brand-ink'
+                    : 'bg-surface border-line text-ink-soft hover:border-line-strong'
+                }`}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {configs.length === 0 ? (
-        <EmptyState
-          icon={<ShieldCheck />}
-          tone="brand"
-          title={t('user.services.emptyTitle')}
-          description={t('user.services.emptyDesc')}
-          action={
-            <Button onClick={onGoToShop}>
-              <ShoppingBag className="w-4 h-4" />
-              <span>{t('user.services.buyFirst')}</span>
-            </Button>
-          }
-          className="my-2"
-        />
+        <div className="flex flex-col gap-4">
+          <FreeTrialBanner
+            trial={trial}
+            botUsername={botUsername}
+            onClaimed={onTrialClaimed}
+            onNotify={onNotify}
+          />
+          <EmptyState
+            icon={<ShieldCheck />}
+            tone="brand"
+            title={t('user.services.emptyTitle')}
+            description={t('user.services.emptyDesc')}
+            action={
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                <Button onClick={onGoToShop}>
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>{t('user.services.buyFirst')}</span>
+                </Button>
+                <Button variant="secondary" onClick={() => setIsClaimModalOpen(true)}>
+                  <Link2 className="w-4 h-4" />
+                  <span>{t('user.services.claimLinkButton')}</span>
+                </Button>
+              </div>
+            }
+            className="my-2"
+          />
+        </div>
+      ) : filteredConfigs.length === 0 ? (
+        <Card padding="lg" className="text-center flex flex-col items-center gap-2">
+          <span className="text-xs text-ink-muted">{t('user.services.emptyTitle')}</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setSearchQuery('');
+              setStatusFilter('all');
+            }}
+          >
+            {t('common.clearSearch')}
+          </Button>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 anim-stagger">
-          {configs.map((c) => {
+          {filteredConfigs.map((c) => {
             const isSubCopied = isCopied(`sub-${c.id}`);
             const urgent = isServiceUrgentForRenewal(c);
 
@@ -282,6 +458,13 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
         </div>
       )}
 
+      {/* Claim Existing Subscription Link Modal */}
+      <ClaimSubLinkModal
+        isOpen={isClaimModalOpen}
+        onClose={() => setIsClaimModalOpen(false)}
+        onNotify={onNotify}
+      />
+
       {/* Service Management Modal */}
       <ServiceManagementModal
         isOpen={selectedConfig !== null}
@@ -289,6 +472,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
         config={selectedConfig}
         botUsername={botUsername}
         currency={currency}
+        customVolumeSettings={customVolumeSettings}
         onOpenQr={onOpenQr}
         onRenewConfig={onRenewConfig}
         onNotify={onNotify}

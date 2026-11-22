@@ -37,12 +37,13 @@ export const App: React.FC = () => {
             ) : (
               <UserPortal
                 user={authData.user}
+                startParam={authData.startParam}
                 isAdminView={true}
                 onSwitchToAdmin={() => setAdminViewMode('admin')}
               />
             )
           ) : (
-            <UserPortal user={authData.user} />
+            <UserPortal user={authData.user} startParam={authData.startParam} />
           )}
         </Suspense>
       )}

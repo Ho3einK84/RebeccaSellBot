@@ -730,6 +730,57 @@ export class UserService {
     return user !== undefined;
   }
 
+  /**
+   * Strict exact-match recipient lookup for user-to-user transfers (wallet or subscription).
+   * Only matches by exact Telegram ID or exact case-insensitive username — never fuzzy matches.
+   */
+  async findTransferRecipient(rawQuery: string): Promise<{
+    telegramId: number;
+    username: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    isBanned: boolean;
+  } | null> {
+    const query = cleanUserSearchQuery(rawQuery);
+    if (!query) return null;
+
+    const db = getDb();
+    const parsedId = /^\d+$/u.test(query) ? Number(query) : Number.NaN;
+    const telegramId = Number.isSafeInteger(parsedId) && parsedId > 0 ? parsedId : null;
+
+    if (telegramId !== null) {
+      const [row] = await db
+        .select({
+          telegramId: users.telegramId,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          isBanned: users.isBanned,
+        })
+        .from(users)
+        .where(eq(users.telegramId, telegramId))
+        .limit(1);
+      return row ?? null;
+    }
+
+    if (!/^[a-zA-Z][a-zA-Z0-9_]{2,31}$/u.test(query)) {
+      return null;
+    }
+
+    const [row] = await db
+      .select({
+        telegramId: users.telegramId,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        isBanned: users.isBanned,
+      })
+      .from(users)
+      .where(sql`LOWER(${users.username}) = LOWER(${query})`)
+      .limit(1);
+    return row ?? null;
+  }
+
   async listRecipientIds(): Promise<number[]> {
     const db = getDb();
     const recipients = await db.select({ telegramId: users.telegramId }).from(users);
