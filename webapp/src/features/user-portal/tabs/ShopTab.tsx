@@ -145,7 +145,11 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   }, [minGb, maxGb]);
 
   const groupDiscountPct =
-    customVolumeSettings?.groupDiscountPercent ?? group?.discountPercent ?? 0;
+    customVolumeSettings?.groupDiscountPercent !== undefined
+      ? customVolumeSettings.groupDiscountPercent
+      : group?.applyDiscountToCustomVolume
+        ? (group.discountPercent ?? 0)
+        : 0;
   const rawLinearPrice = Math.max(0, customGb * basePricePerGb + customDays * pricePerDay);
   const linearPrice =
     groupDiscountPct > 0

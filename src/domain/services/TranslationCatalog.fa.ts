@@ -2242,6 +2242,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_groups_flag_cashback: 'کش‌بک خرید',
   admin_groups_flag_wheel: 'گردونه شانس',
   admin_groups_flag_custom_name: 'نام دلخواه سرویس',
+  admin_groups_flag_custom_vol_discount: 'تخفیف روی حجم دلخواه',
   admin_groups_set_default_btn: '⭐ انتخاب به‌عنوان گروه پیش‌فرض',
   admin_groups_default_updated: 'گروه پیش‌فرض با موفقیت به‌روزرسانی شد.',
   admin_groups_delete_btn: '🗑️ حذف گروه',
@@ -2257,7 +2258,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_groups_name_prompt: 'نام گروه کاربری را وارد کنید (حداکثر ۸۰ کاراکتر، مثال: VIP طلایی):',
   admin_groups_badge_prompt:
     'بج یا نشان کوتاه گروه را وارد کنید (مثال: 👑 VIP) یا برای حذف `-` ارسال کنید:',
-  admin_groups_discount_prompt: 'درصد تخفیف گروهی را وارد کنید (عدد صحیح از ۰ تا ۹۰):',
+  admin_groups_discount_prompt:
+    'درصد تخفیف گروهی روی بسته‌های آماده را وارد کنید (عدد صحیح از ۰ تا ۹۰؛ برای اعمال روی حجم دلخواه، گزینهٔ «تخفیف روی حجم دلخواه» را روشن کنید):',
   admin_groups_credit_prompt:
     'سقف اعتبار منفی مجاز را به تومان وارد کنید (عدد ۰ = بدون امکان خرید با موجودی منفی):',
   admin_groups_custom_gb_prompt:

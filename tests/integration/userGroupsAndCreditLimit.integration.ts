@@ -112,6 +112,14 @@ describeIntegration(
       });
       await userGroupService.assignUserGroup({ telegramId: vipUserId, groupId: vip.id });
 
+      // Default applyDiscountToCustomVolume must be false; toggling persists to DB
+      const initialPolicy = await userGroupService.getEffectiveUserPolicy(vipUserId);
+      expect(initialPolicy.applyDiscountToCustomVolume).toBe(false);
+      await userGroupService.updateGroup(vip.id, { applyDiscountToCustomVolume: true });
+      const toggledPolicy = await userGroupService.getEffectiveUserPolicy(vipUserId);
+      expect(toggledPolicy.applyDiscountToCustomVolume).toBe(true);
+      await userGroupService.updateGroup(vip.id, { applyDiscountToCustomVolume: false });
+
       // Promo is blocked by group policy during saga
       await expect(
         walletService.executePurchaseSaga({

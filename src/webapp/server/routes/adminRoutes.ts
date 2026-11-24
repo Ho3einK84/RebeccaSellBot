@@ -570,6 +570,48 @@ export function registerAdminRoutes(
     }>('/api/admin/users', async (request, reply) => {
       const { search, page, limit, filter, sort } = request.query;
 
+      const attachUserGroups = async <
+        T extends {
+          telegramId: number;
+          groupId?: string | null;
+          groupExpiresAt?: Date | null;
+        },
+      >(
+        rows: T[]
+      ) => {
+        if (
+          rows.length === 0 ||
+          typeof services.userGroupService?.resolvePoliciesForUsers !== 'function'
+        ) {
+          return rows;
+        }
+        try {
+          const policyMap = await services.userGroupService.resolvePoliciesForUsers(rows);
+          return rows.map((u) => {
+            const p = policyMap.get(u.telegramId);
+            return {
+              ...u,
+              creditLimit: p?.creditLimit ?? 0,
+              group: p?.groupId
+                ? {
+                    id: p.groupId,
+                    name: p.groupName ?? '',
+                    badge: p.badge,
+                    isDefault: p.isDefaultGroup,
+                    isAssigned: p.isAssigned,
+                    expiresAt: p.expiresAt ? p.expiresAt.toISOString() : null,
+                    discountPercent: p.discountPercent,
+                    applyDiscountToCustomVolume: p.applyDiscountToCustomVolume,
+                    creditLimit: p.creditLimit,
+                  }
+                : null,
+            };
+          });
+        } catch {
+          return rows;
+        }
+      };
+
       if (search?.trim()) {
         const parsedLimit = clampPositiveInt(limit, 10, 50);
         const parsedPage = clampPositiveInt(page, 1, 1_000_000);
@@ -596,7 +638,7 @@ export function registerAdminRoutes(
         const safePage = Math.min(parsedPage, totalPages);
         const sliced = users.slice((safePage - 1) * parsedLimit, safePage * parsedLimit);
         return reply.code(200).send({
-          users: sliced,
+          users: await attachUserGroups(sliced),
           total,
           page: safePage,
           totalPages,
@@ -609,7 +651,10 @@ export function registerAdminRoutes(
         filter,
         sort,
       });
-      return reply.code(200).send(result);
+      return reply.code(200).send({
+        ...result,
+        users: await attachUserGroups(result.users),
+      });
     });
 
     // GET /api/admin/users/:id
@@ -680,6 +725,7 @@ export function registerAdminRoutes(
                   isAssigned: userPolicy.isAssigned,
                   expiresAt: userPolicy.expiresAt ? userPolicy.expiresAt.toISOString() : null,
                   discountPercent: userPolicy.discountPercent,
+                  applyDiscountToCustomVolume: userPolicy.applyDiscountToCustomVolume,
                   creditLimit: userPolicy.creditLimit,
                 }
               : null,

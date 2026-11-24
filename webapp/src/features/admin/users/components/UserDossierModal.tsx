@@ -15,6 +15,7 @@ import {
   Loader2,
   Send,
   History,
+  Tags,
 } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
@@ -28,13 +29,14 @@ import { SegmentedControl, type SegmentedOption } from '@/shared/components/ui/S
 import { UserConfigQrModal } from './UserConfigQrModal.js';
 import { UserConfirmModal } from './UserConfirmModal.js';
 import { UserDirectMessageModal } from './UserDirectMessageModal.js';
+import { UserGroupAssignModal } from './UserGroupAssignModal.js';
 import { ReceiptPhotoModal } from '@/features/admin/receipts/components/ReceiptPhotoModal.js';
 import {
   getTransactionTypeLabel,
   formatTransactionDescription,
 } from '@/shared/lib/transactionFormatters.js';
 import type { UserDossierResponse } from '@/shared/types/api.js';
-import type { UserProfile, UserConfigItem } from '@/shared/types/admin.js';
+import type { AssignUserGroupPayload, UserProfile, UserConfigItem } from '@/shared/types/admin.js';
 
 type DossierTabId = 'finances' | 'configs' | 'orders' | 'receipts' | 'transactions' | 'audit';
 
@@ -59,6 +61,7 @@ interface UserDossierModalProps {
     panelId?: string
   ) => Promise<void>;
   onSyncConfig?: (telegramId: number, configUsername: string, panelId?: string) => Promise<void>;
+  onAssignGroup?: (telegramId: number, payload: AssignUserGroupPayload) => Promise<void>;
 }
 
 export const UserDossierModal: React.FC<UserDossierModalProps> = ({
@@ -74,6 +77,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
   onResetConfigUsage,
   onRevokeConfigSubUrl,
   onSyncConfig,
+  onAssignGroup,
 }) => {
   const { t, locale } = useLanguage();
   const {
@@ -95,6 +99,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     config?: UserConfigItem;
   } | null>(null);
   const [isDmModalOpen, setIsDmModalOpen] = useState(false);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [photoTarget, setPhotoTarget] = useState<{ id: string; mediaType?: string } | null>(null);
@@ -116,6 +121,7 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
     setQrModalConfig(null);
     setConfirmModal(null);
     setIsDmModalOpen(false);
+    setIsGroupModalOpen(false);
     setActionLoading(null);
     setPhotoTarget(null);
   }, [dossier?.summary?.user?.telegramId]);
@@ -169,6 +175,21 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
       setIsDmModalOpen(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('admin.users.dmFailed');
+      notifyAction(msg, 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleAssignGroupSubmit = async (payload: AssignUserGroupPayload) => {
+    if (!onAssignGroup) return;
+    setActionLoading('group');
+    try {
+      await onAssignGroup(user.telegramId, payload);
+      notifyAction(t('admin.users.assignGroupSuccess'), 'success');
+      setIsGroupModalOpen(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('admin.users.assignGroupFailed');
       notifyAction(msg, 'error');
     } finally {
       setActionLoading(null);
@@ -264,6 +285,11 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
               {t('admin.users.adminBadge')}
             </Badge>
           )}
+          {user.group && (
+            <Badge variant="primary" size="xs">
+              {user.group.badge || user.group.name}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-xs mt-1 flex-wrap">
@@ -310,6 +336,19 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
           <Wallet className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate">{t('admin.users.btnChangeBalance')}</span>
         </Button>
+
+        {onAssignGroup && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsGroupModalOpen(true)}
+            className="flex-1 sm:flex-initial"
+          >
+            <Tags className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{t('admin.users.btnChangeGroup')}</span>
+          </Button>
+        )}
 
         {onSendMessage && (
           <Button
@@ -380,7 +419,12 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   {t('admin.users.userCurBalance')}
                 </span>
                 <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
-                  <bdi dir="ltr" className="text-base sm:text-lg font-bold tnum text-ok-fg">
+                  <bdi
+                    dir="ltr"
+                    className={`text-base sm:text-lg font-bold tnum ${
+                      user.balance < 0 ? 'text-danger-fg' : 'text-ok-fg'
+                    }`}
+                  >
                     {formatMoney(user.balance)}
                   </bdi>
                   <span className="text-[11px] font-normal text-ink-muted">
@@ -388,6 +432,75 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
                   </span>
                 </div>
               </div>
+
+              <div className="p-3.5 rounded-tile border border-brand/25 bg-brand-soft/40">
+                <span className="text-[11px] font-medium block text-ink-muted">
+                  {t('admin.users.userGroupLabel')}
+                </span>
+                <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-sm font-bold text-ink truncate">
+                    {user.group
+                      ? user.group.badge?.trim() && user.group.name?.trim()
+                        ? user.group.badge.includes(user.group.name)
+                          ? user.group.badge
+                          : `${user.group.badge} ${user.group.name}`
+                        : user.group.badge || user.group.name
+                      : t('admin.users.userGroupNone')}
+                  </span>
+                  {user.group?.discountPercent ? (
+                    <Badge variant="success" size="xs" className="tnum">
+                      -{formatNumber(user.group.discountPercent)}%
+                    </Badge>
+                  ) : null}
+                </div>
+                {user.group?.isAssigned && (
+                  <div className="text-[10.5px] text-ink-muted mt-1 tnum">
+                    {user.group.expiresAt
+                      ? t('admin.users.userGroupExpires', {
+                          date: formatIsoDate(user.group.expiresAt),
+                        })
+                      : t('admin.users.userGroupPermanent')}
+                  </div>
+                )}
+              </div>
+
+              {((user.creditLimit ?? user.group?.creditLimit ?? 0) > 0 || user.balance < 0) && (
+                <div className="p-3.5 rounded-tile border border-warn/25 bg-warn-soft/50">
+                  <span className="text-[11px] font-medium block text-warn-fg">
+                    {user.balance < 0
+                      ? t('admin.users.userDebtAmount')
+                      : t('admin.users.userCreditLimit')}
+                  </span>
+                  <div className="mt-1.5 flex items-baseline gap-1 flex-wrap">
+                    <bdi dir="ltr" className="text-base sm:text-lg font-bold tnum text-warn-fg">
+                      {formatMoney(
+                        user.balance < 0
+                          ? Math.abs(user.balance)
+                          : (user.creditLimit ?? user.group?.creditLimit ?? 0)
+                      )}
+                    </bdi>
+                    <span className="text-[11px] font-normal text-warn-fg/80">
+                      {t('common.currency')}
+                    </span>
+                  </div>
+                  {(user.creditLimit ?? user.group?.creditLimit ?? 0) > 0 && (
+                    <div className="text-[10.5px] text-ink-soft mt-1 tnum">
+                      {t('admin.users.userPurchasingPower')}:{' '}
+                      <bdi dir="ltr">
+                        {formatMoney(
+                          Math.max(
+                            0,
+                            user.balance -
+                              (user.reservedBalance ?? 0) +
+                              (user.creditLimit ?? user.group?.creditLimit ?? 0)
+                          )
+                        )}
+                      </bdi>{' '}
+                      {t('common.currency')}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="p-3.5 rounded-tile border border-line bg-surface-2">
                 <span className="text-[11px] font-medium block text-ink-muted">
@@ -924,6 +1037,14 @@ export const UserDossierModal: React.FC<UserDossierModalProps> = ({
         onClose={() => setIsDmModalOpen(false)}
         onSend={handleSendDirectMessage}
         loading={actionLoading === 'dm'}
+      />
+
+      <UserGroupAssignModal
+        user={user}
+        isOpen={isGroupModalOpen}
+        onClose={() => setIsGroupModalOpen(false)}
+        onSubmit={handleAssignGroupSubmit}
+        loading={actionLoading === 'group'}
       />
 
       {/* QR Code Modal for user subscription links */}

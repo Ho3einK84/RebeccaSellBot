@@ -77,6 +77,9 @@ export const userGroups = pgTable(
     badge: text('badge'),
     isDefault: boolean('is_default').notNull().default(false),
     discountPercent: integer('discount_percent').notNull().default(0),
+    applyDiscountToCustomVolume: boolean('apply_discount_to_custom_volume')
+      .notNull()
+      .default(false),
     customPricePerGb: bigint('custom_price_per_gb', { mode: 'number' }),
     customPricePerDay: bigint('custom_price_per_day', { mode: 'number' }),
     allowCatalogDiscounts: boolean('allow_catalog_discounts').notNull().default(true),

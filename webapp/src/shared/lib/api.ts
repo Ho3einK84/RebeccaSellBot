@@ -76,6 +76,12 @@ import type {
   BulkGiftPreviewPayload,
   BulkGiftPreviewResponse,
   CreateBulkGiftJobPayload,
+  AdminUserGroupDto,
+  AdminUserGroupsResponse,
+  CreateAdminUserGroupPayload,
+  UpdateAdminUserGroupPayload,
+  AssignUserGroupPayload,
+  DeleteAdminUserGroupResponse,
 } from '@/shared/types/admin.js';
 import type {
   UserProfileResponse,
@@ -579,6 +585,48 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  // Admin User Groups & VIP Credit Limit API
+  getAdminUserGroups: (): Promise<AdminUserGroupsResponse> =>
+    request<AdminUserGroupsResponse>('/api/admin/groups'),
+
+  createAdminUserGroup: (
+    payload: CreateAdminUserGroupPayload
+  ): Promise<{ group: AdminUserGroupDto }> =>
+    request<{ group: AdminUserGroupDto }>('/api/admin/groups', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateAdminUserGroup: (
+    id: string,
+    payload: UpdateAdminUserGroupPayload
+  ): Promise<{ group: AdminUserGroupDto }> =>
+    request<{ group: AdminUserGroupDto }>(`/api/admin/groups/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteAdminUserGroup: (
+    id: string,
+    transferToGroupId?: string | null
+  ): Promise<DeleteAdminUserGroupResponse> =>
+    request<DeleteAdminUserGroupResponse>(`/api/admin/groups/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      body: JSON.stringify(transferToGroupId === undefined ? {} : { transferToGroupId }),
+    }),
+
+  assignAdminUserGroup: (
+    telegramId: number,
+    payload: AssignUserGroupPayload
+  ): Promise<{ success: boolean; groupId: string | null; expiresAt: string | null }> =>
+    request<{ success: boolean; groupId: string | null; expiresAt: string | null }>(
+      `/api/admin/users/${telegramId}/group`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
 
   toggleUserConfig: (
     telegramId: number,

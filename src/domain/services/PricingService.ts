@@ -9,7 +9,11 @@ import type { EffectiveUserGroupPolicy } from './UserGroupService.js';
 
 export type GroupPricingPolicyInput = Pick<
   EffectiveUserGroupPolicy,
-  'discountPercent' | 'customPricePerGb' | 'customPricePerDay' | 'allowCatalogDiscounts'
+  | 'discountPercent'
+  | 'applyDiscountToCustomVolume'
+  | 'customPricePerGb'
+  | 'customPricePerDay'
+  | 'allowCatalogDiscounts'
 >;
 
 export interface PackageOption {
@@ -292,7 +296,8 @@ export class PricingService {
    * Produce the server-side custom pricing quote. Tiers and overrides are
    * validated JSON settings so pricing policy can change without a deploy.
    * When a user-group policy supplies custom GB/day rates, those rates apply
-   * directly before applying the group's `discountPercent`.
+   * directly; the group's `discountPercent` only applies to custom volume when
+   * `applyDiscountToCustomVolume` is explicitly enabled on the group.
    */
   getCustomPriceQuote(
     gbAmount: number,
@@ -362,7 +367,10 @@ export class PricingService {
       }
     }
 
-    const groupDisc = applyGroupDiscount(subtotal, userPolicy?.discountPercent);
+    const effectiveCustomDiscountPercent = userPolicy?.applyDiscountToCustomVolume
+      ? userPolicy.discountPercent
+      : 0;
+    const groupDisc = applyGroupDiscount(subtotal, effectiveCustomDiscountPercent);
     return {
       totalPrice: groupDisc.finalAmount,
       volumePrice,

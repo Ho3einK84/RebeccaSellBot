@@ -18,6 +18,7 @@ export interface UserGroupSummary {
   isAssigned: boolean;
   expiresAt: string | null;
   discountPercent: number;
+  applyDiscountToCustomVolume?: boolean;
   customPricePerGb: number | null;
   customPricePerDay: number | null;
   allowCatalogDiscounts: boolean;

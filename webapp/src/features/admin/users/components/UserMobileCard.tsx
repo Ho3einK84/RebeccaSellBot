@@ -36,8 +36,13 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <Avatar name={user.firstName} username={user.username} size="md" />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
               <span className="font-semibold text-sm truncate text-ink">{displayName}</span>
+              {user.group && (user.group.isAssigned || user.group.badge) && (
+                <Badge variant="primary" size="xs" className="shrink-0">
+                  {user.group.badge || user.group.name}
+                </Badge>
+              )}
               {user.isBanned && (
                 <Badge variant="error" size="xs" className="shrink-0">
                   {t('admin.users.bannedBadge')}
@@ -75,8 +80,15 @@ export const UserMobileCard: React.FC<UserMobileCardProps> = ({
 
       <Card subCard padding="sm" className="flex items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-1.5">
-          <Wallet className="w-4 h-4 text-ok-fg shrink-0" />
-          <bdi dir="ltr" className="font-semibold text-sm tnum text-ok-fg">
+          <Wallet
+            className={`w-4 h-4 shrink-0 ${user.balance < 0 ? 'text-danger-fg' : 'text-ok-fg'}`}
+          />
+          <bdi
+            dir="ltr"
+            className={`font-semibold text-sm tnum ${
+              user.balance < 0 ? 'text-danger-fg' : 'text-ok-fg'
+            }`}
+          >
             {formatMoney(user.balance)}
           </bdi>
           <span className="text-xs text-ink-muted">{t('common.currency')}</span>

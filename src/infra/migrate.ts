@@ -308,6 +308,7 @@ END $$;`,
 	"badge" text,
 	"is_default" boolean DEFAULT false NOT NULL,
 	"discount_percent" integer DEFAULT 0 NOT NULL,
+	"apply_discount_to_custom_volume" boolean DEFAULT false NOT NULL,
 	"custom_price_per_gb" bigint,
 	"custom_price_per_day" bigint,
 	"allow_catalog_discounts" boolean DEFAULT true NOT NULL,
@@ -358,6 +359,7 @@ END $$;`,
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;`,
+  `ALTER TABLE "user_groups" ADD COLUMN IF NOT EXISTS "apply_discount_to_custom_volume" boolean DEFAULT false NOT NULL;`,
 ];
 
 export async function ensureFeatureSchemaMigrations(

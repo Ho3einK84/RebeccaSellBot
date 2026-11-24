@@ -135,15 +135,27 @@ async function promptCustomVolumeGb(
   ctx: ConversationContext,
   options: { cancelDestination?: 'home' | 'shop' | 'wallet' } = {}
 ): Promise<number | undefined> {
-  const config = await conversation.external((outsideCtx) => {
+  const config = await conversation.external(async (outsideCtx) => {
     const targetCtx = outsideCtx ?? ctx;
     const ts = targetCtx.services?.translationService;
     const bounds = getCustomVolumeBounds(targetCtx);
     const days = customDurationDays(targetCtx);
-    const pricePerGb =
+    const basePricePerGb =
       typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('price_per_gb', 5000) : 5000;
-    const rawTiers =
-      typeof ts?.getSetting === 'function'
+    const userPolicy = await safeGetEffectiveUserPolicy(
+      targetCtx.services?.userGroupService,
+      targetCtx.from?.id
+    );
+    const hasGroupCustomRate =
+      userPolicy.customPricePerGb !== null || userPolicy.customPricePerDay !== null;
+    const rawRate = userPolicy.customPricePerGb ?? basePricePerGb;
+    const effectiveCustomDiscPct = userPolicy.applyDiscountToCustomVolume
+      ? userPolicy.discountPercent
+      : 0;
+    const pricePerGb = applyGroupDiscount(rawRate, effectiveCustomDiscPct).finalAmount;
+    const rawTiers = hasGroupCustomRate
+      ? '[]'
+      : typeof ts?.getSetting === 'function'
         ? ts.getSetting('volume_pricing_tiers_json', '[]')
         : '[]';
     const tiers = (parseVolumePricingTiersJson(rawTiers) ?? [])

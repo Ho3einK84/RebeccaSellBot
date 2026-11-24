@@ -76,7 +76,7 @@ export const UserTable: React.FC<UserTableProps> = ({
                   )}
                 </td>
                 <td className="py-3 px-4 font-medium text-ink">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span>
                       {
                         sanitizeDisplayName(
@@ -86,6 +86,11 @@ export const UserTable: React.FC<UserTableProps> = ({
                         ).displayName
                       }
                     </span>
+                    {u.group && (u.group.isAssigned || u.group.badge) && (
+                      <Badge variant="primary" size="xs" className="shrink-0">
+                        {u.group.badge || u.group.name}
+                      </Badge>
+                    )}
                     {u.isBanned && (
                       <Badge variant="error" size="xs" className="shrink-0">
                         {t('admin.users.bannedBadge')}
@@ -93,7 +98,11 @@ export const UserTable: React.FC<UserTableProps> = ({
                     )}
                   </div>
                 </td>
-                <td className="py-3 px-4 font-semibold tnum text-ok-fg">
+                <td
+                  className={`py-3 px-4 font-semibold tnum ${
+                    u.balance < 0 ? 'text-danger-fg' : 'text-ok-fg'
+                  }`}
+                >
                   <bdi dir="ltr">{formatMoney(u.balance)}</bdi>{' '}
                   <span className="text-[11px] font-normal text-ink-muted">
                     {t('common.currency')}

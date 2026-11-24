@@ -39,6 +39,7 @@ function makeGroupRow(overrides: Partial<UserGroupRow> = {}): UserGroupRow {
     badge: '👑 VIP',
     isDefault: false,
     discountPercent: 20,
+    applyDiscountToCustomVolume: false,
     customPricePerGb: null,
     customPricePerDay: null,
     allowCatalogDiscounts: false,
@@ -231,16 +232,18 @@ describe('UserGroupService policy resolution, pricing pipeline, anti-double-disc
     expect(pricedWithCatalog.catalogDiscountAmount).toBe(8_000);
     expect(pricedWithCatalog.activeDiscountTitle).toBe('Flash 10%');
 
-    // Custom volume with group custom GB/day rates overrides tiers & applies group discount
+    // Custom volume with group custom GB/day rates: by default (applyDiscountToCustomVolume: false),
+    // group discountPercent applies ONLY to catalog packages and does NOT double-discount custom volume.
     const customRateGroup: EffectiveUserGroupPolicy = {
       ...NEUTRAL_USER_GROUP_POLICY,
       groupId: 'grp_reseller',
       customPricePerGb: 3_000,
       customPricePerDay: 500,
       discountPercent: 10,
+      applyDiscountToCustomVolume: false,
       allowCatalogDiscounts: false,
     };
-    const resolvedCustom = resolvePurchasePackage({
+    const resolvedCustomNoGroupDisc = resolvePurchasePackage({
       custom: { gb: 20, days: 30 },
       pricingService: pricing,
       translationService: ts,
@@ -248,13 +251,50 @@ describe('UserGroupService policy resolution, pricing pipeline, anti-double-disc
       activeDiscounts,
       now,
     });
-    expect(resolvedCustom.success).toBe(true);
-    if (resolvedCustom.success) {
+    expect(resolvedCustomNoGroupDisc.success).toBe(true);
+    if (resolvedCustomNoGroupDisc.success) {
+      // 20 * 3000 + 30 * 500 = 75_000; group discountPercent skipped on custom volume; catalog blocked
+      expect(resolvedCustomNoGroupDisc.originalPrice).toBe(75_000);
+      expect(resolvedCustomNoGroupDisc.quotedAmount).toBe(75_000);
+      expect(resolvedCustomNoGroupDisc.groupDiscountPercent).toBe(0);
+      expect(resolvedCustomNoGroupDisc.groupDiscountAmount).toBe(0);
+      expect(resolvedCustomNoGroupDisc.catalogDiscountAmount).toBe(0);
+    }
+
+    // Same group still gets its 10% discount on standard catalog packages
+    const resolvedStaticForReseller = resolvePurchasePackage({
+      packageId: pkg.id,
+      pricingService: pricing,
+      translationService: ts,
+      userPolicy: customRateGroup,
+      activeDiscounts,
+      now,
+    });
+    expect(resolvedStaticForReseller.success).toBe(true);
+    if (resolvedStaticForReseller.success) {
+      expect(resolvedStaticForReseller.originalPrice).toBe(100_000);
+      expect(resolvedStaticForReseller.quotedAmount).toBe(90_000);
+      expect(resolvedStaticForReseller.groupDiscountPercent).toBe(10);
+      expect(resolvedStaticForReseller.groupDiscountAmount).toBe(10_000);
+    }
+
+    // When applyDiscountToCustomVolume: true is explicitly enabled, group discountPercent applies to custom volume too
+    const resolvedCustomWithGroupDisc = resolvePurchasePackage({
+      custom: { gb: 20, days: 30 },
+      pricingService: pricing,
+      translationService: ts,
+      userPolicy: { ...customRateGroup, applyDiscountToCustomVolume: true },
+      activeDiscounts,
+      now,
+    });
+    expect(resolvedCustomWithGroupDisc.success).toBe(true);
+    if (resolvedCustomWithGroupDisc.success) {
       // 20 * 3000 + 30 * 500 = 75_000; -10% = 67_500; catalog discount blocked
-      expect(resolvedCustom.originalPrice).toBe(75_000);
-      expect(resolvedCustom.quotedAmount).toBe(67_500);
-      expect(resolvedCustom.groupDiscountAmount).toBe(7_500);
-      expect(resolvedCustom.catalogDiscountAmount).toBe(0);
+      expect(resolvedCustomWithGroupDisc.originalPrice).toBe(75_000);
+      expect(resolvedCustomWithGroupDisc.quotedAmount).toBe(67_500);
+      expect(resolvedCustomWithGroupDisc.groupDiscountPercent).toBe(10);
+      expect(resolvedCustomWithGroupDisc.groupDiscountAmount).toBe(7_500);
+      expect(resolvedCustomWithGroupDisc.catalogDiscountAmount).toBe(0);
     }
 
     // Custom service name flag: allowed via group OR global setting

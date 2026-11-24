@@ -520,7 +520,10 @@ export function registerUserShopRoutes(
       const pricePerDay =
         userPolicy.customPricePerDay !== null ? userPolicy.customPricePerDay : basePricePerDay;
       const baseTotalPrice = gb * pricePerGb + days * pricePerDay;
-      const groupDisc = applyGroupDiscount(baseTotalPrice, userPolicy.discountPercent);
+      const effectiveCustomDiscPct = userPolicy.applyDiscountToCustomVolume
+        ? userPolicy.discountPercent
+        : 0;
+      const groupDisc = applyGroupDiscount(baseTotalPrice, effectiveCustomDiscPct);
       const discount = userPolicy.allowCatalogDiscounts
         ? resolveBestCatalogDiscount(
             activeDiscounts,

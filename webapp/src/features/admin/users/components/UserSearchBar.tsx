@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, X, Users, Filter, ArrowUpDown } from 'lucide-react';
+import { Search, X, Users, Filter, ArrowUpDown, Tags } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
@@ -18,6 +18,7 @@ interface UserSearchBarProps {
   onFilterChange?: (filter: UserFilterType) => void;
   sort?: UserSortType;
   onSortChange?: (sort: UserSortType) => void;
+  onOpenUserGroups?: () => void;
 }
 
 export const UserSearchBar: React.FC<UserSearchBarProps> = ({
@@ -30,6 +31,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
   onFilterChange,
   sort = 'newest',
   onSortChange,
+  onOpenUserGroups,
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
@@ -50,11 +52,25 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-row justify-between items-center gap-2">
-        <SectionHeader icon={<Users />} title={t('admin.users.title')} />
-        <Badge variant="neutral" size="sm" className="shrink-0">
-          {t('admin.users.totalCount', { count: formatNumber(totalCount) })}
-        </Badge>
+      <div className="flex flex-row justify-between items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <SectionHeader icon={<Users />} title={t('admin.users.title')} />
+          <Badge variant="neutral" size="sm" className="shrink-0">
+            {t('admin.users.totalCount', { count: formatNumber(totalCount) })}
+          </Badge>
+        </div>
+        {onOpenUserGroups && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={onOpenUserGroups}
+            className="shrink-0"
+          >
+            <Tags className="w-3.5 h-3.5 text-brand-fg shrink-0" />
+            <span>{t('admin.users.manageGroupsBtn')}</span>
+          </Button>
+        )}
       </div>
 
       <div className="flex gap-2">

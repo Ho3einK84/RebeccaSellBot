@@ -4,7 +4,7 @@ import { api } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import type { AdjustBalancePayload, UserDossierResponse } from '@/shared/types/api.js';
-import type { UserFilterType, UserSortType } from '@/shared/types/admin.js';
+import type { AssignUserGroupPayload, UserFilterType, UserSortType } from '@/shared/types/admin.js';
 
 export function useAdminUsers() {
   const queryClient = useQueryClient();
@@ -166,6 +166,27 @@ export function useAdminUsers() {
     },
   });
 
+  const assignGroupMutation = useMutation({
+    mutationFn: ({
+      telegramId,
+      payload,
+    }: {
+      telegramId: number;
+      payload: AssignUserGroupPayload;
+    }) => api.assignAdminUserGroup(telegramId, payload),
+    onSuccess: (_data, variables) => {
+      triggerHaptic('success');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.userGroups });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.userDossier(variables.telegramId),
+      });
+    },
+    onError: () => {
+      triggerHaptic('error');
+    },
+  });
+
   const handleSearch = useCallback(
     (query?: string) => {
       const q = query !== undefined ? query : searchQuery;
@@ -243,5 +264,7 @@ export function useAdminUsers() {
     isRevokingSubUrl: revokeSubUrlMutation.isPending,
     syncConfigMutation,
     isSyncingConfig: syncConfigMutation.isPending,
+    assignGroupMutation,
+    isAssigningGroup: assignGroupMutation.isPending,
   };
 }

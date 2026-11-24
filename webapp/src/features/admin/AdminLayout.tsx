@@ -12,6 +12,7 @@ import { PaymentGatewaysModal } from './paymentGateways/PaymentGatewaysModal.js'
 import { ReceiptSettingsModal } from './receipts/components/ReceiptSettingsModal.js';
 import { ForcedJoinModal } from './forcedJoin/ForcedJoinModal.js';
 import { BulkGiftModal } from './bulkGift/BulkGiftModal.js';
+import { UserGroupsModal } from './userGroups/UserGroupsModal.js';
 import { AdminHeader } from './components/AdminHeader.js';
 import { AdminDesktopNav } from './components/AdminDesktopNav.js';
 import { AdminBottomNav, type TabConfig } from './components/AdminBottomNav.js';
@@ -48,6 +49,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isReceiptSettingsModalOpen, setIsReceiptSettingsModalOpen] = useState(false);
   const [isForcedJoinModalOpen, setIsForcedJoinModalOpen] = useState(false);
   const [isBulkGiftModalOpen, setIsBulkGiftModalOpen] = useState(false);
+  const [isUserGroupsModalOpen, setIsUserGroupsModalOpen] = useState(false);
 
   // Single lightweight query drives both dashboard stats, pending badge count, and panel health indicator.
   const { stats, panelHealth, forceRefresh: forceRefreshStats } = useAdminStats();
@@ -114,7 +116,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       void queryClient.invalidateQueries({ queryKey: queryKeys.panels });
       void forceRefreshStats();
     }
-    if (activeTab === 'users') void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    if (activeTab === 'users') {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.userGroups });
+    }
     if (activeTab === 'packages') {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'packages'] });
       void queryClient.invalidateQueries({ queryKey: ['admin', 'categories'] });
@@ -207,6 +212,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           onNotify={(msg, type) => notify(msg, type ?? 'success')}
           inspectedUserId={inspectingUserId}
           onClearInspectedUser={() => setInspectingUserId(null)}
+          onOpenUserGroups={() => setIsUserGroupsModalOpen(true)}
         />
       )}
       {activeTab === 'panels' && (
@@ -218,6 +224,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       {activeTab === 'coming-soon' && (
         <ModulesTab
           botUsername={botUsername}
+          onOpenUserGroups={() => setIsUserGroupsModalOpen(true)}
           onOpenBankCards={() => setIsBankCardsModalOpen(true)}
           onOpenPaymentGateways={() => setIsPaymentGatewaysModalOpen(true)}
           onOpenReceiptSettings={() => setIsReceiptSettingsModalOpen(true)}
@@ -225,6 +232,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           onOpenBulkGift={() => setIsBulkGiftModalOpen(true)}
         />
       )}
+      <UserGroupsModal
+        isOpen={isUserGroupsModalOpen}
+        onClose={() => setIsUserGroupsModalOpen(false)}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
       <ForcedJoinModal
         isOpen={isForcedJoinModalOpen}
         onClose={() => setIsForcedJoinModalOpen(false)}

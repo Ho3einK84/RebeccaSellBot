@@ -25,7 +25,7 @@ import {
   type UserGroupRow,
 } from '../../../domain/services/UserGroupService.js';
 
-type ToggleField = 'cat' | 'prm' | 'cb' | 'whl' | 'nam';
+type ToggleField = 'cat' | 'prm' | 'cb' | 'whl' | 'nam' | 'cvd';
 type EditField = 'name' | 'badge' | 'disc' | 'gb' | 'day' | 'cred';
 
 function groupDisplayTitle(group: Pick<UserGroupRow, 'name' | 'badge' | 'isDefault'>): string {
@@ -165,6 +165,10 @@ export async function renderAdminGroupDetail(
     .text(toggleBtn(group.allowLuckyWheel, 'admin_groups_flag_wheel'), 'adm:grp:t:whl')
     .row()
     .text(toggleBtn(group.allowCustomServiceName, 'admin_groups_flag_custom_name'), 'adm:grp:t:nam')
+    .text(
+      toggleBtn(group.applyDiscountToCustomVolume, 'admin_groups_flag_custom_vol_discount'),
+      'adm:grp:t:cvd'
+    )
     .row();
 
   if (!group.isDefault) {
@@ -204,6 +208,10 @@ export async function renderAdminGroupDetail(
           {
             label: t(ctx, 'admin_groups_discount_label'),
             value: `${localizedNumber(group.discountPercent, ctx)}%`,
+          },
+          {
+            label: t(ctx, 'admin_groups_flag_custom_vol_discount'),
+            value: onOff(group.applyDiscountToCustomVolume),
           },
           {
             label: t(ctx, 'admin_groups_custom_gb_label'),
@@ -538,7 +546,7 @@ export function registerAdminGroupRoutes(): void {
     });
   });
 
-  registerAdminRoute(/^adm:grp:t:(cat|prm|cb|whl|nam)$/u, async (ctx, match) => {
+  registerAdminRoute(/^adm:grp:t:(cat|prm|cb|whl|nam|cvd)$/u, async (ctx, match) => {
     const groupId = getActiveGroupId(ctx);
     const flag = match?.[1] as ToggleField | undefined;
     if (!groupId || !flag || !ctx.services?.userGroupService) {
@@ -559,7 +567,9 @@ export function registerAdminGroupRoutes(): void {
             ? { allowCashback: !group.allowCashback }
             : flag === 'whl'
               ? { allowLuckyWheel: !group.allowLuckyWheel }
-              : { allowCustomServiceName: !group.allowCustomServiceName };
+              : flag === 'cvd'
+                ? { applyDiscountToCustomVolume: !group.applyDiscountToCustomVolume }
+                : { allowCustomServiceName: !group.allowCustomServiceName };
     await ctx.services.userGroupService.updateGroup(groupId, patch, ctx.from?.id);
     await renderAdminGroupDetail(ctx, groupId, {
       tone: 'success',

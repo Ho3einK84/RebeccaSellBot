@@ -63,6 +63,18 @@ export interface ReceiptSettings {
   adminProfiles?: ReceiptAdminProfile[];
 }
 
+export interface AdminUserGroupBadge {
+  id: string;
+  name: string;
+  badge: string | null;
+  isDefault: boolean;
+  isAssigned: boolean;
+  expiresAt: string | null;
+  discountPercent: number;
+  applyDiscountToCustomVolume?: boolean;
+  creditLimit: number;
+}
+
 export interface UserProfile {
   telegramId: number;
   username: string | null;
@@ -70,6 +82,8 @@ export interface UserProfile {
   lastName: string | null;
   balance: number;
   reservedBalance?: number;
+  creditLimit?: number;
+  group?: AdminUserGroupBadge | null;
   totalSpend: number;
   activeSubscriptionCount: number;
   isBanned?: boolean;
@@ -729,4 +743,59 @@ export interface CreateBulkGiftJobPayload extends BulkGiftPreviewPayload {
   giftGb: number;
   giftDays: number;
   notifyMessage?: string | null;
+}
+
+export interface AdminUserGroupDto {
+  id: string;
+  name: string;
+  badge: string | null;
+  isDefault: boolean;
+  discountPercent: number;
+  applyDiscountToCustomVolume: boolean;
+  customPricePerGb: number | null;
+  customPricePerDay: number | null;
+  allowCatalogDiscounts: boolean;
+  allowPromoCodes: boolean;
+  allowCashback: boolean;
+  allowLuckyWheel: boolean;
+  allowCustomServiceName: boolean;
+  creditLimit: number;
+  memberCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AdminUserGroupsResponse {
+  groups: AdminUserGroupDto[];
+}
+
+export interface CreateAdminUserGroupPayload {
+  name: string;
+  badge?: string | null;
+  isDefault?: boolean;
+  discountPercent?: number;
+  applyDiscountToCustomVolume?: boolean;
+  customPricePerGb?: number | null;
+  customPricePerDay?: number | null;
+  allowCatalogDiscounts?: boolean;
+  allowPromoCodes?: boolean;
+  allowCashback?: boolean;
+  allowLuckyWheel?: boolean;
+  allowCustomServiceName?: boolean;
+  creditLimit?: number;
+}
+
+export type UpdateAdminUserGroupPayload = Partial<CreateAdminUserGroupPayload>;
+
+export interface AssignUserGroupPayload {
+  groupId: string | null;
+  durationDays?: number | null;
+  expiresAt?: string | null;
+}
+
+export interface DeleteAdminUserGroupResponse {
+  success: boolean;
+  deleted: boolean;
+  transferredCount: number;
+  targetGroupId: string | null;
 }

@@ -2253,6 +2253,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_groups_flag_cashback: 'Cashback',
   admin_groups_flag_wheel: 'Lucky Wheel',
   admin_groups_flag_custom_name: 'Custom Service Name',
+  admin_groups_flag_custom_vol_discount: 'Discount on Custom Volume',
   admin_groups_set_default_btn: '⭐ Set as Default Group',
   admin_groups_default_updated: 'Default user group updated.',
   admin_groups_delete_btn: '🗑️ Delete Group',
@@ -2268,7 +2269,8 @@ export const EN_TEXTS: Record<string, string> = {
   admin_groups_created_notice: 'New user group created successfully.',
   admin_groups_name_prompt: 'Enter the group name (max 80 characters, e.g., Gold VIP):',
   admin_groups_badge_prompt: 'Enter a short display badge (e.g., 👑 VIP), or send `-` to clear it:',
-  admin_groups_discount_prompt: 'Enter the group discount percentage (integer from 0 to 90):',
+  admin_groups_discount_prompt:
+    'Enter the group discount percentage for catalog packages (integer from 0 to 90; toggle "Discount on Custom Volume" if you also want it applied to custom volume):',
   admin_groups_credit_prompt:
     'Enter the maximum negative credit limit in Toman (0 = negative balance disabled):',
   admin_groups_custom_gb_prompt:

@@ -165,7 +165,10 @@ export function buildRenewalSelectionKeyboard(
     const rawRate =
       userPolicy?.customPricePerGb ??
       ctx.services!.translationService.getSettingNum('price_per_gb', 5_000);
-    const pricePerGb = applyGroupDiscount(rawRate, userPolicy?.discountPercent).finalAmount;
+    const effectiveCustomDiscPct = userPolicy?.applyDiscountToCustomVolume
+      ? userPolicy.discountPercent
+      : 0;
+    const pricePerGb = applyGroupDiscount(rawRate, effectiveCustomDiscPct).finalAmount;
     keyboard
       .text(
         t(ctx, 'renew_custom_button', { price: localizedNumber(pricePerGb, ctx) }),

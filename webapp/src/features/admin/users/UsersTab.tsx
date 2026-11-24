@@ -14,18 +14,24 @@ import { SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { useCopy } from '@/shared/hooks/useCopy.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
-import type { UserProfile, BalanceOperation } from '@/shared/types/admin.js';
+import type {
+  AssignUserGroupPayload,
+  UserProfile,
+  BalanceOperation,
+} from '@/shared/types/admin.js';
 
 interface UsersTabProps {
   onNotify: (message: string, type?: 'success' | 'error') => void;
   inspectedUserId?: number | null;
   onClearInspectedUser?: () => void;
+  onOpenUserGroups?: () => void;
 }
 
 export const UsersTab: React.FC<UsersTabProps> = ({
   onNotify,
   inspectedUserId,
   onClearInspectedUser,
+  onOpenUserGroups,
 }) => {
   const { t } = useLanguage();
   const { formatMoney } = useFormatters();
@@ -65,6 +71,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     resetUsageMutation,
     revokeSubUrlMutation,
     syncConfigMutation,
+    assignGroupMutation,
   } = useAdminUsers();
 
   useEffect(() => {
@@ -152,6 +159,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
     await syncConfigMutation.mutateAsync({ telegramId, configUsername, panelId });
   };
 
+  const handleAssignUserGroup = async (telegramId: number, payload: AssignUserGroupPayload) => {
+    await assignGroupMutation.mutateAsync({ telegramId, payload });
+  };
+
   return (
     <div className="space-y-4 pb-6">
       <UserSearchBar
@@ -164,6 +175,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         onFilterChange={setFilter}
         sort={sort}
         onSortChange={setSort}
+        onOpenUserGroups={onOpenUserGroups}
       />
 
       {isLoading && <SkeletonList count={4} />}
@@ -255,6 +267,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         onResetConfigUsage={handleResetConfigUsage}
         onRevokeConfigSubUrl={handleRevokeConfigSubUrl}
         onSyncConfig={handleSyncConfig}
+        onAssignGroup={handleAssignUserGroup}
       />
 
       <BalanceModal

@@ -120,6 +120,13 @@
       "when": 1795700000000,
       "tag": "0016_add_user_groups_and_credit_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795800000000,
+      "tag": "0017_add_group_discount_custom_volume_toggle",
+      "breakpoints": true
     }
   ]
 }

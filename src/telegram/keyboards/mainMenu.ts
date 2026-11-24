@@ -299,7 +299,10 @@ function resolveEffectiveCustomPricePerGb(
   const basePerGb = ctx.services?.translationService?.getSettingNum('price_per_gb', 5000);
   if (basePerGb === undefined) return undefined;
   const rawRate = userPolicy?.customPricePerGb ?? basePerGb;
-  return applyGroupDiscount(rawRate, userPolicy?.discountPercent).finalAmount;
+  const effectiveCustomDiscPct = userPolicy?.applyDiscountToCustomVolume
+    ? userPolicy.discountPercent
+    : 0;
+  return applyGroupDiscount(rawRate, effectiveCustomDiscPct).finalAmount;
 }
 
 /**

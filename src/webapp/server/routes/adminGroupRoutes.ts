@@ -72,6 +72,7 @@ export function registerAdminGroupRoutes(
         badge?: string | null;
         isDefault?: boolean;
         discountPercent?: number;
+        applyDiscountToCustomVolume?: boolean;
         customPricePerGb?: number | null;
         customPricePerDay?: number | null;
         allowCatalogDiscounts?: boolean;
@@ -96,6 +97,7 @@ export function registerAdminGroupRoutes(
             badge: body.badge,
             isDefault: body.isDefault,
             discountPercent: body.discountPercent,
+            applyDiscountToCustomVolume: body.applyDiscountToCustomVolume,
             customPricePerGb: body.customPricePerGb,
             customPricePerDay: body.customPricePerDay,
             allowCatalogDiscounts: body.allowCatalogDiscounts,
@@ -124,6 +126,7 @@ export function registerAdminGroupRoutes(
         badge?: string | null;
         isDefault?: boolean;
         discountPercent?: number;
+        applyDiscountToCustomVolume?: boolean;
         customPricePerGb?: number | null;
         customPricePerDay?: number | null;
         allowCatalogDiscounts?: boolean;
@@ -161,6 +164,7 @@ export function registerAdminGroupRoutes(
     // DELETE /api/admin/groups/:id
     adminScope.delete<{
       Params: { id: string };
+      Querystring?: { transferToGroupId?: string };
       Body?: { transferToGroupId?: string | null };
     }>('/api/admin/groups/:id', async (request, reply) => {
       const service = ensureService();
@@ -170,8 +174,14 @@ export function registerAdminGroupRoutes(
           .send({ error: 'User group service unavailable', code: 'SERVICE_UNAVAILABLE' });
       }
       try {
+        let transferToGroupId: string | null | undefined = request.body?.transferToGroupId;
+        if (transferToGroupId === undefined && request.query?.transferToGroupId !== undefined) {
+          const rawQueryTarget = request.query.transferToGroupId.trim();
+          transferToGroupId =
+            rawQueryTarget === '' || rawQueryTarget === '__none__' ? null : rawQueryTarget;
+        }
         const result = await service.deleteGroup(request.params.id, {
-          transferToGroupId: request.body?.transferToGroupId,
+          transferToGroupId,
           actorAdminId: request.userSession?.telegramId,
         });
         if (!result.deleted) {

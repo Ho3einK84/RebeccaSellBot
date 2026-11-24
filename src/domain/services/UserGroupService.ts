@@ -28,6 +28,7 @@ export interface EffectiveUserGroupPolicy {
   isExpired: boolean;
   expiresAt: Date | null;
   discountPercent: number;
+  applyDiscountToCustomVolume: boolean;
   customPricePerGb: number | null;
   customPricePerDay: number | null;
   allowCatalogDiscounts: boolean;
@@ -48,6 +49,7 @@ export interface CreateUserGroupInput {
   badge?: string | null;
   isDefault?: boolean;
   discountPercent?: number;
+  applyDiscountToCustomVolume?: boolean;
   customPricePerGb?: number | null;
   customPricePerDay?: number | null;
   allowCatalogDiscounts?: boolean;
@@ -63,6 +65,7 @@ export interface UpdateUserGroupInput {
   badge?: string | null;
   isDefault?: boolean;
   discountPercent?: number;
+  applyDiscountToCustomVolume?: boolean;
   customPricePerGb?: number | null;
   customPricePerDay?: number | null;
   allowCatalogDiscounts?: boolean;
@@ -88,6 +91,7 @@ export const NEUTRAL_USER_GROUP_POLICY: Readonly<EffectiveUserGroupPolicy> = Obj
   isExpired: false,
   expiresAt: null,
   discountPercent: 0,
+  applyDiscountToCustomVolume: false,
   customPricePerGb: null,
   customPricePerDay: null,
   allowCatalogDiscounts: true,
@@ -151,6 +155,7 @@ function policyFromGroupRow(
     isExpired: meta.isExpired,
     expiresAt: meta.expiresAt,
     discountPercent: clampDiscountPercent(group.discountPercent),
+    applyDiscountToCustomVolume: Boolean(group.applyDiscountToCustomVolume),
     customPricePerGb:
       group.customPricePerGb !== null && group.customPricePerGb !== undefined
         ? dbIntegerToSafeNumber(group.customPricePerGb, 'user_group_custom_price_per_gb')
@@ -305,6 +310,7 @@ export class UserGroupService {
           badge,
           isDefault,
           discountPercent,
+          applyDiscountToCustomVolume: input.applyDiscountToCustomVolume ?? false,
           customPricePerGb,
           customPricePerDay,
           allowCatalogDiscounts: input.allowCatalogDiscounts ?? true,
@@ -360,6 +366,9 @@ export class UserGroupService {
     if (input.badge !== undefined) patch.badge = validateGroupBadge(input.badge);
     if (input.discountPercent !== undefined) {
       patch.discountPercent = validateDiscountPercent(input.discountPercent);
+    }
+    if (input.applyDiscountToCustomVolume !== undefined) {
+      patch.applyDiscountToCustomVolume = Boolean(input.applyDiscountToCustomVolume);
     }
     if (input.customPricePerGb !== undefined) {
       patch.customPricePerGb = validateOptionalNonNegativePrice(input.customPricePerGb);

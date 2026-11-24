@@ -20,6 +20,7 @@ import {
   Send,
   Megaphone,
   Gift,
+  Tags,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/shared/components/ui/Card.js';
@@ -37,6 +38,7 @@ import type { TabType } from '@/shared/types/admin.js';
 interface ModulesTabProps {
   botUsername?: string;
   onSwitchTab?: (tab: TabType) => void;
+  onOpenUserGroups?: () => void;
   onOpenBankCards?: () => void;
   onOpenPaymentGateways?: () => void;
   onOpenReceiptSettings?: () => void;
@@ -71,6 +73,7 @@ interface ComingSoonModuleItem {
 
 export const ModulesTab: React.FC<ModulesTabProps> = ({
   botUsername,
+  onOpenUserGroups,
   onOpenBankCards,
   onOpenPaymentGateways,
   onOpenReceiptSettings,
@@ -112,6 +115,12 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
     queryKey: queryKeys.bulkGiftJobs(1),
     queryFn: () => api.getAdminBulkGiftJobs(1, 5),
     staleTime: 30_000,
+  });
+
+  const { data: userGroupsData } = useQuery({
+    queryKey: queryKeys.userGroups,
+    queryFn: () => api.getAdminUserGroups(),
+    staleTime: 60_000,
   });
 
   const openBotDeepLink = (payload: string) => {
@@ -229,7 +238,48 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
     }
   }
 
+  const userGroupsPills: StatusPill[] = [];
+  if (userGroupsData) {
+    const groups = userGroupsData.groups;
+    if (groups.length > 0) {
+      userGroupsPills.push({
+        label: t('admin.modules.statusGroupsCount', { count: formatNumber(groups.length) }),
+        variant: 'success',
+        dot: true,
+      });
+      const defaultGrp = groups.find((g) => g.isDefault);
+      if (defaultGrp) {
+        userGroupsPills.push({
+          label: t('admin.modules.statusDefaultGroup', { name: defaultGrp.name }),
+          variant: 'info',
+        });
+      }
+      const creditCount = groups.filter((g) => g.creditLimit > 0).length;
+      if (creditCount > 0) {
+        userGroupsPills.push({
+          label: t('admin.modules.statusCreditVipGroups', { count: formatNumber(creditCount) }),
+          variant: 'warning',
+        });
+      }
+    } else {
+      userGroupsPills.push({
+        label: t('admin.modules.statusNoGroups'),
+        variant: 'neutral',
+        dot: true,
+      });
+    }
+  }
+
   const activeTools: ActiveToolItem[] = [
+    {
+      id: 'user-groups',
+      icon: Tags,
+      tone: 'accent',
+      title: t('admin.modules.userGroups'),
+      desc: t('admin.modules.userGroupsSub'),
+      pills: userGroupsPills,
+      onOpen: onOpenUserGroups,
+    },
     {
       id: 'forced-join',
       icon: Megaphone,

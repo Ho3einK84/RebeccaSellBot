@@ -31,6 +31,7 @@ describe('WebApp User Groups & VIP Credit Limit Routes', () => {
         badge: '👑 VIP',
         isDefault: false,
         discountPercent: 20,
+        applyDiscountToCustomVolume: false,
         customPricePerGb: 3000,
         customPricePerDay: 0,
         allowCatalogDiscounts: false,
@@ -48,6 +49,7 @@ describe('WebApp User Groups & VIP Credit Limit Routes', () => {
       badge: null,
       isDefault: false,
       discountPercent: 0,
+      applyDiscountToCustomVolume: false,
       customPricePerGb: null,
       customPricePerDay: null,
       allowCatalogDiscounts: true,
@@ -121,6 +123,7 @@ describe('WebApp User Groups & VIP Credit Limit Routes', () => {
       badge: '👑 VIP',
       isAssigned: true,
       discountPercent: 20,
+      applyDiscountToCustomVolume: false,
       customPricePerGb: 3_000,
       customPricePerDay: 0,
       allowCatalogDiscounts: false,
@@ -223,10 +226,11 @@ describe('WebApp User Groups & VIP Credit Limit Routes', () => {
     expect(body.settings.cashbackPercent).toBe(0);
     expect(body.settings.allowPromoCodes).toBe(false);
     expect(body.settings.customVolume.pricePerGb).toBe(3_000);
-    expect(body.settings.customVolume.groupDiscountPercent).toBe(20);
+    expect(body.settings.customVolume.groupDiscountPercent).toBe(0);
+    expect(body.user.group.applyDiscountToCustomVolume).toBe(false);
   });
 
-  it('applies group pricing without double-discounting catalog sales on /packages and /quote', async () => {
+  it('applies group pricing to packages only by default and to custom volume when applyDiscountToCustomVolume is enabled', async () => {
     const pkgRes = await app.inject({
       method: 'GET',
       url: '/api/user/packages',
@@ -240,6 +244,7 @@ describe('WebApp User Groups & VIP Credit Limit Routes', () => {
     expect(pkg.groupDiscountAmount).toBe(20_000);
     expect(pkg.catalogDiscountAmount).toBe(0);
 
+    // Default (applyDiscountToCustomVolume: false): custom volume uses customPricePerGb=3000 WITHOUT 20% discount
     const quoteRes = await app.inject({
       method: 'GET',
       url: '/api/user/quote?gb=10&days=30',
@@ -247,11 +252,29 @@ describe('WebApp User Groups & VIP Credit Limit Routes', () => {
     });
     expect(quoteRes.statusCode).toBe(200);
     const quote = quoteRes.json();
-    // 10 GB * 3000 = 30_000; -20% group discount = 24_000; no catalog double discount
     expect(quote.pricePerGb).toBe(3_000);
     expect(quote.originalPrice).toBe(30_000);
-    expect(quote.totalPrice).toBe(24_000);
+    expect(quote.totalPrice).toBe(30_000);
+    expect(quote.groupDiscountPercent).toBe(0);
+    expect(quote.groupDiscountAmount).toBe(0);
     expect(quote.catalogDiscountAmount).toBe(0);
+
+    // When applyDiscountToCustomVolume: true, 20% group discount ALSO applies to custom volume
+    activePolicy = { ...activePolicy, applyDiscountToCustomVolume: true };
+    const quoteWithDiscRes = await app.inject({
+      method: 'GET',
+      url: '/api/user/quote?gb=10&days=30',
+      cookies: { session: userToken(55555) },
+    });
+    expect(quoteWithDiscRes.statusCode).toBe(200);
+    const quoteWithDisc = quoteWithDiscRes.json();
+    // 10 GB * 3000 = 30_000; -20% group discount = 24_000; no catalog double discount
+    expect(quoteWithDisc.pricePerGb).toBe(3_000);
+    expect(quoteWithDisc.originalPrice).toBe(30_000);
+    expect(quoteWithDisc.totalPrice).toBe(24_000);
+    expect(quoteWithDisc.groupDiscountPercent).toBe(20);
+    expect(quoteWithDisc.groupDiscountAmount).toBe(6_000);
+    expect(quoteWithDisc.catalogDiscountAmount).toBe(0);
   });
 
   it('rejects promo quote and redeem when group disallows promo codes', async () => {
@@ -383,7 +406,7 @@ describe('WebApp User Groups & VIP Credit Limit Routes', () => {
     expect(overBody.deficit).toBe(30_000);
   });
 
-  it('serves admin group CRUD and user group assignment routes', async () => {
+  it('serves admin group CRUD (including applyDiscountToCustomVolume) and user group assignment routes', async () => {
     const listRes = await app.inject({
       method: 'GET',
       url: '/api/admin/groups',
@@ -391,6 +414,53 @@ describe('WebApp User Groups & VIP Credit Limit Routes', () => {
     });
     expect(listRes.statusCode).toBe(200);
     expect(listRes.json().groups).toHaveLength(1);
+
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/admin/groups',
+      cookies: { session: adminToken(12345) },
+      payload: {
+        name: 'Reseller',
+        discountPercent: 15,
+        applyDiscountToCustomVolume: false,
+        customPricePerGb: 2500,
+      },
+    });
+    expect(createRes.statusCode).toBe(201);
+    expect(mockUserGroupService.createGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Reseller',
+        discountPercent: 15,
+        applyDiscountToCustomVolume: false,
+        customPricePerGb: 2500,
+      }),
+      12345
+    );
+
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/groups/grp_vip',
+      cookies: { session: adminToken(12345) },
+      payload: { applyDiscountToCustomVolume: true },
+    });
+    expect(patchRes.statusCode).toBe(200);
+    expect(mockUserGroupService.updateGroup).toHaveBeenCalledWith(
+      'grp_vip',
+      expect.objectContaining({ applyDiscountToCustomVolume: true }),
+      12345
+    );
+
+    const deleteRes = await app.inject({
+      method: 'DELETE',
+      url: '/api/admin/groups/grp_vip',
+      cookies: { session: adminToken(12345) },
+      payload: { transferToGroupId: 'grp_default' },
+    });
+    expect(deleteRes.statusCode).toBe(200);
+    expect(mockUserGroupService.deleteGroup).toHaveBeenCalledWith(
+      'grp_vip',
+      expect.objectContaining({ transferToGroupId: 'grp_default', actorAdminId: 12345 })
+    );
 
     const assignRes = await app.inject({
       method: 'POST',

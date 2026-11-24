@@ -386,6 +386,7 @@ export function registerUserProfileRoutes(
             isAssigned: userPolicy.isAssigned,
             expiresAt: userPolicy.expiresAt ? userPolicy.expiresAt.toISOString() : null,
             discountPercent: userPolicy.discountPercent,
+            applyDiscountToCustomVolume: userPolicy.applyDiscountToCustomVolume,
             customPricePerGb: userPolicy.customPricePerGb,
             customPricePerDay: userPolicy.customPricePerDay,
             allowCatalogDiscounts: userPolicy.allowCatalogDiscounts,
@@ -467,7 +468,9 @@ export function registerUserProfileRoutes(
             defaultDays,
             minGb,
             maxGb,
-            groupDiscountPercent: userPolicy.discountPercent,
+            groupDiscountPercent: userPolicy.applyDiscountToCustomVolume
+              ? userPolicy.discountPercent
+              : 0,
             hasGroupCustomRate,
             tiers: volumePricingTiers,
           },
