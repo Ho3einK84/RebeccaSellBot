@@ -108,19 +108,21 @@ export class RebeccaPanelRegistry {
       .limit(1);
     const legacySeeded = !existingLegacy;
 
-    await db
-      .insert(rebeccaPanels)
-      .values({ id: LEGACY_PANEL_ID, name: 'پنل اصلی', enabled: false, isDefault: true })
-      .onConflictDoNothing();
-    await db
-      .insert(rebeccaPanelServices)
-      .values({
-        panelId: LEGACY_PANEL_ID,
-        serviceId: 1,
-        name: 'سرویس پیش‌فرض',
-        isDefault: true,
-      })
-      .onConflictDoNothing();
+    if (legacySeeded) {
+      await db
+        .insert(rebeccaPanels)
+        .values({ id: LEGACY_PANEL_ID, name: 'پنل اصلی', enabled: false, isDefault: true })
+        .onConflictDoNothing();
+      await db
+        .insert(rebeccaPanelServices)
+        .values({
+          panelId: LEGACY_PANEL_ID,
+          serviceId: validServiceId(this.bootstrap.serviceId) ? this.bootstrap.serviceId : 1,
+          name: 'سرویس پیش‌فرض',
+          isDefault: true,
+        })
+        .onConflictDoNothing();
+    }
 
     const [legacy] = await db
       .select()
@@ -134,9 +136,28 @@ export class RebeccaPanelRegistry {
     const storedService = positiveServiceId(
       translationService.getStoredSetting('rebecca_service_id')
     );
-    const shouldBootstrapUrl = legacySeeded || !legacy.baseUrl || Boolean(storedUrl);
+
+    // Initial Drizzle migration seeds an empty `legacy` placeholder row before
+    // the app boots for the first time (`baseUrl: null`, no credentials,
+    // `enabled: false`). Treat that untouched placeholder—and any incomplete
+    // prior bootstrap where credentials were saved without a URL—the same as a
+    // freshly seeded panel so .env bootstrap values actually take effect, while
+    // never overwriting a configured or admin-disabled panel on restart.
+    const isUnconfiguredLegacy =
+      legacySeeded ||
+      (!legacy.baseUrl && !legacy.apiKeyEncrypted && !legacy.adminPasswordEncrypted);
+    const isIncompleteLegacyBootstrap =
+      !legacy.baseUrl && !legacy.enabled && Boolean(this.bootstrap.baseUrl);
+    const shouldBootstrapLegacyEnv = isUnconfiguredLegacy || isIncompleteLegacyBootstrap;
+    const hasBootstrapConnection = Boolean(
+      this.bootstrap.baseUrl || this.bootstrap.apiKey || this.bootstrap.adminPassword
+    );
+
+    const shouldBootstrapUrl = shouldBootstrapLegacyEnv || !legacy.baseUrl || Boolean(storedUrl);
     const baseUrl =
-      legacy.baseUrl || storedUrl || (legacySeeded ? this.bootstrap.baseUrl : undefined);
+      legacy.baseUrl ||
+      storedUrl ||
+      (shouldBootstrapLegacyEnv ? this.bootstrap.baseUrl : undefined);
     const apiKey = storedKey || this.bootstrap.apiKey;
     const adminPassword = this.bootstrap.adminPassword;
     const shouldImportCredentials =
@@ -160,7 +181,7 @@ export class RebeccaPanelRegistry {
       const nextEnabled =
         normalizedUrl === null
           ? false
-          : legacySeeded || storedUrl || storedKey
+          : shouldBootstrapLegacyEnv || storedUrl || storedKey
             ? nextHasCredentials
             : legacy.enabled && nextHasCredentials;
 
@@ -181,9 +202,24 @@ export class RebeccaPanelRegistry {
         .where(eq(rebeccaPanels.id, LEGACY_PANEL_ID));
     }
 
-    const desiredServiceId = storedService ?? (legacySeeded ? this.bootstrap.serviceId : undefined);
+    const desiredServiceId =
+      storedService ??
+      (shouldBootstrapLegacyEnv && hasBootstrapConnection ? this.bootstrap.serviceId : undefined);
     if (desiredServiceId !== undefined && validServiceId(desiredServiceId)) {
       await db.transaction(async (tx) => {
+        if (shouldBootstrapLegacyEnv && desiredServiceId !== 1) {
+          // Remove the unused service_id=1 placeholder seeded by the initial
+          // migration so restricted reseller tokens are not left with a stale
+          // unauthorized service entry.
+          await tx
+            .delete(rebeccaPanelServices)
+            .where(
+              and(
+                eq(rebeccaPanelServices.panelId, LEGACY_PANEL_ID),
+                eq(rebeccaPanelServices.serviceId, 1)
+              )
+            );
+        }
         await tx
           .update(rebeccaPanelServices)
           .set({ isDefault: false, updatedAt: new Date() })

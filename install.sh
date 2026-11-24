@@ -270,6 +270,26 @@ env_value_from_file() {
   printf '%s' "$value"
 }
 
+OS_ID=""
+OS_PRETTY_NAME=""
+OS_VERSION_CODENAME=""
+OS_UBUNTU_CODENAME=""
+
+# Parse only OS metadata keys from /etc/os-release so keys like SUPPORT_URL
+# (e.g. Ubuntu's https://help.ubuntu.com/) can never clobber bot configuration.
+load_os_release() {
+  local file="${1:-/etc/os-release}"
+  OS_ID=""
+  OS_PRETTY_NAME=""
+  OS_VERSION_CODENAME=""
+  OS_UBUNTU_CODENAME=""
+  [[ -r "$file" ]] || return 0
+  OS_ID="$(env_value_from_file "$file" ID 2>/dev/null || true)"
+  OS_PRETTY_NAME="$(env_value_from_file "$file" PRETTY_NAME 2>/dev/null || true)"
+  OS_VERSION_CODENAME="$(env_value_from_file "$file" VERSION_CODENAME 2>/dev/null || true)"
+  OS_UBUNTU_CODENAME="$(env_value_from_file "$file" UBUNTU_CODENAME 2>/dev/null || true)"
+}
+
 is_complete_backup_bundle() {
   local backup_file="$1"
   tar -tzf "$backup_file" >/dev/null 2>&1 || return 1
@@ -577,14 +597,18 @@ validated_required() {
 }
 
 dc() {
-  "${DOCKER[@]}" compose --env-file "$ENV_FILE" -p "$INSTANCE_NAME" -f "$INSTALL_DIR/docker-compose.yml" "$@"
+  local compose_args=(--env-file "$ENV_FILE" -p "$INSTANCE_NAME" -f "$INSTALL_DIR/docker-compose.yml")
+  if [[ -f "$INSTALL_DIR/docker-compose.override.yml" ]]; then
+    compose_args+=(-f "$INSTALL_DIR/docker-compose.override.yml")
+  fi
+  "${DOCKER[@]}" compose "${compose_args[@]}" "$@"
 }
 
 install_docker_engine() {
-  local distro="${ID:-ubuntu}"
+  local distro="${OS_ID:-ubuntu}"
   [[ "$distro" == "ubuntu" || "$distro" == "debian" ]] ||
     die "Automatic Docker installation requires Ubuntu or Debian. Install Docker Engine manually on this host."
-  local codename="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}" architecture key_file
+  local codename="${OS_VERSION_CODENAME:-${OS_UBUNTU_CODENAME:-}}" architecture key_file
   [[ -n "$codename" ]] || die "Could not determine the OS codename for Docker's APT repository."
   architecture="$(dpkg --print-architecture)"
   key_file="$(mktemp)"
@@ -981,12 +1005,9 @@ if [[ "$ACTION_MODE" == "update" || "$ACTION_MODE" == "uninstall" ]]; then
   fi
 fi
 
-if [[ -r /etc/os-release ]]; then
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  if [[ "${ID:-}" != "ubuntu" && "${ID:-}" != "debian" ]]; then
-    warn "Recommended OS is Ubuntu 22.04/24.04 LTS or Debian 12+; detected ${PRETTY_NAME:-unknown}."
-  fi
+load_os_release /etc/os-release
+if [[ -n "$OS_ID" && "$OS_ID" != "ubuntu" && "$OS_ID" != "debian" ]]; then
+  warn "Recommended OS is Ubuntu 22.04/24.04 LTS or Debian 12+; detected ${OS_PRETTY_NAME:-unknown}."
 fi
 
 step "1/5" "Checking system prerequisites"
@@ -1084,7 +1105,7 @@ success "Installed /usr/local/bin/rsbot"
 step "5/5" "Building containers & launching stack"
 "${DOCKER[@]}" network inspect rsbot_mesh >/dev/null 2>&1 || "${DOCKER[@]}" network create rsbot_mesh >/dev/null 2>&1 || true
 "${DOCKER[@]}" volume inspect rsbot_registry >/dev/null 2>&1 || "${DOCKER[@]}" volume create rsbot_registry >/dev/null 2>&1 || true
-if "${DOCKER[@]}" ps -q -f name=nodexia-caddy-1 >/dev/null 2>&1; then
+if [[ -n "$("${DOCKER[@]}" ps -q -f name=nodexia-caddy-1 2>/dev/null || true)" ]]; then
   "${DOCKER[@]}" network connect rsbot_mesh nodexia-caddy-1 >/dev/null 2>&1 || true
 fi
 

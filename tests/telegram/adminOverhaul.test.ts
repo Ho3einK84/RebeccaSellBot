@@ -25,7 +25,9 @@ import {
   renderAdminHomeScreen,
 } from '../../src/telegram/admin/adminHome.js';
 import {
+  ensureAdminCommandsSyncedForChat,
   registerAdminQuickCommands,
+  resetSyncedAdminCommandsForTests,
   syncAdminBotCommands,
 } from '../../src/telegram/admin/adminCommands.js';
 import { registerAdminSalesRoutes } from '../../src/telegram/admin/adminSalesRoutes.js';
@@ -358,6 +360,26 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
       (c) => (c.payload.scope as { type?: string; chat_id?: number } | undefined)?.type === 'chat'
     );
     expect((adminScopeCall?.payload.scope as { chat_id?: number })?.chat_id).toBe(1);
+  });
+
+  it('retries per-chat admin command registration lazily once after startup chat-not-found failure', async () => {
+    resetSyncedAdminCommandsForTests();
+    const setMyCommands = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('400: Bad Request: chat not found'))
+      .mockResolvedValue(true);
+
+    // Startup attempt fails because admin has not messaged the bot yet
+    await ensureAdminCommandsSyncedForChat({ setMyCommands } as never, 6218273776);
+    expect(setMyCommands).toHaveBeenCalledTimes(1);
+
+    // First interaction after admin starts the bot succeeds
+    await ensureAdminCommandsSyncedForChat({ setMyCommands } as never, 6218273776);
+    expect(setMyCommands).toHaveBeenCalledTimes(2);
+
+    // Subsequent interactions are cached no-ops
+    await ensureAdminCommandsSyncedForChat({ setMyCommands } as never, 6218273776);
+    expect(setMyCommands).toHaveBeenCalledTimes(2);
   });
 
   it('excludes raw webapp settings from General Settings catalog and gives specific cleanup_warn_days error', () => {

@@ -12,6 +12,7 @@ import {
 } from '../keyboards/mainMenu.js';
 import { adminMenu } from '../keyboards/adminMenu.js';
 import { renderAdminHomeScreen, renderAdminSalesHub } from '../admin/adminHome.js';
+import { ensureAdminCommandsSyncedForChat } from '../admin/adminCommands.js';
 import { markAdminContext, markUserContext } from '../admin/adminNav.js';
 import { dispatchAdminRoute } from '../admin/adminRouter.js';
 import { showPromoCenter } from '../promoAdminUi.js';
@@ -366,6 +367,10 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
 
   // /start — with referral detection
   bot.command('start', async (ctx) => {
+    const telegramId = ctx.from?.id;
+    if (telegramId && services.isAdmin(telegramId)) {
+      void ensureAdminCommandsSyncedForChat(ctx.api, telegramId);
+    }
     await handleStartCommand(ctx, services);
   });
 
@@ -381,6 +386,7 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
       );
       return;
     }
+    void ensureAdminCommandsSyncedForChat(ctx.api, telegramId);
     markAdminContext(ctx);
     await renderAdminHomeScreen(ctx);
   });

@@ -280,9 +280,76 @@ describe('scripts/rsbot — full CLI execution under set -Eeuo pipefail', () => 
     expect(combinedErr).toContain('Port collision');
     expect(combinedOut).toContain('Verification Result: 3 error(s), 2 warning(s).');
   });
+
+  it('automatically passes docker-compose.override.yml to docker compose when present', async () => {
+    const baseDir = await makeTempDir('rsbot-override-');
+    const inst = path.join(baseDir, 'main');
+    await fs.mkdir(inst, { recursive: true });
+    await fs.writeFile(
+      path.join(inst, '.env'),
+      'DB_USER=rsbot\nDB_NAME=rsbot\nWEBAPP_HOST_PORT=3002\nWEBHOOK_HOST_PORT=3000\n',
+      { mode: 0o600 }
+    );
+    await fs.writeFile(path.join(inst, 'docker-compose.yml'), 'services: {}\n');
+    await fs.writeFile(path.join(inst, 'docker-compose.override.yml'), 'services: {}\n');
+
+    const capturedArgsFile = path.join(baseDir, 'docker-args.txt');
+    const binDir = await makeTempDir('rsbot-override-bin-');
+    await fs.writeFile(
+      path.join(binDir, 'docker'),
+      `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == "info" ]]; then exit 0; fi
+if [[ "\${1:-}" == "compose" ]]; then
+  printf '%s\\n' "$*" >> "${capturedArgsFile}"
+fi
+exit 0
+`,
+      { mode: 0o755 }
+    );
+
+    await execFileAsync('bash', [RSBOT_PATH, 'main', 'status'], {
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH ?? '/usr/bin:/bin'}`,
+        RSBOT_BASE_PATH: baseDir,
+      },
+    });
+    const recorded = await fs.readFile(capturedArgsFile, 'utf8');
+    expect(recorded).toContain(`-f ${path.join(inst, 'docker-compose.yml')}`);
+    expect(recorded).toContain(`-f ${path.join(inst, 'docker-compose.override.yml')}`);
+  });
 });
 
 describe('install.sh — backup validation, config loading, and port discovery under set -Eeuo pipefail', () => {
+  it('parses /etc/os-release metadata without clobbering SUPPORT_URL or other user env vars', async () => {
+    const tmp = await makeTempDir('os-release-check-');
+    const fakeOsRelease = path.join(tmp, 'os-release');
+    await fs.writeFile(
+      fakeOsRelease,
+      [
+        'PRETTY_NAME="Ubuntu 24.04.5 LTS"',
+        'ID=ubuntu',
+        'VERSION_CODENAME=noble',
+        'UBUNTU_CODENAME=noble',
+        'HOME_URL="https://www.ubuntu.com/"',
+        'SUPPORT_URL="https://help.ubuntu.com/"',
+      ].join('\n')
+    );
+
+    const { stdout } = await runInstallFunctions(`
+      SUPPORT_URL=""
+      load_os_release "${fakeOsRelease}"
+      printf 'EMPTY=%s|ID=%s|PRETTY=%s|CODE=%s\\n' "\${SUPPORT_URL}" "$OS_ID" "$OS_PRETTY_NAME" "$OS_VERSION_CODENAME"
+
+      SUPPORT_URL="https://t.me/my_support"
+      load_os_release "${fakeOsRelease}"
+      printf 'PRESET=%s\\n' "$SUPPORT_URL"
+    `);
+
+    expect(stdout).toContain('EMPTY=|ID=ubuntu|PRETTY=Ubuntu 24.04.5 LTS|CODE=noble');
+    expect(stdout).toContain('PRESET=https://t.me/my_support');
+  });
   it('validates complete backup bundles and rejects symlinks and path traversal', async () => {
     const tmp = await makeTempDir('bundle-check-');
     const validBundle = path.join(tmp, 'valid.tar.gz');

@@ -642,7 +642,11 @@ export async function startWebAppServer(
   });
 
   logger.info(
-    { host: config.WEBAPP_HOST, port: config.WEBAPP_PORT, url: config.WEBAPP_URL },
+    {
+      host: config.WEBAPP_HOST,
+      port: config.WEBAPP_PORT,
+      url: services.webAppUrl || config.WEBAPP_URL,
+    },
     'Telegram Mini App Fastify server running'
   );
 

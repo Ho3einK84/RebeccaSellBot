@@ -355,6 +355,136 @@ describe('DomainPrimitives', () => {
       });
     });
 
+    it('bootstraps env URL, credentials, enabled flag, and custom serviceId over migration-seeded legacy placeholder', async () => {
+      const cipher = new CredentialCipher(secret);
+      const mock = createMockDb({
+        selectResults: [
+          [{ id: LEGACY_PANEL_ID }], // migration 0000 already inserted unconfigured legacy row
+          [
+            {
+              id: LEGACY_PANEL_ID,
+              name: 'پنل اصلی',
+              baseUrl: null,
+              apiKeyEncrypted: null,
+              adminUsername: null,
+              adminPasswordEncrypted: null,
+              enabled: false,
+              isDefault: true,
+            },
+          ],
+          // reload() queries
+          [
+            {
+              id: LEGACY_PANEL_ID,
+              name: 'پنل اصلی',
+              baseUrl: 'https://panel.example.com:2087',
+              apiKeyEncrypted: cipher.encrypt('rk_test_key'),
+              adminUsername: 'Mojtaba',
+              adminPasswordEncrypted: null,
+              enabled: true,
+              isDefault: true,
+            },
+          ],
+          [{ panelId: LEGACY_PANEL_ID, serviceId: 10, name: 'سرویس پیش‌فرض', isDefault: true }],
+        ],
+      });
+      getDbMock.mockReturnValue(mock.db);
+
+      const translationService = {
+        getStoredSetting: vi.fn(() => undefined),
+        deleteSetting: vi.fn(),
+      } as unknown as TranslationService;
+
+      const registry = new RebeccaPanelRegistry(
+        {
+          baseUrl: 'https://panel.example.com:2087',
+          apiKey: 'rk_test_key',
+          adminUsername: 'Mojtaba',
+          serviceId: 10,
+        },
+        secret
+      );
+      await registry.initialize(translationService);
+
+      // Should update panel with baseUrl, encrypted key, enabled=true
+      expect(mock.state.updateCalls[0]?.set).toMatchObject({
+        baseUrl: 'https://panel.example.com:2087',
+        adminUsername: 'Mojtaba',
+        enabled: true,
+      });
+      // Should replace unused placeholder serviceId=1 with desired serviceId=10
+      expect(mock.state.deleteCalls).toHaveLength(1);
+      expect(mock.state.insertCalls).toHaveLength(1);
+      expect(mock.state.insertCalls[0]?.values).toMatchObject({
+        panelId: LEGACY_PANEL_ID,
+        serviceId: 10,
+        isDefault: true,
+      });
+      expect(registry.getEnabledPanelIds()).toEqual([LEGACY_PANEL_ID]);
+      expect(registry.getPanel(LEGACY_PANEL_ID)?.services).toEqual([
+        { serviceId: 10, name: 'سرویس پیش‌فرض', isDefault: true },
+      ]);
+    });
+
+    it('self-heals an incomplete legacy bootstrap where credentials exist without baseUrl', async () => {
+      const cipher = new CredentialCipher(secret);
+      const encryptedKey = cipher.encrypt('rk_existing');
+      const mock = createMockDb({
+        selectResults: [
+          [{ id: LEGACY_PANEL_ID }],
+          [
+            {
+              id: LEGACY_PANEL_ID,
+              name: 'پنل اصلی',
+              baseUrl: null,
+              apiKeyEncrypted: encryptedKey,
+              adminUsername: 'Mojtaba',
+              adminPasswordEncrypted: null,
+              enabled: false,
+              isDefault: true,
+            },
+          ],
+          [
+            {
+              id: LEGACY_PANEL_ID,
+              name: 'پنل اصلی',
+              baseUrl: 'https://panel.example.com:2087',
+              apiKeyEncrypted: encryptedKey,
+              adminUsername: 'Mojtaba',
+              adminPasswordEncrypted: null,
+              enabled: true,
+              isDefault: true,
+            },
+          ],
+          [{ panelId: LEGACY_PANEL_ID, serviceId: 10, name: 'سرویس پیش‌فرض', isDefault: true }],
+        ],
+      });
+      getDbMock.mockReturnValue(mock.db);
+
+      const translationService = {
+        getStoredSetting: vi.fn(() => undefined),
+        deleteSetting: vi.fn(),
+      } as unknown as TranslationService;
+
+      const registry = new RebeccaPanelRegistry(
+        {
+          baseUrl: 'https://panel.example.com:2087',
+          apiKey: 'rk_existing',
+          adminUsername: 'Mojtaba',
+          serviceId: 10,
+        },
+        secret
+      );
+      await registry.initialize(translationService);
+
+      expect(mock.state.updateCalls[0]?.set).toMatchObject({
+        baseUrl: 'https://panel.example.com:2087',
+        enabled: true,
+      });
+      expect(mock.state.deleteCalls).toHaveLength(1);
+      expect(registry.getEnabledPanelIds()).toEqual([LEGACY_PANEL_ID]);
+    });
+
     it('evaluates default panel exclusivity and configuration guards transactionally in createPanel and setPanelEnabled', async () => {
       const cipher = new CredentialCipher(secret);
       const encryptedKeyB = cipher.encrypt('key-backup');

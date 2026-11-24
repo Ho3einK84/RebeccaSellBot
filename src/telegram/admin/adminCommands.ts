@@ -9,6 +9,54 @@ import { markAdminContext } from './adminNav.js';
 import { dispatchAdminRoute } from './adminRouter.js';
 import { formatUserDisplayName } from '../features/admin/userRoutes.js';
 
+const ADMIN_COMMANDS = [
+  { command: 'admin', description: 'پنل مدیریت' },
+  { command: 'r', description: 'صف رسیدهای در انتظار' },
+  { command: 'u', description: 'جست‌وجو یا مشاهدهٔ کاربر (/u 12345)' },
+  { command: 'stats', description: 'آمار فوری و وضعیت زیرساخت' },
+  { command: 'cancel', description: 'لغو عملیات فعال' },
+] as const;
+
+const syncedAdminCommandChats = new Set<number>();
+const syncingAdminCommandChats = new Set<number>();
+
+/** Reset per-chat command sync cache (unit tests only). */
+export function resetSyncedAdminCommandsForTests(): void {
+  syncedAdminCommandChats.clear();
+  syncingAdminCommandChats.clear();
+}
+
+/**
+ * Lazily register per-chat admin slash commands for an admin who had not yet
+ * started a chat with the bot during startup sync (where Telegram returns
+ * `400 Bad Request: chat not found`). No-ops once registered in this process.
+ */
+export async function ensureAdminCommandsSyncedForChat(
+  api: Pick<Bot<MenuContext>['api'], 'setMyCommands'> | undefined,
+  adminId: number,
+  options?: { force?: boolean }
+): Promise<void> {
+  if (
+    !api ||
+    typeof api.setMyCommands !== 'function' ||
+    (!options?.force && syncedAdminCommandChats.has(adminId)) ||
+    syncingAdminCommandChats.has(adminId)
+  ) {
+    return;
+  }
+  syncingAdminCommandChats.add(adminId);
+  try {
+    await api.setMyCommands([...ADMIN_COMMANDS], {
+      scope: { type: 'chat', chat_id: adminId },
+    });
+    syncedAdminCommandChats.add(adminId);
+  } catch (err) {
+    logger.debug({ err, adminId }, 'Could not register admin chat commands');
+  } finally {
+    syncingAdminCommandChats.delete(adminId);
+  }
+}
+
 /**
  * Sync native Telegram command menus:
  * - Default scope: `/start` only (clean for customers)
@@ -24,22 +72,8 @@ export async function syncAdminBotCommands(
     logger.debug({ err }, 'Could not register default Telegram bot commands');
   }
 
-  const adminCommands = [
-    { command: 'admin', description: 'پنل مدیریت' },
-    { command: 'r', description: 'صف رسیدهای در انتظار' },
-    { command: 'u', description: 'جست‌وجو یا مشاهدهٔ کاربر (/u 12345)' },
-    { command: 'stats', description: 'آمار فوری و وضعیت زیرساخت' },
-    { command: 'cancel', description: 'لغو عملیات فعال' },
-  ];
-
   for (const adminId of services.adminIds) {
-    try {
-      await bot.api.setMyCommands(adminCommands, {
-        scope: { type: 'chat', chat_id: adminId },
-      });
-    } catch (err) {
-      logger.debug({ err, adminId }, 'Could not register admin chat commands');
-    }
+    await ensureAdminCommandsSyncedForChat(bot.api, adminId, { force: true });
   }
 }
 
@@ -48,6 +82,7 @@ export function registerAdminQuickCommands(bot: Bot<MenuContext>, services: BotS
   const ensureAdmin = async (ctx: MenuContext): Promise<boolean> => {
     const telegramId = ctx.from?.id;
     if (telegramId && services.isAdmin(telegramId)) {
+      void ensureAdminCommandsSyncedForChat(ctx.api, telegramId);
       clearTransientConversationSession(ctx.session);
       clearAdminInput(ctx.session);
       markAdminContext(ctx);

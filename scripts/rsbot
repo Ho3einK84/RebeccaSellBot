@@ -204,7 +204,11 @@ fi
 [[ -f "$COMPOSE_FILE" ]] || die "Missing Compose file: $COMPOSE_FILE"
 
 dc() {
-  "${DOCKER[@]}" compose --env-file "$ENV_FILE" -p "$INSTANCE" -f "$COMPOSE_FILE" "$@"
+  local compose_args=(--env-file "$ENV_FILE" -p "$INSTANCE" -f "$COMPOSE_FILE")
+  if [[ -f "$INSTANCE_DIR/docker-compose.override.yml" ]]; then
+    compose_args+=(-f "$INSTANCE_DIR/docker-compose.override.yml")
+  fi
+  "${DOCKER[@]}" compose "${compose_args[@]}" "$@"
 }
 
 show_failure_diagnostics() {
@@ -217,7 +221,7 @@ show_failure_diagnostics() {
 ensure_mesh_resources() {
   "${DOCKER[@]}" network inspect rsbot_mesh >/dev/null 2>&1 || "${DOCKER[@]}" network create rsbot_mesh >/dev/null 2>&1 || true
   "${DOCKER[@]}" volume inspect rsbot_registry >/dev/null 2>&1 || "${DOCKER[@]}" volume create rsbot_registry >/dev/null 2>&1 || true
-  if "${DOCKER[@]}" ps -q -f name=nodexia-caddy-1 >/dev/null 2>&1; then
+  if [[ -n "$("${DOCKER[@]}" ps -q -f name=nodexia-caddy-1 2>/dev/null || true)" ]]; then
     "${DOCKER[@]}" network connect rsbot_mesh nodexia-caddy-1 >/dev/null 2>&1 || true
   fi
 }
