@@ -17,7 +17,9 @@ import {
   type NormalizedRebeccaPanelAccess,
 } from './RebeccaPanelAccess.js';
 
-const MAX_TRIAL_GB = 10_000;
+export const MIN_TRIAL_GB = 0.001;
+export const MAX_TRIAL_GB = 10_000;
+const BYTES_PER_GB = 1024 * 1024 * 1024;
 const MAX_TRIAL_DAYS = 3_650;
 const PENDING_TRIAL_RECOVERY_DELAY_MS = 5 * 60 * 1000;
 
@@ -165,8 +167,9 @@ export class TrialService {
       return { enabled: false, reason: 'disabled' };
     }
 
-    const gbAmount = positiveInteger(
+    const gbAmount = positiveDecimal(
       this.translationService.getSettingNum('trial_gb', 1),
+      MIN_TRIAL_GB,
       MAX_TRIAL_GB
     );
     const durationDays = positiveInteger(
@@ -259,7 +262,7 @@ export class TrialService {
     reservation: Extract<TrialReservation, { state: 'reserved' }>
   ): Promise<TrialClaimResult> {
     const { claim } = reservation;
-    const dataLimitBytes = claim.gbAmount * 1024 * 1024 * 1024;
+    const dataLimitBytes = Math.round(claim.gbAmount * BYTES_PER_GB);
     const expireTimestamp = Math.floor(Date.now() / 1000) + claim.durationDays * 86_400;
 
     try {
@@ -685,6 +688,11 @@ export class TrialService {
 
 function positiveInteger(value: number, maximum: number): number {
   if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) return 0;
+  return value;
+}
+
+function positiveDecimal(value: number, minimum: number, maximum: number): number {
+  if (!Number.isFinite(value) || value < minimum || value > maximum) return 0;
   return value;
 }
 

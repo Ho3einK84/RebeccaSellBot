@@ -38,7 +38,7 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
   onNotify,
 }) => {
   const { t } = useLanguage();
-  const { formatNumber } = useFormatters();
+  const { formatNumber, formatDecimal } = useFormatters();
   const { triggerHaptic } = useHaptic();
   const queryClient = useQueryClient();
 
@@ -125,7 +125,7 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
               {showPhonePrompt
                 ? t('user.trial.phoneRequiredDesc')
                 : t('user.trial.desc')
-                    .replace('{gb}', formatNumber(trial.gb))
+                    .replace('{gb}', formatDecimal(trial.gb))
                     .replace('{days}', formatNumber(trial.days))}
             </p>
           </div>

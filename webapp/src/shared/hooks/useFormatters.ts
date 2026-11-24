@@ -3,6 +3,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import {
   formatMoney as formatMoneyUtil,
   formatNumber as formatNumberUtil,
+  formatDecimal as formatDecimalUtil,
   formatId as formatIdUtil,
   formatIsoDate as formatIsoDateUtil,
   formatBytes as formatBytesUtil,
@@ -20,6 +21,11 @@ export function useFormatters() {
   const formatMoney = useCallback((amount: number) => formatMoneyUtil(amount, locale), [locale]);
 
   const formatNumber = useCallback((num: number) => formatNumberUtil(num, locale), [locale]);
+
+  const formatDecimal = useCallback(
+    (num: number, maxFractionDigits?: number) => formatDecimalUtil(num, locale, maxFractionDigits),
+    [locale]
+  );
 
   const formatId = useCallback(
     (value: string | number | null | undefined) => formatIdUtil(value, locale),
@@ -56,6 +62,7 @@ export function useFormatters() {
     formatMoney,
     formatToman: formatMoney,
     formatNumber,
+    formatDecimal,
     formatId,
     formatIsoDate,
     formatBytes,

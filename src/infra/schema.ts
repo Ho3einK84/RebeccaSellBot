@@ -4,6 +4,7 @@ import {
   uuid,
   bigint,
   integer,
+  doublePrecision,
   boolean,
   timestamp,
   primaryKey,
@@ -779,7 +780,7 @@ export const trialClaims = pgTable(
       .references(() => rebeccaPanels.id),
     serviceId: integer('service_id').notNull().default(1),
     configUsername: text('config_username').notNull(),
-    gbAmount: integer('gb_amount').notNull(),
+    gbAmount: doublePrecision('gb_amount').notNull(),
     durationDays: integer('duration_days').notNull(),
     status: text('status').notNull().default('pending'), // pending, compensating, review_required, completed, failed
     subUrl: text('sub_url'),

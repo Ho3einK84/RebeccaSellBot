@@ -1,3 +1,5 @@
+import { MAX_TRIAL_GB, MIN_TRIAL_GB } from '../../../../domain/services/TrialService.js';
+
 export const SETTING_KEYS = [
   'bot_enabled',
   'registration_mode',
@@ -287,7 +289,7 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     key: 'trial_gb',
     group: 'trial',
     labelKey: 'admin_setting_trial_gb',
-    editor: { type: 'integer', minimum: 1, maximum: 10_000 },
+    editor: { type: 'decimal', minimum: MIN_TRIAL_GB, maximum: MAX_TRIAL_GB },
   },
   {
     key: 'trial_days',

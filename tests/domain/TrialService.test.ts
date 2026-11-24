@@ -315,4 +315,73 @@ describe('TrialService', () => {
     expect(panel.deleteUser).toHaveBeenCalledWith('stale_comp');
     expect(reconMock.state.updateCalls.filter((c) => c.set.status === 'failed')).toHaveLength(2);
   });
+
+  it('supports sub-1GB fractional trial volumes (e.g. 0.05 and 0.1 GB) and rejects out-of-range trial_gb', async () => {
+    for (const gb of [0.05, 0.1]) {
+      const { service, panel } = createService(true, gb, 2);
+      const expectedBytes = Math.round(gb * 1024 * 1024 * 1024);
+
+      const mock = createMockDb({
+        selectResults: [
+          [{ balance: 0, hasUsedTrial: false }],
+          [{ configUsername: 'trial_mini', status: 'pending', subUrl: null }],
+        ],
+        returningResults: [
+          [
+            {
+              telegramId: 20,
+              panelId: 'legacy',
+              serviceId: 1,
+              configUsername: 'trial_mini',
+              gbAmount: gb,
+              durationDays: 2,
+              status: 'pending',
+              subUrl: null,
+            },
+          ],
+          [{ balance: 0 }],
+          [{ telegramId: 20 }],
+          [{ id: 'tx_mini' }],
+          [{ telegramId: 20 }],
+        ],
+      });
+      getDbMock.mockReturnValue(mock.db as never);
+
+      panel.createUser.mockResolvedValueOnce({
+        username: 'trial_mini',
+        status: 'active',
+        data_limit: expectedBytes,
+        used_traffic: 0,
+        expire: Math.floor(Date.now() / 1000) + 2 * 86_400,
+        created_at: '2026-01-01T00:00:00Z',
+        note: 'rsbot:trial:20:trial_mini',
+        subscription_url: 'https://sub.example.com/trial/mini',
+      });
+
+      const result = await service.claimTrial(20, 'trial_mini');
+      expect(result).toEqual({
+        success: true,
+        messageKey: 'trial_success',
+        subUrl: 'https://sub.example.com/trial/mini',
+      });
+      expect(panel.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({ data_limit: expectedBytes })
+      );
+      expect(mock.state.insertCalls[0]?.values).toMatchObject({ gbAmount: gb });
+      expect(mock.state.insertCalls[2]?.values).toMatchObject({
+        description: `Claimed free trial config: trial_mini (${gb}GB / 2d)`,
+      });
+    }
+
+    vi.clearAllMocks();
+    for (const invalidGb of [0, -0.1, 0.0001, 10_000.1, Number.NaN]) {
+      const { service, panel } = createService(true, invalidGb, 3);
+      await expect(service.claimTrial(30, 'trial_bad')).resolves.toEqual({
+        success: false,
+        messageKey: 'trial_creation_failed',
+      });
+      expect(getDbMock).not.toHaveBeenCalled();
+      expect(panel.createUser).not.toHaveBeenCalled();
+    }
+  });
 });

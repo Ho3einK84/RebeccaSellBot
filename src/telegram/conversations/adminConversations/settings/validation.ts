@@ -294,6 +294,6 @@ function normalizeLocalizedDecimal(value: string): string {
   return value
     .replace(/[۰-۹]/gu, (digit) => String(digit.charCodeAt(0) - 0x06f0))
     .replace(/[٠-٩]/gu, (digit) => String(digit.charCodeAt(0) - 0x0660))
-    .replace(/[٫]/gu, '.')
+    .replace(/[٫/]/gu, '.')
     .replace(/[,_،٬\s]/gu, '');
 }

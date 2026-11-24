@@ -34,6 +34,18 @@ export function formatNumber(num: number, locale: string = 'fa'): string {
   return rounded.toLocaleString('en-US');
 }
 
+export function formatDecimal(num: number, locale: string = 'fa', maxFractionDigits = 3): string {
+  if (!Number.isFinite(num)) return '-';
+  const formatted = num.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxFractionDigits,
+  });
+  if (locale === 'fa') {
+    return toPersianDigits(formatted.replace(/,/g, '٬').replace(/\./g, '٫'));
+  }
+  return formatted;
+}
+
 export function formatId(value: string | number | null | undefined, locale: string = 'fa'): string {
   if (value === null || value === undefined || value === '') return '-';
   const raw = String(value);

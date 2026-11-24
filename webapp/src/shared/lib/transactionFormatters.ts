@@ -199,7 +199,9 @@ export function formatTransactionDescription(
     const details = m[2]?.trim() ?? '';
     if (isFa) {
       const faDetails = toPersianDigits(
-        details.replace(/(\d+)\s*GB/gi, '$1 گیگ').replace(/(\d+)\s*d/gi, '$1 روز')
+        details
+          .replace(/(\d+(?:\.\d+)?)\s*GB/gi, (_, gb: string) => `${gb.replace('.', '٫')} گیگ`)
+          .replace(/(\d+)\s*d/gi, '$1 روز')
       );
       return `اشتراک آزمایشی رایگان: ${username} (${faDetails})`;
     }

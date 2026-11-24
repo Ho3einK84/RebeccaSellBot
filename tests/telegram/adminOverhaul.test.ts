@@ -856,6 +856,51 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
     await harness.sendText('broken_sync_{random4}', { userId: 1 });
     expect(settingsStore.get('custom_naming_template')).toBe('{prefix}_{jyear}{jmonth}_{counter}');
   });
+
+  it('allows admins to configure fractional sub-1GB trial volume via stateless trial editor', async () => {
+    const realTs = new TranslationService();
+    const settingsStore = new Map<string, string>([
+      ['trial_enabled', 'true'],
+      ['trial_gb', '1'],
+      ['trial_days', '3'],
+      ['require_phone_for_trial', 'false'],
+    ]);
+    const services = createMockServices({
+      adminIds: [1],
+      isAdmin: vi.fn((id) => id === 1),
+      translationService: {
+        resolveLocale: vi.fn(() => 'en'),
+        get: vi.fn((key: string, locale?: string, vars?: Record<string, string | number>) =>
+          realTs.get(key, (locale as 'fa' | 'en') ?? 'en', vars)
+        ),
+        getSetting: vi.fn((key: string, fallback = '') => settingsStore.get(key) ?? fallback),
+        getSettingBool: vi.fn((key: string, fb = false) =>
+          settingsStore.has(key) ? settingsStore.get(key) === 'true' : fb
+        ),
+        getSettingNum: vi.fn((key: string, fb = 0) =>
+          settingsStore.has(key) ? Number(settingsStore.get(key)) : fb
+        ),
+        updateSetting: vi.fn(async (key: string, value: string) => {
+          settingsStore.set(key, value);
+        }),
+      },
+    });
+
+    const harness = createBotHarness({ services, defaultLocale: 'en' });
+    registerAdminInputMiddleware(harness.bot, dispatchAdminRoute);
+    registerCoreRoutes(harness.bot, services);
+    registerAdminSalesRoutes();
+
+    await harness.sendCallback('adm:trl', { userId: 1 });
+    await harness.sendCallback('adm:trl:ed:trial_gb', { userId: 1 });
+    await harness.sendText('۰٫۰۵', { userId: 1 });
+
+    expect(settingsStore.get('trial_gb')).toBe('0.05');
+    const lastScreen = [...harness.apiCalls]
+      .reverse()
+      .find((c) => c.method === 'editMessageText' || c.method === 'sendMessage')?.payload.text;
+    expect(String(lastScreen ?? '')).toContain('0.05 GB');
+  });
 });
 
 // Keep reference used in type validation

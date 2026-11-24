@@ -371,7 +371,17 @@ describe('Admin settings validation, backup catalog & sales navigation', () => {
     expect(validateAdminSetting('expiry_warning_days', '۰')).toBe('0');
     expect(validateAdminSetting('refund_window_hours', '0')).toBe('0');
     expect(validateAdminSetting('cashback_percent', '0')).toBe('0');
+    expect(validateAdminSetting('trial_gb', '0.1')).toBe('0.1');
+    expect(validateAdminSetting('trial_gb', '0.05')).toBe('0.05');
+    expect(validateAdminSetting('trial_gb', '۰٫۰۵')).toBe('0.05');
+    expect(validateAdminSetting('trial_gb', '۰/۱')).toBe('0.1');
+    expect(validateAdminSetting('trial_gb', '.5')).toBe('0.5');
+    expect(validateAdminSetting('trial_gb', '0.001')).toBe('0.001');
     expect(validateAdminSetting('trial_gb', '0')).toBeUndefined();
+    expect(validateAdminSetting('trial_gb', '0.0005')).toBeUndefined();
+    expect(validateAdminSetting('trial_gb', '-0.1')).toBeUndefined();
+    expect(validateAdminSetting('trial_gb', '10000.1')).toBeUndefined();
+    expect(validateAdminSetting('trial_gb', '1/2/3')).toBeUndefined();
     expect(validateAdminSetting('price_per_gb', '-1')).toBeUndefined();
     expect(validateAdminSetting('trial_days', '1.5')).toBeUndefined();
     expect(validateAdminSetting('cashback_percent', '101')).toBeUndefined();

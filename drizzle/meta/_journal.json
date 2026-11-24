@@ -127,6 +127,13 @@
       "when": 1795800000000,
       "tag": "0017_add_group_discount_custom_volume_toggle",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795900000000,
+      "tag": "0018_allow_fractional_trial_gb",
+      "breakpoints": true
     }
   ]
 }

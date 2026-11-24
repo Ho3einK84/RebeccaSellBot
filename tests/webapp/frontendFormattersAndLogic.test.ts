@@ -4,6 +4,7 @@ import {
   normalizeInputDigits,
   formatMoney,
   formatNumber,
+  formatDecimal,
   formatBytes,
   formatCardNumberSpaced,
   formatReceiptShortId,
@@ -85,6 +86,18 @@ describe('Webapp Formatters & Locales', () => {
     expect(formatNumber(1234, 'en')).toBe('1,234');
     expect(formatNumber(42, 'en')).toBe('42');
     expect(formatNumber(Number.NaN, 'en')).toBe('-');
+
+    expect(formatDecimal(0.1, 'fa')).toBe('۰٫۱');
+    expect(formatDecimal(0.05, 'fa')).toBe('۰٫۰۵');
+    expect(formatDecimal(0.001, 'fa')).toBe('۰٫۰۰۱');
+    expect(formatDecimal(1, 'fa')).toBe('۱');
+    expect(formatDecimal(1234.5, 'fa')).toBe('۱٬۲۳۴٫۵');
+    expect(formatDecimal(0.1, 'en')).toBe('0.1');
+    expect(formatDecimal(0.05, 'en')).toBe('0.05');
+    expect(formatDecimal(0.001, 'en')).toBe('0.001');
+    expect(formatDecimal(1, 'en')).toBe('1');
+    expect(formatDecimal(1234.5, 'en')).toBe('1,234.5');
+    expect(formatDecimal(Number.NaN, 'fa')).toBe('-');
   });
 
   it('formats 16-digit bank cards into 4-digit groups and normalizes Persian/Arabic numerals', () => {
@@ -323,6 +336,14 @@ describe('transactionFormatters', () => {
       const trial = 'Claimed free trial config: trial_vip (1GB / 1d)';
       expect(formatTransactionDescription(trial, 'fa')).toBe(
         'اشتراک آزمایشی رایگان: trial_vip (۱ گیگ / ۱ روز)'
+      );
+
+      const miniTrial = 'Claimed free trial config: trial_mini (0.05GB / 1d)';
+      expect(formatTransactionDescription(miniTrial, 'fa')).toBe(
+        'اشتراک آزمایشی رایگان: trial_mini (۰٫۰۵ گیگ / ۱ روز)'
+      );
+      expect(formatTransactionDescription(miniTrial, 'en')).toBe(
+        'Free trial config: trial_mini (0.05GB / 1d)'
       );
 
       const transfer = 'Transfer to user 98765: gift';
