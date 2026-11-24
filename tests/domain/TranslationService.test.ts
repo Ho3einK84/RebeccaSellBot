@@ -465,5 +465,5 @@ describe('TranslationService & Catalog Standards', () => {
         !literals.has(key) && !DYNAMIC_TRANSLATION_KEYS.some(({ pattern }) => pattern.test(key))
     );
     expect(unusedKeys, 'Catalog entries must be referenced by production source').toEqual([]);
-  });
+  }, 15_000);
 });

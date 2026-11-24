@@ -318,6 +318,15 @@ describe('Interactive Admin Bank Cards Manager & Payment Settings', () => {
 
 describe('Topup Flow Multi-Card Selection, Daily Caps & Receipt Card Attribution', () => {
   it('switches to an eligible card when requested amount exceeds initial card cap, records daily usage, and tags receipt + admin alert with card details', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({ ok: false }),
+      } as unknown as Response)
+    );
+
     const cards: BankCardConfig[] = [
       {
         id: 'card_small',
