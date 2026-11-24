@@ -173,12 +173,17 @@ export function createMockBaseServices(overrides: Partial<BotServices> = {}) {
       }
       return null;
     }),
+    exists: vi.fn(
+      async (telegramId: number) =>
+        telegramId === 55555 || telegramId === 1001 || telegramId === 1002
+    ),
     isBanned: vi.fn(async () => false),
     getLocale: vi.fn(async (telegramId: number) => (telegramId === 55555 ? 'en' : undefined)),
     updateLocale: vi.fn(async () => {}),
   };
 
   const mockTranslationService = {
+    get: vi.fn((key: string) => key),
     getDefaultLocale: vi.fn(() => 'fa' as const),
     getSetting: vi.fn((_key: string, defaultValue?: string) => defaultValue),
     getSettingBool: vi.fn((key: string, defaultValue = false) => {
@@ -390,6 +395,7 @@ export function createMockAdminServices() {
   };
 
   const mockTranslationService = {
+    get: vi.fn((key: string) => key),
     getDefaultLocale: vi.fn(() => 'fa' as const),
     getSetting: vi.fn((key: string, defaultValue?: string) => mockConfigStore[key] ?? defaultValue),
     getSettingBool: vi.fn((key: string, defaultValue = false) => {
@@ -652,6 +658,10 @@ export function createMockUserServices() {
       }
       return null;
     }),
+    exists: vi.fn(
+      async (telegramId: number) =>
+        telegramId === 55555 || telegramId === 66666 || telegramId === 99999
+    ),
     isBanned: vi.fn(async (telegramId: number) => telegramId === 99999),
     getLocale: vi.fn(async () => 'fa' as const),
     updateLocale: vi.fn(async () => {}),
@@ -665,6 +675,7 @@ export function createMockUserServices() {
             id: 'cfg_1',
             telegramId: 55555,
             configUsername: 'u55555_srv1',
+            userLabel: null as string | null,
             subUrl: 'https://sub.example.com/token123',
             panelStatus: 'active',
             panelDataLimit: 50 * 1024 * 1024 * 1024,
@@ -685,6 +696,7 @@ export function createMockUserServices() {
           id: 'cfg_1',
           telegramId: 55555,
           configUsername: 'u55555_srv1',
+          userLabel: null as string | null,
           panelId: 'panel_1',
           serviceId: 1,
           subUrl: 'https://sub.example.com/token123',
@@ -707,6 +719,7 @@ export function createMockUserServices() {
           id: 'cfg_1',
           telegramId: 55555,
           configUsername: 'u55555_srv1',
+          userLabel: null as string | null,
           panelId: 'panel_1',
           serviceId: 1,
           subUrl: 'https://sub.example.com/token123',
@@ -735,6 +748,9 @@ export function createMockUserServices() {
       return undefined;
     }),
     setAutoRenew: vi.fn(async () => ({})),
+    setUserLabel: vi.fn(async (_telegramId: number, configId: string, label: string | null) =>
+      configId === 'cfg_1' ? { id: 'cfg_1', configUsername: 'u55555_srv1', userLabel: label } : null
+    ),
     toggleConfig: vi.fn(async () => 'disabled'),
     enableConfig: vi.fn(async () => {}),
     disableConfig: vi.fn(async () => {}),
@@ -896,6 +912,7 @@ export function createMockUserServices() {
   };
 
   const mockTranslationService = {
+    get: vi.fn((key: string) => key),
     getDefaultLocale: vi.fn(() => 'fa' as const),
     getSetting: vi.fn((key: string, defaultValue?: string) => {
       if (key === 'currency') return 'تومان';

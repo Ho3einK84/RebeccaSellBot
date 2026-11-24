@@ -854,6 +854,7 @@ export function registerUserShopRoutes(
       const isRenewal = checkout.kind === 'renew_config';
 
       let configName: string;
+      let configUserLabel: string | null = null;
       if (isRenewal) {
         const targetConfig =
           checkout.configId && options.configService
@@ -864,6 +865,7 @@ export function registerUserShopRoutes(
           return reply.code(403).send({ error: 'Config not owned', code: 'OWNER_MISMATCH' });
         }
         configName = targetConfig.configUsername;
+        configUserLabel = targetConfig.userLabel ?? null;
       } else if (
         checkout.requestedUsername &&
         typeof options.configService?.resolveCustomConfigName === 'function'
@@ -923,6 +925,7 @@ export function registerUserShopRoutes(
               telegramId,
               kind: isRenewal ? 'renew_config' : 'new_config',
               configUsername: result.configUsername,
+              userLabel: configUserLabel,
               configId: checkout.configId ?? undefined,
               subUrl: result.subUrl,
               gbAmount: checkout.gbAmount,

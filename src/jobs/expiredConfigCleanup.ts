@@ -43,7 +43,7 @@ import { auditLogs, notificationDeliveries, userConfigs, users } from '../infra/
 import { callbackData } from '../telegram/callbackData.js';
 import { buildUserScreen } from '../telegram/designSystem.js';
 import { localizedNumberForLocale, tForLocale, tmForLocale } from '../telegram/locale.js';
-import { sanitizeTelegramInlineCode } from '../telegram/rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
 import { jobRunner } from './workerRuntime.js';
 
 const MS_PER_DAY = 86_400_000;
@@ -59,6 +59,7 @@ export interface ExpiredConfigCandidate {
   telegramId: number;
   panelId: string;
   configUsername: string;
+  userLabel?: string | null;
   panelStatus: string | null;
   panelExpire: number | null;
   cleanupHoldUntil: Date | null;
@@ -149,6 +150,7 @@ export class PostgresExpiredConfigCleanupStore implements ExpiredConfigCleanupSt
         telegramId: userConfigs.telegramId,
         panelId: userConfigs.panelId,
         configUsername: userConfigs.configUsername,
+        userLabel: userConfigs.userLabel,
         panelStatus: userConfigs.panelStatus,
         panelExpire: userConfigs.panelExpire,
         cleanupHoldUntil: userConfigs.cleanupHoldUntil,
@@ -464,6 +466,17 @@ export async function runExpiredConfigCleanupCycle(
     });
 
     const locale = candidate.locale ?? deps.translationService.resolveLocale();
+    const trimmedLabel = candidate.userLabel?.trim();
+    const labelPrimary = trimmedLabel
+      ? {
+          primary: {
+            emoji: '🏷️',
+            label: tForLocale(deps.translationService, locale, 'subscription_label_field'),
+            value: escapeTelegramMarkdown(trimmedLabel),
+            inline: true,
+          },
+        }
+      : {};
 
     // Stage 3: Grace period elapsed -> permanent deletion + audit log + best-effort notice.
     if (nowMs >= deleteAtMs) {
@@ -509,6 +522,7 @@ export async function runExpiredConfigCleanupCycle(
         const deletedText = buildUserScreen({
           emoji: '🗑️',
           title: tForLocale(deps.translationService, locale, 'subscription_cleanup_deleted_title'),
+          ...labelPrimary,
           footer: tmForLocale(
             deps.translationService,
             locale,
@@ -558,6 +572,7 @@ export async function runExpiredConfigCleanupCycle(
             locale,
             'subscription_cleanup_warn_last_title'
           ),
+          ...labelPrimary,
           footer: tmForLocale(
             deps.translationService,
             locale,
@@ -616,6 +631,7 @@ export async function runExpiredConfigCleanupCycle(
             locale,
             'subscription_cleanup_warn_first_title'
           ),
+          ...labelPrimary,
           footer: tmForLocale(
             deps.translationService,
             locale,

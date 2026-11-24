@@ -108,6 +108,18 @@ export const ESSENTIAL_USER_TEXTS: readonly EssentialTextItem[] = [
     labelKey: 'admin_text_item_wallet_transfer',
     descKey: 'admin_text_desc_wallet_transfer',
   },
+  {
+    id: 'registration_closed_message',
+    key: 'registration_closed_message',
+    labelKey: 'admin_text_item_registration_closed',
+    descKey: 'admin_text_desc_registration_closed',
+  },
+  {
+    id: 'registration_invite_only_message',
+    key: 'registration_invite_only_message',
+    labelKey: 'admin_text_item_registration_invite_only',
+    descKey: 'admin_text_desc_registration_invite_only',
+  },
 ];
 
 const ESSENTIAL_BY_KEY = new Map<string, EssentialTextItem>(
@@ -211,6 +223,7 @@ const ADMIN_SYSTEM_TEXTS_PREFIXES = [
   'admin_nav_',
   'admin_cfg_',
   'admin_fj_',
+  'admin_registration_',
 ] as const;
 
 const ADMIN_SYSTEM_TEXTS_EXACT = new Set([
@@ -234,6 +247,7 @@ const USER_HOME_NAV_PREFIXES = [
   'text_input_',
   'photo_input_',
   'forced_join_',
+  'registration_',
 ] as const;
 
 const USER_HOME_NAV_EXACT = new Set([
@@ -723,6 +737,12 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     en: 'Bot instance name',
     sampleFa: 'main',
     sampleEn: 'main',
+  },
+  label: {
+    fa: 'برچسب شخصی سرویس',
+    en: 'Personal service label',
+    sampleFa: 'گوشی شخصی',
+    sampleEn: 'My Phone',
   },
   lang: {
     fa: 'برچسب زبان',

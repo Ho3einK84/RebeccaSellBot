@@ -1,12 +1,15 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AdminService } from '../../../domain/services/AdminService.js';
+import { registrationMode } from '../../../domain/services/FeatureSettings.js';
 import type { ForcedJoinService } from '../../../domain/services/ForcedJoinService.js';
+import { resolveRegistrationBlockedCopy } from '../../../domain/services/RegistrationPolicy.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import { resolveSupportDestination } from '../../../domain/services/SupportDestination.js';
 
 export interface UserGuardDeps {
-  userService: UserService;
+  userService: Pick<UserService, 'isBanned'> &
+    Partial<Pick<UserService, 'exists' | 'findProfile' | 'getLocale'>>;
   translationService?: TranslationService;
   forcedJoinService?: ForcedJoinService;
   adminService?: AdminService;
@@ -79,7 +82,48 @@ export function createUserAccessGuard(deps: UserGuardDeps) {
       }
     }
 
-    // 3. Forced channel membership check for global (`all`) scope.
+    // 3. New-user registration control (`open` / `invite_only` / `closed`).
+    // Admins and already-registered users are never blocked.
+    if (
+      !isAdmin &&
+      deps.translationService &&
+      typeof deps.translationService.getSetting === 'function'
+    ) {
+      const mode = registrationMode(deps.translationService);
+      if (mode !== 'open') {
+        const userExists =
+          typeof deps.userService.exists === 'function'
+            ? await deps.userService.exists(telegramId)
+            : typeof deps.userService.findProfile === 'function'
+              ? Boolean(await deps.userService.findProfile(String(telegramId)))
+              : true;
+
+        if (!userExists) {
+          const locale =
+            typeof deps.translationService.getDefaultLocale === 'function'
+              ? deps.translationService.getDefaultLocale()
+              : 'fa';
+          const reason = mode === 'closed' ? 'closed' : 'invite_only';
+          const copy = resolveRegistrationBlockedCopy(deps.translationService, locale, reason);
+          const support = resolveSupportPayload();
+          await reply.code(403).send({
+            error: copy.message,
+            code: mode === 'closed' ? 'REGISTRATION_CLOSED' : 'REGISTRATION_INVITE_ONLY',
+            title: copy.title,
+            message: copy.message,
+            locale,
+            registrationMode: mode,
+            supportUrl: support.supportUrl,
+            supportUsername: support.supportUsername,
+            supportLabel: support.supportLabel,
+            supportEnabled: support.supportEnabled,
+          });
+          return;
+        }
+      }
+    }
+
+    // 4. Forced channel membership check for global (`all`) scope.
     // Admins bypass, and the re-check endpoint stays reachable while locked.
     const routePath = request.routeOptions?.url ?? request.url.split('?')[0] ?? '';
     if (

@@ -2156,4 +2156,59 @@ export const FA_TEXTS: Record<string, string> = {
     'پردازش سرویس‌های باقی‌مانده متوقف می‌شود. هدیه‌هایی که قبلاً اعمال شده‌اند تغییر نمی‌کنند.',
   admin_gift_cancel_confirm_button: '⏹ بله، کمپین لغو شود',
   admin_gift_cancel_requested: 'درخواست لغو کمپین ثبت شد.',
+
+  // حذف خودکار پیام‌های پرداخت و شماره کارت
+  admin_setting_payment_message_auto_delete_hours: 'حذف خودکار پیام پرداخت (ساعت)',
+  admin_setting_payment_message_auto_delete_disabled: 'غیرفعال',
+  admin_setting_payment_message_auto_delete_prompt_hint:
+    'پس از چند ساعت پیام‌های حاوی شماره کارت یا فاکتور پرداخت به‌صورت خودکار حذف شوند؟\nبازهٔ مجاز: `۰` (غیرفعال) تا `۴۸` ساعت (محدودیت تلگرام برای حذف پیام).',
+
+  // کنترل ثبت‌نام کاربران جدید
+  admin_setting_registration_mode: 'نحوهٔ ثبت‌نام کاربران جدید',
+  admin_registration_mode_open: 'آزاد (همه)',
+  admin_registration_mode_invite_only: 'فقط با لینک دعوت',
+  admin_registration_mode_closed: 'بسته',
+  admin_registration_screen_title: 'کنترل ثبت‌نام کاربران جدید',
+  admin_registration_screen_subtitle:
+    'تعیین کنید کاربران جدید در ربات و مینی‌اپ با چه شرایطی اجازهٔ ثبت‌نام داشته باشند.',
+  admin_registration_mode_label: 'وضعیت فعلی ثبت‌نام',
+  admin_registration_desc_open: '🟢 *آزاد:* همهٔ کاربران می‌توانند بدون محدودیت عضو شوند.',
+  admin_registration_desc_invite_only:
+    '🎟 *فقط با لینک دعوت:* کاربران جدید تنها با لینک رفرال معتبر عضو می‌شوند.',
+  admin_registration_desc_closed:
+    '🔒 *بسته:* ثبت‌نام کاربران جدید موقتاً متوقف است (کاربران فعلی و ادمین‌ها محدود نمی‌شوند).',
+  admin_registration_edit_closed_text_button: '✏️ ویرایش متن ثبت‌نام بسته',
+  admin_registration_edit_invite_text_button: '✏️ ویرایش متن دعوت‌نامه‌ای',
+  admin_registration_mode_updated: 'وضعیت ثبت‌نام کاربران جدید به‌روزرسانی شد.',
+
+  registration_closed_title: 'ثبت‌نام بسته است',
+  registration_closed_message:
+    'در حال حاضر پذیرش کاربر جدید غیرفعال است. در صورت نیاز با پشتیبانی در تماس باشید.',
+  registration_invite_only_title: 'ثبت‌نام فقط با دعوت',
+  registration_invite_only_message:
+    'ثبت‌نام در حال حاضر فقط از طریق لینک دعوت معتبر امکان‌پذیر است. لطفاً با لینک معرفی دوستانتان وارد شوید.',
+  registration_blocked_alert: 'امکان ثبت‌نام کاربر جدید در حال حاضر فعال نیست.',
+  admin_text_item_registration_closed: '🔒 پیام بسته بودن ثبت‌نام',
+  admin_text_desc_registration_closed:
+    'متنی که هنگام بسته بودن ثبت‌نام به کاربران جدید نمایش داده می‌شود.',
+  admin_text_item_registration_invite_only: '🎟 پیام ثبت‌نام فقط با دعوت',
+  admin_text_desc_registration_invite_only:
+    'متنی که هنگام نیاز به لینک دعوت معتبر به کاربران جدید نمایش داده می‌شود.',
+
+  // برچسب شخصی روی سرویس‌ها
+  subscription_label_field: 'برچسب شخصی',
+  subscription_label_button: '🏷️ برچسب / یادداشت',
+  subscription_label_prompt_title: 'برچسب شخصی سرویس',
+  subscription_label_prompt_subtitle:
+    'یک نام یا یادداشت کوتاه برای شناسایی راحت‌تر این سرویس بنویسید.',
+  subscription_label_current_field: 'برچسب فعلی',
+  subscription_label_none: 'تنظیم نشده',
+  subscription_label_prompt_hint:
+    'حداکثر ۴۰ کاراکتر مجاز است (این برچسب فقط برای شما نمایش داده می‌شود و نام کاربری اصلی تغییر نمی‌کند).',
+  subscription_label_clear_button: '🗑 حذف برچسب',
+  subscription_label_too_long:
+    '⚠️ برچسب نمی‌تواند بیشتر از {max} کاراکتر باشد. لطفاً کوتاه‌تر بفرستید:',
+  subscription_label_invalid: '⚠️ متن واردشده نامعتبر است. لطفاً یک برچسب متنی معتبر ارسال کنید:',
+  subscription_label_saved: '✅ برچسب شخصی سرویس ذخیره شد: *{label}*',
+  subscription_label_cleared: '🗑 برچسب شخصی سرویس حذف شد.',
 };

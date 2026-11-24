@@ -224,6 +224,8 @@ export async function editSetting(
       return editBooleanSetting(conversation, ctx, definition);
     case 'locale':
       return editLocaleSetting(conversation, ctx, definition);
+    case 'registration_mode':
+      return editRegistrationModeSetting(conversation, ctx, definition);
     case 'receipt_duplicate_policy':
       return editReceiptDuplicatePolicy(conversation, ctx, definition);
     case 'naming_mode':
@@ -307,6 +309,51 @@ async function editLocaleSetting(
   const chosen = input.data.slice(callbackPrefix.length);
   const validLocale = chosen === 'en' ? 'en' : 'fa';
   return saveSetting(conversation, input.ctx ?? ctx, definition, validLocale);
+}
+
+async function editRegistrationModeSetting(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  definition: SettingDefinition
+): Promise<FlowOutcome> {
+  const current = await conversation.external(
+    (outsideCtx) =>
+      (outsideCtx?.services ?? ctx.services)?.translationService.getSetting(
+        definition.key,
+        'open'
+      ) ?? 'open'
+  );
+  const callbackPrefix = 'set-reg:';
+  const modes = ['open', 'invite_only', 'closed'] as const;
+  const keyboard = new InlineKeyboard();
+  for (const mode of modes) {
+    const label = t(ctx, `admin_registration_mode_${mode}`);
+    keyboard.text(current === mode ? `✅ ${label}` : label, `${callbackPrefix}${mode}`).row();
+  }
+  keyboard.text(t(ctx, 'admin_settings_back_category'), `${callbackPrefix}back`);
+  await promptInConversation(
+    conversation,
+    ctx,
+    buildSettingsPrompt(
+      ctx,
+      tm(ctx, 'admin_setting_value_prompt', {
+        setting: t(ctx, definition.labelKey),
+        current_value: displayAdminSettingValue(ctx, definition.key),
+      }),
+      { emoji: '🔐', title: t(ctx, definition.labelKey) }
+    ),
+    { parse_mode: 'Markdown', reply_markup: keyboard }
+  );
+  const input = await waitForSettingsInput(conversation, {
+    callbackPrefixes: [callbackPrefix],
+    backCallbacks: [`${callbackPrefix}back`],
+    retryKeyboard: keyboard,
+  });
+  if (input.type === 'cancel') return 'cancel';
+  if (input.type !== 'callback') return 'back';
+  const value = validateAdminSetting(definition.key, input.data.slice(callbackPrefix.length));
+  if (value === undefined) return 'back';
+  return saveSetting(conversation, input.ctx ?? ctx, definition, value);
 }
 
 async function editBooleanSetting(
@@ -445,15 +492,17 @@ async function editTextSetting(
           ? t(ctx, 'admin_setting_support_destination_prompt')
           : definition.key === 'backup_target_chat_id'
             ? t(ctx, 'admin_backup_target_chat_prompt')
-            : tm(
-                ctx,
-                'admin_setting_value_prompt',
-                {
-                  setting: t(ctx, definition.labelKey),
-                  current_value: sanitizeTelegramInlineCode(current),
-                },
-                ['current_value']
-              );
+            : definition.key === 'payment_message_auto_delete_hours'
+              ? t(ctx, 'admin_setting_payment_message_auto_delete_prompt_hint')
+              : tm(
+                  ctx,
+                  'admin_setting_value_prompt',
+                  {
+                    setting: t(ctx, definition.labelKey),
+                    current_value: sanitizeTelegramInlineCode(current),
+                  },
+                  ['current_value']
+                );
   await promptInConversation(
     conversation,
     ctx,

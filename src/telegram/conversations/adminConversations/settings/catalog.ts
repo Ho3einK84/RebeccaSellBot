@@ -1,5 +1,6 @@
 export const SETTING_KEYS = [
   'bot_enabled',
+  'registration_mode',
   'language_selection_enabled',
   'default_locale',
   'webapp_enabled',
@@ -19,6 +20,7 @@ export const SETTING_KEYS = [
   'card_holder',
   'bank_cards_json',
   'unique_topup_amount_enabled',
+  'payment_message_auto_delete_hours',
   'wallet_transfer_enabled',
   'wallet_transfer_min_amount',
   'receipt_notify_enabled',
@@ -73,6 +75,7 @@ export type SettingEditor =
   | { type: 'packages' }
   | { type: 'boolean' }
   | { type: 'locale' }
+  | { type: 'registration_mode' }
   | { type: 'integer'; minimum: number; maximum: number }
   | { type: 'decimal'; minimum: number; maximum: number }
   | { type: 'card_number' }
@@ -99,6 +102,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'system',
     labelKey: 'admin_setting_bot_enabled',
     editor: { type: 'boolean' },
+  },
+  {
+    key: 'registration_mode',
+    group: 'system',
+    labelKey: 'admin_setting_registration_mode',
+    editor: { type: 'registration_mode' },
   },
   {
     key: 'language_selection_enabled',
@@ -213,6 +222,12 @@ export const SETTING_DEFINITIONS: readonly SettingDefinition[] = [
     group: 'payment',
     labelKey: 'admin_setting_unique_topup_amount_enabled',
     editor: { type: 'boolean' },
+  },
+  {
+    key: 'payment_message_auto_delete_hours',
+    group: 'payment',
+    labelKey: 'admin_setting_payment_message_auto_delete_hours',
+    editor: { type: 'integer', minimum: 0, maximum: 48 },
   },
   {
     key: 'wallet_transfer_enabled',

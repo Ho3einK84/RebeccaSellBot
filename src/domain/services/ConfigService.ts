@@ -48,6 +48,62 @@ const CUSTOM_NAME_SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const CUSTOM_NAME_COLLISION_ATTEMPTS = 10;
 
 export const CUSTOM_SERVICE_NAME_RE = /^[a-z][a-z0-9_]{2,20}$/u;
+export const MAX_CONFIG_USER_LABEL_LENGTH = 40;
+
+export type SanitizeConfigUserLabelResult =
+  { valid: true; value: string | null } | { valid: false; reason: 'too_long' | 'invalid' };
+
+export class ConfigLabelValidationError extends Error {
+  constructor(public readonly reason: 'too_long' | 'invalid') {
+    super(reason === 'too_long' ? 'USER_LABEL_TOO_LONG' : 'INVALID_USER_LABEL');
+    this.name = 'ConfigLabelValidationError';
+  }
+}
+
+function isStrippedLabelChar(ch: string): boolean {
+  const code = ch.charCodeAt(0);
+  if (code <= 0x1f) {
+    return code !== 0x09 && code !== 0x0a && code !== 0x0d;
+  }
+  return (
+    code === 0x7f ||
+    code === 0x200b ||
+    (code >= 0x200d && code <= 0x200f) ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069) ||
+    code === 0xfeff
+  );
+}
+
+/**
+ * Sanitize and validate an optional user-supplied service label (`max 40` chars).
+ * Preserves Persian ZWNJ (`\u200c`) while stripping control and directional
+ * override characters and collapsing repeated whitespace/newlines.
+ */
+export function sanitizeConfigUserLabel(
+  raw: string | null | undefined
+): SanitizeConfigUserLabelResult {
+  if (raw === null || raw === undefined) {
+    return { valid: true, value: null };
+  }
+  if (typeof raw !== 'string') {
+    return { valid: false, reason: 'invalid' };
+  }
+  const cleaned = [...raw]
+    .filter((ch) => !isStrippedLabelChar(ch))
+    .join('')
+    .replace(/[\r\n\t]+/gu, ' ')
+    .replace(/\s{2,}/gu, ' ')
+    .trim();
+
+  if (!cleaned) {
+    return { valid: true, value: null };
+  }
+  if ([...cleaned].length > MAX_CONFIG_USER_LABEL_LENGTH) {
+    return { valid: false, reason: 'too_long' };
+  }
+  return { valid: true, value: cleaned };
+}
 
 /** Normalize and validate a customer-supplied custom service name. */
 export function normalizeCustomServiceName(raw: string): string | null {
@@ -162,6 +218,47 @@ export class ConfigService {
         });
       return updated ?? null;
     });
+  }
+
+  /**
+   * Update or clear the user-facing local label (`user_label`) on a service.
+   * Deliberately touches only local DB state — never mutates `config_username`
+   * or Rebecca panel's `note` (which tracks ownership metadata).
+   */
+  async setUserLabel(
+    telegramId: number,
+    configId: string,
+    rawLabel: string | null,
+    options?: { allowAdminOverride?: boolean }
+  ): Promise<{ id: string; configUsername: string; userLabel: string | null } | null> {
+    const sanitized = sanitizeConfigUserLabel(rawLabel);
+    if (!sanitized.valid) {
+      throw new ConfigLabelValidationError(sanitized.reason);
+    }
+
+    const config = options?.allowAdminOverride
+      ? await this.getConfigById(configId)
+      : await this.getOwnedConfigById(telegramId, configId);
+    if (!config) return null;
+
+    const [updated] = await getDb()
+      .update(userConfigs)
+      .set({
+        userLabel: sanitized.value,
+        updatedAt: new Date(),
+      })
+      .where(
+        options?.allowAdminOverride
+          ? eq(userConfigs.id, config.id)
+          : and(eq(userConfigs.id, config.id), eq(userConfigs.telegramId, telegramId))
+      )
+      .returning({
+        id: userConfigs.id,
+        configUsername: userConfigs.configUsername,
+        userLabel: userConfigs.userLabel,
+      });
+
+    return updated ?? null;
   }
 
   /**

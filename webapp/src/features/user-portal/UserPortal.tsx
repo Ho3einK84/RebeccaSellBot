@@ -7,6 +7,8 @@ import {
   MessageCircle,
   Send,
   Wrench,
+  Lock,
+  Ticket,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { UserPortalHeader } from './components/UserPortalHeader.js';
@@ -229,10 +231,17 @@ export const UserPortal: React.FC<UserPortalProps> = ({
   const forcedJoinPayload = forcedJoinError ? extractForcedJoinPayload(forcedJoinError) : null;
   const isForcedJoinRequired = Boolean(forcedJoinPayload);
 
+  const registrationBlockedError = allErrors.find(
+    (err): err is ApiClientError =>
+      err instanceof ApiClientError &&
+      (err.code === 'REGISTRATION_CLOSED' || err.code === 'REGISTRATION_INVITE_ONLY')
+  );
+  const isRegistrationBlocked = Boolean(registrationBlockedError);
+
   // Notify on transient API errors once per distinct message
   const lastNotifiedErrorRef = useRef<string | null>(null);
   useEffect(() => {
-    if (is401 || isBanned || isMaintenance || isForcedJoinRequired) return;
+    if (is401 || isBanned || isMaintenance || isForcedJoinRequired || isRegistrationBlocked) return;
     const activeError = allErrors[0];
     if (activeError) {
       const msg = activeError instanceof Error ? activeError.message : t('common.networkError');
@@ -243,7 +252,16 @@ export const UserPortal: React.FC<UserPortalProps> = ({
     } else {
       lastNotifiedErrorRef.current = null;
     }
-  }, [allErrors, is401, isBanned, isMaintenance, isForcedJoinRequired, notify, t]);
+  }, [
+    allErrors,
+    is401,
+    isBanned,
+    isMaintenance,
+    isForcedJoinRequired,
+    isRegistrationBlocked,
+    notify,
+    t,
+  ]);
 
   const handleRefresh = () => {
     triggerHaptic('light');
@@ -407,6 +425,72 @@ export const UserPortal: React.FC<UserPortalProps> = ({
             </h2>
             <p className="m-0 text-xs leading-relaxed text-ink-muted">
               {t('user.accountBannedDesc')}
+            </p>
+          </div>
+          <div className="w-full flex flex-col gap-2 pt-2 border-t border-line">
+            {support.url && (
+              <a
+                href={support.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="press rs-focus flex min-h-11 w-full items-center justify-center gap-2 rounded-ctl bg-brand hover:bg-brand-hover px-4 text-xs font-medium text-brand-ink no-underline sm:text-sm"
+              >
+                <MessageCircle className="w-4 h-4 shrink-0" />
+                <span>
+                  {t('user.contactSupport')}
+                  {support.label ? (
+                    <>
+                      {' '}
+                      (<bdi dir="ltr">{support.label}</bdi>)
+                    </>
+                  ) : null}
+                </span>
+              </a>
+            )}
+            <Button variant="secondary" size="md" block onClick={minimizeOrCloseWebApp}>
+              <Send className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('user.backToBot')}</span>
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Dedicated 403 / Registration Blocked Screen (closed or invite_only)
+  if (isRegistrationBlocked && registrationBlockedError) {
+    const support = resolveSupportFromError(registrationBlockedError);
+    const isInviteOnly = registrationBlockedError.code === 'REGISTRATION_INVITE_ONLY';
+    const payload = (
+      registrationBlockedError.data && typeof registrationBlockedError.data === 'object'
+        ? registrationBlockedError.data
+        : {}
+    ) as { title?: unknown; message?: unknown };
+    const blockTitle =
+      (typeof payload.title === 'string' && payload.title.trim()) ||
+      (isInviteOnly ? t('auth.registrationInviteOnlyTitle') : t('auth.registrationClosedTitle'));
+    const blockMessage =
+      (typeof payload.message === 'string' && payload.message.trim()) ||
+      registrationBlockedError.message ||
+      (isInviteOnly
+        ? t('auth.registrationInviteOnlyMessage')
+        : t('auth.registrationClosedMessage'));
+
+    return (
+      <div className="safe-top safe-bottom relative flex min-h-[100dvh] w-full flex-col items-center justify-center bg-canvas p-4 text-ink">
+        <Card
+          padding="lg"
+          className="anim-rise relative z-10 flex w-full max-w-sm flex-col items-center gap-4 border-warn/35 text-center"
+        >
+          <IconTile tone="warn" size="lg">
+            {isInviteOnly ? <Ticket /> : <Lock />}
+          </IconTile>
+          <div className="flex flex-col gap-1.5">
+            <h2 className="m-0 text-base font-semibold text-ink sm:text-lg leading-[1.4]">
+              {blockTitle}
+            </h2>
+            <p className="m-0 text-xs leading-relaxed text-ink-muted whitespace-pre-line">
+              {blockMessage}
             </p>
           </div>
           <div className="w-full flex flex-col gap-2 pt-2 border-t border-line">

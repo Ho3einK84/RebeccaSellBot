@@ -1,5 +1,6 @@
 import { InlineKeyboard, type Api } from 'grammy';
 import { extractOrderTelegramMessageIds } from '../../../domain/services/AutomatedPaymentService.js';
+import type { ScheduledMessageDeletionService } from '../../../domain/services/ScheduledMessageDeletionService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type {
   SupportedLocale,
@@ -495,7 +496,8 @@ export async function deleteOrderTelegramMessages(
   api: Pick<Api, 'deleteMessage'> | { deleteMessage?: Api['deleteMessage'] },
   telegramId: number,
   metadata: string | null | undefined,
-  extraMessageIds: readonly number[] = []
+  extraMessageIds: readonly number[] = [],
+  scheduledMessageDeletionService?: ScheduledMessageDeletionService
 ): Promise<void> {
   if (typeof api.deleteMessage !== 'function') return;
   const ids = new Set<number>(extractOrderTelegramMessageIds(metadata));
@@ -505,6 +507,9 @@ export async function deleteOrderTelegramMessages(
   for (const msgId of ids) {
     try {
       await api.deleteMessage(telegramId, msgId);
+      if (scheduledMessageDeletionService) {
+        await scheduledMessageDeletionService.cancelForMessage(telegramId, msgId).catch(() => {});
+      }
     } catch {
       // Message may already be deleted or older than Telegram's 48h delete window
     }

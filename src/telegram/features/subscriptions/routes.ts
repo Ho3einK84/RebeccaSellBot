@@ -51,6 +51,10 @@ import {
   type PackageOption,
 } from '../../../domain/services/PricingService.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
+import {
+  formatConfigButtonTitle,
+  formatTelegramConfigRef,
+} from '../../../domain/services/TelegramFormatting.js';
 import { packageCatalogToken } from '../../packageCatalog.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../../checkoutLifecycle.js';
 import {
@@ -202,7 +206,7 @@ export async function showUserSubscriptions(
     const card = cards[index]!;
     navigation
       .text(
-        `${statusEmoji(card.status)} ${config.configUsername}`,
+        `${statusEmoji(card.status)} ${formatConfigButtonTitle(config.configUsername, config.userLabel)}`,
         callbackData('config', 'view', config.id)
       )
       .row();
@@ -233,7 +237,7 @@ export async function showUserSubscriptions(
         const card = cards[index]!;
         return {
           emoji: statusEmoji(card.status),
-          title: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+          title: formatTelegramConfigRef(config.configUsername, config.userLabel),
           fields: [
             {
               label: t(ctx, 'subscription_status_label'),
@@ -366,7 +370,7 @@ export async function renderRenewalSelection(
       subtitle: t(ctx, 'renewal_selection_subtitle'),
       primary: {
         label: t(ctx, 'renewal_selection_service_label'),
-        value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+        value: formatTelegramConfigRef(config.configUsername, config.userLabel),
         inline: true,
       },
       ...(currentFields.length > 0
@@ -540,6 +544,7 @@ async function renderRenewalCheckoutForResolvedPackage(
     ctx,
     buildRenewalCheckoutScreen(ctx, {
       username: config.configUsername,
+      serviceLabel: config.userLabel ?? null,
       packageName: localizedPackageName(ctx, pkg.id, pkg.name),
       gbAmount: pkg.gbAmount,
       bonusGb,
@@ -591,7 +596,7 @@ async function renderAutoRenewSelection(ctx: MenuContext, config: UserConfigReco
       subtitle: t(ctx, 'auto_renew_selection_subtitle'),
       primary: {
         label: t(ctx, 'renewal_selection_service_label'),
-        value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+        value: formatTelegramConfigRef(config.configUsername, config.userLabel),
         inline: true,
       },
       footer: hasChoices
@@ -704,7 +709,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         subtitle: t(ctx, 'renewal_processing_subtitle'),
         primary: {
           label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+          value: formatTelegramConfigRef(config.configUsername, config.userLabel),
           inline: true,
         },
       }),
@@ -783,7 +788,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     const successFields: Array<{ label: string; value: string }> = [
       {
         label: t(ctx, 'renewal_success_service_label'),
-        value: `\`${sanitizeTelegramInlineCode(result.configUsername)}\``,
+        value: formatTelegramConfigRef(result.configUsername, config.userLabel),
       },
       {
         label: t(ctx, 'renewal_success_package_label'),
@@ -887,7 +892,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           subtitle: t(ctx, 'auto_renew_disable_subtitle'),
           primary: {
             label: t(ctx, 'renewal_selection_service_label'),
-            value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+            value: formatTelegramConfigRef(config.configUsername, config.userLabel),
             inline: true,
           },
           footer: `⚠️ ${t(ctx, 'auto_renew_disable_consequence')}`,
@@ -955,7 +960,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
               fields: [
                 {
                   label: t(ctx, 'checkout_service_label'),
-                  value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+                  value: formatTelegramConfigRef(config.configUsername, config.userLabel),
                 },
                 {
                   label: t(ctx, 'renewal_success_package_label'),
@@ -1023,7 +1028,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         subtitle: t(ctx, 'auto_renew_enabled_subtitle'),
         primary: {
           label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+          value: formatTelegramConfigRef(config.configUsername, config.userLabel),
           inline: true,
         },
       }),
@@ -1050,7 +1055,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           subtitle: t(ctx, 'auto_renew_disabled_subtitle'),
           primary: {
             label: t(ctx, 'renewal_selection_service_label'),
-            value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+            value: formatTelegramConfigRef(config.configUsername, config.userLabel),
             inline: true,
           },
         }),
@@ -1108,7 +1113,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         subtitle: t(ctx, 'subscription_revoke_subtitle'),
         primary: {
           label: t(ctx, 'renewal_selection_service_label'),
-          value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+          value: formatTelegramConfigRef(config.configUsername, config.userLabel),
           inline: true,
         },
         footer: `⚠️ ${t(ctx, 'subscription_revoke_consequence')}`,
@@ -1152,7 +1157,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
                 fields: [
                   {
                     label: t(ctx, 'checkout_service_label'),
-                    value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+                    value: formatTelegramConfigRef(config.configUsername, config.userLabel),
                   },
                 ],
               },
@@ -1242,7 +1247,13 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         }
         await renderSubscriptionScreen(
           ctx,
-          buildDeleteResultScreen(ctx, result.configUsername, result.refundAmount, true),
+          buildDeleteResultScreen(
+            ctx,
+            result.configUsername,
+            result.refundAmount,
+            true,
+            config.userLabel
+          ),
           backKeyboard(ctx, 'main')
         );
       } catch (err) {
@@ -1282,7 +1293,13 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         await renderSubscriptionScreen(
           ctx,
           deleted
-            ? buildDeleteResultScreen(ctx, config.configUsername, undefined, false)
+            ? buildDeleteResultScreen(
+                ctx,
+                config.configUsername,
+                undefined,
+                false,
+                config.userLabel
+              )
             : buildUserEmptyState(
                 '⚠️',
                 t(ctx, 'config_delete_review_title'),
@@ -1313,6 +1330,14 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
     await ctx.conversation.enter('transferConfigConversation');
   });
 
+  bot.callbackQuery(new RegExp(`^config:label:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
+    const config = await ownedConfig(ctx, ctx.match[1]!);
+    if (!config) return;
+    ctx.session.labelConfigId = config.id;
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('editConfigLabelConversation');
+  });
+
   bot.callbackQuery(new RegExp(`^config:qr:${CONFIG_ID_CAPTURE}$`, 'u'), async (ctx) => {
     const config = await ownedConfig(ctx, ctx.match[1]!);
     if (!config) return;
@@ -1333,7 +1358,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           subtitle: t(ctx, 'subscription_qr_subtitle'),
           primary: {
             label: t(ctx, 'subscription_qr_service_label'),
-            value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+            value: formatTelegramConfigRef(config.configUsername, config.userLabel),
             inline: true,
           },
         }),
@@ -1400,7 +1425,7 @@ async function buildSubscriptionCard(
     return {
       text: buildUserScreen({
         emoji: '📱',
-        title: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+        title: formatTelegramConfigRef(config.configUsername, config.userLabel),
         primary: {
           emoji: statusEmoji(snapshot.status),
           label: t(ctx, 'subscription_status_label'),
@@ -1442,6 +1467,15 @@ async function buildSubscriptionCard(
         {
           title: t(ctx, 'subscription_usage_section'),
           fields: [
+            ...(config.userLabel
+              ? [
+                  {
+                    emoji: '🏷️',
+                    label: t(ctx, 'subscription_label_field'),
+                    value: escapeTelegramMarkdown(config.userLabel),
+                  },
+                ]
+              : []),
             { label: t(ctx, 'remaining'), value: snapshot.remaining },
             { label: t(ctx, 'expiry'), value: snapshot.expiryInfo },
           ],
@@ -1626,7 +1660,11 @@ export function buildSubscriptionActionKeyboard(
     .text(t(ctx, 'subscription_revoke_button'), callbackData('config', 'revoke_prompt', configId))
     .row();
 
-  // Row 4: Ownership & danger zone actions
+  // Row 4: Ownership, label & danger zone actions
+  keyboard
+    .text(t(ctx, 'subscription_label_button'), callbackData('config', 'label', configId))
+    .row();
+
   keyboard
     .text(t(ctx, 'subscription_transfer_button'), callbackData('config', 'transfer', configId))
     .text(t(ctx, 'config_delete_button'), callbackData('config', 'delete_prompt', configId))
@@ -1705,6 +1743,7 @@ export function buildRenewalCheckoutScreen(
   ctx: MenuContext,
   input: {
     username: string;
+    serviceLabel?: string | null;
     packageName?: string;
     gbAmount: number;
     bonusGb?: number;
@@ -1727,6 +1766,7 @@ export function buildRenewalCheckoutScreen(
   return buildUnifiedCheckoutScreen(ctx, {
     mode: 'renewal',
     serviceUsername: input.username,
+    serviceLabel: input.serviceLabel ?? null,
     packageName:
       input.packageName ??
       t(ctx, 'custom_package_name', {
@@ -1787,7 +1827,7 @@ export function buildDeleteReviewScreen(
         fields: [
           {
             label: t(ctx, 'checkout_service_label'),
-            value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+            value: formatTelegramConfigRef(config.configUsername, config.userLabel),
           },
         ],
       },
@@ -1823,8 +1863,10 @@ function buildDeleteResultScreen(
   ctx: MenuContext,
   username: string,
   refundAmount: number | undefined,
-  refunded: boolean
+  refunded: boolean,
+  userLabel?: string | null
 ): string {
+  const formattedService = formatTelegramConfigRef(username, userLabel);
   return buildUserScreen({
     emoji: '✅',
     title: t(ctx, 'config_delete_success_title'),
@@ -1843,7 +1885,7 @@ function buildDeleteResultScreen(
         }
       : {
           label: t(ctx, 'config_delete_service_label'),
-          value: `\`${sanitizeTelegramInlineCode(username)}\``,
+          value: formattedService,
           inline: true,
         },
     ...(refunded
@@ -1854,7 +1896,7 @@ function buildDeleteResultScreen(
               fields: [
                 {
                   label: t(ctx, 'config_delete_service_label'),
-                  value: `\`${sanitizeTelegramInlineCode(username)}\``,
+                  value: formattedService,
                 },
               ],
             },

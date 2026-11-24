@@ -15,6 +15,7 @@ import { normalizeDataLimit } from '../domain/services/TrafficLimit.js';
 import { formatPackageButtonLabel, localizedNumber, resolveContextLocale, t } from './locale.js';
 import { buildUserScreen, type UserScreenField, type UserScreenSection } from './designSystem.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from './rendering.js';
+import { formatTelegramConfigRef } from '../domain/services/TelegramFormatting.js';
 
 export interface RolloverPreview {
   enabled: boolean;
@@ -45,6 +46,7 @@ export interface UnifiedCheckoutViewModel {
   pricePerGb?: number;
   walletAvailableBalance?: number;
   serviceUsername?: string;
+  serviceLabel?: string | null;
   requestedUsername?: string;
   startOnFirstUse?: boolean;
   rollover?: RolloverPreview;
@@ -194,7 +196,7 @@ export function buildUnifiedCheckoutScreen(
   if (input.serviceUsername) {
     packageFields.push({
       label: t(ctx, 'checkout_service_label'),
-      value: `\`${sanitizeTelegramInlineCode(input.serviceUsername)}\``,
+      value: formatTelegramConfigRef(input.serviceUsername, input.serviceLabel),
     });
   }
   if (input.requestedUsername) {

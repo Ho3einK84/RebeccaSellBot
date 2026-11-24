@@ -13,18 +13,18 @@ const UserPortal = lazy(() =>
 );
 
 export const App: React.FC = () => {
-  const { loading, error, authData } = useAuth();
+  const { loading, error, errorCode, errorTitle, errorLocale, authData } = useAuth();
   const [adminViewMode, setAdminViewMode] = useState<'admin' | 'user'>('admin');
 
   return (
     <Providers
-      initialLocale={authData?.locale || 'fa'}
+      initialLocale={authData?.locale || errorLocale || 'fa'}
       languageSelectionEnabled={authData?.languageSelectionEnabled ?? true}
     >
       {loading ? (
         <AuthLoadingScreen />
       ) : error || !authData ? (
-        <AuthErrorScreen error={error} />
+        <AuthErrorScreen error={error} errorCode={errorCode} errorTitle={errorTitle} />
       ) : (
         <Suspense fallback={<AuthLoadingScreen />}>
           {authData.role === 'admin' ? (

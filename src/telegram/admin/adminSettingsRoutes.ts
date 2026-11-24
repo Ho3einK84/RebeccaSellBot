@@ -19,6 +19,8 @@ import {
   forappEnabled,
   nowpaymentsEnabled,
   onHoldDefaultEnabled,
+  paymentMessageAutoDeleteHours,
+  registrationMode,
   renewalRolloverEnabled,
   uniqueTopupAmountEnabled,
 } from '../../domain/services/FeatureSettings.js';
@@ -173,6 +175,7 @@ export async function renderGeneralSettingsScreen(
   markAdminContext(ctx);
   const ts = ctx.services.translationService;
   const botEnabled = ts.getSettingBool('bot_enabled', true);
+  const regMode = registrationMode(ts);
   const langSelection = ts.getSettingBool('language_selection_enabled', true);
   const defLocale = ts.getSetting('default_locale', 'fa') === 'en' ? 'en' : 'fa';
   const reqPhonePurchase = ts.getSettingBool('require_phone_for_purchase', false);
@@ -221,6 +224,10 @@ export async function renderGeneralSettingsScreen(
           {
             label: t(ctx, 'admin_setting_language_selection_enabled'),
             value: buildStatusBadge(ctx, langSelection ? 'active' : 'inactive'),
+          },
+          {
+            label: t(ctx, 'admin_setting_registration_mode'),
+            value: escapeTelegramMarkdown(displayAdminSettingValue(ctx, 'registration_mode')),
           },
         ],
       },
@@ -283,6 +290,15 @@ export async function renderGeneralSettingsScreen(
         `${t(ctx, 'admin_setting_bot_enabled')}: ${buildStatusBadge(ctx, botEnabled ? 'active' : 'inactive')}`
       ),
       'adm:cfg:tg:bot_enabled:gen'
+    )
+    .row()
+    .text(
+      truncateButtonLabel(
+        `${t(ctx, 'admin_setting_registration_mode')}: ${
+          regMode === 'open' ? '🟢' : regMode === 'invite_only' ? '🎟' : '🔒'
+        } ${displayAdminSettingValue(ctx, 'registration_mode')}`
+      ),
+      'adm:cfg:reg'
     )
     .row()
     .text(
@@ -351,7 +367,74 @@ export async function renderGeneralSettingsScreen(
   await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: kb });
 }
 
-// ── 2. Payment & Bank Cards (`adm:cfg:pay` & `adm:bc:*`) ─────────────────────
+export async function renderRegistrationSettingsScreen(
+  ctx: MenuContext,
+  notice?: AdminScreenNotice
+): Promise<void> {
+  if (!ctx.services) return;
+  markAdminContext(ctx);
+  const ts = ctx.services.translationService;
+  const current = registrationMode(ts);
+
+  const text = buildAdminScreen({
+    emoji: '🔐',
+    title: t(ctx, 'admin_registration_screen_title'),
+    subtitle: t(ctx, 'admin_registration_screen_subtitle'),
+    breadcrumb: buildBreadcrumb(
+      t(ctx, 'admin_home_title'),
+      t(ctx, 'admin_menu_settings'),
+      t(ctx, 'admin_cfg_general_button'),
+      t(ctx, 'admin_setting_registration_mode')
+    ),
+    notice,
+    primary: {
+      emoji: current === 'open' ? '🟢' : current === 'invite_only' ? '🎟' : '🔒',
+      label: t(ctx, 'admin_registration_mode_label'),
+      value: escapeTelegramMarkdown(displayAdminSettingValue(ctx, 'registration_mode')),
+      inline: true,
+    },
+    footer: [
+      t(ctx, 'admin_registration_desc_open'),
+      t(ctx, 'admin_registration_desc_invite_only'),
+      t(ctx, 'admin_registration_desc_closed'),
+    ].join('\n'),
+  });
+
+  const kb = new InlineKeyboard()
+    .text(
+      `${current === 'open' ? '✅ ' : '🟢 '}${t(ctx, 'admin_registration_mode_open')}`,
+      'adm:cfg:reg:set:open'
+    )
+    .row()
+    .text(
+      `${current === 'invite_only' ? '✅ ' : '🎟 '}${t(ctx, 'admin_registration_mode_invite_only')}`,
+      'adm:cfg:reg:set:invite_only'
+    )
+    .row()
+    .text(
+      `${current === 'closed' ? '✅ ' : '🔒 '}${t(ctx, 'admin_registration_mode_closed')}`,
+      'adm:cfg:reg:set:closed'
+    )
+    .row()
+    .text(
+      t(ctx, 'admin_registration_edit_invite_text_button'),
+      'adm:txt:open:registration_invite_only_message'
+    )
+    .row()
+    .text(
+      t(ctx, 'admin_registration_edit_closed_text_button'),
+      'adm:txt:open:registration_closed_message'
+    )
+    .row();
+
+  appendAdminFooterNav(kb, ctx, {
+    backCallback: 'adm:cfg:gen',
+    backLabel: t(ctx, 'admin_cfg_general_button'),
+    showHome: true,
+  });
+
+  await renderScreen(ctx, text, { parse_mode: 'Markdown', reply_markup: kb });
+}
 
 export async function renderPaymentSettingsScreen(
   ctx: MenuContext,
@@ -366,6 +449,7 @@ export async function renderPaymentSettingsScreen(
   const configuredCards = parseBankCardsJson(ts.getSetting('bank_cards_json', '[]'));
   const activeCardsCount = configuredCards.filter((c) => c.enabled).length;
   const uniqueOn = uniqueTopupAmountEnabled(ts);
+  const autoDeleteHours = paymentMessageAutoDeleteHours(ts, 0);
   const transferOn = ts.getSettingBool('wallet_transfer_enabled', true);
   const transferMin = ts.getSettingNum('wallet_transfer_min_amount', 5000);
   const notifyOn = ts.getSettingBool('receipt_notify_enabled', true);
@@ -403,6 +487,13 @@ export async function renderPaymentSettingsScreen(
           {
             label: t(ctx, 'admin_setting_unique_topup_amount_enabled'),
             value: buildStatusBadge(ctx, uniqueOn ? 'active' : 'inactive'),
+          },
+          {
+            label: t(ctx, 'admin_setting_payment_message_auto_delete_hours'),
+            value:
+              autoDeleteHours === 0
+                ? t(ctx, 'admin_setting_payment_message_auto_delete_disabled')
+                : `${localizedNumber(autoDeleteHours, ctx)} ${t(ctx, 'hours_unit')}`,
           },
         ],
       },
@@ -485,6 +576,17 @@ export async function renderPaymentSettingsScreen(
     .text(
       `${t(ctx, 'admin_setting_unique_topup_amount_enabled')}: ${uniqueOn ? '🟢' : '⚪'}`,
       'adm:cfg:tg:unique_topup_amount_enabled:pay'
+    )
+    .row()
+    .text(
+      truncateButtonLabel(
+        `${t(ctx, 'admin_setting_payment_message_auto_delete_hours')}: ${
+          autoDeleteHours === 0
+            ? t(ctx, 'admin_setting_payment_message_auto_delete_disabled')
+            : `${localizedNumber(autoDeleteHours, ctx)} ${t(ctx, 'hours_unit')}`
+        }`
+      ),
+      'adm:cfg:ed:payment_message_auto_delete_hours:pay'
     )
     .row()
     .text(
@@ -1251,10 +1353,20 @@ export function registerAdminSettingsRoutes(): void {
       promptText: buildAdminPromptScreen({
         emoji: '✏️',
         title: t(ctx, def.labelKey),
-        body: t(ctx, 'admin_setting_value_prompt', {
-          setting: t(ctx, def.labelKey),
-          current_value: `\`${sanitizeTelegramInlineCode(current)}\``,
-        }),
+        body:
+          key === 'payment_message_auto_delete_hours'
+            ? `${t(ctx, 'admin_setting_payment_message_auto_delete_prompt_hint')}\n\n${t(
+                ctx,
+                'admin_setting_value_prompt',
+                {
+                  setting: t(ctx, def.labelKey),
+                  current_value: `\`${sanitizeTelegramInlineCode(current)}\``,
+                }
+              )}`
+            : t(ctx, 'admin_setting_value_prompt', {
+                setting: t(ctx, def.labelKey),
+                current_value: `\`${sanitizeTelegramInlineCode(current)}\``,
+              }),
       }),
       keyboard: kb,
     });
@@ -1334,6 +1446,22 @@ export function registerAdminSettingsRoutes(): void {
     await renderGeneralSettingsScreen(ctx, {
       tone: 'success',
       text: t(ctx, 'admin_setting_saved_title'),
+    });
+  });
+
+  // General: new-user registration control (`open` / `invite_only` / `closed`)
+  registerAdminRoute('adm:cfg:reg', async (ctx, _m, notice) =>
+    renderRegistrationSettingsScreen(ctx, notice)
+  );
+
+  registerAdminRoute(/^adm:cfg:reg:set:(open|invite_only|closed)$/u, async (ctx, match) => {
+    if (!ctx.services) return;
+    const mode = validateAdminSetting('registration_mode', match![1]!);
+    if (!mode) return;
+    await applyAdminSettingUpdate(ctx.services.translationService, 'registration_mode', mode);
+    await renderRegistrationSettingsScreen(ctx, {
+      tone: 'success',
+      text: t(ctx, 'admin_registration_mode_updated'),
     });
   });
 

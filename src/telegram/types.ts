@@ -33,6 +33,7 @@ import type { CatalogDiscountService } from '../domain/services/CatalogDiscountS
 import type { ContactVerificationService } from '../domain/services/ContactVerificationService.js';
 import type { ForcedJoinService } from '../domain/services/ForcedJoinService.js';
 import type { BulkGiftService, BulkGiftTargetStatus } from '../domain/services/BulkGiftService.js';
+import type { ScheduledMessageDeletionService } from '../domain/services/ScheduledMessageDeletionService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
@@ -110,6 +111,7 @@ export interface SessionData {
     search?: string;
   };
   renewConfigId?: string;
+  labelConfigId?: string;
   /** Package terms awaiting the user's explicit auto-renew confirmation. */
   pendingAutoRenew?: { configId: string; packageId: string; price: number };
   adminPanelId?: string;
@@ -209,6 +211,8 @@ export type BotServices = {
   forcedJoinService?: ForcedJoinService;
   /** Durable Bulk Gift campaign service (traffic GB and/or validity days). */
   bulkGiftService?: BulkGiftService;
+  /** Delayed auto-deletion queue for payment & card messages. */
+  scheduledMessageDeletionService?: ScheduledMessageDeletionService;
   /** Telegram bot username (e.g. "RebeccaSellBot") from bot.botInfo, for deep links. */
   botUsername?: string;
   /** Optional Telegram-compatible support destination rendered as a URL button. */

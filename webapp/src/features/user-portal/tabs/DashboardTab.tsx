@@ -546,12 +546,26 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       <div className="flex items-center justify-between w-full gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <ServiceStatusDot status={cfg.panelStatus} />
-                          <bdi
-                            dir="ltr"
-                            className="text-[13px] font-mono font-medium truncate text-ink"
-                          >
-                            {cfg.configUsername}
-                          </bdi>
+                          {cfg.userLabel ? (
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[13px] font-semibold truncate text-ink">
+                                {cfg.userLabel}
+                              </span>
+                              <bdi
+                                dir="ltr"
+                                className="text-[11px] font-mono truncate text-ink-muted"
+                              >
+                                {cfg.configUsername}
+                              </bdi>
+                            </div>
+                          ) : (
+                            <bdi
+                              dir="ltr"
+                              className="text-[13px] font-mono font-medium truncate text-ink"
+                            >
+                              {cfg.configUsername}
+                            </bdi>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <ServiceAutoRenewBadge enabled={cfg.autoRenewEnabled} />

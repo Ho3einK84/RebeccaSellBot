@@ -2166,4 +2166,59 @@ export const EN_TEXTS: Record<string, string> = {
     'Pending services will be cancelled. Services that already received the gift remain unchanged.',
   admin_gift_cancel_confirm_button: '⏹ Stop Campaign',
   admin_gift_cancel_requested: 'Cancellation requested.',
+
+  // Auto-delete payment & card messages
+  admin_setting_payment_message_auto_delete_hours: 'Auto-delete payment messages (hours)',
+  admin_setting_payment_message_auto_delete_disabled: 'Disabled',
+  admin_setting_payment_message_auto_delete_prompt_hint:
+    'After how many hours should messages containing card numbers or payment invoices be auto-deleted?\nAllowed range: `0` (disabled) to `48` hours (Telegram deleteMessage limit).',
+
+  // New user registration control
+  admin_setting_registration_mode: 'New user registration',
+  admin_registration_mode_open: 'Open (Everyone)',
+  admin_registration_mode_invite_only: 'Invite-Only (Referral)',
+  admin_registration_mode_closed: 'Closed',
+  admin_registration_screen_title: 'New User Registration Control',
+  admin_registration_screen_subtitle:
+    'Choose who is allowed to register new accounts in the Telegram bot and Mini App.',
+  admin_registration_mode_label: 'Current registration mode',
+  admin_registration_desc_open: '🟢 *Open:* Any new user can register without restrictions.',
+  admin_registration_desc_invite_only:
+    '🎟 *Invite-Only:* New users can register only with a valid referral link.',
+  admin_registration_desc_closed:
+    '🔒 *Closed:* New registrations are paused (existing users and admins are never blocked).',
+  admin_registration_edit_closed_text_button: '✏️ Edit Closed Registration Text',
+  admin_registration_edit_invite_text_button: '✏️ Edit Invite-Only Text',
+  admin_registration_mode_updated: 'New user registration mode updated.',
+
+  registration_closed_title: 'Registration Closed',
+  registration_closed_message:
+    'New user registration is currently disabled. Please contact support if you need assistance.',
+  registration_invite_only_title: 'Invite-Only Registration',
+  registration_invite_only_message:
+    'Registration is currently invite-only. Please open the bot or Mini App using a valid referral link.',
+  registration_blocked_alert: 'New user registration is currently restricted.',
+  admin_text_item_registration_closed: '🔒 Closed registration message',
+  admin_text_desc_registration_closed:
+    'Message shown to unregistered users when registration mode is closed.',
+  admin_text_item_registration_invite_only: '🎟 Invite-only registration message',
+  admin_text_desc_registration_invite_only:
+    'Message shown to unregistered users without a valid referral when registration is invite-only.',
+
+  // Personal service labels
+  subscription_label_field: 'Personal label',
+  subscription_label_button: '🏷️ Label / Note',
+  subscription_label_prompt_title: 'Service Personal Label',
+  subscription_label_prompt_subtitle:
+    'Add a short note or nickname to tell this service apart easily.',
+  subscription_label_current_field: 'Current label',
+  subscription_label_none: 'Not set',
+  subscription_label_prompt_hint:
+    'Maximum 40 characters (private to you; never changes your underlying service username).',
+  subscription_label_clear_button: '🗑 Remove Label',
+  subscription_label_too_long:
+    '⚠️ Label cannot exceed {max} characters. Please send a shorter label:',
+  subscription_label_invalid: '⚠️ Invalid label input. Please send a valid text label:',
+  subscription_label_saved: '✅ Personal label saved: *{label}*',
+  subscription_label_cleared: '🗑 Personal label removed.',
 };

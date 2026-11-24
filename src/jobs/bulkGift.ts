@@ -4,12 +4,14 @@ import type {
   BulkGiftJob,
   BulkGiftService,
 } from '../domain/services/BulkGiftService.js';
+import type { ConfigService } from '../domain/services/ConfigService.js';
+import { formatTelegramConfigRef } from '../domain/services/TelegramFormatting.js';
 import type { TranslationService } from '../domain/services/TranslationService.js';
 import type { UserService } from '../domain/services/UserService.js';
 import { logger } from '../infra/logger.js';
 import { localizedNumberForLocale, resolveServiceLocale, tForLocale } from '../telegram/locale.js';
 import { buildUserScreen } from '../telegram/designSystem.js';
-import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
+import { escapeTelegramMarkdown } from '../telegram/rendering.js';
 import { forEachConcurrent, jobRunner } from './workerRuntime.js';
 
 const BULK_GIFT_POLL_INTERVAL_MS = 5_000;
@@ -25,6 +27,7 @@ export interface BulkGiftWorkerDeps {
   bulkGiftService: BulkGiftService;
   telegramApi?: Pick<Api, 'sendMessage'>;
   userService?: Pick<UserService, 'getLocale'>;
+  configService?: Pick<ConfigService, 'getConfigById'>;
   translationService?: TranslationService;
 }
 
@@ -35,6 +38,7 @@ export interface ProcessBulkGiftOptions {
   signal?: AbortSignal;
   telegramApi?: Pick<Api, 'sendMessage'>;
   userService?: Pick<UserService, 'getLocale'>;
+  configService?: Pick<ConfigService, 'getConfigById'>;
   translationService?: TranslationService;
 }
 
@@ -51,6 +55,7 @@ export function startBulkGiftWorker(deps: BulkGiftWorkerDeps): void {
           signal,
           telegramApi: deps.telegramApi,
           userService: deps.userService,
+          configService: deps.configService,
           translationService: deps.translationService,
         });
       });
@@ -102,16 +107,21 @@ function formatGiftNotificationMessage(
   job: BulkGiftJob,
   item: BulkGiftItem,
   locale: 'fa' | 'en',
-  translationService?: TranslationService
+  translationService?: TranslationService,
+  userLabel?: string | null
 ): { text: string; parseMode?: 'Markdown' } {
   const customMessage = job.notifyMessage?.trim() ?? '';
+  const trimmedLabel = userLabel?.trim();
   if (!translationService) {
     const parts: string[] = [];
     if (job.giftGb > 0) parts.push(`+${job.giftGb} GB`);
     if (job.giftDays > 0) parts.push(`+${job.giftDays}d`);
     const summary = parts.join(' · ');
+    const displayName = trimmedLabel
+      ? `${item.configUsername} (${trimmedLabel})`
+      : item.configUsername;
     return {
-      text: `🎁 ${item.configUsername} (${summary})\n\n${customMessage}`.trim(),
+      text: `🎁 ${displayName} (${summary})\n\n${customMessage}`.trim(),
     };
   }
 
@@ -143,7 +153,7 @@ function formatGiftNotificationMessage(
         fields: [
           {
             label: tForLocale(translationService, locale, 'bulk_gift_user_notice_service_label'),
-            value: `\`${sanitizeTelegramInlineCode(item.configUsername)}\``,
+            value: formatTelegramConfigRef(item.configUsername, trimmedLabel),
           },
           ...(customMessage
             ? [
@@ -212,14 +222,17 @@ export async function processNextBulkGift(
       const notifyText = current.notifyMessage?.trim();
       if (!notifyText || !options.telegramApi) return;
 
-      const locale =
-        (await options.userService?.getLocale?.(item.telegramId).catch(() => undefined)) ??
-        resolveServiceLocale(options.translationService);
+      const [locale, cfg] = await Promise.all([
+        options.userService?.getLocale?.(item.telegramId).catch(() => undefined),
+        options.configService?.getConfigById?.(item.configId).catch(() => undefined),
+      ]);
+      const resolvedLocale = locale ?? resolveServiceLocale(options.translationService);
       const formatted = formatGiftNotificationMessage(
         current,
         item,
-        locale,
-        options.translationService
+        resolvedLocale,
+        options.translationService,
+        cfg?.userLabel ?? null
       );
 
       for (let attempt = 0; ; attempt += 1) {

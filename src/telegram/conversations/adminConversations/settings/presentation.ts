@@ -283,6 +283,21 @@ export function displayAdminSettingValue(ctx: ConversationContext, key: string):
     const loc = ctx.services.translationService.getSetting(key, 'fa');
     return loc === 'en' ? t(ctx, 'admin_setting_locale_en') : t(ctx, 'admin_setting_locale_fa');
   }
+  if (key === 'registration_mode') {
+    const mode = ctx.services.translationService.getSetting(key, 'open').trim().toLowerCase();
+    if (mode === 'invite_only') return t(ctx, 'admin_registration_mode_invite_only');
+    if (mode === 'closed') return t(ctx, 'admin_registration_mode_closed');
+    return t(ctx, 'admin_registration_mode_open');
+  }
+  if (key === 'payment_message_auto_delete_hours') {
+    const hours = Math.min(
+      48,
+      Math.max(0, Math.trunc(parseSettingNum(ctx.services.translationService.getSetting(key), 0)))
+    );
+    return hours === 0
+      ? t(ctx, 'admin_setting_payment_message_auto_delete_disabled')
+      : `${localizedNumber(hours, ctx)} ${t(ctx, 'hours_unit')}`;
+  }
   if (key === 'naming_mode') {
     const mode = ctx.services.translationService.getSetting(key, 'custom');
     const labels: Readonly<Record<string, string>> = {

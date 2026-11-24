@@ -747,6 +747,7 @@ export function clearTransientConversationSession(session: SessionData | undefin
   delete session.orphanAssignIssueId;
   delete session.renewConfigId;
   delete session.renewConfigUsername;
+  delete session.labelConfigId;
   delete session.pendingConfigId;
   delete session.pendingAutoRenew;
   delete session.adminPanelId;

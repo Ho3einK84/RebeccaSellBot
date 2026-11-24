@@ -448,6 +448,25 @@ export function registerAdminTextsRoutes(): void {
     await renderTextDetailScreen(ctx, Number(match![1]), notice);
   });
 
+  registerAdminRoute(/^adm:txt:open:([a-z0-9_]+)$/u, async (ctx, match) => {
+    const targetKey = match![1]!;
+    const cur = getTextsState(ctx);
+    const nextState = setTextsState(ctx, {
+      ...cur,
+      mode: 'essential',
+      categoryId: undefined,
+      query: undefined,
+      page: 1,
+    });
+    const keys = resolveListKeys(ctx, nextState);
+    const index = keys.indexOf(targetKey);
+    if (index >= 0) {
+      await renderTextDetailScreen(ctx, index);
+      return;
+    }
+    await renderTextsHubScreen(ctx);
+  });
+
   registerAdminRoute(/^adm:txt:vlang:(\d+)$/u, async (ctx, match) => {
     const idx = Number(match![1]);
     const cur = getTextsState(ctx);

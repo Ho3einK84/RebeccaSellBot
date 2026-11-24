@@ -40,6 +40,7 @@ import {
 } from '../../domain/services/FeatureSettings.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
+import { formatConfigButtonTitle } from '../../domain/services/TelegramFormatting.js';
 import {
   buildInsufficientBalanceKeyboard,
   buildUnifiedCheckoutScreen,
@@ -457,7 +458,10 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
         if (urgent) {
           range
             .text(
-              (c) => t(c, 'home_quick_renew_button', { username: urgent.configUsername }),
+              (c) =>
+                t(c, 'home_quick_renew_button', {
+                  username: formatConfigButtonTitle(urgent.configUsername, urgent.userLabel, 24),
+                }),
               async (c) => {
                 const { renderRenewalSelection } =
                   await import('../features/subscriptions/routes.js');

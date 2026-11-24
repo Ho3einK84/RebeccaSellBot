@@ -122,7 +122,13 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
   const filteredConfigs = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return configs.filter((c) => {
-      if (q && !c.configUsername.toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !c.configUsername.toLowerCase().includes(q) &&
+        !(c.userLabel ?? '').toLowerCase().includes(q)
+      ) {
+        return false;
+      }
       if (statusFilter === 'active') {
         return c.panelStatus === 'active' || c.panelStatus === 'on_hold';
       }
@@ -339,16 +345,27 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({
                 }`}
               >
                 <div className="flex flex-col gap-3">
-                  {/* Header: Name, Auto-renew, and Status */}
+                  {/* Header: Name, Personal Label, Auto-renew, and Status */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <ServiceStatusDot status={c.panelStatus} />
-                      <bdi
-                        dir="ltr"
-                        className="text-[13.5px] font-mono font-medium truncate text-ink"
-                      >
-                        {c.configUsername}
-                      </bdi>
+                      {c.userLabel ? (
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[13.5px] font-semibold truncate text-ink">
+                            {c.userLabel}
+                          </span>
+                          <bdi dir="ltr" className="text-[11px] font-mono truncate text-ink-muted">
+                            {c.configUsername}
+                          </bdi>
+                        </div>
+                      ) : (
+                        <bdi
+                          dir="ltr"
+                          className="text-[13.5px] font-mono font-medium truncate text-ink"
+                        >
+                          {c.configUsername}
+                        </bdi>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">

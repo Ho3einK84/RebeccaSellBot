@@ -12,6 +12,8 @@ import {
   RotateCcw,
   Activity,
   Server,
+  Tag,
+  Save,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/shared/components/ui/Modal.js';
@@ -77,6 +79,8 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
+  const [labelInput, setLabelInput] = useState('');
+  const [isSavingLabel, setIsSavingLabel] = useState(false);
 
   // Sub-confirmation modal state: 'disable' | 'enable' | 'revoke' | null
   const [confirmAction, setConfirmAction] = useState<'disable' | 'enable' | 'revoke' | null>(null);
@@ -86,6 +90,7 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
   useEffect(() => {
     if (config) {
       setAutoRenewOptimistic(Boolean(config.autoRenewEnabled));
+      setLabelInput(config.userLabel ?? '');
     }
   }, [config]);
 
@@ -222,6 +227,44 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
     onRenewConfig?.(config);
   };
 
+  const handleSaveLabel = async (nextLabel: string | null) => {
+    if (isSavingLabel) return;
+    const trimmed = nextLabel === null ? null : nextLabel.trim() || null;
+    if (trimmed && [...trimmed].length > 40) {
+      triggerHaptic('error');
+      onNotify(t('user.services.personalLabelTooLong'), 'error');
+      return;
+    }
+    setIsSavingLabel(true);
+    triggerHaptic('selection');
+    try {
+      const res = await api.updateConfigLabel(config.id, trimmed);
+      setLabelInput(res.userLabel ?? '');
+      await invalidateConfigQueries();
+      triggerHaptic('success');
+      onNotify(
+        res.userLabel
+          ? t('user.services.personalLabelSaved')
+          : t('user.services.personalLabelCleared'),
+        'success'
+      );
+    } catch (err) {
+      triggerHaptic('error');
+      const msg =
+        err instanceof ApiClientError && err.code === 'USER_LABEL_TOO_LONG'
+          ? t('user.services.personalLabelTooLong')
+          : t('user.services.personalLabelSaveError');
+      onNotify(msg, 'error');
+    } finally {
+      setIsSavingLabel(false);
+    }
+  };
+
+  const trimmedLabelInput = labelInput.trim();
+  const labelCharCount = [...trimmedLabelInput].length;
+  const currentServerLabel = (config.userLabel ?? '').trim();
+  const labelUnchanged = trimmedLabelInput === currentServerLabel;
+
   const autoRenewPlanDisplay = config.autoRenewPackageName || config.autoRenewPackageId || '';
   const totalNodeBytes =
     usageData?.nodes.reduce((sum, item) => sum + Math.max(0, item.usedTraffic), 0) ?? 0;
@@ -235,9 +278,20 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
         title={
           <div className="flex items-center gap-2 min-w-0">
             <ServiceStatusDot status={config.panelStatus} />
-            <bdi dir="ltr" className="font-mono text-sm sm:text-base font-semibold truncate">
-              {config.configUsername}
-            </bdi>
+            {config.userLabel ? (
+              <div className="flex items-baseline gap-2 min-w-0 flex-wrap">
+                <span className="text-sm sm:text-base font-semibold truncate text-ink">
+                  {config.userLabel}
+                </span>
+                <bdi dir="ltr" className="font-mono text-xs text-ink-muted truncate">
+                  {config.configUsername}
+                </bdi>
+              </div>
+            ) : (
+              <bdi dir="ltr" className="font-mono text-sm sm:text-base font-semibold truncate">
+                {config.configUsername}
+              </bdi>
+            )}
           </div>
         }
         subtitle={
@@ -406,11 +460,70 @@ export const ServiceManagementModal: React.FC<ServiceManagementModalProps> = ({
             )}
           </div>
 
-          {/* Service Controls: Auto-Renew Toggle, Status Toggle, Revoke Link */}
+          {/* Service Controls: Personal Label, Auto-Renew Toggle, Status Toggle, Revoke Link */}
           <div className="flex flex-col gap-2">
             <h4 className="text-xs font-semibold px-0.5 m-0 text-ink-soft">
               {t('user.services.controlsTitle')}
             </h4>
+
+            {/* Personal Label Editor Card */}
+            <div className="p-3.5 rounded-tile border flex flex-col gap-2 bg-surface-2 border-line">
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink">
+                  <Tag className="w-3.5 h-3.5 text-brand-fg shrink-0" />
+                  <span>{t('user.services.personalLabelTitle')}</span>
+                </span>
+                <span className="text-[11px] font-mono text-ink-muted tnum">
+                  {labelCharCount}/40
+                </span>
+              </div>
+
+              <input
+                type="text"
+                maxLength={40}
+                value={labelInput}
+                onChange={(e) => setLabelInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !labelUnchanged && !isSavingLabel) {
+                    e.preventDefault();
+                    void handleSaveLabel(labelInput);
+                  }
+                }}
+                placeholder={t('user.services.personalLabelPlaceholder')}
+                className="w-full h-10 px-3 rounded-ctl border border-line bg-surface text-xs text-ink placeholder:text-ink-muted rs-focus"
+              />
+
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[11px] text-ink-muted">
+                  {t('user.services.personalLabelHint')}
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0 ms-auto">
+                  {config.userLabel && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void handleSaveLabel(null)}
+                      disabled={isSavingLabel}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>{t('user.services.personalLabelClear')}</span>
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="primary"
+                    onClick={() => void handleSaveLabel(labelInput)}
+                    disabled={isSavingLabel || labelUnchanged}
+                    loading={isSavingLabel}
+                  >
+                    <Save className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t('user.services.personalLabelSave')}</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
 
             {/* Auto-Renew Switch Card */}
             <div className="p-3.5 rounded-tile border flex flex-col gap-2 bg-surface-2 border-line">

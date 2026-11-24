@@ -26,6 +26,7 @@ import { CatalogDiscountService } from './domain/services/CatalogDiscountService
 import { ContactVerificationService } from './domain/services/ContactVerificationService.js';
 import { ForcedJoinService } from './domain/services/ForcedJoinService.js';
 import { BulkGiftService } from './domain/services/BulkGiftService.js';
+import { ScheduledMessageDeletionService } from './domain/services/ScheduledMessageDeletionService.js';
 import { DomainRegistryService } from './domain/services/DomainRegistryService.js';
 import {
   normalizeDomainInput,
@@ -70,6 +71,10 @@ import {
   startForAppFallbackNudgeJob,
   stopForAppFallbackNudgeJob,
 } from './jobs/forappFallbackNudge.js';
+import {
+  startScheduledMessageDeletionJob,
+  stopScheduledMessageDeletionJob,
+} from './jobs/scheduledMessageDeletion.js';
 import { jobRunner } from './jobs/workerRuntime.js';
 
 const WORKER_SHUTDOWN_TIMEOUT_MS = 30_000;
@@ -267,6 +272,7 @@ function stopScheduledWorkers(): void {
   stopFirstUseNudgeJob();
   stopExpiredConfigCleanupJob();
   stopForAppFallbackNudgeJob();
+  stopScheduledMessageDeletionJob();
 }
 
 async function drainWorkers(): Promise<void> {
@@ -419,6 +425,7 @@ async function main() {
     botToken: config.BOT_TOKEN,
   });
   const bulkGiftService = new BulkGiftService(panelRegistry);
+  const scheduledMessageDeletionService = new ScheduledMessageDeletionService();
   const botApiRef: { current?: BotServices['botApi'] } = {};
   const forcedJoinService = new ForcedJoinService({
     translationService,
@@ -560,6 +567,7 @@ async function main() {
     contactVerificationService,
     forcedJoinService,
     bulkGiftService,
+    scheduledMessageDeletionService,
     supportUrl: config.SUPPORT_URL,
     webAppUrl: currentWebAppUrl,
     webAppPort: config.WEBAPP_HOST_PORT ?? config.WEBAPP_PORT,
@@ -599,6 +607,7 @@ async function main() {
     bulkGiftService,
     telegramApi: bot.api,
     userService,
+    configService,
     translationService,
   });
   startBackupCron(backupService, bot.api);
@@ -616,6 +625,11 @@ async function main() {
   });
   startForAppFallbackNudgeJob({
     translationService,
+    telegramApi: bot.api,
+    scheduledMessageDeletionService,
+  });
+  startScheduledMessageDeletionJob({
+    service: scheduledMessageDeletionService,
     telegramApi: bot.api,
   });
 

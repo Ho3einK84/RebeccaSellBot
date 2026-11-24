@@ -434,6 +434,7 @@ export async function createWebAppServer(
     adminService: services.adminService,
     userService: services.userService,
     walletService: services.walletService,
+    referralService: services.referralService,
     translationService: services.translationService,
     // `secure: true` cookies are rejected by browsers over plain HTTP, which
     // broke session login on local dev. Only require Secure in production.

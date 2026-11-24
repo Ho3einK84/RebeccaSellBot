@@ -34,6 +34,7 @@ const RUNTIME_TABLES_TRUNCATE_SQL = `TRUNCATE TABLE
   purchase_checkouts,
   purchase_intents,
   refund_intents,
+  scheduled_message_deletions,
   settings,
   topup_receipts,
   trial_claims,

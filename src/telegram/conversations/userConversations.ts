@@ -40,7 +40,13 @@ import {
 } from '../ui.js';
 import { logger } from '../../infra/logger.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
-import { normalizeCustomServiceName } from '../../domain/services/ConfigService.js';
+import {
+  MAX_CONFIG_USER_LABEL_LENGTH,
+  normalizeCustomServiceName,
+  sanitizeConfigUserLabel,
+} from '../../domain/services/ConfigService.js';
+import { formatTelegramConfigRef } from '../../domain/services/TelegramFormatting.js';
+import { callbackData } from '../callbackData.js';
 import {
   resolveBestCatalogDiscount,
   safeListActiveDiscounts,
@@ -1737,6 +1743,194 @@ export async function transferConfigConversation(
       ),
       { parse_mode: 'Markdown' }
     );
+  }
+}
+
+/** Add, edit, or remove a private personal label (`user_label`) on an owned service. */
+export async function editConfigLabelConversation(
+  conversation: MyConversation,
+  ctx: ConversationContext
+): Promise<void> {
+  const actorTelegramId = ctx.from?.id;
+  if (!actorTelegramId || !ctx.services) return;
+
+  const initial = await conversation.external(async (outsideCtx) => {
+    const targetCtx = outsideCtx ?? ctx;
+    const services = targetCtx.services!;
+    const configId = targetCtx.session.labelConfigId;
+    targetCtx.session.labelConfigId = undefined;
+    if (!configId) return { config: null as null, isAdmin: false };
+    const isAdmin = typeof services.isAdmin === 'function' && services.isAdmin(actorTelegramId);
+    const config = isAdmin
+      ? await services.configService.getConfigById(configId)
+      : await services.configService.getOwnedConfigById(actorTelegramId, configId);
+    return { config: config ?? null, isAdmin };
+  });
+
+  if (!initial.config) {
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUserEmptyState(
+        '⚠️',
+        t(ctx, 'subscription_label_prompt_title'),
+        t(ctx, 'config_not_owned')
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  const config = initial.config;
+  const promptKeyboard = new InlineKeyboard();
+  if (config.userLabel) {
+    promptKeyboard.text(t(ctx, 'subscription_label_clear_button'), 'label:clear').row();
+  }
+  promptKeyboard.text(t(ctx, 'menu_back'), 'conversation:cancel');
+
+  const promptScreen = buildUserScreen({
+    emoji: '🏷️',
+    title: t(ctx, 'subscription_label_prompt_title'),
+    subtitle: t(ctx, 'subscription_label_prompt_subtitle'),
+    primary: {
+      label: t(ctx, 'checkout_service_label'),
+      value: formatTelegramConfigRef(config.configUsername, config.userLabel),
+      inline: true,
+    },
+    sections: [
+      {
+        bullet: '',
+        fields: [
+          {
+            label: t(ctx, 'subscription_label_current_field'),
+            value: config.userLabel
+              ? escapeTelegramMarkdown(config.userLabel)
+              : t(ctx, 'subscription_label_none'),
+          },
+        ],
+      },
+    ],
+    footer: t(ctx, 'subscription_label_prompt_hint'),
+  });
+
+  await promptInConversation(conversation, ctx, promptScreen, {
+    parse_mode: 'Markdown',
+    reply_markup: promptKeyboard,
+  });
+
+  for (;;) {
+    const input = await waitForTextOrCallbackInput(conversation, ['label:clear'], 'main');
+    if (!input) return;
+
+    if (input.type === 'callback' && input.data === 'label:clear') {
+      const cleared = await conversation.external(async (outsideCtx) => {
+        const services = (outsideCtx ?? ctx).services!;
+        return services.configService.setUserLabel(config.telegramId, config.id, null, {
+          allowAdminOverride: initial.isAdmin,
+        });
+      });
+      if (!cleared) {
+        await replyInConversation(
+          conversation,
+          ctx,
+          buildUserEmptyState(
+            '⚠️',
+            t(ctx, 'subscription_label_prompt_title'),
+            t(ctx, 'config_not_owned')
+          ),
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildUserScreen({
+          emoji: '🗑',
+          title: t(ctx, 'subscription_label_prompt_title'),
+          subtitle: t(ctx, 'subscription_label_cleared'),
+          primary: {
+            label: t(ctx, 'checkout_service_label'),
+            value: formatTelegramConfigRef(cleared.configUsername, null),
+            inline: true,
+          },
+        }),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: new InlineKeyboard()
+            .text(t(ctx, 'subscription_view_detail'), callbackData('config', 'view', config.id))
+            .row()
+            .text(t(ctx, 'menu_my_configs'), 'subs:page:1'),
+        }
+      );
+      return;
+    }
+
+    if (input.type !== 'text') continue;
+
+    const sanitized = sanitizeConfigUserLabel(input.text);
+    if (!sanitized.valid) {
+      const errorMsg =
+        sanitized.reason === 'too_long'
+          ? t(ctx, 'subscription_label_too_long', {
+              max: localizedNumber(MAX_CONFIG_USER_LABEL_LENGTH, ctx),
+            })
+          : t(ctx, 'subscription_label_invalid');
+      await promptInConversation(conversation, ctx, errorMsg, {
+        parse_mode: 'Markdown',
+        preferEdit: false,
+        reply_markup: promptKeyboard,
+      });
+      continue;
+    }
+
+    const saved = await conversation.external(async (outsideCtx) => {
+      const services = (outsideCtx ?? ctx).services!;
+      return services.configService.setUserLabel(config.telegramId, config.id, sanitized.value, {
+        allowAdminOverride: initial.isAdmin,
+      });
+    });
+
+    if (!saved) {
+      await replyInConversation(
+        conversation,
+        ctx,
+        buildUserEmptyState(
+          '⚠️',
+          t(ctx, 'subscription_label_prompt_title'),
+          t(ctx, 'config_not_owned')
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUserScreen({
+        emoji: saved.userLabel ? '✅' : '🗑',
+        title: t(ctx, 'subscription_label_prompt_title'),
+        subtitle: saved.userLabel
+          ? t(ctx, 'subscription_label_saved', {
+              label: escapeTelegramMarkdown(saved.userLabel),
+            })
+          : t(ctx, 'subscription_label_cleared'),
+        primary: {
+          label: t(ctx, 'checkout_service_label'),
+          value: formatTelegramConfigRef(saved.configUsername, saved.userLabel),
+          inline: true,
+        },
+      }),
+      {
+        parse_mode: 'Markdown',
+        reply_markup: new InlineKeyboard()
+          .text(t(ctx, 'subscription_view_detail'), callbackData('config', 'view', config.id))
+          .row()
+          .text(t(ctx, 'menu_my_configs'), 'subs:page:1'),
+      }
+    );
+    return;
   }
 }
 

@@ -645,6 +645,7 @@ export function registerAdminRoutes(
           panelName: panel?.name || cfg.panelId,
           serviceId: cfg.serviceId,
           configUsername: cfg.configUsername,
+          userLabel: cfg.userLabel ?? null,
           subUrl: cfg.subUrl,
           panelStatus: cfg.panelStatus,
           panelDataLimit: cfg.panelDataLimit,

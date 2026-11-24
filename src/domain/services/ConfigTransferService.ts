@@ -62,6 +62,7 @@ export class ConfigTransferService {
           .update(userConfigs)
           .set({
             telegramId: params.toTelegramId,
+            userLabel: null,
             autoRenewEnabled: false,
             autoRenewPackageId: null,
             autoRenewPrice: null,

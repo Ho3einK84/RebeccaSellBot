@@ -216,6 +216,7 @@ export interface UserProfileResponse {
 export interface UserConfigRecord {
   id: string;
   configUsername: string;
+  userLabel?: string | null;
   panelId?: string | null;
   panelName?: string | null;
   serviceId?: number | null;
@@ -313,6 +314,13 @@ export interface RevokeConfigResponse {
   subUrl: string;
 }
 
+export interface UpdateConfigLabelResponse {
+  success: boolean;
+  id: string;
+  configUsername: string;
+  userLabel: string | null;
+}
+
 export interface RefreshConfigResponse {
   success: boolean;
   config: {
@@ -372,6 +380,7 @@ export interface UserRenewalOptionsResponse {
   config: {
     id: string;
     configUsername: string;
+    userLabel?: string | null;
     panelStatus: string | null;
     currentRemainingGb: number | null;
     currentRemainingDays: number | null;

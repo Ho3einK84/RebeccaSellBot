@@ -9,6 +9,7 @@ import type { TranslationService } from '../domain/services/TranslationService.j
 import { logger } from '../infra/logger.js';
 import { buildUserScreen, stripLeadingEmoji } from './designSystem.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from './rendering.js';
+import { formatTelegramConfigRef } from '../domain/services/TelegramFormatting.js';
 import {
   formatSubscriptionLink,
   localizedNumberForLocale,
@@ -65,6 +66,7 @@ export async function sendWebAppConfigArtifact(
     telegramId: number;
     kind: 'new_config' | 'renew_config' | 'trial' | 'revoke';
     configUsername: string;
+    userLabel?: string | null;
     configId?: string;
     subUrl?: string;
     gbAmount?: number;
@@ -110,7 +112,7 @@ export async function sendWebAppConfigArtifact(
       {
         emoji: '🆔',
         label: currencyAwareFa ? 'نام سرویس' : 'Service',
-        value: `\`${sanitizeTelegramInlineCode(params.configUsername)}\``,
+        value: formatTelegramConfigRef(params.configUsername, params.userLabel),
       },
     ];
 
@@ -304,6 +306,7 @@ export async function sendWebAppConfigTransferNotification(
     fromTelegramId: number;
     toTelegramId: number;
     configUsername: string;
+    userLabel?: string | null;
     configId?: string;
     webAppUrl?: string;
   }

@@ -21,6 +21,7 @@ import {
   uniqueTopupAmountEnabled,
 } from '../../../domain/services/FeatureSettings.js';
 import { AutomatedPaymentError } from '../../../domain/services/AutomatedPaymentService.js';
+import type { ScheduledDeletionReason } from '../../../domain/services/ScheduledMessageDeletionService.js';
 import {
   buildForAppOrderInvoiceScreen,
   buildForAppOrderKeyboard,
@@ -229,7 +230,7 @@ async function promptReceiptPreview(
   media: ReceiptMediaInput,
   caption: string,
   keyboard: InlineKeyboard
-): Promise<void> {
+): Promise<number | undefined> {
   const options = {
     caption,
     parse_mode: 'Markdown' as const,
@@ -246,6 +247,29 @@ async function promptReceiptPreview(
     if (targetSession) {
       rememberUiMessage(targetSession, message.message_id, 'prompt');
     }
+  });
+  return message.message_id;
+}
+
+async function schedulePaymentMessageDeletion(
+  conversation: MyConversation,
+  ctx: ConversationContext,
+  chatId: number | undefined,
+  messageId: number | undefined,
+  reason: ScheduledDeletionReason
+): Promise<void> {
+  if (!chatId || !messageId) return;
+  await conversation.external(async (outsideCtx) => {
+    const targetServices = outsideCtx?.services ?? ctx.services;
+    const scheduler = targetServices?.scheduledMessageDeletionService;
+    if (!scheduler || !targetServices?.translationService) return;
+    await scheduler
+      .scheduleIfEnabled(targetServices.translationService, {
+        chatId,
+        messageId,
+        reason,
+      })
+      .catch(() => {});
   });
 }
 
@@ -599,11 +623,19 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       );
       if (sentNpInvoice?.message_id) {
         await conversation.external(async (outsideCtx) => {
-          const aps = (outsideCtx?.services ?? ctx.services)?.automatedPaymentService;
+          const targetServices = outsideCtx?.services ?? ctx.services;
+          const aps = targetServices?.automatedPaymentService;
           await aps
             ?.attachTelegramMessageId?.(created.order.id, sentNpInvoice.message_id)
             .catch(() => {});
         });
+        await schedulePaymentMessageDeletion(
+          conversation,
+          ctx,
+          ctx.chat?.id ?? telegramId,
+          sentNpInvoice.message_id,
+          'nowpayments_invoice'
+        );
       }
       return;
     }
@@ -695,7 +727,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
             footer: footerText,
           });
 
-    await promptInConversation(
+    const step1Msg = await promptInConversation(
       conversation,
       ctx,
       buildStepOneAmountPrompt(
@@ -703,6 +735,15 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       ),
       { parse_mode: 'Markdown', reply_markup: presetKeyboard }
     );
+    if (!forappAutoEnabled) {
+      await schedulePaymentMessageDeletion(
+        conversation,
+        ctx,
+        ctx.chat?.id ?? telegramId,
+        step1Msg?.message_id,
+        'payment_card'
+      );
+    }
 
     const ownerId = await conversationOwnerId(conversation);
     while (amountToman === undefined) {
@@ -760,7 +801,13 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
               ) {
                 const botApi = targetServices.botApi ?? outsideCtx?.api;
                 if (botApi) {
-                  await deleteOrderTelegramMessages(botApi, telegramId, previousPending.metadata);
+                  await deleteOrderTelegramMessages(
+                    botApi,
+                    telegramId,
+                    previousPending.metadata,
+                    [],
+                    targetServices.scheduledMessageDeletionService
+                  );
                 }
               }
               return { ok: true as const, order };
@@ -779,10 +826,24 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
               createdForApp.code === 'ALL_CARDS_CAP_REACHED'
                 ? t(ctx, 'topup_amount_exceeds_card_cap')
                 : t(ctx, 'auto_pay_order_create_failed');
-            await promptInConversation(conversation, ctx, buildStepOneAmountPrompt(retryFooter), {
-              parse_mode: 'Markdown',
-              reply_markup: presetKeyboard,
-            });
+            const retryForAppMsg = await promptInConversation(
+              conversation,
+              ctx,
+              buildStepOneAmountPrompt(retryFooter),
+              {
+                parse_mode: 'Markdown',
+                reply_markup: presetKeyboard,
+              }
+            );
+            if (!forappAutoEnabled) {
+              await schedulePaymentMessageDeletion(
+                conversation,
+                ctx,
+                ctx.chat?.id ?? telegramId,
+                retryForAppMsg?.message_id,
+                'payment_card'
+              );
+            }
             continue;
           }
 
@@ -802,6 +863,13 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
                 ?.attachTelegramMessageId?.(createdForApp.order.id, sentForAppInvoice.message_id)
                 .catch(() => {});
             });
+            await schedulePaymentMessageDeletion(
+              conversation,
+              ctx,
+              ctx.chat?.id ?? telegramId,
+              sentForAppInvoice.message_id,
+              'forapp_invoice'
+            );
           }
           return;
         }
@@ -880,7 +948,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
         });
 
         if (resolvedAllocation.status === 'cap_exceeded') {
-          await promptInConversation(
+          const capRetryMsg = await promptInConversation(
             conversation,
             ctx,
             buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
@@ -888,6 +956,13 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
               footer: t(ctx, 'topup_amount_exceeds_card_cap'),
             }),
             { parse_mode: 'Markdown', reply_markup: presetKeyboard }
+          );
+          await schedulePaymentMessageDeletion(
+            conversation,
+            ctx,
+            ctx.chat?.id ?? telegramId,
+            capRetryMsg?.message_id,
+            'payment_card'
           );
           continue;
         }
@@ -902,7 +977,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
         break;
       }
 
-      await promptInConversation(
+      const rangeRetryMsg = await promptInConversation(
         conversation,
         ctx,
         buildStepOneAmountPrompt(
@@ -913,6 +988,15 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
         ),
         { parse_mode: 'Markdown', reply_markup: presetKeyboard }
       );
+      if (!forappAutoEnabled) {
+        await schedulePaymentMessageDeletion(
+          conversation,
+          ctx,
+          ctx.chat?.id ?? telegramId,
+          rangeRetryMsg?.message_id,
+          'payment_card'
+        );
+      }
     }
   }
 
@@ -920,7 +1004,7 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
 
   let mediaInput: TopupReceiptMediaInput | undefined;
   while (!mediaInput) {
-    await promptInConversation(
+    const step2Msg = await promptInConversation(
       conversation,
       ctx,
       buildPaymentInfoCard(ctx, cardNumber, cardHolder, finalAmountToman, {
@@ -932,10 +1016,17 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       }),
       { parse_mode: 'Markdown' }
     );
+    await schedulePaymentMessageDeletion(
+      conversation,
+      ctx,
+      ctx.chat?.id ?? telegramId,
+      step2Msg?.message_id,
+      'payment_card'
+    );
     mediaInput = await waitForTopupReceiptMedia(conversation);
     if (mediaInput === undefined) return;
 
-    await promptReceiptPreview(
+    const previewMsgId = await promptReceiptPreview(
       conversation,
       ctx,
       mediaInput,
@@ -952,6 +1043,13 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
         .text(t(ctx, 'topup_change_receipt_button'), 'topup:change_receipt')
         .row()
         .text(t(ctx, 'menu_cancel'), 'conversation:cancel')
+    );
+    await schedulePaymentMessageDeletion(
+      conversation,
+      ctx,
+      ctx.chat?.id ?? telegramId,
+      previewMsgId,
+      'payment_card'
     );
 
     const selection = await waitForCallbackInput(conversation, [

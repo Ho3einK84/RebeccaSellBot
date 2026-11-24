@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import type { AuthResponse } from '@/shared/types/api.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
-import { api } from '@/shared/lib/api.js';
+import { api, ApiClientError } from '@/shared/lib/api.js';
 
 export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [errorTitle, setErrorTitle] = useState<string | null>(null);
+  const [errorLocale, setErrorLocale] = useState<'fa' | 'en' | null>(null);
   const [authData, setAuthData] = useState<AuthResponse | null>(null);
 
   useEffect(() => {
@@ -54,12 +57,36 @@ export function useAuth() {
         setAuthData(data);
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'authFailed');
+        if (err instanceof ApiClientError) {
+          setErrorCode(err.code ?? null);
+          const payload = (err.data && typeof err.data === 'object' ? err.data : {}) as {
+            title?: unknown;
+            message?: unknown;
+            locale?: unknown;
+            error?: unknown;
+          };
+          setErrorTitle(
+            typeof payload.title === 'string' && payload.title.trim() ? payload.title.trim() : null
+          );
+          setErrorLocale(
+            payload.locale === 'en' || payload.locale === 'fa' ? payload.locale : null
+          );
+          setError(
+            (typeof payload.message === 'string' && payload.message.trim()) ||
+              err.message ||
+              'authFailed'
+          );
+        } else {
+          setErrorCode(null);
+          setErrorTitle(null);
+          setErrorLocale(null);
+          setError(err instanceof Error ? err.message : 'authFailed');
+        }
       })
       .finally(() => {
         setLoading(false);
       });
   }, []);
 
-  return { loading, error, authData };
+  return { loading, error, errorCode, errorTitle, errorLocale, authData };
 }

@@ -1,15 +1,16 @@
 /** Middleware, session and conversation composition for the Telegram bot. */
 
-import { InlineKeyboard, session, type Bot } from 'grammy';
+import { InlineKeyboard, session, type Bot, type StorageAdapter } from 'grammy';
 import { conversations, createConversation } from '@grammyjs/conversations';
 import { apiThrottler } from '@grammyjs/transformer-throttler';
 import { PostgresSessionAdapter } from '../infra/sessionAdapter.js';
-import type { BotServices, ConversationContext, MenuContext } from './types.js';
+import type { BotServices, ConversationContext, MenuContext, SessionData } from './types.js';
 import {
   autoRenewCustomConversation,
   buyConfigConversation,
   buyPackageCustomNameConversation,
   customAmountConversation,
+  editConfigLabelConversation,
   promoConversation,
   transferConfigConversation,
   transferBalanceConversation,
@@ -49,6 +50,12 @@ import {
   forcedJoinGlobalMiddleware,
   isStartCommandText,
 } from './middleware/forcedJoin.js';
+import { registrationMode } from '../domain/services/FeatureSettings.js';
+import {
+  evaluateRegistrationAccess,
+  extractStartReferralCode,
+} from '../domain/services/RegistrationPolicy.js';
+import { renderRegistrationBlockedReply } from './registrationGuard.js';
 import { registerAdminAlertHook } from '../domain/services/RebeccaService.js';
 import { logger } from '../infra/logger.js';
 import { resolveServiceLocale, t, tForLocale } from './locale.js';
@@ -68,7 +75,11 @@ import {
   sanitizeTelegramInlineCode,
 } from './rendering.js';
 
-export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices): void {
+export function configureBotRuntime(
+  bot: Bot<MenuContext>,
+  services: BotServices,
+  options?: { sessionStorage?: StorageAdapter<SessionData> }
+): void {
   // getOrCreateUser already reads the full user row on the normal private-chat
   // path. Reuse its ban flag later instead of issuing a second PostgreSQL query
   // for every Telegram update.
@@ -141,6 +152,41 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     if (ctx.from?.id && ctx.chat?.type === 'private') {
       try {
         const exists = await services.userService.exists(ctx.from.id);
+        const isAdmin = services.isAdmin(ctx.from.id);
+
+        if (!exists && !isAdmin) {
+          const mode =
+            typeof services.translationService?.getSetting === 'function'
+              ? registrationMode(services.translationService)
+              : 'open';
+
+          if (mode !== 'open') {
+            // In invite_only mode, allow `fj:check` through to session + forcedJoinRoutes
+            // which resumes `handleStartCommand` where `pendingReferralCode` is validated.
+            if (mode === 'invite_only' && isForcedJoinCheck) {
+              ctx.userLocale = defaultLocale;
+              knownBanStatus.set(ctx, false);
+              return next();
+            }
+
+            const access = await evaluateRegistrationAccess({
+              telegramId: ctx.from.id,
+              isAdmin: false,
+              userExists: false,
+              settings: services.translationService,
+              referralCode: isStartCommand
+                ? extractStartReferralCode(ctx.message?.text)
+                : undefined,
+              referralService: services.referralService,
+            });
+            if (!access.allowed) {
+              ctx.userLocale = defaultLocale;
+              await renderRegistrationBlockedReply(ctx, services, access.reason);
+              return;
+            }
+          }
+        }
+
         if (!exists && (isStartCommand || isForcedJoinCheck)) {
           // Allow /start and forced-join re-check to handle first registration with referral and language onboarding
           ctx.userLocale = defaultLocale;
@@ -196,7 +242,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   bot.use(
     session({
       initial: () => ({}),
-      storage: new PostgresSessionAdapter(),
+      storage: options?.sessionStorage ?? new PostgresSessionAdapter<SessionData>(),
       getSessionKey: (ctx) => (ctx.chat && ctx.from ? `${ctx.chat.id}:${ctx.from.id}` : undefined),
     })
   );
@@ -266,6 +312,11 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
         const messageId = ctx.callbackQuery.message.message_id;
         await safelyDeleteMessage(ctx, messageId);
         forgetUiMessage(ctx.session, messageId);
+        if (ctx.chat?.id && services.scheduledMessageDeletionService) {
+          await services.scheduledMessageDeletionService
+            .cancelForMessage(ctx.chat.id, messageId)
+            .catch(() => {});
+        }
       }
       return;
     }
@@ -298,6 +349,7 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
   bot.use(createConversation(autoRenewCustomConversation, 'autoRenewCustomConversation'));
   bot.use(createConversation(promoConversation, 'promoConversation'));
   bot.use(createConversation(transferConfigConversation, 'transferConfigConversation'));
+  bot.use(createConversation(editConfigLabelConversation, 'editConfigLabelConversation'));
   bot.use(createConversation(transferBalanceConversation, 'transferBalanceConversation'));
   bot.use(createConversation(topupConversation, 'topupConversation'));
   bot.use(createConversation(adminSetBalanceConversation, 'adminSetBalanceConversation'));

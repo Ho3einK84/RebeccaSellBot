@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ShieldX, AlertTriangle, ExternalLink, X } from 'lucide-react';
+import { ShieldX, AlertTriangle, ExternalLink, X, Lock, Ticket } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import { api } from '@/shared/lib/api.js';
@@ -9,9 +9,15 @@ import { Button } from '@/shared/components/ui/Button.js';
 
 interface AuthErrorScreenProps {
   error: string | null;
+  errorCode?: string | null;
+  errorTitle?: string | null;
 }
 
-export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
+export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({
+  error,
+  errorCode,
+  errorTitle,
+}) => {
   const { t, isRtl } = useLanguage();
   const [resolvedBotUsername, setResolvedBotUsername] = useState<string>(() => {
     const envName = (import.meta.env.VITE_BOT_USERNAME as string | undefined) || '';
@@ -46,12 +52,28 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
 
   useTelegramBackButton(handleClose, true);
 
-  const isTelegramOnly = error === 'telegramOnly' || error?.includes('ربات');
-  const displayError = isTelegramOnly
-    ? t('auth.telegramOnly')
-    : error === 'authFailed'
-      ? t('auth.authFailed')
-      : error || t('auth.authFailed');
+  const isRegistrationClosed = errorCode === 'REGISTRATION_CLOSED';
+  const isRegistrationInviteOnly = errorCode === 'REGISTRATION_INVITE_ONLY';
+  const isRegistrationBlocked = isRegistrationClosed || isRegistrationInviteOnly;
+
+  const isTelegramOnly =
+    !isRegistrationBlocked && (error === 'telegramOnly' || error?.includes('ربات'));
+  const displayTitle = isRegistrationBlocked
+    ? errorTitle ||
+      (isRegistrationInviteOnly
+        ? t('auth.registrationInviteOnlyTitle')
+        : t('auth.registrationClosedTitle'))
+    : t('auth.authErrorTitle');
+  const displayError = isRegistrationBlocked
+    ? error ||
+      (isRegistrationInviteOnly
+        ? t('auth.registrationInviteOnlyMessage')
+        : t('auth.registrationClosedMessage'))
+    : isTelegramOnly
+      ? t('auth.telegramOnly')
+      : error === 'authFailed'
+        ? t('auth.authFailed')
+        : error || t('auth.authFailed');
 
   const openInTelegramUrl = resolvedBotUsername ? `https://t.me/${resolvedBotUsername}` : 'tg://';
 
@@ -64,15 +86,23 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({ error }) => {
         padding="lg"
         className="w-full max-w-sm flex flex-col items-center text-center gap-4 anim-rise"
       >
-        <IconTile tone={isTelegramOnly ? 'warn' : 'danger'} size="lg">
-          {isTelegramOnly ? <AlertTriangle /> : <ShieldX />}
+        <IconTile tone={isRegistrationBlocked || isTelegramOnly ? 'warn' : 'danger'} size="lg">
+          {isRegistrationInviteOnly ? (
+            <Ticket />
+          ) : isRegistrationClosed ? (
+            <Lock />
+          ) : isTelegramOnly ? (
+            <AlertTriangle />
+          ) : (
+            <ShieldX />
+          )}
         </IconTile>
 
         <div className="space-y-1.5">
-          <h2 className="text-base font-semibold text-ink leading-[1.4] m-0">
-            {t('auth.authErrorTitle')}
-          </h2>
-          <p className="text-xs text-ink-soft leading-relaxed m-0 max-w-xs">{displayError}</p>
+          <h2 className="text-base font-semibold text-ink leading-[1.4] m-0">{displayTitle}</h2>
+          <p className="text-xs text-ink-soft leading-relaxed m-0 max-w-xs whitespace-pre-line">
+            {displayError}
+          </p>
         </div>
 
         <div className="w-full flex flex-col gap-2 pt-3 border-t border-line">

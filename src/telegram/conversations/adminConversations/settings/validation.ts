@@ -68,6 +68,12 @@ export function validateAdminSetting(
       return value === 'true' || value === 'false' ? value : undefined;
     case 'locale':
       return value === 'fa' || value === 'en' ? value : undefined;
+    case 'registration_mode': {
+      const normalized = value.toLowerCase();
+      return normalized === 'open' || normalized === 'invite_only' || normalized === 'closed'
+        ? normalized
+        : undefined;
+    }
     case 'card_number': {
       const normalized = normalizeCardNumber(value);
       return /^\d{12,24}$/u.test(normalized) ? normalized : undefined;

@@ -2,6 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { validateTelegramInitData } from '../auth.js';
 import { resolveRateLimitKey } from '../server.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
+import { registrationMode } from '../../../domain/services/FeatureSettings.js';
+import {
+  evaluateRegistrationAccess,
+  resolveRegistrationBlockedCopy,
+  type ReferrerLookup,
+} from '../../../domain/services/RegistrationPolicy.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import type { WalletService } from '../../../domain/services/WalletService.js';
 import type {
@@ -36,6 +42,19 @@ function resolveObservedLocale(
   return defaultLocale;
 }
 
+async function checkUserExists(
+  userService: Pick<UserService, 'findProfile'> & Partial<Pick<UserService, 'exists'>>,
+  telegramId: number
+): Promise<boolean> {
+  if (typeof userService.exists === 'function') {
+    return userService.exists(telegramId);
+  }
+  if (typeof userService.findProfile === 'function') {
+    return Boolean(await userService.findProfile(String(telegramId)));
+  }
+  return false;
+}
+
 export function registerAuthRoutes(
   app: FastifyInstance,
   options: {
@@ -44,6 +63,7 @@ export function registerAuthRoutes(
     adminService: AdminService;
     userService: UserService;
     walletService?: WalletService;
+    referralService?: ReferrerLookup;
     translationService: TranslationService;
     secureCookies?: boolean;
   }
@@ -92,6 +112,46 @@ export function registerAuthRoutes(
       const startParam = validated.rawParams.start_param?.trim() || undefined;
       const referralCode = normalizeStartParamReferral(startParam);
 
+      const languageSelectionEnabled = options.translationService.getSettingBool(
+        'language_selection_enabled',
+        true
+      );
+      const observedLocale = languageSelectionEnabled
+        ? resolveObservedLocale(validated.user.language_code, defaultLocale)
+        : defaultLocale;
+
+      // Enforce new-user registration policy BEFORE creating a user row or issuing JWT.
+      const mode =
+        typeof options.translationService.getSetting === 'function'
+          ? registrationMode(options.translationService)
+          : 'open';
+      if (!isAdmin && mode !== 'open') {
+        const userExists = await checkUserExists(options.userService, telegramId);
+        const access = await evaluateRegistrationAccess({
+          telegramId,
+          isAdmin: false,
+          userExists,
+          settings: options.translationService,
+          referralCode,
+          referralService: options.referralService,
+        });
+        if (!access.allowed) {
+          const copy = resolveRegistrationBlockedCopy(
+            options.translationService,
+            observedLocale,
+            access.reason
+          );
+          return reply.code(403).send({
+            error: copy.message,
+            code: access.code,
+            title: copy.title,
+            message: copy.message,
+            locale: observedLocale,
+            registrationMode: mode,
+          });
+        }
+      }
+
       // Persist Telegram profile metadata & first-touch referral attribution when a user
       // enters via WebApp (e.g. direct `t.me/bot/app?startapp=ref_...` link).
       if (typeof options.walletService?.getOrCreateUser === 'function') {
@@ -122,10 +182,6 @@ export function registerAuthRoutes(
 
       const userLocale = await options.userService.getLocale(telegramId);
       const locale = userLocale ?? defaultLocale;
-      const languageSelectionEnabled = options.translationService.getSettingBool(
-        'language_selection_enabled',
-        true
-      );
 
       return reply.code(200).send({
         token,
@@ -167,6 +223,28 @@ export function registerAuthRoutes(
       const telegramId = request.userSession?.telegramId;
       if (!telegramId) {
         return reply.code(401).send({ error: 'Unauthorized' });
+      }
+
+      const isAdmin =
+        request.userSession?.role === 'admin' || options.adminService.isAdmin(telegramId);
+      const mode =
+        typeof options.translationService.getSetting === 'function'
+          ? registrationMode(options.translationService)
+          : 'open';
+      if (!isAdmin && mode !== 'open') {
+        const userExists = await checkUserExists(options.userService, telegramId);
+        if (!userExists) {
+          const reason = mode === 'closed' ? 'closed' : 'invite_only';
+          const copy = resolveRegistrationBlockedCopy(options.translationService, locale, reason);
+          return reply.code(403).send({
+            error: copy.message,
+            code: mode === 'closed' ? 'REGISTRATION_CLOSED' : 'REGISTRATION_INVITE_ONLY',
+            title: copy.title,
+            message: copy.message,
+            locale,
+            registrationMode: mode,
+          });
+        }
       }
 
       // Ensure local user row exists before updating locale (fixes first-visit race)

@@ -1,5 +1,6 @@
 import type { MenuContext } from '../types.js';
 import { localizedNumber, t, tm } from '../locale.js';
+import { escapeTelegramMarkdown } from '../rendering.js';
 import { buildStatusBadge, buildUserScreen } from '../ui.js';
 
 /** Render the personalized, failure-aware home dashboard. */
@@ -11,7 +12,7 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
   let activeCount = 0;
   let totalConfigsCount = 0;
   let servicesAvailable = true;
-  let nearExpiryInfo: { username: string; daysLeft: number } | undefined;
+  let nearExpiryInfo: { username: string; userLabel?: string | null; daysLeft: number } | undefined;
 
   try {
     const [fetchedBalance, configs] = await Promise.all([
@@ -31,6 +32,7 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
       .filter((config) => config.panelExpire != null)
       .map((config) => ({
         username: config.configUsername,
+        userLabel: config.userLabel ?? null,
         daysLeft: Math.ceil((config.panelExpire! - now) / 86400),
       }))
       .filter((item) => item.daysLeft <= 3)
@@ -52,6 +54,9 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
     }
   }
   if (nearExpiryInfo) {
+    const labelSuffix = nearExpiryInfo.userLabel?.trim()
+      ? `\n🏷️ ${escapeTelegramMarkdown(nearExpiryInfo.userLabel.trim())}`
+      : '';
     notices.push(
       `${buildStatusBadge(ctx, 'warning', t(ctx, 'home_near_expiry_warning'))}\n${tm(
         ctx,
@@ -61,7 +66,7 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
           days: localizedNumber(nearExpiryInfo.daysLeft, ctx),
           days_unit: t(ctx, 'days_unit'),
         }
-      )}`
+      )}${labelSuffix}`
     );
   }
 

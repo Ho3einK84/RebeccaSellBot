@@ -14,6 +14,31 @@ export function sanitizeTelegramInlineCode(value: string | number | null | undef
   return String(value).replace(/`/gu, '');
 }
 
+/**
+ * Format a config username together with its optional private `userLabel`
+ * for Telegram legacy Markdown output (`\`username\`` when no label is set,
+ * `\`username\` (label)` when set so existing username patterns stay intact).
+ */
+export function formatTelegramConfigRef(configUsername: string, userLabel?: string | null): string {
+  const safeCode = `\`${sanitizeTelegramInlineCode(configUsername)}\``;
+  const trimmedLabel = userLabel?.trim();
+  if (!trimmedLabel) return safeCode;
+  return `${safeCode} (${escapeTelegramMarkdown(trimmedLabel)})`;
+}
+
+/** Format a compact button title showing `userLabel` alongside `configUsername` when present. */
+export function formatConfigButtonTitle(
+  configUsername: string,
+  userLabel?: string | null,
+  maxChars = 28
+): string {
+  const trimmedLabel = userLabel?.trim();
+  const raw = trimmedLabel ? `${trimmedLabel} (${configUsername})` : configUsername;
+  const chars = [...raw];
+  if (chars.length <= maxChars) return raw;
+  return `${chars.slice(0, Math.max(1, maxChars - 1)).join('')}…`;
+}
+
 export interface WebhookAlertScreenInput {
   emoji: string;
   title: string;

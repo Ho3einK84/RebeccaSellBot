@@ -8,7 +8,7 @@ import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { WalletService } from './WalletService.js';
 import type { PricingService } from './PricingService.js';
 import type { ConfigReconciliationService } from './ConfigReconciliationService.js';
-import { formatWebhookAlertScreen, sanitizeTelegramInlineCode } from './TelegramFormatting.js';
+import { formatTelegramConfigRef, formatWebhookAlertScreen } from './TelegramFormatting.js';
 
 export interface WebhookInlineButton {
   text: string;
@@ -221,6 +221,7 @@ export class RebeccaWebhookService {
         panelId: userConfigs.panelId,
         serviceId: userConfigs.serviceId,
         configUsername: userConfigs.configUsername,
+        userLabel: userConfigs.userLabel,
         telegramId: userConfigs.telegramId,
         autoRenewEnabled: userConfigs.autoRenewEnabled,
         autoRenewPackageId: userConfigs.autoRenewPackageId,
@@ -267,7 +268,7 @@ export class RebeccaWebhookService {
           primary: {
             emoji: '📱',
             label: this.translationService.get('webhook_service_label', locale),
-            value: `\`${sanitizeTelegramInlineCode(cfg.configUsername)}\``,
+            value: formatTelegramConfigRef(cfg.configUsername, cfg.userLabel),
           },
         });
 

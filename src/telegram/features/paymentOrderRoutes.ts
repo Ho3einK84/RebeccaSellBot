@@ -210,7 +210,8 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
         ctx.api,
         telegramId,
         order.metadata,
-        callbackMsgId !== undefined ? [callbackMsgId] : []
+        callbackMsgId !== undefined ? [callbackMsgId] : [],
+        services.scheduledMessageDeletionService
       );
       const currency = t(ctx, 'currency_toman');
       const credited = order.creditedAmount ?? order.payableAmount;
@@ -390,7 +391,8 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
       ctx.api,
       telegramId,
       cancelled.metadata,
-      callbackMsgId !== undefined ? [callbackMsgId] : []
+      callbackMsgId !== undefined ? [callbackMsgId] : [],
+      services.scheduledMessageDeletionService
     );
 
     await ctx.answerCallbackQuery({ text: t(ctx, 'auto_pay_status_cancelled') });
@@ -435,7 +437,8 @@ export function registerPaymentOrderRoutes(bot: Bot<MenuContext>, services: BotS
       ctx.api,
       telegramId,
       order.metadata,
-      callbackMsgId !== undefined ? [callbackMsgId] : []
+      callbackMsgId !== undefined ? [callbackMsgId] : [],
+      services.scheduledMessageDeletionService
     );
 
     ctx.session.manualFallbackOrder = {

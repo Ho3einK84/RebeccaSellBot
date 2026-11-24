@@ -21,6 +21,7 @@ import {
   mergeOrderMetadata,
 } from '../domain/services/AutomatedPaymentService.js';
 import { forappEnabled } from '../domain/services/FeatureSettings.js';
+import type { ScheduledMessageDeletionService } from '../domain/services/ScheduledMessageDeletionService.js';
 import type { SupportedLocale, TranslationService } from '../domain/services/TranslationService.js';
 import { getDb } from '../infra/db.js';
 import { logger } from '../infra/logger.js';
@@ -54,6 +55,7 @@ export interface ForAppFallbackNudgeDeps {
   translationService: TranslationService;
   telegramApi: Pick<Api, 'sendMessage'>;
   store?: ForAppFallbackNudgeStore;
+  scheduledMessageDeletionService?: ScheduledMessageDeletionService;
 }
 
 export interface ForAppFallbackNudgeSummary {
@@ -248,8 +250,20 @@ export async function runForAppFallbackNudgeCycle(
         parse_mode: 'Markdown',
         reply_markup: keyboard,
       });
-      if (sent?.message_id && store.recordSentMessageId) {
-        await store.recordSentMessageId(candidate.id, sent.message_id, now).catch(() => {});
+      if (sent?.message_id) {
+        if (store.recordSentMessageId) {
+          await store.recordSentMessageId(candidate.id, sent.message_id, now).catch(() => {});
+        }
+        if (deps.scheduledMessageDeletionService) {
+          await deps.scheduledMessageDeletionService
+            .scheduleIfEnabled(deps.translationService, {
+              chatId: candidate.telegramId,
+              messageId: sent.message_id,
+              reason: 'payment_info',
+              now,
+            })
+            .catch(() => {});
+        }
       }
       summary.nudged += 1;
       logger.info(

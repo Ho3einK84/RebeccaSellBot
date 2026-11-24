@@ -326,6 +326,7 @@ export const userConfigs = pgTable(
       .references(() => rebeccaPanels.id),
     serviceId: integer('service_id').notNull().default(1),
     configUsername: text('config_username').notNull(),
+    userLabel: text('user_label'),
     subUrl: text('sub_url'),
     isClaimed: boolean('is_claimed').notNull().default(false),
     claimedAt: timestamp('claimed_at'),
@@ -388,6 +389,10 @@ export const userConfigs = pgTable(
     check(
       'user_configs_auto_renew_price_safe',
       sql`${table.autoRenewPrice} IS NULL OR ${table.autoRenewPrice} BETWEEN 0 AND 9007199254740991`
+    ),
+    check(
+      'user_configs_user_label_valid_chk',
+      sql`${table.userLabel} IS NULL OR (char_length(btrim(${table.userLabel})) BETWEEN 1 AND 40)`
     ),
     foreignKey({
       columns: [table.panelId, table.serviceId],
@@ -1296,3 +1301,41 @@ export const bulkGiftItems = pgTable(
 
 export type BulkGiftJobRow = typeof bulkGiftJobs.$inferSelect;
 export type BulkGiftItemRow = typeof bulkGiftItems.$inferSelect;
+
+export const SCHEDULED_DELETION_STATUSES = ['pending', 'deleted', 'failed', 'cancelled'] as const;
+export type ScheduledDeletionStatus = (typeof SCHEDULED_DELETION_STATUSES)[number];
+
+// Persistent auto-delete queue for Telegram payment / card-number messages
+// (Telegram Bot API limits deleteMessage to 48 hours).
+export const scheduledMessageDeletions = pgTable(
+  'scheduled_message_deletions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    messageId: integer('message_id').notNull(),
+    reason: text('reason').notNull(),
+    deleteAt: timestamp('delete_at').notNull(),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
+    processedAt: timestamp('processed_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('scheduled_message_deletions_chat_msg_uidx').on(table.chatId, table.messageId),
+    index('scheduled_message_deletions_due_idx')
+      .on(table.deleteAt)
+      .where(sql`${table.status} = 'pending'`),
+    check('scheduled_message_deletions_chat_id_chk', sql`${table.chatId} <> 0`),
+    check('scheduled_message_deletions_message_id_chk', sql`${table.messageId} > 0`),
+    check(
+      'scheduled_message_deletions_status_chk',
+      sql`${table.status} IN ('pending', 'deleted', 'failed', 'cancelled')`
+    ),
+    check('scheduled_message_deletions_attempts_chk', sql`${table.attempts} >= 0`),
+  ]
+);
+
+export type ScheduledMessageDeletionRow = typeof scheduledMessageDeletions.$inferSelect;
+export type NewScheduledMessageDeletionRow = typeof scheduledMessageDeletions.$inferInsert;

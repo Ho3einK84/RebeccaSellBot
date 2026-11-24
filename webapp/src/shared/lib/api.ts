@@ -100,6 +100,7 @@ import type {
   ToggleAutoRenewResponse,
   ToggleConfigStatusResponse,
   RevokeConfigResponse,
+  UpdateConfigLabelResponse,
   RefreshConfigResponse,
   SyncAllConfigsResponse,
   ClaimSubLinkResponse,
@@ -1063,6 +1064,12 @@ export const api = {
   revokeConfigLink: (configId: string): Promise<RevokeConfigResponse> =>
     request<RevokeConfigResponse>(`/api/user/configs/${encodeURIComponent(configId)}/revoke`, {
       method: 'POST',
+    }),
+
+  updateConfigLabel: (configId: string, label: string | null): Promise<UpdateConfigLabelResponse> =>
+    request<UpdateConfigLabelResponse>(`/api/user/configs/${encodeURIComponent(configId)}/label`, {
+      method: 'PATCH',
+      body: JSON.stringify({ label }),
     }),
 
   refreshConfigStats: (configId: string): Promise<RefreshConfigResponse> =>

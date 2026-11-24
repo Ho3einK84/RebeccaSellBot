@@ -21,7 +21,8 @@ import { notificationDeliveries, userConfigs, users } from '../infra/schema.js';
 import { logger } from '../infra/logger.js';
 import { buildUserScreen } from '../telegram/designSystem.js';
 import { tForLocale } from '../telegram/locale.js';
-import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
+import { escapeTelegramMarkdown } from '../telegram/rendering.js';
+import { formatTelegramConfigRef } from '../domain/services/TelegramFormatting.js';
 import { jobRunner } from './workerRuntime.js';
 
 export const NOTIFIER_CONDITION_TYPES = ['low_traffic', 'near_expiry'] as const;
@@ -41,6 +42,7 @@ export type ConfigNotificationRecipient = {
   panelId: string;
   serviceId: number;
   configUsername: string;
+  userLabel?: string | null;
   telegramId: number;
   /** Persisted from the latest Telegram update; legacy rows default to FA. */
   locale?: SupportedLocale;
@@ -87,6 +89,7 @@ export class PostgresNotificationDeliveryStore implements NotificationDeliverySt
         panelId: userConfigs.panelId,
         serviceId: userConfigs.serviceId,
         configUsername: userConfigs.configUsername,
+        userLabel: userConfigs.userLabel,
         telegramId: userConfigs.telegramId,
         locale: users.locale,
         autoRenewEnabled: userConfigs.autoRenewEnabled,
@@ -275,7 +278,7 @@ export async function runNotifierSweep(
             subtitle: tForLocale(translationService, locale, 'renewal_notification_subtitle'),
             primary: {
               label: tForLocale(translationService, locale, 'renewal_service_label'),
-              value: `\`${sanitizeTelegramInlineCode(cfg.configUsername)}\``,
+              value: formatTelegramConfigRef(cfg.configUsername, cfg.userLabel),
               inline: true,
             },
             sections: [

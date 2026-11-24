@@ -539,13 +539,14 @@ describe('Conversation input, escape navigation, and home/subscription UI primit
       false,
       true
     ).inline_keyboard;
-    expect(detailRows).toHaveLength(5);
+    expect(detailRows).toHaveLength(6);
     expect(
       detailRows.map((row) => row.map((b) => (b as { callback_data?: string }).callback_data))
     ).toEqual([
       ['renew:open:c1', 'config:qr:c1'],
       ['config:refresh:c1', 'autorenew:on:c1'],
       ['config:set:off:c1', 'config:revoke_prompt:c1'],
+      ['config:label:c1'],
       ['config:transfer:c1', 'config:delete_prompt:c1'],
       ['subs:page:1'],
     ]);

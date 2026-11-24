@@ -18,6 +18,8 @@ import { showPromoCenter } from '../promoAdminUi.js';
 import { languageKeyboard } from '../keyboards/language.js';
 import { logger } from '../../infra/logger.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
+import { evaluateRegistrationAccess } from '../../domain/services/RegistrationPolicy.js';
+import { renderRegistrationBlockedReply } from '../registrationGuard.js';
 import { acquireUserActionCooldown } from '../middleware/actionCooldown.js';
 import { enforceForcedJoin, registerForcedJoinRoutes } from '../middleware/forcedJoin.js';
 import { formatSubscriptionLink, localizedNumber, resolveServiceLocale, t } from '../locale.js';
@@ -79,6 +81,26 @@ export async function handleStartCommand(
     typeof services.translationService?.getDefaultLocale === 'function'
       ? services.translationService.getDefaultLocale()
       : resolveServiceLocale(services.translationService);
+
+  if (isFirstVisit && !services.isAdmin(telegramId)) {
+    const access = await evaluateRegistrationAccess({
+      telegramId,
+      isAdmin: false,
+      userExists: false,
+      settings: services.translationService,
+      referralCode,
+      referralService: services.referralService,
+    });
+    if (!access.allowed) {
+      if (ctx.session) {
+        delete ctx.session.pendingStartPayload;
+        delete ctx.session.pendingReferralCode;
+      }
+      ctx.userLocale = defaultLocale;
+      await renderRegistrationBlockedReply(ctx, services, access.reason);
+      return;
+    }
+  }
 
   const user = await services.walletService.getOrCreateUser(
     telegramId,
@@ -367,8 +389,23 @@ export function registerBaseRoutes(bot: Bot<MenuContext>, services: BotServices)
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
     const locale = ctx.match[1] === 'en' ? 'en' : 'fa';
-    await ctx.answerCallbackQuery();
     try {
+      const exists = await services.userService.exists(telegramId);
+      if (!exists && !services.isAdmin(telegramId)) {
+        const access = await evaluateRegistrationAccess({
+          telegramId,
+          isAdmin: false,
+          userExists: false,
+          settings: services.translationService,
+          referralCode: ctx.session?.pendingReferralCode,
+          referralService: services.referralService,
+        });
+        if (!access.allowed) {
+          await renderRegistrationBlockedReply(ctx, services, access.reason);
+          return;
+        }
+      }
+      await ctx.answerCallbackQuery();
       // A user can open the picker before /start; create the local profile
       // first so the explicit preference is durable in that case as well.
       await services.walletService.getOrCreateUser(

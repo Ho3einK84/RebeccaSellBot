@@ -22,7 +22,8 @@ import type { PricingService } from '../domain/services/PricingService.js';
 import type { SupportedLocale, TranslationService } from '../domain/services/TranslationService.js';
 import { buildUserScreen } from '../telegram/designSystem.js';
 import { tForLocale } from '../telegram/locale.js';
-import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
+import { escapeTelegramMarkdown } from '../telegram/rendering.js';
+import { formatTelegramConfigRef } from '../domain/services/TelegramFormatting.js';
 import {
   PostgresNotificationDeliveryStore,
   assessNotificationConditions,
@@ -51,6 +52,7 @@ export class PostgresAutoRenewalCandidateStore implements AutoRenewalCandidateSt
         panelId: userConfigs.panelId,
         serviceId: userConfigs.serviceId,
         configUsername: userConfigs.configUsername,
+        userLabel: userConfigs.userLabel,
         telegramId: userConfigs.telegramId,
         locale: users.locale,
         autoRenewPackageId: userConfigs.autoRenewPackageId,
@@ -267,7 +269,7 @@ export async function runAutoRenewalSweep(
                 subtitle: tForLocale(translationService, locale, subtitleKey),
                 primary: {
                   label: tForLocale(translationService, locale, 'auto_renew_service_label'),
-                  value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+                  value: formatTelegramConfigRef(config.configUsername, config.userLabel),
                   inline: true,
                 },
                 footer: tForLocale(translationService, locale, footerKey),
@@ -332,7 +334,7 @@ export async function runAutoRenewalSweep(
                     fields: [
                       {
                         label: tForLocale(translationService, locale, 'auto_renew_service_label'),
-                        value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+                        value: formatTelegramConfigRef(config.configUsername, config.userLabel),
                       },
                       {
                         label: tForLocale(translationService, locale, 'auto_renew_balance_label'),
@@ -403,7 +405,7 @@ export async function runAutoRenewalSweep(
             subtitle: tForLocale(translationService, locale, 'auto_renew_success_subtitle'),
             primary: {
               label: tForLocale(translationService, locale, 'auto_renew_service_label'),
-              value: `\`${sanitizeTelegramInlineCode(config.configUsername)}\``,
+              value: formatTelegramConfigRef(config.configUsername, config.userLabel),
               inline: true,
             },
             sections: [

@@ -4,7 +4,10 @@ import {
   normalizeCardNumber,
   parseBankCardsJson,
 } from '../../../../domain/services/PaymentService.js';
-import { uniqueTopupAmountEnabled } from '../../../../domain/services/FeatureSettings.js';
+import {
+  paymentMessageAutoDeleteHours,
+  uniqueTopupAmountEnabled,
+} from '../../../../domain/services/FeatureSettings.js';
 import type { ConversationContext, MyConversation } from '../../../types.js';
 import { localizedNumber, resolveContextLocale, t } from '../../../locale.js';
 import { buildScreen } from '../../../ui.js';
@@ -39,6 +42,7 @@ export async function adminPaymentSettingsConversation(
         configuredCardsCount: configuredCards.length,
         activeCardsCount: activeMultiCards.length,
         uniqueAmountEnabled: uniqueTopupAmountEnabled(ts),
+        autoDeleteHours: paymentMessageAutoDeleteHours(ts, 0),
         transferEnabled: ts.getSettingBool('wallet_transfer_enabled', true),
         transferMinAmount: ts.getSettingNum('wallet_transfer_min_amount', 5000),
         receiptNotifyEnabled: ts.getSettingBool('receipt_notify_enabled', true),
@@ -57,6 +61,7 @@ export async function adminPaymentSettingsConversation(
       configuredCardsCount,
       activeCardsCount,
       uniqueAmountEnabled,
+      autoDeleteHours,
       transferEnabled,
       transferMinAmount,
       receiptNotifyEnabled,
@@ -99,6 +104,13 @@ export async function adminPaymentSettingsConversation(
             {
               label: t(activeCtx, 'admin_setting_unique_topup_amount_enabled'),
               value: uniqueAmountEnabled ? onBadge : offBadge,
+            },
+            {
+              label: t(activeCtx, 'admin_setting_payment_message_auto_delete_hours'),
+              value:
+                autoDeleteHours === 0
+                  ? t(activeCtx, 'admin_setting_payment_message_auto_delete_disabled')
+                  : `${localizedNumber(autoDeleteHours, activeCtx)} ${t(activeCtx, 'hours_unit')}`,
             },
           ],
         },
@@ -169,6 +181,11 @@ export async function adminPaymentSettingsConversation(
       .text(
         `${t(activeCtx, 'admin_setting_unique_topup_amount_enabled')}: ${uniqueAmountEnabled ? onBadge : offBadge}`,
         'pay:toggle:unique_amount'
+      )
+      .row()
+      .text(
+        t(activeCtx, 'admin_setting_payment_message_auto_delete_hours'),
+        'pay:edit:payment_message_auto_delete_hours'
       )
       .row()
       .text(

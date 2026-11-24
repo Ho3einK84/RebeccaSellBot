@@ -57,6 +57,7 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   receipt_duplicate_policy: 'warn',
   bank_cards_json: '[]',
   unique_topup_amount_enabled: 'false',
+  payment_message_auto_delete_hours: '0',
   // Automated wallet payment gateways (ForApp SMS verification & NOWPayments crypto).
   forapp_enabled: 'false',
   forapp_api_key_encrypted: '',
@@ -112,6 +113,7 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
 
   // System, maintenance, and language settings.
   bot_enabled: 'true',
+  registration_mode: 'open',
   language_selection_enabled: 'true',
   default_locale: 'fa',
   webapp_enabled: 'false',

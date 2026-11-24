@@ -1,4 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import {
+  MAX_CONFIG_USER_LABEL_LENGTH,
+  sanitizeConfigUserLabel,
+} from '../../../../domain/services/ConfigService.js';
 import { RebeccaOriginDownError } from '../../../../domain/services/RebeccaService.js';
 import { normalizeDataLimit } from '../../../../domain/services/TrafficLimit.js';
 import {
@@ -82,6 +86,7 @@ export function registerUserConfigRoutes(
       const configs = rows.map((c) => ({
         id: c.id,
         configUsername: c.configUsername,
+        userLabel: c.userLabel ?? null,
         panelId: c.panelId ?? null,
         panelName: c.panelId ? (panelNames.get(c.panelId) ?? null) : null,
         serviceId: c.serviceId ?? null,
@@ -521,6 +526,7 @@ export function registerUserConfigRoutes(
               telegramId,
               kind: 'revoke',
               configUsername: config.configUsername,
+              userLabel: config.userLabel ?? null,
               configId: config.id,
               subUrl,
               webAppUrl: options.webAppUrl,
@@ -756,6 +762,7 @@ export function registerUserConfigRoutes(
         config: {
           id: config.id,
           configUsername: config.configUsername,
+          userLabel: config.userLabel ?? null,
           panelStatus: config.panelStatus,
           currentRemainingGb: basePreview.currentRemainingGb ?? null,
           currentRemainingDays: basePreview.currentRemainingDays ?? null,
@@ -1102,6 +1109,76 @@ export function registerUserConfigRoutes(
         }
         throw err;
       }
+    }
+  );
+
+  // PATCH /api/user/configs/:id/label — set or clear local personal label (`user_label`)
+  userScope.patch<{
+    Params: { id: string };
+    Body?: { label?: string | null };
+  }>(
+    '/api/user/configs/:id/label',
+    {
+      config: {
+        rateLimit: limits.action10,
+      },
+    },
+    async (request, reply) => {
+      const telegramId = request.userSession?.telegramId;
+      if (!telegramId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+      if (!options.configService || typeof options.configService.setUserLabel !== 'function') {
+        return reply
+          .code(503)
+          .send({ error: 'Config service unavailable', code: 'SERVICE_UNAVAILABLE' });
+      }
+
+      const config = await options.configService.getOwnedConfigById(telegramId, request.params.id);
+      if (!config) {
+        const anyConfig = await options.configService.getConfigById?.(request.params.id);
+        if (anyConfig) {
+          return reply.code(403).send({ error: 'Forbidden', code: 'OWNER_MISMATCH' });
+        }
+        return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+      }
+
+      const rawLabel = request.body?.label;
+      if (rawLabel !== undefined && rawLabel !== null && typeof rawLabel !== 'string') {
+        return reply.code(400).send({
+          error: 'Invalid user label',
+          code: 'INVALID_USER_LABEL',
+          maxLength: MAX_CONFIG_USER_LABEL_LENGTH,
+        });
+      }
+
+      const sanitized = sanitizeConfigUserLabel(rawLabel ?? null);
+      if (!sanitized.valid) {
+        return reply.code(400).send({
+          error:
+            sanitized.reason === 'too_long'
+              ? `Label exceeds maximum length of ${MAX_CONFIG_USER_LABEL_LENGTH} characters`
+              : 'Invalid user label',
+          code: sanitized.reason === 'too_long' ? 'USER_LABEL_TOO_LONG' : 'INVALID_USER_LABEL',
+          maxLength: MAX_CONFIG_USER_LABEL_LENGTH,
+        });
+      }
+
+      const updated = await options.configService.setUserLabel(
+        telegramId,
+        config.id,
+        sanitized.value
+      );
+      if (!updated) {
+        return reply.code(404).send({ error: 'Config not found', code: 'CONFIG_NOT_FOUND' });
+      }
+
+      return reply.code(200).send({
+        success: true,
+        id: updated.id,
+        configUsername: updated.configUsername,
+        userLabel: updated.userLabel ?? null,
+      });
     }
   );
 }

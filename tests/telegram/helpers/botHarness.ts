@@ -120,6 +120,7 @@ export function createMockServices(overrides: ServiceOverrides = {}): BotService
     configService: {
       listConfigs: vi.fn().mockResolvedValue([]),
       getConfigById: vi.fn().mockResolvedValue(null),
+      setUserLabel: vi.fn().mockResolvedValue(null),
       extractSubUrl: vi.fn(() => null),
       formatDurationFromDays: vi.fn((days: number) => `${days}d`),
       deleteConfig: vi.fn().mockResolvedValue({ success: true }),
@@ -155,6 +156,7 @@ export function createMockServices(overrides: ServiceOverrides = {}): BotService
     },
     referralService: {
       getStats: vi.fn().mockResolvedValue({ referredCount: 0, totalBonus: 0, code: 'ref_100' }),
+      resolveReferrerId: vi.fn().mockResolvedValue(undefined),
       ...(overrides.referralService as object),
     },
     trialService: {

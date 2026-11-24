@@ -333,3 +333,41 @@ export function forcedJoinScope(settings: SettingReader): ForcedJoinScope {
   }
   return 'off';
 }
+
+export const PAYMENT_MESSAGE_AUTO_DELETE_MIN_HOURS = 0;
+export const PAYMENT_MESSAGE_AUTO_DELETE_MAX_HOURS = 48;
+
+/**
+ * Delay (in hours, 0..48) before payment / card-number messages sent in
+ * Telegram are automatically deleted. `0` disables auto-deletion.
+ */
+export function paymentMessageAutoDeleteHours(settings: SettingReader, fallback = 0): number {
+  return parseBoundedIntSetting(
+    settings,
+    'payment_message_auto_delete_hours',
+    fallback,
+    PAYMENT_MESSAGE_AUTO_DELETE_MIN_HOURS,
+    PAYMENT_MESSAGE_AUTO_DELETE_MAX_HOURS
+  );
+}
+
+export const REGISTRATION_MODES = ['open', 'invite_only', 'closed'] as const;
+export type RegistrationMode = (typeof REGISTRATION_MODES)[number];
+export const DEFAULT_REGISTRATION_MODE: RegistrationMode = 'open';
+
+/** Parse a raw `registration_mode` string, defaulting to `'open'`. */
+export function parseRegistrationMode(raw: string | null | undefined): RegistrationMode {
+  const normalized = (raw ?? '').trim().toLowerCase();
+  if (normalized === 'invite_only' || normalized === 'closed') {
+    return normalized;
+  }
+  return DEFAULT_REGISTRATION_MODE;
+}
+
+/** Policy controlling whether new users may register (`open`, `invite_only`, or `closed`). */
+export function registrationMode(settings: SettingReader): RegistrationMode {
+  if (typeof settings?.getSetting !== 'function') {
+    return DEFAULT_REGISTRATION_MODE;
+  }
+  return parseRegistrationMode(settings.getSetting('registration_mode', DEFAULT_REGISTRATION_MODE));
+}

@@ -99,6 +99,7 @@ export interface UserConfigItem {
   panelName?: string;
   serviceId: number;
   configUsername: string;
+  userLabel?: string | null;
   subUrl: string | null;
   panelStatus: string | null;
   panelDataLimit: number | null;

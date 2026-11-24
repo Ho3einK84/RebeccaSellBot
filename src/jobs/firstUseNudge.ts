@@ -21,7 +21,7 @@ import { notificationDeliveries, userConfigs, users } from '../infra/schema.js';
 import { callbackData } from '../telegram/callbackData.js';
 import { buildUserScreen } from '../telegram/designSystem.js';
 import { tForLocale, tmForLocale } from '../telegram/locale.js';
-import { sanitizeTelegramInlineCode } from '../telegram/rendering.js';
+import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../telegram/rendering.js';
 import { jobRunner } from './workerRuntime.js';
 
 export const FIRST_USE_MIN_AGE_MS = 24 * 60 * 60 * 1000;
@@ -32,6 +32,7 @@ export interface FirstUseNudgeCandidate {
   telegramId: number;
   panelId: string;
   configUsername: string;
+  userLabel?: string | null;
   createdAt: Date;
   locale?: SupportedLocale;
 }
@@ -74,6 +75,7 @@ export class PostgresFirstUseNudgeStore implements FirstUseNudgeStore {
         telegramId: userConfigs.telegramId,
         panelId: userConfigs.panelId,
         configUsername: userConfigs.configUsername,
+        userLabel: userConfigs.userLabel,
         createdAt: userConfigs.createdAt,
         locale: users.locale,
       })
@@ -269,9 +271,20 @@ export async function runFirstUseNudgeCycle(
     }
 
     const locale = candidate.locale ?? deps.translationService.resolveLocale();
+    const trimmedLabel = candidate.userLabel?.trim();
     const messageText = buildUserScreen({
       emoji: '💡',
       title: tForLocale(deps.translationService, locale, 'subscription_first_use_nudge_title'),
+      ...(trimmedLabel
+        ? {
+            primary: {
+              emoji: '🏷️',
+              label: tForLocale(deps.translationService, locale, 'subscription_label_field'),
+              value: escapeTelegramMarkdown(trimmedLabel),
+              inline: true,
+            },
+          }
+        : {}),
       footer: tmForLocale(deps.translationService, locale, 'subscription_first_use_nudge_body', {
         username: sanitizeTelegramInlineCode(candidate.configUsername),
       }),
