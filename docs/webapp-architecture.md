@@ -11,6 +11,7 @@ Telegram Mini App Launch (initData + optional start_param / query string)
   │
   ├─► POST /api/auth/telegram-validate (src/webapp/server/routes/authRoutes.ts)
   │      ├─ Validates Telegram initData HMAC-SHA256 signature & freshness
+  │      ├─ Enforces `registration_mode` (`open` / `invite_only` / `closed`) for new users
   │      ├─ Upserts user profile (username, first_name, last_name, locale)
   │      ├─ Persists first-touch referral code (start_param = ref_...)
   │      └─ Issues HTTP-only JWT session cookie (`ADMIN_SESSION_SECRET`)
@@ -18,8 +19,11 @@ Telegram Mini App Launch (initData + optional start_param / query string)
   └─► Guarded /api/user/* Requests (src/webapp/server/middleware/userGuard.ts)
          ├─ Rejects banned users with HTTP 403 `USER_BANNED`
          │    (payload embeds resolved `supportUrl`, `supportLabel`, `supportUsername`)
-         └─ Enforces `bot_enabled = false` with HTTP 503 `MAINTENANCE_MODE`
-              (automatically bypassed for active admins with an in-app banner)
+         ├─ Enforces `bot_enabled = false` with HTTP 503 `MAINTENANCE_MODE`
+         │    (automatically bypassed for active admins with an in-app banner)
+         ├─ Enforces `registration_mode` with HTTP 403 `REGISTRATION_INVITE_ONLY` / `REGISTRATION_CLOSED`
+         └─ Enforces `forced_join_scope = all` with HTTP 403 `CHANNEL_JOIN_REQUIRED`
+              (bypassed for admins; `/api/user/forced-join/check` remains reachable)
 ```
 
 - **Support Destination Resolution (`src/domain/services/SupportDestination.ts`):** Normalizes `support_destination` (`@username`, `https://t.me/...`, numeric Telegram ID `tg://user?id=...`), `SUPPORT_URL`, and primary admin fallback into a single canonical destination shared across Telegram keyboards, WebApp headers, and `403 USER_BANNED` screens.
@@ -32,13 +36,15 @@ Telegram Mini App Launch (initData + optional start_param / query string)
 
 Customer routes are decomposed into five cohesive domain modules under `src/webapp/server/routes/user/` (composed by `src/webapp/server/routes/userRoutes.ts` and wired in `src/webapp/server/server.ts`):
 
-| Module                 | Endpoints                                                                                                                                                                                                                          | Responsibilities                                                                                                                                                   |
-| :--------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`shared.ts`**        | _(Internal helpers)_                                                                                                                                                                                                               | Per-route rate limiters, bilingual package/label localization (`FA \| EN` & custom IDs), masked P2P recipient previews, magic-byte receipt validation (`≤ 5 MiB`). |
-| **`profileRoutes.ts`** | `GET /api/user/profile`<br>`GET /api/user/trial/status`<br>`POST /api/user/trial/claim`<br>`GET /api/user/wheel/status`<br>`POST /api/user/wheel/spin`                                                                             | Enriched profile (non-mutating card preview, `allCardsCapReached`, `activeBuyersCount`, support CTA, trial & wheel state, custom-volume tiers), Free Trial, Wheel. |
-| **`configRoutes.ts`**  | `GET /api/user/configs`<br>`POST .../sync-all` · `POST .../claim`<br>`GET .../:id/usage` · `.../renewal-options` · `.../refund-quote`<br>`POST .../:id/{auto-renew,toggle-status,revoke,refresh,delete,transfer/preview,transfer}` | Full subscription lifecycle: external sub-link claim, Sync All, per-node usage + `onlineAt`, preset & custom auto-renew, link rotation, P2P transfer, self-refund. |
-| **`shopRoutes.ts`**    | `GET /api/user/packages` · `GET /api/user/quote`<br>`POST /api/user/promo/{quote,redeem}`<br>`POST /api/user/checkout` · `POST /api/user/checkout/:id/confirm`                                                                     | Localized packages with flash-sale metadata & volume tiers, promo quoting/redemption, 3-phase checkout saga (`new_config`-only phone gate + Telegram artifact).    |
-| **`walletRoutes.ts`**  | `GET /api/user/transactions?type=...`<br>`GET /api/user/receipts`<br>`POST /api/user/topup/{prepare,receipt}`<br>`POST /api/user/wallet/transfer/{preview,transfer}`                                                               | Category-filtered ledger (`all`, `topup`, `purchase`, `rewards`, `transfer`), daily-cap card prep, Telegram-hosted receipt upload (`8 MiB` JSON limit), P2P send.  |
+| Module                        | Endpoints                                                                                                                                                                                                                                                  | Responsibilities                                                                                                                                                                      |
+| :---------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`user/shared.ts`**          | _(Internal helpers)_                                                                                                                                                                                                                                       | Per-route rate limiters, bilingual package/label localization (`FA \| EN` & custom IDs), masked P2P recipient previews, magic-byte receipt validation (`≤ 5 MiB`).                    |
+| **`user/profileRoutes.ts`**   | `GET /api/user/profile` · `POST /api/user/locale`<br>`GET /api/user/forced-join/check`<br>`GET /api/user/trial/status` · `POST /api/user/trial/claim`<br>`GET /api/user/wheel/status` · `POST /api/user/wheel/spin`                                        | Enriched profile (`user.group`, signed `availableBalance`, `transferableBalance`, `creditLimit`, `purchasingPower`, `debtAmount`, group feature gates, cards, support), Trial, Wheel. |
+| **`user/configRoutes.ts`**    | `GET /api/user/configs` · `POST .../sync-all` · `POST .../claim`<br>`PATCH /api/user/configs/:id/label`<br>`GET .../:id/{usage,renewal-options,refund-quote}`<br>`POST .../:id/{auto-renew,toggle-status,revoke,refresh,delete,transfer/preview,transfer}` | Subscription lifecycle: local personal labels (`user_label`), external sub-link claim, Sync All, per-node usage, group-priced auto-renew/renewals, P2P transfer, self-refund.         |
+| **`user/shopRoutes.ts`**      | `GET /api/user/packages` · `GET /api/user/quote`<br>`POST /api/user/promo/{quote,redeem}`<br>`POST /api/user/checkout` · `POST /api/user/checkout/:id/confirm`                                                                                             | Group-priced packages & anti-double-discount flash sales, group-gated promo quoting/redemption, 3-phase checkout saga with VIP credit purchasing power (`new_config` phone gate).     |
+| **`user/walletRoutes.ts`**    | `GET /api/user/{transactions,receipts}`<br>`POST /api/user/topup/{prepare,receipt,forapp-order,nowpayments-order}`<br>`GET /api/user/topup/orders[/:id/status]` · `POST .../orders/:id/cancel`<br>`POST /api/user/wallet/transfer/{preview,transfer}`      | Category-filtered ledger, manual card prep & Telegram-hosted receipt upload, automated ForApp & NOWPayments order lifecycle, and positive-balance-only P2P transfers.                 |
+| **`paymentWebhookRoutes.ts`** | `POST /api/webhooks/forapp`<br>`POST /api/webhooks/nowpayments`                                                                                                                                                                                            | Public rate-limited gateway webhooks authenticated via timing-safe `X-API-Key` (ForApp) and `HMAC-SHA512` `x-nowpayments-sig` (NOWPayments).                                          |
+| **`admin*Routes.ts`**         | `/api/admin/{overview,users,receipts,panels,packages,categories,pricing/custom,...}`<br>`/api/admin/groups[/:id]` · `/api/admin/users/:id/group`<br>`/api/admin/payment-gateways/*` · `/api/admin/forced-join/*` · `/api/admin/bulk-gift/*`                | Full Admin Portal REST APIs across CRM, user groups, receipts/voiding, packages/pricing, panels, bank cards, payment gateways & unmatched deposits, forced join, and bulk gifts.      |
 
 ---
 
@@ -72,24 +78,27 @@ webapp/src/
 │   ├── i18n/locales/{fa.ts,en.ts}               (100% key-parity bilingual catalog)
 │   └── types/{api.ts,telegram.ts,userPortal.ts}
 └── features/
-    ├── admin/                                   (Admin CRM, receipts/voiding, packages, panels, broadcasts)
+    ├── auth/                                    (initData bootstrap, AuthErrorScreen w/ registration-mode & support CTA)
+    ├── admin/                                   (Overview, CRM/Users, Receipts/voiding, Packages, Panels, Modules:
+    │                                             BankCardsModal, PaymentGatewaysModal, ForcedJoinModal, BulkGiftModal)
     └── user-portal/
-        ├── UserPortal.tsx                       (Deep-link router, MaintenanceScreen, Admin bypass, Ban CTA)
+        ├── UserPortal.tsx                       (Deep-link router, MaintenanceScreen, ForcedJoinGate, Admin bypass, Ban CTA)
         ├── tabs/
-        │   ├── DashboardTab.tsx                 (KPIs, attention alerts, Free Trial banner, quick actions)
-        │   ├── ServicesTab.tsx                  (Sync All, Claim Sub-Link, live traffic/expiry cards)
-        │   ├── ShopTab.tsx                      (Flash-sale countdowns, categories, custom GB tier table)
-        │   ├── WalletTab.tsx                    (2-step card top-up & receipt upload, P2P, filters, receipts)
-        │   └── ReferralTab.tsx                  (Rewards Hub: interactive Lucky Wheel + 4-metric referral/cashback)
+        │   ├── DashboardTab.tsx                 (KPIs, group badge, debt/credit summary, Free Trial banner, quick actions)
+        │   ├── ServicesTab.tsx                  (Personal labels, Sync All, Claim Sub-Link, live traffic/expiry cards)
+        │   ├── ShopTab.tsx                      (Group-priced plans, flash-sale countdowns, categories, custom GB tier table)
+        │   ├── WalletTab.tsx                    (ForApp/NOWPayments orders, 2-step card receipt upload, credit/debt & P2P)
+        │   └── ReferralTab.tsx                  (Rewards Hub: group-gated Lucky Wheel + referral/cashback KPIs)
         └── components/
+            ├── ForcedJoinGate.tsx               (Mandatory channel membership overlay w/ live re-check)
             ├── LuckyWheelSection.tsx            (8-slice SVG wheel, haptic ticks, live cooldown, history)
             ├── FreeTrialSection.tsx             (Eligible banner + QR/SmartConnect delivery modal)
             ├── SmartConnectButtons.tsx          (1-tap import: v2rayNG, Hiddify, Streisand, Happ, Clash)
-            ├── ServiceManagementModal.tsx       (Per-node usage, onlineAt, revoke, renew, transfer, delete)
+            ├── ServiceManagementModal.tsx       (Personal label edit, per-node usage, onlineAt, revoke, renew, transfer, delete)
             ├── AutoRenewModal.tsx               (Preset packages + custom GB/day auto-renew tabs)
-            ├── CheckoutModal.tsx                (Discount/promo preview, custom name, native contact gate)
+            ├── CheckoutModal.tsx                (Group & flash-sale breakdown, VIP credit/debt preview, promo & phone gate)
             ├── ClaimSubLinkModal.tsx            (Import/claim external Rebecca subscription link)
             ├── ConfigTransferModal.tsx          (Exact-match recipient preview & P2P service transfer)
             ├── ConfigDeleteRefundModal.tsx      (Refund quote inspection, 202 pending handling, delete)
-            └── WalletTransferModal.tsx          (Exact-match recipient preview & P2P wallet transfer)
+            └── WalletTransferModal.tsx          (Exact-match recipient preview & positive-only `transferableBalance` P2P)
 ```

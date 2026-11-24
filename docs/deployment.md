@@ -84,7 +84,7 @@ When `<instance>` is omitted (e.g. `rsbot update`), `rsbot` automatically target
 
 | Command                            | Action                                                                                                              |
 | :--------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
-| `rsbot list`                       | List all instances, running state, published ports, delivery mode, and WebApp URL.                                  |
+| `rsbot list` (or `rsbot ls`)       | List all instances, running state, published ports, delivery mode, and WebApp URL.                                  |
 | `rsbot [name] up`                  | Ensure `.env` defaults & mesh resources, build/start containers, and wait for health checks.                        |
 | `rsbot [name] down`                | Stop containers while preserving PostgreSQL volumes and `.env`.                                                     |
 | `rsbot [name] restart`             | Restart instance containers and verify readiness.                                                                   |
@@ -122,7 +122,8 @@ systemctl reload caddy
 If you prefer static host-port routing without mesh proxying:
 
 ```caddy
-# Mini App (WEBAPP_HOST_PORT=3002)
+# Mini App & Automated Payment Webhooks (WEBAPP_HOST_PORT=3002)
+# Serves the Mini App, /api/webhooks/forapp, and /api/webhooks/nowpayments
 app.example.com {
     reverse_proxy 127.0.0.1:3002
     encode zstd gzip

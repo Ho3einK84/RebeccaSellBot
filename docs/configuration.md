@@ -76,11 +76,14 @@ This reference covers all environment variables (`.env`) validated by [`src/infr
 
 Runtime settings are persisted in the PostgreSQL `settings` table ([`TranslationCatalog.ts`](../src/domain/services/TranslationCatalog.ts) & [`FeatureSettings.ts`](../src/domain/services/FeatureSettings.ts)) and take effect immediately across both the Telegram Bot and Mini App without restarting containers. All sections below are managed via stateless `/admin` hubs (`adm:cfg` and `adm:sales`).
 
-### General & Security (`adm:cfg:gen`)
+### General, Access Control & Security (`adm:cfg:gen` & `adm:cfg:fj`)
 
 | Key                          | Default   | Description                                                                                                                                                                  |
 | :--------------------------- | :-------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `bot_enabled`                | `'true'`  | Enables customer access across both Telegram Bot and Mini App. When `'false'`, non-admin users see the maintenance screen (`503 MAINTENANCE_MODE` in WebApp; admins bypass). |
+| `registration_mode`          | `'open'`  | Controls new-user onboarding across Telegram and Mini App: `'open'`, `'invite_only'` (valid referral link required), or `'closed'` (admins & existing users unaffected).     |
+| `forced_join_scope`          | `'off'`   | Mandatory channel membership enforcement scope: `'off'`, `'all'`, `'trial_only'`, or `'purchase_and_trial'` (managed in `adm:cfg:fj`).                                       |
+| `forced_join_channels_json`  | `'[]'`    | JSON array of required Telegram channels (`id`, `channelId`, `title`, `inviteLink`, `enabled`) verified in real time via Bot API.                                            |
 | `language_selection_enabled` | `'true'`  | Allows users to switch between Persian (`fa`) and English (`en`) in both Telegram and Mini App.                                                                              |
 | `default_locale`             | `'fa'`    | Fallback locale (`'fa'` or `'en'`) for users without an explicit preference.                                                                                                 |
 | `require_phone_for_purchase` | `'false'` | Requires one-time `HMAC-SHA256` Telegram contact verification before new paid service purchases (`new_config`; does not block renewals) in Telegram and Mini App.            |
@@ -128,21 +131,42 @@ Runtime settings are persisted in the PostgreSQL `settings` table ([`Translation
 | `custom_price_overrides_json`     | `'[]'`          | Exact GB/day price override rules JSON.                                    |
 | `custom_volume_target_json`       | `'{}'`          | Target Rebecca `panelId` and `serviceId` binding for custom-volume orders. |
 
-### Payments, Multi-Card & Receipt Security (`adm:cfg:pay` & `adm:bc:*`)
+### Payments, Automated Gateways, Multi-Card & Receipt Security (`adm:cfg:pay`, `adm:bc:*`, `adm:pg:*`)
 
-| Key                                     | Default                  | Description                                                                                                      |
-| :-------------------------------------- | :----------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| `bank_cards_json`                       | `'[]'`                   | Multi-card rotation pool managed via `adm:bc:p:1` (`[{ id, cardNumber, cardHolder, enabled, dailyCapToman }]`).  |
-| `card_number`                           | `'6037997900000000'`     | Primary/fallback 16-digit bank card number for card-to-card top-ups (importable 1-tap into multi-card pool).     |
-| `card_holder`                           | `'Name'`                 | Cardholder name displayed alongside `card_number`.                                                               |
-| `unique_topup_amount_enabled`           | `'false'`                | Adds a small collision-free offset to card top-up amounts to disambiguate concurrent transfers.                  |
-| `topup_min_amount` / `topup_max_amount` | `'10000'` / `'10000000'` | Minimum and maximum wallet top-up bounds in Tomans.                                                              |
-| `receipt_duplicate_policy`              | `'warn'`                 | Action on duplicate receipt (`SHA-256` or `file_unique_id` match): `'warn'` (flag banner) or `'block'` (reject). |
-| `wallet_transfer_enabled`               | `'true'`                 | Enables peer-to-peer wallet balance transfers between users.                                                     |
-| `wallet_transfer_min_amount`            | `'5000'`                 | Minimum peer-to-peer balance transfer amount in Tomans.                                                          |
-| `receipt_notify_enabled`                | `'true'`                 | Sends instant Telegram notifications to admins when a receipt is submitted.                                      |
-| `receipt_notify_mode`                   | `'full'`                 | Admin notification format (`'full'` media card or `'simple'` compact alert).                                     |
-| `receipt_notify_admins`                 | `''`                     | Optional subset of admins (selected by name/username in `adm:cfg:pay:adm`; empty = all admins).                  |
+| Key                                     | Default                   | Description                                                                                                                 |
+| :-------------------------------------- | :------------------------ | :-------------------------------------------------------------------------------------------------------------------------- |
+| `bank_cards_json`                       | `'[]'`                    | Multi-card rotation pool managed via `adm:bc:p:1` (`[{ id, cardNumber, cardHolder, enabled, dailyCapToman }]`).             |
+| `card_number`                           | `'6037997900000000'`      | Primary/fallback 16-digit bank card number for card-to-card top-ups (importable 1-tap into multi-card pool).                |
+| `card_holder`                           | `'Name'`                  | Cardholder name displayed alongside `card_number`.                                                                          |
+| `unique_topup_amount_enabled`           | `'false'`                 | Adds a small upward collision-free offset (`+1..+999` Toman) to card top-up amounts to disambiguate concurrent transfers.   |
+| `payment_message_auto_delete_hours`     | `'0'`                     | Hours (`0–48`) before Telegram payment/card prompt messages are automatically deleted (`0` disables auto-delete).           |
+| `topup_min_amount` / `topup_max_amount` | `'10000'` / `'10000000'`  | Minimum and maximum manual wallet top-up bounds in Tomans.                                                                  |
+| `receipt_duplicate_policy`              | `'warn'`                  | Action on duplicate receipt (`SHA-256` or `file_unique_id` match): `'warn'` (flag banner) or `'block'` (reject).            |
+| `wallet_transfer_enabled`               | `'true'`                  | Enables peer-to-peer wallet balance transfers between users (always strictly limited to positive real balance).             |
+| `wallet_transfer_min_amount`            | `'5000'`                  | Minimum peer-to-peer balance transfer amount in Tomans.                                                                     |
+| `receipt_notify_enabled`                | `'true'`                  | Sends instant Telegram notifications to admins when a receipt is submitted.                                                 |
+| `receipt_notify_mode`                   | `'full'`                  | Admin notification format (`'full'` media card or `'simple'` compact alert).                                                |
+| `receipt_notify_admins`                 | `''`                      | Optional subset of admins (selected by name/username in `adm:cfg:pay:adm`; empty = all admins).                             |
+| `forapp_enabled`                        | `'false'`                 | Enables automated card-to-card deposit verification via ForApp webhook (`POST /api/webhooks/forapp`).                       |
+| `forapp_api_key_encrypted`              | `''`                      | `AES-256-GCM` encrypted `X-API-Key` secret verified on incoming ForApp webhooks (rotatable via `adm:pg:fa:rot`).            |
+| `forapp_order_expiry_minutes`           | `'20'`                    | Expiration window (`5–120` minutes) for pending ForApp card-to-card orders.                                                 |
+| `nowpayments_enabled`                   | `'false'`                 | Enables automated NOWPayments cryptocurrency wallet top-ups (`POST /api/webhooks/nowpayments`).                             |
+| `nowpayments_sandbox`                   | `'false'`                 | Routes NOWPayments API calls to the sandbox environment when `'true'`.                                                      |
+| `nowpayments_api_key_encrypted`         | `''`                      | `AES-256-GCM` encrypted NOWPayments API key.                                                                                |
+| `nowpayments_ipn_secret_encrypted`      | `''`                      | `AES-256-GCM` encrypted NOWPayments IPN secret used for `HMAC-SHA512` (`x-nowpayments-sig`) verification.                   |
+| `nowpayments_rate_mode`                 | `'manual'`                | Toman-to-USD conversion mode: `'manual'` or `'auto'` (live Nobitex / Wallex `USDTTMN` / TGJU with manual fallback).         |
+| `nowpayments_usd_rate_toman`            | `'80000'`                 | Manual and auto-fallback USDT/USD exchange rate in Tomans (`10000–5000000`).                                                |
+| `nowpayments_min_amount_toman` / `max`  | `'100000'` / `'50000000'` | Minimum (`≥ 10000`) and maximum NOWPayments top-up amounts in Tomans.                                                       |
+| `nowpayments_cashback_percent`          | `'0'`                     | Optional extra cashback (`0–50%`) credited on completed NOWPayments top-ups (suppressed when user group disables cashback). |
+| `nowpayments_order_expiry_minutes`      | `'60'`                    | Expiration window (`10–1440` minutes) for pending NOWPayments invoices.                                                     |
+
+### User Groups & VIP Credit Policies (`adm:grp:l` & `user_groups` table)
+
+Customer tiers are stored in the relational `user_groups` table rather than `settings` and managed via **Sales → User Groups** (`adm:grp:l`) or `/api/admin/groups`:
+
+- **Pricing & Credit:** `discount_percent` (`0–90%`), optional custom-volume overrides (`custom_price_per_gb`, `custom_price_per_day`), and `credit_limit` (`≥ 0` Tomans for VIP negative-balance purchasing/renewals).
+- **Anti-Double-Discount & Access Switches:** `allow_catalog_discounts`, `allow_promo_codes`, `allow_cashback`, `allow_lucky_wheel` (default `true`), and `allow_custom_service_name` (default `false`; combined via OR with global `custom_service_name_enabled`).
+- **Default Group & Expiry:** At most one group may have `is_default = true`; ungrouped users and users past `users.group_expires_at` transparently inherit the default group policy.
 
 ### Free Trial (`adm:trl`)
 

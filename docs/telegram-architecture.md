@@ -17,12 +17,14 @@ Incoming Telegram Update
   ├─► 2. Context & Security Guards
   │      ├─ Service Injection              (Attaches BotServices to ctx.services)
   │      ├─ Private Chat Gate              (Blocks non-private chats from user/financial flows)
+  │      ├─ Registration Policy Gate       (Enforces open / invite_only / closed for new users)
   │      ├─ User Upsert & Locale Sync      (Caches ban status in WeakMap; resolves fa/en locale)
   │      ├─ Admin Callback Firewall        (Blocks non-admins from adm:* and legacy admin callbacks)
   │      ├─ PostgresSessionAdapter         (Hydrates session from grammy_sessions)
   │      ├─ cleanChatUiMiddleware()        (Sweeps stale screens/prompts; protects artifacts)
   │      ├─ Ban Guard                      (Drops updates from banned users)
-  │      └─ Maintenance Guard              (Shows maintenance notice when bot_enabled = false)
+  │      ├─ Maintenance Guard              (Shows maintenance notice when bot_enabled = false)
+  │      └─ Forced Channel Join Guard      (Verifies required channels for global/scoped actions)
   │
   ├─► 3. Non-Blocking Pre-Conversation Layer
   │      ├─ Early `ui:dismiss` Handler     (1-tap popover close even during active inputs/wizards)
@@ -35,12 +37,13 @@ Incoming Telegram Update
   ├─► 5. Rate Limit & Cooldown Guards      (rateLimitMiddleware w/ next-expiry pruning + actionCooldown)
   │
   └─► 6. Stateless Admin & Feature Routers
-         ├─ admin/* (`adm:*` router)       (1-tap Command Center, Sales Hub, Settings Hub, Texts, Quick Commands)
+         ├─ admin/* (`adm:*` router)       (Command Center, Sales/Settings/Messaging Hubs, Gateways, Forced Join, Texts)
          ├─ coreRoutes & baseRoutes        (/start incl. ref_* & topup_<amt>, /admin, /lang, trial, native contact)
-         ├─ purchaseRoutes & configRoutes  (Storefront, flash-sale checkouts, custom volume)
-         ├─ subscriptions/routes           (Live status, QR popover, client links, sub rotation)
-         ├─ luckyWheelRoutes               (Daily spin & prize ledger)
-         └─ features/admin/*               (Receipts/voiding, users, panels, orphans, promos, broadcasts)
+         ├─ paymentOrderRoutes             (Automated ForApp & NOWPayments orders, status check, manual fallback)
+         ├─ purchaseRoutes & configRoutes  (Group-priced storefront, flash sales, VIP credit checkout, custom volume)
+         ├─ subscriptions/routes           (Live status, personal labels, QR popover, client links, sub rotation)
+         ├─ luckyWheelRoutes               (Daily spin & prize ledger, gated by group allow_lucky_wheel)
+         └─ features/admin/*               (Receipts/voiding, users & groups, panels, orphans, promos, broadcasts, bulk gifts)
 ```
 
 ---
@@ -71,35 +74,39 @@ All day-to-day administration runs on restart-proof, stateless `adm:*` routes ba
 
 ```text
 src/telegram/admin/
-├── adminNav.ts            (64-byte admCb builder, bounded adminNavStack [max 8], pagination & confirm keyboards)
-├── adminRouter.ts         (Stateless adm:* route registry, adm:back, adm:in:cancel, admin-aware fallback)
-├── adminInput.ts          (Non-blocking session.adminInput text engine — 5m TTL, inline retry, /cancel return)
-├── adminHome.ts           (1-tap Command Center adm:home, 60s cached panel health w/ 1.5s timeout,
-│                           adm:stats, 3×2 adm:sales hub, 7-item adm:cfg hub, adm:msg hub)
-├── adminCommands.ts       (BotCommandScopeChat sync for admins: /admin, /r, /u [query], /stats, /cancel)
-├── adminSalesRoutes.ts    (Stateless Packages & Categories, Custom Volume, Free Trial,
-│                           unified Growth & Rewards [Referral + Cashback + Lucky Wheel], Flash Discounts)
-├── adminSettingsRoutes.ts (Stateless General & Security w/ unified phone gate & cleanup preview,
-│                           Payment & named receipt notify admins, Bank Cards adm:bc:*,
-│                           Naming & Service Rules, Web Mini App w/ dedicated DNS/SSL screen,
-│                           Auto Backup, Admins & Support)
-└── adminTextsRoutes.ts    (Stateless FA/EN Bot Texts browser, search, live preview, inline editor)
+├── adminNav.ts                 (64-byte admCb builder, bounded adminNavStack [max 8], pagination & confirm keyboards)
+├── adminRouter.ts              (Stateless adm:* route registry, adm:back, adm:in:cancel, admin-aware fallback)
+├── adminInput.ts               (Non-blocking session.adminInput text engine — 5m TTL, inline retry, /cancel return)
+├── adminHome.ts                (1-tap Command Center adm:home, 60s cached panel health w/ 1.5s timeout,
+│                                adm:stats, adm:sales hub, 8-item adm:cfg hub, adm:msg hub)
+├── adminCommands.ts            (BotCommandScopeChat sync for admins: /admin, /r, /u [query], /stats, /cancel)
+├── adminSalesRoutes.ts         (Stateless Packages & Categories, Custom Volume, Free Trial,
+│                                unified Growth & Rewards [Referral + Cashback + Lucky Wheel], Flash Discounts)
+├── adminSettingsRoutes.ts      (General & Security w/ registration_mode, phone gate & cleanup preview,
+│                                Payment & auto-delete hours, Bank Cards adm:bc:*, Naming & Service Rules,
+│                                Web Mini App w/ DNS/SSL report, Auto Backup, Admins & Support)
+├── adminPaymentGatewayRoutes.ts (Stateless ForApp & NOWPayments setup, API key rotation, unmatched deposit matcher)
+├── adminForcedJoinRoutes.ts    (Stateless forced channel join scope & multi-channel manager w/ live test)
+└── adminTextsRoutes.ts         (Stateless FA/EN Bot Texts browser, search, live preview, inline editor)
 ```
 
 ### Key Admin Route Families (`adm:*`)
 
-| Route Prefix                   | Module & Capabilities                                                                                       |
-| :----------------------------- | :---------------------------------------------------------------------------------------------------------- |
-| `adm:home` · `adm:stats`       | 1-tap Command Center with live KPIs/alerts, cached panel health, and real-time DB/panel latency stats.      |
-| `adm:rcpt:*`                   | Pending receipt queue (1-click approve, reject reasons, batch approve), searchable approved history & void. |
-| `adm:usr:*`                    | Paginated user list with filter tabs (`all`, `active_subs`, `has_balance`, `banned`), search, CRM & wallet. |
-| `adm:sales` · `adm:pkg:*`      | 3×2 Sales Hub, stateless Packages & Categories CRUD, Custom Volume (`adm:cv`), Free Trial (`adm:trl`).      |
-| `adm:prm:*` · `adm:dsc:*`      | Filterable Promo Center + single-card quick editor (`adm:prm:edit:*`); Flash Discounts w/ confirm guards.   |
-| `adm:grw` · `adm:grw:wheel`    | Unified Growth & Rewards card (Referral bonus, Cashback %, Lucky Wheel toggle & detailed odds settings).    |
-| `adm:pnl:*` · `adm:orp:*`      | Panel registry with direct orphan queue shortcut, live-panel disable confirm, note-aware Quick Assign.      |
-| `adm:msg` · `adm:msg:jobs:<p>` | Messaging Hub with active/recent broadcast job monitor, sleek progress bars, and confirmed cancellation.    |
-| `adm:cfg:*` · `adm:bc:*`       | 7-section unified Settings Hub (zero overlap for WebApp & phone verification) + stateless Bank Cards pool.  |
-| `adm:txt:*`                    | Stateless bilingual text catalog browser with current-value copy view, placeholder checks & live preview.   |
+| Route Prefix                  | Module & Capabilities                                                                                                 |
+| :---------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
+| `adm:home` · `adm:stats`      | 1-tap Command Center with live KPIs/alerts, cached panel health, and real-time DB/panel latency stats.                |
+| `adm:rcpt:*`                  | Pending receipt queue (1-click approve, reject reasons, batch approve), searchable approved history & void.           |
+| `adm:usr:*` · `adm:usr:grp:*` | Paginated user list (`all`, `active_subs`, `has_balance`, `banned`), search, CRM, wallet, & group/expiry assign.      |
+| `adm:sales` · `adm:pkg:*`     | Sales Hub, stateless Packages & Categories CRUD, Custom Volume (`adm:cv`), Free Trial (`adm:trl`).                    |
+| `adm:grp:*`                   | Stateless User Groups CRUD (`groupRoutes.ts`): discount/rate/credit editing, 1-tap feature flags, safe delete.        |
+| `adm:prm:*` · `adm:dsc:*`     | Filterable Promo Center + single-card quick editor (`adm:prm:edit:*`); Flash Discounts w/ confirm guards.             |
+| `adm:grw` · `adm:grw:wheel`   | Unified Growth & Rewards card (Referral bonus, Cashback %, Lucky Wheel toggle & detailed odds settings).              |
+| `adm:pnl:*` · `adm:orp:*`     | Panel registry with direct orphan queue shortcut, live-panel disable confirm, note-aware Quick Assign.                |
+| `adm:msg` · `adm:gift:*`      | Messaging Hub: group-filterable broadcasts (`adm:msg:jobs:<p>`), DMs, and durable Bulk Gift campaigns (`adm:gift:*`). |
+| `adm:cfg:*` · `adm:bc:*`      | 8-section Settings Hub (`registration_mode`, payment auto-delete, WebApp, phone gate) + Bank Cards pool.              |
+| `adm:cfg:fj` · `adm:fj:*`     | Forced Channel Join scope selector (`off`/`all`/`trial_only`/`purchase_and_trial`) and channel manager.               |
+| `adm:pg:fa*` · `adm:pg:np*`   | Automated Payment Gateways: ForApp guide/key rotation/unmatched deposits & NOWPayments config/sandbox/test.           |
+| `adm:txt:*`                   | Stateless bilingual text catalog browser with current-value copy view, placeholder checks & live preview.             |
 
 ### Power-Admin Quick Commands (`BotCommandScopeChat`)
 
@@ -122,18 +129,19 @@ src/telegram/conversations/
 ├── userConversations.ts
 │   ├── buyConfigConversation            (Package selection & checkout creation)
 │   ├── buyPackageCustomNameConversation (Buyer-chosen English service name prompt)
-│   ├── customAmountConversation         (Custom GB/day quote with active flash-sale discount)
+│   ├── customAmountConversation         (Custom GB/day quote with group & flash-sale pricing)
 │   ├── renewConfigConversation          (Package-based renewal with quota/time rollover)
 │   ├── autoRenewCustomConversation      (Auto-renewal package binding & price ceiling consent)
-│   ├── promoConversation                (Promo & gift code redemption)
+│   ├── editConfigLabelConversation      (Local 40-char personal subscription label editor)
+│   ├── promoConversation                (Promo & gift code redemption, gated by group policy)
 │   ├── transferConfigConversation       (Peer-to-peer subscription ownership transfer)
-│   ├── transferBalanceConversation      (Peer-to-peer wallet balance transfer)
+│   ├── transferBalanceConversation      (Positive-balance-only P2P wallet transfer)
 │   └── verifyPhoneConversation          (requestContact flow with ReplyKeyboard cleanup on exit)
 │
 └── adminConversations/                  (Multi-step creation flows & legacy callback compatibility)
-    ├── wallet.ts                        (topupConversation + adminSetBalanceConversation)
+    ├── wallet.ts                        (topupConversation [manual/ForApp/NOWPayments] + adminSetBalance)
     ├── promos.ts                        (Single & bulk promo creation w/ durable artifact output)
-    ├── messaging.ts                     (Segmented broadcast composer w/ artifact test & DM wizard)
+    ├── messaging.ts                     (Group-filtered broadcast composer w/ artifact test & DM wizard)
     ├── lifecycle.ts                     (Admin subscription quota/expiry/service editors)
     ├── panels.ts & catalogDiscounts.ts  (Panel creation wizard & legacy discount compatibility)
     ├── texts/                           (Shared catalog classifier, placeholder metadata & live preview)

@@ -3,7 +3,7 @@
 <p align="center">
   <strong>Resilient, multi-panel Telegram commerce and Mini App platform for Rebecca Panel.</strong>
   <br />
-  Automate sales, renewals, wallet accounting, flash sales, and multi-panel fleets across Telegram and Mini App.
+  Automate sales, VIP user groups, automated top-ups, renewals, wallet accounting, flash sales, and multi-panel fleets across Telegram and Mini App.
 </p>
 
 <p align="center">
@@ -27,44 +27,44 @@
 
 ## Documentation
 
-| Document                                                    | Scope                                                                                                             |
-| :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------- |
-| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga, 24-table PostgreSQL schema, and background workers.                  |
-| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, stateless `adm:*` admin router, non-blocking input engine, and callback guards.          |
-| 📱 **[Mini App Architecture](docs/webapp-architecture.md)** | Unified User & Admin Mini App (`Fastify 5` + `React 19`), modular `/api/user/*` routes, guards, and chat sync.    |
-| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                                     |
-| 🚀 **[Deployment & Operations](docs/deployment.md)**        | 1-command installation, `rsbot` lifecycle CLI, Caddy On-Demand TLS mesh, and transactional disaster recovery.     |
-| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, Mini App upload/auth controls, and database integrity guarantees. |
+| Document                                                    | Scope                                                                                                            |
+| :---------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga with VIP credit limits, 30-table PostgreSQL schema, and 11 workers.  |
+| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, stateless `adm:*` admin router, non-blocking input engine, and callback guards.         |
+| 📱 **[Mini App Architecture](docs/webapp-architecture.md)** | Unified User & Admin Mini App (`Fastify 5` + `React 19`), modular `/api/user/*` & webhook routes, and chat sync. |
+| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                                    |
+| 🚀 **[Deployment & Operations](docs/deployment.md)**        | 1-command installation, `rsbot` lifecycle CLI, Caddy On-Demand TLS mesh, and transactional disaster recovery.    |
+| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, gateway webhook/upload auth, and database integrity guarantees.  |
 
 ---
 
 ## Capabilities
 
-| Customer Experience (Telegram Bot + Mini App Parity)                                                                                                                                     | Administration & Backoffice                                                                                                                                            |
-| :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🛒 **Instant Storefront:** Fixed packages, categorized plans, custom GB/day ordering (with tiered price tables), optional buyer-chosen service names, and live flash-sale countdowns.    | 🌐 **Multi-Panel Fleet:** Connect multiple Rebecca panels at runtime (`AES-256-GCM` vault) and bind packages to specific services.                                     |
-| 🎁 **Free Trial & Interactive Lucky Wheel:** One-tap trial claiming with QR & SmartConnect delivery plus an animated 8-slice SVG Lucky Wheel with haptics, cooldowns, and spin history.  | 🛡️ **Receipt Security & Voiding:** `SHA-256` + `file_unique_id` duplicate receipt detection (`warn`/`block`), atomic receipt voiding, and multi-card rotation.         |
-| 💳 **Wallet 2.0 & P2P Transfers:** Native in-app 2-step card-to-card top-ups, Telegram-hosted receipt uploads, receipt history, category filters, and exact-match P2P balance transfers. | 📊 **Telegram & Mini App CRM:** 1-tap stateless `/admin` command center (`/r`, `/u`, `/stats`), filterable dossiers, broadcast job monitor, and orphan reconciliation. |
-| 📊 **Subscription Portal:** Sync All, external sub-link claim, per-node usage & `onlineAt`, QR codes, 1-tap VPN SmartConnect links (v2rayNG, Hiddify, Streisand, Happ, Clash), & revoke. | 📢 **Growth & Retention:** Throttled segmented broadcasts, 24h first-use connection nudges, and staged expired-config cleanup with renewal warnings.                   |
-| 🔄 **Lifecycle & Safeguards:** Start-on-first-use (`on_hold`), quota/time rollover, preset & custom-volume auto-renewal, P2P service transfer, self-refund quotes, and chat artifacts.   | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` contact verification via bot or native Mini App `WebApp.requestContact()` (zero raw phone storage).            |
-| 🌐 **Unified UX & Localization:** Full Persian (`fa`) / English (`en`) parity, Persian digit normalization, bi-directional deep links, and maintenance mode with admin bypass.           | 📦 **Multi-Instance Operations:** Run isolated instances with automated Caddy On-Demand TLS mesh routing and transactional backups.                                    |
+| Customer Experience (Telegram Bot + Mini App Parity)                                                                                                                                        | Administration & Backoffice                                                                                                                                                                           |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🛒 **Instant Storefront & VIP Groups:** Fixed packages, categorized plans, custom GB/day ordering (tiered prices), buyer-chosen service names, group discounts/badges, & flash sales.       | 🌐 **Multi-Panel Fleet & User Groups:** Connect multiple Rebecca panels (`AES-256-GCM` vault), define `user_groups` with anti-double-discount rules, custom rates, & VIP credit limits.               |
+| 💳 **Automated & Manual Top-Ups:** Automated ForApp card-to-card SMS matching, NOWPayments crypto invoices (live/manual USDT rates), 2-step manual receipts, & positive-only P2P transfers. | 🛡️ **Payment & Access Security:** `SHA-256` + `file_unique_id` receipt deduplication, atomic voiding, payment-message auto-delete, `open`/`invite_only`/`closed` registration, & forced channel join. |
+| 🎁 **Free Trial & Interactive Lucky Wheel:** One-tap trial claiming with QR & SmartConnect delivery plus an animated 8-slice SVG Lucky Wheel with haptics, cooldowns, and spin history.     | 📊 **Telegram & Mini App CRM:** 1-tap stateless `/admin` command center (`/r`, `/u`, `/stats`), group/expiry assignment, unmatched deposit matcher, and orphan reconciliation.                        |
+| 📊 **Subscription Portal & Personal Labels:** Sync All, external sub-link claim, local 40-char personal labels, per-node usage & `onlineAt`, QR codes, 1-tap SmartConnect links, & revoke.  | 📢 **Growth, Retention & Bulk Gifts:** Group-filtered broadcasts, durable bulk GB/day gift campaigns, 24h first-use nudges, and staged expired-config cleanup with warnings.                          |
+| 🔄 **Lifecycle & VIP Credit:** Start-on-first-use (`on_hold`), rollover, preset & custom auto-renewal (VIP credit-aware), P2P service transfer, self-refund quotes, & chat artifacts.       | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` contact verification via bot or native Mini App `WebApp.requestContact()` (zero raw phone storage).                                           |
+| 🌐 **Unified UX & Localization:** Full Persian (`fa`) / English (`en`) parity, Persian digit normalization, bi-directional deep links, and maintenance mode with admin bypass.              | 📦 **Multi-Instance Operations:** Run isolated instances with automated Caddy On-Demand TLS mesh routing and transactional backups.                                                                   |
 
 ---
 
 ## Financial & Operational Guarantees
 
 ```text
-Checkout ──► [1. Reserve Wallet Funds] ──► [2. Provision on Rebecca REST API]
-                                                   │
-                         ┌─────────────────────────┴─────────────────────────┐
-                      Success                                        Failure / Timeout
-                         ▼                                                   ▼
-        [3a. Commit Ledger + Award Bonuses]                 [3b. Release Reserve + Audit Log]
+Checkout ──► [1. Lock User & Reserve Funds] ──► [2. Provision on Rebecca REST API]
+             (balance - reserved + credit_limit)               │
+                                     ┌─────────────────────────┴─────────────────────────┐
+                                  Success                                        Failure / Timeout
+                                     ▼                                                   ▼
+                    [3a. Commit Ledger + Award Bonuses]                 [3b. Release Reserve + Audit Log]
 ```
 
-- **64-Bit Minor-Unit Integer Accounting:** All monetary values use safe integers (`DbNumber`) with PostgreSQL check constraints (`balance >= reserved_balance`, `reserved_balance >= 0`).
-- **3-Phase Purchase & Renewal Saga:** Funds and promo redemptions are reserved before remote API dispatch and automatically compensated on network failure or reconciliation recovery.
-- **Cryptographic Fraud & Privacy Controls:** Receipts are fingerprinted via `SHA-256` and Telegram `file_unique_id`; verified phone numbers are stored strictly as `HMAC-SHA256` digests keyed from `BOT_TOKEN`.
+- **64-Bit Minor-Unit Integer Accounting & VIP Credit Safety:** All monetary values use signed 64-bit safe integers (`DbNumber`, `-9007199254740991..9007199254740991`) with `reserved_balance >= 0`. VIP groups may grant a `credit_limit` for purchases/renewals (snapshotted on `purchase_intents` for safe mid-flight group changes and reconciliation), top-ups naturally settle negative balances, and P2P transfers strictly require positive real balance (`balance - reserved_balance >= amount`).
+- **3-Phase Purchase & Renewal Saga:** Funds, effective group credit limits, and promo redemptions are reserved under a `FOR UPDATE` row lock before remote API dispatch and automatically compensated on network failure or reconciliation recovery.
+- **Cryptographic Fraud, Gateway & Privacy Controls:** Receipts are fingerprinted via `SHA-256` and `file_unique_id`; ForApp (`X-API-Key`) and NOWPayments (`HMAC-SHA512` IPN) webhooks use constant-time verification and `AES-256-GCM` stored secrets; verified phone numbers are stored strictly as `HMAC-SHA256` digests keyed from `BOT_TOKEN`.
 - **Dual-Mode Delivery:** Outbound Long Polling by default (zero open ports required) or reverse-proxied Webhook delivery with `X-Telegram-Bot-Api-Secret-Token` validation.
 
 ---
