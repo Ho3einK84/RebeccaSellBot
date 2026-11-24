@@ -13,6 +13,8 @@ import {
   resolveBestCatalogDiscount,
   safeListActiveDiscounts,
 } from '../../../../domain/services/CatalogDiscountService.js';
+import { applyGroupDiscount } from '../../../../domain/services/PricingService.js';
+import { safeGetEffectiveUserPolicy } from '../../../../domain/services/UserGroupService.js';
 import { RefundOutcomePendingError } from '../../../../domain/services/RefundService.js';
 import { computeRolloverPreview } from '../../../../telegram/checkoutRenderer.js';
 import {
@@ -273,7 +275,10 @@ export function registerUserConfigRoutes(
         return reply.code(500).send({ error: 'Pricing service unavailable' });
       }
 
-      const locale = await resolveUserLocale(telegramId, options);
+      const [locale, userPolicy] = await Promise.all([
+        resolveUserLocale(telegramId, options),
+        safeGetEffectiveUserPolicy(options.userGroupService, telegramId),
+      ]);
       const availablePackages = options.pricingService.getPackages(
         config.panelId,
         config.serviceId,
@@ -324,7 +329,7 @@ export function registerUserConfigRoutes(
             code: 'INVALID_CUSTOM_BOUNDS',
           });
         }
-        const quote = options.pricingService.getCustomPriceQuote(gb, days);
+        const quote = options.pricingService.getCustomPriceQuote(gb, days, userPolicy);
         const customId = `custom_${gb}gb_${days}d`;
         selectedPackage = {
           id: customId,
@@ -339,10 +344,14 @@ export function registerUserConfigRoutes(
             code: 'PACKAGE_NOT_FOUND',
           });
         }
+        const effectivePrice = applyGroupDiscount(
+          match.price,
+          userPolicy.discountPercent
+        ).finalAmount;
         selectedPackage = {
           id: match.id,
           name: localizePackageName(match.id, match.name, locale, options.translationService),
-          price: match.price,
+          price: effectivePrice,
         };
       } else if (config.autoRenewPackageId) {
         const match = availablePackages.find((pkg) => pkg.id === config.autoRenewPackageId);
@@ -350,20 +359,23 @@ export function registerUserConfigRoutes(
           selectedPackage = {
             id: match.id,
             name: localizePackageName(match.id, match.name, locale, options.translationService),
-            price: match.price,
+            price: applyGroupDiscount(match.price, userPolicy.discountPercent).finalAmount,
           };
         } else if (/^custom_(\d+)gb_(\d+)d$/i.test(config.autoRenewPackageId)) {
-          const customPkg = options.pricingService.getPackageById?.(config.autoRenewPackageId);
-          if (customPkg) {
+          const customMatch = /^custom_(\d+)gb_(\d+)d$/i.exec(config.autoRenewPackageId);
+          if (customMatch) {
+            const gb = Number(customMatch[1]);
+            const days = Number(customMatch[2]);
+            const quote = options.pricingService.getCustomPriceQuote(gb, days, userPolicy);
             selectedPackage = {
-              id: customPkg.id,
+              id: config.autoRenewPackageId,
               name: localizePackageName(
-                customPkg.id,
-                customPkg.name,
+                config.autoRenewPackageId,
+                `${gb} GB`,
                 locale,
                 options.translationService
               ),
-              price: customPkg.price,
+              price: quote.totalPrice,
             };
           }
         }
@@ -378,7 +390,7 @@ export function registerUserConfigRoutes(
         selectedPackage = {
           id: first.id,
           name: localizePackageName(first.id, first.name, locale, options.translationService),
-          price: first.price,
+          price: applyGroupDiscount(first.price, userPolicy.discountPercent).finalAmount,
         };
       }
 
@@ -717,29 +729,64 @@ export function registerUserConfigRoutes(
         ? customVolumeEnabled(options.translationService)
         : true;
 
-      const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
+      const [activeDiscounts, userPolicy] = await Promise.all([
+        safeListActiveDiscounts(options.catalogDiscountService),
+        safeGetEffectiveUserPolicy(options.userGroupService, telegramId),
+      ]);
+      const now = new Date();
       const compatiblePackages = (
         options.pricingService?.getPackages(config.panelId, config.serviceId, false) ?? []
       )
         .filter((p) => p.enabled !== false)
         .map((p) => {
-          const discount = resolveBestCatalogDiscount(activeDiscounts, {
-            packageId: p.id,
-            categoryId: p.categoryId ?? null,
-            originalPrice: p.price,
-          });
+          const priced =
+            typeof options.pricingService?.resolvePackagePrice === 'function'
+              ? options.pricingService.resolvePackagePrice(p, activeDiscounts, now, userPolicy)
+              : (() => {
+                  const groupDisc = applyGroupDiscount(p.price, userPolicy.discountPercent);
+                  const catDisc = userPolicy.allowCatalogDiscounts
+                    ? resolveBestCatalogDiscount(
+                        activeDiscounts,
+                        {
+                          packageId: p.id,
+                          categoryId: p.categoryId ?? null,
+                          originalPrice: groupDisc.finalAmount,
+                        },
+                        now
+                      )
+                    : {
+                        originalPrice: groupDisc.finalAmount,
+                        effectivePrice: groupDisc.finalAmount,
+                        discountAmount: 0,
+                        activeDiscountTitle: null,
+                        discountExpiresAt: null,
+                      };
+                  return {
+                    originalPrice: p.price,
+                    effectivePrice: catDisc.effectivePrice,
+                    discountAmount: Math.max(0, p.price - catDisc.effectivePrice),
+                    groupDiscountPercent: groupDisc.discountPercent,
+                    groupDiscountAmount: groupDisc.discountAmount,
+                    catalogDiscountAmount: catDisc.discountAmount,
+                    activeDiscountTitle: catDisc.activeDiscountTitle,
+                    discountExpiresAt: catDisc.discountExpiresAt,
+                  };
+                })();
           return {
             id: p.id,
             name: localizePackageName(p.id, p.name, locale, options.translationService),
             gbAmount: p.gbAmount,
             durationDays: p.durationDays,
-            price: discount.effectivePrice,
-            originalPrice: discount.originalPrice,
-            effectivePrice: discount.effectivePrice,
-            discountAmount: discount.discountAmount,
-            activeDiscountTitle: discount.activeDiscountTitle,
-            discountExpiresAt: discount.discountExpiresAt
-              ? discount.discountExpiresAt.toISOString()
+            price: priced.effectivePrice,
+            originalPrice: priced.originalPrice,
+            effectivePrice: priced.effectivePrice,
+            discountAmount: priced.discountAmount,
+            groupDiscountPercent: priced.groupDiscountPercent ?? 0,
+            groupDiscountAmount: priced.groupDiscountAmount ?? 0,
+            catalogDiscountAmount: priced.catalogDiscountAmount ?? 0,
+            activeDiscountTitle: priced.activeDiscountTitle,
+            discountExpiresAt: priced.discountExpiresAt
+              ? priced.discountExpiresAt.toISOString()
               : null,
             categoryId: p.categoryId ?? null,
             rolloverQuota: p.rolloverQuota ?? defaultRollover,

@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import { getDb } from '../../infra/db.js';
 import { luckyWheelSpins, users, walletTransactions } from '../../infra/schema.js';
 import type { TranslationService } from './TranslationService.js';
+import type { UserGroupService } from './UserGroupService.js';
 import { logger } from '../../infra/logger.js';
 
 export interface LuckyWheelStatus {
@@ -76,7 +77,13 @@ export function calculateLuckyWheelPrize(
 export class LuckyWheelService {
   private invalidationHook?: (telegramId: number) => void;
 
-  constructor(private readonly translationService: TranslationService) {}
+  constructor(
+    private readonly translationService: TranslationService,
+    private readonly userGroupService?: Pick<
+      UserGroupService,
+      'getEffectiveUserPolicy' | 'getEffectiveUserPolicyInTx'
+    >
+  ) {}
 
   registerInvalidationHook(hook: (telegramId: number) => void): void {
     this.invalidationHook = hook;
@@ -139,6 +146,22 @@ export class LuckyWheelService {
         maxPrize,
         currentEffectiveLuck: baseLuck,
       };
+    }
+
+    if (this.userGroupService) {
+      const policy = await this.userGroupService.getEffectiveUserPolicy(telegramId);
+      if (!policy.allowLuckyWheel) {
+        return {
+          enabled: false,
+          canSpin: false,
+          reason: 'disabled',
+          totalSpins: 0,
+          maxSpins,
+          minPrize,
+          maxPrize,
+          currentEffectiveLuck: baseLuck,
+        };
+      }
     }
 
     const db = getDb();
@@ -256,6 +279,12 @@ export class LuckyWheelService {
       }
       if (user.isBanned) {
         throw new Error('USER_BANNED');
+      }
+      if (this.userGroupService) {
+        const policy = await this.userGroupService.getEffectiveUserPolicyInTx(tx, telegramId, user);
+        if (!policy.allowLuckyWheel) {
+          throw new Error('LUCKY_WHEEL_DISABLED');
+        }
       }
 
       const minPrize = clampLuckySetting(

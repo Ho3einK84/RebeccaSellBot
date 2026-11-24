@@ -27,6 +27,7 @@ import { ContactVerificationService } from './domain/services/ContactVerificatio
 import { ForcedJoinService } from './domain/services/ForcedJoinService.js';
 import { BulkGiftService } from './domain/services/BulkGiftService.js';
 import { ScheduledMessageDeletionService } from './domain/services/ScheduledMessageDeletionService.js';
+import { UserGroupService } from './domain/services/UserGroupService.js';
 import { DomainRegistryService } from './domain/services/DomainRegistryService.js';
 import {
   normalizeDomainInput,
@@ -368,13 +369,18 @@ async function main() {
   );
   await panelRegistry.initialize(translationService);
 
-  const referralService = new ReferralService(translationService);
-  const promoService = new PromoService();
+  const userGroupService = new UserGroupService();
+  const referralService = new ReferralService(translationService, userGroupService);
+  const promoService = new PromoService(userGroupService);
   const walletService = new WalletService(
     panelRegistry,
     translationService,
     referralService,
-    promoService
+    promoService,
+    userGroupService
+  );
+  userGroupService.registerInvalidationHook((telegramId) =>
+    walletService.invalidateUserCache(telegramId)
   );
   referralService.registerInvalidationHook((telegramId) =>
     walletService.invalidateUserCache(telegramId)
@@ -403,6 +409,7 @@ async function main() {
     translationService,
     paymentService,
     walletService,
+    userGroupService,
     credentialSecret: config.PANEL_CREDENTIALS_KEY ?? config.BOT_TOKEN,
     resolvePublicBaseUrl: () =>
       currentWebAppUrl ||
@@ -415,7 +422,7 @@ async function main() {
     instanceName: config.INSTANCE_NAME,
     createDocumentInput: (filePath, fileName) => new InputFile(filePath, fileName),
   });
-  const luckyWheelService = new LuckyWheelService(translationService);
+  const luckyWheelService = new LuckyWheelService(translationService, userGroupService);
   luckyWheelService.registerInvalidationHook((telegramId) =>
     walletService.invalidateUserCache(telegramId)
   );
@@ -568,6 +575,7 @@ async function main() {
     forcedJoinService,
     bulkGiftService,
     scheduledMessageDeletionService,
+    userGroupService,
     supportUrl: config.SUPPORT_URL,
     webAppUrl: currentWebAppUrl,
     webAppPort: config.WEBAPP_HOST_PORT ?? config.WEBAPP_PORT,
@@ -601,7 +609,10 @@ async function main() {
     purchaseCheckoutService,
   });
   startTrialCleanupCron(panelRegistry, configService);
-  startAutoRenewalCron(panelRegistry, walletService, pricingService, translationService, bot.api);
+  startAutoRenewalCron(panelRegistry, walletService, pricingService, translationService, bot.api, {
+    userGroupService,
+    catalogDiscountService,
+  });
   startBroadcastWorker(broadcastService, bot.api);
   startBulkGiftWorker({
     bulkGiftService,

@@ -31,6 +31,7 @@ import { FreeTrialBanner } from '@/features/user-portal/components/FreeTrialSect
 import type {
   UserPackageItem,
   UserCategoryItem,
+  UserGroupSummary,
   CustomVolumeSettings,
   CustomVolumeQuoteResponse,
   UserTrialStatus,
@@ -41,6 +42,7 @@ import type {
 interface ShopTabProps {
   packages: UserPackageItem[];
   categories?: UserCategoryItem[];
+  group?: UserGroupSummary | null;
   currency?: string;
   customVolumeSettings?: CustomVolumeSettings;
   trial?: UserTrialStatus | null;
@@ -88,6 +90,7 @@ const PRESET_GB_OPTIONS = [10, 20, 30, 50, 100, 200];
 export const ShopTab: React.FC<ShopTabProps> = ({
   packages,
   categories,
+  group,
   currency: propCurrency,
   customVolumeSettings,
   trial,
@@ -141,7 +144,13 @@ export const ShopTab: React.FC<ShopTabProps> = ({
     });
   }, [minGb, maxGb]);
 
-  const linearPrice = Math.max(0, customGb * basePricePerGb + customDays * pricePerDay);
+  const groupDiscountPct =
+    customVolumeSettings?.groupDiscountPercent ?? group?.discountPercent ?? 0;
+  const rawLinearPrice = Math.max(0, customGb * basePricePerGb + customDays * pricePerDay);
+  const linearPrice =
+    groupDiscountPct > 0
+      ? Math.max(0, rawLinearPrice - Math.floor((rawLinearPrice * groupDiscountPct) / 100))
+      : rawLinearPrice;
   const customPrice = serverQuote ? serverQuote.totalPrice : linearPrice;
   const effectivePricePerGb = serverQuote?.pricePerGb ?? basePricePerGb;
   const isTierDiscounted =
@@ -149,7 +158,16 @@ export const ShopTab: React.FC<ShopTabProps> = ({
   const customOriginalPrice =
     serverQuote?.originalPrice && serverQuote.originalPrice > customPrice
       ? serverQuote.originalPrice
-      : null;
+      : groupDiscountPct > 0 && rawLinearPrice > customPrice
+        ? rawLinearPrice
+        : null;
+  const groupDisplayLabel = group ? [group.badge, group.name].filter(Boolean).join(' ').trim() : '';
+  const hasGroupPricingPerk = Boolean(
+    group &&
+    (group.discountPercent > 0 ||
+      group.customPricePerGb !== null ||
+      group.customPricePerDay !== null)
+  );
 
   useEffect(() => {
     if (!isCustomEnabled) return;
@@ -298,6 +316,36 @@ export const ShopTab: React.FC<ShopTabProps> = ({
         <SectionHeader icon={<ShoppingBag />} title={t('user.shop.title')} />
         <p className="text-xs text-ink-muted m-0">{t('user.shop.desc')}</p>
       </div>
+
+      {/* Group Pricing Banner */}
+      {group && hasGroupPricingPerk && (
+        <div className="rounded-tile border border-brand/30 bg-brand-soft px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs text-brand-fg flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkles className="w-4 h-4 shrink-0" />
+            <span className="font-semibold truncate">
+              {t('user.shop.groupPricingBanner').replace(
+                '{group}',
+                groupDisplayLabel || t('user.group.badgeDefault')
+              )}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {group.discountPercent > 0 && (
+              <Badge variant="primary" size="xs" className="tnum">
+                {t('user.shop.groupDiscountOff').replace(
+                  '{percent}',
+                  formatNumber(group.discountPercent)
+                )}
+              </Badge>
+            )}
+            {(group.customPricePerGb !== null || group.customPricePerDay !== null) && (
+              <Badge variant="success" size="xs">
+                {t('user.shop.groupCustomRateBadge')}
+              </Badge>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Eligible Free Trial Banner */}
       {trial?.eligible && (

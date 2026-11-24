@@ -15,6 +15,7 @@ import { t, tForLocale } from '../locale.js';
 import { mainMenu, renderHomeDashboard } from '../keyboards/mainMenu.js';
 import { registerPromoAdminRoutes } from './admin/promoRoutes.js';
 import { registerAdminUserRoutes } from './admin/userRoutes.js';
+import { registerAdminGroupRoutes } from './admin/groupRoutes.js';
 import { registerReceiptAdminRoutes } from './admin/receiptRoutes.js';
 import { registerAdminMaintenanceRoutes } from './admin/maintenanceRoutes.js';
 import { registerAdminBroadcastRoutes } from './admin/broadcastRoutes.js';
@@ -38,6 +39,7 @@ import { ContactVerificationService } from '../../domain/services/ContactVerific
 
 export function registerCoreRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   registerAdminHomeRoutes();
+  registerAdminGroupRoutes();
   registerAdminSalesRoutes();
   registerAdminSettingsRoutes();
   registerAdminForcedJoinRoutes();

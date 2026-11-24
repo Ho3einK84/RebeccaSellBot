@@ -189,6 +189,14 @@ export const WalletTab: React.FC<WalletTabProps> = ({
   const currency = settings?.currency || t('common.currency');
   const balance = profile?.balance ?? 0;
   const availableBalance = profile?.availableBalance ?? 0;
+  const transferableBalance = profile?.transferableBalance ?? Math.max(0, availableBalance);
+  const creditLimit = profile?.creditLimit ?? 0;
+  const debtAmount = profile?.debtAmount ?? Math.max(0, -balance);
+  const purchasingPower = profile?.purchasingPower ?? Math.max(0, availableBalance + creditLimit);
+  const groupLabel = profile?.group
+    ? [profile.group.badge, profile.group.name].filter(Boolean).join(' ').trim()
+    : '';
+  const allowPromoCodes = settings?.allowPromoCodes ?? profile?.group?.allowPromoCodes ?? true;
   const cardNumber = settings?.cardNumber || '';
   const cardHolder = settings?.cardHolder || '';
   const forappEnabled = Boolean(settings?.forappEnabled);
@@ -553,7 +561,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
     } catch (err: unknown) {
       triggerHaptic('error');
       let msg = t('user.shop.promoInvalid');
-      if (err instanceof ApiClientError && err.code === 'PROMO_PURCHASE_ONLY') {
+      if (err instanceof ApiClientError && err.code === 'PROMO_NOT_ALLOWED') {
+        msg = t('user.shop.promoNotAllowedForGroup');
+      } else if (err instanceof ApiClientError && err.code === 'PROMO_PURCHASE_ONLY') {
         msg = t('user.wallet.giftCodeNotCredit');
       }
       setGiftFeedback({ type: 'error', message: msg });
@@ -571,51 +581,102 @@ export const WalletTab: React.FC<WalletTabProps> = ({
 
   return (
     <div className="w-full flex flex-col gap-5 pb-6">
-      {/* Top Wallet Summary + P2P Transfer CTA (single compact row, button pinned left) */}
-      <Card padding="md" className="flex items-center justify-between gap-2.5 text-start sm:p-5">
-        <div className="flex items-center gap-3 min-w-0">
-          <IconTile tone="brand" size="md">
-            <Wallet />
-          </IconTile>
-          <div className="flex flex-col min-w-0">
-            <span className="text-xs text-ink-muted">{t('user.wallet.currentBalance')}</span>
-            <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
-              <bdi
-                dir="ltr"
-                className="text-xl sm:text-2xl tnum font-bold tracking-tight leading-none text-ink"
-              >
-                {formatToman(availableBalance)}
-              </bdi>
-              <span className="text-xs text-ink-muted font-medium">{currency}</span>
-            </div>
-            {profile?.reservedBalance && profile.reservedBalance > 0 ? (
-              <div className="flex items-center gap-2 text-[11px] text-ink-muted tnum mt-0.5 flex-wrap">
-                <span>{t('user.wallet.totalLabel').replace('{amount}', formatToman(balance))}</span>
-                <span className="text-warn-fg font-medium">
-                  {t('user.wallet.reservedLabel').replace(
-                    '{amount}',
-                    formatToman(profile.reservedBalance)
-                  )}
-                </span>
+      {/* Top Wallet Summary + P2P Transfer CTA */}
+      <Card padding="md" className="flex flex-col gap-3 text-start sm:p-5">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-3 min-w-0">
+            <IconTile tone={debtAmount > 0 ? 'danger' : 'brand'} size="md">
+              <Wallet />
+            </IconTile>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-ink-muted">{t('user.wallet.currentBalance')}</span>
+                {groupLabel ? (
+                  <Badge variant="warning" size="xs">
+                    {groupLabel}
+                  </Badge>
+                ) : null}
               </div>
-            ) : null}
+              <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
+                <bdi
+                  dir="ltr"
+                  className={`text-xl sm:text-2xl tnum font-bold tracking-tight leading-none ${
+                    availableBalance < 0 ? 'text-danger-fg' : 'text-ink'
+                  }`}
+                >
+                  {formatToman(availableBalance)}
+                </bdi>
+                <span className="text-xs text-ink-muted font-medium">{currency}</span>
+              </div>
+              {profile?.reservedBalance && profile.reservedBalance > 0 ? (
+                <div className="flex items-center gap-2 text-[11px] text-ink-muted tnum mt-0.5 flex-wrap">
+                  <span>
+                    {t('user.wallet.totalLabel').replace('{amount}', formatToman(balance))}
+                  </span>
+                  <span className="text-warn-fg font-medium">
+                    {t('user.wallet.reservedLabel').replace(
+                      '{amount}',
+                      formatToman(profile.reservedBalance)
+                    )}
+                  </span>
+                </div>
+              ) : null}
+            </div>
           </div>
+
+          {canTransferBalance && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                triggerHaptic('selection');
+                setIsTransferModalOpen(true);
+              }}
+              className="shrink-0 ms-auto"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 text-brand-fg shrink-0" />
+              <span>{t('user.wallet.transferBalanceButton')}</span>
+            </Button>
+          )}
         </div>
 
-        {canTransferBalance && (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              triggerHaptic('selection');
-              setIsTransferModalOpen(true);
-            }}
-            className="shrink-0 ms-auto"
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5 text-brand-fg shrink-0" />
-            <span>{t('user.wallet.transferBalanceButton')}</span>
-          </Button>
+        {(creditLimit > 0 || debtAmount > 0) && (
+          <div className="pt-2.5 border-t border-line flex flex-col gap-2 text-xs tnum">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {debtAmount > 0 && (
+                <div className="rounded-tile border border-danger/25 bg-danger-soft px-3 py-2 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-danger-fg">{t('user.wallet.debtLabel')}</span>
+                  <bdi dir="ltr" className="font-semibold text-danger-fg">
+                    {formatToman(debtAmount)} {currency}
+                  </bdi>
+                </div>
+              )}
+              {creditLimit > 0 && (
+                <>
+                  <div className="rounded-tile border border-line bg-surface-2 px-3 py-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-ink-muted">
+                      {t('user.wallet.creditLimitLabel')}
+                    </span>
+                    <bdi dir="ltr" className="font-semibold text-ink">
+                      {formatToman(creditLimit)} {currency}
+                    </bdi>
+                  </div>
+                  <div className="rounded-tile border border-ok/25 bg-ok-soft px-3 py-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-ok-fg">
+                      {t('user.wallet.purchasingPowerLabel')}
+                    </span>
+                    <bdi dir="ltr" className="font-semibold text-ok-fg">
+                      {formatToman(purchasingPower)} {currency}
+                    </bdi>
+                  </div>
+                </>
+              )}
+            </div>
+            {debtAmount > 0 && (
+              <p className="text-[11px] text-ink-muted m-0">{t('user.wallet.debtSettleHint')}</p>
+            )}
+          </div>
         )}
       </Card>
 
@@ -1609,54 +1670,56 @@ export const WalletTab: React.FC<WalletTabProps> = ({
             </Card>
           )}
 
-          {/* Gift Credit Redemption Card */}
-          <Card padding="md" className="flex flex-col gap-3 text-start">
-            <div className="flex items-center gap-2">
-              <Gift className="w-4 h-4 text-brand-fg shrink-0" />
-              <h3 className="text-sm font-semibold text-ink m-0">
-                {t('user.wallet.giftCodeTitle')}
-              </h3>
-            </div>
-            <p className="text-xs text-ink-muted m-0 leading-relaxed">
-              {t('user.wallet.giftCodeDesc')}
-            </p>
-            <form
-              onSubmit={(e) => void handleRedeemGiftCode(e)}
-              className="flex items-center gap-2"
-            >
-              <input
-                type="text"
-                dir="ltr"
-                value={giftCode}
-                onChange={(e) => {
-                  setGiftCode(e.target.value);
-                  if (giftFeedback) setGiftFeedback(null);
-                }}
-                placeholder={t('user.wallet.giftCodePlaceholder')}
-                aria-label={t('user.wallet.giftCodeTitle')}
-                className="flex-1 h-11 px-3.5 rounded-ctl border border-line bg-surface-2 text-xs sm:text-sm font-mono text-ink placeholder:text-ink-muted rs-focus"
-              />
-              <Button
-                type="submit"
-                size="md"
-                variant="secondary"
-                disabled={!giftCode.trim() || isRedeemingGift}
-                loading={isRedeemingGift}
-                className="shrink-0"
-              >
-                {t('user.wallet.giftCodeRedeem')}
-              </Button>
-            </form>
-            {giftFeedback && (
-              <p
-                className={`text-xs m-0 ${
-                  giftFeedback.type === 'success' ? 'text-ok-fg' : 'text-danger-fg'
-                }`}
-              >
-                {giftFeedback.message}
+          {/* Gift Credit Redemption Card (hidden when group disallows promo codes) */}
+          {allowPromoCodes && (
+            <Card padding="md" className="flex flex-col gap-3 text-start">
+              <div className="flex items-center gap-2">
+                <Gift className="w-4 h-4 text-brand-fg shrink-0" />
+                <h3 className="text-sm font-semibold text-ink m-0">
+                  {t('user.wallet.giftCodeTitle')}
+                </h3>
+              </div>
+              <p className="text-xs text-ink-muted m-0 leading-relaxed">
+                {t('user.wallet.giftCodeDesc')}
               </p>
-            )}
-          </Card>
+              <form
+                onSubmit={(e) => void handleRedeemGiftCode(e)}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={giftCode}
+                  onChange={(e) => {
+                    setGiftCode(e.target.value);
+                    if (giftFeedback) setGiftFeedback(null);
+                  }}
+                  placeholder={t('user.wallet.giftCodePlaceholder')}
+                  aria-label={t('user.wallet.giftCodeTitle')}
+                  className="flex-1 h-11 px-3.5 rounded-ctl border border-line bg-surface-2 text-xs sm:text-sm font-mono text-ink placeholder:text-ink-muted rs-focus"
+                />
+                <Button
+                  type="submit"
+                  size="md"
+                  variant="secondary"
+                  disabled={!giftCode.trim() || isRedeemingGift}
+                  loading={isRedeemingGift}
+                  className="shrink-0"
+                >
+                  {t('user.wallet.giftCodeRedeem')}
+                </Button>
+              </form>
+              {giftFeedback && (
+                <p
+                  className={`text-xs m-0 ${
+                    giftFeedback.type === 'success' ? 'text-ok-fg' : 'text-danger-fg'
+                  }`}
+                >
+                  {giftFeedback.message}
+                </p>
+              )}
+            </Card>
+          )}
         </div>
 
         {/* Right Column: Transactions Ledger + Receipt History */}
@@ -1820,7 +1883,9 @@ export const WalletTab: React.FC<WalletTabProps> = ({
       <WalletTransferModal
         isOpen={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
-        availableBalance={availableBalance}
+        availableBalance={transferableBalance}
+        hasCreditLimit={creditLimit > 0}
+        debtAmount={debtAmount}
         minAmount={transferMinAmount}
         currency={currency}
         onNotify={onNotify}

@@ -56,6 +56,7 @@ import {
 } from './PaymentService.js';
 import type { TranslationService } from './TranslationService.js';
 import type { WalletService } from './WalletService.js';
+import type { UserGroupService } from './UserGroupService.js';
 
 export const FORAPP_WEBHOOK_PATH = '/api/webhooks/forapp';
 export const NOWPAYMENTS_WEBHOOK_PATH = '/api/webhooks/nowpayments';
@@ -135,6 +136,10 @@ export interface AutomatedPaymentServiceOptions {
   translationService: TranslationService;
   paymentService: PaymentService;
   walletService?: Pick<WalletService, 'invalidateUserCache'>;
+  userGroupService?: Pick<
+    UserGroupService,
+    'getEffectiveUserPolicy' | 'getEffectiveUserPolicyInTx'
+  >;
   credentialSecret: string;
   nowPaymentsClient?: NowPaymentsClient;
   exchangeRateClient?: ExchangeRateClient;
@@ -375,6 +380,10 @@ export class AutomatedPaymentService {
   private readonly translationService: TranslationService;
   private readonly paymentService: PaymentService;
   private readonly walletService?: Pick<WalletService, 'invalidateUserCache'>;
+  private readonly userGroupService?: Pick<
+    UserGroupService,
+    'getEffectiveUserPolicy' | 'getEffectiveUserPolicyInTx'
+  >;
   private readonly cipher: CredentialCipher;
   private readonly nowPaymentsClient: NowPaymentsClient;
   private readonly exchangeRateClient: ExchangeRateClient;
@@ -384,6 +393,7 @@ export class AutomatedPaymentService {
     this.translationService = options.translationService;
     this.paymentService = options.paymentService;
     this.walletService = options.walletService;
+    this.userGroupService = options.userGroupService;
     this.cipher = new CredentialCipher(options.credentialSecret);
     this.nowPaymentsClient = options.nowPaymentsClient ?? new NowPaymentsClient();
     this.exchangeRateClient = options.exchangeRateClient ?? new ExchangeRateClient();
@@ -1367,7 +1377,11 @@ export class AutomatedPaymentService {
       ...(baseUrl ? { successUrl: baseUrl, cancelUrl: baseUrl } : {}),
     });
 
-    const cashbackPercent = nowpaymentsCashbackPercent(this.translationService);
+    let cashbackPercent = nowpaymentsCashbackPercent(this.translationService);
+    if (cashbackPercent > 0 && this.userGroupService) {
+      const policy = await this.userGroupService.getEffectiveUserPolicy(params.telegramId);
+      if (!policy.allowCashback) cashbackPercent = 0;
+    }
     const expiryMinutes = nowpaymentsOrderExpiryMinutes(this.translationService);
     const expiresAt = new Date(now.getTime() + expiryMinutes * 60 * 1000);
 
@@ -1537,7 +1551,14 @@ export class AutomatedPaymentService {
         const creditAmount = dbIntegerToSafeNumber(order.payableAmount, 'nowpayments_credit_toman');
         const meta = parseOrderMetadata(order.metadata);
         const rawCb = parseIntegerInput(meta.cashbackPercent);
-        const cashbackPercent = rawCb !== null && rawCb >= 0 && rawCb <= 50 ? rawCb : 0;
+        let cashbackPercent = rawCb !== null && rawCb >= 0 && rawCb <= 50 ? rawCb : 0;
+        if (cashbackPercent > 0 && this.userGroupService) {
+          const policy = await this.userGroupService.getEffectiveUserPolicyInTx(
+            tx,
+            order.telegramId
+          );
+          if (!policy.allowCashback) cashbackPercent = 0;
+        }
         const cashbackAmount =
           cashbackPercent > 0 ? Math.floor((creditAmount * cashbackPercent) / 100) : 0;
 

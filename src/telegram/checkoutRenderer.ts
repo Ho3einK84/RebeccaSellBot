@@ -45,6 +45,10 @@ export interface UnifiedCheckoutViewModel {
   effectivePrice?: number;
   pricePerGb?: number;
   walletAvailableBalance?: number;
+  creditLimit?: number;
+  groupLabel?: string | null;
+  groupDiscountPercent?: number;
+  groupDiscountAmount?: number;
   serviceUsername?: string;
   serviceLabel?: string | null;
   requestedUsername?: string;
@@ -57,6 +61,7 @@ export interface UnifiedCheckoutViewModel {
 export interface InsufficientBalanceViewModel {
   packagePrice: number;
   balance: number;
+  creditLimit?: number;
   includePromoHint?: boolean;
 }
 
@@ -287,6 +292,33 @@ export function buildUnifiedCheckoutScreen(
     },
   ];
 
+  if (input.groupDiscountAmount && input.groupDiscountAmount > 0) {
+    sections.push({
+      emoji: '🏷️',
+      title: input.groupLabel
+        ? `${t(ctx, 'checkout_group_discount_section')} (${escapeTelegramMarkdown(input.groupLabel)})`
+        : t(ctx, 'checkout_group_discount_section'),
+      fields: [
+        ...(input.originalPrice !== undefined
+          ? [
+              {
+                label: t(ctx, 'checkout_original_price_label'),
+                value: `${localizedNumber(input.originalPrice, ctx)} ${currency}`,
+              },
+            ]
+          : []),
+        {
+          label: t(ctx, 'checkout_group_discount_label'),
+          value: `-${localizedNumber(input.groupDiscountAmount, ctx)} ${currency}${
+            input.groupDiscountPercent
+              ? ` (${localizedNumber(input.groupDiscountPercent, ctx)}%)`
+              : ''
+          }`,
+        },
+      ],
+    });
+  }
+
   const catalogDiscount = input.catalogDiscount;
   if (catalogDiscount && catalogDiscount.discountAmount > 0) {
     sections.push({
@@ -361,18 +393,37 @@ export function buildUnifiedCheckoutScreen(
   }
 
   if (input.walletAvailableBalance !== undefined) {
+    const creditLimit = Math.max(0, input.creditLimit ?? 0);
+    const projectedBalance = input.walletAvailableBalance - input.finalAmount;
+    const remainingPurchasingPower = Math.max(0, projectedBalance + creditLimit);
+    const walletFields: UserScreenField[] = [
+      {
+        label: t(ctx, 'checkout_wallet_balance_label'),
+        value: `${localizedNumber(input.walletAvailableBalance, ctx)} ${currency}`,
+      },
+    ];
+    if (creditLimit > 0) {
+      walletFields.push({
+        label: t(ctx, 'wallet_credit_limit_label'),
+        value: `${localizedNumber(creditLimit, ctx)} ${currency}`,
+      });
+    }
+    walletFields.push({
+      label:
+        projectedBalance < 0
+          ? t(ctx, 'checkout_projected_debt_label')
+          : t(ctx, 'checkout_remaining_balance_label'),
+      value: `${localizedNumber(projectedBalance < 0 ? Math.abs(projectedBalance) : projectedBalance, ctx)} ${currency}`,
+    });
+    if (creditLimit > 0) {
+      walletFields.push({
+        label: t(ctx, 'checkout_remaining_credit_label'),
+        value: `${localizedNumber(remainingPurchasingPower, ctx)} ${currency}`,
+      });
+    }
     sections.push({
       title: t(ctx, 'checkout_wallet_section'),
-      fields: [
-        {
-          label: t(ctx, 'checkout_wallet_balance_label'),
-          value: `${localizedNumber(input.walletAvailableBalance, ctx)} ${currency}`,
-        },
-        {
-          label: t(ctx, 'checkout_remaining_balance_label'),
-          value: `${localizedNumber(Math.max(0, input.walletAvailableBalance - input.finalAmount), ctx)} ${currency}`,
-        },
-      ],
+      fields: walletFields,
     });
   }
 
@@ -398,11 +449,36 @@ export function buildUnifiedInsufficientBalanceScreen(
   ctx: ConversationContext,
   input: InsufficientBalanceViewModel
 ): string {
-  const deficit = Math.max(0, input.packagePrice - input.balance);
+  const creditLimit = Math.max(0, input.creditLimit ?? 0);
+  const purchasingPower = Math.max(0, input.balance + creditLimit);
+  const deficit = Math.max(0, input.packagePrice - purchasingPower);
   const currency = t(ctx, 'currency_toman');
   const footerParts = [t(ctx, 'insufficient_balance_continue_hint')];
   if (input.includePromoHint) {
     footerParts.push(t(ctx, 'insufficient_balance_promo_hint'));
+  }
+
+  const walletFields: UserScreenField[] = [
+    {
+      label: t(ctx, 'insufficient_balance_price_label'),
+      value: `${localizedNumber(input.packagePrice, ctx)} ${currency}`,
+    },
+    {
+      label: t(ctx, 'insufficient_balance_balance_label'),
+      value: `${localizedNumber(input.balance, ctx)} ${currency}`,
+    },
+  ];
+  if (creditLimit > 0) {
+    walletFields.push(
+      {
+        label: t(ctx, 'wallet_credit_limit_label'),
+        value: `${localizedNumber(creditLimit, ctx)} ${currency}`,
+      },
+      {
+        label: t(ctx, 'wallet_purchasing_power_label'),
+        value: `${localizedNumber(purchasingPower, ctx)} ${currency}`,
+      }
+    );
   }
 
   return buildUserScreen({
@@ -418,16 +494,7 @@ export function buildUnifiedInsufficientBalanceScreen(
     sections: [
       {
         title: t(ctx, 'insufficient_balance_wallet_section'),
-        fields: [
-          {
-            label: t(ctx, 'insufficient_balance_price_label'),
-            value: `${localizedNumber(input.packagePrice, ctx)} ${currency}`,
-          },
-          {
-            label: t(ctx, 'insufficient_balance_balance_label'),
-            value: `${localizedNumber(input.balance, ctx)} ${currency}`,
-          },
-        ],
+        fields: walletFields,
       },
     ],
     footer: footerParts.join('\n'),

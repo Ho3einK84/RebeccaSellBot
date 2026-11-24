@@ -1,4 +1,10 @@
-import type { PackageOption, PricingService } from './PricingService.js';
+import {
+  applyGroupDiscount,
+  type GroupPricingPolicyInput,
+  type PackageOption,
+  type PricingService,
+} from './PricingService.js';
+import { resolveBestCatalogDiscount, type CatalogDiscountRule } from './CatalogDiscountService.js';
 import type { TranslationService } from './TranslationService.js';
 import { customVolumeEnabled } from './FeatureSettings.js';
 
@@ -10,6 +16,9 @@ export interface ResolvePurchasePackageParams {
   } | null;
   pricingService: PricingService;
   translationService?: TranslationService;
+  userPolicy?: Partial<GroupPricingPolicyInput> | null;
+  activeDiscounts?: readonly CatalogDiscountRule[];
+  now?: Date;
 }
 
 export type ResolvePurchasePackageResult =
@@ -18,6 +27,14 @@ export type ResolvePurchasePackageResult =
       pkg: PackageOption;
       target: { panelId?: string; serviceId?: number };
       quotedAmount: number;
+      originalPrice?: number;
+      discountAmount?: number;
+      groupDiscountPercent?: number;
+      groupDiscountAmount?: number;
+      catalogDiscountAmount?: number;
+      activeDiscountId?: string | null;
+      activeDiscountTitle?: string | null;
+      discountExpiresAt?: Date | null;
     }
   | {
       success: false;
@@ -34,7 +51,9 @@ export type ResolvePurchasePackageResult =
 export function resolvePurchasePackage(
   params: ResolvePurchasePackageParams
 ): ResolvePurchasePackageResult {
-  const { packageId, custom, pricingService, translationService } = params;
+  const { packageId, custom, pricingService, translationService, userPolicy, activeDiscounts } =
+    params;
+  const now = params.now ?? new Date();
 
   if (!pricingService) {
     return {
@@ -105,9 +124,61 @@ export function resolvePurchasePackage(
       };
     }
 
-    let quote;
+    let finalPrice: number;
+    let originalPrice: number;
+    let discountAmount: number;
+    let groupDiscountPercent: number;
+    let groupDiscountAmount: number;
+    let catalogDiscountAmount = 0;
+    let activeDiscountId: string | null = null;
+    let activeDiscountTitle: string | null = null;
+    let discountExpiresAt: Date | null = null;
+
     try {
-      quote = pricingService.getCustomPriceQuote(gb, days);
+      if (typeof pricingService.resolveCustomPriceWithDiscount === 'function') {
+        const discounted = pricingService.resolveCustomPriceWithDiscount(
+          gb,
+          days,
+          activeDiscounts ?? [],
+          now,
+          userPolicy
+        );
+        finalPrice = discounted.effectivePrice;
+        originalPrice = discounted.originalPrice;
+        discountAmount = discounted.discountAmount;
+        groupDiscountPercent = discounted.groupDiscountPercent ?? 0;
+        groupDiscountAmount = discounted.groupDiscountAmount ?? 0;
+        catalogDiscountAmount = discounted.catalogDiscountAmount ?? 0;
+        activeDiscountId = discounted.activeDiscountId;
+        activeDiscountTitle = discounted.activeDiscountTitle;
+        discountExpiresAt = discounted.discountExpiresAt;
+      } else {
+        const quote = pricingService.getCustomPriceQuote(gb, days, userPolicy);
+        const subtotalAfterGroup = quote.totalPrice;
+        originalPrice = quote.originalPrice ?? subtotalAfterGroup;
+        groupDiscountPercent = quote.groupDiscountPercent ?? 0;
+        groupDiscountAmount = quote.groupDiscountAmount ?? 0;
+        const allowCatalog = userPolicy?.allowCatalogDiscounts ?? true;
+        if (allowCatalog && activeDiscounts && activeDiscounts.length > 0) {
+          const catDisc = resolveBestCatalogDiscount(
+            activeDiscounts,
+            {
+              packageId: `custom_${gb}gb_${days}d`,
+              categoryId: null,
+              originalPrice: subtotalAfterGroup,
+            },
+            now
+          );
+          finalPrice = catDisc.effectivePrice;
+          catalogDiscountAmount = catDisc.discountAmount;
+          activeDiscountId = catDisc.activeDiscountId;
+          activeDiscountTitle = catDisc.activeDiscountTitle;
+          discountExpiresAt = catDisc.discountExpiresAt;
+        } else {
+          finalPrice = subtotalAfterGroup;
+        }
+        discountAmount = Math.max(0, originalPrice - finalPrice);
+      }
     } catch {
       return {
         success: false,
@@ -127,7 +198,7 @@ export function resolvePurchasePackage(
       name: `${gb} GB (${days} days)`,
       gbAmount: gb,
       durationDays: days,
-      price: quote.totalPrice,
+      price: finalPrice,
       ...target,
     };
 
@@ -135,7 +206,15 @@ export function resolvePurchasePackage(
       success: true,
       pkg,
       target,
-      quotedAmount: quote.totalPrice,
+      quotedAmount: finalPrice,
+      originalPrice,
+      discountAmount,
+      groupDiscountPercent,
+      groupDiscountAmount,
+      catalogDiscountAmount,
+      activeDiscountId,
+      activeDiscountTitle,
+      discountExpiresAt,
     };
   }
 
@@ -159,6 +238,58 @@ export function resolvePurchasePackage(
     };
   }
 
+  let effectivePrice: number;
+  let originalPrice = resolvedPkg.price;
+  let discountAmount: number;
+  let groupDiscountPercent: number;
+  let groupDiscountAmount: number;
+  let catalogDiscountAmount = 0;
+  let activeDiscountId: string | null = null;
+  let activeDiscountTitle: string | null = null;
+  let discountExpiresAt: Date | null = null;
+
+  if (typeof pricingService.resolvePackagePrice === 'function') {
+    const priced = pricingService.resolvePackagePrice(
+      resolvedPkg,
+      activeDiscounts ?? [],
+      now,
+      userPolicy
+    );
+    effectivePrice = priced.effectivePrice;
+    originalPrice = priced.originalPrice;
+    discountAmount = priced.discountAmount;
+    groupDiscountPercent = priced.groupDiscountPercent ?? 0;
+    groupDiscountAmount = priced.groupDiscountAmount ?? 0;
+    catalogDiscountAmount = priced.catalogDiscountAmount ?? 0;
+    activeDiscountId = priced.activeDiscountId;
+    activeDiscountTitle = priced.activeDiscountTitle;
+    discountExpiresAt = priced.discountExpiresAt;
+  } else {
+    const groupDisc = applyGroupDiscount(resolvedPkg.price, userPolicy?.discountPercent);
+    groupDiscountPercent = groupDisc.discountPercent;
+    groupDiscountAmount = groupDisc.discountAmount;
+    const allowCatalog = userPolicy?.allowCatalogDiscounts ?? true;
+    if (allowCatalog && activeDiscounts && activeDiscounts.length > 0) {
+      const catDisc = resolveBestCatalogDiscount(
+        activeDiscounts,
+        {
+          packageId: resolvedPkg.id,
+          categoryId: resolvedPkg.categoryId ?? null,
+          originalPrice: groupDisc.finalAmount,
+        },
+        now
+      );
+      effectivePrice = catDisc.effectivePrice;
+      catalogDiscountAmount = catDisc.discountAmount;
+      activeDiscountId = catDisc.activeDiscountId;
+      activeDiscountTitle = catDisc.activeDiscountTitle;
+      discountExpiresAt = catDisc.discountExpiresAt;
+    } else {
+      effectivePrice = groupDisc.finalAmount;
+    }
+    discountAmount = Math.max(0, resolvedPkg.price - effectivePrice);
+  }
+
   const target =
     resolvedPkg.panelId !== undefined || resolvedPkg.serviceId !== undefined
       ? { panelId: resolvedPkg.panelId, serviceId: resolvedPkg.serviceId }
@@ -166,8 +297,19 @@ export function resolvePurchasePackage(
 
   return {
     success: true,
-    pkg: resolvedPkg,
+    pkg:
+      effectivePrice === resolvedPkg.price
+        ? resolvedPkg
+        : { ...resolvedPkg, price: effectivePrice },
     target,
-    quotedAmount: resolvedPkg.price,
+    quotedAmount: effectivePrice,
+    originalPrice,
+    discountAmount,
+    groupDiscountPercent,
+    groupDiscountAmount,
+    catalogDiscountAmount,
+    activeDiscountId,
+    activeDiscountTitle,
+    discountExpiresAt,
   };
 }

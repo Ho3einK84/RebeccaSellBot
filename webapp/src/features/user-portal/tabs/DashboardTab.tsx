@@ -130,6 +130,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const notify = onNotify ?? toastNotify;
   const currency = settings?.currency || t('common.currency');
   const availableBalance = profile?.availableBalance ?? 0;
+  const creditLimit = profile?.creditLimit ?? 0;
+  const debtAmount = profile?.debtAmount ?? Math.max(0, -(profile?.balance ?? 0));
+  const purchasingPower = profile?.purchasingPower ?? Math.max(0, availableBalance + creditLimit);
+  const groupLabel = profile?.group
+    ? [profile.group.badge, profile.group.name].filter(Boolean).join(' ').trim()
+    : '';
+  const showCreditInfo = creditLimit > 0 || debtAmount > 0 || availableBalance < 0;
   const nowSec = Math.floor(Date.now() / 1000);
 
   const activeConfigs = configs.filter((c) => isConfigTrulyActive(c, nowSec));
@@ -249,13 +256,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <div className="relative z-10 flex flex-col justify-between min-h-[138px]">
             {/* Top row */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="w-8 h-6 rounded-[7px] bg-white/[0.09] border border-white/15 flex items-center justify-center shrink-0">
                   <CreditCard className="w-3.5 h-3.5 text-white/85" aria-hidden="true" />
                 </span>
                 <span className="text-xs font-medium text-white/80">
                   {t('user.dashboard.walletBalance')}
                 </span>
+                {groupLabel ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/35 text-[10px] font-semibold text-amber-200">
+                    {groupLabel}
+                  </span>
+                ) : null}
               </div>
 
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.09] border border-white/15 text-[11px] font-medium text-white/90 tnum backdrop-blur-md">
@@ -280,12 +292,45 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <div className="flex items-baseline gap-2 flex-wrap">
                 <bdi
                   dir="ltr"
-                  className="text-2xl sm:text-3xl font-bold tracking-tight leading-none tnum text-white"
+                  className={`text-2xl sm:text-3xl font-bold tracking-tight leading-none tnum ${
+                    availableBalance < 0 ? 'text-rose-300' : 'text-white'
+                  }`}
                 >
                   {formatToman(availableBalance)}
                 </bdi>
                 <span className="text-xs sm:text-sm font-medium text-white/65">{currency}</span>
               </div>
+              {showCreditInfo && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px] tnum">
+                  {debtAmount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-300/35 text-rose-200">
+                      <span>{t('user.wallet.debtLabel')}:</span>
+                      <bdi dir="ltr" className="font-semibold">
+                        {formatToman(debtAmount)}
+                      </bdi>
+                      <span>{currency}</span>
+                    </span>
+                  )}
+                  {creditLimit > 0 && (
+                    <>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-white/85">
+                        <span>{t('user.wallet.creditLimitLabel')}:</span>
+                        <bdi dir="ltr" className="font-semibold">
+                          {formatToman(creditLimit)}
+                        </bdi>
+                        <span>{currency}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-300/30 text-emerald-200">
+                        <span>{t('user.wallet.purchasingPowerLabel')}:</span>
+                        <bdi dir="ltr" className="font-semibold">
+                          {formatToman(purchasingPower)}
+                        </bdi>
+                        <span>{currency}</span>
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Bottom Toolbar: Stacked Referral Code on Right, Top-up CTA on Left */}

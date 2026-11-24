@@ -24,6 +24,7 @@ import type { RefundService } from '../../../../domain/services/RefundService.js
 import type { ConfigTransferService } from '../../../../domain/services/ConfigTransferService.js';
 import type { ForcedJoinService } from '../../../../domain/services/ForcedJoinService.js';
 import type { RebeccaPanelRegistry } from '../../../../domain/services/RebeccaPanelRegistry.js';
+import type { UserGroupService } from '../../../../domain/services/UserGroupService.js';
 import { resolveSupportDestination } from '../../../../domain/services/SupportDestination.js';
 
 export interface UserRoutesOptions {
@@ -46,6 +47,7 @@ export interface UserRoutesOptions {
   refundService?: RefundService;
   configTransferService?: ConfigTransferService;
   panelRegistry?: RebeccaPanelRegistry;
+  userGroupService?: UserGroupService;
   adminService?: AdminService;
   adminIds?: number[];
   botApi?: Api;

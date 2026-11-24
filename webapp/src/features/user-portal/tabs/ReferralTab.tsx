@@ -68,7 +68,9 @@ export const ReferralTab: React.FC<ReferralTabProps> = ({ profile, settings, onN
   return (
     <div className="w-full flex flex-col gap-5 pb-6 text-start">
       {/* Unified Rewards Hub: Interactive Lucky Wheel */}
-      <LuckyWheelSection currency={currency} onNotify={onNotify} />
+      {settings?.allowLuckyWheel !== false && profile?.group?.allowLuckyWheel !== false && (
+        <LuckyWheelSection currency={currency} onNotify={onNotify} />
+      )}
 
       {/* Referrals & Cashback Program */}
       <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">

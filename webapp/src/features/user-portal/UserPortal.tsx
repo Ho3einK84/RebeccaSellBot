@@ -609,6 +609,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
       header={
         <UserPortalHeader
           user={user}
+          group={profile?.group}
           onRefresh={handleRefresh}
           isAdminView={isAdminView}
           onSwitchToAdmin={onSwitchToAdmin}
@@ -692,6 +693,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
             <ShopTab
               packages={packages}
               categories={categories}
+              group={profile?.group}
               currency={settings?.currency}
               customVolumeSettings={
                 settings?.customVolume
@@ -759,6 +761,9 @@ export const UserPortal: React.FC<UserPortalProps> = ({
         pkg={checkoutModal.pkg}
         targetConfig={checkoutModal.targetConfig}
         availableBalance={profile?.availableBalance ?? 0}
+        creditLimit={profile?.creditLimit ?? 0}
+        purchasingPower={profile?.purchasingPower}
+        allowPromoCodes={settings?.allowPromoCodes ?? profile?.group?.allowPromoCodes ?? true}
         currency={settings?.currency}
         customServiceNameEnabled={settings?.customServiceNameEnabled}
         botUsername={settings?.botUsername}

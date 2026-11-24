@@ -102,6 +102,18 @@ export function customServiceNameEnabled(settings: SettingReader): boolean {
   return value === 'true' || value === '1';
 }
 
+/**
+ * Whether a specific buyer may enter a custom English service name:
+ * permitted when either the buyer's effective user-group policy grants
+ * `allowCustomServiceName` OR the global `custom_service_name_enabled` switch is on.
+ */
+export function isCustomServiceNameAllowed(
+  settings: SettingReader,
+  userPolicy?: { allowCustomServiceName?: boolean } | null
+): boolean {
+  return Boolean(userPolicy?.allowCustomServiceName) || customServiceNameEnabled(settings);
+}
+
 export type ReceiptDuplicatePolicy = 'warn' | 'block';
 
 /**

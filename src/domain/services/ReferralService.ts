@@ -9,6 +9,7 @@ import { getDb } from '../../infra/db.js';
 import { purchaseIntents, refundIntents, users, walletTransactions } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
 import type { TranslationService } from './TranslationService.js';
+import type { UserGroupService } from './UserGroupService.js';
 import { dbIntegerToSafeNumber } from './DbNumber.js';
 
 export type BonusSnapshot = {
@@ -24,7 +25,10 @@ type DbTransaction = Parameters<Parameters<DbInstance['transaction']>[0]>[0];
 export class ReferralService {
   private readonly invalidationHooks: Array<(telegramId: number) => void> = [];
 
-  constructor(private readonly translationService: TranslationService) {}
+  constructor(
+    private readonly translationService: TranslationService,
+    private readonly userGroupService?: Pick<UserGroupService, 'getEffectiveUserPolicyInTx'>
+  ) {}
 
   /** Register a callback invoked post-commit whenever bonuses credit a user's wallet. */
   registerInvalidationHook(hook: (telegramId: number) => void): void {
@@ -65,13 +69,18 @@ export class ReferralService {
   async calculateBonusSnapshot(
     tx: Pick<DbTransaction, 'select'>,
     telegramId: number,
-    purchaseAmount: number
+    purchaseAmount: number,
+    options?: { allowCashback?: boolean }
   ): Promise<BonusSnapshot> {
     let referrerTelegramId: number | null = null;
     let referralBonusAmount = 0;
 
     const [user] = await tx
-      .select({ referrerId: users.referrerId })
+      .select({
+        referrerId: users.referrerId,
+        groupId: users.groupId,
+        groupExpiresAt: users.groupExpiresAt,
+      })
       .from(users)
       .where(eq(users.telegramId, telegramId))
       .limit(1);
@@ -97,7 +106,16 @@ export class ReferralService {
       }
     }
 
-    const cashbackPercent = asPercent(this.translationService.getSettingNum('cashback_percent', 0));
+    let allowCashback = options?.allowCashback;
+    if (allowCashback === undefined && this.userGroupService) {
+      const policy = await this.userGroupService.getEffectiveUserPolicyInTx(tx, telegramId, user);
+      allowCashback = policy.allowCashback;
+    }
+
+    const cashbackPercent =
+      allowCashback === false
+        ? 0
+        : asPercent(this.translationService.getSettingNum('cashback_percent', 0));
     const safeAmount = asPositiveSafeInteger(purchaseAmount);
     const cashbackAmount =
       cashbackPercent > 0 && safeAmount > 0 ? percentOf(safeAmount, cashbackPercent) : 0;
@@ -195,13 +213,24 @@ export class ReferralService {
             );
           }
         }
+        let allowCashback = true;
+        if (this.userGroupService && (cashbackPercent === null || cashbackAmount === null)) {
+          const policy = await this.userGroupService.getEffectiveUserPolicyInTx(
+            tx,
+            telegramId,
+            user
+          );
+          allowCashback = policy.allowCashback;
+        }
         if (cashbackPercent === null) {
-          cashbackPercent = asPercent(this.translationService.getSettingNum('cashback_percent', 0));
+          cashbackPercent = allowCashback
+            ? asPercent(this.translationService.getSettingNum('cashback_percent', 0))
+            : 0;
         }
         if (cashbackAmount === null) {
           const purchaseAmount = asPositiveSafeInteger(amount);
           cashbackAmount =
-            cashbackPercent > 0 && purchaseAmount > 0
+            allowCashback && cashbackPercent > 0 && purchaseAmount > 0
               ? percentOf(purchaseAmount, cashbackPercent)
               : 0;
         }

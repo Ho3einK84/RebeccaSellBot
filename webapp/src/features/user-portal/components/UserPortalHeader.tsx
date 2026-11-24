@@ -10,9 +10,11 @@ import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
 import { useToast } from '@/shared/components/ui/Toast.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
+import type { UserGroupSummary } from '@/shared/types/userPortal.js';
 
 interface UserPortalHeaderProps {
   user: TelegramWebAppUser;
+  group?: UserGroupSummary | null;
   onRefresh: () => void;
   isAdminView?: boolean;
   onSwitchToAdmin?: () => void;
@@ -24,6 +26,7 @@ interface UserPortalHeaderProps {
 
 export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
   user,
+  group,
   onRefresh,
   isAdminView = false,
   onSwitchToAdmin,
@@ -40,6 +43,8 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
 
   const { displayName } = sanitizeDisplayName(user.first_name, user.last_name, t('user.guestUser'));
   const displayCurrency = currency || t('common.currency');
+  const groupLabel = group ? [group.badge, group.name].filter(Boolean).join(' ').trim() : '';
+  const isNegativeBalance = typeof balance === 'number' && balance < 0;
 
   const handleCopyId = async () => {
     const ok = await copy(String(user.id), 'portal-header-id');
@@ -62,11 +67,20 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
       }
       title={displayName}
       badge={
-        isAdminView ? (
-          <Badge variant="primary" size="xs" className="hidden sm:inline-flex shrink-0">
-            <Shield className="w-3 h-3" />
-            <span>{t('user.adminViewBadge')}</span>
-          </Badge>
+        isAdminView || groupLabel ? (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {groupLabel ? (
+              <Badge variant="warning" size="xs" className="shrink-0">
+                <span>{groupLabel}</span>
+              </Badge>
+            ) : null}
+            {isAdminView ? (
+              <Badge variant="primary" size="xs" className="hidden sm:inline-flex shrink-0">
+                <Shield className="w-3 h-3" />
+                <span>{t('user.adminViewBadge')}</span>
+              </Badge>
+            ) : null}
+          </div>
         ) : null
       }
       subtitle={
@@ -109,8 +123,13 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
                 className="press rs-focus inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 text-[11px] font-medium text-ink hover:border-line-strong hover:bg-surface-3 cursor-pointer shrink-0"
                 title={t('user.dashboard.walletBalance')}
               >
-                <Wallet className="h-3 w-3 text-ok-fg shrink-0" />
-                <bdi dir="ltr" className="tnum font-semibold text-ok-fg">
+                <Wallet
+                  className={`h-3 w-3 shrink-0 ${isNegativeBalance ? 'text-danger-fg' : 'text-ok-fg'}`}
+                />
+                <bdi
+                  dir="ltr"
+                  className={`tnum font-semibold ${isNegativeBalance ? 'text-danger-fg' : 'text-ok-fg'}`}
+                >
                   {formatToman(balance)}
                 </bdi>
                 <span className="text-ink-muted">{displayCurrency}</span>

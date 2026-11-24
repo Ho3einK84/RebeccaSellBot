@@ -6,9 +6,9 @@ import {
 } from '../../../../domain/services/PaymentService.js';
 import { parseVolumePricingTiersJson } from '../../../../domain/services/PricingService.js';
 import {
-  customServiceNameEnabled,
   customVolumeEnabled,
   forappOrderExpiryMinutes,
+  isCustomServiceNameAllowed,
   nowpaymentsCashbackPercent,
   nowpaymentsManualUsdRateToman,
   nowpaymentsMaxAmountToman,
@@ -22,6 +22,7 @@ import {
 } from '../../../../domain/services/FeatureSettings.js';
 import { formatPaymentOrderShortId } from '../../../../domain/services/AutomatedPaymentService.js';
 import type { ContactVerificationService } from '../../../../domain/services/ContactVerificationService.js';
+import { safeGetEffectiveUserPolicy } from '../../../../domain/services/UserGroupService.js';
 import { sendWebAppConfigArtifact } from '../../../../telegram/webappNotifications.js';
 import {
   resolveSupportInfoForUser,
@@ -130,7 +131,12 @@ export function registerUserProfileRoutes(
       }
 
       const support = resolveSupportInfoForUser(options);
-      const availableBalance = Math.max(0, profile.balance - profile.reservedBalance);
+      const userPolicy = await safeGetEffectiveUserPolicy(options.userGroupService, telegramId);
+      const availableBalance = profile.balance - profile.reservedBalance;
+      const transferableBalance = Math.max(0, availableBalance);
+      const creditLimit = userPolicy.creditLimit;
+      const purchasingPower = Math.max(0, availableBalance + creditLimit);
+      const debtAmount = Math.max(0, -profile.balance);
 
       const pendingReceiptRow = await options.walletService.getPendingReceiptForUser?.(telegramId);
       const pendingReceipt = pendingReceiptRow
@@ -147,10 +153,16 @@ export function registerUserProfileRoutes(
 
       const ts = options.translationService;
       const cvEnabled = ts ? customVolumeEnabled(ts) : true;
-      const pricePerGb =
+      const basePricePerGb =
         typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('price_per_gb', 5000) : 5000;
-      const pricePerDay =
+      const basePricePerDay =
         typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('price_per_day', 0) : 0;
+      const hasGroupCustomRate =
+        userPolicy.customPricePerGb !== null || userPolicy.customPricePerDay !== null;
+      const pricePerGb =
+        userPolicy.customPricePerGb !== null ? userPolicy.customPricePerGb : basePricePerGb;
+      const pricePerDay =
+        userPolicy.customPricePerDay !== null ? userPolicy.customPricePerDay : basePricePerDay;
       const topupMinAmount =
         typeof ts?.getSettingNum === 'function'
           ? ts.getSettingNum('topup_min_amount', 10_000)
@@ -165,10 +177,14 @@ export function registerUserProfileRoutes(
         typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('custom_min_gb', 5) : 5;
       const maxGb =
         typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('custom_max_gb', 500) : 500;
-      const volumePricingTiers =
-        parseVolumePricingTiersJson(ts?.getSetting('volume_pricing_tiers_json', '') ?? '') ?? [];
+      const volumePricingTiers = hasGroupCustomRate
+        ? []
+        : (parseVolumePricingTiersJson(ts?.getSetting('volume_pricing_tiers_json', '') ?? '') ??
+          []);
 
-      const customNameEnabled = ts ? customServiceNameEnabled(ts) : false;
+      const customNameEnabled = ts
+        ? isCustomServiceNameAllowed(ts, userPolicy)
+        : userPolicy.allowCustomServiceName;
       const onHoldDefault = ts ? onHoldDefaultEnabled(ts) : false;
       const rolloverDefault = ts ? renewalRolloverEnabled(ts) : true;
       const isUniqueTopupEnabled = ts ? uniqueTopupAmountEnabled(ts) : false;
@@ -181,7 +197,7 @@ export function registerUserProfileRoutes(
       );
       const npMinAmount = ts ? nowpaymentsMinAmountToman(ts) : 100_000;
       const npMaxAmount = ts ? nowpaymentsMaxAmountToman(ts) : 50_000_000;
-      const npCashback = ts ? nowpaymentsCashbackPercent(ts) : 0;
+      const npCashback = userPolicy.allowCashback && ts ? nowpaymentsCashbackPercent(ts) : 0;
       let npUsdRate = ts ? nowpaymentsManualUsdRateToman(ts) : 80_000;
       if (
         isNowPaymentsEnabled &&
@@ -340,8 +356,17 @@ export function registerUserProfileRoutes(
         typeof ts?.getSettingNum === 'function'
           ? ts.getSettingNum('referral_bonus_toman', 10_000)
           : 10_000;
-      const cashbackPercent =
+      const rawCashbackPercent =
         typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('cashback_percent', 0) : 0;
+      const cashbackPercent = userPolicy.allowCashback ? rawCashbackPercent : 0;
+      if (!userPolicy.allowLuckyWheel && luckyWheelSummary) {
+        luckyWheelSummary = {
+          ...luckyWheelSummary,
+          enabled: false,
+          canSpin: false,
+          reason: 'disabled',
+        };
+      }
       let activeBuyers = 0;
       if (typeof options.referralService?.getReferralStats === 'function') {
         try {
@@ -351,6 +376,26 @@ export function registerUserProfileRoutes(
           activeBuyers = 0;
         }
       }
+
+      const groupSummary = userPolicy.groupId
+        ? {
+            id: userPolicy.groupId,
+            name: userPolicy.groupName ?? '',
+            badge: userPolicy.badge,
+            isDefault: userPolicy.isDefaultGroup,
+            isAssigned: userPolicy.isAssigned,
+            expiresAt: userPolicy.expiresAt ? userPolicy.expiresAt.toISOString() : null,
+            discountPercent: userPolicy.discountPercent,
+            customPricePerGb: userPolicy.customPricePerGb,
+            customPricePerDay: userPolicy.customPricePerDay,
+            allowCatalogDiscounts: userPolicy.allowCatalogDiscounts,
+            allowPromoCodes: userPolicy.allowPromoCodes,
+            allowCashback: userPolicy.allowCashback,
+            allowLuckyWheel: userPolicy.allowLuckyWheel,
+            allowCustomServiceName: userPolicy.allowCustomServiceName,
+            creditLimit: userPolicy.creditLimit,
+          }
+        : null;
 
       return reply.code(200).send({
         user: {
@@ -362,6 +407,11 @@ export function registerUserProfileRoutes(
           balance: profile.balance,
           reservedBalance: profile.reservedBalance,
           availableBalance,
+          transferableBalance,
+          creditLimit,
+          purchasingPower,
+          debtAmount,
+          group: groupSummary,
           referralCode: profile.referralCode,
           totalSpend: profile.totalSpend,
           activeSubscriptionCount: profile.activeSubscriptionCount,
@@ -402,6 +452,9 @@ export function registerUserProfileRoutes(
           topupMaxAmount,
           referralBonusToman,
           cashbackPercent,
+          allowPromoCodes: userPolicy.allowPromoCodes,
+          allowCashback: userPolicy.allowCashback,
+          allowLuckyWheel: userPolicy.allowLuckyWheel,
           maintenanceMode: !botEnabled,
           isAdminBypass: !botEnabled && isAdmin,
           customServiceNameEnabled: customNameEnabled,
@@ -414,6 +467,8 @@ export function registerUserProfileRoutes(
             defaultDays,
             minGb,
             maxGb,
+            groupDiscountPercent: userPolicy.discountPercent,
+            hasGroupCustomRate,
             tiers: volumePricingTiers,
           },
         },

@@ -415,6 +415,7 @@ async function completePendingIntent(
       .returning({ id: purchaseIntents.id });
     if (transitioned.length === 0) return false;
 
+    const effectiveCreditLimit = Math.max(0, intent.creditLimit ?? 0);
     const updatedUsers = await tx
       .update(users)
       .set({
@@ -425,7 +426,7 @@ async function completePendingIntent(
       })
       .where(
         sql`${users.telegramId} = ${intent.telegramId}
-          AND ${users.balance} >= ${intent.amount}
+          AND ${users.balance} + ${effectiveCreditLimit} >= ${intent.amount}
           AND ${users.reservedBalance} >= ${intent.amount}`
       )
       .returning();

@@ -272,6 +272,8 @@ export function buildAdminSalesHubKeyboard(ctx: MenuContext): InlineKeyboard {
     .row()
     .text(t(ctx, 'admin_sales_trial_button'), 'adm:trl')
     .text(t(ctx, 'admin_sales_growth_button'), 'adm:grw')
+    .row()
+    .text(t(ctx, 'admin_groups_button'), 'adm:grp:l')
     .row();
   return appendAdminFooterNav(kb, ctx, {
     backCallback: 'adm:home',

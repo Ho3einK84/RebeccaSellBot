@@ -69,6 +69,9 @@ interface CheckoutModalProps {
   mode?: 'purchase' | 'renewal';
   targetConfig?: UserConfigRecord | null;
   availableBalance: number;
+  creditLimit?: number;
+  purchasingPower?: number;
+  allowPromoCodes?: boolean;
   currency?: string;
   customServiceNameEnabled?: boolean;
   botUsername?: string;
@@ -93,6 +96,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   mode = 'purchase',
   targetConfig = null,
   availableBalance,
+  creditLimit = 0,
+  purchasingPower,
+  allowPromoCodes = true,
   currency,
   customServiceNameEnabled = false,
   botUsername,
@@ -157,6 +163,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Shortfall metadata from 409 response
   const [shortfallPrice, setShortfallPrice] = useState<number | null>(null);
+  const [shortfallCreditLimit, setShortfallCreditLimit] = useState<number | null>(null);
+  const [shortfallPurchasingPower, setShortfallPurchasingPower] = useState<number | null>(null);
   const [forcedJoinChannels, setForcedJoinChannels] = useState<ForcedJoinChannelDto[] | null>(null);
 
   const effectivePkg = isRenewal ? (pkg ?? selectedRenewalPkg) : pkg;
@@ -165,6 +173,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   // Stable refs
   const availableBalanceRef = useRef<number>(availableBalance);
   availableBalanceRef.current = availableBalance;
+  const creditLimitRef = useRef<number>(creditLimit);
+  creditLimitRef.current = creditLimit;
+  const purchasingPowerRef = useRef<number>(
+    purchasingPower ?? Math.max(0, availableBalance + creditLimit)
+  );
+  purchasingPowerRef.current = purchasingPower ?? Math.max(0, availableBalance + creditLimit);
 
   const stepRef = useRef(step);
   stepRef.current = step;
@@ -288,7 +302,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             return;
           }
           const errData = err.data as
-            | { code?: string; deficit?: number; availableBalance?: number; price?: number }
+            | {
+                code?: string;
+                deficit?: number;
+                availableBalance?: number;
+                creditLimit?: number;
+                purchasingPower?: number;
+                price?: number;
+              }
             | undefined;
 
           if (
@@ -306,9 +327,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           ) {
             const serverPrice = errData?.price ?? targetPkg.price;
             setShortfallPrice(serverPrice);
+            setShortfallCreditLimit(
+              typeof errData?.creditLimit === 'number'
+                ? errData.creditLimit
+                : creditLimitRef.current
+            );
+            setShortfallPurchasingPower(
+              typeof errData?.purchasingPower === 'number'
+                ? errData.purchasingPower
+                : purchasingPowerRef.current
+            );
             const deficit =
               errData?.deficit ??
-              Math.max(0, serverPrice - (errData?.availableBalance ?? availableBalanceRef.current));
+              Math.max(0, serverPrice - (errData?.purchasingPower ?? purchasingPowerRef.current));
             dispatch({ type: 'CREATE_INSUFFICIENT_BALANCE', deficit });
             return;
           }
@@ -353,6 +384,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setPromoError(null);
       setCustomNameInput('');
       setShortfallPrice(null);
+      setShortfallCreditLimit(null);
+      setShortfallPurchasingPower(null);
       setForcedJoinChannels(null);
       dispatch({ type: 'RESET' });
       return;
@@ -413,7 +446,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       await createCheckoutSession({ promoCode: quote.code });
     } catch (err: unknown) {
       triggerHaptic('error');
-      if (err instanceof ApiClientError && err.code === 'PROMO_GIFT_CREDIT_ONLY') {
+      if (err instanceof ApiClientError && err.code === 'PROMO_NOT_ALLOWED') {
+        setPromoError(t('user.shop.promoNotAllowedForGroup'));
+      } else if (err instanceof ApiClientError && err.code === 'PROMO_GIFT_CREDIT_ONLY') {
         setPromoError(t('user.shop.promoGiftCreditHint'));
       } else {
         setPromoError(t('user.shop.promoInvalid'));
@@ -576,7 +611,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               errData?.deficit ??
               Math.max(
                 0,
-                (checkout?.price ?? effectivePkg?.price ?? 0) - availableBalanceRef.current
+                (checkout?.price ?? effectivePkg?.price ?? 0) - purchasingPowerRef.current
               ),
           });
           return;
@@ -712,79 +747,82 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         ? t('user.services.renewModalTitle')
         : t('user.shop.orderModalTitle');
 
-  const renderPromoControls = () => (
-    <div className="w-full rounded-tile border border-line bg-surface-2 p-3 flex flex-col gap-2 text-start">
-      {appliedPromo ? (
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-1.5 text-ok-fg font-medium min-w-0">
-            <Ticket className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">
-              {appliedPromo.bonusGb > 0
-                ? t('user.shop.promoAppliedGiftGb')
-                    .replace('{code}', appliedPromo.code)
-                    .replace('{gb}', formatNumber(appliedPromo.bonusGb))
-                : t('user.shop.promoAppliedDiscount')
-                    .replace('{code}', appliedPromo.code)
-                    .replace('{amount}', formatToman(appliedPromo.discountAmount))
-                    .replace('{currency}', displayCurrency)}
-            </span>
+  const renderPromoControls = () => {
+    if (!allowPromoCodes) return null;
+    return (
+      <div className="w-full rounded-tile border border-line bg-surface-2 p-3 flex flex-col gap-2 text-start">
+        {appliedPromo ? (
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-1.5 text-ok-fg font-medium min-w-0">
+              <Ticket className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">
+                {appliedPromo.bonusGb > 0
+                  ? t('user.shop.promoAppliedGiftGb')
+                      .replace('{code}', appliedPromo.code)
+                      .replace('{gb}', formatNumber(appliedPromo.bonusGb))
+                  : t('user.shop.promoAppliedDiscount')
+                      .replace('{code}', appliedPromo.code)
+                      .replace('{amount}', formatToman(appliedPromo.discountAmount))
+                      .replace('{currency}', displayCurrency)}
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={isProcessing || isApplyingPromo}
+              onClick={() => void handleRemovePromo()}
+              className="text-[11px] font-semibold text-danger-fg hover:underline shrink-0 cursor-pointer inline-flex items-center gap-0.5"
+            >
+              <X className="w-3 h-3" />
+              <span>{t('user.shop.promoRemove')}</span>
+            </button>
           </div>
+        ) : !promoOpen ? (
           <button
             type="button"
-            disabled={isProcessing || isApplyingPromo}
-            onClick={() => void handleRemovePromo()}
-            className="text-[11px] font-semibold text-danger-fg hover:underline shrink-0 cursor-pointer inline-flex items-center gap-0.5"
+            onClick={() => {
+              triggerHaptic('light');
+              setPromoOpen(true);
+            }}
+            className="w-full flex items-center justify-between text-xs font-medium text-brand-fg cursor-pointer"
           >
-            <X className="w-3 h-3" />
-            <span>{t('user.shop.promoRemove')}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <Ticket className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('user.shop.promoToggleLabel')}</span>
+            </span>
+            <Plus className="w-3.5 h-3.5 shrink-0" />
           </button>
-        </div>
-      ) : !promoOpen ? (
-        <button
-          type="button"
-          onClick={() => {
-            triggerHaptic('light');
-            setPromoOpen(true);
-          }}
-          className="w-full flex items-center justify-between text-xs font-medium text-brand-fg cursor-pointer"
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <Ticket className="w-3.5 h-3.5 shrink-0" />
-            <span>{t('user.shop.promoToggleLabel')}</span>
-          </span>
-          <Plus className="w-3.5 h-3.5 shrink-0" />
-        </button>
-      ) : (
-        <form onSubmit={(e) => void handleApplyPromo(e)} className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              dir="ltr"
-              value={promoInput}
-              onChange={(e) => {
-                setPromoInput(e.target.value);
-                if (promoError) setPromoError(null);
-              }}
-              placeholder={t('user.shop.promoPlaceholder')}
-              aria-label={t('user.shop.promoToggleLabel')}
-              className="flex-1 h-9 px-2.5 rounded-ctl border border-line bg-surface text-xs font-mono text-ink placeholder:text-ink-muted rs-focus"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              variant="secondary"
-              disabled={!promoInput.trim() || isApplyingPromo}
-              loading={isApplyingPromo}
-              className="h-9 shrink-0"
-            >
-              {t('user.shop.promoApply')}
-            </Button>
-          </div>
-          {promoError && <p className="text-[11px] text-danger-fg m-0">{promoError}</p>}
-        </form>
-      )}
-    </div>
-  );
+        ) : (
+          <form onSubmit={(e) => void handleApplyPromo(e)} className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                dir="ltr"
+                value={promoInput}
+                onChange={(e) => {
+                  setPromoInput(e.target.value);
+                  if (promoError) setPromoError(null);
+                }}
+                placeholder={t('user.shop.promoPlaceholder')}
+                aria-label={t('user.shop.promoToggleLabel')}
+                className="flex-1 h-9 px-2.5 rounded-ctl border border-line bg-surface text-xs font-mono text-ink placeholder:text-ink-muted rs-focus"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="secondary"
+                disabled={!promoInput.trim() || isApplyingPromo}
+                loading={isApplyingPromo}
+                className="h-9 shrink-0"
+              >
+                {t('user.shop.promoApply')}
+              </Button>
+            </div>
+            {promoError && <p className="text-[11px] text-danger-fg m-0">{promoError}</p>}
+          </form>
+        )}
+      </div>
+    );
+  };
 
   const validRenewPresets = RENEW_CUSTOM_PRESETS.filter((v) => v >= minGb && v <= maxGb);
   const renewRangePct =
@@ -1151,6 +1189,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
               {/* Price Breakdown when discounts or bonus GB apply */}
               {((checkout.discountAmount ?? 0) > 0 ||
+                (checkout.groupDiscountAmount ?? 0) > 0 ||
                 (checkout.promoDiscountAmount ?? 0) > 0 ||
                 (checkout.bonusGb ?? 0) > 0) && (
                 <div className="pt-2 border-t border-line flex flex-col gap-1 text-[11px] tnum">
@@ -1162,7 +1201,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </span>
                     </div>
                   )}
-                  {(checkout.discountAmount ?? 0) > 0 && (
+                  {(checkout.groupDiscountAmount ?? 0) > 0 && (
+                    <div className="flex items-center justify-between text-brand-fg">
+                      <span className="inline-flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        <span>
+                          {t('user.shop.groupDiscountLabel')}
+                          {(checkout.groupDiscountPercent ?? 0) > 0
+                            ? ` (${formatNumber(checkout.groupDiscountPercent!)}%)`
+                            : ''}
+                        </span>
+                      </span>
+                      <span>
+                        -{formatToman(checkout.groupDiscountAmount!)} {displayCurrency}
+                      </span>
+                    </div>
+                  )}
+                  {(checkout.catalogDiscountAmount ??
+                    Math.max(
+                      0,
+                      (checkout.discountAmount ?? 0) - (checkout.groupDiscountAmount ?? 0)
+                    )) > 0 && (
                     <div className="flex items-center justify-between text-warn-fg">
                       <span className="inline-flex items-center gap-1">
                         <Flame className="w-3 h-3" />
@@ -1171,7 +1230,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         </span>
                       </span>
                       <span>
-                        -{formatToman(checkout.discountAmount!)} {displayCurrency}
+                        -
+                        {formatToman(
+                          checkout.catalogDiscountAmount ??
+                            Math.max(
+                              0,
+                              (checkout.discountAmount ?? 0) - (checkout.groupDiscountAmount ?? 0)
+                            )
+                        )}{' '}
+                        {displayCurrency}
                       </span>
                     </div>
                   )}
@@ -1287,25 +1354,68 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
             )}
 
-            {/* Wallet Balance Status + Balance After Payment */}
-            <div className="p-3 rounded-tile border flex flex-col gap-1.5 text-xs bg-ok-soft border-ok/25 text-ok-fg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Wallet className="w-4 h-4 shrink-0" />
-                  <span>{t('user.dashboard.availableBalance')}</span>
+            {/* Wallet Balance Status + Balance / Credit After Payment */}
+            {(() => {
+              const effCreditLimit = checkout.creditLimit ?? creditLimit;
+              const projectedAfter = checkout.availableBalance - checkout.price;
+              const usesCredit = projectedAfter < 0;
+              const remainingCreditAfter =
+                effCreditLimit > 0 ? Math.max(0, projectedAfter + effCreditLimit) : 0;
+              return (
+                <div
+                  className={`p-3 rounded-tile border flex flex-col gap-1.5 text-xs ${
+                    usesCredit
+                      ? 'bg-warn-soft border-warn/30 text-warn-fg'
+                      : 'bg-ok-soft border-ok/25 text-ok-fg'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="w-4 h-4 shrink-0" />
+                      <span>{t('user.dashboard.availableBalance')}</span>
+                    </div>
+                    <bdi dir="ltr" className="tnum font-semibold">
+                      {formatToman(checkout.availableBalance)} {displayCurrency}
+                    </bdi>
+                  </div>
+                  {effCreditLimit > 0 && (
+                    <div
+                      className={`flex items-center justify-between text-[11px] opacity-90 pt-1 border-t ${
+                        usesCredit ? 'border-warn/25' : 'border-ok/20'
+                      }`}
+                    >
+                      <span>{t('user.wallet.creditLimitLabel')}</span>
+                      <bdi dir="ltr" className="tnum font-semibold">
+                        {formatToman(effCreditLimit)} {displayCurrency}
+                      </bdi>
+                    </div>
+                  )}
+                  <div
+                    className={`flex items-center justify-between text-[11px] opacity-90 pt-1 border-t ${
+                      usesCredit ? 'border-warn/25' : 'border-ok/20'
+                    }`}
+                  >
+                    <span>
+                      {usesCredit
+                        ? t('user.shop.projectedDebtLabel')
+                        : t('user.shop.balanceAfterLabel')}
+                    </span>
+                    <bdi dir="ltr" className="tnum font-semibold">
+                      {formatToman(usesCredit ? Math.abs(projectedAfter) : projectedAfter)}{' '}
+                      {displayCurrency}
+                    </bdi>
+                  </div>
+                  {usesCredit && effCreditLimit > 0 && (
+                    <div className="flex items-center justify-between text-[11px] opacity-85 pt-1 border-t border-warn/25">
+                      <span>{t('user.shop.remainingCreditLabel')}</span>
+                      <bdi dir="ltr" className="tnum font-semibold">
+                        {formatToman(remainingCreditAfter)} {displayCurrency}
+                      </bdi>
+                    </div>
+                  )}
                 </div>
-                <span className="tnum font-semibold">
-                  {formatToman(checkout.availableBalance)} {displayCurrency}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px] opacity-85 pt-1 border-t border-ok/20">
-                <span>{t('user.shop.balanceAfterLabel')}</span>
-                <span className="tnum font-semibold">
-                  {formatToman(Math.max(0, checkout.availableBalance - checkout.price))}{' '}
-                  {displayCurrency}
-                </span>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Action Buttons */}
             <div className="flex flex-col gap-2 mt-1">
@@ -1365,10 +1475,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-ink-muted">{t('user.dashboard.availableBalance')}:</span>
-                <span className="tnum font-semibold">
+                <bdi dir="ltr" className="tnum font-semibold">
                   {formatToman(checkout?.availableBalance ?? availableBalance)} {displayCurrency}
-                </span>
+                </bdi>
               </div>
+              {(shortfallCreditLimit ?? creditLimit) > 0 && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-ink-muted">{t('user.wallet.creditLimitLabel')}:</span>
+                    <bdi dir="ltr" className="tnum font-semibold">
+                      {formatToman(shortfallCreditLimit ?? creditLimit)} {displayCurrency}
+                    </bdi>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-ink-muted">{t('user.wallet.purchasingPowerLabel')}:</span>
+                    <bdi dir="ltr" className="tnum font-semibold">
+                      {formatToman(
+                        shortfallPurchasingPower ??
+                          purchasingPower ??
+                          Math.max(0, availableBalance + creditLimit)
+                      )}{' '}
+                      {displayCurrency}
+                    </bdi>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between pt-2 border-t border-line text-danger-fg font-semibold">
                 <span>{t('user.shop.deficitLabel')}:</span>
                 <span className="tnum font-semibold">
@@ -1608,10 +1739,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
               {typeof successData.availableBalanceAfter === 'number' && (
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-line tnum">
-                  <span className="text-ink-muted">{t('user.shop.balanceAfterLabel')}:</span>
-                  <span className="font-semibold text-ink">
-                    {formatToman(successData.availableBalanceAfter)} {displayCurrency}
+                  <span className="text-ink-muted">
+                    {successData.availableBalanceAfter < 0
+                      ? t('user.shop.projectedDebtLabel')
+                      : t('user.shop.balanceAfterLabel')}
+                    :
                   </span>
+                  <bdi
+                    dir="ltr"
+                    className={`font-semibold ${
+                      successData.availableBalanceAfter < 0 ? 'text-warn-fg' : 'text-ink'
+                    }`}
+                  >
+                    {formatToman(
+                      successData.availableBalanceAfter < 0
+                        ? Math.abs(successData.availableBalanceAfter)
+                        : successData.availableBalanceAfter
+                    )}{' '}
+                    {displayCurrency}
+                  </bdi>
                 </div>
               )}
             </div>

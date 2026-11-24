@@ -68,6 +68,51 @@ export const rebeccaPanelServices = pgTable(
   ]
 );
 
+// User groups (Phase 1 pricing, anti-double-discount policy & VIP credit limits).
+export const userGroups = pgTable(
+  'user_groups',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    badge: text('badge'),
+    isDefault: boolean('is_default').notNull().default(false),
+    discountPercent: integer('discount_percent').notNull().default(0),
+    customPricePerGb: bigint('custom_price_per_gb', { mode: 'number' }),
+    customPricePerDay: bigint('custom_price_per_day', { mode: 'number' }),
+    allowCatalogDiscounts: boolean('allow_catalog_discounts').notNull().default(true),
+    allowPromoCodes: boolean('allow_promo_codes').notNull().default(true),
+    allowCashback: boolean('allow_cashback').notNull().default(true),
+    allowLuckyWheel: boolean('allow_lucky_wheel').notNull().default(true),
+    allowCustomServiceName: boolean('allow_custom_service_name').notNull().default(false),
+    creditLimit: bigint('credit_limit', { mode: 'number' }).notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    check('user_groups_name_present', sql`length(btrim(${table.name})) BETWEEN 1 AND 80`),
+    check(
+      'user_groups_badge_valid',
+      sql`${table.badge} IS NULL OR (length(btrim(${table.badge})) BETWEEN 1 AND 40)`
+    ),
+    check('user_groups_discount_percent_range', sql`${table.discountPercent} BETWEEN 0 AND 90`),
+    check(
+      'user_groups_custom_price_per_gb_safe',
+      sql`${table.customPricePerGb} IS NULL OR (${table.customPricePerGb} >= 0 AND ${table.customPricePerGb} <= 9007199254740991)`
+    ),
+    check(
+      'user_groups_custom_price_per_day_safe',
+      sql`${table.customPricePerDay} IS NULL OR (${table.customPricePerDay} >= 0 AND ${table.customPricePerDay} <= 9007199254740991)`
+    ),
+    check(
+      'user_groups_credit_limit_safe',
+      sql`${table.creditLimit} >= 0 AND ${table.creditLimit} <= 9007199254740991`
+    ),
+    uniqueIndex('user_groups_one_default')
+      .on(table.isDefault)
+      .where(sql`${table.isDefault} = true`),
+  ]
+);
+
 // Users table (Telegram users)
 export const users = pgTable(
   'users',
@@ -79,7 +124,7 @@ export const users = pgTable(
     username: text('username'),
     firstName: text('first_name'),
     lastName: text('last_name'),
-    balance: bigint('balance', { mode: 'number' }).notNull().default(0), // configured currency minor units
+    balance: bigint('balance', { mode: 'number' }).notNull().default(0), // configured currency minor units (may be negative for VIP credit)
     reservedBalance: bigint('reserved_balance', { mode: 'number' }).notNull().default(0),
     isBanned: boolean('is_banned').notNull().default(false),
     hasUsedTrial: boolean('has_used_trial').notNull().default(false),
@@ -99,19 +144,27 @@ export const users = pgTable(
     activeSubscriptionCount: integer('active_subscription_count').notNull().default(0),
     phoneHash: text('phone_hash'),
     phoneVerifiedAt: timestamp('phone_verified_at'),
+    groupId: text('group_id').references(() => userGroups.id, { onDelete: 'set null' }),
+    groupExpiresAt: timestamp('group_expires_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => [
     check('users_reserved_balance_nonnegative', sql`${table.reservedBalance} >= 0`),
-    check('users_available_balance_nonnegative', sql`${table.balance} >= ${table.reservedBalance}`),
+    check(
+      'users_available_balance_nonnegative',
+      sql`(${table.balance} - ${table.reservedBalance}) BETWEEN -9007199254740991 AND 9007199254740991`
+    ),
     check('users_locale_supported', sql`${table.locale} IN ('fa', 'en')`),
     check('users_total_spend_nonnegative', sql`${table.totalSpend} >= 0`),
     check(
       'users_telegram_id_safe_integer',
       sql`${table.telegramId} > 0 AND ${table.telegramId} <= 9007199254740991`
     ),
-    check('users_balance_safe_integer', sql`${table.balance} <= 9007199254740991`),
+    check(
+      'users_balance_safe_integer',
+      sql`${table.balance} BETWEEN -9007199254740991 AND 9007199254740991`
+    ),
     check('users_total_spend_safe_integer', sql`${table.totalSpend} <= 9007199254740991`),
     check(
       'users_referrer_id_safe_integer',
@@ -124,6 +177,7 @@ export const users = pgTable(
     uniqueIndex('users_phone_hash_unique')
       .on(table.phoneHash)
       .where(sql`${table.phoneHash} IS NOT NULL`),
+    index('users_group_id_idx').on(table.groupId),
   ]
 );
 
@@ -165,7 +219,7 @@ export const walletTransactions = pgTable(
     ),
     check(
       'wallet_transactions_balance_after_safe_integer',
-      sql`${table.balanceAfter} BETWEEN 0 AND 9007199254740991`
+      sql`${table.balanceAfter} BETWEEN -9007199254740991 AND 9007199254740991`
     ),
     check(
       'wallet_transactions_type_supported',
@@ -213,6 +267,9 @@ export const purchaseIntents = pgTable(
     cashbackAmount: bigint('cashback_amount', { mode: 'number' }),
     referrerTelegramId: bigint('referrer_telegram_id', { mode: 'number' }),
     referralBonusAmount: bigint('referral_bonus_amount', { mode: 'number' }),
+    // Snapshotted effective VIP credit limit at reservation time so mid-purchase
+    // group expiry/removal cannot break commit or reconciliation.
+    creditLimit: bigint('credit_limit', { mode: 'number' }).notNull().default(0),
     refundedAt: timestamp('refunded_at'),
     // A reconciler may only claim work after this foreground-operation lease
     // expires. Heartbeats prevent a slow but active Rebecca request from being
@@ -289,6 +346,10 @@ export const purchaseIntents = pgTable(
     check(
       'purchase_intents_referral_bonus_amount_safe',
       sql`${table.referralBonusAmount} IS NULL OR (${table.referralBonusAmount} >= 0 AND ${table.referralBonusAmount} <= 9007199254740991)`
+    ),
+    check(
+      'purchase_intents_credit_limit_safe',
+      sql`${table.creditLimit} >= 0 AND ${table.creditLimit} <= 9007199254740991`
     ),
     // A generated new-config name changes on every tap, so a per-config
     // uniqueness constraint does not prevent duplicate purchases. One active
@@ -634,6 +695,7 @@ export const broadcastJobs = pgTable(
     id: uuid('id').notNull().defaultRandom().primaryKey(),
     actorTelegramId: bigint('actor_telegram_id', { mode: 'number' }).notNull(),
     audience: text('audience').notNull(),
+    groupId: text('group_id').references(() => userGroups.id, { onDelete: 'set null' }),
     message: text('message').notNull(),
     status: text('status').notNull().default('queued'),
     recipientCount: integer('recipient_count').notNull().default(0),

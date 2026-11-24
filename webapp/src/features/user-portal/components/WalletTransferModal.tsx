@@ -16,6 +16,8 @@ interface WalletTransferModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableBalance: number;
+  hasCreditLimit?: boolean;
+  debtAmount?: number;
   minAmount: number;
   currency?: string;
   onNotify: (message: string, type?: 'success' | 'error') => void;
@@ -25,6 +27,8 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
   isOpen,
   onClose,
   availableBalance,
+  hasCreditLimit = false,
+  debtAmount = 0,
   minAmount,
   currency: propCurrency,
   onNotify,
@@ -142,11 +146,18 @@ export const WalletTransferModal: React.FC<WalletTransferModalProps> = ({
       }
     >
       <div className="flex flex-col gap-3.5 text-start">
-        <div className="rounded-tile border border-line bg-surface-2 px-3 py-2 text-xs flex items-center justify-between gap-2">
-          <span className="text-ink-muted">{t('user.dashboard.availableBalance')}</span>
-          <bdi dir="ltr" className="font-semibold tnum text-ink">
-            {formatToman(availableBalance)} {currency}
-          </bdi>
+        <div className="rounded-tile border border-line bg-surface-2 px-3 py-2 text-xs flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-ink-muted">{t('user.dashboard.availableBalance')}</span>
+            <bdi dir="ltr" className="font-semibold tnum text-ink">
+              {formatToman(Math.max(0, availableBalance))} {currency}
+            </bdi>
+          </div>
+          {(hasCreditLimit || debtAmount > 0) && (
+            <span className="text-[11px] text-ink-muted leading-snug">
+              {t('user.wallet.transferPositiveBalanceNote')}
+            </span>
+          )}
         </div>
 
         {/* Step 1: Recipient Lookup */}

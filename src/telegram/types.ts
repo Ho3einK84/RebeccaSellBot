@@ -34,6 +34,7 @@ import type { ContactVerificationService } from '../domain/services/ContactVerif
 import type { ForcedJoinService } from '../domain/services/ForcedJoinService.js';
 import type { BulkGiftService, BulkGiftTargetStatus } from '../domain/services/BulkGiftService.js';
 import type { ScheduledMessageDeletionService } from '../domain/services/ScheduledMessageDeletionService.js';
+import type { UserGroupService } from '../domain/services/UserGroupService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
@@ -213,6 +214,8 @@ export type BotServices = {
   bulkGiftService?: BulkGiftService;
   /** Delayed auto-deletion queue for payment & card messages. */
   scheduledMessageDeletionService?: ScheduledMessageDeletionService;
+  /** User group pricing, policy & VIP negative credit limit service. */
+  userGroupService?: UserGroupService;
   /** Telegram bot username (e.g. "RebeccaSellBot") from bot.botInfo, for deep links. */
   botUsername?: string;
   /** Optional Telegram-compatible support destination rendered as a URL button. */

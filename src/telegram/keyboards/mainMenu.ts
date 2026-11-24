@@ -17,6 +17,7 @@ import {
   t,
 } from '../locale.js';
 import {
+  applyGroupDiscount,
   formatRemainingDiscountDuration,
   type PackageOption,
 } from '../../domain/services/PricingService.js';
@@ -26,6 +27,11 @@ import {
   type CatalogDiscountRow,
   type ResolvedCatalogDiscount,
 } from '../../domain/services/CatalogDiscountService.js';
+import {
+  formatUserGroupDisplayLabel,
+  safeGetEffectiveUserPolicy,
+  type EffectiveUserGroupPolicy,
+} from '../../domain/services/UserGroupService.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 import { enforceForcedJoin } from '../middleware/forcedJoin.js';
 import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from '../ui.js';
@@ -33,8 +39,8 @@ import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
 import { renderAdminHomeScreen } from '../admin/adminHome.js';
 import {
-  customServiceNameEnabled,
   customVolumeEnabled,
+  isCustomServiceNameAllowed,
   onHoldDefaultEnabled,
   walletTransferEnabled,
 } from '../../domain/services/FeatureSettings.js';
@@ -66,10 +72,19 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
   const telegramId = ctx.from?.id;
   if (!telegramId || !ctx.services) return t(ctx, 'balance', { balance: '0' });
 
-  const [balance, pendingReceipt] = await Promise.all([
+  const [balance, availableBalance, pendingReceipt, groupPolicy] = await Promise.all([
     ctx.services.walletService.getBalance(telegramId),
+    resolveAvailableWalletBalance(ctx, telegramId),
     ctx.services.walletService.getPendingReceiptForUser?.(telegramId) ?? Promise.resolve(null),
+    safeGetEffectiveUserPolicy(ctx.services.userGroupService, telegramId),
   ]);
+
+  const effectiveAvailable = availableBalance ?? balance;
+  const currency = t(ctx, 'currency_toman');
+  const groupLabel = formatUserGroupDisplayLabel(groupPolicy);
+  const debtAmount = Math.max(0, -balance);
+  const purchasingPower = Math.max(0, effectiveAvailable + groupPolicy.creditLimit);
+  const showCreditInfo = groupPolicy.creditLimit > 0 || balance < 0;
 
   return buildUserScreen({
     emoji: '💳',
@@ -77,7 +92,7 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
     subtitle: t(ctx, 'wallet_dashboard_subtitle'),
     primary: {
       label: t(ctx, 'wallet_available_balance'),
-      value: `${localizedNumber(balance, ctx)} ${t(ctx, 'currency_toman')}`,
+      value: `${localizedNumber(balance, ctx)} ${currency}`,
       emphasizeValue: true,
     },
     sections: [
@@ -88,6 +103,38 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
             label: t(ctx, 'wallet_user_id_label'),
             value: `\`${telegramId}\``,
           },
+          ...(groupLabel
+            ? [
+                {
+                  emoji: '🏷️',
+                  label: t(ctx, 'user_group_badge_label'),
+                  value: escapeTelegramMarkdown(groupLabel),
+                },
+              ]
+            : []),
+          ...(debtAmount > 0
+            ? [
+                {
+                  emoji: '🔻',
+                  label: t(ctx, 'wallet_debt_label'),
+                  value: `${localizedNumber(debtAmount, ctx)} ${currency}`,
+                },
+              ]
+            : []),
+          ...(showCreditInfo
+            ? [
+                {
+                  emoji: '💎',
+                  label: t(ctx, 'wallet_credit_limit_label'),
+                  value: `${localizedNumber(groupPolicy.creditLimit, ctx)} ${currency}`,
+                },
+                {
+                  emoji: '🛒',
+                  label: t(ctx, 'wallet_purchasing_power_label'),
+                  value: `${localizedNumber(purchasingPower, ctx)} ${currency}`,
+                },
+              ]
+            : []),
         ],
       },
       ...(pendingReceipt
@@ -98,7 +145,7 @@ export async function renderWalletDashboard(ctx: MenuContext): Promise<string> {
               fields: [
                 {
                   label: t(ctx, 'wallet_pending_amount'),
-                  value: `${localizedNumber(pendingReceipt.amount, ctx)} ${t(ctx, 'currency_toman')}`,
+                  value: `${localizedNumber(pendingReceipt.amount, ctx)} ${currency}`,
                 },
                 {
                   label: t(ctx, 'wallet_pending_submitted'),
@@ -209,32 +256,105 @@ async function resolveAvailableWalletBalance(
   return undefined;
 }
 
+function resolvePackageWithUserPolicy(
+  pkg: PackageOption,
+  activeDiscounts: readonly CatalogDiscountRow[],
+  userPolicy?: EffectiveUserGroupPolicy | null
+): {
+  originalPrice: number;
+  effectivePrice: number;
+  groupDiscountPercent: number;
+  groupDiscountAmount: number;
+  catalogDiscount: ResolvedCatalogDiscount;
+} {
+  const groupDisc = applyGroupDiscount(pkg.price, userPolicy?.discountPercent);
+  const allowCatalog = userPolicy?.allowCatalogDiscounts ?? true;
+  const catalogDiscount = allowCatalog
+    ? resolveBestCatalogDiscount(activeDiscounts, {
+        packageId: pkg.id,
+        categoryId: pkg.categoryId ?? null,
+        originalPrice: groupDisc.finalAmount,
+      })
+    : {
+        originalPrice: groupDisc.finalAmount,
+        effectivePrice: groupDisc.finalAmount,
+        discountAmount: 0,
+        activeDiscountId: null,
+        activeDiscountTitle: null,
+        discountExpiresAt: null,
+      };
+  return {
+    originalPrice: pkg.price,
+    effectivePrice: catalogDiscount.effectivePrice,
+    groupDiscountPercent: groupDisc.discountPercent,
+    groupDiscountAmount: groupDisc.discountAmount,
+    catalogDiscount,
+  };
+}
+
+function resolveEffectiveCustomPricePerGb(
+  ctx: MenuContext,
+  userPolicy?: EffectiveUserGroupPolicy | null
+): number | undefined {
+  const basePerGb = ctx.services?.translationService?.getSettingNum('price_per_gb', 5000);
+  if (basePerGb === undefined) return undefined;
+  const rawRate = userPolicy?.customPricePerGb ?? basePerGb;
+  return applyGroupDiscount(rawRate, userPolicy?.discountPercent).finalAmount;
+}
+
 /**
  * Render shop header text with live catalog summary, active category, wallet balance, and promo code if set.
  */
 export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
-  const pendingPromo = ctx.session.pendingPromo;
   const telegramId = ctx.from?.id;
+  const userPolicy = await safeGetEffectiveUserPolicy(ctx.services?.userGroupService, telegramId);
+  const pendingPromo = userPolicy.allowPromoCodes ? ctx.session.pendingPromo : undefined;
   const availableBalance = telegramId
     ? await resolveAvailableWalletBalance(ctx, telegramId)
     : undefined;
   const packages = ctx.services?.pricingService?.getPackages?.() ?? [];
   const categories = (await ctx.services?.packageCategoryService?.listCategories?.(false)) ?? [];
-  const activeDiscounts = ctx.services
-    ? await safeListActiveDiscounts(ctx.services.catalogDiscountService)
-    : [];
+  const activeDiscounts =
+    ctx.services && userPolicy.allowCatalogDiscounts
+      ? await safeListActiveDiscounts(ctx.services.catalogDiscountService)
+      : [];
   const isCustomEnabled = ctx.services?.translationService
     ? customVolumeEnabled(ctx.services.translationService)
     : false;
-  const customPricePerGb = ctx.services?.translationService?.getSettingNum('price_per_gb', 5000);
+  const customPricePerGb = resolveEffectiveCustomPricePerGb(ctx, userPolicy);
+  const currency = t(ctx, 'currency_toman');
+  const groupLabel = formatUserGroupDisplayLabel(userPolicy);
+  const groupFields = [
+    ...(groupLabel
+      ? [
+          {
+            emoji: '🏷️',
+            label: t(ctx, 'user_group_badge_label'),
+            value:
+              userPolicy.discountPercent > 0
+                ? `${escapeTelegramMarkdown(groupLabel)} (-${localizedNumber(userPolicy.discountPercent, ctx)}%)`
+                : escapeTelegramMarkdown(groupLabel),
+          },
+        ]
+      : []),
+  ];
   const walletField =
     availableBalance !== undefined
       ? [
           {
             emoji: '💳',
             label: t(ctx, 'shop_wallet_balance_label'),
-            value: `${localizedNumber(availableBalance, ctx)} ${t(ctx, 'currency_toman')}`,
+            value: `${localizedNumber(availableBalance, ctx)} ${currency}`,
           },
+          ...(userPolicy.creditLimit > 0
+            ? [
+                {
+                  emoji: '🛒',
+                  label: t(ctx, 'wallet_purchasing_power_label'),
+                  value: `${localizedNumber(Math.max(0, availableBalance + userPolicy.creditLimit), ctx)} ${currency}`,
+                },
+              ]
+            : []),
         ]
       : [];
 
@@ -268,6 +388,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
           {
             bullet: '',
             fields: [
+              ...groupFields,
               ...walletField,
               ...buildShopDiscountBannerField(ctx, featuredCategoryDiscount),
               {
@@ -297,6 +418,7 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
   ).length;
 
   const catalogFields = [
+    ...groupFields,
     ...walletField,
     ...buildShopDiscountBannerField(ctx, featuredDiscount),
     ...(packages.length > 0
@@ -353,12 +475,14 @@ export async function renderShopMenuText(ctx: MenuContext): Promise<string> {
 function buildInsufficientBalanceScreen(
   ctx: MenuContext,
   packagePrice: number,
-  balance: number
+  balance: number,
+  options?: { creditLimit?: number; includePromoHint?: boolean }
 ): string {
   return buildUnifiedInsufficientBalanceScreen(ctx, {
     packagePrice,
     balance,
-    includePromoHint: true,
+    creditLimit: options?.creditLimit,
+    includePromoHint: options?.includePromoHint ?? true,
   });
 }
 
@@ -376,7 +500,14 @@ export function buildPurchaseCheckoutScreen(
   promoCode?: string,
   walletBalance?: number,
   catalogDiscount?: ResolvedCatalogDiscount,
-  options?: { bonusGb?: number; requestedUsername?: string }
+  options?: {
+    bonusGb?: number;
+    requestedUsername?: string;
+    creditLimit?: number;
+    groupLabel?: string | null;
+    groupDiscountPercent?: number;
+    groupDiscountAmount?: number;
+  }
 ): string {
   const defaultOnHold =
     typeof ctx.services?.translationService?.getSetting === 'function'
@@ -388,10 +519,14 @@ export function buildPurchaseCheckoutScreen(
     packageName: localizedPackageName(ctx, pkg.id, pkg.name),
     gbAmount: pkg.gbAmount,
     durationDays: pkg.durationDays,
-    originalPrice: catalogDiscount?.originalPrice ?? pkg.price,
+    originalPrice: pkg.price,
     effectivePrice,
     finalAmount: amount,
     walletAvailableBalance: walletBalance,
+    creditLimit: options?.creditLimit,
+    groupLabel: options?.groupLabel,
+    groupDiscountPercent: options?.groupDiscountPercent,
+    groupDiscountAmount: options?.groupDiscountAmount,
     requestedUsername: options?.requestedUsername,
     startOnFirstUse: pkg.startOnFirstUse ?? defaultOnHold,
     catalogDiscount,
@@ -542,7 +677,7 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
     async (ctx) => {
       const telegramId = ctx.from?.id;
       if (!telegramId || !ctx.services) return;
-      const [u, stats] = await Promise.all([
+      const [u, stats, userPolicy] = await Promise.all([
         ctx.services.walletService.getOrCreateUser(
           telegramId,
           ctx.from?.username ?? null,
@@ -552,11 +687,14 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
           observedContextLocale(ctx)
         ),
         ctx.services.referralService.getReferralStats(telegramId),
+        safeGetEffectiveUserPolicy(ctx.services.userGroupService, telegramId),
       ]);
       const botUsername = ctx.services?.botUsername ?? ctx.me?.username ?? 'RebeccaSellBot';
       const refLink = `https://t.me/${botUsername}?start=${u.referralCode}`;
       const bonus = ctx.services.translationService.getSettingNum('referral_bonus_toman', 10_000);
-      const cashbackPercent = ctx.services.translationService.getSettingNum('cashback_percent', 0);
+      const cashbackPercent = userPolicy.allowCashback
+        ? ctx.services.translationService.getSettingNum('cashback_percent', 0)
+        : 0;
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}`;
       const refKeyboard = new InlineKeyboard()
         .url(t(ctx, 'referral_share_button'), shareUrl)
@@ -616,10 +754,16 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
       );
     }
   )
-  .dynamic((ctx, range) => {
+  .dynamic(async (ctx, range) => {
     const wheelEnabled =
       ctx.services?.translationService.getSettingBool('lucky_wheel_enabled', true) ?? true;
-    if (wheelEnabled || (ctx.from?.id && ctx.services?.isAdmin(ctx.from.id))) {
+    const isAdmin = Boolean(ctx.from?.id && ctx.services?.isAdmin(ctx.from.id));
+    const userPolicy =
+      wheelEnabled && !isAdmin
+        ? await safeGetEffectiveUserPolicy(ctx.services?.userGroupService, ctx.from?.id)
+        : null;
+    const allowedForUser = userPolicy ? userPolicy.allowLuckyWheel : true;
+    if ((wheelEnabled && allowedForUser) || isAdmin) {
       range.text(
         (c) => t(c, 'menu_lucky_wheel'),
         async (c) => {
@@ -766,30 +910,27 @@ async function enforcePurchasePhoneGate(
 function renderPackageButtons(
   range: Parameters<Parameters<typeof shopMenu.dynamic>[0]>[1],
   packages: readonly PackageOption[],
-  activeDiscounts: readonly CatalogDiscountRow[] = []
+  activeDiscounts: readonly CatalogDiscountRow[] = [],
+  userPolicy?: EffectiveUserGroupPolicy | null
 ) {
   for (const pkg of packages) {
     const isPopular =
       pkg.id.includes('popular') || pkg.id.includes('best') || pkg.id.includes('pro');
     const tag = isPopular ? '⭐ ' : '';
-    const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
-      packageId: pkg.id,
-      categoryId: pkg.categoryId ?? null,
-      originalPrice: pkg.price,
-    });
+    const priced = resolvePackageWithUserPolicy(pkg, activeDiscounts, userPolicy);
 
     range
       .text(
         (c) => {
-          const basePrice = catalogDiscount.effectivePrice;
+          const basePrice = priced.effectivePrice;
           const effectivePrice = getEffectivePackagePrice(
             { price: basePrice, gbAmount: pkg.gbAmount },
-            c.session.pendingPromo
+            userPolicy?.allowPromoCodes === false ? undefined : c.session.pendingPromo
           );
           return formatCompactDiscountedPackageLabel(c, pkg, {
             effectivePrice,
             tag,
-            catalogDiscount,
+            catalogDiscount: priced.catalogDiscount,
           });
         },
         async (c) => {
@@ -805,21 +946,25 @@ function renderPackageButtons(
             return;
           }
 
-          const latestDiscounts = await safeListActiveDiscounts(c.services.catalogDiscountService);
-          const liveDiscount = resolveBestCatalogDiscount(latestDiscounts, {
-            packageId: pkg.id,
-            categoryId: pkg.categoryId ?? null,
-            originalPrice: pkg.price,
-          });
-          const effectivePkg: PackageOption =
-            liveDiscount.discountAmount > 0 ? { ...pkg, price: liveDiscount.effectivePrice } : pkg;
-
-          const pendingPromo = await getPendingPromoPricing(
-            c,
-            telegramId,
-            effectivePkg.price,
-            pkg.gbAmount
+          const livePolicy = await safeGetEffectiveUserPolicy(
+            c.services.userGroupService,
+            telegramId
           );
+          const latestDiscounts = livePolicy.allowCatalogDiscounts
+            ? await safeListActiveDiscounts(c.services.catalogDiscountService)
+            : [];
+          const livePriced = resolvePackageWithUserPolicy(pkg, latestDiscounts, livePolicy);
+          const effectivePkg: PackageOption =
+            livePriced.effectivePrice !== pkg.price
+              ? { ...pkg, price: livePriced.effectivePrice }
+              : pkg;
+
+          if (!livePolicy.allowPromoCodes && c.session.pendingPromo) {
+            delete c.session.pendingPromo;
+          }
+          const pendingPromo = livePolicy.allowPromoCodes
+            ? await getPendingPromoPricing(c, telegramId, effectivePkg.price, pkg.gbAmount)
+            : {};
           if (pendingPromo.messageKey) {
             await renderScreen(
               c,
@@ -837,30 +982,38 @@ function renderPackageButtons(
             ? Math.max(0, pendingPromo.quote.finalGbAmount - pkg.gbAmount)
             : 0;
           const balance = (await resolveAvailableWalletBalance(c, telegramId)) ?? 0;
-          if (balance < displayedPrice) {
+          const purchasingPower = Math.max(0, balance + livePolicy.creditLimit);
+          if (purchasingPower < displayedPrice) {
             c.session.promoCheckoutContext = { kind: 'new_config', packageId: pkg.id };
             c.session.pendingTopupIntent = {
               kind: 'new_config',
               packageId: pkg.id,
-              deficitAmount: displayedPrice - balance,
+              deficitAmount: displayedPrice - purchasingPower,
               createdAt: Date.now(),
             };
             const insufficientKeyboard = buildInsufficientBalanceKeyboard(c, {
               backLabelKey: 'menu_back_shop',
               backCallback: 'nav:shop',
-              promoCallback: 'shop:apply_promo',
+              ...(livePolicy.allowPromoCodes ? { promoCallback: 'shop:apply_promo' } : {}),
             });
 
-            await renderScreen(c, buildInsufficientBalanceScreen(c, displayedPrice, balance), {
-              parse_mode: 'Markdown',
-              reply_markup: insufficientKeyboard,
-            });
+            await renderScreen(
+              c,
+              buildInsufficientBalanceScreen(c, displayedPrice, balance, {
+                creditLimit: livePolicy.creditLimit,
+                includePromoHint: livePolicy.allowPromoCodes,
+              }),
+              {
+                parse_mode: 'Markdown',
+                reply_markup: insufficientKeyboard,
+              }
+            );
             return;
           }
 
           if (
             typeof c.services.translationService?.getSetting === 'function' &&
-            customServiceNameEnabled(c.services.translationService)
+            isCustomServiceNameAllowed(c.services.translationService, livePolicy)
           ) {
             c.session.pendingCustomNamePurchase = { packageId: pkg.id };
             await c.conversation.enter('buyPackageCustomNameConversation');
@@ -894,15 +1047,17 @@ function renderPackageButtons(
           const confirmKeyboard = new InlineKeyboard()
             .text(t(c, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
             .row();
-          if (pendingPromo.quote?.code) {
-            confirmKeyboard
-              .text(t(c, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
-              .text(t(c, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
-              .row();
-          } else {
-            confirmKeyboard
-              .text(t(c, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`)
-              .row();
+          if (livePolicy.allowPromoCodes) {
+            if (pendingPromo.quote?.code) {
+              confirmKeyboard
+                .text(t(c, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
+                .text(t(c, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
+                .row();
+            } else {
+              confirmKeyboard
+                .text(t(c, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`)
+                .row();
+            }
           }
           confirmKeyboard.text(t(c, 'menu_back_shop'), 'nav:shop');
 
@@ -914,8 +1069,14 @@ function renderPackageButtons(
               displayedPrice,
               pendingPromo.quote?.code,
               balance,
-              liveDiscount,
-              { bonusGb }
+              livePriced.catalogDiscount,
+              {
+                bonusGb,
+                creditLimit: livePolicy.creditLimit,
+                groupLabel: formatUserGroupDisplayLabel(livePolicy),
+                groupDiscountPercent: livePriced.groupDiscountPercent,
+                groupDiscountAmount: livePriced.groupDiscountAmount,
+              }
             ),
             {
               parse_mode: 'Markdown',
@@ -931,7 +1092,13 @@ function renderPackageButtons(
 export const shopMenu = new Menu<MenuContext>('shop-menu')
   .dynamic(async (ctx, range) => {
     if (!ctx.services) return;
-    const activeDiscounts = await safeListActiveDiscounts(ctx.services.catalogDiscountService);
+    const userPolicy = await safeGetEffectiveUserPolicy(
+      ctx.services.userGroupService,
+      ctx.from?.id
+    );
+    const activeDiscounts = userPolicy.allowCatalogDiscounts
+      ? await safeListActiveDiscounts(ctx.services.catalogDiscountService)
+      : [];
 
     if (ctx.session.activeShopCategory) {
       const categoryPackages = ctx.services.pricingService.getPackages(
@@ -949,7 +1116,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           )
           .row();
       } else {
-        renderPackageButtons(range, categoryPackages, activeDiscounts);
+        renderPackageButtons(range, categoryPackages, activeDiscounts, userPolicy);
       }
 
       range
@@ -990,13 +1157,10 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           ? ctx.services.pricingService.getPackages(undefined, undefined, false, null)
           : allPackages;
 
-      renderPackageButtons(range, uncategorizedPackages, activeDiscounts);
+      renderPackageButtons(range, uncategorizedPackages, activeDiscounts, userPolicy);
 
       if (customVolumeEnabled(ctx.services.translationService)) {
-        const customPricePerGb = ctx.services.translationService.getSettingNum(
-          'price_per_gb',
-          5000
-        );
+        const customPricePerGb = resolveEffectiveCustomPricePerGb(ctx, userPolicy) ?? 5000;
         range
           .text(
             (c) => t(c, 'menu_custom_amount', { price: localizedNumber(customPricePerGb, c) }),
@@ -1020,31 +1184,33 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
       }
     }
 
-    if (ctx.session.pendingPromo) {
-      range
-        .text(
-          (c) => `${t(c, 'shop_clear_promo_button')} · ${c.session.pendingPromo?.code}`,
-          async (c) => {
-            delete c.session.pendingPromo;
-            await c.answerCallbackQuery({ text: t(c, 'button_refreshed') });
-            await renderScreen(c, await renderShopMenuText(c), {
-              parse_mode: 'Markdown',
-              reply_markup: shopMenu,
-            });
-          }
-        )
-        .row();
-    } else {
-      range
-        .text(
-          (c) => t(c, 'shop_apply_promo_button'),
-          async (c) => {
-            delete c.session.promoCheckoutContext;
-            c.session.promoReturnDestination = 'shop';
-            await c.conversation.enter('promoConversation');
-          }
-        )
-        .row();
+    if (userPolicy.allowPromoCodes) {
+      if (ctx.session.pendingPromo) {
+        range
+          .text(
+            (c) => `${t(c, 'shop_clear_promo_button')} · ${c.session.pendingPromo?.code}`,
+            async (c) => {
+              delete c.session.pendingPromo;
+              await c.answerCallbackQuery({ text: t(c, 'button_refreshed') });
+              await renderScreen(c, await renderShopMenuText(c), {
+                parse_mode: 'Markdown',
+                reply_markup: shopMenu,
+              });
+            }
+          )
+          .row();
+      } else {
+        range
+          .text(
+            (c) => t(c, 'shop_apply_promo_button'),
+            async (c) => {
+              delete c.session.promoCheckoutContext;
+              c.session.promoReturnDestination = 'shop';
+              await c.conversation.enter('promoConversation');
+            }
+          )
+          .row();
+      }
     }
   })
   .row()

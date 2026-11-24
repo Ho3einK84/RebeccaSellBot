@@ -7,6 +7,7 @@ import {
   broadcastRecipients,
   purchaseIntents,
   userConfigs,
+  userGroups,
   users,
 } from '../../infra/schema.js';
 
@@ -25,11 +26,17 @@ const STALE_CLAIM_MS = 10 * 60 * 1000;
 
 /** Durable audience snapshots and progress state for Telegram broadcasts. */
 export class BroadcastService {
-  async countAudience(audience: BroadcastAudience): Promise<number> {
+  async countAudience(audience: BroadcastAudience, groupId?: string | null): Promise<number> {
+    const cleanGroupId = normalizeGroupFilterId(groupId);
+    const groupCondition = groupFilterCondition(cleanGroupId);
     const [row] = await getDb()
       .select({ value: count() })
       .from(users)
-      .where(and(eq(users.isBanned, false), audienceCondition(audience)));
+      .where(
+        groupCondition
+          ? and(eq(users.isBanned, false), audienceCondition(audience), groupCondition)
+          : and(eq(users.isBanned, false), audienceCondition(audience))
+      );
     return row?.value ?? 0;
   }
 
@@ -37,8 +44,10 @@ export class BroadcastService {
     actorTelegramId: number;
     audience: BroadcastAudience;
     message: string;
+    groupId?: string | null;
   }): Promise<BroadcastJob> {
     assertMessage(params.message);
+    const cleanGroupId = normalizeGroupFilterId(params.groupId);
     const db = getDb();
     const jobId = crypto.randomUUID();
     return db.transaction(async (tx) => {
@@ -46,11 +55,16 @@ export class BroadcastService {
         id: jobId,
         actorTelegramId: params.actorTelegramId,
         audience: params.audience,
+        groupId: cleanGroupId,
         message: params.message,
         status: 'queued',
       });
 
       const condition = audienceCondition(params.audience);
+      const groupCondition = groupFilterCondition(cleanGroupId);
+      const combinedCondition = groupCondition
+        ? sql`${condition} AND ${groupCondition}`
+        : condition;
       await tx.execute(sql`
         INSERT INTO ${broadcastRecipients} (
           "job_id",
@@ -66,7 +80,7 @@ export class BroadcastService {
           0,
           NOW()
         FROM ${users}
-        WHERE ${users.isBanned} = false AND ${condition}
+        WHERE ${users.isBanned} = false AND ${combinedCondition}
         ON CONFLICT DO NOTHING
       `);
 
@@ -96,6 +110,7 @@ export class BroadcastService {
         entityId: jobId,
         metadata: JSON.stringify({
           audience: params.audience,
+          groupId: cleanGroupId,
           recipientCount,
           messageLength: params.message.length,
         }),
@@ -414,6 +429,32 @@ function audienceCondition(audience: BroadcastAudience) {
   }
   const exhaustive: never = audience;
   throw new Error(`Unsupported broadcast audience: ${String(exhaustive)}`);
+}
+
+function normalizeGroupFilterId(groupId?: string | null): string | null {
+  const clean = typeof groupId === 'string' ? groupId.trim() : '';
+  return clean.length > 0 ? clean : null;
+}
+
+/**
+ * Filter users by effective group membership. If `groupId` is the default group,
+ * ungrouped users and users with expired group memberships are transparently included.
+ */
+function groupFilterCondition(groupId: string | null) {
+  if (!groupId) return undefined;
+  return sql`(
+    (${users.groupId} = ${groupId} AND (${users.groupExpiresAt} IS NULL OR ${users.groupExpiresAt} > NOW()))
+    OR (
+      EXISTS (
+        SELECT 1 FROM ${userGroups}
+        WHERE ${userGroups.id} = ${groupId} AND ${userGroups.isDefault} = true
+      )
+      AND (
+        ${users.groupId} IS NULL
+        OR (${users.groupExpiresAt} IS NOT NULL AND ${users.groupExpiresAt} <= NOW())
+      )
+    )
+  )`;
 }
 
 function assertMessage(message: string): void {

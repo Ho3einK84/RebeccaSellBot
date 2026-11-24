@@ -52,12 +52,19 @@ import {
   safeListActiveDiscounts,
   type ResolvedCatalogDiscount,
 } from '../../domain/services/CatalogDiscountService.js';
-import { parseVolumePricingTiersJson } from '../../domain/services/PricingService.js';
+import {
+  applyGroupDiscount,
+  parseVolumePricingTiersJson,
+} from '../../domain/services/PricingService.js';
+import {
+  formatUserGroupDisplayLabel,
+  safeGetEffectiveUserPolicy,
+} from '../../domain/services/UserGroupService.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 import { buildForcedJoinGateScreen } from '../middleware/forcedJoin.js';
 import {
-  customServiceNameEnabled,
   customVolumeEnabled,
+  isCustomServiceNameAllowed,
   onHoldDefaultEnabled,
   renewalRolloverEnabled,
   walletTransferEnabled,
@@ -316,6 +323,11 @@ export function buildCustomCheckoutScreen(
     amount: number;
     pricePerGb: number;
     walletAvailableBalance?: number;
+    creditLimit?: number;
+    groupLabel?: string | null;
+    groupDiscountPercent?: number;
+    groupDiscountAmount?: number;
+    originalPrice?: number;
     startOnFirstUse?: boolean;
     promoCode?: string;
     promo?: UnifiedCheckoutPromo;
@@ -330,10 +342,14 @@ export function buildCustomCheckoutScreen(
     gbAmount: input.gbAmount,
     durationDays: input.durationDays,
     finalAmount: input.amount,
-    originalPrice: input.catalogDiscount?.originalPrice,
+    originalPrice: input.originalPrice ?? input.catalogDiscount?.originalPrice,
     effectivePrice: input.catalogDiscount?.effectivePrice,
     pricePerGb: input.pricePerGb,
     walletAvailableBalance: input.walletAvailableBalance,
+    creditLimit: input.creditLimit,
+    groupLabel: input.groupLabel,
+    groupDiscountPercent: input.groupDiscountPercent,
+    groupDiscountAmount: input.groupDiscountAmount,
     serviceUsername: input.username,
     requestedUsername: input.requestedUsername,
     startOnFirstUse: input.startOnFirstUse,
@@ -406,28 +422,47 @@ async function executePurchaseFlow(
   }
 
   const customPkgId = `custom_${gbAmount}gb_${durationDays}d`;
-  const { customQuote, catalogDiscount, startOnFirstUse } = await conversation.external(
+  const { userPolicy, customQuote, catalogDiscount, startOnFirstUse } = await conversation.external(
     async (outsideCtx) => {
       const services = outsideCtx?.services ?? ctx.services!;
-      const quote = services.pricingService.getCustomPriceQuote(gbAmount, durationDays);
-      const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
-      const discount = resolveBestCatalogDiscount(activeDiscounts, {
-        packageId: customPkgId,
-        categoryId: null,
-        originalPrice: quote.totalPrice,
-      });
+      const policy = await safeGetEffectiveUserPolicy(services.userGroupService, telegramId);
+      const quote = services.pricingService.getCustomPriceQuote(gbAmount, durationDays, policy);
+      const activeDiscounts = policy.allowCatalogDiscounts
+        ? await safeListActiveDiscounts(services.catalogDiscountService)
+        : [];
+      const discount = policy.allowCatalogDiscounts
+        ? resolveBestCatalogDiscount(activeDiscounts, {
+            packageId: customPkgId,
+            categoryId: null,
+            originalPrice: quote.totalPrice,
+          })
+        : {
+            originalPrice: quote.totalPrice,
+            effectivePrice: quote.totalPrice,
+            discountAmount: 0,
+            activeDiscountId: null,
+            activeDiscountTitle: null,
+            discountExpiresAt: null,
+          };
       const onHold =
         typeof services.translationService?.getSetting === 'function' &&
         onHoldDefaultEnabled(services.translationService);
-      return { customQuote: quote, catalogDiscount: discount, startOnFirstUse: onHold };
+      return {
+        userPolicy: policy,
+        customQuote: quote,
+        catalogDiscount: discount,
+        startOnFirstUse: onHold,
+      };
     }
   );
   const pricePerGb = customQuote.pricePerGb;
   const totalCost = catalogDiscount.effectivePrice;
 
-  const pendingPromo = await conversation.external((outsideCtx) =>
-    getPendingPromoPricing(outsideCtx, telegramId, totalCost, gbAmount)
-  );
+  const pendingPromo = userPolicy.allowPromoCodes
+    ? await conversation.external((outsideCtx) =>
+        getPendingPromoPricing(outsideCtx, telegramId, totalCost, gbAmount)
+      )
+    : {};
   if (pendingPromo.messageKey) {
     await replyInConversation(conversation, ctx, t(ctx, pendingPromo.messageKey));
     return;
@@ -439,13 +474,14 @@ async function executePurchaseFlow(
   const balance = await conversation.external((outsideCtx) =>
     outsideCtx.services!.walletService.getAvailableBalance(telegramId)
   );
-  if (balance < displayedCost) {
+  const purchasingPower = Math.max(0, balance + userPolicy.creditLimit);
+  if (purchasingPower < displayedCost) {
     const createdAt = await conversation.now();
     await conversation.external((outsideCtx) => {
       outsideCtx.session.pendingTopupIntent = {
         kind: 'new_config',
         packageId: customPkgId,
-        deficitAmount: Math.max(0, displayedCost - balance),
+        deficitAmount: Math.max(0, displayedCost - purchasingPower),
         createdAt,
       };
     });
@@ -455,6 +491,7 @@ async function executePurchaseFlow(
       buildUnifiedInsufficientBalanceScreen(ctx, {
         packagePrice: displayedCost,
         balance,
+        creditLimit: userPolicy.creditLimit,
       }),
       {
         parse_mode: 'Markdown',
@@ -470,7 +507,7 @@ async function executePurchaseFlow(
   const askCustomName = await conversation.external(
     (outsideCtx) =>
       typeof outsideCtx.services?.translationService?.getSetting === 'function' &&
-      customServiceNameEnabled(outsideCtx.services.translationService)
+      isCustomServiceNameAllowed(outsideCtx.services.translationService, userPolicy)
   );
   let requestedUsername: string | undefined;
   if (askCustomName) {
@@ -524,6 +561,11 @@ async function executePurchaseFlow(
       amount: displayedCost,
       pricePerGb,
       walletAvailableBalance: balance,
+      creditLimit: userPolicy.creditLimit,
+      groupLabel: formatUserGroupDisplayLabel(userPolicy),
+      groupDiscountPercent: customQuote.groupDiscountPercent,
+      groupDiscountAmount: customQuote.groupDiscountAmount,
+      originalPrice: customQuote.originalPrice ?? catalogDiscount.originalPrice,
       startOnFirstUse,
       promo: pendingPromo.quote?.code
         ? {
@@ -772,30 +814,46 @@ export async function buyPackageCustomNameConversation(
     return;
   }
 
-  const { catalogDiscount, effectivePkg, startOnFirstUse } = await conversation.external(
-    async (outsideCtx) => {
+  const { userPolicy, groupDisc, catalogDiscount, effectivePkg, startOnFirstUse } =
+    await conversation.external(async (outsideCtx) => {
       const services = outsideCtx?.services ?? ctx.services!;
-      const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
-      const discount = resolveBestCatalogDiscount(activeDiscounts, {
-        packageId: pkg.id,
-        categoryId: pkg.categoryId ?? null,
-        originalPrice: pkg.price,
-      });
+      const policy = await safeGetEffectiveUserPolicy(services.userGroupService, telegramId);
+      const gd = applyGroupDiscount(pkg.price, policy.discountPercent);
+      const activeDiscounts = policy.allowCatalogDiscounts
+        ? await safeListActiveDiscounts(services.catalogDiscountService)
+        : [];
+      const discount = policy.allowCatalogDiscounts
+        ? resolveBestCatalogDiscount(activeDiscounts, {
+            packageId: pkg.id,
+            categoryId: pkg.categoryId ?? null,
+            originalPrice: gd.finalAmount,
+          })
+        : {
+            originalPrice: gd.finalAmount,
+            effectivePrice: gd.finalAmount,
+            discountAmount: 0,
+            activeDiscountId: null,
+            activeDiscountTitle: null,
+            discountExpiresAt: null,
+          };
       const defaultOnHold =
         typeof services.translationService?.getSetting === 'function' &&
         onHoldDefaultEnabled(services.translationService);
       return {
+        userPolicy: policy,
+        groupDisc: gd,
         catalogDiscount: discount,
         effectivePkg:
-          discount.discountAmount > 0 ? { ...pkg, price: discount.effectivePrice } : pkg,
+          discount.effectivePrice !== pkg.price ? { ...pkg, price: discount.effectivePrice } : pkg,
         startOnFirstUse: pkg.startOnFirstUse ?? defaultOnHold,
       };
-    }
-  );
+    });
 
-  const pendingPromo = await conversation.external((outsideCtx) =>
-    getPendingPromoPricing(outsideCtx, telegramId, effectivePkg.price, pkg.gbAmount)
-  );
+  const pendingPromo = userPolicy.allowPromoCodes
+    ? await conversation.external((outsideCtx) =>
+        getPendingPromoPricing(outsideCtx, telegramId, effectivePkg.price, pkg.gbAmount)
+      )
+    : {};
   if (pendingPromo.messageKey) {
     await replyInConversation(
       conversation,
@@ -812,24 +870,26 @@ export async function buyPackageCustomNameConversation(
   const balance = await conversation.external((outsideCtx) =>
     outsideCtx.services!.walletService.getAvailableBalance(telegramId)
   );
-  if (balance < displayedPrice) {
+  const purchasingPower = Math.max(0, balance + userPolicy.creditLimit);
+  if (purchasingPower < displayedPrice) {
     const createdAt = await conversation.now();
     await conversation.external((outsideCtx) => {
       outsideCtx.session.promoCheckoutContext = { kind: 'new_config', packageId: pkg.id };
       outsideCtx.session.pendingTopupIntent = {
         kind: 'new_config',
         packageId: pkg.id,
-        deficitAmount: Math.max(0, displayedPrice - balance),
+        deficitAmount: Math.max(0, displayedPrice - purchasingPower),
         createdAt,
       };
     });
-    const showPromoButton = !pendingPromo.quote?.code;
+    const showPromoButton = userPolicy.allowPromoCodes && !pendingPromo.quote?.code;
     await replyInConversation(
       conversation,
       ctx,
       buildUnifiedInsufficientBalanceScreen(ctx, {
         packagePrice: displayedPrice,
         balance,
+        creditLimit: userPolicy.creditLimit,
         includePromoHint: showPromoButton,
       }),
       {
@@ -885,13 +945,17 @@ export async function buyPackageCustomNameConversation(
   const confirmKeyboard = new InlineKeyboard()
     .text(t(ctx, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
     .row();
-  if (pendingPromo.quote?.code) {
-    confirmKeyboard
-      .text(t(ctx, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
-      .text(t(ctx, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
-      .row();
-  } else {
-    confirmKeyboard.text(t(ctx, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`).row();
+  if (userPolicy.allowPromoCodes) {
+    if (pendingPromo.quote?.code) {
+      confirmKeyboard
+        .text(t(ctx, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
+        .text(t(ctx, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
+        .row();
+    } else {
+      confirmKeyboard
+        .text(t(ctx, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`)
+        .row();
+    }
   }
   confirmKeyboard.text(t(ctx, 'menu_back_shop'), 'nav:shop');
 
@@ -901,9 +965,13 @@ export async function buyPackageCustomNameConversation(
     gbAmount: pkg.gbAmount,
     durationDays: pkg.durationDays,
     finalAmount: displayedPrice,
-    originalPrice: catalogDiscount.originalPrice,
+    originalPrice: pkg.price,
     effectivePrice: catalogDiscount.effectivePrice,
     walletAvailableBalance: balance,
+    creditLimit: userPolicy.creditLimit,
+    groupLabel: formatUserGroupDisplayLabel(userPolicy),
+    groupDiscountPercent: groupDisc.discountPercent,
+    groupDiscountAmount: groupDisc.discountAmount,
     requestedUsername,
     startOnFirstUse,
     catalogDiscount,
@@ -985,23 +1053,39 @@ export async function renewConfigConversation(
   const durationDays = await conversation.external((outsideCtx) => customDurationDays(outsideCtx));
   const customPkgId = `custom_${gbAmount}gb_${durationDays}d`;
 
-  const { customQuote, catalogDiscount } = await conversation.external(async (outsideCtx) => {
-    const services = outsideCtx?.services ?? ctx.services!;
-    const quote = services.pricingService.getCustomPriceQuote(gbAmount, durationDays);
-    const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
-    const discount = resolveBestCatalogDiscount(activeDiscounts, {
-      packageId: customPkgId,
-      categoryId: null,
-      originalPrice: quote.totalPrice,
-    });
-    return { customQuote: quote, catalogDiscount: discount };
-  });
+  const { userPolicy, customQuote, catalogDiscount } = await conversation.external(
+    async (outsideCtx) => {
+      const services = outsideCtx?.services ?? ctx.services!;
+      const policy = await safeGetEffectiveUserPolicy(services.userGroupService, targetTelegramId);
+      const quote = services.pricingService.getCustomPriceQuote(gbAmount, durationDays, policy);
+      const activeDiscounts = policy.allowCatalogDiscounts
+        ? await safeListActiveDiscounts(services.catalogDiscountService)
+        : [];
+      const discount = policy.allowCatalogDiscounts
+        ? resolveBestCatalogDiscount(activeDiscounts, {
+            packageId: customPkgId,
+            categoryId: null,
+            originalPrice: quote.totalPrice,
+          })
+        : {
+            originalPrice: quote.totalPrice,
+            effectivePrice: quote.totalPrice,
+            discountAmount: 0,
+            activeDiscountId: null,
+            activeDiscountTitle: null,
+            discountExpiresAt: null,
+          };
+      return { userPolicy: policy, customQuote: quote, catalogDiscount: discount };
+    }
+  );
   const pricePerGb = customQuote.pricePerGb;
   const totalCost = catalogDiscount.effectivePrice;
 
-  const pendingPromo = await conversation.external((outsideCtx) =>
-    getPendingPromoPricing(outsideCtx, targetTelegramId, totalCost, gbAmount)
-  );
+  const pendingPromo = userPolicy.allowPromoCodes
+    ? await conversation.external((outsideCtx) =>
+        getPendingPromoPricing(outsideCtx, targetTelegramId, totalCost, gbAmount)
+      )
+    : {};
   if (pendingPromo.messageKey) {
     await replyInConversation(conversation, ctx, t(ctx, pendingPromo.messageKey));
     return;
@@ -1013,14 +1097,15 @@ export async function renewConfigConversation(
   const balance = await conversation.external((outsideCtx) =>
     outsideCtx.services!.walletService.getAvailableBalance(targetTelegramId)
   );
-  if (balance < displayedCost) {
+  const purchasingPower = Math.max(0, balance + userPolicy.creditLimit);
+  if (purchasingPower < displayedCost) {
     const createdAt = await conversation.now();
     await conversation.external((outsideCtx) => {
       outsideCtx.session.pendingTopupIntent = {
         kind: 'renew_config',
         configId: config.id,
         configUsername: config.configUsername,
-        deficitAmount: Math.max(0, displayedCost - balance),
+        deficitAmount: Math.max(0, displayedCost - purchasingPower),
         createdAt,
       };
     });
@@ -1030,6 +1115,7 @@ export async function renewConfigConversation(
       buildUnifiedInsufficientBalanceScreen(ctx, {
         packagePrice: displayedCost,
         balance,
+        creditLimit: userPolicy.creditLimit,
       }),
       {
         parse_mode: 'Markdown',
@@ -1100,6 +1186,11 @@ export async function renewConfigConversation(
       amount: displayedCost,
       pricePerGb,
       walletAvailableBalance: balance,
+      creditLimit: userPolicy.creditLimit,
+      groupLabel: formatUserGroupDisplayLabel(userPolicy),
+      groupDiscountPercent: customQuote.groupDiscountPercent,
+      groupDiscountAmount: customQuote.groupDiscountAmount,
+      originalPrice: customQuote.originalPrice ?? catalogDiscount.originalPrice,
       catalogDiscount,
       promo: pendingPromo.quote?.code
         ? {
@@ -1220,7 +1311,7 @@ export async function renewConfigConversation(
   }
 
   const currency = t(ctx, 'currency_toman');
-  const balanceAfter = Math.max(0, balance - checkout.quotedAmount);
+  const balanceAfter = balance - checkout.quotedAmount;
   const renewalSuccessText = buildUserScreen({
     emoji: '✅',
     title: t(ctx, 'renewal_success_title'),
@@ -1322,10 +1413,11 @@ export async function autoRenewCustomConversation(
 
   const durationDays = await conversation.external((outsideCtx) => customDurationDays(outsideCtx));
   const customPackageId = `custom_${gbAmount}gb_${durationDays}d`;
-  const approvedPrice = await conversation.external(
-    (outsideCtx) =>
-      outsideCtx.services!.pricingService.getCustomPriceQuote(gbAmount, durationDays).totalPrice
-  );
+  const approvedPrice = await conversation.external(async (outsideCtx) => {
+    const services = outsideCtx?.services ?? ctx.services!;
+    const policy = await safeGetEffectiveUserPolicy(services.userGroupService, config.telegramId);
+    return services.pricingService.getCustomPriceQuote(gbAmount, durationDays, policy).totalPrice;
+  });
 
   await promptInConversation(
     conversation,
@@ -1412,6 +1504,22 @@ export async function promoConversation(conversation: MyConversation, ctx: Conve
     conversation.external((outsideCtx) => {
       delete outsideCtx.session.promoReturnDestination;
     });
+
+  const promoAllowed = await conversation.external(async (outsideCtx) => {
+    const services = outsideCtx?.services ?? ctx.services!;
+    const policy = await safeGetEffectiveUserPolicy(services.userGroupService, telegramId);
+    return policy.allowPromoCodes;
+  });
+  if (!promoAllowed) {
+    await finishPromoFlow();
+    await replyInConversation(
+      conversation,
+      ctx,
+      buildUserEmptyState('🎟️', t(ctx, 'promo_title'), t(ctx, 'promo_not_allowed_for_group')),
+      { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, returnDestination) }
+    );
+    return;
+  }
 
   await promptInConversation(
     conversation,

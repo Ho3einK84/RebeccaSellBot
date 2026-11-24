@@ -33,6 +33,7 @@ import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { SupportedLocale, TranslationService } from './TranslationService.js';
 import type { ReferralService } from './ReferralService.js';
 import type { PromoService } from './PromoService.js';
+import type { UserGroupService } from './UserGroupService.js';
 import { receiptDuplicatePolicy } from './FeatureSettings.js';
 import { dbIntegerToSafeNumber } from './DbNumber.js';
 import crypto from 'crypto';
@@ -87,6 +88,21 @@ export type {
   WalletTransferResult,
 } from './WalletContracts.js';
 
+export interface WalletBalanceSummary {
+  balance: number;
+  reservedBalance: number;
+  /** Signed available balance (`balance - reservedBalance`); may be negative when indebted. */
+  availableBalance: number;
+  /** Strictly non-negative real balance eligible for P2P transfers. */
+  transferableBalance: number;
+  /** Effective VIP negative credit limit (`>= 0`). */
+  creditLimit: number;
+  /** Usable spending power for purchases/renewals (`Math.max(0, availableBalance + creditLimit)`). */
+  purchasingPower: number;
+  /** Current debt amount (`Math.max(0, -balance)`). */
+  debtAmount: number;
+}
+
 export class WalletService {
   private readonly purchaseSaga: WalletPurchaseSaga;
   private readonly userCache = new Map<
@@ -99,14 +115,19 @@ export class WalletService {
     panels: RebeccaPanelRegistry | RebeccaService,
     private translationService: TranslationService,
     private referralService: ReferralService,
-    promoService: PromoService
+    promoService: PromoService,
+    private readonly userGroupService?: Pick<
+      UserGroupService,
+      'getEffectiveUserPolicy' | 'getEffectiveUserPolicyInTx'
+    >
   ) {
     this.purchaseSaga = new WalletPurchaseSaga(
       normalizeRebeccaPanelAccess(panels),
       referralService,
       promoService,
       isRebeccaPanelRegistryAccess(panels),
-      translationService
+      translationService,
+      userGroupService
     );
   }
 
@@ -278,6 +299,39 @@ export class WalletService {
     return res[0]!.balance - res[0]!.reservedBalance;
   }
 
+  /**
+   * Full balance + VIP credit summary for purchase gates and UI displays.
+   * P2P transfer strictly uses `transferableBalance`, while purchases/renewals
+   * use `purchasingPower = Math.max(0, balance - reservedBalance + creditLimit)`.
+   */
+  async getWalletBalanceSummary(telegramId: number): Promise<WalletBalanceSummary> {
+    const db = getDb();
+    const [row] = await db
+      .select({ balance: users.balance, reservedBalance: users.reservedBalance })
+      .from(users)
+      .where(eq(users.telegramId, telegramId))
+      .limit(1);
+    const balance = row?.balance ?? 0;
+    const reservedBalance = row?.reservedBalance ?? 0;
+    const availableBalance = balance - reservedBalance;
+    const creditLimit = this.userGroupService
+      ? (await this.userGroupService.getEffectiveUserPolicy(telegramId)).creditLimit
+      : 0;
+    return {
+      balance,
+      reservedBalance,
+      availableBalance,
+      transferableBalance: Math.max(0, availableBalance),
+      creditLimit,
+      purchasingPower: Math.max(0, availableBalance + creditLimit),
+      debtAmount: Math.max(0, -balance),
+    };
+  }
+
+  async getPurchasingPower(telegramId: number): Promise<number> {
+    return (await this.getWalletBalanceSummary(telegramId)).purchasingPower;
+  }
+
   /** Backward-compatible set operation used by older admin entry points. */
   async setBalanceAdmin(
     telegramId: number,
@@ -353,8 +407,9 @@ export class WalletService {
             : params.amount;
       if (
         !Number.isSafeInteger(targetBalance) ||
-        targetBalance < 0 ||
-        targetBalance < user.reservedBalance
+        targetBalance > 9007199254740991 ||
+        targetBalance < -9007199254740991 ||
+        (params.operation !== 'add' && (targetBalance < 0 || targetBalance < user.reservedBalance))
       ) {
         throw new Error('ADMIN_BALANCE_BELOW_RESERVED');
       }

@@ -113,6 +113,13 @@
       "when": 1795600000000,
       "tag": "0015_add_payment_autodelete_and_config_labels",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795700000000,
+      "tag": "0016_add_user_groups_and_credit_limit",
+      "breakpoints": true
     }
   ]
 }

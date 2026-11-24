@@ -23,6 +23,7 @@ import { PaymentService } from '../../domain/services/PaymentService.js';
 import { logger } from '../../infra/logger.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
 import { registerAdminRoutes } from './routes/adminRoutes.js';
+import { registerAdminGroupRoutes } from './routes/adminGroupRoutes.js';
 import { registerAdminForcedJoinAndGiftRoutes } from './routes/adminForcedJoinAndGiftRoutes.js';
 import { registerAdminPackageRoutes } from './routes/adminPackageRoutes.js';
 import { registerAdminPaymentRoutes } from './routes/adminPaymentRoutes.js';
@@ -453,6 +454,12 @@ export async function createWebAppServer(
     adminIds: services.adminIds,
     botApi: services.botApi,
     translationService: services.translationService,
+    userGroupService: services.userGroupService,
+  });
+
+  registerAdminGroupRoutes(app, {
+    userGroupService: services.userGroupService,
+    adminService: services.adminService,
   });
 
   const hasTranslationService =
@@ -500,6 +507,7 @@ export async function createWebAppServer(
           translationService: services.translationService,
           paymentService: resolvedPaymentService,
           walletService: services.walletService,
+          userGroupService: services.userGroupService,
           credentialSecret: config.PANEL_CREDENTIALS_KEY ?? config.BOT_TOKEN,
           resolvePublicBaseUrl: () =>
             services.webAppUrl ||
@@ -580,6 +588,7 @@ export async function createWebAppServer(
     refundService: services.refundService,
     configTransferService: services.configTransferService,
     panelRegistry: services.panelRegistry,
+    userGroupService: services.userGroupService,
     purchaseCheckoutService: services.purchaseCheckoutService,
     catalogDiscountService: resolvedCatalogDiscountService,
     contactVerificationService: resolvedContactVerificationService,

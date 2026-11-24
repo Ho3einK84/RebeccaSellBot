@@ -10,6 +10,24 @@ export interface VolumePricingTierItem {
   discountPercent?: number;
 }
 
+export interface UserGroupSummary {
+  id: string;
+  name: string;
+  badge: string | null;
+  isDefault: boolean;
+  isAssigned: boolean;
+  expiresAt: string | null;
+  discountPercent: number;
+  customPricePerGb: number | null;
+  customPricePerDay: number | null;
+  allowCatalogDiscounts: boolean;
+  allowPromoCodes: boolean;
+  allowCashback: boolean;
+  allowLuckyWheel: boolean;
+  allowCustomServiceName: boolean;
+  creditLimit: number;
+}
+
 export interface UserPortalProfile {
   id: string;
   telegramId: number;
@@ -19,6 +37,11 @@ export interface UserPortalProfile {
   balance: number;
   reservedBalance: number;
   availableBalance: number;
+  transferableBalance?: number;
+  creditLimit?: number;
+  purchasingPower?: number;
+  debtAmount?: number;
+  group?: UserGroupSummary | null;
   referralCode: string;
   totalSpend: number;
   activeSubscriptionCount: number;
@@ -40,6 +63,8 @@ export interface CustomVolumeSettings {
   defaultDays: number;
   minGb: number;
   maxGb: number;
+  groupDiscountPercent?: number;
+  hasGroupCustomRate?: boolean;
   tiers?: VolumePricingTierItem[];
 }
 
@@ -57,6 +82,9 @@ export interface CustomVolumeQuoteResponse {
   totalPrice: number;
   originalPrice?: number;
   effectivePrice?: number;
+  groupDiscountPercent?: number;
+  groupDiscountAmount?: number;
+  catalogDiscountAmount?: number;
   activeDiscountTitle?: string | null;
   discountExpiresAt?: string | null;
   pricePerGb: number;
@@ -91,6 +119,9 @@ export interface UserPortalSettings {
   nowpaymentsUsdRateToman?: number;
   referralBonusToman?: number;
   cashbackPercent?: number;
+  allowPromoCodes?: boolean;
+  allowCashback?: boolean;
+  allowLuckyWheel?: boolean;
   maintenanceMode?: boolean;
   isAdminBypass?: boolean;
   customServiceNameEnabled?: boolean;
@@ -354,6 +385,9 @@ export interface UserPackageItem {
   originalPrice?: number;
   effectivePrice?: number;
   discountAmount?: number;
+  groupDiscountPercent?: number;
+  groupDiscountAmount?: number;
+  catalogDiscountAmount?: number;
   activeDiscountTitle?: string | null;
   discountExpiresAt?: string | null;
   categoryId?: string | null;
@@ -517,6 +551,9 @@ export interface UserCheckoutResponse {
   originalPrice?: number;
   effectivePrice?: number;
   discountAmount?: number;
+  groupDiscountPercent?: number;
+  groupDiscountAmount?: number;
+  catalogDiscountAmount?: number;
   activeDiscountTitle?: string | null;
   discountExpiresAt?: string | null;
   promoCode?: string | null;
@@ -527,6 +564,8 @@ export interface UserCheckoutResponse {
   rolloverEnabled?: boolean;
   rolloverPreview?: RolloverPreviewDto;
   availableBalance: number;
+  creditLimit?: number;
+  purchasingPower?: number;
   expiresAt: string;
 }
 
@@ -537,6 +576,8 @@ export interface UserConfirmCheckoutResponse {
   subUrl?: string;
   startOnFirstUse?: boolean;
   availableBalanceAfter?: number;
+  creditLimit?: number;
+  purchasingPowerAfter?: number;
 }
 
 export type ForcedJoinScopeDto = 'off' | 'all' | 'trial_only' | 'purchase_and_trial';

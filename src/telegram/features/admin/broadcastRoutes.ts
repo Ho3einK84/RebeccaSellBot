@@ -13,6 +13,7 @@ import {
   type StatusType,
 } from '../../ui.js';
 import { callbackData } from '../../callbackData.js';
+import { escapeTelegramMarkdown } from '../../rendering.js';
 import {
   appendAdminFooterNav,
   appendAdminPagination,
@@ -188,6 +189,11 @@ export async function renderBroadcastStatus(
     showHome: true,
   });
 
+  const jobGroupName = job.groupId
+    ? ((await ctx.services.userGroupService?.getGroupById(job.groupId).catch(() => null))?.name ??
+      job.groupId)
+    : null;
+
   await renderBroadcastScreen(
     ctx,
     buildAdminScreen({
@@ -212,6 +218,14 @@ export async function renderBroadcastStatus(
               label: t(ctx, 'admin_broadcast_audience_label'),
               value: t(ctx, `admin_broadcast_audience_${job.audience}`),
             },
+            ...(jobGroupName
+              ? [
+                  {
+                    label: t(ctx, 'admin_user_group_label'),
+                    value: escapeTelegramMarkdown(jobGroupName),
+                  },
+                ]
+              : []),
             { label: t(ctx, 'admin_broadcast_id_label'), value: `\`${job.id}\`` },
             {
               label: t(ctx, 'admin_broadcast_created_label'),

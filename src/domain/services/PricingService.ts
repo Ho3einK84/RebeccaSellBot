@@ -5,6 +5,12 @@ import {
   type CatalogDiscountRule,
   type CatalogDiscountService,
 } from './CatalogDiscountService.js';
+import type { EffectiveUserGroupPolicy } from './UserGroupService.js';
+
+export type GroupPricingPolicyInput = Pick<
+  EffectiveUserGroupPolicy,
+  'discountPercent' | 'customPricePerGb' | 'customPricePerDay' | 'allowCatalogDiscounts'
+>;
 
 export interface PackageOption {
   id: string;
@@ -33,12 +39,18 @@ export interface CustomPriceQuote {
   pricePerDay: number;
   tierId?: string;
   overrideId?: string;
+  originalPrice?: number;
+  groupDiscountPercent?: number;
+  groupDiscountAmount?: number;
 }
 
 export interface DiscountedPackageOption extends PackageOption {
   originalPrice: number;
   effectivePrice: number;
   discountAmount: number;
+  groupDiscountPercent?: number;
+  groupDiscountAmount?: number;
+  catalogDiscountAmount?: number;
   activeDiscountId: string | null;
   activeDiscountTitle: string | null;
   discountExpiresAt: Date | null;
@@ -48,9 +60,37 @@ export interface DiscountedCustomPriceQuote extends CustomPriceQuote {
   originalPrice: number;
   effectivePrice: number;
   discountAmount: number;
+  groupDiscountPercent?: number;
+  groupDiscountAmount?: number;
+  catalogDiscountAmount?: number;
   activeDiscountId: string | null;
   activeDiscountTitle: string | null;
   discountExpiresAt: Date | null;
+}
+
+/**
+ * Apply an integer user-group discount percentage (0..90%) safely without float overflow.
+ */
+export function applyGroupDiscount(
+  amount: number,
+  discountPercent: number | null | undefined
+): { finalAmount: number; discountAmount: number; discountPercent: number } {
+  const safeAmount = Number.isSafeInteger(amount) && amount > 0 ? amount : 0;
+  const pct =
+    typeof discountPercent === 'number' && Number.isFinite(discountPercent)
+      ? Math.max(0, Math.min(90, Math.trunc(discountPercent)))
+      : 0;
+  if (safeAmount === 0 || pct === 0) {
+    return { finalAmount: safeAmount, discountAmount: 0, discountPercent: 0 };
+  }
+  const quotient = Math.floor(safeAmount / 100);
+  const remainder = safeAmount % 100;
+  const discountAmount = Math.min(safeAmount, quotient * pct + Math.floor((remainder * pct) / 100));
+  return {
+    finalAmount: Math.max(0, safeAmount - discountAmount),
+    discountAmount,
+    discountPercent: pct,
+  };
 }
 
 /**
@@ -251,8 +291,14 @@ export class PricingService {
   /**
    * Produce the server-side custom pricing quote. Tiers and overrides are
    * validated JSON settings so pricing policy can change without a deploy.
+   * When a user-group policy supplies custom GB/day rates, those rates apply
+   * directly before applying the group's `discountPercent`.
    */
-  getCustomPriceQuote(gbAmount: number, durationDays: number): CustomPriceQuote {
+  getCustomPriceQuote(
+    gbAmount: number,
+    durationDays: number,
+    userPolicy?: Partial<GroupPricingPolicyInput> | null
+  ): CustomPriceQuote {
     assertAmountRange(gbAmount, 1, MAX_GB_AMOUNT, 'INVALID_CUSTOM_GB_AMOUNT');
     assertAmountRange(durationDays, 1, MAX_DURATION_DAYS, 'INVALID_CUSTOM_DURATION_DAYS');
 
@@ -262,74 +308,133 @@ export class PricingService {
     const basePerDay = nonNegativeSetting(
       this.translationService.getSettingNum('price_per_day', 0)
     );
-    const tiers = parseVolumePricingTiersJson(
-      this.translationService.getSetting('volume_pricing_tiers_json')
-    );
-    const overrides = parseCustomPriceOverridesJson(
-      this.translationService.getSetting('custom_price_overrides_json')
-    );
-    const tier = tiers?.find((candidate) => matchesVolumeTier(candidate, gbAmount));
-    let pricePerGb = tier ? tierPricePerGb(tier, basePerGb) : basePerGb;
-    let pricePerDay = basePerDay;
-    const override = overrides?.find((candidate) =>
-      matchesOverride(candidate, gbAmount, durationDays)
-    );
 
-    if (override?.price !== undefined) {
-      return {
-        totalPrice: override.price,
-        volumePrice: 0,
-        durationPrice: 0,
-        pricePerGb,
-        pricePerDay,
-        ...(tier ? { tierId: tier.id } : {}),
-        overrideId: override.id,
-      };
+    const hasGroupCustomRate =
+      (userPolicy?.customPricePerGb !== null && userPolicy?.customPricePerGb !== undefined) ||
+      (userPolicy?.customPricePerDay !== null && userPolicy?.customPricePerDay !== undefined);
+
+    let subtotal: number;
+    let volumePrice: number;
+    let durationPrice: number;
+    let pricePerGb: number;
+    let pricePerDay: number;
+    let tierId: string | undefined;
+    let overrideId: string | undefined;
+
+    if (hasGroupCustomRate) {
+      pricePerGb =
+        userPolicy?.customPricePerGb !== null && userPolicy?.customPricePerGb !== undefined
+          ? nonNegativeSetting(userPolicy.customPricePerGb)
+          : basePerGb;
+      pricePerDay =
+        userPolicy?.customPricePerDay !== null && userPolicy?.customPricePerDay !== undefined
+          ? nonNegativeSetting(userPolicy.customPricePerDay)
+          : basePerDay;
+      volumePrice = checkedMultiply(gbAmount, pricePerGb);
+      durationPrice = checkedMultiply(durationDays, pricePerDay);
+      subtotal = checkedAdd(volumePrice, durationPrice);
+    } else {
+      const tiers = parseVolumePricingTiersJson(
+        this.translationService.getSetting('volume_pricing_tiers_json')
+      );
+      const overrides = parseCustomPriceOverridesJson(
+        this.translationService.getSetting('custom_price_overrides_json')
+      );
+      const tier = tiers?.find((candidate) => matchesVolumeTier(candidate, gbAmount));
+      pricePerGb = tier ? tierPricePerGb(tier, basePerGb) : basePerGb;
+      pricePerDay = basePerDay;
+      const override = overrides?.find((candidate) =>
+        matchesOverride(candidate, gbAmount, durationDays)
+      );
+      tierId = tier?.id;
+      overrideId = override?.id;
+
+      if (override?.price !== undefined) {
+        volumePrice = 0;
+        durationPrice = 0;
+        subtotal = override.price;
+      } else {
+        if (override?.pricePerGb !== undefined) pricePerGb = override.pricePerGb;
+        if (override?.pricePerDay !== undefined) pricePerDay = override.pricePerDay;
+        volumePrice = checkedMultiply(gbAmount, pricePerGb);
+        durationPrice = checkedMultiply(durationDays, pricePerDay);
+        subtotal = checkedAdd(volumePrice, durationPrice);
+      }
     }
-    if (override?.pricePerGb !== undefined) pricePerGb = override.pricePerGb;
-    if (override?.pricePerDay !== undefined) pricePerDay = override.pricePerDay;
 
-    const volumePrice = checkedMultiply(gbAmount, pricePerGb);
-    const durationPrice = checkedMultiply(durationDays, pricePerDay);
+    const groupDisc = applyGroupDiscount(subtotal, userPolicy?.discountPercent);
     return {
-      totalPrice: checkedAdd(volumePrice, durationPrice),
+      totalPrice: groupDisc.finalAmount,
       volumePrice,
       durationPrice,
       pricePerGb,
       pricePerDay,
-      ...(tier ? { tierId: tier.id } : {}),
-      ...(override ? { overrideId: override.id } : {}),
+      ...(tierId ? { tierId } : {}),
+      ...(overrideId ? { overrideId } : {}),
+      ...(groupDisc.discountAmount > 0
+        ? {
+            originalPrice: subtotal,
+            groupDiscountPercent: groupDisc.discountPercent,
+            groupDiscountAmount: groupDisc.discountAmount,
+          }
+        : {}),
     };
   }
 
   /** Backward-compatible total-price API for existing bot entry points. */
-  calculateCustomPrice(gbAmount: number, durationDays = 30): number {
-    return this.getCustomPriceQuote(gbAmount, durationDays).totalPrice;
+  calculateCustomPrice(
+    gbAmount: number,
+    durationDays = 30,
+    userPolicy?: Partial<GroupPricingPolicyInput> | null
+  ): number {
+    return this.getCustomPriceQuote(gbAmount, durationDays, userPolicy).totalPrice;
   }
 
   /**
-   * Resolve catalog-discount-aware pricing for a single package using preloaded active discounts.
+   * Resolve group-policy and catalog-discount-aware pricing for a single package.
+   * Respects `userPolicy.allowCatalogDiscounts` to prevent double-discounting.
    */
   resolvePackagePrice(
     pkg: PackageOption,
     activeDiscounts: readonly CatalogDiscountRule[] = [],
-    now = new Date()
+    now = new Date(),
+    userPolicy?: Partial<GroupPricingPolicyInput> | null
   ): DiscountedPackageOption {
-    const resolved = resolveBestCatalogDiscount(
-      activeDiscounts,
-      {
-        packageId: pkg.id,
-        categoryId: pkg.categoryId ?? null,
-        originalPrice: pkg.price,
-      },
-      now
-    );
+    const groupDisc = applyGroupDiscount(pkg.price, userPolicy?.discountPercent);
+    const allowCatalog = userPolicy?.allowCatalogDiscounts ?? true;
+    const resolved = allowCatalog
+      ? resolveBestCatalogDiscount(
+          activeDiscounts,
+          {
+            packageId: pkg.id,
+            categoryId: pkg.categoryId ?? null,
+            originalPrice: groupDisc.finalAmount,
+          },
+          now
+        )
+      : {
+          originalPrice: groupDisc.finalAmount,
+          effectivePrice: groupDisc.finalAmount,
+          discountAmount: 0,
+          activeDiscountId: null,
+          activeDiscountTitle: null,
+          discountExpiresAt: null,
+        };
+
+    const totalDiscountAmount = Math.max(0, pkg.price - resolved.effectivePrice);
 
     return {
       ...pkg,
-      originalPrice: resolved.originalPrice,
+      originalPrice: pkg.price,
       effectivePrice: resolved.effectivePrice,
-      discountAmount: resolved.discountAmount,
+      discountAmount: totalDiscountAmount,
+      ...(groupDisc.discountAmount > 0
+        ? {
+            groupDiscountPercent: groupDisc.discountPercent,
+            groupDiscountAmount: groupDisc.discountAmount,
+          }
+        : {}),
+      ...(resolved.discountAmount > 0 ? { catalogDiscountAmount: resolved.discountAmount } : {}),
       activeDiscountId: resolved.activeDiscountId,
       activeDiscountTitle: resolved.activeDiscountTitle,
       discountExpiresAt: resolved.discountExpiresAt,
@@ -337,31 +442,53 @@ export class PricingService {
   }
 
   /**
-   * Resolve catalog-discount-aware pricing for custom volume using preloaded active discounts.
+   * Resolve group-policy and catalog-discount-aware pricing for custom volume.
+   * Respects `userPolicy.allowCatalogDiscounts` to prevent double-discounting.
    */
   resolveCustomPriceWithDiscount(
     gbAmount: number,
     durationDays: number,
     activeDiscounts: readonly CatalogDiscountRule[] = [],
-    now = new Date()
+    now = new Date(),
+    userPolicy?: Partial<GroupPricingPolicyInput> | null
   ): DiscountedCustomPriceQuote {
-    const base = this.getCustomPriceQuote(gbAmount, durationDays);
-    const resolved = resolveBestCatalogDiscount(
-      activeDiscounts,
-      {
-        packageId: `custom_${gbAmount}gb_${durationDays}d`,
-        categoryId: null,
-        originalPrice: base.totalPrice,
-      },
-      now
-    );
+    const base = this.getCustomPriceQuote(gbAmount, durationDays, userPolicy);
+    const preGroupSubtotal = base.originalPrice ?? base.totalPrice;
+    const allowCatalog = userPolicy?.allowCatalogDiscounts ?? true;
+    const resolved = allowCatalog
+      ? resolveBestCatalogDiscount(
+          activeDiscounts,
+          {
+            packageId: `custom_${gbAmount}gb_${durationDays}d`,
+            categoryId: null,
+            originalPrice: base.totalPrice,
+          },
+          now
+        )
+      : {
+          originalPrice: base.totalPrice,
+          effectivePrice: base.totalPrice,
+          discountAmount: 0,
+          activeDiscountId: null,
+          activeDiscountTitle: null,
+          discountExpiresAt: null,
+        };
+
+    const totalDiscountAmount = Math.max(0, preGroupSubtotal - resolved.effectivePrice);
 
     return {
       ...base,
       totalPrice: resolved.effectivePrice,
-      originalPrice: resolved.originalPrice,
+      originalPrice: preGroupSubtotal,
       effectivePrice: resolved.effectivePrice,
-      discountAmount: resolved.discountAmount,
+      discountAmount: totalDiscountAmount,
+      ...(base.groupDiscountAmount
+        ? {
+            groupDiscountPercent: base.groupDiscountPercent,
+            groupDiscountAmount: base.groupDiscountAmount,
+          }
+        : {}),
+      ...(resolved.discountAmount > 0 ? { catalogDiscountAmount: resolved.discountAmount } : {}),
       activeDiscountId: resolved.activeDiscountId,
       activeDiscountTitle: resolved.activeDiscountTitle,
       discountExpiresAt: resolved.discountExpiresAt,
@@ -379,6 +506,7 @@ export class PricingService {
       includeDisabled?: boolean;
       categoryId?: string | null;
       now?: Date;
+      userPolicy?: Partial<GroupPricingPolicyInput> | null;
     }
   ): Promise<DiscountedPackageOption[]> {
     const now = options?.now ?? new Date();
@@ -388,8 +516,13 @@ export class PricingService {
       options?.includeDisabled ?? false,
       options?.categoryId
     );
-    const activeDiscounts = await safeListActiveDiscounts(catalogDiscountService, now);
-    return packages.map((pkg) => this.resolvePackagePrice(pkg, activeDiscounts, now));
+    const allowCatalog = options?.userPolicy?.allowCatalogDiscounts ?? true;
+    const activeDiscounts = allowCatalog
+      ? await safeListActiveDiscounts(catalogDiscountService, now)
+      : [];
+    return packages.map((pkg) =>
+      this.resolvePackagePrice(pkg, activeDiscounts, now, options?.userPolicy)
+    );
   }
 
   /**
@@ -399,10 +532,20 @@ export class PricingService {
     gbAmount: number,
     durationDays: number,
     catalogDiscountService?: Pick<CatalogDiscountService, 'listActiveDiscounts'>,
-    now = new Date()
+    now = new Date(),
+    userPolicy?: Partial<GroupPricingPolicyInput> | null
   ): Promise<DiscountedCustomPriceQuote> {
-    const activeDiscounts = await safeListActiveDiscounts(catalogDiscountService, now);
-    return this.resolveCustomPriceWithDiscount(gbAmount, durationDays, activeDiscounts, now);
+    const allowCatalog = userPolicy?.allowCatalogDiscounts ?? true;
+    const activeDiscounts = allowCatalog
+      ? await safeListActiveDiscounts(catalogDiscountService, now)
+      : [];
+    return this.resolveCustomPriceWithDiscount(
+      gbAmount,
+      durationDays,
+      activeDiscounts,
+      now,
+      userPolicy
+    );
   }
 
   getCustomVolumeTarget(): { panelId?: string; serviceId?: number } {

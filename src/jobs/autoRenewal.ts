@@ -19,6 +19,12 @@ import {
   type WalletService,
 } from '../domain/services/WalletService.js';
 import type { PricingService } from '../domain/services/PricingService.js';
+import type { CatalogDiscountService } from '../domain/services/CatalogDiscountService.js';
+import { safeListActiveDiscounts } from '../domain/services/CatalogDiscountService.js';
+import {
+  safeGetEffectiveUserPolicy,
+  type UserGroupService,
+} from '../domain/services/UserGroupService.js';
 import type { SupportedLocale, TranslationService } from '../domain/services/TranslationService.js';
 import { buildUserScreen } from '../telegram/designSystem.js';
 import { tForLocale } from '../telegram/locale.js';
@@ -97,13 +103,19 @@ export type AutoRenewalSweepSummary = {
   skipped: number;
 };
 
+export interface AutoRenewalPolicyDeps {
+  userGroupService?: Pick<UserGroupService, 'getEffectiveUserPolicy'>;
+  catalogDiscountService?: Pick<CatalogDiscountService, 'listActiveDiscounts'>;
+}
+
 let task: ReturnType<typeof cron.schedule> | null = null;
 export function startAutoRenewalCron(
   panels: RebeccaPanelRegistry,
   walletService: WalletService,
   pricingService: PricingService,
   translationService: TranslationService,
-  telegramApi: Api
+  telegramApi: Api,
+  policyDeps?: AutoRenewalPolicyDeps
 ): void {
   stopAutoRenewalCron();
   const candidateStore = new PostgresAutoRenewalCandidateStore();
@@ -118,7 +130,9 @@ export function startAutoRenewalCron(
           translationService,
           telegramApi,
           candidateStore,
-          deliveryStore
+          deliveryStore,
+          new Date(),
+          policyDeps
         );
       });
     } catch (err) {
@@ -146,9 +160,13 @@ export async function runAutoRenewalSweep(
   telegramApi: Api,
   candidateStore: AutoRenewalCandidateStore = new PostgresAutoRenewalCandidateStore(),
   deliveryStore: NotificationDeliveryStore = new PostgresNotificationDeliveryStore(),
-  now = new Date()
+  now = new Date(),
+  policyDeps?: AutoRenewalPolicyDeps
 ): Promise<AutoRenewalSweepSummary> {
   const configs = await candidateStore.listEnabledConfigs();
+  const activeCatalogDiscounts = policyDeps?.catalogDiscountService
+    ? await safeListActiveDiscounts(policyDeps.catalogDiscountService, now)
+    : [];
   const thresholdGb = positiveFinite(
     translationService.getSettingNum('low_traffic_threshold_gb', 2)
   );
@@ -239,12 +257,39 @@ export async function runAutoRenewalSweep(
         }
       }
 
+      const userPolicy = await safeGetEffectiveUserPolicy(
+        policyDeps?.userGroupService,
+        config.telegramId,
+        now
+      );
+
+      let effectivePrice = selectedPackage?.price ?? 0;
+      if (selectedPackage) {
+        const customMatch = /^custom_(\d+)gb_(\d+)d$/i.exec(selectedPackage.id);
+        if (customMatch && typeof pricingService.resolveCustomPriceWithDiscount === 'function') {
+          effectivePrice = pricingService.resolveCustomPriceWithDiscount(
+            selectedPackage.gbAmount,
+            selectedPackage.durationDays,
+            activeCatalogDiscounts,
+            now,
+            userPolicy
+          ).effectivePrice;
+        } else if (typeof pricingService.resolvePackagePrice === 'function') {
+          effectivePrice = pricingService.resolvePackagePrice(
+            selectedPackage,
+            activeCatalogDiscounts,
+            now,
+            userPolicy
+          ).effectivePrice;
+        }
+      }
+
       const ceilingPrice = config.autoRenewPrice;
       const isPriceExceeded =
         Boolean(selectedPackage) &&
         (typeof ceilingPrice !== 'number' ||
           !Number.isFinite(ceilingPrice) ||
-          selectedPackage!.price > ceilingPrice);
+          effectivePrice > ceilingPrice);
 
       if (!selectedPackage || isPriceExceeded) {
         const reserved = await deliveryStore.reserve(config, 'auto_renew_package_missing', now);
@@ -309,7 +354,8 @@ export async function runAutoRenewalSweep(
         typeof walletService.getAvailableBalance === 'function'
           ? await walletService.getAvailableBalance(config.telegramId)
           : await walletService.getBalance(config.telegramId);
-      if (balance < selectedPackage.price) {
+      const purchasingPower = Math.max(0, balance + userPolicy.creditLimit);
+      if (purchasingPower < effectivePrice) {
         const reserved = await deliveryStore.reserve(config, 'auto_renew_low_balance', now);
         if (reserved) {
           try {
@@ -322,11 +368,7 @@ export async function runAutoRenewalSweep(
                 subtitle: tForLocale(translationService, locale, 'auto_renew_low_balance_subtitle'),
                 primary: {
                   label: tForLocale(translationService, locale, 'auto_renew_required_label'),
-                  value: formatAutoRenewalCurrency(
-                    selectedPackage.price,
-                    translationService,
-                    locale
-                  ),
+                  value: formatAutoRenewalCurrency(effectivePrice, translationService, locale),
                   emphasizeValue: true,
                 },
                 sections: [
@@ -338,7 +380,11 @@ export async function runAutoRenewalSweep(
                       },
                       {
                         label: tForLocale(translationService, locale, 'auto_renew_balance_label'),
-                        value: formatAutoRenewalCurrency(balance, translationService, locale),
+                        value: formatAutoRenewalCurrency(
+                          userPolicy.creditLimit > 0 ? purchasingPower : balance,
+                          translationService,
+                          locale
+                        ),
                       },
                     ],
                   },
@@ -369,7 +415,7 @@ export async function runAutoRenewalSweep(
       try {
         await walletService.executePurchaseSaga({
           telegramId: config.telegramId,
-          amount: selectedPackage.price,
+          amount: effectivePrice,
           type: 'renew_config',
           configUsername: config.configUsername,
           gbAmount: selectedPackage.gbAmount,

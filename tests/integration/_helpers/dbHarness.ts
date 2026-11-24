@@ -40,6 +40,7 @@ const RUNTIME_TABLES_TRUNCATE_SQL = `TRUNCATE TABLE
   trial_claims,
   user_configs,
   users,
+  user_groups,
   wallet_transactions
 CASCADE`;
 

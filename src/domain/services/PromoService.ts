@@ -12,6 +12,7 @@ import {
   walletTransactions,
 } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
+import type { UserGroupService } from './UserGroupService.js';
 
 const PROMO_TYPES = ['discount_percent', 'discount_fixed', 'gift_credit', 'gift_gb'] as const;
 const PURCHASE_PROMO_TYPES = ['discount_percent', 'discount_fixed', 'gift_gb'] as const;
@@ -68,6 +69,31 @@ export class PromoValidationError extends Error {
 }
 
 export class PromoService {
+  constructor(
+    private readonly userGroupService?: Pick<
+      UserGroupService,
+      'getEffectiveUserPolicy' | 'getEffectiveUserPolicyInTx'
+    >
+  ) {}
+
+  private async assertPromoAllowedForUser(
+    dbOrTx: Pick<DbTransaction, 'select'> | ReturnType<typeof getDb>,
+    telegramId: number,
+    explicitAllowed?: boolean
+  ): Promise<void> {
+    if (explicitAllowed === false) {
+      throw new PromoValidationError('promo_not_allowed_for_group');
+    }
+    if (explicitAllowed === true || !this.userGroupService) return;
+    const policy =
+      typeof this.userGroupService.getEffectiveUserPolicyInTx === 'function'
+        ? await this.userGroupService.getEffectiveUserPolicyInTx(dbOrTx, telegramId)
+        : await this.userGroupService.getEffectiveUserPolicy(telegramId);
+    if (!policy.allowPromoCodes) {
+      throw new PromoValidationError('promo_not_allowed_for_group');
+    }
+  }
+
   async listCodes(
     page = 1,
     pageSize = 8,
@@ -448,8 +474,10 @@ export class PromoService {
     maxDiscountAmount?: number | null;
     firstPurchaseOnly: boolean;
   }> {
+    const db = getDb();
+    await this.assertPromoAllowedForUser(db, telegramId);
     const code = normalizeCode(rawCode);
-    const promo = await this.getSelectablePromo(getDb(), telegramId, code);
+    const promo = await this.getSelectablePromo(db, telegramId, code);
     return {
       code,
       type: promo.type,
@@ -471,8 +499,10 @@ export class PromoService {
     baseAmount: number,
     baseGbAmount: number
   ): Promise<PromoQuote> {
+    const db = getDb();
+    await this.assertPromoAllowedForUser(db, telegramId);
     const code = normalizeCode(rawCode);
-    const promo = await this.getSelectablePromo(getDb(), telegramId, code);
+    const promo = await this.getSelectablePromo(db, telegramId, code);
     if (promo.type === 'gift_credit') {
       throw new PromoValidationError('promo_not_purchase_code');
     }
@@ -558,8 +588,10 @@ export class PromoService {
       rawCode: string;
       baseAmount: number;
       baseGbAmount: number;
+      allowPromoCodes?: boolean;
     }
   ): Promise<ReservedPurchasePromo> {
+    await this.assertPromoAllowedForUser(tx, params.telegramId, params.allowPromoCodes);
     const code = normalizeCode(params.rawCode);
     const baseAmount = validateBaseAmount(params.baseAmount);
     const baseGbAmount = validateBaseGbAmount(params.baseGbAmount);

@@ -27,6 +27,10 @@ import { RebeccaOriginDownError } from '../../../domain/services/RebeccaService.
 import type { AdminService } from '../../../domain/services/AdminService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import {
+  safeGetEffectiveUserPolicy,
+  type UserGroupService,
+} from '../../../domain/services/UserGroupService.js';
+import {
   TopupVoidError,
   type AdminBalanceOperation,
 } from '../../../domain/services/WalletContracts.js';
@@ -71,6 +75,7 @@ export function registerAdminRoutes(
     adminIds?: number[];
     botApi?: Api;
     translationService?: TranslationService;
+    userGroupService?: UserGroupService;
   }
 ): void {
   app.register(async (adminScope) => {
@@ -621,7 +626,7 @@ export function registerAdminRoutes(
         return reply.code(404).send({ error: 'User not found' });
       }
 
-      const [ordersRes, receiptsRes, rawConfigs, txRes, auditRes] = await Promise.all([
+      const [ordersRes, receiptsRes, rawConfigs, txRes, auditRes, userPolicy] = await Promise.all([
         services.userService.listOrdersForUser(telegramId, 1, 10),
         services.userService.listReceiptsForUser(telegramId, 1, 10),
         services.configService
@@ -633,6 +638,7 @@ export function registerAdminRoutes(
         typeof services.userService.listAuditLogsForUser === 'function'
           ? services.userService.listAuditLogsForUser(telegramId, 1, 15).catch(() => ({ logs: [] }))
           : Promise.resolve({ logs: [] }),
+        safeGetEffectiveUserPolicy(services.userGroupService, telegramId),
       ]);
 
       const isAdmin = Boolean(services.adminService?.isAdmin(telegramId));
@@ -664,6 +670,19 @@ export function registerAdminRoutes(
           user: {
             ...summary.user,
             isAdmin,
+            creditLimit: userPolicy.creditLimit,
+            group: userPolicy.groupId
+              ? {
+                  id: userPolicy.groupId,
+                  name: userPolicy.groupName ?? '',
+                  badge: userPolicy.badge,
+                  isDefault: userPolicy.isDefaultGroup,
+                  isAssigned: userPolicy.isAssigned,
+                  expiresAt: userPolicy.expiresAt ? userPolicy.expiresAt.toISOString() : null,
+                  discountPercent: userPolicy.discountPercent,
+                  creditLimit: userPolicy.creditLimit,
+                }
+              : null,
           },
         },
         isAdmin,

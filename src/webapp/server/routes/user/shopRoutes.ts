@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { normalizeCustomServiceName } from '../../../../domain/services/ConfigService.js';
 import { PromoValidationError } from '../../../../domain/services/PromoService.js';
-import { parseVolumePricingTiersJson } from '../../../../domain/services/PricingService.js';
+import {
+  applyGroupDiscount,
+  parseVolumePricingTiersJson,
+} from '../../../../domain/services/PricingService.js';
 import {
   type PurchaseCheckoutService,
   PurchaseCheckoutUnavailableError,
@@ -13,7 +16,7 @@ import {
 import { RebeccaOriginDownError } from '../../../../domain/services/RebeccaService.js';
 import { resolvePurchasePackage } from '../../../../domain/services/PurchasePackageResolver.js';
 import {
-  customServiceNameEnabled,
+  isCustomServiceNameAllowed,
   onHoldDefaultEnabled,
   renewalRolloverEnabled,
 } from '../../../../domain/services/FeatureSettings.js';
@@ -21,6 +24,7 @@ import {
   resolveBestCatalogDiscount,
   safeListActiveDiscounts,
 } from '../../../../domain/services/CatalogDiscountService.js';
+import { safeGetEffectiveUserPolicy } from '../../../../domain/services/UserGroupService.js';
 import type { ContactVerificationService } from '../../../../domain/services/ContactVerificationService.js';
 import { trackFunnelEvent } from '../../../../domain/services/FunnelTelemetry.js';
 import {
@@ -99,7 +103,7 @@ export function registerUserShopRoutes(
         ? renewalRolloverEnabled(options.translationService)
         : true;
 
-      const [activeDiscounts, rawCategories] = await Promise.all([
+      const [activeDiscounts, rawCategories, userPolicy] = await Promise.all([
         safeListActiveDiscounts(options.catalogDiscountService),
         (async () => {
           try {
@@ -108,30 +112,63 @@ export function registerUserShopRoutes(
             return [];
           }
         })(),
+        safeGetEffectiveUserPolicy(options.userGroupService, telegramId),
       ]);
 
+      const now = new Date();
       const rawPackages = options.pricingService
         .getPackages(undefined, undefined, false)
         .filter((p) => p.enabled !== false);
 
       const packages = rawPackages.map((p) => {
-        const discount = resolveBestCatalogDiscount(activeDiscounts, {
-          packageId: p.id,
-          categoryId: p.categoryId ?? null,
-          originalPrice: p.price,
-        });
+        const priced =
+          typeof options.pricingService!.resolvePackagePrice === 'function'
+            ? options.pricingService!.resolvePackagePrice(p, activeDiscounts, now, userPolicy)
+            : (() => {
+                const groupDisc = applyGroupDiscount(p.price, userPolicy.discountPercent);
+                const catDisc = userPolicy.allowCatalogDiscounts
+                  ? resolveBestCatalogDiscount(
+                      activeDiscounts,
+                      {
+                        packageId: p.id,
+                        categoryId: p.categoryId ?? null,
+                        originalPrice: groupDisc.finalAmount,
+                      },
+                      now
+                    )
+                  : {
+                      originalPrice: groupDisc.finalAmount,
+                      effectivePrice: groupDisc.finalAmount,
+                      discountAmount: 0,
+                      activeDiscountTitle: null,
+                      discountExpiresAt: null,
+                    };
+                return {
+                  originalPrice: p.price,
+                  effectivePrice: catDisc.effectivePrice,
+                  discountAmount: Math.max(0, p.price - catDisc.effectivePrice),
+                  groupDiscountPercent: groupDisc.discountPercent,
+                  groupDiscountAmount: groupDisc.discountAmount,
+                  catalogDiscountAmount: catDisc.discountAmount,
+                  activeDiscountTitle: catDisc.activeDiscountTitle,
+                  discountExpiresAt: catDisc.discountExpiresAt,
+                };
+              })();
         return {
           id: p.id,
           name: localizePackageName(p.id, p.name, locale, options.translationService),
           gbAmount: p.gbAmount,
           durationDays: p.durationDays,
-          price: discount.effectivePrice,
-          originalPrice: discount.originalPrice,
-          effectivePrice: discount.effectivePrice,
-          discountAmount: discount.discountAmount,
-          activeDiscountTitle: discount.activeDiscountTitle,
-          discountExpiresAt: discount.discountExpiresAt
-            ? discount.discountExpiresAt.toISOString()
+          price: priced.effectivePrice,
+          originalPrice: priced.originalPrice,
+          effectivePrice: priced.effectivePrice,
+          discountAmount: priced.discountAmount,
+          groupDiscountPercent: priced.groupDiscountPercent ?? 0,
+          groupDiscountAmount: priced.groupDiscountAmount ?? 0,
+          catalogDiscountAmount: priced.catalogDiscountAmount ?? 0,
+          activeDiscountTitle: priced.activeDiscountTitle,
+          discountExpiresAt: priced.discountExpiresAt
+            ? priced.discountExpiresAt.toISOString()
             : null,
           categoryId: p.categoryId ?? null,
           startOnFirstUse: p.startOnFirstUse ?? defaultOnHold,
@@ -150,10 +187,13 @@ export function registerUserShopRoutes(
           displayOrder: cat.displayOrder,
         }));
 
-      const volumePricingTiers =
-        parseVolumePricingTiersJson(
-          options.translationService?.getSetting('volume_pricing_tiers_json', '') ?? ''
-        ) ?? [];
+      const hasGroupCustomRate =
+        userPolicy.customPricePerGb !== null || userPolicy.customPricePerDay !== null;
+      const volumePricingTiers = hasGroupCustomRate
+        ? []
+        : (parseVolumePricingTiersJson(
+            options.translationService?.getSetting('volume_pricing_tiers_json', '') ?? ''
+          ) ?? []);
 
       return reply.code(200).send({ packages, categories, volumePricingTiers });
     }
@@ -196,28 +236,36 @@ export function registerUserShopRoutes(
         });
       }
 
+      const userPolicy = await safeGetEffectiveUserPolicy(options.userGroupService, telegramId);
+      if (!userPolicy.allowPromoCodes) {
+        return reply.code(400).send({
+          error: 'promo_not_allowed_for_group',
+          code: 'PROMO_NOT_ALLOWED',
+          messageKey: 'promo_not_allowed_for_group',
+        });
+      }
+
+      const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
       const resolved = resolvePurchasePackage({
         packageId: request.body?.packageId,
         custom: request.body?.custom,
         pricingService: options.pricingService,
         translationService: options.translationService,
+        userPolicy,
+        activeDiscounts,
       });
       if (!resolved.success) {
         return reply.code(resolved.status).send({ error: resolved.error, code: resolved.code });
       }
 
-      const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
-      const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
-        packageId: resolved.pkg.id,
-        categoryId: resolved.pkg.categoryId ?? null,
-        originalPrice: resolved.quotedAmount,
-      });
+      const prePromoPrice = resolved.quotedAmount;
+      const originalPrice = resolved.originalPrice ?? prePromoPrice;
 
       try {
         const quote = await options.promoService.quoteForPurchase(
           telegramId,
           rawCode,
-          catalogDiscount.effectivePrice,
+          prePromoPrice,
           resolved.pkg.gbAmount
         );
         return reply.code(200).send({
@@ -225,10 +273,10 @@ export function registerUserShopRoutes(
           code: quote.code,
           type: quote.type,
           value: quote.value,
-          originalPrice: catalogDiscount.originalPrice,
-          effectivePrice: catalogDiscount.effectivePrice,
+          originalPrice,
+          effectivePrice: prePromoPrice,
           finalAmount: quote.finalAmount,
-          discountAmount: Math.max(0, catalogDiscount.effectivePrice - quote.finalAmount),
+          discountAmount: Math.max(0, prePromoPrice - quote.finalAmount),
           baseGb: resolved.pkg.gbAmount,
           bonusGb: Math.max(0, quote.finalGbAmount - resolved.pkg.gbAmount),
           finalGb: quote.finalGbAmount,
@@ -240,7 +288,9 @@ export function registerUserShopRoutes(
             code:
               err.messageKey === 'promo_not_purchase_code'
                 ? 'PROMO_GIFT_CREDIT_ONLY'
-                : 'PROMO_INVALID',
+                : err.messageKey === 'promo_not_allowed_for_group'
+                  ? 'PROMO_NOT_ALLOWED'
+                  : 'PROMO_INVALID',
             messageKey: err.messageKey,
           });
         }
@@ -281,11 +331,23 @@ export function registerUserShopRoutes(
           .send({ error: 'promo_invalid', code: 'PROMO_INVALID', messageKey: 'promo_invalid' });
       }
 
+      const userPolicy = await safeGetEffectiveUserPolicy(options.userGroupService, telegramId);
+      if (!userPolicy.allowPromoCodes) {
+        return reply.code(400).send({
+          error: 'promo_not_allowed_for_group',
+          code: 'PROMO_NOT_ALLOWED',
+          messageKey: 'promo_not_allowed_for_group',
+        });
+      }
+
       const res = await options.promoService.redeemCode(telegramId, rawCode);
       if (!res.success) {
         return reply.code(400).send({
           error: res.messageKey,
-          code: 'PROMO_INVALID',
+          code:
+            res.messageKey === 'promo_not_allowed_for_group'
+              ? 'PROMO_NOT_ALLOWED'
+              : 'PROMO_INVALID',
           messageKey: res.messageKey,
         });
       }
@@ -299,9 +361,7 @@ export function registerUserShopRoutes(
       }
 
       const profile = await options.userService.findProfile(String(telegramId));
-      const availableBalance = profile
-        ? Math.max(0, profile.balance - profile.reservedBalance)
-        : undefined;
+      const availableBalance = profile ? profile.balance - profile.reservedBalance : undefined;
       return reply.code(200).send({
         success: true,
         code: res.code,
@@ -369,22 +429,68 @@ export function registerUserShopRoutes(
         days = parsed;
       }
 
-      const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
+      const [activeDiscounts, userPolicy] = await Promise.all([
+        safeListActiveDiscounts(options.catalogDiscountService),
+        safeGetEffectiveUserPolicy(options.userGroupService, telegramId),
+      ]);
+      const now = new Date();
 
       if (options.pricingService) {
         try {
-          const quote = options.pricingService.getCustomPriceQuote(gb, days);
-          const discount = resolveBestCatalogDiscount(activeDiscounts, {
-            packageId: `custom_${gb}gb_${days}d`,
-            categoryId: null,
-            originalPrice: quote.totalPrice,
-          });
+          if (typeof options.pricingService.resolveCustomPriceWithDiscount === 'function') {
+            const priced = options.pricingService.resolveCustomPriceWithDiscount(
+              gb,
+              days,
+              activeDiscounts,
+              now,
+              userPolicy
+            );
+            return reply.code(200).send({
+              gbAmount: gb,
+              durationDays: days,
+              totalPrice: priced.effectivePrice,
+              originalPrice: priced.originalPrice,
+              effectivePrice: priced.effectivePrice,
+              groupDiscountPercent: priced.groupDiscountPercent ?? 0,
+              groupDiscountAmount: priced.groupDiscountAmount ?? 0,
+              catalogDiscountAmount: priced.catalogDiscountAmount ?? 0,
+              activeDiscountTitle: priced.activeDiscountTitle,
+              discountExpiresAt: priced.discountExpiresAt
+                ? priced.discountExpiresAt.toISOString()
+                : null,
+              pricePerGb: priced.pricePerGb,
+              pricePerDay: priced.pricePerDay,
+              tierId: priced.tierId ?? null,
+            });
+          }
+
+          const quote = options.pricingService.getCustomPriceQuote(gb, days, userPolicy);
+          const discount = userPolicy.allowCatalogDiscounts
+            ? resolveBestCatalogDiscount(
+                activeDiscounts,
+                {
+                  packageId: `custom_${gb}gb_${days}d`,
+                  categoryId: null,
+                  originalPrice: quote.totalPrice,
+                },
+                now
+              )
+            : {
+                originalPrice: quote.totalPrice,
+                effectivePrice: quote.totalPrice,
+                discountAmount: 0,
+                activeDiscountTitle: null,
+                discountExpiresAt: null,
+              };
           return reply.code(200).send({
             gbAmount: gb,
             durationDays: days,
             totalPrice: discount.effectivePrice,
-            originalPrice: discount.originalPrice,
+            originalPrice: quote.originalPrice ?? discount.originalPrice,
             effectivePrice: discount.effectivePrice,
+            groupDiscountPercent: quote.groupDiscountPercent ?? 0,
+            groupDiscountAmount: quote.groupDiscountAmount ?? 0,
+            catalogDiscountAmount: discount.discountAmount,
             activeDiscountTitle: discount.activeDiscountTitle,
             discountExpiresAt: discount.discountExpiresAt
               ? discount.discountExpiresAt.toISOString()
@@ -401,26 +507,46 @@ export function registerUserShopRoutes(
         }
       }
 
-      const pricePerGb =
+      const basePricePerGb =
         typeof options.translationService?.getSettingNum === 'function'
           ? options.translationService.getSettingNum('price_per_gb', 5000)
           : 5000;
-      const pricePerDay =
+      const basePricePerDay =
         typeof options.translationService?.getSettingNum === 'function'
           ? options.translationService.getSettingNum('price_per_day', 0)
           : 0;
+      const pricePerGb =
+        userPolicy.customPricePerGb !== null ? userPolicy.customPricePerGb : basePricePerGb;
+      const pricePerDay =
+        userPolicy.customPricePerDay !== null ? userPolicy.customPricePerDay : basePricePerDay;
       const baseTotalPrice = gb * pricePerGb + days * pricePerDay;
-      const discount = resolveBestCatalogDiscount(activeDiscounts, {
-        packageId: `custom_${gb}gb_${days}d`,
-        categoryId: null,
-        originalPrice: baseTotalPrice,
-      });
+      const groupDisc = applyGroupDiscount(baseTotalPrice, userPolicy.discountPercent);
+      const discount = userPolicy.allowCatalogDiscounts
+        ? resolveBestCatalogDiscount(
+            activeDiscounts,
+            {
+              packageId: `custom_${gb}gb_${days}d`,
+              categoryId: null,
+              originalPrice: groupDisc.finalAmount,
+            },
+            now
+          )
+        : {
+            originalPrice: groupDisc.finalAmount,
+            effectivePrice: groupDisc.finalAmount,
+            discountAmount: 0,
+            activeDiscountTitle: null,
+            discountExpiresAt: null,
+          };
       return reply.code(200).send({
         gbAmount: gb,
         durationDays: days,
         totalPrice: discount.effectivePrice,
-        originalPrice: discount.originalPrice,
+        originalPrice: baseTotalPrice,
         effectivePrice: discount.effectivePrice,
+        groupDiscountPercent: groupDisc.discountPercent,
+        groupDiscountAmount: groupDisc.discountAmount,
+        catalogDiscountAmount: discount.discountAmount,
         activeDiscountTitle: discount.activeDiscountTitle,
         discountExpiresAt: discount.discountExpiresAt
           ? discount.discountExpiresAt.toISOString()
@@ -529,18 +655,33 @@ export function registerUserShopRoutes(
         return reply.code(500).send({ error: 'Pricing service unavailable' });
       }
 
+      const [activeDiscounts, userPolicy] = await Promise.all([
+        safeListActiveDiscounts(options.catalogDiscountService),
+        safeGetEffectiveUserPolicy(options.userGroupService, telegramId),
+      ]);
+
       const resolved = resolvePurchasePackage({
         packageId: hasPackageId ? body.packageId : undefined,
         custom: hasCustom ? body.custom : undefined,
         pricingService: options.pricingService,
         translationService: options.translationService,
+        userPolicy,
+        activeDiscounts,
       });
 
       if (!resolved.success) {
         return reply.code(resolved.status).send({ error: resolved.error, code: resolved.code });
       }
 
-      const { pkg, target, quotedAmount: baseQuotedAmount } = resolved;
+      const { pkg, target, quotedAmount: afterCatalogPrice } = resolved;
+      const originalPrice = resolved.originalPrice ?? afterCatalogPrice;
+      const totalPrePromoDiscount =
+        resolved.discountAmount ?? Math.max(0, originalPrice - afterCatalogPrice);
+      const groupDiscountPercent = resolved.groupDiscountPercent ?? 0;
+      const groupDiscountAmount = resolved.groupDiscountAmount ?? 0;
+      const catalogDiscountAmount = resolved.catalogDiscountAmount ?? 0;
+      const activeDiscountTitle = resolved.activeDiscountTitle ?? null;
+      const discountExpiresAt = resolved.discountExpiresAt ?? null;
 
       if (
         renewConfig &&
@@ -554,15 +695,8 @@ export function registerUserShopRoutes(
         });
       }
 
-      const activeDiscounts = await safeListActiveDiscounts(options.catalogDiscountService);
-      const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
-        packageId: pkg.id,
-        categoryId: pkg.categoryId ?? null,
-        originalPrice: baseQuotedAmount,
-      });
-      const afterCatalogPrice = catalogDiscount.effectivePrice;
       const checkoutPkg =
-        catalogDiscount.discountAmount > 0 ? { ...pkg, price: afterCatalogPrice } : pkg;
+        pkg.price !== afterCatalogPrice ? { ...pkg, price: afterCatalogPrice } : pkg;
 
       let appliedPromo:
         | {
@@ -576,6 +710,13 @@ export function registerUserShopRoutes(
         | undefined;
       const rawPromoCode = typeof body.promoCode === 'string' ? body.promoCode.trim() : '';
       if (rawPromoCode) {
+        if (!userPolicy.allowPromoCodes) {
+          return reply.code(400).send({
+            error: 'promo_not_allowed_for_group',
+            code: 'PROMO_NOT_ALLOWED',
+            messageKey: 'promo_not_allowed_for_group',
+          });
+        }
         if (typeof options.promoService?.quoteForPurchase !== 'function') {
           return reply
             .code(503)
@@ -603,7 +744,9 @@ export function registerUserShopRoutes(
               code:
                 err.messageKey === 'promo_not_purchase_code'
                   ? 'PROMO_GIFT_CREDIT_ONLY'
-                  : 'PROMO_INVALID',
+                  : err.messageKey === 'promo_not_allowed_for_group'
+                    ? 'PROMO_NOT_ALLOWED'
+                    : 'PROMO_INVALID',
               messageKey: err.messageKey,
             });
           }
@@ -635,28 +778,37 @@ export function registerUserShopRoutes(
         return reply.code(404).send({ error: 'User profile not found' });
       }
 
-      const availableBalance = Math.max(0, profile.balance - profile.reservedBalance);
-      if (availableBalance < quotedAmount) {
+      const availableBalance = profile.balance - profile.reservedBalance;
+      const creditLimit = userPolicy.creditLimit;
+      const purchasingPower = Math.max(0, availableBalance + creditLimit);
+      if (purchasingPower < quotedAmount) {
         return reply.code(409).send({
           error: 'Insufficient balance',
           code: 'INSUFFICIENT_BALANCE',
-          deficit: quotedAmount - availableBalance,
+          deficit: quotedAmount - purchasingPower,
           availableBalance,
+          creditLimit,
+          purchasingPower,
           price: quotedAmount,
-          originalPrice: catalogDiscount.originalPrice,
-          effectivePrice: catalogDiscount.effectivePrice,
+          originalPrice,
+          effectivePrice: afterCatalogPrice,
+          groupDiscountPercent,
+          groupDiscountAmount,
+          catalogDiscountAmount,
           promoDiscountAmount: appliedPromo?.discountAmount ?? 0,
           bonusGb: appliedPromo?.bonusGb ?? 0,
         });
       }
 
       let requestedUsername: string | undefined;
+      const customNameAllowed = options.translationService
+        ? isCustomServiceNameAllowed(options.translationService, userPolicy)
+        : userPolicy.allowCustomServiceName;
       if (
         kind === 'new_config' &&
         typeof body.requestedUsername === 'string' &&
         body.requestedUsername.trim().length > 0 &&
-        options.translationService &&
-        customServiceNameEnabled(options.translationService)
+        customNameAllowed
       ) {
         const normalizedName = normalizeCustomServiceName(body.requestedUsername);
         if (!normalizedName) {
@@ -726,13 +878,14 @@ export function registerUserShopRoutes(
         price: checkout.quotedAmount,
         basePrice: checkout.amount,
         quotedAmount: checkout.quotedAmount,
-        originalPrice: catalogDiscount.originalPrice,
-        effectivePrice: catalogDiscount.effectivePrice,
-        discountAmount: catalogDiscount.discountAmount,
-        activeDiscountTitle: catalogDiscount.activeDiscountTitle,
-        discountExpiresAt: catalogDiscount.discountExpiresAt
-          ? catalogDiscount.discountExpiresAt.toISOString()
-          : null,
+        originalPrice,
+        effectivePrice: afterCatalogPrice,
+        discountAmount: totalPrePromoDiscount,
+        groupDiscountPercent,
+        groupDiscountAmount,
+        catalogDiscountAmount,
+        activeDiscountTitle,
+        discountExpiresAt: discountExpiresAt ? discountExpiresAt.toISOString() : null,
         promoCode: appliedPromo?.code ?? null,
         promoType: appliedPromo?.type ?? null,
         promoDiscountAmount: appliedPromo?.discountAmount ?? 0,
@@ -741,6 +894,8 @@ export function registerUserShopRoutes(
         rolloverEnabled: kind === 'renew_config' ? rolloverEnabled : false,
         ...(rolloverPreview ? { rolloverPreview } : {}),
         availableBalance,
+        creditLimit,
+        purchasingPower,
         expiresAt:
           checkout.expiresAt instanceof Date
             ? checkout.expiresAt.toISOString()
@@ -833,16 +988,23 @@ export function registerUserShopRoutes(
         });
       }
 
-      // Re-check available balance >= checkout.quotedAmount
-      const profile = await options.userService.findProfile(String(telegramId));
-      const availableBalance = profile ? Math.max(0, profile.balance - profile.reservedBalance) : 0;
-      if (availableBalance < checkout.quotedAmount) {
+      // Re-check purchasing power (signed available balance + credit limit) >= checkout.quotedAmount
+      const [profile, confirmPolicy] = await Promise.all([
+        options.userService.findProfile(String(telegramId)),
+        safeGetEffectiveUserPolicy(options.userGroupService, telegramId),
+      ]);
+      const availableBalance = profile ? profile.balance - profile.reservedBalance : 0;
+      const creditLimit = confirmPolicy.creditLimit;
+      const purchasingPower = Math.max(0, availableBalance + creditLimit);
+      if (purchasingPower < checkout.quotedAmount) {
         await safeRecordCheckoutFailed(options.purchaseCheckoutService, checkout.id);
         return reply.code(409).send({
           error: 'Insufficient balance',
           code: 'INSUFFICIENT_BALANCE',
-          deficit: checkout.quotedAmount - availableBalance,
+          deficit: checkout.quotedAmount - purchasingPower,
           availableBalance,
+          creditLimit,
+          purchasingPower,
           price: checkout.quotedAmount,
         });
       }
@@ -943,7 +1105,9 @@ export function registerUserShopRoutes(
           configUsername: result.configUsername,
           subUrl: result.subUrl,
           startOnFirstUse,
-          availableBalanceAfter: Math.max(0, availableBalance - checkout.quotedAmount),
+          availableBalanceAfter: availableBalance - checkout.quotedAmount,
+          creditLimit,
+          purchasingPowerAfter: Math.max(0, availableBalance + creditLimit - checkout.quotedAmount),
         });
       } catch (err: unknown) {
         trackFunnelEvent('purchase_failed');

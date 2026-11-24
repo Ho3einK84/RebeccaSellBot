@@ -39,6 +39,10 @@ import {
   startAdminInput,
 } from '../../admin/adminInput.js';
 import { formatReceiptShortId } from './receiptRoutes.js';
+import {
+  formatUserGroupDisplayLabel,
+  safeGetEffectiveUserPolicy,
+} from '../../../domain/services/UserGroupService.js';
 
 const USER_PAGE_SIZE = 7;
 const USER_SERVICE_PAGE_SIZE = 4;
@@ -129,7 +133,10 @@ export async function renderUserListPage(
   if (result.users.length === 0) {
     const emptyKb = new InlineKeyboard();
     filterRowKb(emptyKb);
-    emptyKb.text(t(ctx, 'admin_user_search_button'), 'adm:usr:search').row();
+    emptyKb
+      .text(t(ctx, 'admin_user_search_button'), 'adm:usr:search')
+      .text(t(ctx, 'admin_groups_button'), 'adm:grp:l')
+      .row();
     appendAdminFooterNav(emptyKb, ctx, {
       backCallback: 'adm:home',
       backLabel: t(ctx, 'admin_menu_back_to_admin'),
@@ -172,7 +179,10 @@ export async function renderUserListPage(
     pageCallback: (p) => `adm:usr:p:${p}:${filterCode}`,
   });
 
-  keyboard.text(t(ctx, 'admin_user_search_button'), 'adm:usr:search').row();
+  keyboard
+    .text(t(ctx, 'admin_user_search_button'), 'adm:usr:search')
+    .text(t(ctx, 'admin_groups_button'), 'adm:grp:l')
+    .row();
   appendAdminFooterNav(keyboard, ctx, {
     backCallback: 'adm:home',
     backLabel: t(ctx, 'admin_menu_back_to_admin'),
@@ -202,6 +212,47 @@ export async function renderUserListPage(
 }
 
 function registerUserInputHandlers(): void {
+  registerAdminInputHandler('usr:grp_days', async (ctx, rawText, state) => {
+    const targetId = Number(state.payload?.targetId);
+    const groupId = typeof state.payload?.groupId === 'string' ? state.payload.groupId : null;
+    if (!ctx.services?.userGroupService || !Number.isSafeInteger(targetId) || !groupId) {
+      return { status: 'done', redirectRoute: `adm:usr:v:${targetId}` };
+    }
+    const normalized = normalizeInputDigits(rawText);
+    const days = /^\d+$/u.test(normalized) ? Number(normalized) : Number.NaN;
+    if (!Number.isSafeInteger(days) || days < 0 || days > 3650) {
+      return {
+        status: 'retry',
+        promptText: buildAdminPromptScreen(
+          '⏳',
+          t(ctx, 'admin_user_group_assign_title'),
+          t(ctx, 'admin_user_group_custom_days_prompt'),
+          { error: t(ctx, 'admin_user_group_invalid_days') }
+        ),
+      };
+    }
+    const expiresAt = days > 0 ? new Date(Date.now() + days * 86_400_000) : null;
+    try {
+      await ctx.services.userGroupService.assignUserGroup({
+        telegramId: targetId,
+        groupId,
+        expiresAt,
+        actorAdminId: ctx.from?.id,
+      });
+      return {
+        status: 'done',
+        redirectRoute: `adm:usr:v:${targetId}`,
+        notice: { tone: 'success', text: t(ctx, 'admin_user_group_updated') },
+      };
+    } catch {
+      return {
+        status: 'done',
+        redirectRoute: `adm:usr:v:${targetId}`,
+        notice: { tone: 'error', text: t(ctx, 'operation_failed') },
+      };
+    }
+  });
+
   registerAdminInputHandler('usr:search', async (ctx, rawText, state) => {
     if (!ctx.services) return { status: 'done' };
     const candidates =
@@ -696,6 +747,87 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
         text: t(ctx, 'admin_direct_failed'),
       });
     }
+  });
+
+  registerAdminRoute(/^adm:usr:grp:(\d+)$/u, async (ctx, match) => {
+    await renderUserGroupPicker(ctx, Number(match![1]));
+  });
+
+  registerAdminRoute(/^adm:usr:grpi:(\d+):(\d+|none)$/u, async (ctx, match) => {
+    const targetId = Number(match![1]);
+    const choice = match![2]!;
+    if (!ctx.services?.userGroupService) {
+      await renderUserProfile(ctx, targetId);
+      return;
+    }
+    if (choice === 'none') {
+      await ctx.services.userGroupService.assignUserGroup({
+        telegramId: targetId,
+        groupId: null,
+        expiresAt: null,
+        actorAdminId: ctx.from?.id,
+      });
+      await renderUserProfile(ctx, targetId, {
+        tone: 'success',
+        text: t(ctx, 'admin_user_group_updated'),
+      });
+      return;
+    }
+    const idx = Number(choice);
+    const ids = Array.isArray(ctx.session?.adminDraft?.assignGroupIds)
+      ? (ctx.session.adminDraft.assignGroupIds as string[])
+      : [];
+    const groupId = Number.isSafeInteger(idx) ? ids[idx] : undefined;
+    if (!groupId) {
+      await renderUserGroupPicker(ctx, targetId);
+      return;
+    }
+    await renderUserGroupExpiryPicker(ctx, targetId, groupId);
+  });
+
+  registerAdminRoute(/^adm:usr:grpd:(\d+):(\d+|custom)$/u, async (ctx, match) => {
+    const targetId = Number(match![1]);
+    const rawDays = match![2]!;
+    const groupId =
+      typeof ctx.session?.adminDraft?.assignGroupId === 'string'
+        ? ctx.session.adminDraft.assignGroupId
+        : null;
+    if (!ctx.services?.userGroupService || !groupId) {
+      await renderUserGroupPicker(ctx, targetId);
+      return;
+    }
+    if (rawDays === 'custom') {
+      await startAdminInput(ctx, {
+        kind: 'usr:grp_days',
+        payload: { targetId, groupId },
+        returnRoute: `adm:usr:v:${targetId}`,
+        promptText: buildAdminPromptScreen(
+          '⏳',
+          t(ctx, 'admin_user_group_assign_title'),
+          t(ctx, 'admin_user_group_custom_days_prompt'),
+          {
+            breadcrumb: buildBreadcrumb(
+              t(ctx, 'admin_home_title'),
+              t(ctx, 'admin_users_list_title'),
+              `#${targetId}`
+            ),
+          }
+        ),
+      });
+      return;
+    }
+    const days = Number(rawDays);
+    const expiresAt = days > 0 ? new Date(Date.now() + days * 86_400_000) : null;
+    await ctx.services.userGroupService.assignUserGroup({
+      telegramId: targetId,
+      groupId,
+      expiresAt,
+      actorAdminId: ctx.from?.id,
+    });
+    await renderUserProfile(ctx, targetId, {
+      tone: 'success',
+      text: t(ctx, 'admin_user_group_updated'),
+    });
   });
 
   registerAdminRoute(/^adm:usr:sub:(\d+)(?::(\d+))?$/u, async (ctx, match) => {
@@ -1195,6 +1327,22 @@ export async function renderUserProfile(
   const statusBadge = user.isBanned
     ? buildStatusBadge(ctx, 'inactive', t(ctx, 'admin_banned'))
     : buildStatusBadge(ctx, 'active', t(ctx, 'admin_active'));
+  const groupPolicy = await safeGetEffectiveUserPolicy(
+    ctx.services.userGroupService,
+    user.telegramId
+  );
+  const groupDisplayLabel = formatUserGroupDisplayLabel(groupPolicy);
+  const groupSummaryValue = groupDisplayLabel
+    ? `${escapeTelegramMarkdown(groupDisplayLabel)}${
+        groupPolicy.isAssigned && groupPolicy.expiresAt
+          ? ` (${t(ctx, 'admin_user_group_expires_on', { date: localizedDate(groupPolicy.expiresAt, ctx) })})`
+          : !groupPolicy.isAssigned && groupPolicy.isDefaultGroup
+            ? ` (${t(ctx, 'admin_groups_default_tag')})`
+            : ''
+      }`
+    : t(ctx, 'admin_user_group_none');
+  const debtAmount = Math.max(0, -user.balance);
+  const usableCredit = Math.max(0, user.balance - user.reservedBalance + groupPolicy.creditLimit);
 
   const text = buildAdminScreen({
     emoji: '👤',
@@ -1222,6 +1370,10 @@ export async function renderUserProfile(
             value: escapeTelegramMarkdown(displayName),
           },
           {
+            label: t(ctx, 'admin_user_group_label'),
+            value: groupSummaryValue,
+          },
+          {
             label: t(ctx, 'admin_user_joined_label'),
             value: localizedDate(user.createdAt, ctx),
           },
@@ -1234,6 +1386,26 @@ export async function renderUserProfile(
             label: t(ctx, 'admin_user_balance_label'),
             value: `${localizedNumber(user.balance, ctx)} ${t(ctx, 'currency_toman')}`,
           },
+          ...(debtAmount > 0
+            ? [
+                {
+                  label: t(ctx, 'wallet_debt_label'),
+                  value: `${localizedNumber(debtAmount, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+              ]
+            : []),
+          ...(groupPolicy.creditLimit > 0
+            ? [
+                {
+                  label: t(ctx, 'wallet_credit_limit_label'),
+                  value: `${localizedNumber(groupPolicy.creditLimit, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+                {
+                  label: t(ctx, 'wallet_purchasing_power_label'),
+                  value: `${localizedNumber(usableCredit, ctx)} ${t(ctx, 'currency_toman')}`,
+                },
+              ]
+            : []),
           {
             label: t(ctx, 'admin_user_total_spend_label'),
             value: `${localizedNumber(user.totalSpend, ctx)} ${t(ctx, 'currency_toman')}`,
@@ -1295,6 +1467,7 @@ export async function renderUserProfile(
     .text(t(ctx, 'admin_user_message_button'), `adm:usr:msg:${user.telegramId}`)
     .text(t(ctx, 'admin_user_audit_button'), `adm:usr:rep:${user.telegramId}`)
     .row()
+    .text(t(ctx, 'admin_user_group_button'), `adm:usr:grp:${user.telegramId}`)
     .text(
       t(ctx, user.isBanned ? 'admin_user_unban_button' : 'admin_user_ban_button'),
       `admin:user:ban_prompt:${user.telegramId}`
@@ -1303,6 +1476,113 @@ export async function renderUserProfile(
   appendAdminFooterNav(keyboard, ctx, { backCallback, backLabel, showHome: true });
 
   await renderUserScreen(ctx, text, keyboard, 'Markdown');
+}
+
+async function renderUserGroupPicker(ctx: MenuContext, targetId: number): Promise<void> {
+  if (!ctx.services?.userGroupService) {
+    await renderUserProfile(ctx, targetId);
+    return;
+  }
+  markAdminContext(ctx);
+  const [groups, policy] = await Promise.all([
+    ctx.services.userGroupService.listGroups(),
+    safeGetEffectiveUserPolicy(ctx.services.userGroupService, targetId),
+  ]);
+
+  if (ctx.session) {
+    ctx.session.adminDraft = {
+      ...(ctx.session.adminDraft ?? {}),
+      assignGroupIds: groups.map((g) => g.id),
+    };
+  }
+
+  const kb = new InlineKeyboard();
+  for (const [idx, g] of groups.entries()) {
+    const activeMark = policy.isAssigned && policy.groupId === g.id ? '✅ ' : '';
+    const badge = g.badge ? `${g.badge} ` : '';
+    kb.text(`${activeMark}${badge}${g.name}`, `adm:usr:grpi:${targetId}:${idx}`).row();
+  }
+  kb.text(t(ctx, 'admin_user_group_clear_btn'), `adm:usr:grpi:${targetId}:none`).row();
+  appendAdminFooterNav(kb, ctx, {
+    backCallback: `adm:usr:v:${targetId}`,
+    backLabel: t(ctx, 'admin_user_report_btn_back_profile'),
+    showHome: true,
+  });
+
+  const currentLabel = formatUserGroupDisplayLabel(policy) ?? t(ctx, 'admin_user_group_none');
+  const text = buildAdminScreen({
+    emoji: '👥',
+    title: t(ctx, 'admin_user_group_assign_title'),
+    breadcrumb: buildBreadcrumb(
+      t(ctx, 'admin_home_title'),
+      t(ctx, 'admin_users_list_title'),
+      `#${targetId}`
+    ),
+    primary: {
+      label: t(ctx, 'admin_user_group_label'),
+      value: escapeTelegramMarkdown(currentLabel),
+      inline: true,
+    },
+    footer:
+      groups.length > 0 ? t(ctx, 'admin_user_group_select_prompt') : t(ctx, 'admin_groups_empty'),
+  });
+
+  await renderUserScreen(ctx, text, kb, 'Markdown');
+}
+
+async function renderUserGroupExpiryPicker(
+  ctx: MenuContext,
+  targetId: number,
+  groupId: string
+): Promise<void> {
+  if (!ctx.services?.userGroupService) {
+    await renderUserProfile(ctx, targetId);
+    return;
+  }
+  const group = await ctx.services.userGroupService.getGroupById(groupId);
+  if (!group) {
+    await renderUserGroupPicker(ctx, targetId);
+    return;
+  }
+  if (ctx.session) {
+    ctx.session.adminDraft = {
+      ...(ctx.session.adminDraft ?? {}),
+      assignGroupId: group.id,
+    };
+  }
+
+  const kb = new InlineKeyboard()
+    .text(t(ctx, 'admin_user_group_expiry_permanent'), `adm:usr:grpd:${targetId}:0`)
+    .row()
+    .text(t(ctx, 'admin_user_group_expiry_7d'), `adm:usr:grpd:${targetId}:7`)
+    .text(t(ctx, 'admin_user_group_expiry_30d'), `adm:usr:grpd:${targetId}:30`)
+    .text(t(ctx, 'admin_user_group_expiry_90d'), `adm:usr:grpd:${targetId}:90`)
+    .row()
+    .text(t(ctx, 'admin_user_group_expiry_custom'), `adm:usr:grpd:${targetId}:custom`)
+    .row();
+  appendAdminFooterNav(kb, ctx, {
+    backCallback: `adm:usr:grp:${targetId}`,
+    backLabel: t(ctx, 'menu_back'),
+    showHome: true,
+  });
+
+  const text = buildAdminScreen({
+    emoji: '⏳',
+    title: t(ctx, 'admin_user_group_assign_title'),
+    breadcrumb: buildBreadcrumb(
+      t(ctx, 'admin_home_title'),
+      t(ctx, 'admin_users_list_title'),
+      `#${targetId}`
+    ),
+    primary: {
+      label: t(ctx, 'admin_user_group_label'),
+      value: escapeTelegramMarkdown(group.name),
+      inline: true,
+    },
+    footer: t(ctx, 'admin_user_group_expiry_prompt'),
+  });
+
+  await renderUserScreen(ctx, text, kb, 'Markdown');
 }
 
 const TRANSACTION_TYPE_MAP: Record<string, string> = {

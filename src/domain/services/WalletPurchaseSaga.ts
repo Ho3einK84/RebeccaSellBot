@@ -28,7 +28,8 @@ import {
   type SettingReader,
 } from './FeatureSettings.js';
 import type { ReferralService } from './ReferralService.js';
-import type { PromoService } from './PromoService.js';
+import { PromoValidationError, type PromoService } from './PromoService.js';
+import type { UserGroupService } from './UserGroupService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import { purchaseOwnershipMarker, remoteFingerprint } from './RebeccaOwnership.js';
 import { verifyOrEstablishConfigIncarnation } from './ConfigIncarnation.js';
@@ -59,7 +60,8 @@ export class WalletPurchaseSaga {
     private readonly referralService: ReferralService,
     private readonly promoService: PromoService,
     private readonly verifyBindingConflict = true,
-    private readonly settings?: Partial<SettingReader>
+    private readonly settings?: Partial<SettingReader>,
+    private readonly userGroupService?: Pick<UserGroupService, 'getEffectiveUserPolicyInTx'>
   ) {}
 
   private resolveStartOnFirstUse(params: PurchaseSagaParams): boolean {
@@ -105,9 +107,53 @@ export class WalletPurchaseSaga {
     // Promo pricing is derived only inside the same transaction that reserves
     // the intent. UI quotes are display-only and can never set these values.
     const final = { amount: params.amount, gbAmount: params.gbAmount };
+    // Snapshotted effective credit limit from the locked user row at reservation time
+    // so mid-purchase VIP removal or expiration cannot break commit or reconciliation.
+    let effectiveCreditLimit = 0;
 
     try {
       await db.transaction(async (tx) => {
+        let allowCashback: boolean | undefined;
+        let allowPromoCodes: boolean | undefined;
+        let lockedUser:
+          | {
+              telegramId: number;
+              balance: number;
+              reservedBalance: number;
+              groupId: string | null;
+              groupExpiresAt: Date | null;
+            }
+          | undefined;
+
+        if (this.userGroupService) {
+          const [foundUser] = await tx
+            .select({
+              telegramId: users.telegramId,
+              balance: users.balance,
+              reservedBalance: users.reservedBalance,
+              groupId: users.groupId,
+              groupExpiresAt: users.groupExpiresAt,
+            })
+            .from(users)
+            .where(eq(users.telegramId, params.telegramId))
+            .for('update')
+            .limit(1);
+          if (!foundUser) throw new Error('INSUFFICIENT_BALANCE');
+          lockedUser = foundUser;
+
+          const effectivePolicy = await this.userGroupService.getEffectiveUserPolicyInTx(
+            tx,
+            params.telegramId,
+            foundUser
+          );
+          if (params.promoCode && !effectivePolicy.allowPromoCodes) {
+            throw new PromoValidationError('promo_not_allowed_for_group');
+          }
+          effectiveCreditLimit = effectivePolicy.creditLimit;
+          allowCashback = effectivePolicy.allowCashback;
+          allowPromoCodes = effectivePolicy.allowPromoCodes;
+        }
+
         // Insert a provisional intent first. Promo reservation can safely add
         // its own rows here, derive final.amount/final.gbAmount, then update this
         // intent before the guarded wallet reservation below.
@@ -123,6 +169,7 @@ export class WalletPurchaseSaga {
           configUsername: params.configUsername,
           gbAmount: params.gbAmount,
           durationDays: params.durationDays,
+          creditLimit: effectiveCreditLimit,
           operationStartedAt: new Date(),
           leaseExpiresAt: new Date(Date.now() + FOREGROUND_LEASE_MS),
         });
@@ -134,6 +181,7 @@ export class WalletPurchaseSaga {
             rawCode: params.promoCode,
             baseAmount: params.amount,
             baseGbAmount: params.gbAmount,
+            ...(allowPromoCodes !== undefined ? { allowPromoCodes } : {}),
           });
           final.amount = promo.finalAmount;
           final.gbAmount = promo.finalGbAmount;
@@ -143,10 +191,28 @@ export class WalletPurchaseSaga {
           throw new Error('PURCHASE_QUOTE_CHANGED');
         }
 
+        if (lockedUser) {
+          const purchasingPower =
+            lockedUser.balance - lockedUser.reservedBalance + effectiveCreditLimit;
+          const projectedAvailableAfterReserve =
+            lockedUser.balance - (lockedUser.reservedBalance + final.amount);
+          const projectedBalanceAfterCommit = lockedUser.balance - final.amount;
+          if (
+            purchasingPower < final.amount ||
+            !Number.isSafeInteger(projectedAvailableAfterReserve) ||
+            projectedAvailableAfterReserve < -9007199254740991 ||
+            !Number.isSafeInteger(projectedBalanceAfterCommit) ||
+            projectedBalanceAfterCommit < -9007199254740991
+          ) {
+            throw new Error('INSUFFICIENT_BALANCE');
+          }
+        }
+
         const bonusSnapshot = (await this.referralService?.calculateBonusSnapshot?.(
           tx,
           params.telegramId,
-          final.amount
+          final.amount,
+          allowCashback !== undefined ? { allowCashback } : undefined
         )) ?? {
           cashbackPercent: null,
           cashbackAmount: null,
@@ -163,6 +229,7 @@ export class WalletPurchaseSaga {
             cashbackAmount: bonusSnapshot.cashbackAmount,
             referrerTelegramId: bonusSnapshot.referrerTelegramId,
             referralBonusAmount: bonusSnapshot.referralBonusAmount,
+            creditLimit: effectiveCreditLimit,
             updatedAt: new Date(),
           })
           .where(eq(purchaseIntents.id, intentId));
@@ -175,7 +242,7 @@ export class WalletPurchaseSaga {
           })
           .where(
             sql`${users.telegramId} = ${params.telegramId}
-              AND ${users.balance} - ${users.reservedBalance} >= ${final.amount}`
+              AND ${users.balance} - ${users.reservedBalance} + ${effectiveCreditLimit} >= ${final.amount}`
           )
           .returning({ telegramId: users.telegramId });
         if (reserved.length === 0) throw new Error('INSUFFICIENT_BALANCE');
@@ -525,7 +592,7 @@ export class WalletPurchaseSaga {
             .where(
               sql`${users.telegramId} = ${params.telegramId}
               AND ${users.reservedBalance} >= ${final.amount}
-              AND ${users.balance} >= ${final.amount}`
+              AND ${users.balance} + ${effectiveCreditLimit} >= ${final.amount}`
             )
             .returning();
           if (updatedUsers.length === 0) throw new Error('RESERVATION_INVARIANT_VIOLATION');

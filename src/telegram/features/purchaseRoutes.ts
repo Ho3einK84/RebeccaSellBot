@@ -8,7 +8,11 @@ import {
   safeListActiveDiscounts,
 } from '../../domain/services/CatalogDiscountService.js';
 import { onHoldDefaultEnabled } from '../../domain/services/FeatureSettings.js';
-import type { PackageOption } from '../../domain/services/PricingService.js';
+import { applyGroupDiscount, type PackageOption } from '../../domain/services/PricingService.js';
+import {
+  formatUserGroupDisplayLabel,
+  safeGetEffectiveUserPolicy,
+} from '../../domain/services/UserGroupService.js';
 import { clearPendingPromo, getPendingPromoPricing } from '../promoSelection.js';
 import { purchaseFailureMessage } from '../purchaseFeedback.js';
 import {
@@ -56,21 +60,36 @@ async function renderResumedCheckout(ctx: MenuContext, services: BotServices): P
     return false;
   }
 
-  const activeDiscounts = await safeListActiveDiscounts(services.catalogDiscountService);
-  const liveDiscount = resolveBestCatalogDiscount(activeDiscounts, {
-    packageId: pkg.id,
-    categoryId: pkg.categoryId ?? null,
-    originalPrice: pkg.price,
-  });
+  const userPolicy = await safeGetEffectiveUserPolicy(services.userGroupService, telegramId);
+  const groupDisc = applyGroupDiscount(pkg.price, userPolicy.discountPercent);
+  const activeDiscounts = userPolicy.allowCatalogDiscounts
+    ? await safeListActiveDiscounts(services.catalogDiscountService)
+    : [];
+  const liveDiscount = userPolicy.allowCatalogDiscounts
+    ? resolveBestCatalogDiscount(activeDiscounts, {
+        packageId: pkg.id,
+        categoryId: pkg.categoryId ?? null,
+        originalPrice: groupDisc.finalAmount,
+      })
+    : {
+        originalPrice: groupDisc.finalAmount,
+        effectivePrice: groupDisc.finalAmount,
+        discountAmount: 0,
+        activeDiscountId: null,
+        activeDiscountTitle: null,
+        discountExpiresAt: null,
+      };
   const effectivePkg: PackageOption =
-    liveDiscount.discountAmount > 0 ? { ...pkg, price: liveDiscount.effectivePrice } : pkg;
+    liveDiscount.effectivePrice !== pkg.price
+      ? { ...pkg, price: liveDiscount.effectivePrice }
+      : pkg;
 
-  const pendingPromo = await getPendingPromoPricing(
-    ctx,
-    telegramId,
-    effectivePkg.price,
-    pkg.gbAmount
-  );
+  if (!userPolicy.allowPromoCodes && ctx.session.pendingPromo) {
+    delete ctx.session.pendingPromo;
+  }
+  const pendingPromo = userPolicy.allowPromoCodes
+    ? await getPendingPromoPricing(ctx, telegramId, effectivePkg.price, pkg.gbAmount)
+    : {};
   if (pendingPromo.messageKey) {
     await renderScreen(
       ctx,
@@ -88,12 +107,13 @@ async function renderResumedCheckout(ctx: MenuContext, services: BotServices): P
     typeof services.walletService.getAvailableBalance === 'function'
       ? await services.walletService.getAvailableBalance(telegramId)
       : await services.walletService.getBalance(telegramId);
+  const purchasingPower = Math.max(0, balance + userPolicy.creditLimit);
 
-  if (balance < displayedPrice) {
+  if (purchasingPower < displayedPrice) {
     ctx.session.pendingTopupIntent = {
       kind: 'new_config',
       packageId: pkg.id,
-      deficitAmount: displayedPrice - balance,
+      deficitAmount: displayedPrice - purchasingPower,
       createdAt: Date.now(),
     };
     await renderScreen(
@@ -101,14 +121,15 @@ async function renderResumedCheckout(ctx: MenuContext, services: BotServices): P
       buildUnifiedInsufficientBalanceScreen(ctx, {
         packagePrice: displayedPrice,
         balance,
-        includePromoHint: true,
+        creditLimit: userPolicy.creditLimit,
+        includePromoHint: userPolicy.allowPromoCodes,
       }),
       {
         parse_mode: 'Markdown',
         reply_markup: buildInsufficientBalanceKeyboard(ctx, {
           backLabelKey: 'menu_back_shop',
           backCallback: 'nav:shop',
-          promoCallback: 'shop:apply_promo',
+          ...(userPolicy.allowPromoCodes ? { promoCallback: 'shop:apply_promo' } : {}),
         }),
       }
     );
@@ -141,13 +162,17 @@ async function renderResumedCheckout(ctx: MenuContext, services: BotServices): P
   const confirmKeyboard = new InlineKeyboard()
     .text(t(ctx, 'buy_confirm_button'), `buy:confirm:${checkout.id}`)
     .row();
-  if (pendingPromo.quote?.code) {
-    confirmKeyboard
-      .text(t(ctx, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
-      .text(t(ctx, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
-      .row();
-  } else {
-    confirmKeyboard.text(t(ctx, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`).row();
+  if (userPolicy.allowPromoCodes) {
+    if (pendingPromo.quote?.code) {
+      confirmKeyboard
+        .text(t(ctx, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
+        .text(t(ctx, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
+        .row();
+    } else {
+      confirmKeyboard
+        .text(t(ctx, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`)
+        .row();
+    }
   }
   confirmKeyboard.text(t(ctx, 'menu_back_shop'), 'nav:shop');
 
@@ -160,7 +185,14 @@ async function renderResumedCheckout(ctx: MenuContext, services: BotServices): P
       pendingPromo.quote?.code,
       balance,
       liveDiscount,
-      { bonusGb, requestedUsername: context.requestedUsername }
+      {
+        bonusGb,
+        requestedUsername: context.requestedUsername,
+        creditLimit: userPolicy.creditLimit,
+        groupLabel: formatUserGroupDisplayLabel(userPolicy),
+        groupDiscountPercent: groupDisc.discountPercent,
+        groupDiscountAmount: groupDisc.discountAmount,
+      }
     ),
     { parse_mode: 'Markdown', reply_markup: confirmKeyboard }
   );
@@ -191,13 +223,17 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
       return;
     }
 
-    const availableBalance = await services.walletService.getAvailableBalance(telegramId);
-    if (availableBalance < checkout.quotedAmount) {
+    const [availableBalance, userPolicy] = await Promise.all([
+      services.walletService.getAvailableBalance(telegramId),
+      safeGetEffectiveUserPolicy(services.userGroupService, telegramId),
+    ]);
+    const purchasingPower = Math.max(0, availableBalance + userPolicy.creditLimit);
+    if (purchasingPower < checkout.quotedAmount) {
       await recordCheckoutFailed(services.purchaseCheckoutService, checkout.id);
       ctx.session.pendingTopupIntent = {
         kind: 'new_config',
         packageId: checkout.packageId,
-        deficitAmount: checkout.quotedAmount - availableBalance,
+        deficitAmount: checkout.quotedAmount - purchasingPower,
         createdAt: Date.now(),
       };
       await ctx.answerCallbackQuery({ text: t(ctx, 'insufficient_balance'), show_alert: true });
@@ -206,6 +242,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
         buildUnifiedInsufficientBalanceScreen(ctx, {
           packagePrice: checkout.quotedAmount,
           balance: availableBalance,
+          creditLimit: userPolicy.creditLimit,
           includePromoHint: false,
         }),
         {

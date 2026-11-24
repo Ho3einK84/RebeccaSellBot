@@ -47,9 +47,15 @@ import {
   type ResolvedCatalogDiscount,
 } from '../../../domain/services/CatalogDiscountService.js';
 import {
+  applyGroupDiscount,
   formatRemainingDiscountDuration,
   type PackageOption,
 } from '../../../domain/services/PricingService.js';
+import {
+  formatUserGroupDisplayLabel,
+  safeGetEffectiveUserPolicy,
+  type EffectiveUserGroupPolicy,
+} from '../../../domain/services/UserGroupService.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../../rendering.js';
 import {
   formatConfigButtonTitle,
@@ -119,18 +125,31 @@ export function buildRenewalSelectionKeyboard(
   configId: string,
   panelId?: string,
   serviceId?: number,
-  activeDiscounts: readonly CatalogDiscountRow[] = []
+  activeDiscounts: readonly CatalogDiscountRow[] = [],
+  userPolicy?: EffectiveUserGroupPolicy | null
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   const packages = ctx.services!.pricingService.getPackages(panelId, serviceId);
   const catalogToken = packageCatalogToken(packages);
-  const pendingPromo = ctx.session?.pendingPromo;
+  const allowPromo = userPolicy?.allowPromoCodes ?? true;
+  const allowCatalog = userPolicy?.allowCatalogDiscounts ?? true;
+  const pendingPromo = allowPromo ? ctx.session?.pendingPromo : undefined;
   for (const [index, pkg] of packages.entries()) {
-    const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
-      packageId: pkg.id,
-      categoryId: pkg.categoryId ?? null,
-      originalPrice: pkg.price,
-    });
+    const groupDisc = applyGroupDiscount(pkg.price, userPolicy?.discountPercent);
+    const catalogDiscount = allowCatalog
+      ? resolveBestCatalogDiscount(activeDiscounts, {
+          packageId: pkg.id,
+          categoryId: pkg.categoryId ?? null,
+          originalPrice: groupDisc.finalAmount,
+        })
+      : {
+          originalPrice: groupDisc.finalAmount,
+          effectivePrice: groupDisc.finalAmount,
+          discountAmount: 0,
+          activeDiscountId: null,
+          activeDiscountTitle: null,
+          discountExpiresAt: null,
+        };
     const effectivePrice = applyPendingPromoToPrice(catalogDiscount.effectivePrice, pendingPromo);
     keyboard
       .text(
@@ -143,7 +162,10 @@ export function buildRenewalSelectionKeyboard(
       .row();
   }
   if (customVolumeEnabled(ctx.services!.translationService)) {
-    const pricePerGb = ctx.services!.translationService.getSettingNum('price_per_gb', 5_000);
+    const rawRate =
+      userPolicy?.customPricePerGb ??
+      ctx.services!.translationService.getSettingNum('price_per_gb', 5_000);
+    const pricePerGb = applyGroupDiscount(rawRate, userPolicy?.discountPercent).finalAmount;
     keyboard
       .text(
         t(ctx, 'renew_custom_button', { price: localizedNumber(pricePerGb, ctx) }),
@@ -151,15 +173,17 @@ export function buildRenewalSelectionKeyboard(
       )
       .row();
   }
-  if (pendingPromo) {
-    keyboard
-      .text(
-        `${t(ctx, 'shop_clear_promo_button')} · ${pendingPromo.code}`,
-        callbackData('renew', 'clear_promo', configId)
-      )
-      .row();
-  } else {
-    keyboard.text(t(ctx, 'shop_apply_promo_button'), 'shop:apply_promo').row();
+  if (allowPromo) {
+    if (pendingPromo) {
+      keyboard
+        .text(
+          `${t(ctx, 'shop_clear_promo_button')} · ${pendingPromo.code}`,
+          callbackData('renew', 'clear_promo', configId)
+        )
+        .row();
+    } else {
+      keyboard.text(t(ctx, 'shop_apply_promo_button'), 'shop:apply_promo').row();
+    }
   }
   return keyboard.text(t(ctx, 'menu_back'), callbackData('config', 'view', configId));
 }
@@ -274,19 +298,26 @@ export async function renderRenewalSelection(
   ctx: MenuContext,
   config: UserConfigRecord
 ): Promise<void> {
+  const targetTelegramId = config.telegramId;
+  const userPolicy = await safeGetEffectiveUserPolicy(
+    ctx.services!.userGroupService,
+    targetTelegramId
+  );
   const packages = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId);
-  const activeDiscounts = await safeListActiveDiscounts(ctx.services!.catalogDiscountService);
+  const activeDiscounts = userPolicy.allowCatalogDiscounts
+    ? await safeListActiveDiscounts(ctx.services!.catalogDiscountService)
+    : [];
   const isCustom = customVolumeEnabled(ctx.services!.translationService);
   const keyboard = buildRenewalSelectionKeyboard(
     ctx,
     config.id,
     config.panelId,
     config.serviceId,
-    activeDiscounts
+    activeDiscounts,
+    userPolicy
   );
   const hasChoices = packages.length > 0 || isCustom;
 
-  const targetTelegramId = config.telegramId;
   let availableBalance: number | undefined;
   try {
     const ws = ctx.services!.walletService;
@@ -300,28 +331,49 @@ export async function renderRenewalSelection(
   }
 
   let featuredDiscount: ResolvedCatalogDiscount | undefined;
-  for (const pkg of packages) {
-    const resolved = resolveBestCatalogDiscount(activeDiscounts, {
-      packageId: pkg.id,
-      categoryId: pkg.categoryId ?? null,
-      originalPrice: pkg.price,
-    });
-    if (
-      resolved.discountAmount > 0 &&
-      (!featuredDiscount || resolved.discountAmount > featuredDiscount.discountAmount)
-    ) {
-      featuredDiscount = resolved;
+  if (userPolicy.allowCatalogDiscounts) {
+    for (const pkg of packages) {
+      const groupPrice = applyGroupDiscount(pkg.price, userPolicy.discountPercent).finalAmount;
+      const resolved = resolveBestCatalogDiscount(activeDiscounts, {
+        packageId: pkg.id,
+        categoryId: pkg.categoryId ?? null,
+        originalPrice: groupPrice,
+      });
+      if (
+        resolved.discountAmount > 0 &&
+        (!featuredDiscount || resolved.discountAmount > featuredDiscount.discountAmount)
+      ) {
+        featuredDiscount = resolved;
+      }
     }
   }
 
   const traffic = calculateTraffic(undefined, config);
   const currentFields: Array<{ emoji?: string; label?: string; value: string }> = [];
+  const groupLabel = formatUserGroupDisplayLabel(userPolicy);
+  if (groupLabel) {
+    currentFields.push({
+      emoji: '🏷️',
+      label: t(ctx, 'user_group_badge_label'),
+      value:
+        userPolicy.discountPercent > 0
+          ? `${escapeTelegramMarkdown(groupLabel)} (-${localizedNumber(userPolicy.discountPercent, ctx)}%)`
+          : escapeTelegramMarkdown(groupLabel),
+    });
+  }
   if (availableBalance !== undefined) {
     currentFields.push({
       emoji: '💳',
       label: t(ctx, 'shop_wallet_balance_label'),
       value: `${localizedNumber(availableBalance, ctx)} ${t(ctx, 'currency_toman')}`,
     });
+    if (userPolicy.creditLimit > 0) {
+      currentFields.push({
+        emoji: '🛒',
+        label: t(ctx, 'wallet_purchasing_power_label'),
+        value: `${localizedNumber(Math.max(0, availableBalance + userPolicy.creditLimit), ctx)} ${t(ctx, 'currency_toman')}`,
+      });
+    }
   }
   if (!traffic.isUnavailable) {
     const remValue = traffic.isUnlimited
@@ -416,21 +468,39 @@ async function renderRenewalCheckoutForResolvedPackage(
   pkg: PackageOption
 ): Promise<void> {
   const targetTelegramId = config.telegramId;
-  const activeDiscounts = await safeListActiveDiscounts(ctx.services!.catalogDiscountService);
-  const catalogDiscount = resolveBestCatalogDiscount(activeDiscounts, {
-    packageId: pkg.id,
-    categoryId: pkg.categoryId ?? null,
-    originalPrice: pkg.price,
-  });
-  const effectivePkg: PackageOption =
-    catalogDiscount.discountAmount > 0 ? { ...pkg, price: catalogDiscount.effectivePrice } : pkg;
-
-  const pendingPromo = await getPendingPromoPricing(
-    ctx,
-    targetTelegramId,
-    effectivePkg.price,
-    pkg.gbAmount
+  const userPolicy = await safeGetEffectiveUserPolicy(
+    ctx.services!.userGroupService,
+    targetTelegramId
   );
+  const groupDisc = applyGroupDiscount(pkg.price, userPolicy.discountPercent);
+  const activeDiscounts = userPolicy.allowCatalogDiscounts
+    ? await safeListActiveDiscounts(ctx.services!.catalogDiscountService)
+    : [];
+  const catalogDiscount = userPolicy.allowCatalogDiscounts
+    ? resolveBestCatalogDiscount(activeDiscounts, {
+        packageId: pkg.id,
+        categoryId: pkg.categoryId ?? null,
+        originalPrice: groupDisc.finalAmount,
+      })
+    : {
+        originalPrice: groupDisc.finalAmount,
+        effectivePrice: groupDisc.finalAmount,
+        discountAmount: 0,
+        activeDiscountId: null,
+        activeDiscountTitle: null,
+        discountExpiresAt: null,
+      };
+  const effectivePkg: PackageOption =
+    catalogDiscount.effectivePrice !== pkg.price
+      ? { ...pkg, price: catalogDiscount.effectivePrice }
+      : pkg;
+
+  if (!userPolicy.allowPromoCodes && ctx.session?.pendingPromo) {
+    delete ctx.session.pendingPromo;
+  }
+  const pendingPromo = userPolicy.allowPromoCodes
+    ? await getPendingPromoPricing(ctx, targetTelegramId, effectivePkg.price, pkg.gbAmount)
+    : {};
   if (pendingPromo.messageKey) {
     if (ctx.callbackQuery) {
       await ctx.answerCallbackQuery({ text: t(ctx, 'promo_no_longer_usable'), show_alert: true });
@@ -448,6 +518,7 @@ async function renderRenewalCheckoutForResolvedPackage(
     ? Math.max(0, pendingPromo.quote.finalGbAmount - pkg.gbAmount)
     : 0;
   const balance = await ctx.services!.walletService.getAvailableBalance(targetTelegramId);
+  const purchasingPower = Math.max(0, balance + userPolicy.creditLimit);
 
   if (ctx.session) {
     ctx.session.promoCheckoutContext = {
@@ -457,14 +528,14 @@ async function renderRenewalCheckoutForResolvedPackage(
     };
   }
 
-  if (balance < price) {
+  if (purchasingPower < price) {
     if (ctx.session) {
       ctx.session.pendingTopupIntent = {
         kind: 'renew_config',
         packageId: pkg.id,
         configId: config.id,
         configUsername: config.configUsername,
-        deficitAmount: price - balance,
+        deficitAmount: price - purchasingPower,
         createdAt: Date.now(),
       };
     }
@@ -476,12 +547,13 @@ async function renderRenewalCheckoutForResolvedPackage(
       buildUnifiedInsufficientBalanceScreen(ctx, {
         packagePrice: price,
         balance,
-        includePromoHint: true,
+        creditLimit: userPolicy.creditLimit,
+        includePromoHint: userPolicy.allowPromoCodes,
       }),
       buildInsufficientBalanceKeyboard(ctx, {
         backLabelKey: 'menu_back',
         backCallback: callbackData('renew', 'open', config.id),
-        promoCallback: 'shop:apply_promo',
+        ...(userPolicy.allowPromoCodes ? { promoCallback: 'shop:apply_promo' } : {}),
       })
     );
     return;
@@ -530,13 +602,17 @@ async function renderRenewalCheckoutForResolvedPackage(
   const confirmKeyboard = new InlineKeyboard()
     .text(t(ctx, 'renew_confirm_button'), callbackData('renew', 'confirm', checkout.id))
     .row();
-  if (pendingPromo.quote?.code) {
-    confirmKeyboard
-      .text(t(ctx, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
-      .text(t(ctx, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
-      .row();
-  } else {
-    confirmKeyboard.text(t(ctx, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`).row();
+  if (userPolicy.allowPromoCodes) {
+    if (pendingPromo.quote?.code) {
+      confirmKeyboard
+        .text(t(ctx, 'shop_change_promo_button'), `checkout:promo:${checkout.id}`)
+        .text(t(ctx, 'shop_clear_promo_button'), `checkout:clear_promo:${checkout.id}`)
+        .row();
+    } else {
+      confirmKeyboard
+        .text(t(ctx, 'shop_apply_promo_button'), `checkout:promo:${checkout.id}`)
+        .row();
+    }
   }
   confirmKeyboard.text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id));
 
@@ -550,10 +626,14 @@ async function renderRenewalCheckoutForResolvedPackage(
       bonusGb,
       durationDays: pkg.durationDays,
       amount: price,
-      originalPrice: catalogDiscount.originalPrice,
+      originalPrice: pkg.price,
       effectivePrice: effectivePkg.price,
       pricePerGb: pkg.gbAmount + bonusGb > 0 ? Math.round(price / (pkg.gbAmount + bonusGb)) : price,
       walletBalance: balance,
+      creditLimit: userPolicy.creditLimit,
+      groupLabel: formatUserGroupDisplayLabel(userPolicy),
+      groupDiscountPercent: groupDisc.discountPercent,
+      groupDiscountAmount: groupDisc.discountAmount,
       catalogDiscount,
       promoCode: pendingPromo.quote?.code,
       rolloverEnabled,
@@ -565,20 +645,28 @@ async function renderRenewalCheckoutForResolvedPackage(
 
 async function renderAutoRenewSelection(ctx: MenuContext, config: UserConfigRecord): Promise<void> {
   if (!ctx.services) return;
+  const userPolicy = await safeGetEffectiveUserPolicy(
+    ctx.services.userGroupService,
+    config.telegramId
+  );
   const packages = ctx.services.pricingService.getPackages(config.panelId, config.serviceId);
   const catalogToken = packageCatalogToken(packages);
   const keyboard = new InlineKeyboard();
   for (const [index, pkg] of packages.entries()) {
+    const effectivePrice = applyGroupDiscount(pkg.price, userPolicy.discountPercent).finalAmount;
     keyboard
       .text(
-        formatPackageButtonLabel(ctx, pkg),
+        formatPackageButtonLabel(ctx, pkg, { effectivePrice }),
         callbackData('ar', 'p', config.id, index, catalogToken)
       )
       .row();
   }
   const isCustom = customVolumeEnabled(ctx.services.translationService);
   if (isCustom) {
-    const pricePerGb = ctx.services.translationService.getSettingNum('price_per_gb', 5_000);
+    const rawRate =
+      userPolicy.customPricePerGb ??
+      ctx.services.translationService.getSettingNum('price_per_gb', 5_000);
+    const pricePerGb = applyGroupDiscount(rawRate, userPolicy.discountPercent).finalAmount;
     keyboard
       .text(
         t(ctx, 'renew_custom_button', { price: localizedNumber(pricePerGb, ctx) }),
@@ -941,7 +1029,19 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         });
         return;
       }
-      ctx.session.pendingAutoRenew = { configId: config.id, packageId: pkg.id, price: pkg.price };
+      const userPolicy = await safeGetEffectiveUserPolicy(
+        ctx.services!.userGroupService,
+        config.telegramId
+      );
+      const effectiveAutoRenewPrice = applyGroupDiscount(
+        pkg.price,
+        userPolicy.discountPercent
+      ).finalAmount;
+      ctx.session.pendingAutoRenew = {
+        configId: config.id,
+        packageId: pkg.id,
+        price: effectiveAutoRenewPrice,
+      };
       await ctx.answerCallbackQuery();
       await renderSubscriptionScreen(
         ctx,
@@ -951,7 +1051,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
           subtitle: t(ctx, 'auto_renew_review_subtitle'),
           primary: {
             label: t(ctx, 'auto_renew_charge_label'),
-            value: `${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
+            value: `${localizedNumber(effectiveAutoRenewPrice, ctx)} ${t(ctx, 'currency_toman')}`,
             emphasizeValue: true,
           },
           sections: [
@@ -998,9 +1098,17 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       await ctx.answerCallbackQuery({ text: t(ctx, 'button_action_failed'), show_alert: true });
       return;
     }
+    const userPolicy = await safeGetEffectiveUserPolicy(
+      ctx.services!.userGroupService,
+      config.telegramId
+    );
     const pkg = ctx
       .services!.pricingService.getPackages(config.panelId, config.serviceId)
-      .find((item) => item.id === pending.packageId && item.price === pending.price);
+      .find(
+        (item) =>
+          item.id === pending.packageId &&
+          applyGroupDiscount(item.price, userPolicy.discountPercent).finalAmount === pending.price
+      );
     if (!pkg) {
       await ctx.answerCallbackQuery({
         text: t(ctx, 'auto_renew_package_unavailable'),
@@ -1018,7 +1126,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
       config.id,
       true,
       pkg.id,
-      pkg.price
+      pending.price
     );
     await renderSubscriptionScreen(
       ctx,
@@ -1753,6 +1861,10 @@ export function buildRenewalCheckoutScreen(
     effectivePrice?: number;
     pricePerGb: number;
     walletBalance?: number;
+    creditLimit?: number;
+    groupLabel?: string | null;
+    groupDiscountPercent?: number;
+    groupDiscountAmount?: number;
     catalogDiscount?: ResolvedCatalogDiscount;
     promoCode?: string;
     rolloverEnabled?: boolean;
@@ -1780,6 +1892,10 @@ export function buildRenewalCheckoutScreen(
     finalAmount: input.amount,
     pricePerGb: input.pricePerGb,
     walletAvailableBalance: input.walletBalance,
+    creditLimit: input.creditLimit,
+    groupLabel: input.groupLabel,
+    groupDiscountPercent: input.groupDiscountPercent,
+    groupDiscountAmount: input.groupDiscountAmount,
     catalogDiscount: input.catalogDiscount,
     rollover,
     ...(input.promoCode

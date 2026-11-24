@@ -42,6 +42,8 @@ export async function adminBroadcastConversation(
     .text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
   let audience: BroadcastAudience;
+  let selectedGroupId: string | null = null;
+  let selectedGroupName: string | null;
   let recipientCount: number;
   let audienceLabel: string;
   let audienceError: string | undefined;
@@ -65,10 +67,58 @@ export async function adminBroadcastConversation(
     if (!audienceChoice) return;
 
     audience = audienceChoice.slice('broadcast:audience:'.length) as BroadcastAudience;
-    recipientCount = await conversation.external((outsideCtx) =>
-      outsideCtx.services!.broadcastService.countAudience(audience)
+    selectedGroupId = null;
+    selectedGroupName = null;
+
+    const groups = await conversation.external(
+      async (outsideCtx) => (await outsideCtx.services?.userGroupService?.listGroups?.()) ?? []
     );
-    audienceLabel = t(ctx, `admin_broadcast_audience_${audience}`);
+
+    if (groups.length > 0) {
+      const groupKb = new InlineKeyboard()
+        .text(t(ctx, 'admin_broadcast_group_all'), 'broadcast:group:all')
+        .row();
+      for (const [idx, group] of groups.entries()) {
+        const badge = group.badge ? `${group.badge} ` : '';
+        groupKb.text(`${badge}${group.name}`, `broadcast:group:${idx}`).row();
+      }
+      groupKb.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
+
+      await promptInConversation(
+        conversation,
+        ctx,
+        buildAdminPromptScreen({
+          emoji: '👥',
+          title: t(ctx, 'admin_broadcast_group_title'),
+          breadcrumb: buildBreadcrumb(
+            t(ctx, 'admin_nav_messaging'),
+            t(ctx, 'admin_broadcast_title')
+          ),
+          body: t(ctx, 'admin_broadcast_group_prompt'),
+        }),
+        { parse_mode: 'Markdown', reply_markup: groupKb }
+      );
+
+      const groupChoice = await waitForAdminCallbackInput(conversation, ['broadcast:group:']);
+      if (!groupChoice) return;
+      const rawSelection = groupChoice.slice('broadcast:group:'.length);
+      if (rawSelection !== 'all') {
+        const idx = Number(rawSelection);
+        const picked = Number.isSafeInteger(idx) ? groups[idx] : undefined;
+        if (picked) {
+          selectedGroupId = picked.id;
+          selectedGroupName = picked.name;
+        }
+      }
+    }
+
+    recipientCount = await conversation.external((outsideCtx) =>
+      outsideCtx.services!.broadcastService.countAudience(audience, selectedGroupId)
+    );
+    const baseAudienceLabel = t(ctx, `admin_broadcast_audience_${audience}`);
+    audienceLabel = selectedGroupName
+      ? `${baseAudienceLabel} (${escapeTelegramMarkdown(selectedGroupName)})`
+      : baseAudienceLabel;
 
     if (recipientCount === 0) {
       audienceError = t(ctx, 'admin_broadcast_empty_audience');
@@ -214,6 +264,7 @@ export async function adminBroadcastConversation(
     outsideCtx.services!.broadcastService.createJob({
       actorTelegramId: adminId,
       audience,
+      groupId: selectedGroupId,
       message: broadcastText,
     })
   );

@@ -152,6 +152,7 @@ export type TextCategory = {
 const ADMIN_USERS_RECEIPTS_PREFIXES = [
   'admin_user_',
   'admin_users_',
+  'admin_groups_',
   'admin_search_',
   'admin_username_',
   'admin_name_',
@@ -230,6 +231,7 @@ const ADMIN_SYSTEM_TEXTS_EXACT = new Set([
   'admin_bootstrap_env',
   'admin_access_denied',
   'admin_confirm_button',
+  'admin_unset_value',
 ]);
 
 const USER_HOME_NAV_PREFIXES = [
@@ -248,6 +250,7 @@ const USER_HOME_NAV_PREFIXES = [
   'photo_input_',
   'forced_join_',
   'registration_',
+  'user_group_',
 ] as const;
 
 const USER_HOME_NAV_EXACT = new Set([
