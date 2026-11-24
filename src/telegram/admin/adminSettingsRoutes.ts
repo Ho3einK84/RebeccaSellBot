@@ -24,7 +24,10 @@ import {
   renewalRolloverEnabled,
   uniqueTopupAmountEnabled,
 } from '../../domain/services/FeatureSettings.js';
-import { previewConfigName } from '../../domain/services/ConfigService.js';
+import {
+  previewConfigName,
+  previewCustomNamingTemplate,
+} from '../../domain/services/ConfigService.js';
 import {
   checkDomainDns,
   getServerPublicIp,
@@ -74,12 +77,26 @@ import {
   truncateButtonLabel,
 } from '../conversations/adminConversations/settings/presentation.js';
 import {
-  isValidNamingTemplate,
-  normalizeNamingTemplate,
+  MAX_NAMING_TEMPLATE_LENGTH,
   settingValidationMessage,
   validateAdminSetting,
+  validateNamingTemplateDetailed,
 } from '../conversations/adminConversations/settings/validation.js';
-import { NAMING_TEMPLATE_PRESETS } from '../conversations/adminConversations/settings/naming.js';
+import {
+  appendNamingToken,
+  buildAdvancedNamingTemplateKeyboard,
+  buildAdvancedNamingTemplateScreen,
+  buildNamingPresetsKeyboard,
+  buildNamingPresetsScreen,
+  createNamingTemplateDraft,
+  formatNamingTemplateValidationError,
+  NAMING_TEMPLATE_PRESETS,
+  nextNamingSeparator,
+  popLastNamingSegment,
+  readNamingTemplateDraft,
+  resolveBuilderToken,
+  type NamingTemplateDraft,
+} from '../conversations/adminConversations/settings/namingTemplateBuilder.js';
 import { formatCardNumberGrouped } from '../conversations/adminConversations/wallet.js';
 
 const CARDS_PAGE_SIZE = 6;
@@ -871,6 +888,89 @@ export async function renderBankCardDetailScreen(
 
 // ── 3. Naming & Service Rules (`adm:cfg:svc`) ────────────────────────────────
 
+const DEFAULT_CUSTOM_NAMING_TEMPLATE = '{prefix}_{telegram_id}_{counter}';
+
+function clearNamingTemplateDraft(ctx: MenuContext): void {
+  if (ctx.session?.adminDraft?.kind === 'naming_tmpl') {
+    delete ctx.session.adminDraft;
+  }
+}
+
+async function saveNamingTemplateChoice(
+  ctx: MenuContext,
+  normalizedTemplate: string
+): Promise<AdminScreenNotice> {
+  if (!ctx.services) {
+    return { tone: 'error', text: t(ctx, 'admin_setting_save_failed') };
+  }
+  const ts = ctx.services.translationService;
+  const prevTemplate = ts.getSetting('custom_naming_template', DEFAULT_CUSTOM_NAMING_TEMPLATE);
+  const prevMode = ts.getSetting('naming_mode', 'custom');
+  await ts.updateSetting('custom_naming_template', normalizedTemplate);
+  await ts.updateSetting('naming_mode', 'custom');
+  try {
+    await ctx.services.configService.syncCounters();
+  } catch {
+    await ts.updateSetting('custom_naming_template', prevTemplate).catch(() => undefined);
+    await ts.updateSetting('naming_mode', prevMode).catch(() => undefined);
+    return { tone: 'error', text: t(ctx, 'admin_setting_apply_failed') };
+  }
+  clearNamingTemplateDraft(ctx);
+  const prefix = ts.getSetting('naming_prefix', 'rebecca');
+  const sample = previewCustomNamingTemplate(normalizedTemplate, prefix).preview;
+  return {
+    tone: 'success',
+    text: tm(ctx, 'admin_naming_saved_notice', { username: sanitizeTelegramInlineCode(sample) }, [
+      'username',
+    ]),
+  };
+}
+
+async function openAdvancedNamingTemplateStudio(
+  ctx: MenuContext,
+  options?: {
+    draft?: NamingTemplateDraft;
+    notice?: AdminScreenNotice;
+    resetDraft?: boolean;
+  }
+): Promise<void> {
+  if (!ctx.services) return;
+  markAdminContext(ctx);
+  const ts = ctx.services.translationService;
+  const savedTemplate = ts.getSetting('custom_naming_template', DEFAULT_CUSTOM_NAMING_TEMPLATE);
+  const prefix = ts.getSetting('naming_prefix', 'rebecca');
+  const namingMode = ts.getSetting('naming_mode', 'custom');
+
+  const draft =
+    options?.draft ??
+    (options?.resetDraft
+      ? createNamingTemplateDraft(savedTemplate)
+      : readNamingTemplateDraft(ctx.session?.adminDraft, savedTemplate));
+
+  if (ctx.session) {
+    ctx.session.adminDraft = draft as unknown as Record<string, unknown>;
+  }
+
+  const promptText = buildAdvancedNamingTemplateScreen(ctx, {
+    savedTemplate,
+    draft,
+    prefix,
+    notice: options?.notice,
+  });
+  const keyboard = buildAdvancedNamingTemplateKeyboard(ctx, {
+    savedTemplate,
+    draft,
+    namingMode,
+  });
+
+  await startAdminInput(ctx, {
+    kind: 'cfg:naming_template',
+    returnRoute: 'adm:cfg:svc',
+    promptText,
+    keyboard,
+  });
+}
+
 export async function renderServiceRulesScreen(
   ctx: MenuContext,
   notice?: AdminScreenNotice,
@@ -878,10 +978,11 @@ export async function renderServiceRulesScreen(
 ): Promise<void> {
   if (!ctx.services) return;
   markAdminContext(ctx);
+  clearNamingTemplateDraft(ctx);
   const ts = ctx.services.translationService;
   const mode = ts.getSetting('naming_mode', 'custom');
   const prefix = ts.getSetting('naming_prefix', 'rebecca');
-  const template = ts.getSetting('custom_naming_template', '{prefix}_{telegram_id}_{counter}');
+  const template = ts.getSetting('custom_naming_template', DEFAULT_CUSTOM_NAMING_TEMPLATE);
   const formula = activeNamingFormula(mode, template);
   const preview = previewConfigName(ts, sampleOverride?.sampleId, sampleOverride?.sampleCounter);
   const customNameOn = customServiceNameEnabled(ts);
@@ -905,7 +1006,7 @@ export async function renderServiceRulesScreen(
       emoji: '✨',
       label: t(ctx, 'admin_naming_preview_label'),
       value: `\u200e\`${sanitizeTelegramInlineCode(preview)}\`\u200e`,
-      inline: true,
+      inline: false,
     },
     sections: [
       {
@@ -922,7 +1023,7 @@ export async function renderServiceRulesScreen(
           },
           {
             label: t(ctx, 'admin_naming_template_label'),
-            value: `\u200e\`${sanitizeTelegramInlineCode(formula)}\`\u200e`,
+            value: `\n\u200e\`${sanitizeTelegramInlineCode(formula)}\`\u200e`,
           },
           {
             label: t(ctx, 'admin_setting_custom_service_name_enabled'),
@@ -974,9 +1075,10 @@ export async function renderServiceRulesScreen(
     .text(t(ctx, 'admin_naming_btn_refresh_preview'), 'adm:cfg:svc:ref')
     .row()
     .text(
-      truncateButtonLabel(`${t(ctx, 'admin_naming_btn_edit_prefix')}: ${prefix}`, 30),
+      truncateButtonLabel(`${t(ctx, 'admin_naming_btn_edit_prefix')}: ${prefix}`, 48),
       'adm:cfg:ed:naming_prefix:svc'
     )
+    .row()
     .text(t(ctx, 'admin_naming_btn_edit_template'), 'adm:cfg:svc:tmpl')
     .row()
     .text(
@@ -1354,19 +1456,26 @@ export function registerAdminSettingsRoutes(): void {
         emoji: '✏️',
         title: t(ctx, def.labelKey),
         body:
-          key === 'payment_message_auto_delete_hours'
-            ? `${t(ctx, 'admin_setting_payment_message_auto_delete_prompt_hint')}\n\n${t(
+          key === 'naming_prefix'
+            ? tm(
                 ctx,
-                'admin_setting_value_prompt',
-                {
+                'admin_setting_naming_prefix_prompt',
+                { current: sanitizeTelegramInlineCode(current) },
+                ['current']
+              )
+            : key === 'payment_message_auto_delete_hours'
+              ? `${t(ctx, 'admin_setting_payment_message_auto_delete_prompt_hint')}\n\n${t(
+                  ctx,
+                  'admin_setting_value_prompt',
+                  {
+                    setting: t(ctx, def.labelKey),
+                    current_value: `\`${sanitizeTelegramInlineCode(current)}\``,
+                  }
+                )}`
+              : t(ctx, 'admin_setting_value_prompt', {
                   setting: t(ctx, def.labelKey),
                   current_value: `\`${sanitizeTelegramInlineCode(current)}\``,
-                }
-              )}`
-            : t(ctx, 'admin_setting_value_prompt', {
-                setting: t(ctx, def.labelKey),
-                current_value: `\`${sanitizeTelegramInlineCode(current)}\``,
-              }),
+                }),
       }),
       keyboard: kb,
     });
@@ -1403,15 +1512,24 @@ export function registerAdminSettingsRoutes(): void {
       graceDays !== undefined ? { graceDays } : undefined
     );
     if (validated === undefined) {
+      const current = ctx.services.translationService.getSetting(key, '—');
       return {
         status: 'retry',
         promptText: buildAdminPromptScreen({
           emoji: '✏️',
           title: t(ctx, def.labelKey),
-          body: t(ctx, 'admin_setting_value_prompt', {
-            setting: t(ctx, def.labelKey),
-            current_value: `\`${sanitizeTelegramInlineCode(ctx.services.translationService.getSetting(key, '—'))}\``,
-          }),
+          body:
+            key === 'naming_prefix'
+              ? tm(
+                  ctx,
+                  'admin_setting_naming_prefix_prompt',
+                  { current: sanitizeTelegramInlineCode(current) },
+                  ['current']
+                )
+              : t(ctx, 'admin_setting_value_prompt', {
+                  setting: t(ctx, def.labelKey),
+                  current_value: `\`${sanitizeTelegramInlineCode(current)}\``,
+                }),
           error: settingValidationMessage(ctx, key),
         }),
       };
@@ -1553,7 +1671,9 @@ export function registerAdminSettingsRoutes(): void {
 
   registerAdminRoute('adm:cfg:svc:mode', async (ctx) => {
     if (!ctx.services) return;
-    const current = ctx.services.translationService.getSetting('naming_mode', 'custom');
+    const ts = ctx.services.translationService;
+    const current = ts.getSetting('naming_mode', 'custom');
+    const preview = previewConfigName(ts);
     const modes = [
       'prefix_number',
       'telegramid_number',
@@ -1570,12 +1690,34 @@ export function registerAdminSettingsRoutes(): void {
         `adm:cfg:svc:setm:${m}`
       ).row();
     }
-    appendAdminFooterNav(kb, ctx, { backCallback: 'adm:cfg:svc' });
+    appendAdminFooterNav(kb, ctx, { backCallback: 'adm:cfg:svc', showHome: true });
     await renderScreen(
       ctx,
       buildAdminScreen({
         emoji: '🏷️',
         title: t(ctx, 'admin_setting_naming_mode'),
+        breadcrumb: buildBreadcrumb(
+          t(ctx, 'admin_menu_settings'),
+          t(ctx, 'admin_cfg_service_button'),
+          t(ctx, 'admin_setting_naming_mode')
+        ),
+        primary: {
+          emoji: '✨',
+          label: t(ctx, 'admin_naming_preview_label'),
+          value: `\u200e\`${sanitizeTelegramInlineCode(preview)}\`\u200e`,
+          inline: false,
+        },
+        sections: [
+          {
+            fields: [
+              {
+                label: t(ctx, 'admin_naming_active_mode'),
+                value: displayAdminSettingValue(ctx, 'naming_mode'),
+              },
+            ],
+          },
+        ],
+        footer: t(ctx, 'admin_naming_mode_custom_hint'),
       }),
       { parse_mode: 'Markdown', reply_markup: kb }
     );
@@ -1589,6 +1731,13 @@ export function registerAdminSettingsRoutes(): void {
       await ctx.services.configService.syncCounters().catch(() => {
         // best-effort sync
       });
+      if (mode === 'custom') {
+        await openAdvancedNamingTemplateStudio(ctx, {
+          resetDraft: true,
+          notice: { tone: 'success', text: t(ctx, 'admin_naming_custom_mode_activated') },
+        });
+        return;
+      }
     }
     await renderServiceRulesScreen(ctx, {
       tone: 'success',
@@ -1596,32 +1745,131 @@ export function registerAdminSettingsRoutes(): void {
     });
   });
 
+  // Advanced Custom Naming Template Studio (`adm:cfg:svc:tmpl`, `adm:cfg:svc:tb:*`, `adm:cfg:svc:tpls`)
   registerAdminRoute('adm:cfg:svc:tmpl', async (ctx) => {
+    await openAdvancedNamingTemplateStudio(ctx);
+  });
+
+  registerAdminRoute(/^adm:cfg:svc:tb:add:([a-z0-9_]+)$/u, async (ctx, match) => {
     if (!ctx.services) return;
-    const current = ctx.services.translationService.getSetting(
+    const token = resolveBuilderToken(match![1]!);
+    if (!token) return;
+    const saved = ctx.services.translationService.getSetting(
       'custom_naming_template',
-      '{prefix}_{telegram_id}_{counter}'
+      DEFAULT_CUSTOM_NAMING_TEMPLATE
     );
-    const kb = adminInputCancelKeyboard(ctx, (inner) => {
-      for (const p of NAMING_TEMPLATE_PRESETS) {
-        inner
-          .text(
-            `\u200e${current === p.template ? '✅ ' : '🧩 '}${p.template}\u200e`,
-            `adm:cfg:svc:tpl:${p.id}`
-          )
-          .row();
-      }
+    const draft = readNamingTemplateDraft(ctx.session?.adminDraft, saved);
+    const appended = appendNamingToken(draft.template, token.token, draft.separator);
+    await openAdvancedNamingTemplateStudio(ctx, {
+      draft: { ...draft, template: appended.template },
+      ...(appended.exceededMaxLength
+        ? {
+            notice: {
+              tone: 'warning' as const,
+              text: t(ctx, 'admin_naming_err_too_long', {
+                max: localizedNumber(MAX_NAMING_TEMPLATE_LENGTH, ctx),
+              }),
+            },
+          }
+        : {}),
     });
-    await startAdminInput(ctx, {
-      kind: 'cfg:naming_template',
-      returnRoute: 'adm:cfg:svc',
-      promptText: buildAdminPromptScreen({
-        emoji: '🎨',
-        title: t(ctx, 'admin_setting_custom_naming_template'),
-        body:
-          t(ctx, 'admin_naming_template_label') + `: \`${sanitizeTelegramInlineCode(current)}\``,
-      }),
-      keyboard: kb,
+  });
+
+  registerAdminRoute('adm:cfg:svc:tb:sep', async (ctx) => {
+    if (!ctx.services) return;
+    const saved = ctx.services.translationService.getSetting(
+      'custom_naming_template',
+      DEFAULT_CUSTOM_NAMING_TEMPLATE
+    );
+    const draft = readNamingTemplateDraft(ctx.session?.adminDraft, saved);
+    await openAdvancedNamingTemplateStudio(ctx, {
+      draft: { ...draft, separator: nextNamingSeparator(draft.separator) },
+    });
+  });
+
+  registerAdminRoute('adm:cfg:svc:tb:undo', async (ctx) => {
+    if (!ctx.services) return;
+    const saved = ctx.services.translationService.getSetting(
+      'custom_naming_template',
+      DEFAULT_CUSTOM_NAMING_TEMPLATE
+    );
+    const draft = readNamingTemplateDraft(ctx.session?.adminDraft, saved);
+    await openAdvancedNamingTemplateStudio(ctx, {
+      draft: { ...draft, template: popLastNamingSegment(draft.template) },
+    });
+  });
+
+  registerAdminRoute('adm:cfg:svc:tb:clear', async (ctx) => {
+    if (!ctx.services) return;
+    const saved = ctx.services.translationService.getSetting(
+      'custom_naming_template',
+      DEFAULT_CUSTOM_NAMING_TEMPLATE
+    );
+    const draft = readNamingTemplateDraft(ctx.session?.adminDraft, saved);
+    await openAdvancedNamingTemplateStudio(ctx, {
+      draft: { ...draft, template: '' },
+    });
+  });
+
+  registerAdminRoute('adm:cfg:svc:tb:reset', async (ctx) => {
+    if (!ctx.services) return;
+    const saved = ctx.services.translationService.getSetting(
+      'custom_naming_template',
+      DEFAULT_CUSTOM_NAMING_TEMPLATE
+    );
+    const draft = readNamingTemplateDraft(ctx.session?.adminDraft, saved);
+    await openAdvancedNamingTemplateStudio(ctx, {
+      draft: { ...draft, template: saved },
+    });
+  });
+
+  registerAdminRoute('adm:cfg:svc:tb:ref', async (ctx) => {
+    if (!ctx.services) return;
+    const saved = ctx.services.translationService.getSetting(
+      'custom_naming_template',
+      DEFAULT_CUSTOM_NAMING_TEMPLATE
+    );
+    const draft = readNamingTemplateDraft(ctx.session?.adminDraft, saved);
+    await openAdvancedNamingTemplateStudio(ctx, {
+      draft: {
+        ...draft,
+        sampleId: Math.floor(1_000_000_000 + Math.random() * 8_999_999_999),
+        sampleCounter: Math.floor(1 + Math.random() * 99),
+      },
+    });
+  });
+
+  registerAdminRoute('adm:cfg:svc:tb:save', async (ctx) => {
+    if (!ctx.services) return;
+    const saved = ctx.services.translationService.getSetting(
+      'custom_naming_template',
+      DEFAULT_CUSTOM_NAMING_TEMPLATE
+    );
+    const draft = readNamingTemplateDraft(ctx.session?.adminDraft, saved);
+    const validation = validateNamingTemplateDetailed(draft.template);
+    if (!validation.valid) {
+      await openAdvancedNamingTemplateStudio(ctx, {
+        draft,
+        notice: {
+          tone: 'error',
+          text: formatNamingTemplateValidationError(ctx, validation),
+        },
+      });
+      return;
+    }
+    const notice = await saveNamingTemplateChoice(ctx, validation.normalized);
+    await renderServiceRulesScreen(ctx, notice);
+  });
+
+  registerAdminRoute('adm:cfg:svc:tpls', async (ctx) => {
+    if (!ctx.services) return;
+    markAdminContext(ctx);
+    const ts = ctx.services.translationService;
+    const savedTemplate = ts.getSetting('custom_naming_template', DEFAULT_CUSTOM_NAMING_TEMPLATE);
+    const prefix = ts.getSetting('naming_prefix', 'rebecca');
+    await renderScreen(ctx, buildNamingPresetsScreen(ctx, { savedTemplate, prefix }), {
+      parse_mode: 'Markdown',
+      reply_markup: buildNamingPresetsKeyboard(ctx, savedTemplate),
     });
   });
 
@@ -1629,44 +1877,42 @@ export function registerAdminSettingsRoutes(): void {
     if (!ctx.services) return;
     const preset = NAMING_TEMPLATE_PRESETS.find((p) => p.id === match![1]);
     if (!preset) return;
-    await ctx.services.translationService.updateSetting('custom_naming_template', preset.template);
-    await ctx.services.translationService.updateSetting('naming_mode', 'custom');
-    await ctx.services.configService.syncCounters().catch(() => {
-      // best-effort sync
-    });
-    await renderServiceRulesScreen(ctx, {
-      tone: 'success',
-      text: t(ctx, 'admin_setting_saved_title'),
-    });
+    const notice = await saveNamingTemplateChoice(ctx, preset.template);
+    await renderServiceRulesScreen(ctx, notice);
   });
 
   registerAdminInputHandler('cfg:naming_template', async (ctx, rawText) => {
     if (!ctx.services) return { status: 'done' };
-    if (!isValidNamingTemplate(rawText)) {
-      const current = ctx.services.translationService.getSetting(
-        'custom_naming_template',
-        '{prefix}_{telegram_id}_{counter}'
-      );
+    const ts = ctx.services.translationService;
+    const validation = validateNamingTemplateDetailed(rawText);
+    if (!validation.valid) {
+      const savedTemplate = ts.getSetting('custom_naming_template', DEFAULT_CUSTOM_NAMING_TEMPLATE);
+      const prefix = ts.getSetting('naming_prefix', 'rebecca');
+      const namingMode = ts.getSetting('naming_mode', 'custom');
+      const draft = readNamingTemplateDraft(ctx.session?.adminDraft, savedTemplate);
       return {
         status: 'retry',
-        promptText: buildAdminPromptScreen({
-          emoji: '🎨',
-          title: t(ctx, 'admin_setting_custom_naming_template'),
-          body: `${t(ctx, 'admin_naming_template_label')}: \`${sanitizeTelegramInlineCode(current)}\``,
-          error: t(ctx, 'admin_setting_naming_template_invalid'),
+        promptText: buildAdvancedNamingTemplateScreen(ctx, {
+          savedTemplate,
+          draft,
+          prefix,
+          notice: {
+            tone: 'error',
+            text: formatNamingTemplateValidationError(ctx, validation),
+          },
+        }),
+        keyboard: buildAdvancedNamingTemplateKeyboard(ctx, {
+          savedTemplate,
+          draft,
+          namingMode,
         }),
       };
     }
-    const normalized = normalizeNamingTemplate(rawText);
-    await ctx.services.translationService.updateSetting('custom_naming_template', normalized);
-    await ctx.services.translationService.updateSetting('naming_mode', 'custom');
-    await ctx.services.configService.syncCounters().catch(() => {
-      // best-effort sync
-    });
+    const notice = await saveNamingTemplateChoice(ctx, validation.normalized);
     return {
       status: 'done',
       redirectRoute: 'adm:cfg:svc',
-      notice: { tone: 'success', text: t(ctx, 'admin_setting_saved_title') },
+      notice,
     };
   });
 

@@ -3,6 +3,7 @@ import {
   ConfigService,
   getDateTokens,
   previewConfigName,
+  previewCustomNamingTemplate,
 } from '../../src/domain/services/ConfigService.js';
 import { configLockKey, withConfigLock } from '../../src/domain/services/ConfigLock.js';
 import { ConfigTransferService } from '../../src/domain/services/ConfigTransferService.js';
@@ -483,6 +484,27 @@ describe('ConfigService, ConfigLock & ConfigTransferService', () => {
       expect(previewRefreshed).toMatch(/^h_2784218178_[a-f0-9]{4}$/u);
       expect(previewRefreshed).not.toBe('h_2784218178_8f2d');
       expect(previewRefreshed).not.toMatch(/_4$/u);
+
+      // previewCustomNamingTemplate reports autoCounterAppended & truncation accurately
+      const noCounterPreview = previewCustomNamingTemplate('{prefix}_{jyear}', 'sky', 12345, 7);
+      expect(noCounterPreview.preview).toBe(`sky_${dt.jyear}_7`);
+      expect(noCounterPreview.autoCounterAppended).toBe(true);
+      expect(noCounterPreview.truncated).toBe(false);
+
+      const randomPreview = previewCustomNamingTemplate('{prefix}-{random6}', 'sky');
+      expect(randomPreview.preview).toBe('sky-a7f9b2');
+      expect(randomPreview.autoCounterAppended).toBe(false);
+      expect(randomPreview.truncated).toBe(false);
+
+      const longPreview = previewCustomNamingTemplate(
+        '{prefix}_{telegram_id}_{year}_{month}_{day}_{counter}',
+        'very_long_brand_prefix',
+        6698253699,
+        12
+      );
+      expect(longPreview.preview.length).toBeLessThanOrEqual(32);
+      expect(longPreview.preview.endsWith('_12')).toBe(true);
+      expect(longPreview.truncated).toBe(true);
 
       const randCustomSvc = new ConfigService(
         rebeccaService as unknown as RebeccaService,

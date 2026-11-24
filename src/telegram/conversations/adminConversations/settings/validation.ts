@@ -13,7 +13,9 @@ const NAMING_MODES = new Set([
   'random_alphanumeric',
   'prefix_date_counter',
 ]);
-const NAMING_TOKENS = [
+export const MAX_NAMING_TEMPLATE_LENGTH = 80;
+
+export const NAMING_TOKENS = [
   '{prefix}',
   '{telegram_id}',
   '{counter}',
@@ -32,6 +34,19 @@ const NAMING_TOKENS = [
   '{random6}',
   '{random8}',
 ] as const;
+
+const NAMING_TOKEN_SET = new Set<string>(NAMING_TOKENS);
+
+export type NamingTemplateValidationFailureReason =
+  'empty' | 'too_long' | 'invalid_chars' | 'unknown_token' | 'unbalanced_braces' | 'no_content';
+
+export type NamingTemplateValidationResult =
+  | { valid: true; normalized: string }
+  | {
+      valid: false;
+      reason: NamingTemplateValidationFailureReason;
+      unknownToken?: string;
+    };
 
 /** Validate and canonicalize one persisted setting value. */
 export function validateAdminSetting(
@@ -243,13 +258,36 @@ export function normalizeNamingTemplate(rawValue: string): string {
   );
 }
 
-export function isValidNamingTemplate(rawValue: string): boolean {
+export function validateNamingTemplateDetailed(rawValue: string): NamingTemplateValidationResult {
   const value = normalizeNamingTemplate(rawValue);
-  if (value.length < 1 || value.length > 80 || !/^[a-z0-9_{}.-]+$/iu.test(value)) return false;
+  if (value.length < 1) {
+    return { valid: false, reason: 'empty' };
+  }
+  if (value.length > MAX_NAMING_TEMPLATE_LENGTH) {
+    return { valid: false, reason: 'too_long' };
+  }
+  if (!/^[a-z0-9_{}.-]+$/iu.test(value)) {
+    return { valid: false, reason: 'invalid_chars' };
+  }
+  for (const match of value.matchAll(/\{([a-z0-9_.-]+)\}/giu)) {
+    const token = match[0];
+    if (!NAMING_TOKEN_SET.has(token)) {
+      return { valid: false, reason: 'unknown_token', unknownToken: token };
+    }
+  }
   let literal = value;
   for (const token of NAMING_TOKENS) literal = literal.replaceAll(token, 'token');
-  if (/[{}]/u.test(literal)) return false;
-  return /[a-z0-9]/iu.test(literal);
+  if (/[{}]/u.test(literal)) {
+    return { valid: false, reason: 'unbalanced_braces' };
+  }
+  if (!/[a-z0-9]/iu.test(literal)) {
+    return { valid: false, reason: 'no_content' };
+  }
+  return { valid: true, normalized: value };
+}
+
+export function isValidNamingTemplate(rawValue: string): boolean {
+  return validateNamingTemplateDetailed(rawValue).valid;
 }
 
 function normalizeLocalizedDecimal(value: string): string {

@@ -1434,6 +1434,66 @@ function templateCounterPattern(template: string, prefix: string): RegExp {
   return new RegExp(`^${source}$`, 'i');
 }
 
+export interface CustomNamingTemplatePreview {
+  /** Final Rebecca-compliant username (3–32 chars, lowercase, sanitized). */
+  preview: string;
+  /** True when the template lacked `{counter}` and `{random*}`, so `_{counter}` was auto-appended. */
+  autoCounterAppended: boolean;
+  /** True when the rendered candidate exceeded Rebecca's 32-character limit and was trimmed. */
+  truncated: boolean;
+}
+
+export function previewCustomNamingTemplate(
+  template: string,
+  prefix: string,
+  sampleTelegramId = 6698253699,
+  sampleCounter = 1,
+  now = new Date()
+): CustomNamingTemplatePreview {
+  const isDefaultSeed = sampleTelegramId === 6698253699 && sampleCounter === 1;
+  const seedDigest = isDefaultSeed
+    ? ''
+    : crypto.createHash('sha256').update(`${sampleTelegramId}:${sampleCounter}`).digest('hex');
+  const random4 = isDefaultSeed ? '8f2d' : seedDigest.slice(0, 4);
+  const random6 = isDefaultSeed ? 'a7f9b2' : seedDigest.slice(4, 10);
+  const random8 = isDefaultSeed ? 'd3f1a24c' : seedDigest.slice(10, 18);
+
+  const dateTokens = getDateTokens(now);
+  const usesCounter = templateUsesCounter(template);
+  const autoCounterAppended = usesCounter && !template.includes('{counter}');
+  const rendered = renderNamingTemplate(template, {
+    prefix,
+    telegramId: sampleTelegramId,
+    counter: usesCounter ? sampleCounter : undefined,
+    random4,
+    random6,
+    random8,
+    dateTokens,
+  });
+
+  if (!usesCounter) {
+    const fallbackTail = template.includes('{random8}')
+      ? random8
+      : template.includes('{random6}')
+        ? random6
+        : random4;
+    const rawNormalized = sanitize(rendered);
+    return {
+      preview: toRebeccaRandomUsername(rendered, fallbackTail),
+      autoCounterAppended: false,
+      truncated: rawNormalized.length > MAX_REBECCA_USERNAME_LENGTH,
+    };
+  }
+
+  const name = template.includes('{counter}') ? rendered : `${rendered}_${sampleCounter}`;
+  const rawNormalized = sanitize(name);
+  return {
+    preview: toRebeccaUsername(name, sampleCounter),
+    autoCounterAppended,
+    truncated: rawNormalized.length > MAX_REBECCA_USERNAME_LENGTH,
+  };
+}
+
 export function previewConfigName(
   translationService: { getSetting: (key: string, fallback?: string) => string },
   sampleTelegramId = 6698253699,
@@ -1450,7 +1510,6 @@ export function previewConfigName(
   const seedDigest = isDefaultSeed
     ? ''
     : crypto.createHash('sha256').update(`${sampleTelegramId}:${sampleCounter}`).digest('hex');
-  const random4 = isDefaultSeed ? '8f2d' : seedDigest.slice(0, 4);
   const random6 = isDefaultSeed ? 'a7f9b2' : seedDigest.slice(4, 10);
   const random8 = isDefaultSeed ? 'd3f1a24c' : seedDigest.slice(10, 18);
 
@@ -1477,27 +1536,8 @@ export function previewConfigName(
     'custom_naming_template',
     '{prefix}_{telegram_id}_{counter}'
   );
-  const dateTokens = getDateTokens(now);
-  const usesCounter = templateUsesCounter(template);
-  const rendered = renderNamingTemplate(template, {
-    prefix,
-    telegramId: sampleTelegramId,
-    counter: usesCounter ? sampleCounter : undefined,
-    random4,
-    random6,
-    random8,
-    dateTokens,
-  });
-  if (!usesCounter) {
-    const fallbackTail = template.includes('{random8}')
-      ? random8
-      : template.includes('{random6}')
-        ? random6
-        : random4;
-    return toRebeccaRandomUsername(rendered, fallbackTail);
-  }
-  const name = template.includes('{counter}') ? rendered : `${rendered}_${sampleCounter}`;
-  return toRebeccaUsername(name, sampleCounter);
+  return previewCustomNamingTemplate(template, prefix, sampleTelegramId, sampleCounter, now)
+    .preview;
 }
 
 function prefixCounterPattern(prefix: string): RegExp {

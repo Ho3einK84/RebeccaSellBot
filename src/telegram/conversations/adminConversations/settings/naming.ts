@@ -17,21 +17,14 @@ import { logger } from '../../../../infra/logger.js';
 import { SETTING_LABELS, getSettingDefinition } from './catalog.js';
 import { applyAdminSettingUpdate, saveSetting } from './conversation.js';
 import {
-  isValidNamingTemplate,
-  normalizeNamingTemplate,
-  validateAdminSetting,
-} from './validation.js';
+  formatNamingTemplateValidationError,
+  NAMING_TEMPLATE_PRESETS,
+} from './namingTemplateBuilder.js';
+import { validateAdminSetting, validateNamingTemplateDetailed } from './validation.js';
 
 type FlowOutcome = 'continue' | 'back' | 'cancel';
 
-export const NAMING_TEMPLATE_PRESETS: ReadonlyArray<{ id: string; template: string }> = [
-  { id: 'prefix_tid_rand4', template: '{prefix}_{telegram_id}_{random4}' },
-  { id: 'prefix_tid_counter', template: '{prefix}_{telegram_id}_{counter}' },
-  { id: 'prefix_rand6', template: '{prefix}_{random6}' },
-  { id: 'prefix_jalali_counter', template: '{prefix}_{jyear}{jmonth}_{counter}' },
-  { id: 'prefix_date_counter', template: '{prefix}_{date}_{counter}' },
-  { id: 'prefix_counter_rand4', template: '{prefix}_{counter}_{random4}' },
-];
+export { NAMING_TEMPLATE_PRESETS };
 
 export async function manageNamingSettings(
   conversation: MyConversation,
@@ -284,7 +277,7 @@ async function editNamingTemplate(
   const keyboard = new InlineKeyboard();
   for (const preset of NAMING_TEMPLATE_PRESETS) {
     const isCurrent = currentTemplate === preset.template;
-    const label = `\u200e${isCurrent ? '✅ ' : '🧩 '}${preset.template}\u200e`;
+    const label = `${isCurrent ? '✅ ' : '🧩 '}${t(ctx, preset.labelKey)}`;
     keyboard.text(label, `tmpl:preset:${preset.id}`).row();
   }
   keyboard.text(t(ctx, 'admin_naming_back_to_naming'), 'tmpl:back');
@@ -310,12 +303,18 @@ async function editNamingTemplate(
     if (input.type === 'back') return 'back';
 
     let selectedTemplate: string | undefined;
+    let errorMessage = t(ctx, 'admin_setting_naming_template_invalid');
     if (input.type === 'callback' && input.data.startsWith('tmpl:preset:')) {
       const presetId = input.data.slice('tmpl:preset:'.length);
       const matched = NAMING_TEMPLATE_PRESETS.find((item) => item.id === presetId);
       if (matched) selectedTemplate = matched.template;
-    } else if (input.type === 'text' && isValidNamingTemplate(input.value)) {
-      selectedTemplate = normalizeNamingTemplate(input.value);
+    } else if (input.type === 'text') {
+      const validation = validateNamingTemplateDetailed(input.value);
+      if (validation.valid) {
+        selectedTemplate = validation.normalized;
+      } else {
+        errorMessage = formatNamingTemplateValidationError(ctx, validation);
+      }
     }
 
     if (selectedTemplate) {
@@ -325,11 +324,7 @@ async function editNamingTemplate(
     await promptInConversation(
       conversation,
       ctx,
-      buildEmptyState(
-        '⚠️',
-        t(ctx, 'admin_setting_custom_naming_template'),
-        t(ctx, 'admin_setting_naming_template_invalid')
-      ),
+      buildEmptyState('⚠️', t(ctx, 'admin_setting_custom_naming_template'), errorMessage),
       { parse_mode: 'Markdown', reply_markup: keyboard }
     );
   }

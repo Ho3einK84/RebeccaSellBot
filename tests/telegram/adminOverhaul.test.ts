@@ -730,6 +730,132 @@ describe('Admin Telegram UI/UX Overhaul (adm:* routes, non-blocking input, P0 fi
     const homeText = String(harness.callsFor('sendMessage').at(-1)?.payload.text ?? '');
     expect(homeText).toContain('admin_home_title');
   });
+
+  it('provides an advanced custom naming template studio supporting interactive builder, direct typing, presets, and rollback', async () => {
+    const settingsStore = new Map<string, string>([
+      ['naming_mode', 'prefix_number'],
+      ['naming_prefix', 'skylink'],
+      ['custom_naming_template', '{prefix}_{telegram_id}_{random4}'],
+    ]);
+    const realTs = new TranslationService();
+    const syncCounters = vi.fn().mockResolvedValue(undefined);
+    const services = createMockServices({
+      adminIds: [1],
+      isAdmin: vi.fn((id) => id === 1),
+      translationService: {
+        resolveLocale: vi.fn(() => 'fa'),
+        get: vi.fn((key: string, locale?: string, vars?: Record<string, string | number>) =>
+          realTs.get(key, (locale as 'fa' | 'en') ?? 'fa', vars)
+        ),
+        getSetting: vi.fn((key: string, fallback = '') => settingsStore.get(key) ?? fallback),
+        getSettingBool: vi.fn((_key: string, fallback = false) => fallback),
+        getSettingNum: vi.fn((_key: string, fallback = 0) => fallback),
+        updateSetting: vi.fn(async (key: string, value: string) => {
+          settingsStore.set(key, value);
+        }),
+      },
+      configService: {
+        syncCounters,
+      },
+    });
+
+    const harness = createBotHarness({ services, defaultLocale: 'fa' });
+    registerAdminInputMiddleware(harness.bot, dispatchAdminRoute);
+    registerCoreRoutes(harness.bot, services);
+    registerAdminSettingsRoutes();
+
+    const lastRendered = () =>
+      [...harness.apiCalls]
+        .reverse()
+        .find((c) => c.method === 'editMessageText' || c.method === 'sendMessage')?.payload;
+
+    // 1. Service Rules screen isolates formula on its own LTR line & offers Advanced button
+    await harness.sendCallback('adm:cfg:svc', { userId: 1 });
+    const svcPayload = lastRendered();
+    const svcText = String(svcPayload?.text ?? '');
+    expect(validateTelegramMarkdown(svcText).valid).toBe(true);
+    expect(svcText).toContain('\n\u200e`{prefix}_{counter}`\u200e');
+    expect(extractCallbackDataList(svcPayload?.reply_markup)).toContain('adm:cfg:svc:tmpl');
+
+    // 2. Selecting "custom" mode opens the Advanced Custom Template Studio directly
+    await harness.sendCallback('adm:cfg:svc:setm:custom', { userId: 1 });
+    const studioPayload = lastRendered();
+    const studioText = String(studioPayload?.text ?? '');
+    const studioCbs = extractCallbackDataList(studioPayload?.reply_markup);
+    expect(validateTelegramMarkdown(studioText).valid).toBe(true);
+    expect(studioText).toContain('\u200e`{prefix}_{telegram_id}_{random4}`\u200e');
+    expect(studioText).toContain('skylink_6698253699_8f2d');
+    expect(studioText).toContain('{jyear}');
+    expect(studioText).toContain('{random8}');
+    expect(studioCbs).toContain('adm:cfg:svc:tb:add:prefix');
+    expect(studioCbs).toContain('adm:cfg:svc:tb:clear');
+    expect(studioCbs).toContain('adm:cfg:svc:tpls');
+    expect(studioCbs.every((cb) => Buffer.byteLength(cb, 'utf8') <= 64)).toBe(true);
+
+    // 3. Interactive builder flow: Clear -> +prefix -> sep(-) -> +jyear -> sep(.) -> sep(none) -> +jmonth -> sep(_) -> +random4 -> undo -> +random6 -> Save
+    await harness.sendCallback('adm:cfg:svc:tb:clear', { userId: 1 });
+    expect(String(lastRendered()?.text ?? '')).toContain('خالی');
+    await harness.sendCallback('adm:cfg:svc:tb:add:prefix', { userId: 1 });
+    // Single {prefix} shows auto-counter hint
+    expect(String(lastRendered()?.text ?? '')).toContain('شمارنده خودکار');
+    await harness.sendCallback('adm:cfg:svc:tb:sep', { userId: 1 }); // '-'
+    await harness.sendCallback('adm:cfg:svc:tb:add:jyear', { userId: 1 });
+    await harness.sendCallback('adm:cfg:svc:tb:sep', { userId: 1 }); // '.'
+    await harness.sendCallback('adm:cfg:svc:tb:sep', { userId: 1 }); // '' (none)
+    await harness.sendCallback('adm:cfg:svc:tb:add:jmonth', { userId: 1 });
+    await harness.sendCallback('adm:cfg:svc:tb:sep', { userId: 1 }); // '_'
+    await harness.sendCallback('adm:cfg:svc:tb:add:random4', { userId: 1 });
+    await harness.sendCallback('adm:cfg:svc:tb:undo', { userId: 1 });
+    await harness.sendCallback('adm:cfg:svc:tb:add:random6', { userId: 1 });
+
+    const builtPayload = lastRendered();
+    const builtText = String(builtPayload?.text ?? '');
+    expect(validateTelegramMarkdown(builtText).valid).toBe(true);
+    expect(builtText).toContain('\u200e`{prefix}-{jyear}{jmonth}_{random6}`\u200e');
+    expect(extractCallbackDataList(builtPayload?.reply_markup)).toContain('adm:cfg:svc:tb:save');
+
+    await harness.sendCallback('adm:cfg:svc:tb:save', { userId: 1 });
+    expect(settingsStore.get('custom_naming_template')).toBe('{prefix}-{jyear}{jmonth}_{random6}');
+    expect(settingsStore.get('naming_mode')).toBe('custom');
+
+    // 4. Direct text input: invalid unknown variable retries WITH exact error & keeps builder keyboard!
+    await harness.sendCallback('adm:cfg:svc:tmpl', { userId: 1 });
+    await harness.sendText('{prefix}_{badvar}_{counter}', { userId: 1 });
+    const retryPayload = lastRendered();
+    const retryText = String(retryPayload?.text ?? '');
+    expect(validateTelegramMarkdown(retryText).valid).toBe(true);
+    expect(retryText).toContain('{badvar}');
+    expect(extractCallbackDataList(retryPayload?.reply_markup)).toContain(
+      'adm:cfg:svc:tb:add:prefix'
+    );
+
+    // 5. Direct valid custom text input saves immediately & shows sample preview notice
+    await harness.sendText('vip-{jyear}-{random4}', { userId: 1 });
+    expect(settingsStore.get('custom_naming_template')).toBe('vip-{jyear}-{random4}');
+    expect(settingsStore.get('naming_mode')).toBe('custom');
+    const savedNoticeText = String(lastRendered()?.text ?? '');
+    expect(savedNoticeText).toContain('vip-');
+
+    // 6. Curated Presets Gallery uses clean human-readable buttons & applies preset cleanly
+    await harness.sendCallback('adm:cfg:svc:tmpl', { userId: 1 });
+    await harness.sendCallback('adm:cfg:svc:tpls', { userId: 1 });
+    const presetsPayload = lastRendered();
+    const presetsText = String(presetsPayload?.text ?? '');
+    expect(validateTelegramMarkdown(presetsText).valid).toBe(true);
+    const presetButtons = (
+      (presetsPayload?.reply_markup as { inline_keyboard?: Array<Array<{ text: string }>> })
+        ?.inline_keyboard ?? []
+    ).flat();
+    expect(presetButtons.some((b) => b.text.includes('{prefix}'))).toBe(false);
+    await harness.sendCallback('adm:cfg:svc:tpl:prefix_jalali_counter', { userId: 1 });
+    expect(settingsStore.get('custom_naming_template')).toBe('{prefix}_{jyear}{jmonth}_{counter}');
+
+    // 7. Rollback restores previous template if counter sync fails
+    syncCounters.mockRejectedValueOnce(new Error('panel unreachable'));
+    await harness.sendCallback('adm:cfg:svc:tmpl', { userId: 1 });
+    await harness.sendText('broken_sync_{random4}', { userId: 1 });
+    expect(settingsStore.get('custom_naming_template')).toBe('{prefix}_{jyear}{jmonth}_{counter}');
+  });
 });
 
 // Keep reference used in type validation

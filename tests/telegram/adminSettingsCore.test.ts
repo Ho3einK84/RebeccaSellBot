@@ -40,7 +40,15 @@ import {
   buildPackageManagerScreen,
   buildSettingsOverviewScreen,
 } from '../../src/telegram/conversations/adminConversations/settings/presentation.js';
-import { normalizeBackupTarget } from '../../src/telegram/conversations/adminConversations/settings/validation.js';
+import {
+  normalizeBackupTarget,
+  validateNamingTemplateDetailed,
+} from '../../src/telegram/conversations/adminConversations/settings/validation.js';
+import {
+  appendNamingToken,
+  nextNamingSeparator,
+  popLastNamingSegment,
+} from '../../src/telegram/conversations/adminConversations/settings/namingTemplateBuilder.js';
 import {
   renderAdminSalesMenuScreen,
   salesMenuKeyboard,
@@ -411,6 +419,62 @@ describe('Admin settings validation, backup catalog & sales navigation', () => {
     expect(isValidNamingTemplate('{unknown}_{counter}')).toBe(false);
     expect(isValidNamingTemplate('{prefix}_{counter}!')).toBe(false);
     expect(isValidNamingTemplate('{}')).toBe(false);
+
+    expect(validateNamingTemplateDetailed('')).toEqual({ valid: false, reason: 'empty' });
+    expect(validateNamingTemplateDetailed('a'.repeat(81))).toEqual({
+      valid: false,
+      reason: 'too_long',
+    });
+    expect(validateNamingTemplateDetailed('سرویس_{counter}')).toEqual({
+      valid: false,
+      reason: 'invalid_chars',
+    });
+    expect(validateNamingTemplateDetailed('{prefix}_{userid}_{counter}')).toEqual({
+      valid: false,
+      reason: 'unknown_token',
+      unknownToken: '{userid}',
+    });
+    expect(validateNamingTemplateDetailed('{prefix}_{counter')).toEqual({
+      valid: false,
+      reason: 'unbalanced_braces',
+    });
+    expect(validateNamingTemplateDetailed('___')).toEqual({
+      valid: false,
+      reason: 'no_content',
+    });
+    expect(validateNamingTemplateDetailed('VIP-{JYEAR}-{Random۴}')).toEqual({
+      valid: true,
+      normalized: 'VIP-{jyear}-{random4}',
+    });
+
+    // Interactive template builder pure operations
+    expect(nextNamingSeparator('_')).toBe('-');
+    expect(nextNamingSeparator('-')).toBe('.');
+    expect(nextNamingSeparator('.')).toBe('');
+    expect(nextNamingSeparator('')).toBe('_');
+
+    expect(appendNamingToken('', '{prefix}', '_')).toEqual({
+      template: '{prefix}',
+      exceededMaxLength: false,
+    });
+    expect(appendNamingToken('{prefix}', '{jyear}', '-')).toEqual({
+      template: '{prefix}-{jyear}',
+      exceededMaxLength: false,
+    });
+    expect(appendNamingToken('{prefix}-{jyear}', '{jmonth}', '')).toEqual({
+      template: '{prefix}-{jyear}{jmonth}',
+      exceededMaxLength: false,
+    });
+    expect(appendNamingToken('a'.repeat(76), '{prefix}', '_')).toEqual({
+      template: 'a'.repeat(76),
+      exceededMaxLength: true,
+    });
+
+    expect(popLastNamingSegment('{prefix}_{telegram_id}_{random4}')).toBe('{prefix}_{telegram_id}');
+    expect(popLastNamingSegment('{prefix}_{jyear}{jmonth}')).toBe('{prefix}_{jyear}');
+    expect(popLastNamingSegment('vip-{jyear}-pro')).toBe('vip-{jyear}');
+    expect(popLastNamingSegment('vip')).toBe('');
+    expect(popLastNamingSegment('')).toBe('');
 
     expect(validateAdminSetting('packages_json', '[]')).toBeUndefined();
     expect(validateAdminSetting('packages_json', '{not json}')).toBeUndefined();
