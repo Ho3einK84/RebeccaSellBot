@@ -682,15 +682,25 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
     }
     presetKeyboard.text(t(ctx, 'menu_cancel'), 'conversation:cancel');
 
+    const buildStepOneAmountPrompt = (footerText: string): string =>
+      forappAutoEnabled
+        ? buildUserScreen({
+            emoji: '⚡',
+            title: t(ctx, 'payment_method_forapp_auto'),
+            subtitle: t(ctx, 'topup_subtitle'),
+            footer: footerText,
+          })
+        : buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
+            bankName,
+            footer: footerText,
+          });
+
     await promptInConversation(
       conversation,
       ctx,
-      buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
-        bankName,
-        footer: forappAutoEnabled
-          ? t(ctx, 'forapp_choose_amount_hint')
-          : t(ctx, 'topup_choose_amount_hint'),
-      }),
+      buildStepOneAmountPrompt(
+        forappAutoEnabled ? t(ctx, 'forapp_choose_amount_hint') : t(ctx, 'topup_choose_amount_hint')
+      ),
       { parse_mode: 'Markdown', reply_markup: presetKeyboard }
     );
 
@@ -769,15 +779,10 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
               createdForApp.code === 'ALL_CARDS_CAP_REACHED'
                 ? t(ctx, 'topup_amount_exceeds_card_cap')
                 : t(ctx, 'auto_pay_order_create_failed');
-            await promptInConversation(
-              conversation,
-              ctx,
-              buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
-                bankName,
-                footer: retryFooter,
-              }),
-              { parse_mode: 'Markdown', reply_markup: presetKeyboard }
-            );
+            await promptInConversation(conversation, ctx, buildStepOneAmountPrompt(retryFooter), {
+              parse_mode: 'Markdown',
+              reply_markup: presetKeyboard,
+            });
             continue;
           }
 
@@ -900,13 +905,12 @@ export async function topupConversation(conversation: MyConversation, ctx: Conve
       await promptInConversation(
         conversation,
         ctx,
-        buildPaymentInfoCard(ctx, cardNumber, cardHolder, undefined, {
-          bankName,
-          footer: `⚠️ ${t(ctx, 'topup_amount_invalid_range', {
+        buildStepOneAmountPrompt(
+          `⚠️ ${t(ctx, 'topup_amount_invalid_range', {
             min: localizedNumber(minimum, ctx),
             max: localizedNumber(maximum, ctx),
-          })}`,
-        }),
+          })}`
+        ),
         { parse_mode: 'Markdown', reply_markup: presetKeyboard }
       );
     }

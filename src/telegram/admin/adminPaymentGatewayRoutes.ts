@@ -290,7 +290,7 @@ export async function renderForAppDepositDetailScreen(
   const rialUnit = t(ctx, 'currency_rial');
   const fields: Array<{ label: string; value: string }> = [
     {
-      label: t(ctx, 'auto_pay_order_id_label'),
+      label: t(ctx, 'admin_forapp_deposit_id_label'),
       value: `\`#${formatPaymentOrderShortId(dep.id)}\``,
     },
     {

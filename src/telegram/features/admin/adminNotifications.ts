@@ -693,6 +693,8 @@ export async function sendAdminForAppUnmatchedDepositAlert(
     bank?: string | null;
     sender?: string | null;
     note?: string | null;
+    relatedOrderId?: string | null;
+    relatedTelegramId?: number | null;
   }
 ): Promise<void> {
   const ts = services.translationService;
@@ -712,10 +714,22 @@ export async function sendAdminForAppUnmatchedDepositAlert(
 
       const fields: Array<{ label: string; value: string }> = [
         {
-          label: tForLocale(ts, adminLocale, 'auto_pay_order_id_label'),
+          label: tForLocale(ts, adminLocale, 'admin_forapp_deposit_id_label'),
           value: `\`#${shortId}\``,
         },
       ];
+      if (params.relatedOrderId) {
+        fields.push({
+          label: tForLocale(ts, adminLocale, 'auto_pay_order_id_label'),
+          value: `\`#${defaultShortId(params.relatedOrderId)}\``,
+        });
+      }
+      if (params.relatedTelegramId) {
+        fields.push({
+          label: tForLocale(ts, adminLocale, 'admin_forapp_candidate_user_label'),
+          value: `\`${params.relatedTelegramId}\``,
+        });
+      }
       if (params.bank) {
         fields.push({
           label: tForLocale(ts, adminLocale, 'topup_card_bank_label'),

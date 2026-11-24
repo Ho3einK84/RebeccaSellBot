@@ -631,6 +631,22 @@ describe('Multi-Card Rotation & Unique Payable Amount (PaymentService)', () => {
 
     expect(() => computeUniquePayableAmount(0, [])).toThrow('INVALID_TOPUP_AMOUNT');
     expect(() => computeUniquePayableAmount(-5000, [])).toThrow('INVALID_TOPUP_AMOUNT');
+
+    // avoidRoundMultiplesOf skips round multiples (e.g. 49,500 + 500 = 50,000) for ForApp invoices
+    const nonRound = computeUniquePayableAmount(49_500, [], {
+      minOffset: 500,
+      maxOffset: 502,
+      step: 1,
+      mode: 'add',
+      avoidRoundMultiplesOf: 100,
+      random: () => 0,
+    });
+    expect(nonRound).toEqual({
+      requestedAmount: 49_500,
+      payableAmount: 50_001,
+      offset: 501,
+      isUnique: true,
+    });
   });
 });
 

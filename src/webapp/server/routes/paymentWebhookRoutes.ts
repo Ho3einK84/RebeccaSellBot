@@ -89,6 +89,8 @@ export function registerPaymentWebhookRoutes(
             bank: result.deposit.bank,
             sender: result.deposit.sender,
             note: result.deposit.note,
+            relatedOrderId: result.relatedOrder?.id ?? null,
+            relatedTelegramId: result.relatedOrder?.telegramId ?? null,
           });
         }
       }

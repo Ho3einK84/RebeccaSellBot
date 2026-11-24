@@ -271,6 +271,30 @@ describe('WebApp Automated Payment Webhooks, User & Admin Routes', () => {
     expect(mockBotApi.deleteMessage).toHaveBeenCalledWith(55555, 4101);
     expect(mockBotApi.deleteMessage).toHaveBeenCalledWith(55555, 4105);
     expect(mockBotApi.sendMessage).toHaveBeenCalled();
+
+    // Ignored personal round deposit (e.g. 2,000,000 Toman) -> 200 OK, zero Telegram notifications
+    mockBotApi.sendMessage.mockClear();
+    mockAutomatedPaymentService.processForAppWebhook!.mockResolvedValueOnce({
+      statusCode: 200,
+      outcome: 'ignored',
+      deposit: {
+        id: 'fad_round_2m',
+        amountRial: 20_000_000,
+        amountToman: 2_000_000,
+        bank: 'بلوبانک',
+        note: 'round_amount',
+      },
+    });
+    const ignoredRound = await app.inject({
+      method: 'POST',
+      url: '/api/webhooks/forapp',
+      headers: { 'x-api-key': 'valid', 'idempotency-key': 'idem-round-1' },
+      payload: { id: 'idem-round-1', amount: 20_000_000, unit: 'rial', is_deposit: true },
+    });
+    expect(ignoredRound.statusCode).toBe(200);
+    expect(ignoredRound.json()).toMatchObject({ ok: true, outcome: 'ignored' });
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(mockBotApi.sendMessage).not.toHaveBeenCalled();
   });
 
   it('handles POST /api/webhooks/nowpayments for invalid sig, completed, and partially_paid', async () => {

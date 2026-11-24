@@ -1974,6 +1974,8 @@ export const FA_TEXTS: Record<string, string> = {
   admin_forapp_unmatched_title: 'واریزی‌های تطبیق‌نخورده',
   admin_forapp_unmatched_empty: 'هیچ واریزی تطبیق‌نخورده‌ای در صف وجود ندارد.',
   admin_forapp_deposit_detail_title: 'جزئیات واریزی ForApp',
+  admin_forapp_deposit_id_label: 'شناسهٔ واریزی',
+  admin_forapp_candidate_user_label: 'کاربر مرتبط احتمالی',
   admin_forapp_deposit_sms_label: 'متن پیامک',
   admin_forapp_deposit_match_button: '✅ تطبیق دستی و شارژ کاربر',
   admin_forapp_deposit_dismiss_button: '🗑 نادیده‌گرفتن واریزی',

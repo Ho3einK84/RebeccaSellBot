@@ -175,12 +175,15 @@ describe('AutomatedPaymentService', () => {
     const insertedOrder = mock.state.insertCalls[0]?.values as Record<string, unknown>;
     expect(Number(insertedOrder.payableAmount)).toBeGreaterThan(100_000);
     expect(Number(insertedOrder.payableAmount)).toBeLessThanOrEqual(100_999);
+    expect(Number(insertedOrder.payableAmount) % 100).not.toBe(0);
+    expect(Number(insertedOrder.payableAmount) % 1_000).not.toBe(0);
     expect(insertedOrder.payableAmountRial).toBe(Number(insertedOrder.payableAmount) * 10);
   });
 
-  it('handles ForApp webhook auth, test ping, duplicate idempotency, non-deposit, and non-multiple-of-10 Rial', async () => {
+  it('handles ForApp webhook auth, test ping, duplicate idempotency, non-deposit, and odd-Rial deposits', async () => {
     const { apiKey } = await service.rotateForAppApiKey();
     settings.forapp_enabled = 'true';
+    const now = new Date('2026-11-24T07:06:00Z');
 
     // 1. Invalid X-API-Key -> 401
     const unauth = await service.processForAppWebhook({
@@ -232,8 +235,41 @@ describe('AutomatedPaymentService', () => {
     });
     expect(ignRes).toMatchObject({ statusCode: 200, outcome: 'ignored' });
 
-    // 5. Rial not multiple of 10 -> 200 unmatched (no rounding error credit)
+    // 5a. Odd Rial with NO recent ForApp order (e.g. bank interest 184,637 Rial) -> 200 ignored
+    const unrelatedOddRialMock = createMockDb({
+      selectResults: [[]],
+      returningResults: [
+        [{ id: 'fad_2a', status: 'unmatched', amountRial: 184_637, amountToman: null }],
+        [{ id: 'fad_2a', status: 'ignored', note: 'unrelated_odd_rial' }],
+      ],
+    });
+    getDbMock.mockReturnValue(unrelatedOddRialMock.db as never);
+    const unrelatedOddRes = await service.processForAppWebhook({
+      apiKeyHeader: apiKey,
+      idempotencyKeyHeader: 'msg-odd-interest',
+      body: { id: 'msg-odd-interest', amount: 184_637, unit: 'rial', is_deposit: true },
+      now,
+    });
+    expect(unrelatedOddRes).toMatchObject({ statusCode: 200, outcome: 'ignored' });
+    expect(unrelatedOddRes.deposit?.note).toBe('unrelated_odd_rial');
+
+    // 5b. Odd Rial near an active ForApp order -> 200 unmatched (rial_not_multiple_of_10)
     const oddRialMock = createMockDb({
+      selectResults: [
+        [
+          {
+            id: 'po_active_1',
+            telegramId: 55555,
+            provider: 'forapp_card',
+            status: 'pending',
+            requestedAmount: 100_000,
+            payableAmount: 100_012,
+            payableAmountRial: 1_000_120,
+            createdAt: new Date('2026-11-24T07:00:00Z'),
+            expiresAt: new Date('2026-11-24T07:20:00Z'),
+          },
+        ],
+      ],
       returningResults: [
         [{ id: 'fad_2', status: 'unmatched', amountRial: 1_000_123, amountToman: null }],
         [{ id: 'fad_2', status: 'unmatched', note: 'rial_not_multiple_of_10' }],
@@ -244,6 +280,7 @@ describe('AutomatedPaymentService', () => {
       apiKeyHeader: apiKey,
       idempotencyKeyHeader: 'msg-odd-1',
       body: { id: 'msg-odd-1', amount: 1_000_123, unit: 'rial', is_deposit: true },
+      now,
     });
     expect(oddRes).toMatchObject({ statusCode: 200, outcome: 'unmatched' });
     expect(oddRes.deposit?.note).toBe('rial_not_multiple_of_10');
@@ -303,16 +340,110 @@ describe('AutomatedPaymentService', () => {
     expect(walletService.invalidateUserCache).toHaveBeenCalledWith(55555);
   });
 
-  it('stores unmatched ForApp deposit when no unexpired order matches and supports admin manual match', async () => {
+  it('ignores round & unrelated personal deposits while flagging expired/near ForApp orders as unmatched', async () => {
     const { apiKey } = await service.rotateForAppApiKey();
     settings.forapp_enabled = 'true';
+    const now = new Date('2026-11-24T07:06:13Z');
 
-    // No pending order -> unmatched
-    const unmatchedMock = createMockDb({
+    // 1. Personal round 2,000,000 Toman (20,000,000 Rial) BluBank deposit -> ignored (no alert!)
+    const roundMock = createMockDb({
       selectResults: [[]],
       returningResults: [
-        [{ id: 'fad_u1', amountRial: 500_000, amountToman: 50_000, status: 'unmatched' }],
-        [{ id: 'fad_u1', status: 'unmatched', note: 'no_matching_pending_order' }],
+        [
+          {
+            id: 'fad_f7006155',
+            amountRial: 20_000_000,
+            amountToman: 2_000_000,
+            status: 'unmatched',
+          },
+        ],
+        [
+          {
+            id: 'fad_f7006155',
+            amountRial: 20_000_000,
+            amountToman: 2_000_000,
+            status: 'ignored',
+            note: 'round_amount',
+          },
+        ],
+      ],
+    });
+    getDbMock.mockReturnValue(roundMock.db as never);
+
+    const roundRes = await service.processForAppWebhook({
+      apiKeyHeader: apiKey,
+      idempotencyKeyHeader: 'sms-round-blu-2m',
+      body: {
+        id: 'sms-round-blu-2m',
+        amount: 20_000_000,
+        unit: 'rial',
+        is_deposit: true,
+        bank: 'بلوبانک',
+        sender: '+989999987641',
+      },
+      now,
+    });
+    expect(roundRes.outcome).toBe('ignored');
+    expect(roundRes.deposit?.note).toBe('round_amount');
+
+    // 2. Unrelated non-round deposit (850,450 Toman refund) with no correlated ForApp order -> ignored
+    const unrelatedMock = createMockDb({
+      selectResults: [
+        [], // no active pending match
+        [], // no recent uncompleted ForApp orders
+      ],
+      returningResults: [
+        [{ id: 'fad_unrel', amountRial: 8_504_500, amountToman: 850_450, status: 'unmatched' }],
+        [
+          {
+            id: 'fad_unrel',
+            amountRial: 8_504_500,
+            amountToman: 850_450,
+            status: 'ignored',
+            note: 'unrelated_deposit',
+          },
+        ],
+      ],
+    });
+    getDbMock.mockReturnValue(unrelatedMock.db as never);
+
+    const unrelatedRes = await service.processForAppWebhook({
+      apiKeyHeader: apiKey,
+      idempotencyKeyHeader: 'sms-unrelated-refund',
+      body: { id: 'sms-unrelated-refund', amount: 8_504_500, unit: 'rial', is_deposit: true },
+      now,
+    });
+    expect(unrelatedRes.outcome).toBe('ignored');
+    expect(unrelatedRes.deposit?.note).toBe('unrelated_deposit');
+
+    // 3. Late payment matching a recently expired ForApp order (50,532 Toman) -> unmatched + relatedOrder!
+    const expiredOrder = {
+      id: 'po_exp_50532',
+      telegramId: 77777,
+      provider: 'forapp_card',
+      status: 'expired',
+      requestedAmount: 50_000,
+      payableAmount: 50_532,
+      payableAmountRial: 505_320,
+      createdAt: new Date('2026-11-24T06:20:00Z'),
+      expiresAt: new Date('2026-11-24T06:40:00Z'),
+    };
+    const unmatchedMock = createMockDb({
+      selectResults: [
+        [], // no unexpired pending order
+        [expiredOrder], // recent uncompleted ForApp orders
+      ],
+      returningResults: [
+        [{ id: 'fad_u1', amountRial: 505_320, amountToman: 50_532, status: 'unmatched' }],
+        [
+          {
+            id: 'fad_u1',
+            amountRial: 505_320,
+            amountToman: 50_532,
+            status: 'unmatched',
+            note: 'late_or_cancelled_order:po_exp_50532',
+          },
+        ],
       ],
     });
     getDbMock.mockReturnValue(unmatchedMock.db as never);
@@ -320,27 +451,30 @@ describe('AutomatedPaymentService', () => {
     const unmatchedRes = await service.processForAppWebhook({
       apiKeyHeader: apiKey,
       idempotencyKeyHeader: 'sms-expired-order',
-      body: { id: 'sms-expired-order', amount: 500_000, unit: 'rial', is_deposit: true },
+      body: { id: 'sms-expired-order', amount: 505_320, unit: 'rial', is_deposit: true },
+      now,
     });
     expect(unmatchedRes.outcome).toBe('unmatched');
+    expect(unmatchedRes.relatedOrder?.id).toBe('po_exp_50532');
+    expect(unmatchedRes.relatedOrder?.telegramId).toBe(77777);
 
-    // Admin manually matches the unmatched deposit
+    // 4. Admin manually matches the unmatched deposit
     const manualMock = createMockDb({
       selectResults: [
         [
           {
             id: 'fad_u1',
-            amountRial: 500_000,
-            amountToman: 50_000,
+            amountRial: 505_320,
+            amountToman: 50_532,
             status: 'unmatched',
-            note: null,
+            note: 'late_or_cancelled_order:po_exp_50532',
           },
         ],
         [{ telegramId: 77777, balance: 10_000 }], // user FOR UPDATE
         [], // no prior wallet tx
       ],
       returningResults: [
-        [{ balance: 60_000 }],
+        [{ balance: 60_532 }],
         [{ id: 'fad_u1', status: 'manual_matched', matchedTelegramId: 77777 }],
       ],
     });
@@ -351,8 +485,8 @@ describe('AutomatedPaymentService', () => {
       targetTelegramId: 77777,
       adminId: 12345,
     });
-    expect(matched.creditedAmount).toBe(50_000);
-    expect(matched.balanceAfter).toBe(60_000);
+    expect(matched.creditedAmount).toBe(50_532);
+    expect(matched.balanceAfter).toBe(60_532);
     expect(walletService.invalidateUserCache).toHaveBeenCalledWith(77777);
   });
 

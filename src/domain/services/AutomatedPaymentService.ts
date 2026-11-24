@@ -13,7 +13,7 @@
  *    and `forapp_deposits.idempotency_key` unique constraints guarantee strict idempotency.
  */
 import crypto from 'node:crypto';
-import { and, asc, count, desc, eq, gt, inArray, lt, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, inArray, lt, or } from 'drizzle-orm';
 import { getDb } from '../../infra/db.js';
 import {
   auditLogs,
@@ -189,8 +189,95 @@ export interface ForAppWebhookProcessResult {
   idempotencyKey?: string;
   deposit?: ForAppDepositRow;
   order?: PaymentOrderRow;
+  relatedOrder?: PaymentOrderRow;
   creditedAmount?: number;
   balanceAfter?: number;
+}
+
+/** Lookback window for matching late/cancelled exact ForApp order amounts (48 hours). */
+const FORAPP_EXACT_LATE_ORDER_LOOKBACK_MS = 48 * 60 * 60 * 1000;
+/** Lookback window for 10x Rial/Toman unit-confusion correlation against ForApp orders (6 hours). */
+const FORAPP_UNIT_MISTAKE_LOOKBACK_MS = 6 * 60 * 60 * 1000;
+/** Lookback window for digit-typo proximity correlation against recent ForApp orders (2 hours). */
+const FORAPP_NEAR_AMOUNT_LOOKBACK_MS = 2 * 60 * 60 * 1000;
+/** Maximum Toman proximity band to treat a non-round deposit as a typo on a recent ForApp order. */
+const FORAPP_NEAR_AMOUNT_TOLERANCE_TOMAN = 2_000;
+
+/**
+ * Returns true when `amountToman` is a round thousand-Toman transfer (`% 1000 === 0`, e.g. 2,000,000 Toman).
+ * Every automated ForApp order allocates a non-round unique offset (`payableAmount % 100 !== 0`),
+ * so round deposits on the cardholder's personal SIM are unrelated non-bot transfers.
+ */
+export function isRoundForAppDepositToman(amountToman: number): boolean {
+  return Number.isSafeInteger(amountToman) && amountToman > 0 && amountToman % 1_000 === 0;
+}
+
+export type ForAppUnmatchedCorrelationReason =
+  | 'late_or_cancelled_order'
+  | 'rial_instead_of_toman'
+  | 'extra_zero_rial'
+  | 'near_forapp_order'
+  | 'rial_not_multiple_of_10';
+
+export function correlateUnmatchedForAppDeposit(params: {
+  amountRial: number;
+  amountToman: number | null;
+  now: Date;
+  recentOrders: readonly PaymentOrderRow[];
+}): { reason: ForAppUnmatchedCorrelationReason; order: PaymentOrderRow } | null {
+  const { amountRial, amountToman, now, recentOrders } = params;
+  const nowMs = now.getTime();
+
+  // 1. Exact payableAmount match on a recently expired/cancelled ForApp order (up to 48h).
+  if (amountToman !== null && amountToman > 0) {
+    for (const order of recentOrders) {
+      const createdMs = new Date(order.createdAt).getTime();
+      if (
+        nowMs - createdMs <= FORAPP_EXACT_LATE_ORDER_LOOKBACK_MS &&
+        order.payableAmount === amountToman
+      ) {
+        return { reason: 'late_or_cancelled_order', order };
+      }
+    }
+  }
+
+  // 2. Classic 10x unit mistake: customer typed invoice Toman figure into Rial field (or added extra 0).
+  for (const order of recentOrders) {
+    const createdMs = new Date(order.createdAt).getTime();
+    if (nowMs - createdMs > FORAPP_UNIT_MISTAKE_LOOKBACK_MS) continue;
+    if (order.payableAmount === amountRial) {
+      return { reason: 'rial_instead_of_toman', order };
+    }
+    if (amountToman !== null && order.payableAmount * 10 === amountToman) {
+      return { reason: 'extra_zero_rial', order };
+    }
+  }
+
+  // 3. Digit typo near an active or recently-active ForApp order (within 2h & ±2,000 Toman).
+  const approxToman = amountToman ?? Math.floor(amountRial / 10);
+  if (approxToman > 0) {
+    for (const order of recentOrders) {
+      const createdMs = new Date(order.createdAt).getTime();
+      const expiresMs = new Date(order.expiresAt).getTime();
+      const isRecent =
+        nowMs - createdMs <= FORAPP_NEAR_AMOUNT_LOOKBACK_MS ||
+        nowMs - expiresMs <= FORAPP_NEAR_AMOUNT_LOOKBACK_MS;
+      if (!isRecent) continue;
+
+      const nearPayable =
+        Math.abs(approxToman - order.payableAmount) <= FORAPP_NEAR_AMOUNT_TOLERANCE_TOMAN;
+      const nearRequested =
+        Math.abs(approxToman - order.requestedAmount) <= FORAPP_NEAR_AMOUNT_TOLERANCE_TOMAN;
+      if (nearPayable || nearRequested) {
+        return {
+          reason: amountToman === null ? 'rial_not_multiple_of_10' : 'near_forapp_order',
+          order,
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 export interface NowPaymentsIpnProcessResult {
@@ -680,6 +767,7 @@ export class AutomatedPaymentService {
       mode: 'add',
       minOffset: 1,
       maxOffset: 999,
+      avoidRoundMultiplesOf: 100,
     });
 
     if (!allocation.isUnique || allocation.payableAmount <= 0) {
@@ -862,13 +950,100 @@ export class AutomatedPaymentService {
         };
       }
 
-      if (unit !== 'rial' || amountToman === null || amountToman <= 0) {
+      if (unit !== 'rial' || amountRial <= 0) {
+        const note = unit !== 'rial' ? `unsupported_unit:${unit}` : 'non_positive_amount';
+        const [ignoredDeposit] = await tx
+          .update(forappDeposits)
+          .set({ status: 'ignored', note, updatedAt: now })
+          .where(eq(forappDeposits.id, insertedDeposit.id))
+          .returning();
+        return {
+          statusCode: 200,
+          outcome: 'ignored',
+          idempotencyKey,
+          deposit: ignoredDeposit ?? { ...insertedDeposit, status: 'ignored', note },
+        };
+      }
+
+      // 1. Atomic row lock on oldest unexpired pending ForApp order with exact Toman amount.
+      const [matchedOrder] =
+        amountToman !== null && amountToman > 0
+          ? await tx
+              .select()
+              .from(paymentOrders)
+              .where(
+                and(
+                  eq(paymentOrders.provider, 'forapp_card'),
+                  eq(paymentOrders.status, 'pending'),
+                  eq(paymentOrders.payableAmount, amountToman),
+                  gt(paymentOrders.expiresAt, now)
+                )
+              )
+              .orderBy(asc(paymentOrders.createdAt))
+              .limit(1)
+              .for('update')
+          : [undefined];
+
+      if (!matchedOrder || amountToman === null) {
+        // 2. Round Toman transfers (multiples of 1,000 Toman, e.g. 2,000,000 Toman) are personal
+        //    non-bot deposits — ForApp invoices always carry a non-round unique offset.
+        if (amountToman !== null && isRoundForAppDepositToman(amountToman)) {
+          const note = 'round_amount';
+          const [ignoredDeposit] = await tx
+            .update(forappDeposits)
+            .set({ status: 'ignored', note, updatedAt: now })
+            .where(eq(forappDeposits.id, insertedDeposit.id))
+            .returning();
+          return {
+            statusCode: 200,
+            outcome: 'ignored',
+            idempotencyKey,
+            deposit: ignoredDeposit ?? { ...insertedDeposit, status: 'ignored', note },
+          };
+        }
+
+        // 3. Check whether this non-round / odd-Rial deposit correlates with any recent uncompleted
+        //    ForApp order (late SMS after expiry, cancelled order, 10x Rial/Toman mistake, or digit typo).
+        const lookbackCutoff = new Date(now.getTime() - FORAPP_EXACT_LATE_ORDER_LOOKBACK_MS);
+        const recentOrders = await tx
+          .select()
+          .from(paymentOrders)
+          .where(
+            and(
+              eq(paymentOrders.provider, 'forapp_card'),
+              inArray(paymentOrders.status, ['pending', 'expired', 'cancelled']),
+              gte(paymentOrders.createdAt, lookbackCutoff)
+            )
+          )
+          .orderBy(desc(paymentOrders.createdAt))
+          .limit(50);
+
+        const correlation = correlateUnmatchedForAppDeposit({
+          amountRial,
+          amountToman,
+          now,
+          recentOrders,
+        });
+
+        if (!correlation) {
+          const note = amountToman === null ? 'unrelated_odd_rial' : 'unrelated_deposit';
+          const [ignoredDeposit] = await tx
+            .update(forappDeposits)
+            .set({ status: 'ignored', note, updatedAt: now })
+            .where(eq(forappDeposits.id, insertedDeposit.id))
+            .returning();
+          return {
+            statusCode: 200,
+            outcome: 'ignored',
+            idempotencyKey,
+            deposit: ignoredDeposit ?? { ...insertedDeposit, status: 'ignored', note },
+          };
+        }
+
         const note =
-          unit !== 'rial'
-            ? `unsupported_unit:${unit}`
-            : amountRial <= 0
-              ? 'non_positive_amount'
-              : 'rial_not_multiple_of_10';
+          correlation.reason === 'rial_not_multiple_of_10'
+            ? 'rial_not_multiple_of_10'
+            : `${correlation.reason}:${correlation.order.id}`;
         const [unmatchedDeposit] = await tx
           .update(forappDeposits)
           .set({ status: 'unmatched', note, updatedAt: now })
@@ -878,40 +1053,11 @@ export class AutomatedPaymentService {
           statusCode: 200,
           outcome: 'unmatched',
           idempotencyKey,
-          deposit: unmatchedDeposit ?? { ...insertedDeposit, status: 'unmatched', note },
-        };
-      }
-
-      // Atomic row lock on oldest unexpired pending ForApp order with exact Toman amount.
-      const [matchedOrder] = await tx
-        .select()
-        .from(paymentOrders)
-        .where(
-          and(
-            eq(paymentOrders.provider, 'forapp_card'),
-            eq(paymentOrders.status, 'pending'),
-            eq(paymentOrders.payableAmount, amountToman),
-            gt(paymentOrders.expiresAt, now)
-          )
-        )
-        .orderBy(asc(paymentOrders.createdAt))
-        .limit(1)
-        .for('update');
-
-      if (!matchedOrder) {
-        const [unmatchedDeposit] = await tx
-          .update(forappDeposits)
-          .set({ status: 'unmatched', note: 'no_matching_pending_order', updatedAt: now })
-          .where(eq(forappDeposits.id, insertedDeposit.id))
-          .returning();
-        return {
-          statusCode: 200,
-          outcome: 'unmatched',
-          idempotencyKey,
+          relatedOrder: correlation.order,
           deposit: unmatchedDeposit ?? {
             ...insertedDeposit,
             status: 'unmatched',
-            note: 'no_matching_pending_order',
+            note,
           },
         };
       }
@@ -1073,7 +1219,7 @@ export class AutomatedPaymentService {
       if (!deposit) {
         throw new AutomatedPaymentError('DEPOSIT_NOT_FOUND');
       }
-      if (deposit.status !== 'unmatched') {
+      if (deposit.status !== 'unmatched' && deposit.status !== 'ignored') {
         throw new AutomatedPaymentError('DEPOSIT_NOT_UNMATCHED');
       }
 
@@ -1118,7 +1264,12 @@ export class AutomatedPaymentService {
           note: params.note?.trim() || deposit.note,
           updatedAt: now,
         })
-        .where(and(eq(forappDeposits.id, deposit.id), eq(forappDeposits.status, 'unmatched')))
+        .where(
+          and(
+            eq(forappDeposits.id, deposit.id),
+            inArray(forappDeposits.status, ['unmatched', 'ignored'])
+          )
+        )
         .returning();
 
       return {

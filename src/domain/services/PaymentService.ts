@@ -61,6 +61,11 @@ export interface UniquePayableAmountOptions {
   random?: () => number;
   /** Skip DB lookup when existingPendingAmounts is omitted. */
   skipDbLookup?: boolean;
+  /**
+   * Optional positive integer (>= 2): disallow candidate payable amounts divisible by this
+   * multiple (e.g. `100` ensures automated ForApp invoices never land on round `...00` or `...000` Toman).
+   */
+  avoidRoundMultiplesOf?: number;
 }
 
 export interface UniquePayableAmountAllocation {
@@ -371,6 +376,14 @@ export function computeUniquePayableAmount(
     options.step !== undefined && Number.isSafeInteger(options.step) && options.step >= 1
       ? options.step
       : DEFAULT_UNIQUE_STEP;
+  const avoidMultiple =
+    options.avoidRoundMultiplesOf !== undefined &&
+    Number.isSafeInteger(options.avoidRoundMultiplesOf) &&
+    options.avoidRoundMultiplesOf >= 2
+      ? options.avoidRoundMultiplesOf
+      : null;
+  const isDisallowedRound = (value: number): boolean =>
+    avoidMultiple !== null && value % avoidMultiple === 0;
 
   const preferredMode = options.mode ?? 'add';
   const effectiveMode: 'deduct' | 'add' =
@@ -390,7 +403,12 @@ export function computeUniquePayableAmount(
   for (let offset = minOffset; offset <= effectiveMaxOffset; offset += step) {
     const candidate =
       effectiveMode === 'deduct' ? requestedAmount - offset : requestedAmount + offset;
-    if (candidate > 0 && Number.isSafeInteger(candidate) && !pendingSet.has(candidate)) {
+    if (
+      candidate > 0 &&
+      Number.isSafeInteger(candidate) &&
+      !pendingSet.has(candidate) &&
+      !isDisallowedRound(candidate)
+    ) {
       availableCandidates.push({
         payableAmount: candidate,
         offset: effectiveMode === 'deduct' ? -offset : offset,
@@ -420,7 +438,11 @@ export function computeUniquePayableAmount(
   for (let extra = 1; extra <= 2_000; extra += 1) {
     const offset = maxOffset + extra * step;
     const candidate = requestedAmount + offset;
-    if (Number.isSafeInteger(candidate) && !pendingSet.has(candidate)) {
+    if (
+      Number.isSafeInteger(candidate) &&
+      !pendingSet.has(candidate) &&
+      !isDisallowedRound(candidate)
+    ) {
       return {
         requestedAmount,
         payableAmount: candidate,
@@ -434,7 +456,7 @@ export function computeUniquePayableAmount(
     requestedAmount,
     payableAmount: requestedAmount,
     offset: 0,
-    isUnique: !pendingSet.has(requestedAmount),
+    isUnique: !pendingSet.has(requestedAmount) && !isDisallowedRound(requestedAmount),
   };
 }
 

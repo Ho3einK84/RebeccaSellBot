@@ -84,32 +84,56 @@ describeIntegration('AutomatedPaymentService PostgreSQL Integration', () => {
     const [userRow] = await getDb().select().from(users).where(eq(users.telegramId, 50001));
     expect(userRow?.balance).toBe(10_000 + order.payableAmount);
 
-    // Unmatched deposit -> admin manually matches to user 50002
+    // Personal round deposit (2,000,000 Toman = 20,000,000 Rial) -> ignored without unmatched queue noise
+    const roundPersonal = await svc.processForAppWebhook({
+      apiKeyHeader: apiKey,
+      idempotencyKeyHeader: 'forapp-round-personal-int',
+      body: {
+        id: 'forapp-round-personal-int',
+        amount: 20_000_000,
+        unit: 'rial',
+        is_deposit: true,
+        bank: 'بلوبانک',
+      },
+    });
+    expect(roundPersonal.outcome).toBe('ignored');
+    expect(roundPersonal.deposit?.note).toBe('round_amount');
+    expect(await svc.getForAppUnmatchedCount()).toBe(0);
+
+    // Late deposit for a cancelled/expired ForApp order -> unmatched -> admin manually matches to user 50002
+    const order2 = await svc.createForAppOrder({
+      telegramId: 50002,
+      requestedAmount: 25_000,
+      locale: 'fa',
+    });
+    await svc.cancelOrderForUser(order2.id, 50002);
+
     const unmatched = await svc.processForAppWebhook({
       apiKeyHeader: apiKey,
       idempotencyKeyHeader: 'forapp-unmatched-int-2',
       body: {
         id: 'forapp-unmatched-int-2',
-        amount: 250_000,
+        amount: order2.payableAmountRial,
         unit: 'rial',
         is_deposit: true,
         bank: 'ملت',
       },
     });
     expect(unmatched.outcome).toBe('unmatched');
+    expect(unmatched.relatedOrder?.id).toBe(order2.id);
 
     const manual = await svc.manualMatchForAppDeposit({
       depositId: unmatched.deposit!.id,
       targetTelegramId: 50002,
       adminId: 99999,
     });
-    expect(manual.creditedAmount).toBe(25_000);
+    expect(manual.creditedAmount).toBe(order2.payableAmount);
 
     const [user2] = await getDb().select().from(users).where(eq(users.telegramId, 50002));
-    expect(user2?.balance).toBe(25_000);
+    expect(user2?.balance).toBe(order2.payableAmount);
 
     const allDeposits = await getDb().select().from(forappDeposits);
-    expect(allDeposits).toHaveLength(2);
+    expect(allDeposits).toHaveLength(3);
   });
 
   it('settles NOWPayments finished IPN atomically with cashback and ignores replays against real Postgres', async () => {

@@ -1988,6 +1988,8 @@ export const EN_TEXTS: Record<string, string> = {
   admin_forapp_unmatched_title: 'Unmatched ForApp Deposits',
   admin_forapp_unmatched_empty: 'No unmatched deposits in queue.',
   admin_forapp_deposit_detail_title: 'ForApp Deposit Details',
+  admin_forapp_deposit_id_label: 'Deposit ID',
+  admin_forapp_candidate_user_label: 'Likely user',
   admin_forapp_deposit_sms_label: 'SMS body',
   admin_forapp_deposit_match_button: '✅ Match & Credit User',
   admin_forapp_deposit_dismiss_button: '🗑 Dismiss Deposit',
