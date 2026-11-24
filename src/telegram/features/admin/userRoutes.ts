@@ -79,6 +79,7 @@ const USER_FILTERS: readonly { id: AdminUserListFilter; short: string; labelKey:
   { id: 'all', short: 'a', labelKey: 'admin_user_filter_all' },
   { id: 'active_subs', short: 's', labelKey: 'admin_user_filter_active' },
   { id: 'has_balance', short: 'w', labelKey: 'admin_user_filter_balance' },
+  { id: 'negative_balance', short: 'n', labelKey: 'admin_user_filter_negative_balance' },
   { id: 'banned', short: 'b', labelKey: 'admin_user_filter_banned' },
 ];
 
@@ -90,6 +91,9 @@ function decodeUserFilter(code?: string): AdminUserListFilter {
     case 'w':
     case 'has_balance':
       return 'has_balance';
+    case 'n':
+    case 'negative_balance':
+      return 'negative_balance';
     case 'b':
     case 'banned':
       return 'banned';
@@ -122,10 +126,11 @@ export async function renderUserListPage(
   const breadcrumb = buildBreadcrumb(t(ctx, 'admin_home_title'), t(ctx, 'admin_users_list_title'));
 
   const filterRowKb = (kb: InlineKeyboard) => {
-    for (const item of USER_FILTERS) {
+    for (const [idx, item] of USER_FILTERS.entries()) {
       const active = item.id === filter;
       const label = active ? `• ${t(ctx, item.labelKey)}` : t(ctx, item.labelKey);
       kb.text(label, `adm:usr:p:1:${item.short}`);
+      if (idx === 2) kb.row();
     }
     kb.row();
   };
@@ -572,7 +577,7 @@ export function registerAdminUserRoutes(bot: Bot<MenuContext>): void {
   registerUserInputHandlers();
 
   // Unified `adm:usr:*` routes
-  registerAdminRoute(/^adm:usr:p:(\d+)(?::([aswb]))?$/u, async (ctx, match, notice) => {
+  registerAdminRoute(/^adm:usr:p:(\d+)(?::([aswnb]))?$/u, async (ctx, match, notice) => {
     const page = Number(match?.[1]) || 1;
     const filter = match?.[2] ? decodeUserFilter(match[2]) : undefined;
     await renderUserListPage(ctx, page, filter, notice);

@@ -135,7 +135,7 @@ export interface UserTransactionItem {
   createdAt: string;
 }
 
-export type UserFilterType = 'all' | 'active_subs' | 'has_balance' | 'banned';
+export type UserFilterType = 'all' | 'active_subs' | 'has_balance' | 'negative_balance' | 'banned';
 export type UserSortType = 'newest' | 'balance_desc' | 'subs_desc' | 'spend_desc';
 
 export interface UserReportSummary {

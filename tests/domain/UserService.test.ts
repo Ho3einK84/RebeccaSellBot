@@ -254,4 +254,22 @@ describe('UserService', () => {
       totalPages: 1,
     });
   });
+
+  it('supports negative_balance filter in listUsers alongside has_balance and banned', async () => {
+    const indebtedUser = makeUser(777, { balance: -45_000 });
+    const mock = createMockDb({
+      selectResults: [[{ count: 1 }], [indebtedUser]],
+    });
+    getDbMock.mockReturnValue(mock.db as never);
+
+    const res = await new UserService().listUsers(1, 12, { filter: 'negative_balance' });
+    expect(res.total).toBe(1);
+    expect(res.users).toHaveLength(1);
+    expect(res.users[0]?.telegramId).toBe(777);
+    expect(res.users[0]?.balance).toBe(-45_000);
+    // Both count and items queries received the WHERE clause
+    expect(mock.state.selectCalls).toHaveLength(2);
+    expect(mock.state.selectCalls[0]?.where).toBeDefined();
+    expect(mock.state.selectCalls[1]?.where).toBeDefined();
+  });
 });

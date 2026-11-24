@@ -155,9 +155,11 @@ export async function renderAdminGroupDetail(
     .text(t(ctx, 'admin_groups_edit_discount_btn'), 'adm:grp:e:disc')
     .text(t(ctx, 'admin_groups_edit_credit_btn'), 'adm:grp:e:cred')
     .row()
-    .text(t(ctx, 'admin_groups_edit_gb_btn'), 'adm:grp:e:gb')
-    .text(t(ctx, 'admin_groups_edit_day_btn'), 'adm:grp:e:day')
-    .row()
+    .text(t(ctx, 'admin_groups_edit_gb_btn'), 'adm:grp:e:gb');
+  if (group.customPricePerDay !== null) {
+    kb.text(t(ctx, 'admin_groups_edit_day_btn'), 'adm:grp:e:day');
+  }
+  kb.row()
     .text(toggleBtn(group.allowCatalogDiscounts, 'admin_groups_flag_catalog'), 'adm:grp:t:cat')
     .text(toggleBtn(group.allowPromoCodes, 'admin_groups_flag_promo'), 'adm:grp:t:prm')
     .row()
@@ -220,13 +222,14 @@ export async function renderAdminGroupDetail(
                 ? `${localizedNumber(group.customPricePerGb, ctx)} ${currency}`
                 : t(ctx, 'admin_groups_inherit_default'),
           },
-          {
-            label: t(ctx, 'admin_groups_custom_day_label'),
-            value:
-              group.customPricePerDay !== null
-                ? `${localizedNumber(group.customPricePerDay, ctx)} ${currency}`
-                : t(ctx, 'admin_groups_inherit_default'),
-          },
+          ...(group.customPricePerDay !== null
+            ? [
+                {
+                  label: t(ctx, 'admin_groups_custom_day_label'),
+                  value: `${localizedNumber(group.customPricePerDay, ctx)} ${currency}`,
+                },
+              ]
+            : []),
           {
             label: t(ctx, 'admin_groups_credit_limit_label'),
             value: `${localizedNumber(group.creditLimit, ctx)} ${currency}`,

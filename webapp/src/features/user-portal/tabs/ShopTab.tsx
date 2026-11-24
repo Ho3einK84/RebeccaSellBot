@@ -170,7 +170,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
     group &&
     (group.discountPercent > 0 ||
       group.customPricePerGb !== null ||
-      group.customPricePerDay !== null)
+      (group.customPricePerDay !== null && group.customPricePerDay > 0))
   );
 
   useEffect(() => {
@@ -342,7 +342,8 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                 )}
               </Badge>
             )}
-            {(group.customPricePerGb !== null || group.customPricePerDay !== null) && (
+            {(group.customPricePerGb !== null ||
+              (group.customPricePerDay !== null && group.customPricePerDay > 0)) && (
               <Badge variant="success" size="xs">
                 {t('user.shop.groupCustomRateBadge')}
               </Badge>

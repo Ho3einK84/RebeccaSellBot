@@ -1821,6 +1821,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_user_filter_all: 'All',
   admin_user_filter_active: 'Active',
   admin_user_filter_balance: 'Balance',
+  admin_user_filter_negative_balance: 'Negative',
   admin_user_filter_banned: 'Banned',
   admin_user_balance_projected_label: 'Projected balance',
   admin_user_balance_preset_hint: 'Type a custom amount or pick a quick preset below:',
@@ -2276,7 +2277,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_groups_custom_gb_prompt:
     'Enter the custom price per GB in Toman (or send `-` to inherit the base rate):',
   admin_groups_custom_day_prompt:
-    'Enter the custom price per day in Toman (or send `-` to inherit the base rate):',
+    'Enter the custom price per day in Toman (applies only on fixed default duration), or send `-` to clear and inherit the base rate:',
   admin_groups_invalid_name: 'Invalid group name (must be 1–80 characters).',
   admin_groups_invalid_badge: 'Badge is too long (maximum 40 characters).',
   admin_groups_invalid_discount: 'Discount percent must be an integer between 0 and 90.',

@@ -38,7 +38,8 @@ import type { UserGroupService } from '../domain/services/UserGroupService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
-export type AdminUserListFilter = 'all' | 'active_subs' | 'has_balance' | 'banned';
+export type AdminUserListFilter =
+  'all' | 'active_subs' | 'has_balance' | 'negative_balance' | 'banned';
 export type AdminPromoListFilter = 'all' | 'active' | 'inactive' | 'expired';
 
 export interface AdminInputState {

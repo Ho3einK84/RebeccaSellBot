@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   Check,
   X,
+  ChevronDown,
+  Info,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
@@ -94,6 +96,7 @@ export const UserGroupsModal: React.FC<UserGroupsModalProps> = ({ isOpen, onClos
   const [editing, setEditing] = useState<AdminUserGroupDto | 'new' | null>(null);
   const [form, setForm] = useState<GroupFormState>(DEFAULT_FORM_STATE);
   const [formError, setFormError] = useState<string | null>(null);
+  const [showAdvancedPricing, setShowAdvancedPricing] = useState(false);
 
   const [deletingGroup, setDeletingGroup] = useState<AdminUserGroupDto | null>(null);
   const [transferTargetId, setTransferTargetId] = useState<string>('__none__');
@@ -182,6 +185,7 @@ export const UserGroupsModal: React.FC<UserGroupsModalProps> = ({ isOpen, onClos
     setFormError(null);
     setDeletingGroup(null);
     setForm(DEFAULT_FORM_STATE);
+    setShowAdvancedPricing(false);
     setEditing('new');
   };
 
@@ -204,6 +208,7 @@ export const UserGroupsModal: React.FC<UserGroupsModalProps> = ({ isOpen, onClos
       allowLuckyWheel: Boolean(group.allowLuckyWheel),
       allowCustomServiceName: Boolean(group.allowCustomServiceName),
     });
+    setShowAdvancedPricing(group.customPricePerDay !== null);
     setEditing(group);
   };
 
@@ -282,6 +287,7 @@ export const UserGroupsModal: React.FC<UserGroupsModalProps> = ({ isOpen, onClos
     setEditing(null);
     setDeletingGroup(null);
     setFormError(null);
+    setShowAdvancedPricing(false);
     onClose();
   };
 
@@ -473,46 +479,75 @@ export const UserGroupsModal: React.FC<UserGroupsModalProps> = ({ isOpen, onClos
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-ink-soft block">
-                    {t('admin.userGroups.customPricePerGbLabel')}
-                  </label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    dir="ltr"
-                    className="tnum"
-                    value={form.customPricePerGb}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        customPricePerGb: sanitizeNonNegativeDigits(e.target.value),
-                      }))
-                    }
-                    placeholder={t('admin.userGroups.customPricePerGbPlaceholder')}
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-ink-soft block">
+                  {t('admin.userGroups.customPricePerGbLabel')}
+                </label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  dir="ltr"
+                  className="tnum"
+                  value={form.customPricePerGb}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      customPricePerGb: sanitizeNonNegativeDigits(e.target.value),
+                    }))
+                  }
+                  placeholder={t('admin.userGroups.customPricePerGbPlaceholder')}
+                />
+                <p className="text-[11px] text-ink-muted m-0 leading-relaxed">
+                  {t('admin.userGroups.customPricePerGbHint')}
+                </p>
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-ink-soft block">
-                    {t('admin.userGroups.customPricePerDayLabel')}
-                  </label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    dir="ltr"
-                    className="tnum"
-                    value={form.customPricePerDay}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        customPricePerDay: sanitizeNonNegativeDigits(e.target.value),
-                      }))
-                    }
-                    placeholder={t('admin.userGroups.customPricePerDayPlaceholder')}
+              {/* Advanced backend-only fixed-day rate — hidden by default unless expanded or already set */}
+              <div className="pt-1 border-t border-line/70 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedPricing((prev) => !prev)}
+                  aria-expanded={showAdvancedPricing}
+                  className="w-full flex items-center justify-between gap-2 text-[11px] font-medium text-ink-muted hover:text-ink py-1 cursor-pointer transition-colors"
+                >
+                  <span>{t('admin.userGroups.advancedPricingToggle')}</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
+                      showAdvancedPricing ? 'rotate-180' : ''
+                    }`}
                   />
-                </div>
+                </button>
+
+                {showAdvancedPricing && (
+                  <div className="p-3 rounded-tile border border-dashed border-line-strong bg-surface-2/45 opacity-90 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <label className="text-xs font-semibold text-ink-soft">
+                        {t('admin.userGroups.customPricePerDayLabel')}
+                      </label>
+                      <Badge variant="outline" size="xs" className="border-dashed">
+                        {t('admin.userGroups.fixedDaysBadge')}
+                      </Badge>
+                    </div>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      dir="ltr"
+                      className="tnum"
+                      value={form.customPricePerDay}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          customPricePerDay: sanitizeNonNegativeDigits(e.target.value),
+                        }))
+                      }
+                      placeholder={t('admin.userGroups.customPricePerDayPlaceholder')}
+                    />
+                    <p className="text-[11px] text-ink-muted flex items-start gap-1.5 leading-relaxed m-0">
+                      <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-ink-muted" />
+                      <span>{t('admin.userGroups.customPricePerDayHint')}</span>
+                    </p>
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -685,7 +720,13 @@ export const UserGroupsModal: React.FC<UserGroupsModalProps> = ({ isOpen, onClos
                       </div>
 
                       {/* Pricing & Credit Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div
+                        className={`grid gap-2 text-xs ${
+                          group.customPricePerDay !== null
+                            ? 'grid-cols-2 sm:grid-cols-4'
+                            : 'grid-cols-1 sm:grid-cols-3'
+                        }`}
+                      >
                         <div className="rounded-ctl border border-line bg-surface-2 px-2.5 py-2 space-y-0.5">
                           <div className="text-[10.5px] text-ink-muted">
                             {t('admin.userGroups.discountLabel')}
@@ -720,25 +761,19 @@ export const UserGroupsModal: React.FC<UserGroupsModalProps> = ({ isOpen, onClos
                           </div>
                         </div>
 
-                        <div className="rounded-ctl border border-line bg-surface-2 px-2.5 py-2 space-y-0.5">
-                          <div className="text-[10.5px] text-ink-muted">
-                            {t('admin.userGroups.customDayLabel')}
-                          </div>
-                          <div className="font-semibold text-ink tnum truncate">
-                            {group.customPricePerDay !== null ? (
-                              <>
-                                <bdi dir="ltr">{formatMoney(group.customPricePerDay)}</bdi>{' '}
-                                <span className="text-[10px] font-normal text-ink-muted">
-                                  {t('common.currency')}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-ink-muted font-normal">
-                                {t('admin.userGroups.baseTariff')}
+                        {group.customPricePerDay !== null && (
+                          <div className="rounded-ctl border border-dashed border-line-strong bg-surface-2/60 px-2.5 py-2 space-y-0.5">
+                            <div className="text-[10.5px] text-ink-muted">
+                              {t('admin.userGroups.customDayLabel')}
+                            </div>
+                            <div className="font-semibold text-ink tnum truncate">
+                              <bdi dir="ltr">{formatMoney(group.customPricePerDay)}</bdi>{' '}
+                              <span className="text-[10px] font-normal text-ink-muted">
+                                {t('common.currency')}
                               </span>
-                            )}
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         <div
                           className={`rounded-ctl border px-2.5 py-2 space-y-0.5 ${

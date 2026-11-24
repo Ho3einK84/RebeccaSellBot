@@ -1808,6 +1808,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_user_filter_all: 'همه',
   admin_user_filter_active: 'فعال',
   admin_user_filter_balance: 'موجودی‌دار',
+  admin_user_filter_negative_balance: 'موجودی منفی',
   admin_user_filter_banned: 'مسدود',
   admin_user_balance_projected_label: 'موجودی پس از تغییر',
   admin_user_balance_preset_hint: 'مبلغ دلخواه را تایپ کنید یا از مبالغ آماده انتخاب کنید:',
@@ -2265,7 +2266,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_groups_custom_gb_prompt:
     'نرخ اختصاصی هر گیگابایت را به تومان وارد کنید (یا `-` برای بازگشت به نرخ پایه):',
   admin_groups_custom_day_prompt:
-    'نرخ اختصاصی هر روز را به تومان وارد کنید (یا `-` برای بازگشت به نرخ پایه):',
+    'نرخ اختصاصی هر روز (فقط روی مدت پیش‌فرض ثابت اعمال می‌شود) را به تومان وارد کنید یا `-` برای حذف و بازگشت به نرخ پایه بفرستید:',
   admin_groups_invalid_name: 'نام گروه نامعتبر است (بین ۱ تا ۸۰ کاراکتر وارد کنید).',
   admin_groups_invalid_badge: 'بج واردشده بیش از حد طولانی است (حداکثر ۴۰ کاراکتر).',
   admin_groups_invalid_discount: 'درصد تخفیف باید یک عدد صحیح بین ۰ تا ۹۰ باشد.',

@@ -835,6 +835,7 @@ export const en: DeepPartial<TranslationSchema> = {
       filterAll: 'All Users',
       filterActiveSubs: 'Active Services',
       filterHasBalance: 'Has Balance',
+      filterNegativeBalance: 'Negative Balance',
       filterBanned: 'Banned',
       sortNewest: 'Newest First',
       sortBalanceDesc: 'Highest Balance',
@@ -1763,11 +1764,17 @@ export const en: DeepPartial<TranslationSchema> = {
       discountPercentHint: 'By default, applies only to fixed catalog packages.',
       applyDiscountCustomLabel: 'Apply discount % to custom volume',
       applyDiscountCustomHint:
-        'When off (recommended), group discount % applies only to catalog plans while custom volume uses its per-GB/day rate.',
+        'When off (recommended), group discount % applies only to catalog plans while custom volume uses its per-GB tariff.',
       customPricePerGbLabel: 'Custom Price per GB (Toman · optional)',
       customPricePerGbPlaceholder: 'Blank = inherit base system rate',
+      customPricePerGbHint:
+        'When set, custom-volume orders for this group are billed at this per-GB rate (blank = inherit base rate & volume tiers).',
+      advancedPricingToggle: 'Advanced Backend Setting (Daily Rate · Fixed-Days Only)',
+      fixedDaysBadge: 'Fixed-days only',
       customPricePerDayLabel: 'Custom Price per Day (Toman · optional)',
       customPricePerDayPlaceholder: 'Blank = inherit base system rate',
+      customPricePerDayHint:
+        'Buyers cannot choose custom validity days in the Bot or WebApp yet — duration stays locked to the default period. This is a backend fixed-day tariff adding (default days × per-day rate) as a flat charge; leave blank for volume-only pricing.',
       creditLimitInputLabel: 'VIP Negative Credit Limit (Toman)',
       creditLimitHint:
         '0 disables negative-balance purchases. P2P wallet transfers always require real positive balance.',

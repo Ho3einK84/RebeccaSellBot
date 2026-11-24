@@ -10,6 +10,7 @@ import {
   walletTransactions,
 } from '../../src/infra/schema.js';
 import { UserGroupService } from '../../src/domain/services/UserGroupService.js';
+import { UserService } from '../../src/domain/services/UserService.js';
 import { WalletService } from '../../src/domain/services/WalletService.js';
 import { ReferralService } from '../../src/domain/services/ReferralService.js';
 import { PromoService, PromoValidationError } from '../../src/domain/services/PromoService.js';
@@ -456,6 +457,21 @@ describeIntegration(
         .from(broadcastRecipients)
         .where(eq(broadcastRecipients.jobId, job.id));
       expect(recipients.map((r) => r.telegramId)).toEqual([vipUserId]);
+    });
+
+    it('filters indebted users via UserService.listUsers({ filter: "negative_balance" }) in PostgreSQL', async () => {
+      await seedIntegrationUser(vipUserId, { balance: -35_000 });
+      await seedIntegrationUser(regularUserId, { balance: 0 });
+      await seedIntegrationUser(recipientUserId, { balance: 40_000 });
+
+      const userService = new UserService();
+      const negRes = await userService.listUsers(1, 20, { filter: 'negative_balance' });
+      expect(negRes.total).toBe(1);
+      expect(negRes.users.map((u) => u.telegramId)).toEqual([vipUserId]);
+
+      const posRes = await userService.listUsers(1, 20, { filter: 'has_balance' });
+      expect(posRes.total).toBe(1);
+      expect(posRes.users.map((u) => u.telegramId)).toEqual([recipientUserId]);
     });
   }
 );

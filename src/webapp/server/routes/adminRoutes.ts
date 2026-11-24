@@ -564,7 +564,7 @@ export function registerAdminRoutes(
         search?: string;
         page?: string;
         limit?: string;
-        filter?: 'all' | 'active_subs' | 'has_balance' | 'banned';
+        filter?: 'all' | 'active_subs' | 'has_balance' | 'negative_balance' | 'banned';
         sort?: 'newest' | 'balance_desc' | 'subs_desc' | 'spend_desc';
       };
     }>('/api/admin/users', async (request, reply) => {
@@ -623,6 +623,8 @@ export function registerAdminRoutes(
           users = users.filter((u) => u.activeSubscriptionCount > 0);
         } else if (filter === 'has_balance') {
           users = users.filter((u) => u.balance > 0);
+        } else if (filter === 'negative_balance') {
+          users = users.filter((u) => u.balance < 0);
         } else if (filter === 'banned') {
           users = users.filter((u) => u.isBanned);
         }

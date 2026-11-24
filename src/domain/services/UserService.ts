@@ -819,7 +819,7 @@ export class UserService {
     page = 1,
     limit = 6,
     options?: {
-      filter?: 'all' | 'active_subs' | 'has_balance' | 'banned';
+      filter?: 'all' | 'active_subs' | 'has_balance' | 'negative_balance' | 'banned';
       sort?: 'newest' | 'balance_desc' | 'subs_desc' | 'spend_desc';
     }
   ): Promise<{
@@ -840,6 +840,8 @@ export class UserService {
       whereClause = sql`${users.activeSubscriptionCount} > 0`;
     } else if (options?.filter === 'has_balance') {
       whereClause = sql`${users.balance} > 0`;
+    } else if (options?.filter === 'negative_balance') {
+      whereClause = sql`${users.balance} < 0`;
     } else if (options?.filter === 'banned') {
       whereClause = eq(users.isBanned, true);
     }

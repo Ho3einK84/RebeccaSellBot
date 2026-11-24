@@ -40,6 +40,7 @@ export const UserSearchBar: React.FC<UserSearchBarProps> = ({
     { id: 'all', label: t('admin.users.filterAll') },
     { id: 'active_subs', label: t('admin.users.filterActiveSubs') },
     { id: 'has_balance', label: t('admin.users.filterHasBalance') },
+    { id: 'negative_balance', label: t('admin.users.filterNegativeBalance') },
     { id: 'banned', label: t('admin.users.filterBanned') },
   ];
 

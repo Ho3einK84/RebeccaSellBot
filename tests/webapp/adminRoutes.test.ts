@@ -909,6 +909,62 @@ describe('WebApp Server & Admin Routes', () => {
         filter: undefined,
         sort: undefined,
       });
+
+      // negative_balance filter works in both list mode and search mode
+      mockUserService.listUsers.mockClear();
+      const negListRes = await app.inject({
+        method: 'GET',
+        url: '/api/admin/users?filter=negative_balance&page=1&limit=12',
+        cookies: { session: getAdminToken() },
+      });
+      expect(negListRes.statusCode).toBe(200);
+      expect(mockUserService.listUsers).toHaveBeenCalledWith(1, 12, {
+        filter: 'negative_balance',
+        sort: undefined,
+      });
+
+      mockUserService.searchProfiles.mockResolvedValueOnce([
+        {
+          telegramId: 401,
+          username: 'vip_debt',
+          firstName: 'Debtor',
+          lastName: null,
+          balance: -25_000,
+          totalSpend: 100_000,
+          activeSubscriptionCount: 1,
+          createdAt: new Date(),
+        },
+        {
+          telegramId: 402,
+          username: 'vip_zero',
+          firstName: 'Zero',
+          lastName: null,
+          balance: 0,
+          totalSpend: 50_000,
+          activeSubscriptionCount: 0,
+          createdAt: new Date(),
+        },
+        {
+          telegramId: 403,
+          username: 'vip_positive',
+          firstName: 'Rich',
+          lastName: null,
+          balance: 80_000,
+          totalSpend: 200_000,
+          activeSubscriptionCount: 2,
+          createdAt: new Date(),
+        },
+      ]);
+      const negSearchRes = await app.inject({
+        method: 'GET',
+        url: '/api/admin/users?search=vip&filter=negative_balance',
+        cookies: { session: getAdminToken() },
+      });
+      expect(negSearchRes.statusCode).toBe(200);
+      expect(negSearchRes.json().total).toBe(1);
+      expect(negSearchRes.json().users.map((u: { telegramId: number }) => u.telegramId)).toEqual([
+        401,
+      ]);
     });
 
     it('rejects non-positive/invalid :id (400) and maps RebeccaOriginDownError (503) on user config endpoints', async () => {
