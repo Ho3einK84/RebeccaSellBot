@@ -31,6 +31,8 @@ import type { LuckyWheelService } from '../domain/services/LuckyWheelService.js'
 import type { DomainRegistryService } from '../domain/services/DomainRegistryService.js';
 import type { CatalogDiscountService } from '../domain/services/CatalogDiscountService.js';
 import type { ContactVerificationService } from '../domain/services/ContactVerificationService.js';
+import type { ForcedJoinService } from '../domain/services/ForcedJoinService.js';
+import type { BulkGiftService, BulkGiftTargetStatus } from '../domain/services/BulkGiftService.js';
 
 export type UiMessageRole = 'screen' | 'prompt' | 'artifact' | 'notification';
 
@@ -136,6 +138,24 @@ export interface SessionData {
   pendingCustomNamePurchase?: { packageId: string };
   /** Post-verification destination so users can smoothly continue after phone verification. */
   phoneVerifyReturnAction?: 'trial' | 'shop' | 'custom_amount' | 'main';
+  /** Preserved `/start <payload>` while a user completes mandatory channel join. */
+  pendingStartPayload?: string;
+  /** Preserved first-touch referral code (`ref_...`) across forced-join gate. */
+  pendingReferralCode?: string;
+  /** Action blocked by forced channel join so verification resumes smoothly. */
+  pendingForcedJoinAction?: {
+    kind: 'start' | 'trial' | 'shop' | 'custom_amount' | 'home';
+    payload?: string;
+  };
+  /** Draft state for creating a Bulk Gift campaign in Telegram admin UI. */
+  bulkGiftDraft?: {
+    giftGb: number;
+    giftDays: number;
+    statuses: BulkGiftTargetStatus[];
+    panelId: string | null;
+    serviceId: number | null;
+    notifyMessage: string | null;
+  };
   /** Return screen when exiting standalone bank cards manager conversation. */
   bankCardsReturnTo?: 'sales' | 'receipts' | 'settings';
   /** Active non-blocking admin text input session (TTL-bounded, stored in Postgres session). */
@@ -185,6 +205,10 @@ export type BotServices = {
   catalogDiscountService?: CatalogDiscountService;
   /** Optional HMAC-SHA256 Telegram phone verification service. */
   contactVerificationService?: ContactVerificationService;
+  /** Mandatory channel membership service (cache + fail-safe + channel CRUD). */
+  forcedJoinService?: ForcedJoinService;
+  /** Durable Bulk Gift campaign service (traffic GB and/or validity days). */
+  bulkGiftService?: BulkGiftService;
   /** Telegram bot username (e.g. "RebeccaSellBot") from bot.botInfo, for deep links. */
   botUsername?: string;
   /** Optional Telegram-compatible support destination rendered as a URL button. */

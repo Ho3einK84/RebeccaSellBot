@@ -321,3 +321,15 @@ export function nowpaymentsCashbackPercent(settings: SettingReader, fallback = 0
 export function nowpaymentsOrderExpiryMinutes(settings: SettingReader, fallback = 60): number {
   return parseBoundedIntSetting(settings, 'nowpayments_order_expiry_minutes', fallback, 10, 1440);
 }
+
+export const FORCED_JOIN_SCOPES = ['off', 'all', 'trial_only', 'purchase_and_trial'] as const;
+export type ForcedJoinScope = (typeof FORCED_JOIN_SCOPES)[number];
+
+/** Enforcement scope for mandatory channel membership. Defaults to `'off'`. */
+export function forcedJoinScope(settings: SettingReader): ForcedJoinScope {
+  const raw = settings.getSetting('forced_join_scope', 'off').trim().toLowerCase();
+  if (raw === 'all' || raw === 'trial_only' || raw === 'purchase_and_trial') {
+    return raw;
+  }
+  return 'off';
+}

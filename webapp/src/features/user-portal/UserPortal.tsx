@@ -14,6 +14,7 @@ import { UserBottomNav } from './components/UserBottomNav.js';
 import { QrCodeModal } from './components/QrCodeModal.js';
 import { CheckoutModal } from './components/CheckoutModal.js';
 import { FreeTrialResultModal } from './components/FreeTrialSection.js';
+import { ForcedJoinFullScreen, extractForcedJoinPayload } from './components/ForcedJoinGate.js';
 import { DashboardTab } from './tabs/DashboardTab.js';
 import { ServicesTab } from './tabs/ServicesTab.js';
 import { ShopTab } from './tabs/ShopTab.js';
@@ -221,10 +222,17 @@ export const UserPortal: React.FC<UserPortalProps> = ({
   );
   const isMaintenance = Boolean(maintenanceError);
 
+  const forcedJoinError = allErrors.find(
+    (err): err is ApiClientError =>
+      err instanceof ApiClientError && err.code === 'CHANNEL_JOIN_REQUIRED'
+  );
+  const forcedJoinPayload = forcedJoinError ? extractForcedJoinPayload(forcedJoinError) : null;
+  const isForcedJoinRequired = Boolean(forcedJoinPayload);
+
   // Notify on transient API errors once per distinct message
   const lastNotifiedErrorRef = useRef<string | null>(null);
   useEffect(() => {
-    if (is401 || isBanned || isMaintenance) return;
+    if (is401 || isBanned || isMaintenance || isForcedJoinRequired) return;
     const activeError = allErrors[0];
     if (activeError) {
       const msg = activeError instanceof Error ? activeError.message : t('common.networkError');
@@ -235,7 +243,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
     } else {
       lastNotifiedErrorRef.current = null;
     }
-  }, [allErrors, is401, isBanned, isMaintenance, notify, t]);
+  }, [allErrors, is401, isBanned, isMaintenance, isForcedJoinRequired, notify, t]);
 
   const handleRefresh = () => {
     triggerHaptic('light');
@@ -474,6 +482,19 @@ export const UserPortal: React.FC<UserPortalProps> = ({
           </div>
         </Card>
       </div>
+    );
+  }
+
+  // Dedicated 403 Forced Channel Join Gate (global `all` scope)
+  if (isForcedJoinRequired && forcedJoinPayload) {
+    return (
+      <ForcedJoinFullScreen
+        channels={forcedJoinPayload.channels}
+        onVerified={() => {
+          void queryClient.invalidateQueries({ queryKey: ['user'] });
+        }}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
     );
   }
 

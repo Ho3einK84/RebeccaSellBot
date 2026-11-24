@@ -1166,3 +1166,133 @@ export const forappDeposits = pgTable(
 
 export type ForAppDepositRow = typeof forappDeposits.$inferSelect;
 export type NewForAppDepositRow = typeof forappDeposits.$inferInsert;
+
+export const BULK_GIFT_TARGET_STATUSES = ['active', 'on_hold', 'limited'] as const;
+export type BulkGiftTargetStatus = (typeof BULK_GIFT_TARGET_STATUSES)[number];
+
+export const BULK_GIFT_JOB_STATUSES = [
+  'queued',
+  'running',
+  'cancel_requested',
+  'cancelled',
+  'completed',
+] as const;
+export type BulkGiftJobStatus = (typeof BULK_GIFT_JOB_STATUSES)[number];
+
+export const BULK_GIFT_ITEM_STATUSES = [
+  'pending',
+  'processing',
+  'applied',
+  'failed',
+  'skipped',
+  'cancelled',
+] as const;
+export type BulkGiftItemStatus = (typeof BULK_GIFT_ITEM_STATUSES)[number];
+
+// Durable Bulk Gift queue (traffic GB and/or validity days). Item rows snapshot
+// eligible services at queue time, making execution restart-safe, cancellable,
+// and strictly idempotent per campaign.
+export const bulkGiftJobs = pgTable(
+  'bulk_gift_jobs',
+  {
+    id: uuid('id').notNull().defaultRandom().primaryKey(),
+    actorTelegramId: bigint('actor_telegram_id', { mode: 'number' }).notNull(),
+    giftGb: integer('gift_gb').notNull().default(0),
+    giftDays: integer('gift_days').notNull().default(0),
+    targetStatuses: text('target_statuses').notNull(), // JSON array of BulkGiftTargetStatus
+    panelId: text('panel_id').references(() => rebeccaPanels.id),
+    serviceId: integer('service_id'),
+    notifyMessage: text('notify_message'),
+    status: text('status').notNull().default('queued'),
+    totalCount: integer('total_count').notNull().default(0),
+    appliedCount: integer('applied_count').notNull().default(0),
+    failedCount: integer('failed_count').notNull().default(0),
+    skippedCount: integer('skipped_count').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    startedAt: timestamp('started_at'),
+    completedAt: timestamp('completed_at'),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'bulk_gift_jobs_actor_safe',
+      sql`${table.actorTelegramId} > 0 AND ${table.actorTelegramId} <= 9007199254740991`
+    ),
+    check(
+      'bulk_gift_jobs_gift_positive',
+      sql`${table.giftGb} >= 0 AND ${table.giftDays} >= 0 AND (${table.giftGb} > 0 OR ${table.giftDays} > 0) AND ${table.giftGb} <= 10000 AND ${table.giftDays} <= 3650`
+    ),
+    check(
+      'bulk_gift_jobs_service_id_safe',
+      sql`${table.serviceId} IS NULL OR (${table.serviceId} > 0 AND ${table.serviceId} <= 2147483647)`
+    ),
+    check(
+      'bulk_gift_jobs_status_supported',
+      sql`${table.status} IN ('queued', 'running', 'cancel_requested', 'cancelled', 'completed')`
+    ),
+    check(
+      'bulk_gift_jobs_counts_safe',
+      sql`${table.totalCount} >= 0 AND ${table.appliedCount} >= 0 AND ${table.failedCount} >= 0 AND ${table.skippedCount} >= 0 AND ${table.appliedCount} + ${table.failedCount} + ${table.skippedCount} <= ${table.totalCount}`
+    ),
+    index('bulk_gift_jobs_runnable_idx')
+      .on(table.createdAt)
+      .where(sql`${table.status} IN ('queued', 'running', 'cancel_requested')`),
+  ]
+);
+
+export const bulkGiftItems = pgTable(
+  'bulk_gift_items',
+  {
+    jobId: uuid('job_id')
+      .notNull()
+      .references(() => bulkGiftJobs.id, { onDelete: 'cascade' }),
+    configId: text('config_id').notNull(),
+    telegramId: bigint('telegram_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.telegramId),
+    panelId: text('panel_id')
+      .notNull()
+      .references(() => rebeccaPanels.id),
+    serviceId: integer('service_id').notNull(),
+    configUsername: text('config_username').notNull(),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    claimedAt: timestamp('claimed_at'),
+    appliedAt: timestamp('applied_at'),
+    notifiedAt: timestamp('notified_at'),
+    previousDataLimit: bigint('previous_data_limit', { mode: 'number' }),
+    newDataLimit: bigint('new_data_limit', { mode: 'number' }),
+    previousExpire: bigint('previous_expire', { mode: 'number' }),
+    newExpire: bigint('new_expire', { mode: 'number' }),
+    previousOnHoldDuration: bigint('previous_on_hold_duration', { mode: 'number' }),
+    newOnHoldDuration: bigint('new_on_hold_duration', { mode: 'number' }),
+    lastError: text('last_error'),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.jobId, table.configId] }),
+    uniqueIndex('bulk_gift_items_job_panel_username_unique').on(
+      table.jobId,
+      table.panelId,
+      table.configUsername
+    ),
+    check(
+      'bulk_gift_items_status_supported',
+      sql`${table.status} IN ('pending', 'processing', 'applied', 'failed', 'skipped', 'cancelled')`
+    ),
+    check('bulk_gift_items_attempts_safe', sql`${table.attempts} >= 0`),
+    check(
+      'bulk_gift_items_service_id_positive',
+      sql`${table.serviceId} > 0 AND ${table.serviceId} <= 2147483647`
+    ),
+    index('bulk_gift_items_pending_idx')
+      .on(table.jobId, table.configId)
+      .where(sql`${table.status} = 'pending'`),
+    index('bulk_gift_items_stale_idx')
+      .on(table.claimedAt)
+      .where(sql`${table.status} = 'processing'`),
+  ]
+);
+
+export type BulkGiftJobRow = typeof bulkGiftJobs.$inferSelect;
+export type BulkGiftItemRow = typeof bulkGiftItems.$inferSelect;

@@ -22,6 +22,7 @@ export function registerUserRoutes(app: FastifyInstance, options: UserRoutesOpti
   const userAccessGuard = createUserAccessGuard({
     userService: options.userService,
     translationService: options.translationService,
+    forcedJoinService: options.forcedJoinService,
     adminService: options.adminService,
     adminIds: options.adminIds,
     supportUrl: options.supportUrl,

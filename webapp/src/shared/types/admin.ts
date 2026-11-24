@@ -619,3 +619,113 @@ export interface TestNowPaymentsResponse {
   rateToman: number;
   rateSource: 'auto' | 'manual' | 'fallback';
 }
+
+export type AdminForcedJoinScope = 'off' | 'all' | 'trial_only' | 'purchase_and_trial';
+
+export interface AdminForcedJoinChannelDto {
+  id: string;
+  channelId: string;
+  title: string;
+  inviteLink: string;
+  enabled: boolean;
+}
+
+export interface AdminForcedJoinConfigResponse {
+  scope: AdminForcedJoinScope;
+  channels: AdminForcedJoinChannelDto[];
+  activeCount: number;
+  maxChannels: number;
+  scopes?: AdminForcedJoinScope[];
+}
+
+export interface AdminForcedJoinTestResponse {
+  ok: boolean;
+  isAdmin: boolean;
+  channelId: string;
+  status?: string;
+  chatTitle?: string;
+  inviteLink?: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+export interface CreateAdminForcedJoinChannelPayload {
+  channelId: string;
+  title: string;
+  inviteLink?: string | null;
+  enabled?: boolean;
+}
+
+export interface UpdateAdminForcedJoinChannelPayload {
+  channelId?: string;
+  title?: string;
+  inviteLink?: string | null;
+  enabled?: boolean;
+}
+
+export type BulkGiftTargetStatusDto = 'active' | 'on_hold' | 'limited';
+
+export type BulkGiftJobStatusDto =
+  'queued' | 'running' | 'cancel_requested' | 'cancelled' | 'completed';
+
+export interface AdminBulkGiftJobDto {
+  id: string;
+  actorTelegramId: number;
+  giftGb: number;
+  giftDays: number;
+  targetStatuses: BulkGiftTargetStatusDto[];
+  panelId: string | null;
+  serviceId: number | null;
+  notifyMessage: string | null;
+  status: BulkGiftJobStatusDto;
+  totalCount: number;
+  appliedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+}
+
+export interface AdminBulkGiftPanelDto {
+  id: string;
+  name: string;
+  enabled: boolean;
+  services: Array<{
+    serviceId: number;
+    name: string;
+    isDefault: boolean;
+  }>;
+}
+
+export interface AdminBulkGiftJobsResponse {
+  items: AdminBulkGiftJobDto[];
+  total: number;
+  page: number;
+  totalPages: number;
+  activeCount: number;
+  panels: AdminBulkGiftPanelDto[];
+  limits: {
+    maxGb: number;
+    maxDays: number;
+    maxMessageLength: number;
+  };
+}
+
+export interface BulkGiftPreviewPayload {
+  targetStatuses: BulkGiftTargetStatusDto[];
+  panelId?: string | null;
+  serviceId?: number | null;
+}
+
+export interface BulkGiftPreviewResponse {
+  configCount: number;
+  userCount: number;
+}
+
+export interface CreateBulkGiftJobPayload extends BulkGiftPreviewPayload {
+  giftGb: number;
+  giftDays: number;
+  notifyMessage?: string | null;
+}

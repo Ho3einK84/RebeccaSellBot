@@ -15,7 +15,12 @@ import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
 import { SmartConnectButtons } from './SmartConnectButtons.js';
-import type { TrialClaimResponse, UserTrialStatus } from '@/shared/types/userPortal.js';
+import { ForcedJoinModal, extractForcedJoinPayload } from './ForcedJoinGate.js';
+import type {
+  ForcedJoinChannelDto,
+  TrialClaimResponse,
+  UserTrialStatus,
+} from '@/shared/types/userPortal.js';
 
 interface FreeTrialBannerProps {
   trial: UserTrialStatus | null | undefined;
@@ -39,6 +44,7 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
 
   const [isClaiming, setIsClaiming] = useState(false);
   const [needsPhoneGate, setNeedsPhoneGate] = useState(false);
+  const [forcedJoinChannels, setForcedJoinChannels] = useState<ForcedJoinChannelDto[] | null>(null);
 
   const executeClaim = async () => {
     if (isClaiming) return;
@@ -51,10 +57,16 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
       await queryClient.invalidateQueries({ queryKey: queryKeys.user.configs });
       await queryClient.invalidateQueries({ queryKey: queryKeys.user.trial });
       setNeedsPhoneGate(false);
+      setForcedJoinChannels(null);
       onNotify(t('user.trial.modalTitle'), 'success');
       onClaimed?.(res);
     } catch (err: unknown) {
       triggerHaptic('error');
+      const fjPayload = extractForcedJoinPayload(err);
+      if (fjPayload) {
+        setForcedJoinChannels(fjPayload.channels);
+        return;
+      }
       if (err instanceof ApiClientError) {
         if (err.code === 'PHONE_VERIFICATION_REQUIRED') {
           setNeedsPhoneGate(true);
@@ -177,6 +189,17 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
           <span>{isClaiming ? t('user.trial.claiming') : t('user.trial.claimCta')}</span>
         </Button>
       )}
+      <ForcedJoinModal
+        isOpen={Boolean(forcedJoinChannels)}
+        channels={forcedJoinChannels ?? []}
+        action="trial"
+        onClose={() => setForcedJoinChannels(null)}
+        onVerified={() => {
+          setForcedJoinChannels(null);
+          void executeClaim();
+        }}
+        onNotify={onNotify}
+      />
     </Card>
   );
 };

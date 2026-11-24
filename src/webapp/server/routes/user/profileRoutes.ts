@@ -507,6 +507,22 @@ export function registerUserProfileRoutes(
         await options.walletService.getOrCreateUser(telegramId);
       }
 
+      const isAdmin =
+        request.userSession?.role === 'admin' ||
+        Boolean(options.adminService?.isAdmin?.(telegramId)) ||
+        Boolean(options.adminIds?.includes(telegramId));
+      if (!isAdmin && options.forcedJoinService) {
+        const fjCheck = await options.forcedJoinService.checkMembership(telegramId, 'trial');
+        if (!fjCheck.allowed) {
+          return reply.code(403).send({
+            error: 'Channel membership required',
+            code: 'CHANNEL_JOIN_REQUIRED',
+            scope: fjCheck.scope,
+            channels: fjCheck.missingChannels,
+          });
+        }
+      }
+
       if (
         await contactVerificationService.shouldRequirePhoneForTrial(
           telegramId,
@@ -594,6 +610,54 @@ export function registerUserProfileRoutes(
         subUrl: result.subUrl ?? '',
         gb: trialGb,
         days: trialDays,
+      });
+    }
+  );
+
+  // POST /api/user/forced-join/check — invalidates user cache and re-verifies channel membership
+  userScope.post<{
+    Body?: { action?: 'any' | 'trial' | 'purchase' };
+  }>(
+    '/api/user/forced-join/check',
+    {
+      config: {
+        rateLimit: limits.action30,
+      },
+    },
+    async (request, reply) => {
+      const telegramId = request.userSession?.telegramId;
+      if (!telegramId) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+
+      if (!options.forcedJoinService) {
+        return reply.code(200).send({ joined: true, scope: 'off', channels: [] });
+      }
+
+      const isAdmin =
+        request.userSession?.role === 'admin' ||
+        Boolean(options.adminService?.isAdmin?.(telegramId)) ||
+        Boolean(options.adminIds?.includes(telegramId));
+      if (isAdmin) {
+        return reply.code(200).send({
+          joined: true,
+          scope: options.forcedJoinService.getScope(),
+          channels: [],
+        });
+      }
+
+      const rawAction = request.body?.action;
+      const action: 'any' | 'trial' | 'purchase' =
+        rawAction === 'trial' || rawAction === 'purchase' ? rawAction : 'any';
+
+      const check = await options.forcedJoinService.checkMembership(telegramId, action, {
+        bypassCache: true,
+      });
+
+      return reply.code(200).send({
+        joined: check.allowed,
+        scope: check.scope,
+        channels: check.missingChannels,
       });
     }
   );

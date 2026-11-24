@@ -38,6 +38,7 @@ import {
   shopMenu,
 } from '../keyboards/mainMenu.js';
 import { renderRenewalCheckoutForPackage } from './subscriptions/routes.js';
+import { enforceForcedJoin } from '../middleware/forcedJoin.js';
 import { callbackData } from '../callbackData.js';
 
 async function renderResumedCheckout(ctx: MenuContext, services: BotServices): Promise<boolean> {
@@ -169,6 +170,10 @@ async function renderResumedCheckout(ctx: MenuContext, services: BotServices): P
 export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServices): void {
   bot.callbackQuery(/^buy:confirm:(co_[A-Za-z0-9_-]{8,32})$/u, async (ctx) => {
     const telegramId = ctx.from.id;
+
+    if (await enforceForcedJoin(ctx, 'purchase', { kind: 'shop' })) {
+      return;
+    }
 
     let checkout;
     try {

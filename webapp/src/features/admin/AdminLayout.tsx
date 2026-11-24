@@ -10,6 +10,8 @@ import { ModulesTab } from './modules/ModulesTab.js';
 import { BankCardsModal } from './bankCards/BankCardsModal.js';
 import { PaymentGatewaysModal } from './paymentGateways/PaymentGatewaysModal.js';
 import { ReceiptSettingsModal } from './receipts/components/ReceiptSettingsModal.js';
+import { ForcedJoinModal } from './forcedJoin/ForcedJoinModal.js';
+import { BulkGiftModal } from './bulkGift/BulkGiftModal.js';
 import { AdminHeader } from './components/AdminHeader.js';
 import { AdminDesktopNav } from './components/AdminDesktopNav.js';
 import { AdminBottomNav, type TabConfig } from './components/AdminBottomNav.js';
@@ -44,6 +46,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isBankCardsModalOpen, setIsBankCardsModalOpen] = useState(false);
   const [isPaymentGatewaysModalOpen, setIsPaymentGatewaysModalOpen] = useState(false);
   const [isReceiptSettingsModalOpen, setIsReceiptSettingsModalOpen] = useState(false);
+  const [isForcedJoinModalOpen, setIsForcedJoinModalOpen] = useState(false);
+  const [isBulkGiftModalOpen, setIsBulkGiftModalOpen] = useState(false);
 
   // Single lightweight query drives both dashboard stats, pending badge count, and panel health indicator.
   const { stats, panelHealth, forceRefresh: forceRefreshStats } = useAdminStats();
@@ -217,8 +221,20 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           onOpenBankCards={() => setIsBankCardsModalOpen(true)}
           onOpenPaymentGateways={() => setIsPaymentGatewaysModalOpen(true)}
           onOpenReceiptSettings={() => setIsReceiptSettingsModalOpen(true)}
+          onOpenForcedJoin={() => setIsForcedJoinModalOpen(true)}
+          onOpenBulkGift={() => setIsBulkGiftModalOpen(true)}
         />
       )}
+      <ForcedJoinModal
+        isOpen={isForcedJoinModalOpen}
+        onClose={() => setIsForcedJoinModalOpen(false)}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
+      <BulkGiftModal
+        isOpen={isBulkGiftModalOpen}
+        onClose={() => setIsBulkGiftModalOpen(false)}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
       <BankCardsModal
         isOpen={isBankCardsModalOpen}
         onClose={() => setIsBankCardsModalOpen(false)}

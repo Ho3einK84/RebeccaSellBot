@@ -17,10 +17,13 @@ import { PricingService } from '../../domain/services/PricingService.js';
 import { CatalogDiscountService } from '../../domain/services/CatalogDiscountService.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
 import { AutomatedPaymentService } from '../../domain/services/AutomatedPaymentService.js';
+import { BulkGiftService } from '../../domain/services/BulkGiftService.js';
+import { ForcedJoinService } from '../../domain/services/ForcedJoinService.js';
 import { PaymentService } from '../../domain/services/PaymentService.js';
 import { logger } from '../../infra/logger.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
 import { registerAdminRoutes } from './routes/adminRoutes.js';
+import { registerAdminForcedJoinAndGiftRoutes } from './routes/adminForcedJoinAndGiftRoutes.js';
 import { registerAdminPackageRoutes } from './routes/adminPackageRoutes.js';
 import { registerAdminPaymentRoutes } from './routes/adminPaymentRoutes.js';
 import { registerPaymentWebhookRoutes } from './routes/paymentWebhookRoutes.js';
@@ -514,6 +517,29 @@ export async function createWebAppServer(
     botApi: services.botApi,
   });
 
+  const resolvedForcedJoinService =
+    services.forcedJoinService ??
+    (hasTranslationService
+      ? new ForcedJoinService({
+          translationService: services.translationService,
+          getAdapter: () =>
+            services.botApi
+              ? {
+                  getChatMember: (chatId, userId) => services.botApi!.getChatMember(chatId, userId),
+                  getMe: () => services.botApi!.getMe(),
+                  getChat: (chatId) => services.botApi!.getChat(chatId),
+                }
+              : undefined,
+          isAdmin: (telegramId) =>
+            Boolean(services.adminService?.isAdmin?.(telegramId)) ||
+            Boolean(services.adminIds?.includes(telegramId)),
+        })
+      : undefined);
+
+  const resolvedBulkGiftService =
+    services.bulkGiftService ??
+    (services.panelRegistry ? new BulkGiftService(services.panelRegistry) : undefined);
+
   registerAdminPaymentRoutes(app, {
     automatedPaymentService: resolvedAutomatedPaymentService,
     userService: services.userService,
@@ -521,6 +547,14 @@ export async function createWebAppServer(
     adminIds: services.adminIds,
     translationService: services.translationService,
     botApi: services.botApi,
+  });
+
+  registerAdminForcedJoinAndGiftRoutes(app, {
+    forcedJoinService: resolvedForcedJoinService,
+    bulkGiftService: resolvedBulkGiftService,
+    panelRegistry: services.panelRegistry,
+    userService: services.userService,
+    adminService: services.adminService,
   });
 
   registerUserRoutes(app, {
@@ -548,6 +582,7 @@ export async function createWebAppServer(
     purchaseCheckoutService: services.purchaseCheckoutService,
     catalogDiscountService: resolvedCatalogDiscountService,
     contactVerificationService: resolvedContactVerificationService,
+    forcedJoinService: resolvedForcedJoinService,
   });
 
   // Static files & SPA fallback

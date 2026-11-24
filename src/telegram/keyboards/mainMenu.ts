@@ -27,6 +27,7 @@ import {
   type ResolvedCatalogDiscount,
 } from '../../domain/services/CatalogDiscountService.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
+import { enforceForcedJoin } from '../middleware/forcedJoin.js';
 import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from '../ui.js';
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
@@ -792,6 +793,10 @@ function renderPackageButtons(
           const chatId = c.chat?.id;
           if (!telegramId || !chatId || !c.services) return;
 
+          if (await enforceForcedJoin(c, 'purchase', { kind: 'shop' })) {
+            return;
+          }
+
           if (await enforcePurchasePhoneGate(c, 'shop')) {
             return;
           }
@@ -996,6 +1001,9 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
                 await renderScreen(c, t(c, 'custom_volume_unavailable'), {
                   reply_markup: backKeyboard(c, 'main'),
                 });
+                return;
+              }
+              if (await enforceForcedJoin(c, 'purchase', { kind: 'custom_amount' })) {
                 return;
               }
               if (await enforcePurchasePhoneGate(c, 'custom_amount')) {

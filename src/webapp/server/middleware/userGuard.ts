@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AdminService } from '../../../domain/services/AdminService.js';
+import type { ForcedJoinService } from '../../../domain/services/ForcedJoinService.js';
 import type { TranslationService } from '../../../domain/services/TranslationService.js';
 import type { UserService } from '../../../domain/services/UserService.js';
 import { resolveSupportDestination } from '../../../domain/services/SupportDestination.js';
@@ -7,6 +8,7 @@ import { resolveSupportDestination } from '../../../domain/services/SupportDesti
 export interface UserGuardDeps {
   userService: UserService;
   translationService?: TranslationService;
+  forcedJoinService?: ForcedJoinService;
   adminService?: AdminService;
   adminIds?: number[];
   supportUrl?: string;
@@ -72,6 +74,27 @@ export function createUserAccessGuard(deps: UserGuardDeps) {
           supportUsername: support.supportUsername,
           supportLabel: support.supportLabel,
           supportEnabled: support.supportEnabled,
+        });
+        return;
+      }
+    }
+
+    // 3. Forced channel membership check for global (`all`) scope.
+    // Admins bypass, and the re-check endpoint stays reachable while locked.
+    const routePath = request.routeOptions?.url ?? request.url.split('?')[0] ?? '';
+    if (
+      !isAdmin &&
+      deps.forcedJoinService &&
+      routePath !== '/api/user/forced-join/check' &&
+      deps.forcedJoinService.getScope() === 'all'
+    ) {
+      const check = await deps.forcedJoinService.checkMembership(telegramId, 'any');
+      if (!check.allowed) {
+        await reply.code(403).send({
+          error: 'Channel membership required',
+          code: 'CHANNEL_JOIN_REQUIRED',
+          scope: check.scope,
+          channels: check.missingChannels,
         });
         return;
       }

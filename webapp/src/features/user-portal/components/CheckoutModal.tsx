@@ -43,9 +43,11 @@ import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import { openTelegramLinkAndMinimize } from '@/shared/lib/telegramNavigation.js';
 import { useTelegramContactVerification } from '@/shared/hooks/useTelegramContactVerification.js';
 import { SmartConnectButtons } from './SmartConnectButtons.js';
+import { ForcedJoinModal, extractForcedJoinPayload } from './ForcedJoinGate.js';
 import type {
   CustomVolumeQuoteResponse,
   CustomVolumeSettings,
+  ForcedJoinChannelDto,
   PromoQuoteResponse,
   UserConfigRecord,
   UserPackageItem,
@@ -155,6 +157,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Shortfall metadata from 409 response
   const [shortfallPrice, setShortfallPrice] = useState<number | null>(null);
+  const [forcedJoinChannels, setForcedJoinChannels] = useState<ForcedJoinChannelDto[] | null>(null);
 
   const effectivePkg = isRenewal ? (pkg ?? selectedRenewalPkg) : pkg;
   const isSelectingRenewalPackage = isRenewal && effectivePkg === null;
@@ -275,6 +278,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         if (reachedSuccess()) return;
 
         if (err instanceof ApiClientError) {
+          const fjPayload = extractForcedJoinPayload(err);
+          if (fjPayload) {
+            setForcedJoinChannels(fjPayload.channels);
+            dispatch({
+              type: 'CREATE_ERROR',
+              message: t('user.forcedJoin.purchaseDesc'),
+            });
+            return;
+          }
           const errData = err.data as
             | { code?: string; deficit?: number; availableBalance?: number; price?: number }
             | undefined;
@@ -341,6 +353,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setPromoError(null);
       setCustomNameInput('');
       setShortfallPrice(null);
+      setForcedJoinChannels(null);
       dispatch({ type: 'RESET' });
       return;
     }
@@ -498,6 +511,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     } catch (err: unknown) {
       triggerHaptic('error');
       if (err instanceof ApiClientError) {
+        const fjPayload = extractForcedJoinPayload(err);
+        if (fjPayload) {
+          setForcedJoinChannels(fjPayload.channels);
+          dispatch({
+            type: 'CONFIRM_ERROR',
+            message: t('user.forcedJoin.purchaseDesc'),
+          });
+          return;
+        }
         const errData = err.data as { code?: string; deficit?: number } | undefined;
 
         if (
@@ -1688,6 +1710,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </div>
         )}
       </div>
+      <ForcedJoinModal
+        isOpen={Boolean(forcedJoinChannels)}
+        channels={forcedJoinChannels ?? []}
+        action="purchase"
+        onClose={() => setForcedJoinChannels(null)}
+        onVerified={() => {
+          setForcedJoinChannels(null);
+          void createCheckoutSession();
+        }}
+        onNotify={(msg, type) => notify(msg, type ?? 'success')}
+      />
     </Modal>
   );
 };

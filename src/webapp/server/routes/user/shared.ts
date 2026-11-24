@@ -22,6 +22,7 @@ import type { TrialService } from '../../../../domain/services/TrialService.js';
 import type { ReferralService } from '../../../../domain/services/ReferralService.js';
 import type { RefundService } from '../../../../domain/services/RefundService.js';
 import type { ConfigTransferService } from '../../../../domain/services/ConfigTransferService.js';
+import type { ForcedJoinService } from '../../../../domain/services/ForcedJoinService.js';
 import type { RebeccaPanelRegistry } from '../../../../domain/services/RebeccaPanelRegistry.js';
 import { resolveSupportDestination } from '../../../../domain/services/SupportDestination.js';
 
@@ -38,6 +39,7 @@ export interface UserRoutesOptions {
   purchaseCheckoutService?: PurchaseCheckoutService;
   catalogDiscountService?: CatalogDiscountService;
   contactVerificationService?: ContactVerificationService;
+  forcedJoinService?: ForcedJoinService;
   luckyWheelService?: LuckyWheelService;
   trialService?: TrialService;
   referralService?: ReferralService;

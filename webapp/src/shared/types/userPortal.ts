@@ -529,3 +529,24 @@ export interface UserConfirmCheckoutResponse {
   startOnFirstUse?: boolean;
   availableBalanceAfter?: number;
 }
+
+export type ForcedJoinScopeDto = 'off' | 'all' | 'trial_only' | 'purchase_and_trial';
+
+export interface ForcedJoinChannelDto {
+  id: string;
+  channelId: string;
+  title: string;
+  inviteLink: string;
+}
+
+export interface ForcedJoinErrorPayload {
+  code?: string;
+  scope?: ForcedJoinScopeDto;
+  channels?: ForcedJoinChannelDto[];
+}
+
+export interface ForcedJoinCheckResponse {
+  joined: boolean;
+  scope: ForcedJoinScopeDto;
+  channels: ForcedJoinChannelDto[];
+}

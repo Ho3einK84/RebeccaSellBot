@@ -124,6 +124,10 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   backup_include_env: 'true',
   backup_last_run_at: '',
   backup_last_status: '',
+
+  // Forced channel join lock settings.
+  forced_join_scope: 'off',
+  forced_join_channels_json: '[]',
 };
 
 function qualify(locale: SupportedLocale, texts: Record<string, string>): Record<string, string> {

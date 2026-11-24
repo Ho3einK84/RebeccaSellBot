@@ -6,6 +6,8 @@ export const queryKeys = {
   receiptSettings: ['admin', 'receipts', 'settings'] as const,
   bankCards: ['admin', 'bankCards'] as const,
   paymentGateways: ['admin', 'paymentGateways'] as const,
+  forcedJoin: ['admin', 'forcedJoin'] as const,
+  bulkGiftJobs: (page?: number) => ['admin', 'bulkGiftJobs', page ?? 1] as const,
   forappDeposits: (params?: { page?: number; status?: string }) =>
     ['admin', 'forappDeposits', params ?? { page: 1, status: 'unmatched' }] as const,
   users: (page?: number, search?: string, filter?: string, sort?: string) =>

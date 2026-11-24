@@ -460,6 +460,25 @@ export function registerUserShopRoutes(
       const kind: 'new_config' | 'renew_config' =
         body.kind === 'renew_config' ? 'renew_config' : 'new_config';
 
+      const isAdmin =
+        request.userSession?.role === 'admin' ||
+        Boolean(options.adminService?.isAdmin?.(telegramId)) ||
+        Boolean(options.adminIds?.includes(telegramId));
+
+      // Forced join applies to new purchases under `purchase_and_trial` (or `all`),
+      // and NEVER blocks existing-service renewals (`renew_config`).
+      if (kind === 'new_config' && !isAdmin && options.forcedJoinService) {
+        const fjCheck = await options.forcedJoinService.checkMembership(telegramId, 'purchase');
+        if (!fjCheck.allowed) {
+          return reply.code(403).send({
+            error: 'Channel membership required',
+            code: 'CHANNEL_JOIN_REQUIRED',
+            scope: fjCheck.scope,
+            channels: fjCheck.missingChannels,
+          });
+        }
+      }
+
       if (
         kind === 'new_config' &&
         (await contactVerificationService.shouldRequirePhoneForPurchase(
@@ -778,6 +797,24 @@ export function registerUserShopRoutes(
           }
         }
         throw err;
+      }
+
+      // Forced join applies ONLY to `new_config` purchases (never renewals).
+      const isAdminAtConfirm =
+        request.userSession?.role === 'admin' ||
+        Boolean(options.adminService?.isAdmin?.(telegramId)) ||
+        Boolean(options.adminIds?.includes(telegramId));
+      if (checkout.kind === 'new_config' && !isAdminAtConfirm && options.forcedJoinService) {
+        const fjCheck = await options.forcedJoinService.checkMembership(telegramId, 'purchase');
+        if (!fjCheck.allowed) {
+          await safeRecordCheckoutFailed(options.purchaseCheckoutService, checkout.id);
+          return reply.code(403).send({
+            error: 'Channel membership required',
+            code: 'CHANNEL_JOIN_REQUIRED',
+            scope: fjCheck.scope,
+            channels: fjCheck.missingChannels,
+          });
+        }
       }
 
       // P0-3 fix: Phone verification gate applies ONLY to `new_config` purchases (matches Telegram bot).

@@ -48,6 +48,7 @@ import {
 } from '../../domain/services/CatalogDiscountService.js';
 import { parseVolumePricingTiersJson } from '../../domain/services/PricingService.js';
 import { ContactVerificationService } from '../../domain/services/ContactVerificationService.js';
+import { buildForcedJoinGateScreen } from '../middleware/forcedJoin.js';
 import {
   customServiceNameEnabled,
   customVolumeEnabled,
@@ -350,6 +351,25 @@ async function executePurchaseFlow(
   // Pricing rules live in settings and are evaluated server-side. The
   // confirmation uses the same base amount that the wallet saga receives;
   // promo settlement remains authoritative inside the saga transaction.
+  const forcedJoinBlocked = await conversation.external(async (outsideCtx) => {
+    const services = outsideCtx?.services ?? ctx.services!;
+    if (!services.forcedJoinService || services.isAdmin(telegramId)) return null;
+    const check = await services.forcedJoinService.checkMembership(telegramId, 'purchase');
+    if (check.allowed) return null;
+    if (outsideCtx?.session) {
+      outsideCtx.session.pendingForcedJoinAction = { kind: 'custom_amount' };
+    }
+    return check.missingChannels;
+  });
+  if (forcedJoinBlocked) {
+    const { text, keyboard } = buildForcedJoinGateScreen(ctx, forcedJoinBlocked);
+    await replyInConversation(conversation, ctx, text, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+    return;
+  }
+
   const phoneRequired = await conversation.external(async (outsideCtx) => {
     const services = outsideCtx?.services ?? ctx.services!;
     const phoneService =
@@ -702,6 +722,25 @@ export async function buyPackageCustomNameConversation(
 ) {
   const telegramId = ctx.from?.id;
   if (!telegramId || !ctx.services) return;
+
+  const forcedJoinBlocked = await conversation.external(async (outsideCtx) => {
+    const services = outsideCtx?.services ?? ctx.services!;
+    if (!services.forcedJoinService || services.isAdmin(telegramId)) return null;
+    const check = await services.forcedJoinService.checkMembership(telegramId, 'purchase');
+    if (check.allowed) return null;
+    if (outsideCtx?.session) {
+      outsideCtx.session.pendingForcedJoinAction = { kind: 'shop' };
+    }
+    return check.missingChannels;
+  });
+  if (forcedJoinBlocked) {
+    const { text, keyboard } = buildForcedJoinGateScreen(ctx, forcedJoinBlocked);
+    await replyInConversation(conversation, ctx, text, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
+    });
+    return;
+  }
 
   const packageId = await conversation.external((outsideCtx) => {
     const selected = outsideCtx.session.pendingCustomNamePurchase?.packageId;

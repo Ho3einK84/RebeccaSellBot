@@ -66,9 +66,20 @@ import type {
   AdminForAppDepositsResponse,
   UpdateAdminNowPaymentsPayload,
   TestNowPaymentsResponse,
+  AdminForcedJoinScope,
+  AdminForcedJoinConfigResponse,
+  AdminForcedJoinTestResponse,
+  CreateAdminForcedJoinChannelPayload,
+  UpdateAdminForcedJoinChannelPayload,
+  AdminBulkGiftJobsResponse,
+  AdminBulkGiftJobDto,
+  BulkGiftPreviewPayload,
+  BulkGiftPreviewResponse,
+  CreateBulkGiftJobPayload,
 } from '@/shared/types/admin.js';
 import type {
   UserProfileResponse,
+  ForcedJoinCheckResponse,
   UserConfigsResponse,
   UserPackagesResponse,
   UserTransactionsResponse,
@@ -432,6 +443,95 @@ export const api = {
     request<TestNowPaymentsResponse>('/api/admin/payment-gateways/nowpayments/test', {
       method: 'POST',
     }),
+
+  // Admin Forced Channel Join API
+  getAdminForcedJoin: (): Promise<AdminForcedJoinConfigResponse> =>
+    request<AdminForcedJoinConfigResponse>('/api/admin/forced-join'),
+
+  updateAdminForcedJoinScope: (
+    scope: AdminForcedJoinScope
+  ): Promise<AdminForcedJoinConfigResponse> =>
+    request<AdminForcedJoinConfigResponse>('/api/admin/forced-join/scope', {
+      method: 'PUT',
+      body: JSON.stringify({ scope }),
+    }),
+
+  createAdminForcedJoinChannel: (
+    payload: CreateAdminForcedJoinChannelPayload
+  ): Promise<AdminForcedJoinConfigResponse> =>
+    request<AdminForcedJoinConfigResponse>('/api/admin/forced-join/channels', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateAdminForcedJoinChannel: (
+    id: string,
+    payload: UpdateAdminForcedJoinChannelPayload
+  ): Promise<AdminForcedJoinConfigResponse> =>
+    request<AdminForcedJoinConfigResponse>(
+      `/api/admin/forced-join/channels/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  toggleAdminForcedJoinChannel: (
+    id: string,
+    enabled?: boolean
+  ): Promise<AdminForcedJoinConfigResponse> =>
+    request<AdminForcedJoinConfigResponse>(
+      `/api/admin/forced-join/channels/${encodeURIComponent(id)}/toggle`,
+      {
+        method: 'POST',
+        body: JSON.stringify(enabled === undefined ? {} : { enabled }),
+      }
+    ),
+
+  deleteAdminForcedJoinChannel: (id: string): Promise<AdminForcedJoinConfigResponse> =>
+    request<AdminForcedJoinConfigResponse>(
+      `/api/admin/forced-join/channels/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+      }
+    ),
+
+  testAdminForcedJoinChannel: (channelId: string): Promise<AdminForcedJoinTestResponse> =>
+    request<AdminForcedJoinTestResponse>('/api/admin/forced-join/test', {
+      method: 'POST',
+      body: JSON.stringify({ channelId }),
+    }),
+
+  // Admin Bulk Gift Campaigns API
+  getAdminBulkGiftJobs: (page = 1, limit = 10): Promise<AdminBulkGiftJobsResponse> =>
+    request<AdminBulkGiftJobsResponse>(`/api/admin/bulk-gift/jobs?page=${page}&limit=${limit}`),
+
+  getAdminBulkGiftJob: (id: string): Promise<{ job: AdminBulkGiftJobDto }> =>
+    request<{ job: AdminBulkGiftJobDto }>(`/api/admin/bulk-gift/jobs/${encodeURIComponent(id)}`),
+
+  previewAdminBulkGift: (payload: BulkGiftPreviewPayload): Promise<BulkGiftPreviewResponse> =>
+    request<BulkGiftPreviewResponse>('/api/admin/bulk-gift/preview', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  createAdminBulkGiftJob: (
+    payload: CreateBulkGiftJobPayload
+  ): Promise<{ success: boolean; job: AdminBulkGiftJobDto }> =>
+    request<{ success: boolean; job: AdminBulkGiftJobDto }>('/api/admin/bulk-gift/jobs', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  cancelAdminBulkGiftJob: (
+    id: string
+  ): Promise<{ success: boolean; requested: boolean; job: AdminBulkGiftJobDto }> =>
+    request<{ success: boolean; requested: boolean; job: AdminBulkGiftJobDto }>(
+      `/api/admin/bulk-gift/jobs/${encodeURIComponent(id)}/cancel`,
+      {
+        method: 'POST',
+      }
+    ),
 
   getAdminUsers: (
     params: {
@@ -810,6 +910,14 @@ export const api = {
   // User Portal API
   getUserProfile: (): Promise<UserProfileResponse> =>
     request<UserProfileResponse>('/api/user/profile'),
+
+  checkUserForcedJoin: (
+    action: 'any' | 'trial' | 'purchase' = 'any'
+  ): Promise<ForcedJoinCheckResponse> =>
+    request<ForcedJoinCheckResponse>('/api/user/forced-join/check', {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    }),
 
   getUserConfigs: (): Promise<UserConfigsResponse> =>
     request<UserConfigsResponse>('/api/user/configs'),

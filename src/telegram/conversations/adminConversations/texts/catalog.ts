@@ -150,6 +150,7 @@ const ADMIN_USERS_RECEIPTS_PREFIXES = [
   'admin_new_balance_',
   'admin_invalid_balance',
   'admin_broadcast_',
+  'admin_gift_',
   'admin_direct_',
   'admin_message_',
   'admin_msg_',
@@ -209,6 +210,7 @@ const ADMIN_SYSTEM_TEXTS_PREFIXES = [
   'admin_text_',
   'admin_nav_',
   'admin_cfg_',
+  'admin_fj_',
 ] as const;
 
 const ADMIN_SYSTEM_TEXTS_EXACT = new Set([
@@ -231,6 +233,7 @@ const USER_HOME_NAV_PREFIXES = [
   'operation_',
   'text_input_',
   'photo_input_',
+  'forced_join_',
 ] as const;
 
 const USER_HOME_NAV_EXACT = new Set([
@@ -296,6 +299,7 @@ const USER_SERVICES_PREFIXES = [
   'webhook_',
   'transfer_',
   'refund_reason_',
+  'bulk_gift_',
 ] as const;
 
 const USER_SERVICES_EXACT = new Set(['subscriptions_loading', 'traffic_unavailable']);
@@ -563,6 +567,12 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     en: '2-digit Gregorian year token',
     sampleFa: '{yy}',
     sampleEn: '{yy}',
+  },
+  configs: {
+    fa: 'تعداد سرویس‌های مشمول',
+    en: 'Eligible services count',
+    sampleFa: '۴۲',
+    sampleEn: '42',
   },
   count: {
     fa: 'تعداد موارد',
@@ -923,6 +933,12 @@ export const PLACEHOLDER_METADATA: Readonly<Record<string, PlaceholderMeta>> = {
     en: 'Service username',
     sampleFa: 'reb1042',
     sampleEn: 'reb1042',
+  },
+  users: {
+    fa: 'تعداد کاربران مشمول',
+    en: 'Eligible users count',
+    sampleFa: '۲۸',
+    sampleEn: '28',
   },
   version: {
     fa: 'نسخه فرمت بکاپ',

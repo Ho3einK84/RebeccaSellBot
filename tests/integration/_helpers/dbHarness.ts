@@ -19,6 +19,8 @@ const RUNTIME_TABLES_TRUNCATE_SQL = `TRUNCATE TABLE
   bot_admins,
   broadcast_recipients,
   broadcast_jobs,
+  bulk_gift_items,
+  bulk_gift_jobs,
   code_redemptions,
   config_counters,
   config_reconciliation_issues,

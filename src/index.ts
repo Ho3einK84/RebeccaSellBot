@@ -24,6 +24,8 @@ import { BackupService } from './domain/services/BackupService.js';
 import { LuckyWheelService } from './domain/services/LuckyWheelService.js';
 import { CatalogDiscountService } from './domain/services/CatalogDiscountService.js';
 import { ContactVerificationService } from './domain/services/ContactVerificationService.js';
+import { ForcedJoinService } from './domain/services/ForcedJoinService.js';
+import { BulkGiftService } from './domain/services/BulkGiftService.js';
 import { DomainRegistryService } from './domain/services/DomainRegistryService.js';
 import {
   normalizeDomainInput,
@@ -57,6 +59,7 @@ import { startReconciliationCron, stopReconciliationCron } from './jobs/reconcil
 import { startTrialCleanupCron, stopTrialCleanupCron } from './jobs/trialCleanup.js';
 import { startAutoRenewalCron, stopAutoRenewalCron } from './jobs/autoRenewal.js';
 import { startBroadcastWorker, stopBroadcastWorker } from './jobs/broadcast.js';
+import { startBulkGiftWorker, stopBulkGiftWorker } from './jobs/bulkGift.js';
 import { startBackupCron, stopBackupCron } from './jobs/backup.js';
 import { startFirstUseNudgeJob, stopFirstUseNudgeJob } from './jobs/firstUseNudge.js';
 import {
@@ -259,6 +262,7 @@ function stopScheduledWorkers(): void {
   stopTrialCleanupCron();
   stopAutoRenewalCron();
   stopBroadcastWorker();
+  stopBulkGiftWorker();
   stopBackupCron();
   stopFirstUseNudgeJob();
   stopExpiredConfigCleanupJob();
@@ -414,6 +418,28 @@ async function main() {
     translationService,
     botToken: config.BOT_TOKEN,
   });
+  const bulkGiftService = new BulkGiftService(panelRegistry);
+  const botApiRef: { current?: BotServices['botApi'] } = {};
+  const forcedJoinService = new ForcedJoinService({
+    translationService,
+    isAdmin: (telegramId) => adminService.isAdmin(telegramId),
+    getAdapter: () =>
+      botApiRef.current
+        ? {
+            getChatMember: (chatId, userId) => botApiRef.current!.getChatMember(chatId, userId),
+            getMe: () => botApiRef.current!.getMe(),
+            getChat: async (chatId) => {
+              const chat = await botApiRef.current!.getChat(chatId);
+              return {
+                id: chat.id,
+                title: 'title' in chat ? chat.title : undefined,
+                username: 'username' in chat ? chat.username : undefined,
+                invite_link: 'invite_link' in chat ? chat.invite_link : undefined,
+              };
+            },
+          }
+        : undefined,
+  });
 
   const domainRegistryService = new DomainRegistryService(config.REGISTRY_DIR);
 
@@ -532,6 +558,8 @@ async function main() {
     luckyWheelService,
     catalogDiscountService,
     contactVerificationService,
+    forcedJoinService,
+    bulkGiftService,
     supportUrl: config.SUPPORT_URL,
     webAppUrl: currentWebAppUrl,
     webAppPort: config.WEBAPP_HOST_PORT ?? config.WEBAPP_PORT,
@@ -553,6 +581,7 @@ async function main() {
   // Expose the resolved bot username and bot API to services for WebApp notifications
   services.botUsername = bot.botInfo.username;
   services.botApi = bot.api;
+  botApiRef.current = bot.api;
 
   startNotifierCron(panelRegistry, translationService, bot.api);
   startReconciliationCron(panelRegistry, {
@@ -566,6 +595,12 @@ async function main() {
   startTrialCleanupCron(panelRegistry, configService);
   startAutoRenewalCron(panelRegistry, walletService, pricingService, translationService, bot.api);
   startBroadcastWorker(broadcastService, bot.api);
+  startBulkGiftWorker({
+    bulkGiftService,
+    telegramApi: bot.api,
+    userService,
+    translationService,
+  });
   startBackupCron(backupService, bot.api);
   startFirstUseNudgeJob({
     panels: panelRegistry,

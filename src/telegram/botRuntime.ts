@@ -44,6 +44,11 @@ import {
   adminPanelConversation,
 } from './conversations/adminConversations.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
+import {
+  FORCED_JOIN_CHECK_CALLBACK,
+  forcedJoinGlobalMiddleware,
+  isStartCommandText,
+} from './middleware/forcedJoin.js';
 import { registerAdminAlertHook } from '../domain/services/RebeccaService.js';
 import { logger } from '../infra/logger.js';
 import { resolveServiceLocale, t, tForLocale } from './locale.js';
@@ -130,13 +135,14 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
       typeof services.translationService?.getDefaultLocale === 'function'
         ? services.translationService.getDefaultLocale()
         : resolveServiceLocale(services.translationService);
-    const isStartCommand = Boolean(ctx.message?.text && /^\/start(?:\s|$)/u.test(ctx.message.text));
+    const isStartCommand = isStartCommandText(ctx.message?.text);
+    const isForcedJoinCheck = ctx.callbackQuery?.data === FORCED_JOIN_CHECK_CALLBACK;
 
     if (ctx.from?.id && ctx.chat?.type === 'private') {
       try {
         const exists = await services.userService.exists(ctx.from.id);
-        if (!exists && isStartCommand) {
-          // Allow /start command to handle first registration with referral and language onboarding
+        if (!exists && (isStartCommand || isForcedJoinCheck)) {
+          // Allow /start and forced-join re-check to handle first registration with referral and language onboarding
           ctx.userLocale = defaultLocale;
           knownBanStatus.set(ctx, false);
           return next();
@@ -265,6 +271,11 @@ export function configureBotRuntime(bot: Bot<MenuContext>, services: BotServices
     }
     return next();
   });
+
+  // Mandatory channel join gate (global scope = 'all'). Runs after session, ban,
+  // and maintenance checks so `/start ref_...` referral payloads are preserved in
+  // Postgres session while unjoined non-admin users are diverted to the join screen.
+  bot.use(forcedJoinGlobalMiddleware(services));
 
   // Non-blocking, Postgres-session-backed admin input engine. Runs before
   // conversations so active text prompts work seamlessly without locking alerts.

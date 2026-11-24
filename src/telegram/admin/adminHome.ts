@@ -326,7 +326,7 @@ export async function renderAdminSalesHub(
   });
 }
 
-/** Build the unified 7-item Settings Hub keyboard. */
+/** Build the unified 8-item Settings Hub keyboard. */
 export function buildAdminSettingsHubKeyboard(ctx: MenuContext): InlineKeyboard {
   const kb = new InlineKeyboard()
     .text(t(ctx, 'admin_cfg_general_button'), 'adm:cfg:gen')
@@ -338,6 +338,7 @@ export function buildAdminSettingsHubKeyboard(ctx: MenuContext): InlineKeyboard 
     .text(t(ctx, 'admin_menu_webapp_settings'), 'adm:cfg:web')
     .text(t(ctx, 'admin_menu_backup'), 'adm:cfg:bak')
     .row()
+    .text(t(ctx, 'admin_fj_menu_button'), 'adm:cfg:fj')
     .text(t(ctx, 'admin_cfg_admins_support_button'), 'adm:cfg:adm')
     .row();
   return appendAdminFooterNav(kb, ctx, {
@@ -356,6 +357,7 @@ export async function renderAdminSettingsHub(
   const botEnabled = ts?.getSettingBool?.('bot_enabled', true) ?? true;
   const backupOn = ts?.getSettingBool?.('backup_enabled', false) ?? false;
   const webAppActive = Boolean(ctx.services?.webAppUrl);
+  const fjScope = ctx.services?.forcedJoinService?.getScope?.() ?? 'off';
 
   const text = buildAdminScreen({
     emoji: '⚙️',
@@ -368,6 +370,10 @@ export async function renderAdminSettingsHub(
           {
             label: t(ctx, 'admin_setting_bot_enabled'),
             value: buildStatusBadge(ctx, botEnabled ? 'active' : 'inactive'),
+          },
+          {
+            label: t(ctx, 'admin_fj_title'),
+            value: buildStatusBadge(ctx, fjScope === 'off' ? 'inactive' : 'active'),
           },
           {
             label: t(ctx, 'admin_menu_webapp_settings'),
@@ -394,16 +400,26 @@ export async function renderAdminMessagingHub(
   notice?: AdminScreenNotice
 ): Promise<void> {
   markAdminContext(ctx);
-  const recent = await ctx.services?.broadcastService
-    ?.listRecentJobs?.(1, 3)
-    .catch(() => ({ items: [], total: 0, page: 1, totalPages: 1, activeCount: 0 }));
+  const [recent, giftRecent] = await Promise.all([
+    ctx.services?.broadcastService
+      ?.listRecentJobs?.(1, 3)
+      .catch(() => ({ items: [], total: 0, page: 1, totalPages: 1, activeCount: 0 })),
+    ctx.services?.bulkGiftService
+      ?.listRecentJobs?.(1, 3)
+      .catch(() => ({ items: [], total: 0, page: 1, totalPages: 1, activeCount: 0 })),
+  ]);
   const activeCount = recent?.activeCount ?? 0;
   const totalJobs = recent?.total ?? 0;
+  const activeGiftCount = giftRecent?.activeCount ?? 0;
 
   const jobsLabel =
     activeCount > 0
       ? `${t(ctx, 'admin_msg_jobs_button')} (${localizedNumber(activeCount, ctx)})`
       : t(ctx, 'admin_msg_jobs_button');
+  const giftLabel =
+    activeGiftCount > 0
+      ? `${t(ctx, 'admin_gift_menu_button')} (${localizedNumber(activeGiftCount, ctx)})`
+      : t(ctx, 'admin_gift_menu_button');
 
   const text = buildAdminScreen({
     emoji: '📣',
@@ -424,6 +440,13 @@ export async function renderAdminMessagingHub(
             label: t(ctx, 'admin_msg_total_jobs_label'),
             value: localizedNumber(totalJobs, ctx),
           },
+          {
+            label: t(ctx, 'admin_gift_active_jobs_label'),
+            value:
+              activeGiftCount > 0
+                ? buildStatusBadge(ctx, 'pending', localizedNumber(activeGiftCount, ctx))
+                : localizedNumber(0, ctx),
+          },
         ],
       },
     ],
@@ -433,6 +456,7 @@ export async function renderAdminMessagingHub(
     .text(t(ctx, 'admin_menu_broadcast'), 'adm:msg:bcast')
     .text(t(ctx, 'admin_menu_direct_message'), 'adm:msg:dm')
     .row()
+    .text(giftLabel, 'adm:msg:gift')
     .text(jobsLabel, 'adm:msg:jobs:1')
     .row();
   appendAdminFooterNav(kb, ctx, {

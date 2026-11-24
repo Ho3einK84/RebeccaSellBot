@@ -18,6 +18,8 @@ import {
   Zap,
   Sparkles,
   Send,
+  Megaphone,
+  Gift,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/shared/components/ui/Card.js';
@@ -38,6 +40,8 @@ interface ModulesTabProps {
   onOpenBankCards?: () => void;
   onOpenPaymentGateways?: () => void;
   onOpenReceiptSettings?: () => void;
+  onOpenForcedJoin?: () => void;
+  onOpenBulkGift?: () => void;
 }
 
 interface StatusPill {
@@ -70,6 +74,8 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
   onOpenBankCards,
   onOpenPaymentGateways,
   onOpenReceiptSettings,
+  onOpenForcedJoin,
+  onOpenBulkGift,
 }) => {
   const { t } = useLanguage();
   const { formatNumber } = useFormatters();
@@ -94,6 +100,18 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
     queryKey: queryKeys.receiptSettings,
     queryFn: () => api.getReceiptSettings(),
     staleTime: 60_000,
+  });
+
+  const { data: forcedJoinData } = useQuery({
+    queryKey: queryKeys.forcedJoin,
+    queryFn: () => api.getAdminForcedJoin(),
+    staleTime: 60_000,
+  });
+
+  const { data: bulkGiftData } = useQuery({
+    queryKey: queryKeys.bulkGiftJobs(1),
+    queryFn: () => api.getAdminBulkGiftJobs(1, 5),
+    staleTime: 30_000,
   });
 
   const openBotDeepLink = (payload: string) => {
@@ -167,7 +185,69 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
     });
   }
 
+  const forcedJoinPills: StatusPill[] = [];
+  if (forcedJoinData) {
+    const scopeLabel =
+      forcedJoinData.scope === 'all'
+        ? t('admin.modules.statusScopeAll')
+        : forcedJoinData.scope === 'trial_only'
+          ? t('admin.modules.statusScopeTrial')
+          : forcedJoinData.scope === 'purchase_and_trial'
+            ? t('admin.modules.statusScopePurchaseTrial')
+            : t('admin.modules.statusScopeOff');
+    forcedJoinPills.push({
+      label: scopeLabel,
+      variant: forcedJoinData.scope === 'off' ? 'neutral' : 'success',
+      dot: true,
+    });
+    if (forcedJoinData.activeCount > 0) {
+      forcedJoinPills.push({
+        label: t('admin.modules.statusActiveChannels', {
+          count: formatNumber(forcedJoinData.activeCount),
+        }),
+        variant: 'info',
+      });
+    }
+  }
+
+  const bulkGiftPills: StatusPill[] = [];
+  if (bulkGiftData) {
+    if (bulkGiftData.activeCount > 0) {
+      bulkGiftPills.push({
+        label: t('admin.modules.statusActiveCampaigns', {
+          count: formatNumber(bulkGiftData.activeCount),
+        }),
+        variant: 'warning',
+        dot: true,
+      });
+    } else {
+      bulkGiftPills.push({
+        label: t('admin.modules.statusIdle'),
+        variant: 'neutral',
+        dot: true,
+      });
+    }
+  }
+
   const activeTools: ActiveToolItem[] = [
+    {
+      id: 'forced-join',
+      icon: Megaphone,
+      tone: 'brand',
+      title: t('admin.modules.forcedJoin'),
+      desc: t('admin.modules.forcedJoinSub'),
+      pills: forcedJoinPills,
+      onOpen: onOpenForcedJoin,
+    },
+    {
+      id: 'bulk-gift',
+      icon: Gift,
+      tone: 'accent',
+      title: t('admin.modules.bulkGift'),
+      desc: t('admin.modules.bulkGiftSub'),
+      pills: bulkGiftPills,
+      onOpen: onOpenBulkGift,
+    },
     {
       id: 'gateways',
       icon: CreditCard,
