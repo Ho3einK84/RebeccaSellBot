@@ -460,8 +460,24 @@ describeIntegration('Wallet, sessions, and background job PostgreSQL integration
     const paymentService = new PaymentService(ts);
     const userService = new UserService();
     const immediateRebecca = {
-      createUser: vi.fn(async (payload: { username: string }) =>
-        remoteUser(payload.username, { data_limit: 10 * 1024 ** 3 })
+      createUser: vi.fn(
+        async (payload: {
+          username: string;
+          data_limit: number;
+          expire?: number | null;
+          status?: 'active' | 'on_hold';
+          on_hold_expire_duration?: number | null;
+          note?: string;
+        }) =>
+          remoteUser(payload.username, {
+            data_limit: payload.data_limit,
+            expire: payload.expire ?? null,
+            status: payload.status ?? 'active',
+            ...(payload.on_hold_expire_duration !== undefined
+              ? { on_hold_expire_duration: payload.on_hold_expire_duration }
+              : {}),
+            note: payload.note ?? null,
+          })
       ),
       deleteUser: vi.fn().mockResolvedValue({ username: 'deleted', status: 'deleted' }),
     } as unknown as RebeccaService;
