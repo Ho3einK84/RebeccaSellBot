@@ -530,7 +530,7 @@ describeIntegration('Wallet, sessions, and background job PostgreSQL integration
       gbAmount: 10,
       durationDays: 30,
     });
-    const refundedPurchase = await liveWallet.executePurchaseSaga({
+    await liveWallet.executePurchaseSaga({
       telegramId: userB,
       amount: 30_000,
       type: 'new_config',
@@ -538,20 +538,25 @@ describeIntegration('Wallet, sessions, and background job PostgreSQL integration
       gbAmount: 5,
       durationDays: 30,
     });
-    expect(refundedPurchase.intentId).toBeTruthy();
+    const [refundedIntent] = await db
+      .select()
+      .from(purchaseIntents)
+      .where(eq(purchaseIntents.configUsername, 'rev_refund_cfg'))
+      .limit(1);
+    expect(refundedIntent?.id).toBeTruthy();
 
     // Mark second purchase refunded with deterministic refund tx
     await db
       .update(purchaseIntents)
       .set({ status: 'refunded', refundedAt: new Date() })
-      .where(eq(purchaseIntents.id, refundedPurchase.intentId!));
+      .where(eq(purchaseIntents.id, refundedIntent!.id));
     await db.insert(walletTransactions).values({
       id: 'tx_refund_test_1',
       telegramId: userB,
       amount: 30_000,
       balanceAfter: 30_000,
       type: 'refund',
-      referenceId: `refund_${refundedPurchase.intentId!}`,
+      referenceId: `refund_${refundedIntent!.id}`,
       description: 'Refunded test purchase',
     });
 
