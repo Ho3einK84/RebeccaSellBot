@@ -1,7 +1,14 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { getDb } from '../../src/infra/db.js';
-import { auditLogs, bulkGiftItems, bulkGiftJobs, userConfigs } from '../../src/infra/schema.js';
+import {
+  auditLogs,
+  bulkGiftItems,
+  bulkGiftJobs,
+  rebeccaPanels,
+  rebeccaPanelServices,
+  userConfigs,
+} from '../../src/infra/schema.js';
 import { BulkGiftService } from '../../src/domain/services/BulkGiftService.js';
 import type { RebeccaPanelRegistry } from '../../src/domain/services/RebeccaPanelRegistry.js';
 import type {
@@ -69,6 +76,22 @@ describeIntegration('BulkGift durable jobs PostgreSQL integration', () => {
     ]);
 
     const db = getDb();
+    await db
+      .insert(rebeccaPanels)
+      .values([
+        { id: 'panel_de', name: 'Panel DE', enabled: true, isDefault: false },
+        { id: 'panel_nl', name: 'Panel NL', enabled: true, isDefault: false },
+      ])
+      .onConflictDoNothing();
+
+    await db
+      .insert(rebeccaPanelServices)
+      .values([
+        { panelId: 'panel_de', serviceId: 1, name: 'DE Default', isDefault: true },
+        { panelId: 'panel_nl', serviceId: 2, name: 'NL Default', isDefault: true },
+      ])
+      .onConflictDoNothing();
+
     await db.insert(userConfigs).values([
       {
         id: 'uc_active_a',
@@ -129,6 +152,14 @@ describeIntegration('BulkGift durable jobs PostgreSQL integration', () => {
 
     const mockRegistry = {
       getService: vi.fn(() => mockRebeccaService),
+      getEnabledPanelIds: vi.fn(() => ['panel_de', 'panel_nl']),
+      resolveTarget: vi.fn(async (panelId = 'panel_de', serviceId = 1) => ({
+        panelId,
+        panelName: panelId,
+        serviceId,
+        serviceName: `Service ${serviceId}`,
+        service: mockRebeccaService,
+      })),
     } as unknown as RebeccaPanelRegistry;
 
     bulkGiftService = new BulkGiftService(mockRegistry);

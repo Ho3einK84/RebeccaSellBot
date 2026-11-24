@@ -194,11 +194,11 @@ export class ScheduledMessageDeletionService {
 
     const nextStatusExpr = options.retryable
       ? sql<string>`CASE WHEN ${scheduledMessageDeletions.attempts} + 1 >= ${maxAttempts} THEN 'failed' ELSE 'pending' END`
-      : sql<string>`'failed'`;
+      : 'failed';
 
     const nextProcessedExpr = options.retryable
-      ? sql<Date | null>`CASE WHEN ${scheduledMessageDeletions.attempts} + 1 >= ${maxAttempts} THEN ${now} ELSE NULL END`
-      : sql<Date | null>`${now}`;
+      ? sql<Date | null>`CASE WHEN ${scheduledMessageDeletions.attempts} + 1 >= ${maxAttempts} THEN CAST(${now.toISOString()} AS timestamp) ELSE NULL END`
+      : now;
 
     const [updated] = await getDb()
       .update(scheduledMessageDeletions)
