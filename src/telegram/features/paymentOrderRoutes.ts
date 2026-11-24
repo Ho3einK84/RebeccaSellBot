@@ -29,7 +29,7 @@ import {
 function formatCardGrouped(rawCard: string): string {
   const digits = normalizeCardNumber(rawCard).replace(/\D/g, '');
   if (digits.length === 16) {
-    return `\u200E${digits.slice(0, 4)} \u200E${digits.slice(4, 8)} \u200E${digits.slice(8, 12)} \u200E${digits.slice(12, 16)}`;
+    return digits;
   }
   return rawCard;
 }

@@ -110,10 +110,8 @@ describe('Bank Cards Domain Utilities & Iranian BIN Detection', () => {
     );
   });
 
-  it('formats 16-digit Persian/Arabic card numbers into LRM-prefixed 4-digit groups', () => {
-    expect(formatCardNumberGrouped('۶۰۳۷-۹۹۱۸-۱۲۳۴-۵۶۷۸')).toBe(
-      '\u200E6037 \u200E9918 \u200E1234 \u200E5678'
-    );
+  it('formats 16-digit Persian/Arabic card numbers as clean contiguous digits for mono copy', () => {
+    expect(formatCardNumberGrouped('۶۰۳۷-۹۹۱۸-۱۲۳۴-۵۶۷۸')).toBe('6037991812345678');
   });
 
   it('detects Iranian Shetab banks including 8-digit Blu Bank before 6-digit Saman Bank', () => {
@@ -383,6 +381,8 @@ describe('Topup Flow Multi-Card Selection, Daily Caps & Receipt Card Attribution
     const receiptPrompt = String(harness.callsFor('sendMessage').at(-1)?.payload.text);
     expect(receiptPrompt).toContain('Big Cap Holder');
     expect(receiptPrompt).toContain('بانک ملی');
+    expect(receiptPrompt).toContain('`6037997911112222`');
+    expect(receiptPrompt).not.toContain('\u200E');
 
     await harness.sendPhoto('photo_123', { userId: 42 });
     await harness.sendCallback('topup:confirm', { userId: 42, isCaptionMessage: true });

@@ -28,6 +28,7 @@ import {
   topupReceipts,
   userConfigs,
   auditLogs,
+  purchaseIntents,
 } from '../../infra/schema.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { SupportedLocale, TranslationService } from './TranslationService.js';
@@ -1167,14 +1168,42 @@ export class WalletService {
     const dayStart = new Date(tehranDayStartMs - IRAN_TZ_OFFSET_MS);
     const weekStart = new Date(dayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const purchaseSum = (since?: Date) =>
+    const netTopupRevenueSum = (since: Date) =>
       db
         .select({ value: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)` })
         .from(walletTransactions)
         .where(
-          since
-            ? sql`${walletTransactions.type} = 'purchase' AND ${walletTransactions.createdAt} >= ${since}`
-            : eq(walletTransactions.type, 'purchase')
+          sql`${walletTransactions.type} = 'topup'
+            AND ${walletTransactions.amount} > 0
+            AND ${walletTransactions.createdAt} >= ${since}
+            AND NOT EXISTS (
+              SELECT 1 FROM ${topupReceipts}
+              WHERE ${topupReceipts.id} = ${walletTransactions.referenceId}
+                AND ${topupReceipts.status} = 'voided'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM wallet_transactions AS wt_void
+              WHERE wt_void.type = 'topup_void'
+                AND wt_void.reference_id = ('void_' || ${walletTransactions.referenceId})
+            )`
+        );
+    const netSalesSum = () =>
+      db
+        .select({ value: sql<number>`COALESCE(SUM(ABS(${walletTransactions.amount})), 0)` })
+        .from(walletTransactions)
+        .where(
+          sql`${walletTransactions.type} = 'purchase'
+            AND ${walletTransactions.amount} < 0
+            AND NOT EXISTS (
+              SELECT 1 FROM ${purchaseIntents}
+              WHERE ${purchaseIntents.id} = ${walletTransactions.referenceId}
+                AND ${purchaseIntents.status} = 'refunded'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM wallet_transactions AS wt_ref
+              WHERE wt_ref.type = 'refund'
+                AND wt_ref.reference_id = ('refund_' || ${walletTransactions.referenceId})
+            )`
         );
     const [
       [userCount],
@@ -1189,10 +1218,10 @@ export class WalletService {
       [pendingReceipts],
     ] = await Promise.all([
       db.select({ value: count() }).from(users),
-      purchaseSum(),
-      purchaseSum(dayStart),
-      purchaseSum(weekStart),
-      purchaseSum(monthStart),
+      netSalesSum(),
+      netTopupRevenueSum(dayStart),
+      netTopupRevenueSum(weekStart),
+      netTopupRevenueSum(monthStart),
       db
         .select({ value: sql<number>`COALESCE(SUM(${walletTransactions.amount}), 0)` })
         .from(walletTransactions)
@@ -1214,16 +1243,20 @@ export class WalletService {
     ]);
     return {
       totalUsers: dbIntegerToSafeNumber(userCount?.value ?? 0, 'dashboard_total_users'),
-      totalSales: Math.abs(
+      totalSales: Math.max(
+        0,
         dbIntegerToSafeNumber(purchaseTotal?.value ?? 0, 'dashboard_total_sales')
       ),
-      dailyRevenue: Math.abs(
+      dailyRevenue: Math.max(
+        0,
         dbIntegerToSafeNumber(dailyRevenue?.value ?? 0, 'dashboard_daily_revenue')
       ),
-      weeklyRevenue: Math.abs(
+      weeklyRevenue: Math.max(
+        0,
         dbIntegerToSafeNumber(weeklyRevenue?.value ?? 0, 'dashboard_weekly_revenue')
       ),
-      monthlyRevenue: Math.abs(
+      monthlyRevenue: Math.max(
+        0,
         dbIntegerToSafeNumber(monthlyRevenue?.value ?? 0, 'dashboard_monthly_revenue')
       ),
       totalReferralBonus: dbIntegerToSafeNumber(

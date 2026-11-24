@@ -745,4 +745,76 @@ describe('WalletService', () => {
       ).rejects.toThrow('TRANSFER_ALREADY_PROCESSED');
     });
   });
+
+  describe('getDashboardStats', () => {
+    it('computes net topup revenue (excluding voided receipts) and net sales (excluding refunds)', async () => {
+      const statsDb = createMockDb({
+        selectResults: [
+          [{ value: 42 }],
+          [{ value: 250_000 }],
+          [{ value: 80_000 }],
+          [{ value: 190_000 }],
+          [{ value: 420_000 }],
+          [{ value: 15_000 }],
+          [{ value: 5_000 }],
+          [{ value: 18 }],
+          [{ value: 4 }],
+          [{ value: 3 }],
+        ],
+      });
+      getDbMock.mockReturnValue(statsDb.db as never);
+
+      const stats = await walletService.getDashboardStats();
+
+      expect(stats).toEqual({
+        totalUsers: 42,
+        totalSales: 250_000,
+        dailyRevenue: 80_000,
+        weeklyRevenue: 190_000,
+        monthlyRevenue: 420_000,
+        totalReferralBonus: 15_000,
+        totalCashback: 5_000,
+        activeSubscriptions: 18,
+        inactiveSubscriptions: 4,
+        pendingReceipts: 3,
+      });
+
+      const salesWhere = extractSqlText(statsDb.state.selectCalls[1]?.where);
+      expect(salesWhere).toContain('purchase');
+      expect(salesWhere).toContain('refunded');
+      expect(salesWhere).toContain('refund_');
+
+      for (const idx of [2, 3, 4]) {
+        const revWhere = extractSqlText(statsDb.state.selectCalls[idx]?.where);
+        expect(revWhere).toContain('topup');
+        expect(revWhere).toContain('voided');
+        expect(revWhere).toContain('topup_void');
+        expect(revWhere).toContain('void_');
+      }
+
+      // Clamps anomalous negative sums to zero instead of flipping sign with Math.abs
+      const negativeDb = createMockDb({
+        selectResults: [
+          [{ value: 1 }],
+          [{ value: -10 }],
+          [{ value: -50 }],
+          [{ value: -20 }],
+          [{ value: -5 }],
+          [{ value: 0 }],
+          [{ value: 0 }],
+          [{ value: 0 }],
+          [{ value: 0 }],
+          [{ value: 0 }],
+        ],
+      });
+      getDbMock.mockReturnValue(negativeDb.db as never);
+      const clamped = await walletService.getDashboardStats();
+      expect(clamped).toMatchObject({
+        totalSales: 0,
+        dailyRevenue: 0,
+        weeklyRevenue: 0,
+        monthlyRevenue: 0,
+      });
+    });
+  });
 });

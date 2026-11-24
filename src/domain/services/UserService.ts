@@ -510,7 +510,23 @@ export class UserService {
         .where(
           and(
             eq(walletTransactions.telegramId, telegramId),
-            sql`${walletTransactions.amount} > 0 AND ${walletTransactions.type} IN ('topup', 'admin_adjustment', 'transfer_received')`
+            sql`${walletTransactions.amount} > 0
+              AND ${walletTransactions.type} IN ('topup', 'admin_adjustment', 'transfer_received')
+              AND NOT (
+                ${walletTransactions.type} = 'topup'
+                AND (
+                  EXISTS (
+                    SELECT 1 FROM ${topupReceipts}
+                    WHERE ${topupReceipts.id} = ${walletTransactions.referenceId}
+                      AND ${topupReceipts.status} = 'voided'
+                  )
+                  OR EXISTS (
+                    SELECT 1 FROM wallet_transactions AS wt_void
+                    WHERE wt_void.type = 'topup_void'
+                      AND wt_void.reference_id = ('void_' || ${walletTransactions.referenceId})
+                  )
+                )
+              )`
           )
         ),
       db
@@ -572,7 +588,10 @@ export class UserService {
 
     return {
       user,
-      totalDeposit: dbIntegerToSafeNumber(depositRow?.value ?? 0, 'report_total_deposit'),
+      totalDeposit: Math.max(
+        0,
+        dbIntegerToSafeNumber(depositRow?.value ?? 0, 'report_total_deposit')
+      ),
       totalSpend: Number(user.totalSpend),
       totalRefund: dbIntegerToSafeNumber(refundRow?.value ?? 0, 'report_total_refund'),
       totalCashback: Number(user.cashbackEarned),

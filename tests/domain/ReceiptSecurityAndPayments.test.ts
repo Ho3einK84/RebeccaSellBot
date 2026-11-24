@@ -567,6 +567,53 @@ describe('Multi-Card Rotation & Unique Payable Amount (PaymentService)', () => {
     expect(['card_a', 'card_b']).toContain(instructions.cardId);
   });
 
+  it('replaces stale in-memory card usage with live DB totals so voided receipts drop out immediately', async () => {
+    const fixedNow = new Date('2026-10-15T10:00:00Z');
+    await paymentService.updateBankCards([
+      {
+        id: 'card_a',
+        cardNumber: '6037997900001111',
+        cardHolder: 'Holder A',
+        enabled: true,
+        dailyCapToman: 500_000,
+      },
+    ]);
+
+    // Simulate an in-memory receipt recorded up to daily cap before being voided/rejected
+    paymentService.recordCardDailyUsage('card_a', 500_000, fixedNow);
+    expect(paymentService.getCardDailyUsage('card_a', fixedNow)).toBe(500_000);
+
+    // Authoritative DB query shows only 100,000 active today (voided 400,000 receipt excluded)
+    getDbMock.mockReturnValue(
+      createMockDb({
+        selectResults: [
+          [{ cardId: 'card_a', cardNumber: '6037997900001111', amount: 100_000 }],
+          [],
+        ],
+      }).db as never
+    );
+
+    const dbUsage = await paymentService.getTodayCardUsageMap(fixedNow);
+    expect(dbUsage.get('card_a')).toBe(100_000);
+    expect(dbUsage.get('6037997900001111')).toBe(100_000);
+    expect(paymentService.getCardDailyUsage('card_a', fixedNow)).toBe(100_000);
+    expect(
+      paymentService.selectCardForTopup({
+        amountToman: 300_000,
+        dailyUsageByCardId: dbUsage,
+        now: fixedNow,
+      })?.id
+    ).toBe('card_a');
+
+    // When DB is unavailable (isolated unit tests), falls back to in-memory usage (100k + 200k = 300k)
+    getDbMock.mockImplementation(() => {
+      throw new Error('DB_UNINITIALIZED');
+    });
+    paymentService.recordCardDailyUsage('card_a', 200_000, fixedNow);
+    const fallbackUsage = await paymentService.getTodayCardUsageMap(fixedNow);
+    expect(fallbackUsage.get('card_a')).toBe(300_000);
+  });
+
   it('allocates unique payable amounts avoiding pending collisions and rounds upward by default', async () => {
     // Default mode adds +1..+999 Toman so users never fall short of their target package price
     const defaultUp = computeUniquePayableAmount(50_000, [50_001, 50_002], {

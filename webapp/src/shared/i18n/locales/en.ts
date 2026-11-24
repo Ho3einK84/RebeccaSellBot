@@ -634,7 +634,7 @@ export const en: DeepPartial<TranslationSchema> = {
       totalUsers: 'Total Users',
       totalUsersSub: 'Registered bot accounts',
       totalSales: 'Total Sales',
-      totalSalesSub: 'Cumulative user purchases',
+      totalSalesSub: 'Net user purchases (excluding refunds)',
       dailyRevenue: "Today's Revenue",
       revenueBreakdown: 'Revenue & subscriptions',
       dailyRevenueSub: 'Since 00:00 today',

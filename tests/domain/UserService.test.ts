@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../../src/infra/db.js';
 import { cleanUserSearchQuery, UserService } from '../../src/domain/services/UserService.js';
-import { createMockDb } from './_helpers/mockDb.js';
+import { createMockDb, extractSqlText } from './_helpers/mockDb.js';
 
 vi.mock('../../src/infra/db.js', () => ({ getDb: vi.fn() }));
 vi.mock('../../src/infra/logger.js', () => ({
@@ -130,27 +130,26 @@ describe('UserService', () => {
 
   it('builds user report summary and normalizes search queries including Persian/Arabic digits', async () => {
     const user = makeUser(44, { hasUsedTrial: true });
-    getDbMock.mockReturnValue(
-      createMockDb({
-        selectResults: [
-          [user],
-          [{ value: 5 }],
-          [{ value: 2 }],
-          [{ value: 10_000 }],
-          [{ value: 5_000 }],
-          [{ value: 200_000 }],
-          [{ value: 0 }],
-          [{ value: 15_000 }],
-          [{ count: 4 }],
-          [{ count: 2 }],
-          [{ count: 3 }],
-          [{ count: 5 }],
-          [{ count: 1 }],
-          [{ count: 0 }],
-          [{ count: 7 }],
-        ],
-      }).db as never
-    );
+    const mockReportDb = createMockDb({
+      selectResults: [
+        [user],
+        [{ value: 5 }],
+        [{ value: 2 }],
+        [{ value: 10_000 }],
+        [{ value: 5_000 }],
+        [{ value: 200_000 }],
+        [{ value: 0 }],
+        [{ value: 15_000 }],
+        [{ count: 4 }],
+        [{ count: 2 }],
+        [{ count: 3 }],
+        [{ count: 5 }],
+        [{ count: 1 }],
+        [{ count: 0 }],
+        [{ count: 7 }],
+      ],
+    });
+    getDbMock.mockReturnValue(mockReportDb.db as never);
 
     const summary = await new UserService().getUserReportSummary(44);
     expect(summary).toMatchObject({
@@ -165,6 +164,11 @@ describe('UserService', () => {
       totalReceiptsCount: 6,
       auditEventsCount: 7,
     });
+
+    const depositWhereSql = extractSqlText(mockReportDb.state.selectCalls[5]?.where);
+    expect(depositWhereSql).toContain('topup');
+    expect(depositWhereSql).toContain('voided');
+    expect(depositWhereSql).toContain('topup_void');
 
     expect(cleanUserSearchQuery('  @john_doe  ')).toBe('john_doe');
     expect(cleanUserSearchQuery('https://t.me/super_user')).toBe('super_user');

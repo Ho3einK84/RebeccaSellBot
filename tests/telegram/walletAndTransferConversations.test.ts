@@ -13,13 +13,10 @@ import { createMockServices } from './helpers/botHarness.js';
 import { createConversationHarness } from './helpers/conversationHarness.js';
 
 describe('Topup helpers & hydrated conversation', () => {
-  it('formats 16-digit card numbers into LRM-prefixed 4-digit groups and builds bounded presets', () => {
-    expect(formatCardNumberGrouped('6037991812345678')).toBe(
-      '\u200E6037 \u200E9918 \u200E1234 \u200E5678'
-    );
-    expect(formatCardNumberGrouped('6037-9918-1234-5678')).toBe(
-      '\u200E6037 \u200E9918 \u200E1234 \u200E5678'
-    );
+  it('formats 16-digit card numbers as clean contiguous digits for tap-to-copy mono spans and builds bounded presets', () => {
+    expect(formatCardNumberGrouped('6037991812345678')).toBe('6037991812345678');
+    expect(formatCardNumberGrouped('6037-9918-1234-5678')).toBe('6037991812345678');
+    expect(formatCardNumberGrouped('۶۰۳۷-۹۹۱۸-۱۲۳۴-۵۶۷۸')).toBe('6037991812345678');
     expect(formatCardNumberGrouped('12345')).toBe('12345');
 
     expect(buildTopupPresets(10_000, 10_000_000)).toEqual([50_000, 100_000, 200_000, 500_000]);
@@ -33,7 +30,9 @@ describe('Topup helpers & hydrated conversation', () => {
       adminIds: [999],
       walletService: { submitTopupReceipt },
       translationService: {
-        getSetting: vi.fn((_k: string, fb: string) => fb),
+        getSetting: vi.fn((k: string, fb: string) =>
+          k === 'card_number' ? '6037997900000000' : fb
+        ),
         getSettingNum: vi.fn((_k: string, fb: number) => fb),
       },
     });
@@ -47,9 +46,12 @@ describe('Topup helpers & hydrated conversation', () => {
     });
 
     await harness.sendText('/topup', { userId: 6_698_253_699 });
-    expect(String(harness.callsFor('sendMessage')[0]?.payload.text)).toContain(
-      'topup_choose_amount_hint'
-    );
+    const firstMsgText = String(harness.callsFor('sendMessage')[0]?.payload.text);
+    expect(firstMsgText).toContain('topup_choose_amount_hint');
+    expect(firstMsgText).toContain('`6037997900000000`');
+    const cardLine = firstMsgText.split('\n').find((line) => line.includes('6037997900000000'));
+    expect(cardLine).toContain('`6037997900000000`');
+    expect(cardLine).not.toContain('\u200E');
 
     await harness.sendText('100000', { userId: 6_698_253_699 });
     expect(String(harness.callsFor('sendMessage').at(-1)?.payload.text)).toContain(

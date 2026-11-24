@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Bot } from 'grammy';
-import { registerPaymentOrderRoutes } from '../../src/telegram/features/paymentOrderRoutes.js';
+import {
+  buildForAppOrderInvoiceScreen,
+  registerPaymentOrderRoutes,
+} from '../../src/telegram/features/paymentOrderRoutes.js';
+import { validateTelegramMarkdown } from '../../src/telegram/rendering.js';
 import {
   renderForAppGuideScreen,
   renderForAppSettingsScreen,
@@ -278,5 +282,29 @@ describe('Telegram paymentOrderRoutes UX lifecycle', () => {
         show_alert: true,
       })
     );
+  });
+
+  it('renders ForApp invoice card number as contiguous 16-digit mono without BiDi markers or spaces', () => {
+    const services = {
+      translationService: new TranslationService(),
+    } as unknown as BotServices;
+    const { ctx } = createCallbackContext(services);
+
+    const screen = buildForAppOrderInvoiceScreen(
+      ctx as never,
+      {
+        id: 'po_1795548358344_50d1148f',
+        payableAmount: 100_077,
+        payableAmountRial: 1_000_770,
+        cardNumber: '۶۲۱۹-۸۶۱۹-۸۳۶۱-۰۹۹۸',
+        cardHolder: 'مجتبی مرتضوی',
+        bankName: 'بلوبانک (سامان)',
+        expiresAt: new Date('2026-11-24T19:45:58Z'),
+      } as never
+    );
+
+    expect(screen).toContain('`6219861983610998`');
+    expect(screen).not.toContain('\u200E');
+    expect(validateTelegramMarkdown(screen).valid).toBe(true);
   });
 });

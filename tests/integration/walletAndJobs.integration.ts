@@ -5,13 +5,19 @@ import { PostgresSessionAdapter } from '../../src/infra/sessionAdapter.js';
 import {
   notificationDeliveries,
   purchaseIntents,
+  topupReceipts,
   userConfigs,
   users,
   walletTransactions,
 } from '../../src/infra/schema.js';
 import { PurchaseInProgressError, WalletService } from '../../src/domain/services/WalletService.js';
+import {
+  PaymentService,
+  serializeBankCardsJson,
+} from '../../src/domain/services/PaymentService.js';
+import { UserService } from '../../src/domain/services/UserService.js';
 import type { RebeccaService } from '../../src/domain/services/RebeccaService.js';
-import type { TranslationService } from '../../src/domain/services/TranslationService.js';
+import { TranslationService } from '../../src/domain/services/TranslationService.js';
 import type { ReferralService } from '../../src/domain/services/ReferralService.js';
 import type { PromoService } from '../../src/domain/services/PromoService.js';
 import { JobRunner, PostgresAdvisoryJobLockProvider } from '../../src/jobs/workerRuntime.js';
@@ -427,5 +433,166 @@ describeIntegration('Wallet, sessions, and background job PostgreSQL integration
     expect(applied?.status).toBe('completed');
     expect(released?.status).toBe('failed');
     expect(fresh?.status).toBe('pending');
+  });
+
+  it('excludes voided top-up receipts and refunded purchases from dashboard revenue, sales, user deposits, and card usage in PostgreSQL', async () => {
+    const db = getDb();
+    const userA = 9_002_001;
+    const userB = 9_002_002;
+    const adminId = 999_001;
+    await seedIntegrationUser(userA, { balance: 0, locale: 'fa' });
+    await seedIntegrationUser(userB, { balance: 0, locale: 'fa' });
+
+    const ts = new TranslationService();
+    await ts.ensureDefaultSettings();
+    await ts.updateSettings({
+      bank_cards_json: serializeBankCardsJson([
+        {
+          id: 'card_a',
+          cardNumber: '6037698111306846',
+          cardHolder: 'Integration Card',
+          enabled: true,
+          dailyCapToman: 300_000,
+        },
+      ]),
+    });
+
+    const paymentService = new PaymentService(ts);
+    const userService = new UserService();
+    const immediateRebecca = {
+      createUser: vi.fn(async (payload: { username: string }) =>
+        remoteUser(payload.username, { data_limit: 10 * 1024 ** 3 })
+      ),
+      deleteUser: vi.fn().mockResolvedValue({ username: 'deleted', status: 'deleted' }),
+    } as unknown as RebeccaService;
+    const referralService = {
+      processCompletedPurchase: vi.fn().mockResolvedValue(undefined),
+      resolveReferrerId: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ReferralService;
+    const promoService = {
+      reserveForPurchase: vi.fn(),
+      finalizeReservedPurchasePromo: vi.fn().mockResolvedValue(false),
+      releaseReservedPurchasePromoInTransaction: vi.fn().mockResolvedValue(false),
+    } as unknown as PromoService;
+
+    const liveWallet = new WalletService(immediateRebecca, ts, referralService, promoService);
+
+    // 1. User A submits receipt r1 (120,000) & approves -> increments revenue, deposit, and card usage
+    const { receiptId: r1 } = await liveWallet.submitTopupReceiptDetailed({
+      telegramId: userA,
+      amount: 120_000,
+      photoFileId: 'photo_r1',
+      cardId: 'card_a',
+      cardNumber: '6037698111306846',
+    });
+    paymentService.recordCardDailyUsage('card_a', 120_000);
+    await liveWallet.approveTopup(r1, adminId);
+
+    const statsBeforeVoid = await liveWallet.getDashboardStats();
+    expect(statsBeforeVoid.dailyRevenue).toBe(120_000);
+    expect(statsBeforeVoid.weeklyRevenue).toBe(120_000);
+    expect(statsBeforeVoid.monthlyRevenue).toBe(120_000);
+    expect((await userService.getUserReportSummary(userA))?.totalDeposit).toBe(120_000);
+    expect((await paymentService.getTodayCardUsageMap()).get('card_a')).toBe(120_000);
+
+    // 2. User B submits receipt r2 (80,000), spends everything (50k kept + 30k refunded), then r2 is voided with zero deduct
+    const { receiptId: r2 } = await liveWallet.submitTopupReceiptDetailed({
+      telegramId: userB,
+      amount: 80_000,
+      photoFileId: 'photo_r2',
+      cardId: 'card_a',
+      cardNumber: '6037698111306846',
+    });
+    paymentService.recordCardDailyUsage('card_a', 80_000);
+    await liveWallet.approveTopup(r2, adminId);
+
+    await liveWallet.executePurchaseSaga({
+      telegramId: userB,
+      amount: 50_000,
+      type: 'new_config',
+      configUsername: 'rev_kept_cfg',
+      gbAmount: 10,
+      durationDays: 30,
+    });
+    const refundedPurchase = await liveWallet.executePurchaseSaga({
+      telegramId: userB,
+      amount: 30_000,
+      type: 'new_config',
+      configUsername: 'rev_refund_cfg',
+      gbAmount: 5,
+      durationDays: 30,
+    });
+    expect(refundedPurchase.intentId).toBeTruthy();
+
+    // Mark second purchase refunded with deterministic refund tx
+    await db
+      .update(purchaseIntents)
+      .set({ status: 'refunded', refundedAt: new Date() })
+      .where(eq(purchaseIntents.id, refundedPurchase.intentId!));
+    await db.insert(walletTransactions).values({
+      id: 'tx_refund_test_1',
+      telegramId: userB,
+      amount: 30_000,
+      balanceAfter: 30_000,
+      type: 'refund',
+      referenceId: `refund_${refundedPurchase.intentId!}`,
+      description: 'Refunded test purchase',
+    });
+
+    // User A gets another approved receipt r3 (45,000) + an automated ForApp topup (55,000)
+    const { receiptId: r3 } = await liveWallet.submitTopupReceiptDetailed({
+      telegramId: userA,
+      amount: 45_000,
+      photoFileId: 'photo_r3',
+      cardId: 'card_a',
+      cardNumber: '6037698111306846',
+    });
+    paymentService.recordCardDailyUsage('card_a', 45_000);
+    await liveWallet.approveTopup(r3, adminId);
+
+    await db.insert(walletTransactions).values({
+      id: 'tx_forapp_test_1',
+      telegramId: userA,
+      amount: 55_000,
+      balanceAfter: 220_000,
+      type: 'topup',
+      referenceId: 'forapp_order_po_int_1',
+      description: 'Automated ForApp card-to-card top-up',
+    });
+
+    // Now void r1 (full deduct) and void r2 (zero deduct due to shortfall; test with zeroed balance first)
+    await db.update(users).set({ balance: 0 }).where(eq(users.telegramId, userB));
+    const voidR1 = await liveWallet.voidApprovedTopup({
+      receiptId: r1,
+      adminId,
+      reason: 'Fake r1',
+    });
+    const voidR2 = await liveWallet.voidApprovedTopup({
+      receiptId: r2,
+      adminId,
+      reason: 'Fake r2',
+    });
+    expect(voidR1.deductedAmount).toBe(120_000);
+    expect(voidR2.deductedAmount).toBe(0);
+    expect(voidR2.shortfallAmount).toBe(80_000);
+
+    const [voidedRow] = await db.select().from(topupReceipts).where(eq(topupReceipts.id, r1));
+    expect(voidedRow?.status).toBe('voided');
+
+    const statsAfterVoid = await liveWallet.getDashboardStats();
+    // Net revenue = r3 (45,000) + automated ForApp (55,000) = 100,000
+    expect(statsAfterVoid.dailyRevenue).toBe(100_000);
+    expect(statsAfterVoid.weeklyRevenue).toBe(100_000);
+    expect(statsAfterVoid.monthlyRevenue).toBe(100_000);
+    // Net sales = kept purchase (50,000); refunded 30,000 excluded
+    expect(statsAfterVoid.totalSales).toBe(50_000);
+
+    expect((await userService.getUserReportSummary(userA))?.totalDeposit).toBe(100_000);
+    expect((await userService.getUserReportSummary(userB))?.totalDeposit).toBe(0);
+
+    // Card usage reflects only non-voided receipt r3 (45,000), ignoring stale in-memory sums
+    const cardUsageAfterVoid = await paymentService.getTodayCardUsageMap();
+    expect(cardUsageAfterVoid.get('card_a')).toBe(45_000);
+    expect(paymentService.getCardDailyUsage('card_a')).toBe(45_000);
   });
 });

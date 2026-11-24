@@ -616,7 +616,7 @@ export const fa = {
     overview: {
       statsLoading: 'در حال بارگذاری آمار',
       revenueOverviewTitle: 'روند بازه‌های درآمد',
-      revenueOverviewSub: 'مقایسه فروش روزانه، هفتگی و ماهانه',
+      revenueOverviewSub: 'مقایسه درآمد خالص روزانه، هفتگی و ماهانه',
       subHealthTitle: 'سهم اشتراک‌ها و مشوق‌ها',
       subHealthSub: 'وضعیت سرویس‌های فعال در برابر کل مشوق‌های پرداخت‌شده',
       activeRatioLabel: 'سهم سرویس‌های فعال',
@@ -631,7 +631,7 @@ export const fa = {
       totalUsers: 'کل کاربران',
       totalUsersSub: 'حساب‌های ثبت‌شده در ربات',
       totalSales: 'کل فروش',
-      totalSalesSub: 'مجموع خریدهای موفق کاربران',
+      totalSalesSub: 'مجموع خریدهای خالص (منهای بازگشت وجه)',
       dailyRevenue: 'درآمد امروز',
       revenueBreakdown: 'درآمد و اشتراک‌ها',
       dailyRevenueSub: 'از ساعت ۰۰:۰۰ بامداد',

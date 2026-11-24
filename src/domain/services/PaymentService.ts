@@ -749,12 +749,13 @@ export class PaymentService {
   }
 
   /**
-   * Load today's (Tehran day) card volume from PostgreSQL (`pending` + `approved` receipts),
-   * merged with any in-memory tracked volume. Safe when DB is uninitialized in unit tests.
+   * Load today's (Tehran day) card volume from PostgreSQL (`pending` + `approved` receipts
+   * plus active/completed ForApp orders) as the authoritative source of truth so voided or
+   * rejected receipts drop out immediately. Falls back to in-memory tracked volume only when
+   * DB is uninitialized in isolated unit tests.
    */
   async getTodayCardUsageMap(now: Date = new Date()): Promise<Map<string, number>> {
     this.ensureDailyUsageWindow(now);
-    const merged = new Map<string, number>(this.dailyUsageByCard);
     const dayStartUtc = resolveTehranDayStartUtc(now);
 
     try {
@@ -827,17 +828,20 @@ export class PaymentService {
         );
       }
 
+      this.dailyUsageByCard.clear();
+      const dbUsage = new Map<string, number>();
       for (const [key, total] of dbById) {
-        merged.set(key, Math.max(merged.get(key) ?? 0, total));
+        this.dailyUsageByCard.set(key, total);
+        dbUsage.set(key, total);
       }
       for (const [key, total] of dbByNumber) {
-        merged.set(key, Math.max(merged.get(key) ?? 0, total));
+        dbUsage.set(key, Math.max(dbUsage.get(key) ?? 0, total));
       }
+      return dbUsage;
     } catch (err) {
       logger.debug({ err }, 'Could not query DB for today card usage; using in-memory usage map');
+      return new Map<string, number>(this.dailyUsageByCard);
     }
-
-    return merged;
   }
 
   /** Return all configured bank cards enriched with today's usage, remaining cap, and BIN metadata. */
