@@ -2,6 +2,11 @@
 
 <!-- Briefly describe the changes introduced by this pull request. -->
 
+## Target Branch
+
+- [ ] `dev` (features, fixes, docs, chores, dependencies)
+- [ ] `main` (release merge from `dev` or urgent hotfix only)
+
 ## Type of Change
 
 - [ ] Bug fix (non-breaking change which fixes an issue)
@@ -15,4 +20,5 @@ Please confirm the following checks have been executed locally:
 
 - [ ] `npm run verify` passes without errors (architecture check, typecheck, lint, format check, tests, build)
 - [ ] If applicable, integration tests pass: `npm run test:integration`
+- [ ] If user-facing, `CHANGELOG.md` (`[Unreleased]`) is updated
 - [ ] No secrets, tokens, or live URLs are included in commits or tests

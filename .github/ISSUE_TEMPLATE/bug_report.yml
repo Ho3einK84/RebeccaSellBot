@@ -11,8 +11,8 @@ body:
     id: version
     attributes:
       label: RebeccaSellBot Version / Commit
-      description: What version or git commit hash are you running? (e.g. 0.1.0 or main)
-      placeholder: e.g. 0.1.0
+      description: What version or git commit hash are you running? (e.g. v0.3.0 or main)
+      placeholder: e.g. v0.3.0
     validations:
       required: true
   - type: dropdown

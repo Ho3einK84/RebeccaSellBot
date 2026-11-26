@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 24.18.0
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+
+      - name: Validate tag matches package.json version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const tag = process.env.TAG_NAME || "";
+            const version = tag.replace(/^v/, "");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            if (pkg.version !== version) {
+              console.error(`Tag ${tag} does not match package.json version ${pkg.version}`);
+              process.exit(1);
+            }
+            console.log(`Validated release tag ${tag} matches package.json (${pkg.version}).`);
+          '
+
+      - name: Extract release notes from CHANGELOG.md
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          node -e '
+            const { execFileSync } = require("node:child_process");
+            const fs = require("node:fs");
+            const tag = process.env.TAG_NAME || "";
+            const repo = process.env.REPO || "";
+            const version = tag.replace(/^v/, "");
+            const changelog = fs.existsSync("CHANGELOG.md")
+              ? fs.readFileSync("CHANGELOG.md", "utf8")
+              : "";
+            const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const re = new RegExp(
+              `(?:^|\\n)## \\[${escaped}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n## \\[|\\n\\[[^\\]]+\\]:|$)`
+            );
+            const match = changelog.match(re);
+            let notes = match ? match[1].trim() : "";
+            let prevTag = "";
+            try {
+              prevTag = execFileSync(
+                "git",
+                ["describe", "--tags", "--abbrev=0", "--match", "v*", `${tag}^`],
+                { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+              ).trim();
+            } catch {
+              prevTag = "";
+            }
+            if (notes && prevTag && repo && !notes.includes(`${prevTag}...${tag}`)) {
+              notes += `\n\n**Full Changelog**: https://github.com/${repo}/compare/${prevTag}...${tag}`;
+            }
+            fs.writeFileSync("/tmp/release-notes.md", notes);
+            console.log(`Extracted ${notes.length} chars of release notes for ${version}.`);
+          '
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists; skipping creation."
+            exit 0
+          fi
+
+          args=(release create "$TAG_NAME" --title "RebeccaSellBot $TAG_NAME" --verify-tag)
+          if [[ "$TAG_NAME" == *-* ]]; then
+            args+=(--prerelease)
+          else
+            args+=(--latest)
+          fi
+
+          if [[ -s /tmp/release-notes.md ]]; then
+            args+=(--notes-file /tmp/release-notes.md)
+          else
+            args+=(--generate-notes)
+          fi
+
+          gh "${args[@]}"

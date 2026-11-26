@@ -7,7 +7,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Ho3einK84/RebeccaSellBot"><img src="https://img.shields.io/badge/release-0.3.0-7c3aed?style=flat-square" alt="Release 0.3.0" /></a>
+  <a href="https://github.com/Ho3einK84/RebeccaSellBot/releases"><img src="https://img.shields.io/github/v/release/Ho3einK84/RebeccaSellBot?style=flat-square&color=7c3aed" alt="Latest Release" /></a>
+  <a href="https://github.com/Ho3einK84/RebeccaSellBot/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Ho3einK84/RebeccaSellBot/ci.yml?branch=main&label=CI&style=flat-square" alt="CI Status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Ho3einK84/RebeccaSellBot?style=flat-square&color=0ea5e9" alt="MIT License" /></a>
   <img src="https://img.shields.io/badge/node-24.x-339933?style=flat-square" alt="Node.js 24" />
   <img src="https://img.shields.io/badge/postgres-16-336791?style=flat-square" alt="PostgreSQL 16" />
   <img src="https://img.shields.io/badge/telegram-grammY-0088cc?style=flat-square" alt="grammY" />
@@ -34,6 +36,8 @@
 | 📱 **[Mini App Architecture](docs/webapp-architecture.md)** | Unified User & Admin Mini App (`Fastify 5` + `React 19`), modular `/api/user/*` & webhook routes, and chat sync. |
 | ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                                    |
 | 🚀 **[Deployment & Operations](docs/deployment.md)**        | 1-command installation, `rsbot` lifecycle CLI, Caddy On-Demand TLS mesh, and transactional disaster recovery.    |
+| 📋 **[Changelog](CHANGELOG.md)**                            | Official release history and version highlights following Keep a Changelog.                                      |
+| 🤝 **[Contributing](CONTRIBUTING.md)**                      | `main`/`dev` branching workflow, Conventional Commits, and local verification checklist.                         |
 | 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, gateway webhook/upload auth, and database integrity guarantees.  |
 
 ---
