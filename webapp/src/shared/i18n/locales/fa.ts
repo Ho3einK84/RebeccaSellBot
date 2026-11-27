@@ -60,7 +60,6 @@ export const fa = {
     channelStable: 'پایدار',
     channelDev: 'توسعه',
     channelPrerelease: 'پیش‌انتشار',
-    channel: 'کانال انتشار',
     branch: 'شاخه',
     commit: 'کد کامیت',
     buildId: 'شناسه ساخت',
@@ -68,7 +67,6 @@ export const fa = {
     dirtyTag: 'تغییرات محلی',
     copyBuildId: 'کپی نسخه',
     copied: 'شناسه نسخه کپی شد',
-    viewOnGitHub: 'گیت‌هاب',
   },
   auth: {
     connecting: 'در حال برقراری ارتباط امن با سرور',

@@ -66,4 +66,9 @@ jobs:
         run: npm run test:integration
 
       - name: Build production image
-        run: docker build --pull=false -t rebeccasellbot:ci .
+        run: |
+          docker build --pull=false \
+            --build-arg APP_GIT_BRANCH="${GITHUB_REF_TYPE:+$([ "$GITHUB_REF_TYPE" = "branch" ] && printf '%s' "$GITHUB_REF_NAME" || true)}" \
+            --build-arg APP_GIT_TAG="${GITHUB_REF_TYPE:+$([ "$GITHUB_REF_TYPE" = "tag" ] && printf '%s' "$GITHUB_REF_NAME" || true)}" \
+            --build-arg APP_GIT_SHA="${GITHUB_SHA}" \
+            -t rebeccasellbot:ci .

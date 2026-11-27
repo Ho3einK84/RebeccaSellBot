@@ -29,6 +29,7 @@ flowchart TD
 
         subgraph Domain["Domain Layer (src/domain/services)"]
             Saga["WalletPurchaseSaga & WalletService"]
+            Inventory["InventoryService (FOR NO KEY UPDATE)"]
             Groups["UserGroupService (Pricing & VIP Credit)"]
             Pricing["PricingService & CatalogDiscountService"]
             Payment["PaymentService & AutomatedPaymentService"]
@@ -211,13 +212,13 @@ Public HTTPS (*.yourdomain.com)
 
 ## 6. Database Schema Overview (`src/infra/schema.ts`)
 
-30-table PostgreSQL 16 schema managed via Drizzle ORM (`drizzle/0000_*.sql` through `drizzle/0016_*.sql`) plus idempotent startup guards in `src/infra/migrate.ts`:
+32-table PostgreSQL 16 schema managed via Drizzle ORM (`drizzle/0000_*.sql` through `drizzle/0019_*.sql`) plus idempotent startup guards in `src/infra/migrate.ts`:
 
-| Category                  | Tables                                                                                                                                                                               |
-| :------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Panels & Fleet**        | `rebecca_panels` (AES-256-GCM credentials), `rebecca_panel_services`, `config_counters`                                                                                              |
-| **Users, Groups & Auth**  | `user_groups` (discounts, custom rates, feature gates, `credit_limit`), `users` (signed balances, `group_id`, `group_expires_at`, `phone_hash`), `bot_admins`, `grammy_sessions`     |
-| **Wallet & Payments**     | `wallet_transactions`, `topup_receipts` (`file_unique_id`, `file_sha256`, `duplicate_of_receipt_id`, `voided_*`), `payment_orders`, `forapp_deposits`, `scheduled_message_deletions` |
-| **Commerce & Sagas**      | `purchase_checkouts`, `purchase_intents` (snapshotted `credit_limit`), `refund_intents`, `trial_claims`, `package_categories`, `catalog_discounts`                                   |
-| **Subscriptions & Ops**   | `user_configs` (`user_label`, `panel_*` cache, `first_use_checked_at`, `cleanup_hold_until`), `config_reconciliation_issues`, `notification_deliveries`                              |
-| **Growth, Gifts & Audit** | `promo_codes`, `code_redemptions`, `lucky_wheel_spins`, `broadcast_jobs` (`group_id`), `broadcast_recipients`, `bulk_gift_jobs`, `bulk_gift_items`, `settings`, `audit_logs`         |
+| Category                  | Tables                                                                                                                                                                                            |
+| :------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Panels & Fleet**        | `rebecca_panels` (AES-256-GCM credentials, capacity & creation quotas), `rebecca_panel_services`, `config_counters`                                                                               |
+| **Users, Groups & Auth**  | `user_groups` (discounts, custom rates, feature gates, `credit_limit`), `users` (signed balances, `group_id`, `group_expires_at`, `phone_hash`), `bot_admins`, `grammy_sessions`                  |
+| **Wallet & Payments**     | `wallet_transactions`, `topup_receipts` (`file_unique_id`, `file_sha256`, `duplicate_of_receipt_id`, `voided_*`), `payment_orders`, `forapp_deposits`, `scheduled_message_deletions`              |
+| **Commerce & Sagas**      | `purchase_checkouts`, `purchase_intents` (snapshotted `credit_limit`), `refund_intents`, `trial_claims`, `package_categories`, `catalog_discounts`, `package_inventory`, `inventory_reservations` |
+| **Subscriptions & Ops**   | `user_configs` (`user_label`, `panel_*` cache, `first_use_checked_at`, `cleanup_hold_until`), `config_reconciliation_issues`, `notification_deliveries`                                           |
+| **Growth, Gifts & Audit** | `promo_codes`, `code_redemptions`, `lucky_wheel_spins`, `broadcast_jobs` (`group_id`), `broadcast_recipients`, `bulk_gift_jobs`, `bulk_gift_items`, `settings`, `audit_logs`                      |

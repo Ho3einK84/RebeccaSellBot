@@ -62,7 +62,6 @@ export const en: DeepPartial<TranslationSchema> = {
     channelStable: 'Stable',
     channelDev: 'Dev',
     channelPrerelease: 'Pre-release',
-    channel: 'Channel',
     branch: 'Branch',
     commit: 'Commit',
     buildId: 'Build ID',
@@ -70,7 +69,6 @@ export const en: DeepPartial<TranslationSchema> = {
     dirtyTag: 'Local changes',
     copyBuildId: 'Copy version',
     copied: 'Version copied to clipboard',
-    viewOnGitHub: 'GitHub',
   },
   auth: {
     connecting: 'Connecting securely to server',

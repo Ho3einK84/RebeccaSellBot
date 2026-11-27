@@ -318,7 +318,7 @@ show_instance_env() {
   p_key="$(env_value_from_file "$ENV_FILE" PANEL_CREDENTIALS_KEY 2>/dev/null || true)"
   a_key="$(env_value_from_file "$ENV_FILE" ADMIN_SESSION_SECRET 2>/dev/null || true)"
   git_rev="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --short=7 HEAD 2>/dev/null || printf 'unknown')"
-  local git_branch="" pkg_version="" version_display=""
+  local git_branch="" pkg_version="" latest_tag="" commits_ahead="" dev_suffix="dev" version_display=""
   git_branch="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   [[ "$git_branch" != "HEAD" ]] || git_branch=""
   if [[ -f "$INSTANCE_DIR/package.json" ]]; then
@@ -326,7 +326,14 @@ show_instance_env() {
   fi
   if [[ -n "$pkg_version" ]]; then
     if [[ -n "$git_branch" && "$git_branch" != "main" && "$git_branch" != "master" && "$pkg_version" != *-* ]]; then
-      version_display="v${pkg_version}-dev (${git_branch} @ ${git_rev})"
+      latest_tag="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+      if [[ -n "$latest_tag" ]]; then
+        commits_ahead="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-list --count "${latest_tag}..HEAD" 2>/dev/null || true)"
+      fi
+      if [[ "$commits_ahead" =~ ^[1-9][0-9]*$ ]]; then
+        dev_suffix="dev.${commits_ahead}"
+      fi
+      version_display="v${pkg_version}-${dev_suffix} (${git_branch} @ ${git_rev})"
     else
       version_display="v${pkg_version} (${git_branch:-release} @ ${git_rev})"
     fi
@@ -796,16 +803,24 @@ case "$COMMAND" in
     ;;
   update)
     [[ -d "$INSTANCE_DIR/.git" ]] || die "Instance repository is not a Git checkout."
-    printf "Updating '%s'...\n" "$INSTANCE"
-    old_commit="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
-    git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" pull --ff-only
-    new_commit="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
-    sync_global_cli
-    ensure_env_defaults
-    if [[ "$old_commit" != "$new_commit" && "$old_commit" != "unknown" ]]; then
-      printf "Revision: %s -> %s\n" "$old_commit" "$new_commit"
-      git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" log --oneline -n 5 "${old_commit}..${new_commit}" 2>/dev/null || true
+    if [[ "${RSBOT_UPDATE_REEXEC:-}" != "1" ]]; then
+      printf "Updating '%s'...\n" "$INSTANCE"
+      old_commit="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+      git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" fetch --tags --force --quiet 2>/dev/null || true
+      git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" pull --ff-only
+      new_commit="$(git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+      sync_global_cli
+      if [[ "$old_commit" != "$new_commit" && "$old_commit" != "unknown" ]]; then
+        printf "Revision: %s -> %s\n" "$old_commit" "$new_commit"
+        git -C "$INSTANCE_DIR" -c safe.directory="$INSTANCE_DIR" log --oneline -n 5 "${old_commit}..${new_commit}" 2>/dev/null || true
+        if [[ -x "$INSTANCE_DIR/scripts/rsbot" ]]; then
+          export RSBOT_DISPATCHED=1
+          export RSBOT_UPDATE_REEXEC=1
+          exec "$INSTANCE_DIR/scripts/rsbot" "$INSTANCE" update "$@"
+        fi
+      fi
     fi
+    ensure_env_defaults
     export_git_build_metadata "$INSTANCE_DIR"
     dc build bot
     wait_for_stack db

@@ -7,10 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-27
+
+Adds atomic fleet, service, and package inventory controls across the Telegram Bot and Mini App, minimal SemVer release-channel telemetry (`main` / `dev`), and a redesigned responsive Mini App header architecture.
+
 ### Added
 
-- **Service, Panel & Package Inventory Limits:** Atomic `FOR NO KEY UPDATE` inventory reservation & rollback engine (`InventoryService`) supporting per-panel and per-service creation caps (`enabled`, `maxConfigs`, `stockRemaining`, `dailyCreateLimit`), per-package stock and per-user purchase limits (`package_inventory`), custom-volume stock/daily caps, sold-out visibility toggle (`shop_show_out_of_stock`), and low-stock warning threshold (`shop_low_stock_threshold`) across Telegram Bot and Mini App — while ensuring existing subscribers can always renew without being blocked by panel/service new-creation caps.
-- **Standard SemVer Version & Release Channel Display (`main` / `dev`):** Automated SemVer 2.0.0 build metadata resolution across Docker/Compose/`rsbot`/Vite (`stable`, `dev`, `prerelease`), surfaced in `/version`, Telegram Admin Home/Stats/Settings, User Home/Support footers, `/api/health`, `/readyz`, WebApp Admin Header badge, Admin Settings Build Info card, and unified WebApp footers.
+- **Panel, Service & Package Inventory Engine (`InventoryService` + Migration `0019`):** Atomic PostgreSQL reservation, commit, release, reconciliation, and refund-restoration engine supporting per-panel and per-service pause toggles (`enabled`), concurrent config capacity (`maxConfigs`), consumable new-creation quotas (`stockRemaining`), and Tehran-midnight daily creation caps (`dailyCreateLimit`) — strictly scoping panel/service caps to new provisioning (`new_config` and `trial`) so existing subscribers can always renew (`renew_config` and `autoRenewal`).
+- **Package, Custom-Volume & Trial Stock Controls:** Per-package stock counters and per-user purchase limits (`package_inventory`), custom-volume and free-trial stock/daily caps, storefront sold-out visibility toggle (`shop_show_out_of_stock`), low-stock warning threshold (`shop_low_stock_threshold`), Admin Overview fleet capacity alerts, `PATCH /api/admin/panels/:id/services/:serviceId`, and `HTTP 409` concurrent stock-exhaustion handling across Bot and Mini App checkouts.
+- **Minimal SemVer 2.0.0 Version & Release-Channel Telemetry:** Automated `stable` (`main`), `dev`, and `prerelease` build metadata resolution (`v0.4.0`, `v0.4.0-dev.N+<sha>`) wired across Docker, Compose, `rsbot`, `install.sh`, esbuild (`dist/build-info.json`), and Vite — surfaced minimally in admin-only `/version`, Telegram Admin Home/Settings/Stats, `/api/health`, `/readyz`, WebApp Admin Header & Build Info card, and white-label WebApp footers (with internal build metadata omitted for end users and zero Telegram user clutter).
+
+### Changed
+
+- **Responsive Mini App Header Architecture:** Redesigned `TopBar`, `HeaderUtilityActions`, `AdminHeader`, and `UserPortalHeader` with a compact utility capsule and dedicated mobile quick-action bar (`320px+`), eliminating RTL/LTR title truncation and action crowding across mobile and desktop viewports.
+- **Inventory & Capacity UX Clarity:** Standardized concise Persian/English terminology, live usage counters, distinct panel/service limit badges, and single-line micro-hints distinguishing concurrent **Max Total Configs** from consumable **New Creation Quota** and **Daily Creation Limit**.
+
+### Fixed
+
+- **Zero-Deadlock Concurrent Inventory Locking:** Locked `rebecca_panels` and `rebecca_panel_services` rows with `FOR NO KEY UPDATE` instead of `FOR UPDATE` so parallel child inserts (`FOR KEY SHARE` foreign-key checks) never deadlock during concurrent checkouts, while preserving `NULL` (unlimited) stock if toggled mid-flight.
+- **Responsive Display Utility Precedence (`Badge` / `IconButton`):** Prevented base `inline-flex` classes from overriding responsive `hidden md:inline-flex` and `hidden sm:inline-flex` utilities in Tailwind CSS v4 builds.
+- **Self-Updating `rsbot` Release Pulls:** Updated `rsbot update` to fetch remote SemVer tags prior to building and re-exec the newly pulled `scripts/rsbot` when advancing across commits.
 
 ## [0.3.0] - 2026-11-26
 
@@ -37,5 +53,6 @@ First official GitHub release of **RebeccaSellBot** — delivering unified Teleg
 - **Financial Integrity:** 64-bit safe-integer minor-unit accounting (`DbNumber`) with a 3-phase `FOR UPDATE` purchase/renewal saga and automatic failure compensation.
 - **Parallel Verification Gate:** `scripts/verify.mjs` enforcing static layer boundaries (`architecture:check`), parallel incremental TypeScript checks, ESLint 10, Prettier, Vitest unit & PostgreSQL integration/concurrency suites, and esbuild + Vite production builds.
 
-[Unreleased]: https://github.com/Ho3einK84/RebeccaSellBot/compare/v0.3.0...dev
+[Unreleased]: https://github.com/Ho3einK84/RebeccaSellBot/compare/v0.4.0...dev
+[0.4.0]: https://github.com/Ho3einK84/RebeccaSellBot/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Ho3einK84/RebeccaSellBot/releases/tag/v0.3.0

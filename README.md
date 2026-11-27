@@ -29,16 +29,16 @@
 
 ## Documentation
 
-| Document                                                    | Scope                                                                                                            |
-| :---------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga with VIP credit limits, 30-table PostgreSQL schema, and 11 workers.  |
-| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, stateless `adm:*` admin router, non-blocking input engine, and callback guards.         |
-| 📱 **[Mini App Architecture](docs/webapp-architecture.md)** | Unified User & Admin Mini App (`Fastify 5` + `React 19`), modular `/api/user/*` & webhook routes, and chat sync. |
-| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                                    |
-| 🚀 **[Deployment & Operations](docs/deployment.md)**        | 1-command installation, `rsbot` lifecycle CLI, Caddy On-Demand TLS mesh, and transactional disaster recovery.    |
-| 📋 **[Changelog](CHANGELOG.md)**                            | Official release history and version highlights following Keep a Changelog.                                      |
-| 🤝 **[Contributing](CONTRIBUTING.md)**                      | `main`/`dev` branching workflow, Conventional Commits, and local verification checklist.                         |
-| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, gateway webhook/upload auth, and database integrity guarantees.  |
+| Document                                                    | Scope                                                                                                                      |
+| :---------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga with VIP credit & inventory locks, 32-table PostgreSQL schema, and 11 workers. |
+| 💬 **[Telegram & UI Layer](docs/telegram-architecture.md)** | Ephemeral screen engine, stateless `adm:*` admin router, non-blocking input engine, and callback guards.                   |
+| 📱 **[Mini App Architecture](docs/webapp-architecture.md)** | Unified User & Admin Mini App (`Fastify 5` + `React 19`), modular `/api/user/*` & webhook routes, and chat sync.           |
+| ⚙️ **[Configuration Reference](docs/configuration.md)**     | Complete `.env` specification and runtime `/admin` database settings catalog.                                              |
+| 🚀 **[Deployment & Operations](docs/deployment.md)**        | 1-command installation, `rsbot` lifecycle CLI, Caddy On-Demand TLS mesh, and transactional disaster recovery.              |
+| 📋 **[Changelog](CHANGELOG.md)**                            | Official release history and version highlights following Keep a Changelog.                                                |
+| 🤝 **[Contributing](CONTRIBUTING.md)**                      | `main`/`dev` branching workflow, Conventional Commits, and local verification checklist.                                   |
+| 🔐 **[Security Policy](SECURITY.md)**                       | Vulnerability reporting, credential encryption, gateway webhook/upload auth, and database integrity guarantees.            |
 
 ---
 
@@ -46,7 +46,7 @@
 
 | Customer Experience (Telegram Bot + Mini App Parity)                                                                                                                                        | Administration & Backoffice                                                                                                                                                                           |
 | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🛒 **Instant Storefront & VIP Groups:** Fixed packages, categorized plans, custom GB/day ordering (tiered prices), buyer-chosen service names, group discounts/badges, & flash sales.       | 🌐 **Multi-Panel Fleet & User Groups:** Connect multiple Rebecca panels (`AES-256-GCM` vault), define `user_groups` with anti-double-discount rules, custom rates, & VIP credit limits.               |
+| 🛒 **Instant Storefront & VIP Groups:** Fixed packages, stock/per-user caps, custom GB/day ordering, buyer-chosen service names, group discounts/badges, & flash sales.                     | 🌐 **Multi-Panel Fleet & Inventory Caps:** Connect multiple Rebecca panels (`AES-256-GCM` vault), enforce panel/service capacity & creation quotas, and define VIP `user_groups`.                     |
 | 💳 **Automated & Manual Top-Ups:** Automated ForApp card-to-card SMS matching, NOWPayments crypto invoices (live/manual USDT rates), 2-step manual receipts, & positive-only P2P transfers. | 🛡️ **Payment & Access Security:** `SHA-256` + `file_unique_id` receipt deduplication, atomic voiding, payment-message auto-delete, `open`/`invite_only`/`closed` registration, & forced channel join. |
 | 🎁 **Free Trial & Interactive Lucky Wheel:** One-tap trial claiming with QR & SmartConnect delivery plus an animated 8-slice SVG Lucky Wheel with haptics, cooldowns, and spin history.     | 📊 **Telegram & Mini App CRM:** 1-tap stateless `/admin` command center (`/r`, `/u`, `/stats`), group/expiry assignment, unmatched deposit matcher, and orphan reconciliation.                        |
 | 📊 **Subscription Portal & Personal Labels:** Sync All, external sub-link claim, local 40-char personal labels, per-node usage & `onlineAt`, QR codes, 1-tap SmartConnect links, & revoke.  | 📢 **Growth, Retention & Bulk Gifts:** Group-filtered broadcasts, durable bulk GB/day gift campaigns, 24h first-use nudges, and staged expired-config cleanup with warnings.                          |
