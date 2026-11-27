@@ -1,4 +1,7 @@
 import crypto from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   resetAppVersionCacheForTests,
@@ -486,5 +489,44 @@ describe('WebApp API & Frontend Version Integration', () => {
     const faKeys = Object.keys(webappFa.version).sort();
     const enKeys = Object.keys(webappEn.version ?? {}).sort();
     expect(enKeys).toEqual(faKeys);
+  });
+});
+
+describe('Documentation Version Sync Guard', () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const trackedDocs = [
+    'README.md',
+    'CONTRIBUTING.md',
+    'SECURITY.md',
+    'docs/architecture.md',
+    'docs/configuration.md',
+    'docs/deployment.md',
+    'docs/telegram-architecture.md',
+    'docs/webapp-architecture.md',
+  ] as const;
+
+  it('keeps every tracked doc synced with package.json version and CHANGELOG.md', async () => {
+    const pkg = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8')) as {
+      version: string;
+    };
+    const normalizedVersion = pkg.version.trim().replace(/^v/iu, '').split('+')[0]!;
+    const expectedSyncVersion = `v${normalizedVersion}`;
+
+    for (const docPath of trackedDocs) {
+      const content = await readFile(path.join(repoRoot, docPath), 'utf8');
+      const match =
+        /^\s*>\s*\*\*Last synced with version:\*\*\s*`(v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)`\s*$/mu.exec(
+          content
+        );
+      expect(match?.[1], `${docPath} must be synced with ${expectedSyncVersion}`).toBe(
+        expectedSyncVersion
+      );
+    }
+
+    if (!normalizedVersion.includes('-')) {
+      const changelog = await readFile(path.join(repoRoot, 'CHANGELOG.md'), 'utf8');
+      const escaped = normalizedVersion.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+      expect(changelog).toMatch(new RegExp(`^## \\[${escaped}\\](?:\\s|$)`, 'mu'));
+    }
   });
 });

@@ -1,6 +1,8 @@
 # RebeccaSellBot — System Architecture
 
-RebeccaSellBot is a multi-panel Telegram commerce and subscription management platform built for **Rebecca Panel** VPN infrastructures. It combines a clean-chat Telegram bot (`grammY`), an optional Telegram Mini App (`Fastify 5` + `React 19`), a 3-phase financial saga engine, and automated lifecycle workers backed by **PostgreSQL 16** (`Drizzle ORM`).
+> **Last synced with version:** `v0.4.0`
+
+RebeccaSellBot is a multi-panel Telegram commerce and subscription management platform built for **Rebecca Panel** VPN infrastructures. It combines a clean-chat Telegram bot (`grammY`), an optional Telegram Mini App (`Fastify 5` + `React 19`), a 3-phase financial & inventory saga engine, SemVer release-channel telemetry, and automated lifecycle workers backed by **PostgreSQL 16** (`Drizzle ORM`).
 
 ---
 
@@ -92,30 +94,37 @@ All monetary balances, package prices, discounts, referral bonuses, credit limit
 - **Purchasing Power & Natural Debt Settlement:** During purchases and renewals, effective purchasing power is `balance - reserved_balance + effectiveCreditLimit`. Any wallet top-up (manual receipt, ForApp, NOWPayments, or admin adjustment) naturally offsets negative debt balances.
 - **Strict Positive-Only P2P Transfers:** `WalletService.transferBalance` always enforces `balance - reserved_balance >= amount` under row locking, ensuring VIP negative credit limits can never be transferred to another account.
 
-### 3-Phase Purchase & Renewal Saga (`WalletPurchaseSaga.ts`)
+### 3-Phase Purchase, Renewal & Inventory Saga (`WalletPurchaseSaga.ts` & `InventoryService.ts`)
 
 ```text
 1. RESERVE (Local DB Tx)
    ├── Lock user row (FOR UPDATE), resolve effective group policy & creditLimit
    ├── Verify purchasing power (balance - reserved_balance + creditLimit >= amount)
+   ├── Reserve panel/service capacity & package stock (`InventoryService`, FOR NO KEY UPDATE)
    ├── Snapshot checkout price, creditLimit, catalog discount, promo reservation, & referral terms
-   └── Create `purchase_intents` row (status = 'pending') with foreground heartbeat lease
+   └── Create `purchase_intents` & `inventory_reservations` rows with foreground heartbeat lease
 
 2. DISPATCH (Remote HTTPS REST)
    ├── Provision new user or renew existing user on target Rebecca panel
    └── Apply `on_hold` start-on-first-use or renewal quota/validity rollover policies
 
 3a. COMMIT (On Confirmed Remote State)
-   ├── Deduct balance & release reservation using snapshotted creditLimit, write `wallet_transactions`
+   ├── Deduct balance, release wallet reservation, & commit `inventory_reservations` (`sold_count`)
    ├── Upsert `user_configs`, settle referral bonus / cashback (gated by allowCashback), & complete checkout
    └── Deliver subscription artifact (sub link, QR code, client deep-links)
 
 3b. COMPENSATE (On Definitive Remote Failure)
-   ├── Release reserved funds & promo code redemption cap
-   └── Mark intent `'failed'` with diagnostic audit metadata
+   ├── Release reserved funds, inventory/stock counters, & promo code redemption cap
+   └── Mark intent `'failed'` and reservation `'released'` with diagnostic audit metadata
 ```
 
-If a process crashes or a network timeout occurs during Phase 2, the intent transitions to `'reconciliation_required'` and the background `reconciler` settles it once the foreground lease (`leaseExpiresAt`) expires by inspecting remote panel state and committing against the intent's snapshotted `credit_limit`.
+If a process crashes or a network timeout occurs during Phase 2, the intent transitions to `'reconciliation_required'` and the background `reconciler` settles both the financial intent (against its snapshotted `credit_limit`) and the linked `inventory_reservations` row once the foreground lease (`leaseExpiresAt`) expires by inspecting remote panel state.
+
+### Atomic Fleet, Service & Package Inventory (`InventoryService.ts`)
+
+- **New-Creation Isolation (`new_config` & `trial` Only):** Per-panel (`rebecca_panels`) and per-service (`rebecca_panel_services`) pause switches (`enabled`), concurrent config ceilings (`max_configs`), consumable creation quotas (`stock_remaining`), and Tehran-midnight daily creation caps (`daily_create_limit`) restrict **only new provisioning (`new_config` and `trial`)**. Existing subscribers can always renew (`renew_config` and `autoRenewal`) even when a panel or service is full or paused for new sales.
+- **Package, Custom-Volume & Trial Stock (`package_inventory`):** Supports per-package stock (`stock_remaining`), lifetime per-user purchase ceilings (`max_purchases_per_user`), and `sold_count` tracking across fixed packages, custom-volume plans (`__custom_volume__` + `custom_volume_daily_limit`), and free trials (`__trial__` + `trial_daily_limit`), plus storefront visibility (`shop_show_out_of_stock`) and low-stock warning badges (`shop_low_stock_threshold`).
+- **Zero-Deadlock Concurrency & Refund Restoration:** Locks `rebecca_panels`, `rebecca_panel_services`, and `package_inventory` rows with PostgreSQL `FOR NO KEY UPDATE` (preventing deadlocks against concurrent `FOR KEY SHARE` child foreign-key checks), preserves `NULL` (unlimited) stock if toggled mid-flight, and restores consumed quotas automatically on failed checkouts or approved self-refunds (`RefundService` → `restoreRefundedReservation`).
 
 ### Automated Payment Gateways (`AutomatedPaymentService.ts`), Receipt Security & Multi-Card Rotation
 
@@ -139,9 +148,9 @@ If a process crashes or a network timeout occurs during Phase 2, the intent tran
 
 ### User Groups & Anti-Double-Discount Pricing (`UserGroupService.ts` & `PricingService.ts`)
 
-- Manages customer tiers in `user_groups` (with optional `badge`, partial unique default index `user_groups_one_default`, `discount_percent` `0–90`, optional `custom_price_per_gb` / `custom_price_per_day`, `credit_limit >= 0`, and per-group feature flags: `allow_catalog_discounts`, `allow_promo_codes`, `allow_cashback`, `allow_lucky_wheel`, `allow_custom_service_name`).
+- Manages customer tiers in `user_groups` (with optional `badge`, partial unique default index `user_groups_one_default`, `discount_percent` `0–90`, `apply_discount_to_custom_volume`, optional `custom_price_per_gb` / `custom_price_per_day`, `credit_limit >= 0`, and per-group feature flags: `allow_catalog_discounts`, `allow_promo_codes`, `allow_cashback`, `allow_lucky_wheel`, `allow_custom_service_name`).
 - Users reference `users.group_id` (`ON DELETE SET NULL`) with an optional `users.group_expires_at` timestamp; ungrouped or expired users transparently resolve to the default group policy. Deleting a group safely migrates members to a chosen replacement group or default.
-- `PricingService` and `PurchasePackageResolver` apply group custom GB/day rates and `discount_percent`, then conditionally layer `CatalogDiscountService` flash sales only when `allow_catalog_discounts = true`. `PromoService`, `ReferralService`, `AutomatedPaymentService`, and `LuckyWheelService` respect `allow_promo_codes`, `allow_cashback`, and `allow_lucky_wheel`; `BroadcastService` supports optional `group_id` audience filtering.
+- `PricingService` and `PurchasePackageResolver` apply group custom GB/day rates and `discount_percent` (including custom-volume plans when `apply_discount_to_custom_volume = true` and no `custom_price_per_gb` override is set), then conditionally layer `CatalogDiscountService` flash sales only when `allow_catalog_discounts = true`. `PromoService`, `ReferralService`, `AutomatedPaymentService`, and `LuckyWheelService` respect `allow_promo_codes`, `allow_cashback`, and `allow_lucky_wheel`; `BroadcastService` supports optional `group_id` audience filtering.
 
 ### Timed Catalog Discounts (`CatalogDiscountService.ts` & `PricingService.ts`)
 
@@ -171,7 +180,7 @@ All 11 background jobs run under `src/jobs/workerRuntime.ts` (`jobRunner`), whic
 
 | Worker                         | Schedule       | Responsibility                                                                                                                                                                                                                                                                                                                                                                      |
 | :----------------------------- | :------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`reconciler`**               | Every `1m`     | Settles non-terminal `purchase_intents` (honoring snapshotted `credit_limit`), `refund_intents`, `trial_claims`, and expired `purchase_checkouts`; syncs panel statuses and scans orphaned configs every 15m.                                                                                                                                                                       |
+| **`reconciler`**               | Every `1m`     | Settles non-terminal `purchase_intents` (honoring snapshotted `credit_limit`), `inventory_reservations`, `refund_intents`, `trial_claims` (supporting fractional sub-1 GB quotas), and expired `purchase_checkouts`; syncs panel statuses and scans orphaned configs every 15m.                                                                                                     |
 | **`notifier`**                 | `0 * * * *`    | Hourly sweep for low traffic (`low_traffic_threshold_gb`) and near expiry (`expiry_warning_days`) with durable deduplication in `notification_deliveries`.                                                                                                                                                                                                                          |
 | **`autoRenewal`**              | `20 * * * *`   | Hourly evaluation of subscriptions with `autoRenewEnabled = true`, executing group-priced, VIP credit-aware wallet renewal sagas within the user's approved price ceiling (`autoRenewPrice`).                                                                                                                                                                                       |
 | **`firstUseNudge`**            | `40 * * * *`   | Hourly scan for configs created 24–72h ago (`firstUseCheckedAt IS NULL`) with zero live panel traffic (`used_traffic === 0 && lifetime_used_traffic === 0`); atomically marks `firstUseCheckedAt` and sends a localized connection guide.                                                                                                                                           |
@@ -205,8 +214,8 @@ Public HTTPS (*.yourdomain.com)
  Serve Local    Proxy over `rsbot_mesh` (loop-guarded via `x-rsbot-proxy-hops`)
 ```
 
-- **Backend (`src/webapp/server/`):** Fastify 5 server validating Telegram WebApp `initData` (`HMAC-SHA256`, with profile upsert, `registration_mode` enforcement, and first-touch `start_param` referral capture), issuing HTTP-only JWT cookies (`ADMIN_SESSION_SECRET`), enforcing centralized `userGuard` (`USER_BANNED`, `MAINTENANCE_MODE`, `REGISTRATION_INVITE_ONLY`/`CLOSED`, `CHANNEL_JOIN_REQUIRED`) and per-route rate limits, and serving `/api/user/*`, `/api/admin/*` (including groups, payment gateways, forced join, and bulk gifts), and public gateway webhooks (`/api/webhooks/forapp`, `/api/webhooks/nowpayments`).
-- **Frontend (`webapp/src/`):** React 19 + Tailwind CSS v4 + DaisyUI v5 + TanStack Query SPA delivering full customer parity (Dashboard with group badge & credit/debt visibility, Services with personal labels / Sync All / Claim / per-node usage / P2P transfer / self-refund / SmartConnect, Shop with group pricing & flash-sale countdowns, Wallet 2.0 with ForApp & NOWPayments automated orders + manual receipt upload + positive-only P2P transfers, Rewards Hub with Lucky Wheel & Free Trial) alongside the Admin Portal (including Payment Gateways, Forced Join, Bulk Gift, Bank Cards, Packages, Panels, Receipts, and Users), synchronized with Telegram chat via `src/telegram/webappNotifications.ts`. See [docs/webapp-architecture.md](webapp-architecture.md) for the full Mini App reference.
+- **Backend (`src/webapp/server/`):** Fastify 5 server validating Telegram WebApp `initData` (`HMAC-SHA256`, with profile upsert, `registration_mode` enforcement, and first-touch `start_param` referral capture), issuing HTTP-only JWT cookies (`ADMIN_SESSION_SECRET`), enforcing centralized `userGuard` (`USER_BANNED`, `MAINTENANCE_MODE`, `REGISTRATION_INVITE_ONLY`/`CLOSED`, `CHANNEL_JOIN_REQUIRED`) and per-route rate limits, and serving `/api/user/*`, `/api/admin/*` (including groups, per-panel & per-service inventory limits via `PATCH /api/admin/panels/:id/services/:serviceId`, package inventory, payment gateways, forced join, and bulk gifts), `/api/health` (SemVer `version` & `channel`), and public gateway webhooks (`/api/webhooks/forapp`, `/api/webhooks/nowpayments`).
+- **Frontend (`webapp/src/`):** React 19 + Tailwind CSS v4 + DaisyUI v5 + TanStack Query SPA with a responsive header architecture (`TopBar`, `HeaderUtilityActions`, `AdminHeader`, `UserPortalHeader`) and white-label SemVer telemetry (`VersionBadge`, `AppVersionFooter`, `AdminVersionCard`), delivering full customer parity (Dashboard with group badge & credit/debt visibility, Services with personal labels / Sync All / Claim / per-node usage / P2P transfer / self-refund / SmartConnect, Shop with group pricing, stock badges, & flash-sale countdowns, Wallet 2.0 with ForApp & NOWPayments automated orders + manual receipt upload + positive-only P2P transfers, Rewards Hub with Lucky Wheel & Free Trial) alongside the Admin Portal (including Overview capacity alerts, User Groups, Payment Gateways, Forced Join, Bulk Gift, Bank Cards, Packages, Panels & Services, Receipts, and Users), synchronized with Telegram chat via `src/telegram/webappNotifications.ts`. See [docs/webapp-architecture.md](webapp-architecture.md) for the full Mini App reference.
 
 ---
 

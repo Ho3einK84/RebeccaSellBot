@@ -41,6 +41,9 @@ jobs:
             console.log(`Validated release tag ${tag} matches package.json (${pkg.version}).`);
           '
 
+      - name: Validate architecture and documentation version sync
+        run: node scripts/check-architecture.mjs
+
       - name: Extract release notes from CHANGELOG.md
         env:
           TAG_NAME: ${{ github.ref_name }}

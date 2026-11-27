@@ -1,5 +1,7 @@
 # Contributing to RebeccaSellBot
 
+> **Last synced with version:** `v0.4.0`
+
 Thank you for contributing to **RebeccaSellBot**. Keep changes focused, tested, and aligned with the project's layered architecture.
 
 ## Branching & Release Workflow
@@ -13,7 +15,11 @@ Thank you for contributing to **RebeccaSellBot**. Keep changes focused, tested, 
 
 1. Branch off `dev` for new features, fixes, documentation, or refactoring.
 2. Open pull requests against **`dev`** (Dependabot PRs also target `dev`).
-3. Releases are cut by merging `dev` into `main` (updating `package.json`, `package-lock.json`, and `CHANGELOG.md`) and pushing an annotated SemVer tag (`vX.Y.Z`), which triggers the automated GitHub Release workflow.
+3. When cutting a release (`vX.Y.Z`) from `dev` into `main`, complete the **Release & Documentation Sync Checklist**:
+   - Review all documentation files (`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `docs/*.md`) against new features, schema migrations, runtime settings, CLI flags, and HTTP/bot routes.
+   - Bump `version` in `package.json` and `package-lock.json`, add the `## [X.Y.Z]` release section in [CHANGELOG.md](CHANGELOG.md), and update `> **Last synced with version:** \`vX.Y.Z\`` across all tracked documentation files.
+   - Run `npm run verify` (`scripts/check-architecture.mjs` and `.github/workflows/release.yml` automatically fail if any tracked document's `Last synced with version` metadata or `CHANGELOG.md` release heading differs from `package.json`).
+   - Merge `dev` into `main` and push an annotated SemVer tag (`vX.Y.Z`) to trigger the automated GitHub Release workflow.
 
 ## Commit Convention
 
@@ -55,7 +61,7 @@ TEST_DATABASE_URL=postgres://rsbot_test:rsbot_test@127.0.0.1:5432/rsbot_test \
 - **Zero Direct Panel DB Touch:** Always communicate with Rebecca panels through `RebeccaService` (enforced by `npm run architecture:check`).
 - **Layer Isolation:** Keep transport code (`src/telegram`, `src/webapp`) decoupled from direct database access; place business rules in `src/domain`.
 - **Localization Parity:** Keep Persian (`fa`) and English (`en`) translations synchronized and preserve Persian digit (`۰-۹`) normalization.
-- **Changelog Hygiene:** Add a brief entry under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for notable user-facing changes.
+- **Changelog & Documentation Sync:** Add a brief entry under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for notable user-facing changes, update affected guides in `README.md` / `docs/*.md`, and keep every tracked document's `> **Last synced with version:** \`vX.Y.Z\``header aligned with`package.json`on releases (enforced by`npm run architecture:check`).
 - **No Secrets:** Never commit real Telegram tokens, Rebecca API keys, subscription URLs, or database dumps.
 
 ## Security

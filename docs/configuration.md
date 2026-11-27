@@ -1,6 +1,8 @@
 # RebeccaSellBot — Configuration Reference
 
-This reference covers all environment variables (`.env`) validated by [`src/infra/config.ts`](../src/infra/config.ts) and all runtime database settings (`settings` table) managed in-bot via `/admin` → **Settings**.
+> **Last synced with version:** `v0.4.0`
+
+This reference covers all environment variables (`.env`) validated by [`src/infra/config.ts`](../src/infra/config.ts) and all runtime database settings (`settings` table and relational policy tables) managed in-bot via `/admin` or the Mini App Admin Portal.
 
 ---
 
@@ -8,14 +10,17 @@ This reference covers all environment variables (`.env`) validated by [`src/infr
 
 ### Core Runtime
 
-| Variable         | Type      | Default       | Description                                                                                                                                                 |
-| :--------------- | :-------- | :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`       | Enum      | `development` | Runtime mode: `production`, `development`, or `test`.                                                                                                       |
-| `BOT_TOKEN`      | String    | _Required_    | Telegram Bot API token from `@BotFather`.                                                                                                                   |
-| `ADMIN_IDS`      | CSV Ints  | `[]`          | Comma-separated positive integer Telegram user IDs used to bootstrap `bot_admins`.                                                                          |
-| `DEFAULT_LOCALE` | Enum      | `fa`          | Initial language for newly observed users (`fa` or `en`).                                                                                                   |
-| `INSTANCE_NAME`  | String    | `main`        | Alphanumeric instance identifier (`[a-z0-9_-]`) for multi-instance isolation and mesh routing.                                                              |
-| `SUPPORT_URL`    | HTTPS URL | —             | Optional support link override (`https://...`); resolved uniformly across Telegram and WebApp via `SupportDestination.ts` (defaults to primary admin chat). |
+| Variable           | Type      | Default       | Description                                                                                                                                                 |
+| :----------------- | :-------- | :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`         | Enum      | `development` | Runtime mode: `production`, `development`, or `test`.                                                                                                       |
+| `BOT_TOKEN`        | String    | _Required_    | Telegram Bot API token from `@BotFather`.                                                                                                                   |
+| `ADMIN_IDS`        | CSV Ints  | `[]`          | Comma-separated positive integer Telegram user IDs used to bootstrap `bot_admins`.                                                                          |
+| `DEFAULT_LOCALE`   | Enum      | `fa`          | Initial language for newly observed users (`fa` or `en`).                                                                                                   |
+| `INSTANCE_NAME`    | String    | `main`        | Alphanumeric instance identifier (`[a-z0-9_-]`) for multi-instance isolation and mesh routing.                                                              |
+| `SUPPORT_URL`      | HTTPS URL | —             | Optional support link override (`https://...`); resolved uniformly across Telegram and WebApp via `SupportDestination.ts` (defaults to primary admin chat). |
+| `LOG_LEVEL`        | String    | `info`        | Pino structured logger level (`fatal`, `error`, `warn`, `info`, `debug`, `trace`).                                                                          |
+| `TIMEZONE`         | IANA TZ   | `Asia/Tehran` | Timezone used for localized timestamps and daily reset boundaries.                                                                                          |
+| `SERVER_PUBLIC_IP` | IP        | Auto-detected | Optional public server IPv4 override used by WebApp DNS/SSL pre-flight diagnostics (`HOST_IP` also supported).                                              |
 
 ### Database & Encryption
 
@@ -70,6 +75,21 @@ This reference covers all environment variables (`.env`) validated by [`src/infr
 | `REBECCA_ADMIN_PASSWORD` | Secret    | —       | _Optional legacy bootstrap:_ Initial panel admin password.                                                 |
 | `REBECCA_SERVICE_ID`     | Integer   | `1`     | _Optional legacy bootstrap:_ Initial panel default service ID.                                             |
 
+### Build & Version Telemetry Overrides (Optional / Auto-Populated)
+
+`rsbot`, `install.sh`, `Dockerfile`, and GitHub Actions automatically inject Git metadata into `scripts/version-info.mjs` (`dist/build-info.json`) and [`src/infra/appVersion.ts`](../src/infra/appVersion.ts). Custom container pipelines where `.git` is absent may pass:
+
+| Variable                | Default        | Description                                                                                         |
+| :---------------------- | :------------- | :-------------------------------------------------------------------------------------------------- |
+| `APP_VERSION`           | `package.json` | Explicit SemVer override (e.g. `0.4.0` or `0.4.0-rc.1`).                                            |
+| `APP_RELEASE_CHANNEL`   | Auto-derived   | Explicit channel override (`stable`, `dev`, or `prerelease`; derived from branch/tag when omitted). |
+| `APP_GIT_BRANCH`        | Local Git      | Branch name (`main` resolves to `stable`; `dev` / feature branches resolve to `dev`).               |
+| `APP_GIT_SHA`           | Local Git      | Commit SHA (normalized to a 7-char lowercase short hash).                                           |
+| `APP_GIT_TAG`           | Local Git      | Exact Git tag on `HEAD` (e.g. `v0.4.0`).                                                            |
+| `APP_GIT_COMMITS_AHEAD` | Local Git      | Commits ahead of the nearest `v*` tag (formats `dev` builds as `vX.Y.Z-dev.N`).                     |
+| `APP_GIT_DIRTY`         | Local Git      | `'true'` / `'false'` indicator appending `.dirty` to `fullVersion` when tracked files are modified. |
+| `APP_BUILD_TIME`        | Build UTC ISO  | ISO-8601 build timestamp embedded into `dist/build-info.json` and Vite `__APP_VERSION_INFO__`.      |
+
 ---
 
 ## 2. In-Bot Runtime Settings (`/admin` → Settings & Sales)
@@ -102,12 +122,14 @@ Runtime settings are persisted in the PostgreSQL `settings` table ([`Translation
 | `webapp_enabled` | `'false'` | Managed exclusively in **Settings → Web Mini App** (`adm:cfg:web`); dynamically starts/stops Fastify and toggles WebApp UI. |
 | `webapp_url`     | `''`      | Public HTTPS origin registered in the multi-instance mesh registry (includes pre-flight DNS check & dedicated SSL report).  |
 
-### Naming & Service Rules (`adm:cfg:svc` & `adm:pkg:*`)
+### Naming, Storefront Inventory & Service Rules (`adm:cfg:svc` & `adm:pkg:*`)
 
 | Key                           | Default                              | Description                                                                                                               |
 | :---------------------------- | :----------------------------------- | :------------------------------------------------------------------------------------------------------------------------ |
 | `packages_json`               | 4 starter plans                      | JSON array of fixed packages managed via **Sales → Packages** (`adm:pkg:p:1`).                                            |
 | `package_display_mode`        | `'specs'`                            | Storefront package button label style (`'specs'` or `'name'`).                                                            |
+| `shop_show_out_of_stock`      | `'true'`                             | Keeps sold-out or capacity-full packages visible with a disabled out-of-stock badge (`'true'`) or hides them (`'false'`). |
+| `shop_low_stock_threshold`    | `'5'`                                | Remaining-unit threshold (`1–1000`) triggering low-stock badges and Admin Overview fleet capacity warnings.               |
 | `on_hold_default_enabled`     | `'false'`                            | Provisions new purchases in Rebecca `on_hold` mode (validity starts on first connection).                                 |
 | `renewal_rollover_enabled`    | `'true'`                             | Carries remaining traffic quota and validity days over into renewed subscriptions.                                        |
 | `low_traffic_threshold_gb`    | `'2'`                                | Remaining quota threshold (GB) that triggers an automated low-traffic notification.                                       |
@@ -120,16 +142,17 @@ Runtime settings are persisted in the PostgreSQL `settings` table ([`Translation
 
 ### Custom-Volume Plans (`adm:cv`)
 
-| Key                               | Default         | Description                                                                |
-| :-------------------------------- | :-------------- | :------------------------------------------------------------------------- |
-| `custom_volume_enabled`           | `'true'`        | Enables custom GB/duration ordering and renewal flows.                     |
-| `price_per_gb`                    | `'5000'`        | Base price per GB in minor units (Tomans).                                 |
-| `price_per_day`                   | `'0'`           | Optional base price per day in minor units.                                |
-| `custom_default_days`             | `'30'`          | Default duration (days) applied to custom-volume plans.                    |
-| `custom_min_gb` / `custom_max_gb` | `'5'` / `'500'` | Minimum and maximum selectable traffic (GB) for custom plans.              |
-| `volume_pricing_tiers_json`       | `'[]'`          | Tiered per-GB pricing breakpoints JSON.                                    |
-| `custom_price_overrides_json`     | `'[]'`          | Exact GB/day price override rules JSON.                                    |
-| `custom_volume_target_json`       | `'{}'`          | Target Rebecca `panelId` and `serviceId` binding for custom-volume orders. |
+| Key                               | Default         | Description                                                                             |
+| :-------------------------------- | :-------------- | :-------------------------------------------------------------------------------------- |
+| `custom_volume_enabled`           | `'true'`        | Enables custom GB/duration ordering and renewal flows.                                  |
+| `price_per_gb`                    | `'5000'`        | Base price per GB in minor units (Tomans).                                              |
+| `price_per_day`                   | `'0'`           | Optional base price per day in minor units.                                             |
+| `custom_default_days`             | `'30'`          | Default duration (days) applied to custom-volume plans.                                 |
+| `custom_min_gb` / `custom_max_gb` | `'5'` / `'500'` | Minimum and maximum selectable traffic (GB) for custom plans.                           |
+| `custom_volume_daily_limit`       | `'0'`           | Tehran-day creation ceiling (`0–100000`) for custom-volume configs (`'0'` = unlimited). |
+| `volume_pricing_tiers_json`       | `'[]'`          | Tiered per-GB pricing breakpoints JSON.                                                 |
+| `custom_price_overrides_json`     | `'[]'`          | Exact GB/day price override rules JSON.                                                 |
+| `custom_volume_target_json`       | `'{}'`          | Target Rebecca `panelId` and `serviceId` binding for custom-volume orders.              |
 
 ### Payments, Automated Gateways, Multi-Card & Receipt Security (`adm:cfg:pay`, `adm:bc:*`, `adm:pg:*`)
 
@@ -164,17 +187,25 @@ Runtime settings are persisted in the PostgreSQL `settings` table ([`Translation
 
 Customer tiers are stored in the relational `user_groups` table rather than `settings` and managed via **Sales → User Groups** (`adm:grp:l`) or `/api/admin/groups`:
 
-- **Pricing & Credit:** `discount_percent` (`0–90%`), optional custom-volume overrides (`custom_price_per_gb`, `custom_price_per_day`), and `credit_limit` (`≥ 0` Tomans for VIP negative-balance purchasing/renewals).
+- **Pricing & Credit:** `discount_percent` (`0–90%`), `apply_discount_to_custom_volume` (default `false`; applies `discount_percent` to custom-volume plans when no `custom_price_per_gb` override is set), optional custom-volume overrides (`custom_price_per_gb`, `custom_price_per_day`), and `credit_limit` (`≥ 0` Tomans for VIP negative-balance purchasing/renewals).
 - **Anti-Double-Discount & Access Switches:** `allow_catalog_discounts`, `allow_promo_codes`, `allow_cashback`, `allow_lucky_wheel` (default `true`), and `allow_custom_service_name` (default `false`; combined via OR with global `custom_service_name_enabled`).
 - **Default Group & Expiry:** At most one group may have `is_default = true`; ungrouped users and users past `users.group_expires_at` transparently inherit the default group policy.
 
+### Panel, Service & Package Inventory Caps (`adm:pnl:*`, `adm:pkg:*` & Relational Tables)
+
+Fleet capacity and package stock controls are stored in relational tables with `FOR NO KEY UPDATE` concurrency locking (`InventoryService`):
+
+- **Panel & Service Caps (`rebecca_panels` & `rebecca_panel_services`):** `enabled` (pause toggle), `max_configs` (concurrent active/on-hold/limited ceiling), `stock_remaining` (consumable new-creation quota), and `daily_create_limit` (Tehran-midnight creation cap). `NULL` means unlimited and `0` stops new creations. Enforced **exclusively on `new_config` and `trial`** so existing subscribers can always renew (`renew_config` and `autoRenewal`).
+- **Package, Custom-Volume & Trial Inventory (`package_inventory`):** `stock_remaining` (`NULL` = unlimited, `0` = sold out), `max_purchases_per_user` (`NULL` = unlimited), `reserved_count`, and `sold_count` across fixed packages (`package_id`), custom-volume (`__custom_volume__`), and free trials (`__trial__`).
+
 ### Free Trial (`adm:trl`)
 
-| Key             | Default  | Description                                                                                         |
-| :-------------- | :------- | :-------------------------------------------------------------------------------------------------- |
-| `trial_enabled` | `'true'` | Enables one-time free trial claims for new users. (Phone verification gate lives in `adm:cfg:gen`.) |
-| `trial_gb`      | `'1'`    | Traffic quota (GB) allocated to trial subscriptions.                                                |
-| `trial_days`    | `'3'`    | Validity duration (days) allocated to trial subscriptions.                                          |
+| Key                 | Default  | Description                                                                                         |
+| :------------------ | :------- | :-------------------------------------------------------------------------------------------------- |
+| `trial_enabled`     | `'true'` | Enables one-time free trial claims for new users. (Phone verification gate lives in `adm:cfg:gen`.) |
+| `trial_gb`          | `'1'`    | Traffic quota (GB) allocated to trial subscriptions (supports fractional sub-1 GB values, `0.1+`).  |
+| `trial_days`        | `'3'`    | Validity duration (days) allocated to trial subscriptions.                                          |
+| `trial_daily_limit` | `'0'`    | Tehran-day creation ceiling (`0–100000`) for free trials (`'0'` = unlimited).                       |
 
 ### Growth & Rewards, Support & Backups (`adm:grw`, `adm:cfg:adm`, `adm:cfg:bak`)
 

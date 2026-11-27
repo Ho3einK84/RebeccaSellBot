@@ -29,6 +29,8 @@
 
 ## Documentation
 
+> **Last synced with version:** `v0.4.0`
+
 | Document                                                    | Scope                                                                                                                      |
 | :---------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------- |
 | 🏛️ **[System Architecture](docs/architecture.md)**          | Layered architecture, 3-phase purchase saga with VIP credit & inventory locks, 32-table PostgreSQL schema, and 11 workers. |
@@ -44,30 +46,30 @@
 
 ## Capabilities
 
-| Customer Experience (Telegram Bot + Mini App Parity)                                                                                                                                        | Administration & Backoffice                                                                                                                                                                           |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🛒 **Instant Storefront & VIP Groups:** Fixed packages, stock/per-user caps, custom GB/day ordering, buyer-chosen service names, group discounts/badges, & flash sales.                     | 🌐 **Multi-Panel Fleet & Inventory Caps:** Connect multiple Rebecca panels (`AES-256-GCM` vault), enforce panel/service capacity & creation quotas, and define VIP `user_groups`.                     |
-| 💳 **Automated & Manual Top-Ups:** Automated ForApp card-to-card SMS matching, NOWPayments crypto invoices (live/manual USDT rates), 2-step manual receipts, & positive-only P2P transfers. | 🛡️ **Payment & Access Security:** `SHA-256` + `file_unique_id` receipt deduplication, atomic voiding, payment-message auto-delete, `open`/`invite_only`/`closed` registration, & forced channel join. |
-| 🎁 **Free Trial & Interactive Lucky Wheel:** One-tap trial claiming with QR & SmartConnect delivery plus an animated 8-slice SVG Lucky Wheel with haptics, cooldowns, and spin history.     | 📊 **Telegram & Mini App CRM:** 1-tap stateless `/admin` command center (`/r`, `/u`, `/stats`), group/expiry assignment, unmatched deposit matcher, and orphan reconciliation.                        |
-| 📊 **Subscription Portal & Personal Labels:** Sync All, external sub-link claim, local 40-char personal labels, per-node usage & `onlineAt`, QR codes, 1-tap SmartConnect links, & revoke.  | 📢 **Growth, Retention & Bulk Gifts:** Group-filtered broadcasts, durable bulk GB/day gift campaigns, 24h first-use nudges, and staged expired-config cleanup with warnings.                          |
-| 🔄 **Lifecycle & VIP Credit:** Start-on-first-use (`on_hold`), rollover, preset & custom auto-renewal (VIP credit-aware), P2P service transfer, self-refund quotes, & chat artifacts.       | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` contact verification via bot or native Mini App `WebApp.requestContact()` (zero raw phone storage).                                           |
-| 🌐 **Unified UX & Localization:** Full Persian (`fa`) / English (`en`) parity, Persian digit normalization, bi-directional deep links, and maintenance mode with admin bypass.              | 📦 **Multi-Instance Operations:** Run isolated instances with automated Caddy On-Demand TLS mesh routing and transactional backups.                                                                   |
+| Customer Experience (Telegram Bot + Mini App Parity)                                                                                                                                                                  | Administration & Backoffice                                                                                                                                                                           |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🛒 **Instant Storefront & VIP Groups:** Fixed packages, stock/per-user caps, custom GB/day ordering, buyer-chosen service names, group discounts/badges, & flash sales.                                               | 🌐 **Multi-Panel Fleet & Inventory Caps:** Connect multiple Rebecca panels (`AES-256-GCM` vault), enforce panel/service capacity & creation quotas, and define VIP `user_groups`.                     |
+| 💳 **Automated & Manual Top-Ups:** Automated ForApp card-to-card SMS matching, NOWPayments crypto invoices (live/manual USDT rates), 2-step manual receipts, & positive-only P2P transfers.                           | 🛡️ **Payment & Access Security:** `SHA-256` + `file_unique_id` receipt deduplication, atomic voiding, payment-message auto-delete, `open`/`invite_only`/`closed` registration, & forced channel join. |
+| 🎁 **Free Trial & Interactive Lucky Wheel:** One-tap trial claiming (fractional `0.1 GB+` quotas) with QR & SmartConnect delivery plus an animated 8-slice SVG Lucky Wheel with haptics, cooldowns, and spin history. | 📊 **Telegram & Mini App CRM:** 1-tap stateless `/admin` command center (`/r`, `/u`, `/stats`, `/version`), group/expiry assignment, unmatched deposit matcher, and orphan reconciliation.            |
+| 📊 **Subscription Portal & Personal Labels:** Sync All, external sub-link claim, local 40-char personal labels, per-node usage & `onlineAt`, QR codes, 1-tap SmartConnect links, & revoke.                            | 📢 **Growth, Retention & Bulk Gifts:** Group-filtered broadcasts, durable bulk GB/day gift campaigns, 24h first-use nudges, and staged expired-config cleanup with warnings.                          |
+| 🔄 **Lifecycle & VIP Credit:** Start-on-first-use (`on_hold`), rollover, preset & custom auto-renewal (VIP credit-aware), P2P service transfer, self-refund quotes, & chat artifacts.                                 | 📱 **Privacy-First Phone Gate:** Optional `HMAC-SHA256` contact verification via bot or native Mini App `WebApp.requestContact()` (zero raw phone storage).                                           |
+| 🌐 **Unified UX & Localization:** Full Persian (`fa`) / English (`en`) parity, Persian digit normalization, white-label WebApp version footer, bi-directional deep links, and maintenance mode.                       | 📦 **Multi-Instance & Release Telemetry:** Isolated instances with Caddy On-Demand TLS mesh routing, transactional backups, and `main`/`dev` SemVer telemetry.                                        |
 
 ---
 
 ## Financial & Operational Guarantees
 
 ```text
-Checkout ──► [1. Lock User & Reserve Funds] ──► [2. Provision on Rebecca REST API]
-             (balance - reserved + credit_limit)               │
-                                     ┌─────────────────────────┴─────────────────────────┐
-                                  Success                                        Failure / Timeout
-                                     ▼                                                   ▼
-                    [3a. Commit Ledger + Award Bonuses]                 [3b. Release Reserve + Audit Log]
+Checkout ──► [1. Lock User, Funds & Inventory] ──► [2. Provision on Rebecca REST API]
+             (FOR UPDATE + FOR NO KEY UPDATE)                       │
+                                     ┌──────────────────────────────┴─────────────────────────┐
+                                  Success                                             Failure / Timeout
+                                     ▼                                                        ▼
+                    [3a. Commit Ledger, Stock & Bonuses]                  [3b. Release Funds, Stock & Audit Log]
 ```
 
 - **64-Bit Minor-Unit Integer Accounting & VIP Credit Safety:** All monetary values use signed 64-bit safe integers (`DbNumber`, `-9007199254740991..9007199254740991`) with `reserved_balance >= 0`. VIP groups may grant a `credit_limit` for purchases/renewals (snapshotted on `purchase_intents` for safe mid-flight group changes and reconciliation), top-ups naturally settle negative balances, and P2P transfers strictly require positive real balance (`balance - reserved_balance >= amount`).
-- **3-Phase Purchase & Renewal Saga:** Funds, effective group credit limits, and promo redemptions are reserved under a `FOR UPDATE` row lock before remote API dispatch and automatically compensated on network failure or reconciliation recovery.
+- **3-Phase Purchase, Renewal & Inventory Saga:** Wallet funds (`FOR UPDATE`), deadlock-free panel/service/package inventory reservations (`FOR NO KEY UPDATE`), effective group credit limits, and promo redemptions are reserved atomically before remote API dispatch and automatically compensated on network failure, reconciliation, or self-refund. Panel and service caps restrict only new provisioning (`new_config` & `trial`) so existing subscribers can always renew.
 - **Cryptographic Fraud, Gateway & Privacy Controls:** Receipts are fingerprinted via `SHA-256` and `file_unique_id`; ForApp (`X-API-Key`) and NOWPayments (`HMAC-SHA512` IPN) webhooks use constant-time verification and `AES-256-GCM` stored secrets; verified phone numbers are stored strictly as `HMAC-SHA256` digests keyed from `BOT_TOKEN`.
 - **Dual-Mode Delivery:** Outbound Long Polling by default (zero open ports required) or reverse-proxied Webhook delivery with `X-Telegram-Bot-Api-Secret-Token` validation.
 

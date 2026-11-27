@@ -1,5 +1,7 @@
 # RebeccaSellBot — Telegram Delivery Layer & UI Architecture
 
+> **Last synced with version:** `v0.4.0`
+
 RebeccaSellBot treats Telegram strictly as an **ephemeral delivery and interaction layer**. Handlers, conversations, and keyboards under [`src/telegram/`](../src/telegram/) never query PostgreSQL directly or instantiate panel HTTP clients; every operation flows through typed domain services injected on `ctx.services`.
 
 ---
@@ -65,6 +67,7 @@ To prevent chat clutter while guaranteeing zero loss of payment or subscription 
 - **Single-Tap Popover Dismiss (`ui:dismiss`):** Mounted ahead of `conversations()` and `adminInput` so temporary overlays (QR popovers, outage alerts, test broadcasts) always close in one tap without disturbing the active screen or prompt.
 - **Digit Normalization (`normalizeInputDigits`):** All numeric inputs (amounts, GB, days, card numbers, phone numbers, expiry dates, warn days) automatically normalize Persian (`۰–۹`) and Arabic (`٠–٩`) numerals to ASCII (`0–9`).
 - **Zero Duplicate Status Emojis:** Status formatters and empty-state builders strip duplicate leading emojis and emit a single canonical badge per state (`active`, `on_hold`, `limited`, `expired`, `disabled`, `healthy`, `warning`, `error`).
+- **White-Label Customer Surface & Minimal Admin Version Telemetry (`src/telegram/versionBadge.ts`):** Regular customers see zero version text or `RebeccaSellBot` branding anywhere in Telegram. Administrators see concise single-line SemVer tags (`🏷️ v0.4.0` on `main`, `🧪 v0.4.0-dev.N · <sha>` on `dev`) on Admin Home (`adm:home`), Settings (`adm:cfg`), Stats (`adm:stats`), and the admin-only `/version` screen.
 
 ---
 
@@ -78,12 +81,12 @@ src/telegram/admin/
 ├── adminRouter.ts              (Stateless adm:* route registry, adm:back, adm:in:cancel, admin-aware fallback)
 ├── adminInput.ts               (Non-blocking session.adminInput text engine — 5m TTL, inline retry, /cancel return)
 ├── adminHome.ts                (1-tap Command Center adm:home, 60s cached panel health w/ 1.5s timeout,
-│                                adm:stats, adm:sales hub, 8-item adm:cfg hub, adm:msg hub)
-├── adminCommands.ts            (BotCommandScopeChat sync for admins: /admin, /r, /u [query], /stats, /cancel)
-├── adminSalesRoutes.ts         (Stateless Packages & Categories, Custom Volume, Free Trial,
+│                                adm:stats, adm:sales hub, 8-item adm:cfg hub, adm:msg hub, minimal version tags)
+├── adminCommands.ts            (BotCommandScopeChat sync for admins: /admin, /r, /u [query], /stats, /version, /cancel)
+├── adminSalesRoutes.ts         (Stateless Packages & Categories + stock/per-user limits, Custom Volume, Free Trial,
 │                                unified Growth & Rewards [Referral + Cashback + Lucky Wheel], Flash Discounts)
 ├── adminSettingsRoutes.ts      (General & Security w/ registration_mode, phone gate & cleanup preview,
-│                                Payment & auto-delete hours, Bank Cards adm:bc:*, Naming & Service Rules,
+│                                Payment & auto-delete hours, Bank Cards adm:bc:*, Naming/Storefront Stock & Rules,
 │                                Web Mini App w/ DNS/SSL report, Auto Backup, Admins & Support)
 ├── adminPaymentGatewayRoutes.ts (Stateless ForApp & NOWPayments setup, API key rotation, unmatched deposit matcher)
 ├── adminForcedJoinRoutes.ts    (Stateless forced channel join scope & multi-channel manager w/ live test)
@@ -92,30 +95,31 @@ src/telegram/admin/
 
 ### Key Admin Route Families (`adm:*`)
 
-| Route Prefix                  | Module & Capabilities                                                                                                 |
-| :---------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
-| `adm:home` · `adm:stats`      | 1-tap Command Center with live KPIs/alerts, cached panel health, and real-time DB/panel latency stats.                |
-| `adm:rcpt:*`                  | Pending receipt queue (1-click approve, reject reasons, batch approve), searchable approved history & void.           |
-| `adm:usr:*` · `adm:usr:grp:*` | Paginated user list (`all`, `active_subs`, `has_balance`, `banned`), search, CRM, wallet, & group/expiry assign.      |
-| `adm:sales` · `adm:pkg:*`     | Sales Hub, stateless Packages & Categories CRUD, Custom Volume (`adm:cv`), Free Trial (`adm:trl`).                    |
-| `adm:grp:*`                   | Stateless User Groups CRUD (`groupRoutes.ts`): discount/rate/credit editing, 1-tap feature flags, safe delete.        |
-| `adm:prm:*` · `adm:dsc:*`     | Filterable Promo Center + single-card quick editor (`adm:prm:edit:*`); Flash Discounts w/ confirm guards.             |
-| `adm:grw` · `adm:grw:wheel`   | Unified Growth & Rewards card (Referral bonus, Cashback %, Lucky Wheel toggle & detailed odds settings).              |
-| `adm:pnl:*` · `adm:orp:*`     | Panel registry with direct orphan queue shortcut, live-panel disable confirm, note-aware Quick Assign.                |
-| `adm:msg` · `adm:gift:*`      | Messaging Hub: group-filterable broadcasts (`adm:msg:jobs:<p>`), DMs, and durable Bulk Gift campaigns (`adm:gift:*`). |
-| `adm:cfg:*` · `adm:bc:*`      | 8-section Settings Hub (`registration_mode`, payment auto-delete, WebApp, phone gate) + Bank Cards pool.              |
-| `adm:cfg:fj` · `adm:fj:*`     | Forced Channel Join scope selector (`off`/`all`/`trial_only`/`purchase_and_trial`) and channel manager.               |
-| `adm:pg:fa*` · `adm:pg:np*`   | Automated Payment Gateways: ForApp guide/key rotation/unmatched deposits & NOWPayments config/sandbox/test.           |
-| `adm:txt:*`                   | Stateless bilingual text catalog browser with current-value copy view, placeholder checks & live preview.             |
+| Route Prefix                  | Module & Capabilities                                                                                                            |
+| :---------------------------- | :------------------------------------------------------------------------------------------------------------------------------- |
+| `adm:home` · `adm:stats`      | 1-tap Command Center with live KPIs/alerts, cached panel health, real-time DB/panel latency stats, and minimal SemVer badge.     |
+| `adm:rcpt:*`                  | Pending receipt queue (1-click approve, reject reasons, batch approve), searchable approved history & void.                      |
+| `adm:usr:*` · `adm:usr:grp:*` | Paginated user list (`all`, `active_subs`, `has_balance`, `banned`), search, CRM, wallet, & group/expiry assign.                 |
+| `adm:sales` · `adm:pkg:*`     | Sales Hub, Packages & Categories CRUD + stock/per-user caps, Custom Volume (`adm:cv`), Free Trial (`adm:trl`) & daily caps.      |
+| `adm:grp:*`                   | Stateless User Groups CRUD (`groupRoutes.ts`): discount/rate/credit editing, custom-volume discount toggle, 1-tap feature flags. |
+| `adm:prm:*` · `adm:dsc:*`     | Filterable Promo Center + single-card quick editor (`adm:prm:edit:*`); Flash Discounts w/ confirm guards.                        |
+| `adm:grw` · `adm:grw:wheel`   | Unified Growth & Rewards card (Referral bonus, Cashback %, Lucky Wheel toggle & detailed odds settings).                         |
+| `adm:pnl:*` · `adm:orp:*`     | Panel & service registry with pause toggles, concurrent capacity/creation/daily caps, orphan shortcut, & note-aware Assign.      |
+| `adm:msg` · `adm:gift:*`      | Messaging Hub: group-filterable broadcasts (`adm:msg:jobs:<p>`), DMs, and durable Bulk Gift campaigns (`adm:gift:*`).            |
+| `adm:cfg:*` · `adm:bc:*`      | 8-section Settings Hub (`registration_mode`, out-of-stock visibility, payment auto-delete, WebApp, phone gate) + Bank Cards.     |
+| `adm:cfg:fj` · `adm:fj:*`     | Forced Channel Join scope selector (`off`/`all`/`trial_only`/`purchase_and_trial`) and channel manager.                          |
+| `adm:pg:fa*` · `adm:pg:np*`   | Automated Payment Gateways: ForApp guide/key rotation/unmatched deposits & NOWPayments config/sandbox/test.                      |
+| `adm:txt:*`                   | Stateless bilingual text catalog browser with current-value copy view, placeholder checks & live preview.                        |
 
 ### Power-Admin Quick Commands (`BotCommandScopeChat`)
 
-On startup (`syncAdminBotCommands` in [`src/index.ts`](../src/index.ts)), RebeccaSellBot registers an admin-only command menu for each ID in `adminIds` (while regular users only see `/start`):
+On startup (`syncAdminBotCommands` in [`src/index.ts`](../src/index.ts), with lazy per-chat fallback via `ensureAdminCommandsSyncedForChat` for admins who had not yet opened a chat), RebeccaSellBot registers an admin-only command menu for each ID in `adminIds` (while regular users only see `/start`):
 
 - `/admin` — Open the 1-tap Admin Command Center (clearing any stale transient input/secret state)
 - `/r` — Jump directly to the pending receipts queue (`adm:rcpt:q:1`)
 - `/u [query]` — Open a matching customer profile directly or launch user omnisearch
 - `/stats` — Open live revenue, subscriber, and panel health statistics (`adm:stats`)
+- `/version` — Inspect the active SemVer release, channel (`stable`/`dev`/`prerelease`), branch, commit SHA, and build timestamp
 - `/cancel` — Cancel an active `adminInput` prompt and return directly to its parent screen
 
 ---

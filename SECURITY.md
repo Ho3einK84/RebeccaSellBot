@@ -1,5 +1,7 @@
 # Security Policy
 
+> **Last synced with version:** `v0.4.0`
+
 ## Reporting a Vulnerability
 
 Do not disclose suspected vulnerabilities, credentials, Rebecca subscription URLs, database dumps, or access tokens in public issues. Use **GitHub Private Vulnerability Reporting** for this repository or contact the maintainers through an established private channel with minimal synthetic reproduction steps.
@@ -21,5 +23,6 @@ Include the affected commit or version, impact assessment, prerequisites, and re
 
 ## Database & Operational Integrity
 
-- **64-Bit Minor-Unit Boundaries & Credit Safety:** PostgreSQL check constraints enforce signed safe-integer bounds (`-9007199254740991` to `9007199254740991`), non-negative reservations (`reserved_balance >= 0`), `user_groups.credit_limit >= 0`, single default group uniqueness (`user_groups_one_default`), and valid state-machine transitions across `drizzle/0000_initial_schema.sql` through `drizzle/0016_add_user_groups_and_credit_limit.sql`. Purchasing power (`balance - reserved_balance + effectiveCreditLimit`) is enforced under `FOR UPDATE` row locks and snapshotted onto `purchase_intents` rather than via a hard DB check against mutable group limits, ensuring expired or reassigned indebted VIP users never trigger constraint errors.
+- **64-Bit Minor-Unit Boundaries, Credit Safety & Inventory Locks:** PostgreSQL check constraints enforce signed safe-integer bounds (`-9007199254740991` to `9007199254740991`), non-negative reservations (`reserved_balance >= 0`), `user_groups.credit_limit >= 0`, single default group uniqueness (`user_groups_one_default`), non-negative panel/service/package capacity & stock bounds, and valid state-machine transitions across `drizzle/0000_initial_schema.sql` through `drizzle/0019_service_and_package_inventory.sql`. Purchasing power (`balance - reserved_balance + effectiveCreditLimit`) is enforced under `FOR UPDATE` row locks and snapshotted onto `purchase_intents` rather than via a hard DB check against mutable group limits, while `InventoryService` locks `rebecca_panels`, `rebecca_panel_services`, and `package_inventory` rows with `FOR NO KEY UPDATE` to prevent foreign-key `FOR KEY SHARE` deadlocks during parallel checkouts.
+- **Sanitized Public Telemetry:** Public and customer-facing version payloads (`toPublicAppVersion` on `/api/auth/bot-info` and `/api/health`) omit internal Git commit SHAs, dirty-tree flags, build timestamps, and repository URLs, exposing full build diagnostics strictly to authenticated administrators and local `/readyz` health probes.
 - **Deployment Hygiene:** Keep `.env` (`chmod 0600`), deploy keys, and backup archives outside the Docker build context. Treat Rebecca subscription URLs (`sub_url`) as bearer credentials and never expose them in public logs.

@@ -1,6 +1,8 @@
 # RebeccaSellBot — Deployment & Operations Guide
 
-This guide covers production installation, single and multi-instance lifecycle management with `rsbot`, reverse proxy integration (Caddy On-Demand TLS mesh and static proxies), and transactional disaster recovery.
+> **Last synced with version:** `v0.4.0`
+
+This guide covers production installation, single and multi-instance lifecycle management with `rsbot`, SemVer release-channel telemetry, reverse proxy integration (Caddy On-Demand TLS mesh and static proxies), and transactional disaster recovery.
 
 ---
 
@@ -85,20 +87,28 @@ When `<instance>` is omitted (e.g. `rsbot update`), `rsbot` automatically target
 | Command                            | Action                                                                                                              |
 | :--------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
 | `rsbot list` (or `rsbot ls`)       | List all instances, running state, published ports, delivery mode, and WebApp URL.                                  |
-| `rsbot [name] up`                  | Ensure `.env` defaults & mesh resources, build/start containers, and wait for health checks.                        |
+| `rsbot [name] up`                  | Ensure `.env` defaults & mesh resources, bake Git build metadata, build/start containers, and wait for `/readyz`.   |
 | `rsbot [name] down`                | Stop containers while preserving PostgreSQL volumes and `.env`.                                                     |
 | `rsbot [name] restart`             | Restart instance containers and verify readiness.                                                                   |
 | `rsbot [name] status`              | Display container states and health status.                                                                         |
 | `rsbot [name] verify`              | Deep diagnostics: `.env` permissions (`0600`), port collisions, PostgreSQL readiness, and `/readyz` HTTP 200 probe. |
-| `rsbot [name] env`                 | Display sanitized instance configuration, commit SHA, ports, and masked secret indicators.                          |
+| `rsbot [name] env`                 | Display sanitized instance configuration, SemVer version & release channel (`main`/`dev`), commit SHA, and ports.   |
 | `rsbot [name] logs [-f]`           | View or follow (`-f`) container logs.                                                                               |
-| `rsbot [name] update`              | Pull latest Git commits, sync `/usr/local/bin/rsbot`, rebuild image, apply SQL migrations, and verify `/readyz`.    |
+| `rsbot [name] update`              | Fetch tags, pull latest Git commits, self-reexec updated `rsbot`, rebuild image, migrate SQL, and verify `/readyz`. |
 | `rsbot [name] backup`              | Create a compressed `0600` backup bundle in `/opt/RebeccaSellBot/backups/<name>/`.                                  |
 | `rsbot [name] backups`             | List available backup archives with timestamps, git commits, and sizes.                                             |
 | `rsbot [name] prune-backups [N]`   | Retain the newest `N` backups (default: `14`) and remove older archives.                                            |
 | `rsbot [name] restore <file> [-y]` | Validate and restore a `.tar.gz` bundle (or legacy `.dump`) with automatic pre-restore rollback protection.         |
 | `rsbot [name] uninstall`           | Permanently remove the instance directory, containers, and database volume.                                         |
 | `rsbot all <cmd>`                  | Run `status`, `verify`, `update`, `backup`, `restart`, `up`, `down`, or `env` across all installed instances.       |
+
+### Release Channels & Health Telemetry
+
+During `rsbot up` and `rsbot update`, Git build metadata (`APP_GIT_BRANCH`, `APP_GIT_SHA`, `APP_GIT_TAG`, `APP_GIT_COMMITS_AHEAD`) is baked into `dist/build-info.json` and Vite (`__APP_VERSION_INFO__`):
+
+- **`main` (`stable` channel):** Displays clean SemVer (`v0.4.0`, `fullVersion: "v0.4.0+<sha>"`).
+- **`dev` (`dev` channel):** Displays commits ahead of the latest release tag (`v0.4.0-dev.N`, `fullVersion: "v0.4.0-dev.N+<sha>"`).
+- **Health Probes:** Internal container probe `GET http://127.0.0.1:3001/readyz` reports `{ state, phase, version, fullVersion, channel, branch, commit }`, while the public WebApp probe `GET /api/health` exposes only `{ status: "ok", component: "webapp", version, channel }`.
 
 ---
 

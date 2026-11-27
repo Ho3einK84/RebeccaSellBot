@@ -29,6 +29,8 @@ const requiredFiles = [
   'src/domain/services/PromoService.ts',
   'src/domain/services/ReferralService.ts',
   'src/domain/services/UserService.ts',
+  'src/domain/services/InventoryService.ts',
+  'src/infra/appVersion.ts',
   'src/infra/RebeccaApiClient.ts',
   'src/infra/RebeccaApiSchemas.ts',
   'src/infra/db.ts',
@@ -187,12 +189,63 @@ if (!/bot\.on\(['"]callback_query:data['"]/u.test(`${botSource}\n${coreRoutesSou
   failures.push('Telegram routes must acknowledge stale/unmatched callback queries.');
 }
 
+const versionSyncedDocs = [
+  'README.md',
+  'CONTRIBUTING.md',
+  'SECURITY.md',
+  'docs/architecture.md',
+  'docs/configuration.md',
+  'docs/deployment.md',
+  'docs/telegram-architecture.md',
+  'docs/webapp-architecture.md',
+];
+const pkgRaw = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
+const pkgVersion = String(pkgRaw.version ?? '')
+  .trim()
+  .replace(/^v/iu, '')
+  .split('+')[0];
+const expectedDocSyncVersion = `v${pkgVersion}`;
+
+for (const docPath of versionSyncedDocs) {
+  let docSource;
+  try {
+    docSource = await readFile(path.join(repositoryRoot, docPath), 'utf8');
+  } catch {
+    failures.push(`Missing required documentation file: ${docPath}`);
+    continue;
+  }
+
+  const syncMatch =
+    /^\s*>\s*\*\*Last synced with version:\*\*\s*`(v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)`\s*$/mu.exec(
+      docSource
+    );
+  if (!syncMatch) {
+    failures.push(
+      `${docPath} is missing "> **Last synced with version:** \`${expectedDocSyncVersion}\`".`
+    );
+  } else if (syncMatch[1] !== expectedDocSyncVersion) {
+    failures.push(
+      `${docPath} has "Last synced with version: ${syncMatch[1]}", expected "${expectedDocSyncVersion}" (from package.json). Review and update documentation before releasing.`
+    );
+  }
+}
+
+if (pkgVersion && !pkgVersion.includes('-')) {
+  const changelogSource = await readFile(path.join(repositoryRoot, 'CHANGELOG.md'), 'utf8');
+  const escapedVersion = pkgVersion.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  if (!new RegExp(`^## \\[${escapedVersion}\\](?:\\s|$)`, 'mu').test(changelogSource)) {
+    failures.push(
+      `CHANGELOG.md is missing release heading "## [${pkgVersion}]" for package.json version ${pkgVersion}.`
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error('Architecture check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
   process.exitCode = 1;
 } else {
   console.log(
-    'Architecture check passed: layered API access and dual delivery (long polling / webhook) are enforced.'
+    `Architecture check passed: layered API access, dual delivery, and docs version sync (${expectedDocSyncVersion}) are enforced.`
   );
 }

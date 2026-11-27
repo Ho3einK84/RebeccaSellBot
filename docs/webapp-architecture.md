@@ -1,5 +1,7 @@
 # RebeccaSellBot — Telegram Mini App Architecture (User & Admin Portal)
 
+> **Last synced with version:** `v0.4.0`
+
 RebeccaSellBot ships a unified **Telegram Mini App** (`Fastify 5` backend + `React 19` / `Tailwind CSS v4` / `DaisyUI v5` / `TanStack Query` frontend) that achieves full feature parity with the Telegram bot across both customer self-service and administration.
 
 ---
@@ -36,15 +38,16 @@ Telegram Mini App Launch (initData + optional start_param / query string)
 
 Customer routes are decomposed into five cohesive domain modules under `src/webapp/server/routes/user/` (composed by `src/webapp/server/routes/userRoutes.ts` and wired in `src/webapp/server/server.ts`):
 
-| Module                        | Endpoints                                                                                                                                                                                                                                                  | Responsibilities                                                                                                                                                                      |
-| :---------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`user/shared.ts`**          | _(Internal helpers)_                                                                                                                                                                                                                                       | Per-route rate limiters, bilingual package/label localization (`FA \| EN` & custom IDs), masked P2P recipient previews, magic-byte receipt validation (`≤ 5 MiB`).                    |
-| **`user/profileRoutes.ts`**   | `GET /api/user/profile` · `POST /api/user/locale`<br>`GET /api/user/forced-join/check`<br>`GET /api/user/trial/status` · `POST /api/user/trial/claim`<br>`GET /api/user/wheel/status` · `POST /api/user/wheel/spin`                                        | Enriched profile (`user.group`, signed `availableBalance`, `transferableBalance`, `creditLimit`, `purchasingPower`, `debtAmount`, group feature gates, cards, support), Trial, Wheel. |
-| **`user/configRoutes.ts`**    | `GET /api/user/configs` · `POST .../sync-all` · `POST .../claim`<br>`PATCH /api/user/configs/:id/label`<br>`GET .../:id/{usage,renewal-options,refund-quote}`<br>`POST .../:id/{auto-renew,toggle-status,revoke,refresh,delete,transfer/preview,transfer}` | Subscription lifecycle: local personal labels (`user_label`), external sub-link claim, Sync All, per-node usage, group-priced auto-renew/renewals, P2P transfer, self-refund.         |
-| **`user/shopRoutes.ts`**      | `GET /api/user/packages` · `GET /api/user/quote`<br>`POST /api/user/promo/{quote,redeem}`<br>`POST /api/user/checkout` · `POST /api/user/checkout/:id/confirm`                                                                                             | Group-priced packages & anti-double-discount flash sales, group-gated promo quoting/redemption, 3-phase checkout saga with VIP credit purchasing power (`new_config` phone gate).     |
-| **`user/walletRoutes.ts`**    | `GET /api/user/{transactions,receipts}`<br>`POST /api/user/topup/{prepare,receipt,forapp-order,nowpayments-order}`<br>`GET /api/user/topup/orders[/:id/status]` · `POST .../orders/:id/cancel`<br>`POST /api/user/wallet/transfer/{preview,transfer}`      | Category-filtered ledger, manual card prep & Telegram-hosted receipt upload, automated ForApp & NOWPayments order lifecycle, and positive-balance-only P2P transfers.                 |
-| **`paymentWebhookRoutes.ts`** | `POST /api/webhooks/forapp`<br>`POST /api/webhooks/nowpayments`                                                                                                                                                                                            | Public rate-limited gateway webhooks authenticated via timing-safe `X-API-Key` (ForApp) and `HMAC-SHA512` `x-nowpayments-sig` (NOWPayments).                                          |
-| **`admin*Routes.ts`**         | `/api/admin/{overview,users,receipts,panels,packages,categories,pricing/custom,...}`<br>`/api/admin/groups[/:id]` · `/api/admin/users/:id/group`<br>`/api/admin/payment-gateways/*` · `/api/admin/forced-join/*` · `/api/admin/bulk-gift/*`                | Full Admin Portal REST APIs across CRM, user groups, receipts/voiding, packages/pricing, panels, bank cards, payment gateways & unmatched deposits, forced join, and bulk gifts.      |
+| Module                         | Endpoints                                                                                                                                                                                                                                                  | Responsibilities                                                                                                                                                                                         |
+| :----------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`user/shared.ts`**           | _(Internal helpers)_                                                                                                                                                                                                                                       | Per-route rate limiters, bilingual package/label localization (`FA \| EN` & custom IDs), masked P2P recipient previews, magic-byte receipt validation (`≤ 5 MiB`).                                       |
+| **`user/profileRoutes.ts`**    | `GET /api/user/profile` · `POST /api/user/locale`<br>`GET /api/user/forced-join/check`<br>`GET /api/user/trial/status` · `POST /api/user/trial/claim`<br>`GET /api/user/wheel/status` · `POST /api/user/wheel/spin`                                        | Enriched profile (`user.group`, signed `availableBalance`, `transferableBalance`, `creditLimit`, `purchasingPower`, `debtAmount`, group feature gates, cards, support), Trial, Wheel.                    |
+| **`user/configRoutes.ts`**     | `GET /api/user/configs` · `POST .../sync-all` · `POST .../claim`<br>`PATCH /api/user/configs/:id/label`<br>`GET .../:id/{usage,renewal-options,refund-quote}`<br>`POST .../:id/{auto-renew,toggle-status,revoke,refresh,delete,transfer/preview,transfer}` | Subscription lifecycle: local personal labels (`user_label`), external sub-link claim, Sync All, per-node usage, group-priced auto-renew/renewals, P2P transfer, self-refund.                            |
+| **`user/shopRoutes.ts`**       | `GET /api/user/packages` · `GET /api/user/quote`<br>`POST /api/user/promo/{quote,redeem}`<br>`POST /api/user/checkout` · `POST /api/user/checkout/:id/confirm`                                                                                             | Group-priced packages & flash sales, stock/per-user availability (`outOfStock`, `lowStock`, `HTTP 409` exhaustion handling), promo quoting/redemption, and 3-phase VIP credit + inventory checkout saga. |
+| **`user/walletRoutes.ts`**     | `GET /api/user/{transactions,receipts}`<br>`POST /api/user/topup/{prepare,receipt,forapp-order,nowpayments-order}`<br>`GET /api/user/topup/orders[/:id/status]` · `POST .../orders/:id/cancel`<br>`POST /api/user/wallet/transfer/{preview,transfer}`      | Category-filtered ledger, manual card prep & Telegram-hosted receipt upload, automated ForApp & NOWPayments order lifecycle, and positive-balance-only P2P transfers.                                    |
+| **`authRoutes.ts` & `server`** | `GET /api/health` · `GET /api/caddy-check`<br>`GET /api/auth/bot-info` · `POST /api/auth/telegram-validate`                                                                                                                                                | Public WebApp health (`version`, `channel`), On-Demand TLS mesh check, sanitized public `appVersion` (`toPublicAppVersion`), and `initData` session auth (full `AppVersionInfo` for admins).             |
+| **`paymentWebhookRoutes.ts`**  | `POST /api/webhooks/forapp`<br>`POST /api/webhooks/nowpayments`                                                                                                                                                                                            | Public rate-limited gateway webhooks authenticated via timing-safe `X-API-Key` (ForApp) and `HMAC-SHA512` `x-nowpayments-sig` (NOWPayments).                                                             |
+| **`admin*Routes.ts`**          | `/api/admin/{overview,users,receipts,panels,packages,categories,pricing/custom,...}`<br>`PATCH /api/admin/panels/:id/services/:serviceId`<br>`/api/admin/groups[/:id]` · `/api/admin/{payment-gateways,forced-join,bulk-gift}/*`                           | Full Admin Portal REST APIs across CRM, user groups, receipts/voiding, packages/stock/pricing, per-panel & per-service capacity/creation caps, bank cards, payment gateways, forced join, & bulk gifts.  |
 
 ---
 
@@ -73,20 +76,24 @@ Every high-value customer action in the Mini App stays synchronized with the use
 webapp/src/
 ├── app/App.tsx                                  (Root bootstrap, locale/theme hydration, portal routing)
 ├── shared/
-│   ├── lib/{api.ts,deepLinks.ts,queryKeys.ts,transactionFormatters.ts}
+│   ├── components/layout/                       (AppShell, responsive TopBar, compact HeaderUtilityActions capsule, Navs)
+│   ├── components/ui/VersionBadge.tsx           (VersionBadge, white-label AppVersionFooter, AdminVersionCard)
+│   ├── lib/{api.ts,appVersion.ts,deepLinks.ts,queryKeys.ts,transactionFormatters.ts}
 │   ├── hooks/useTelegramContactVerification.ts  (Native Telegram.WebApp.requestContact + polling)
 │   ├── i18n/locales/{fa.ts,en.ts}               (100% key-parity bilingual catalog)
-│   └── types/{api.ts,telegram.ts,userPortal.ts}
+│   └── types/{admin.ts,api.ts,telegram.ts,userPortal.ts}
 └── features/
     ├── auth/                                    (initData bootstrap, AuthErrorScreen w/ registration-mode & support CTA)
-    ├── admin/                                   (Overview, CRM/Users, Receipts/voiding, Packages, Panels, Modules:
-    │                                             BankCardsModal, PaymentGatewaysModal, ForcedJoinModal, BulkGiftModal)
+    ├── admin/                                   (Responsive 2-row mobile / 1-row desktop AdminHeader, Overview w/ capacity alerts,
+    │                                             CRM/Users, Receipts/voiding, Packages & stock, Panels & ManageServicesModal,
+    │                                             ModulesTab w/ AdminVersionCard, UserGroupsModal, BankCardsModal,
+    │                                             PaymentGatewaysModal, ForcedJoinModal, BulkGiftModal)
     └── user-portal/
-        ├── UserPortal.tsx                       (Deep-link router, MaintenanceScreen, ForcedJoinGate, Admin bypass, Ban CTA)
+        ├── UserPortal.tsx                       (Deep-link router, UserPortalHeader, MaintenanceScreen, ForcedJoinGate, Ban CTA)
         ├── tabs/
         │   ├── DashboardTab.tsx                 (KPIs, group badge, debt/credit summary, Free Trial banner, quick actions)
         │   ├── ServicesTab.tsx                  (Personal labels, Sync All, Claim Sub-Link, live traffic/expiry cards)
-        │   ├── ShopTab.tsx                      (Group-priced plans, flash-sale countdowns, categories, custom GB tier table)
+        │   ├── ShopTab.tsx                      (Group-priced plans, stock/low-stock badges, flash-sale countdowns, custom GB tiers)
         │   ├── WalletTab.tsx                    (ForApp/NOWPayments orders, 2-step card receipt upload, credit/debt & P2P)
         │   └── ReferralTab.tsx                  (Rewards Hub: group-gated Lucky Wheel + referral/cashback KPIs)
         └── components/
