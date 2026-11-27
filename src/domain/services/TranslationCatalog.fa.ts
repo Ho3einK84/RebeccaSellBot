@@ -2414,10 +2414,8 @@ export const FA_TEXTS: Record<string, string> = {
 
   // App version & release channel
   version_title: 'نسخه و اطلاعات ساخت',
-  version_subtitle: 'اطلاعات نسخه و کانال انتشار RebeccaSellBot',
   version_section_build: 'مشخصات نسخه',
   version_section_runtime: 'محیط اجرا',
-  version_product_label: 'نرم‌افزار',
   version_version_label: 'نسخه',
   version_full_label: 'شناسه کامل',
   version_channel_label: 'کانال انتشار',

@@ -58,7 +58,7 @@ export const en: DeepPartial<TranslationSchema> = {
   version: {
     label: 'Version',
     title: 'Version & Build Info',
-    subtitle: 'RebeccaSellBot release channel, branch, and build metadata',
+    subtitle: 'Release channel, branch, and build metadata',
     channelStable: 'Stable',
     channelDev: 'Dev',
     channelPrerelease: 'Pre-release',

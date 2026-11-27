@@ -2425,10 +2425,8 @@ export const EN_TEXTS: Record<string, string> = {
 
   // App version & release channel
   version_title: 'Version & Build Info',
-  version_subtitle: 'RebeccaSellBot release version and channel details',
   version_section_build: 'Release Metadata',
   version_section_runtime: 'Runtime',
-  version_product_label: 'Application',
   version_version_label: 'Version',
   version_full_label: 'Build ID',
   version_channel_label: 'Release Channel',

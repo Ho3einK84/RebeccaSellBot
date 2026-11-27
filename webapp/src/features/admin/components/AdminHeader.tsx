@@ -49,7 +49,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         </IconTile>
       }
       title={t('admin.title')}
-      badge={<VersionBadge version={appVersion} size="xs" showChannel />}
+      badge={<VersionBadge version={appVersion} size="xs" className="hidden md:inline-flex" />}
       subtitle={
         <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted truncate max-w-full">
           <span className="truncate font-medium text-ink-soft">{adminDisplayName}</span>
@@ -68,10 +68,10 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
               }}
               title={t('admin.switchToUserPortal')}
               aria-label={t('admin.switchToUserPortal')}
-              className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-brand/30 bg-brand-soft px-2 sm:px-2.5 text-[11px] sm:text-xs font-medium text-brand-fg hover:bg-brand/15 rs-focus press cursor-pointer shrink-0 transition-colors"
+              className="inline-flex h-8 w-8 sm:w-auto items-center justify-center gap-1.5 rounded-ctl border border-brand/30 bg-brand-soft sm:px-2.5 text-xs font-medium text-brand-fg hover:bg-brand/15 rs-focus press cursor-pointer shrink-0 transition-colors"
             >
               <Eye className="h-3.5 w-3.5 shrink-0" />
-              <span>{t('admin.switchToUserPortal')}</span>
+              <span className="hidden sm:inline">{t('admin.switchToUserPortal')}</span>
             </button>
           ) : null}
 

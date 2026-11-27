@@ -109,20 +109,11 @@ export function registerAdminQuickCommands(bot: Bot<MenuContext>, services: BotS
   });
 
   bot.command('version', async (ctx) => {
-    const telegramId = ctx.from?.id;
-    const isAdmin = Boolean(telegramId && services.isAdmin(telegramId));
-    clearTransientConversationSession(ctx.session);
-    clearAdminInput(ctx.session);
-    if (isAdmin && telegramId) {
-      void ensureAdminCommandsSyncedForChat(ctx.api, telegramId);
-      markAdminContext(ctx);
-    }
-    const kb = isAdmin
-      ? new InlineKeyboard()
-          .text(t(ctx, 'admin_menu_stats'), 'adm:stats')
-          .text(t(ctx, 'admin_menu_back_to_admin'), 'adm:home')
-      : new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:home');
-    await renderScreen(ctx, buildVersionScreen(ctx, { isAdmin }), {
+    if (!(await ensureAdmin(ctx))) return;
+    const kb = new InlineKeyboard()
+      .text(t(ctx, 'admin_menu_stats'), 'adm:stats')
+      .text(t(ctx, 'admin_menu_back_to_admin'), 'adm:home');
+    await renderScreen(ctx, buildVersionScreen(ctx), {
       parse_mode: 'Markdown',
       reply_markup: kb,
     });

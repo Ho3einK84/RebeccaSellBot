@@ -3,7 +3,7 @@ import {
   type AppVersionInfo,
   type ReleaseChannel,
 } from '../infra/appVersion.js';
-import { buildAdminScreen, buildBreadcrumb, buildUserScreen } from './designSystem.js';
+import { buildAdminScreen, buildBreadcrumb } from './designSystem.js';
 import { localizedDate, resolveContextLocale, t } from './locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from './rendering.js';
 import type { ConversationContext } from './types.js';
@@ -42,77 +42,45 @@ function inlineCode(value: string): string {
 }
 
 /**
- * Compact, subtle single-line version footer for user-facing Telegram screens.
- * Never exposes internal commit hashes or dirty flags to regular users.
- */
-export function formatUserVersionFooter(
-  ctx: ConversationContext,
-  info: AppVersionInfo = getAppVersionInfo()
-): string {
-  const icon = channelEmoji(info.channel);
-  const versionCode = inlineCode(info.displayVersion);
-  if (info.channel === 'stable') {
-    return `${icon} ${info.name} ${versionCode}`;
-  }
-  const channelLabel = escapeTelegramMarkdown(localizedChannelName(ctx, info.channel));
-  const branchTag = info.branch ? ` (${inlineCode(info.branch)})` : '';
-  return `${icon} ${info.name} ${versionCode} · ${channelLabel}${branchTag}`;
-}
-
-/**
- * Compact single-line version footer for Admin Home & Settings Hub screens.
+ * Minimal single-line version footer for Admin Home & Settings Hub screens.
+ * Intentionally omits any upstream product branding so it stays crisp and single-line on mobile.
  */
 export function formatAdminVersionFooter(
-  ctx: ConversationContext,
+  _ctx: ConversationContext,
   info: AppVersionInfo = getAppVersionInfo()
 ): string {
   const icon = channelEmoji(info.channel);
   const versionCode = inlineCode(info.displayVersion);
-  const channelLabel = escapeTelegramMarkdown(localizedChannelName(ctx, info.channel));
-  const trackBranch = info.branch ?? (info.channel === 'stable' ? 'main' : null);
-  const details: string[] = [];
-  if (trackBranch) details.push(inlineCode(trackBranch));
-  if (info.commit && info.channel !== 'stable') {
-    details.push(inlineCode(info.commit));
+  if (info.channel !== 'stable' && info.commit) {
+    return `${icon} ${versionCode} · ${inlineCode(info.commit)}`;
   }
-  const suffix = details.length > 0 ? ` (${details.join(' · ')})` : '';
-  return `${icon} ${info.name} ${versionCode} · ${channelLabel}${suffix}`;
+  return `${icon} ${versionCode}`;
 }
 
 /**
- * Compact field value for the Admin Stats (`adm:stats`) Infrastructure Health section.
+ * Minimal field value for the Admin Stats (`adm:stats`) Infrastructure Health section.
  */
 export function formatAdminStatsVersionValue(
-  ctx: ConversationContext,
+  _ctx: ConversationContext,
   info: AppVersionInfo = getAppVersionInfo()
 ): string {
   const versionCode = inlineCode(info.displayVersion);
-  const channelLabel = escapeTelegramMarkdown(localizedChannelName(ctx, info.channel));
-  const trackBranch = info.branch ?? (info.channel === 'stable' ? 'main' : null);
-  const metaParts: string[] = [];
-  if (trackBranch) metaParts.push(inlineCode(trackBranch));
-  if (info.commit) metaParts.push(inlineCode(info.commit));
-  const metaSuffix = metaParts.length > 0 ? ` (${metaParts.join(' · ')})` : '';
-  return `${versionCode} · ${channelLabel}${metaSuffix}`;
+  if (info.commit) {
+    return `${versionCode} · ${inlineCode(info.commit)}`;
+  }
+  return versionCode;
 }
 
 /**
- * Render the `/version` screen. Regular users receive clean release & channel details;
- * admins receive full build telemetry (branch, commit SHA, SemVer build ID, timestamp, runtime).
+ * Render the admin-only `/version` build & runtime telemetry screen.
  */
 export function buildVersionScreen(
   ctx: ConversationContext,
-  options: { isAdmin: boolean; info?: AppVersionInfo }
+  options?: { info?: AppVersionInfo }
 ): string {
-  const info = options.info ?? getAppVersionInfo();
+  const info = options?.info ?? getAppVersionInfo();
   const icon = channelEmoji(info.channel);
   const title = safeLabel(ctx, 'version_title', 'نسخه و اطلاعات ساخت', 'Version & Build Info');
-  const subtitle = safeLabel(
-    ctx,
-    'version_subtitle',
-    'اطلاعات نسخه و کانال انتشار RebeccaSellBot',
-    'RebeccaSellBot release version and channel details'
-  );
   const channelLabel = localizedChannelName(ctx, info.channel);
   const channelDisplay =
     info.channel === 'stable'
@@ -123,40 +91,7 @@ export function buildVersionScreen(
 
   const trackBranch = info.branch ?? (info.channel === 'stable' ? 'main' : null);
 
-  if (!options.isAdmin) {
-    return buildUserScreen({
-      emoji: icon,
-      title,
-      subtitle,
-      primary: {
-        label: safeLabel(ctx, 'version_version_label', 'نسخه', 'Version'),
-        value: inlineCode(info.displayVersion),
-        inline: true,
-      },
-      sections: [
-        {
-          fields: [
-            {
-              label: safeLabel(ctx, 'version_product_label', 'نرم‌افزار', 'Application'),
-              value: info.name,
-            },
-            {
-              label: safeLabel(ctx, 'version_channel_label', 'کانال انتشار', 'Release Channel'),
-              value: trackBranch
-                ? `${channelDisplay} (${inlineCode(trackBranch)})`
-                : channelDisplay,
-            },
-          ],
-        },
-      ],
-    });
-  }
-
   const buildFields: Array<{ label: string; value: string }> = [
-    {
-      label: safeLabel(ctx, 'version_product_label', 'نرم‌افزار', 'Application'),
-      value: info.name,
-    },
     {
       label: safeLabel(ctx, 'version_channel_label', 'کانال انتشار', 'Release Channel'),
       value: channelDisplay,

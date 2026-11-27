@@ -616,7 +616,6 @@ export const UserPortal: React.FC<UserPortalProps> = ({
         <UserPortalHeader
           user={user}
           group={profile?.group}
-          appVersion={resolvedAppVersion}
           onRefresh={handleRefresh}
           isAdminView={isAdminView}
           onSwitchToAdmin={onSwitchToAdmin}

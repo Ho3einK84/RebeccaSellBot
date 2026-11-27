@@ -11,7 +11,6 @@ import {
   buildVersionScreen,
   formatAdminStatsVersionValue,
   formatAdminVersionFooter,
-  formatUserVersionFooter,
 } from '../../src/telegram/versionBadge.js';
 import { validateTelegramMarkdown } from '../../src/telegram/rendering.js';
 import { TranslationService } from '../../src/domain/services/TranslationService.js';
@@ -224,7 +223,7 @@ describe('Telegram Bot Version Display & Markdown Safety', () => {
     resetAppVersionCacheForTests();
   });
 
-  it('formats main and dev versions cleanly with valid Telegram Markdown v1', () => {
+  it('formats minimal admin main and dev versions without upstream branding and with valid Telegram Markdown v1', () => {
     const mainInfo = resolveAppVersionInfo({
       version: '0.3.0',
       branch: 'main',
@@ -242,41 +241,33 @@ describe('Telegram Bot Version Display & Markdown Safety', () => {
 
     for (const locale of ['fa', 'en'] as const) {
       const ctx = makeCtx(locale);
-      const userMain = formatUserVersionFooter(ctx, mainInfo);
-      expect(userMain).toContain('`v0.3.0`');
-      expect(userMain).not.toContain('6d9c285');
-      expect(validateTelegramMarkdown(userMain).valid).toBe(true);
-
-      const userDev = formatUserVersionFooter(ctx, devInfo);
-      expect(userDev).toContain('`v0.3.0-dev.4`');
-      expect(userDev).toContain('`feat/my_branch`');
-      expect(userDev).not.toContain('a1b2c3d');
-      expect(validateTelegramMarkdown(userDev).valid).toBe(true);
+      const adminMainFooter = formatAdminVersionFooter(ctx, mainInfo);
+      expect(adminMainFooter).toContain('`v0.3.0`');
+      expect(adminMainFooter).not.toContain('RebeccaSellBot');
+      expect(validateTelegramMarkdown(adminMainFooter).valid).toBe(true);
 
       const adminDevFooter = formatAdminVersionFooter(ctx, devInfo);
       expect(adminDevFooter).toContain('`v0.3.0-dev.4`');
       expect(adminDevFooter).toContain('`a1b2c3d`');
+      expect(adminDevFooter).not.toContain('RebeccaSellBot');
       expect(validateTelegramMarkdown(adminDevFooter).valid).toBe(true);
 
       const statsValue = formatAdminStatsVersionValue(ctx, devInfo);
       expect(statsValue).toContain('`v0.3.0-dev.4`');
       expect(statsValue).toContain('`a1b2c3d`');
+      expect(statsValue).not.toContain('RebeccaSellBot');
       expect(validateTelegramMarkdown(statsValue).valid).toBe(true);
 
-      const userScreen = buildVersionScreen(ctx, { isAdmin: false, info: devInfo });
-      expect(userScreen).toContain('`v0.3.0-dev.4`');
-      expect(userScreen).not.toContain('a1b2c3d');
-      expect(validateTelegramMarkdown(userScreen).valid).toBe(true);
-
-      const adminScreen = buildVersionScreen(ctx, { isAdmin: true, info: devInfo });
+      const adminScreen = buildVersionScreen(ctx, { info: devInfo });
       expect(adminScreen).toContain('`v0.3.0-dev.4`');
       expect(adminScreen).toContain('`a1b2c3d`');
       expect(adminScreen).toContain('`v0.3.0-dev.4+a1b2c3d.dirty`');
+      expect(adminScreen).not.toContain('RebeccaSellBot');
       expect(validateTelegramMarkdown(adminScreen).valid).toBe(true);
     }
   });
 
-  it('embeds version info in User Home, Admin Home, and Admin Stats screens', async () => {
+  it('keeps user home dashboard free of version text while showing minimal version in Admin Home & Stats', async () => {
     setAppVersionInfoForTests(
       resolveAppVersionInfo({
         version: '0.3.0',
@@ -288,7 +279,8 @@ describe('Telegram Bot Version Display & Markdown Safety', () => {
     const ctx = makeCtx('fa');
 
     const homeText = await renderHomeDashboard(ctx);
-    expect(homeText).toContain('`v0.3.0-dev.2`');
+    expect(homeText).not.toContain('v0.3.0-dev.2');
+    expect(homeText).not.toContain('RebeccaSellBot');
     expect(homeText).not.toContain('9988776');
 
     await renderAdminHomeScreen(ctx);
@@ -297,6 +289,7 @@ describe('Telegram Bot Version Display & Markdown Safety', () => {
     );
     expect(adminHomeText).toContain('`v0.3.0-dev.2`');
     expect(adminHomeText).toContain('`9988776`');
+    expect(adminHomeText).not.toContain('RebeccaSellBot');
 
     await renderAdminStatsScreen(ctx);
     const adminStatsText = String(
@@ -305,6 +298,7 @@ describe('Telegram Bot Version Display & Markdown Safety', () => {
     expect(adminStatsText).toContain('نسخه ربات');
     expect(adminStatsText).toContain('`v0.3.0-dev.2`');
     expect(adminStatsText).toContain('`9988776`');
+    expect(adminStatsText).not.toContain('RebeccaSellBot');
   });
 });
 

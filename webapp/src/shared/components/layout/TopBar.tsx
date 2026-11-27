@@ -31,10 +31,10 @@ export const TopBar: React.FC<TopBarProps> = ({
     className={`rounded-card border border-line bg-surface/94 rs-backdrop-blur px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-[var(--shadow-card)] transition-shadow duration-200 ${className}`}
   >
     <div className="flex items-center justify-between gap-2.5">
-      <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
         {icon}
-        <div className="min-w-0 flex-1 text-start">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="min-w-0 flex-1 text-start overflow-hidden">
+          <div className="flex items-center gap-2 min-w-0 overflow-hidden">
             <h1 className="truncate font-semibold text-sm sm:text-[15px] text-ink leading-[1.35] m-0">
               {title}
             </h1>

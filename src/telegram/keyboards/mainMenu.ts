@@ -38,7 +38,6 @@ import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
 import { renderAdminHomeScreen } from '../admin/adminHome.js';
-import { formatUserVersionFooter } from '../versionBadge.js';
 import {
   customVolumeEnabled,
   isCustomServiceNameAllowed,
@@ -821,12 +820,9 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
               emoji: '💬',
               title: t(c, 'support_title'),
               subtitle: t(c, 'support_subtitle'),
-              footer: [
-                supportInfo.isConfigured
-                  ? t(c, 'support_message')
-                  : `⚠️ ${t(c, 'support_not_configured')}`,
-                formatUserVersionFooter(c),
-              ].join('\n\n'),
+              footer: supportInfo.isConfigured
+                ? t(c, 'support_message')
+                : `⚠️ ${t(c, 'support_not_configured')}`,
             }),
             { parse_mode: 'Markdown', reply_markup: keyboard }
           );

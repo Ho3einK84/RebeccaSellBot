@@ -56,7 +56,7 @@ export const fa = {
   version: {
     label: 'نسخه',
     title: 'نسخه و اطلاعات ساخت',
-    subtitle: 'مشخصات انتشار، شاخه و شناسه ساخت RebeccaSellBot',
+    subtitle: 'مشخصات نسخه، شاخه و شناسه ساخت',
     channelStable: 'پایدار',
     channelDev: 'توسعه',
     channelPrerelease: 'پیش‌انتشار',
