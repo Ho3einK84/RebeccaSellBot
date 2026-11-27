@@ -565,6 +565,9 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                     setCustomForm((prev) => ({ ...prev, stockRemaining: e.target.value }))
                   }
                 />
+                <p className="text-[11px] text-ink-muted mt-1 m-0">
+                  {t('admin.packages.custom.stockRemainingHint')}
+                </p>
                 {customError('stockRemaining') && (
                   <p className="text-xs text-danger-fg mt-1 m-0">{customError('stockRemaining')}</p>
                 )}
@@ -587,6 +590,9 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                     setCustomForm((prev) => ({ ...prev, dailyCreateLimit: e.target.value }))
                   }
                 />
+                <p className="text-[11px] text-ink-muted mt-1 m-0">
+                  {t('admin.packages.custom.dailyCreateLimitHint')}
+                </p>
                 {customError('dailyCreateLimit') && (
                   <p className="text-xs text-danger-fg mt-1 m-0">
                     {customError('dailyCreateLimit')}

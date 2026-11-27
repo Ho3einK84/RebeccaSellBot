@@ -57,17 +57,20 @@ export const Badge: React.FC<BadgeProps> = ({
   pulse: _pulse = false,
   className = '',
   ...props
-}) => (
-  <span
-    className={`inline-flex items-center justify-center rounded-full border font-medium whitespace-nowrap leading-none ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
-    {...props}
-  >
-    {dot ? (
-      <span
-        aria-hidden="true"
-        className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClasses[variant]}`}
-      />
-    ) : null}
-    {children}
-  </span>
-);
+}) => {
+  const displayClass = /\bhidden\b/.test(className) ? '' : 'inline-flex';
+  return (
+    <span
+      className={`${displayClass} items-center justify-center rounded-full border font-medium whitespace-nowrap leading-none ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
+      {...props}
+    >
+      {dot ? (
+        <span
+          aria-hidden="true"
+          className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClasses[variant]}`}
+        />
+      ) : null}
+      {children}
+    </span>
+  );
+};

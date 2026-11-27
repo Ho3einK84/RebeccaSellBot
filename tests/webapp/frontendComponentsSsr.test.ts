@@ -283,9 +283,18 @@ describe('Webapp Unified Design System & Portal SSR Smoke Tests', () => {
         null,
         React.createElement(AdminHeader, {
           user: sampleTelegramUser,
+          appVersion: {
+            name: 'RebeccaSellBot',
+            version: '0.3.0',
+            displayVersion: 'v0.3.0-dev.3',
+            channel: 'dev',
+            branch: 'dev',
+            commit: '97f3c6e',
+          },
           onRefresh: () => undefined,
           onClose: () => undefined,
           onSwitchToUserPortal: () => undefined,
+          onOpenMore: () => undefined,
         }),
         React.createElement(HealthBanner, {
           panelHealth: { configured: 2, healthy: 2, latencyMs: 42 },
@@ -334,6 +343,10 @@ describe('Webapp Unified Design System & Portal SSR Smoke Tests', () => {
     );
 
     expect(adminFaHtml).toContain('نمای کاربری');
+    expect(adminFaHtml).toContain('بیشتر و تنظیمات');
+    // Regression guard: desktop-only version badge must NOT emit an unprefixed `inline-flex` that overrides `hidden`
+    expect(adminFaHtml).not.toMatch(/class="inline-flex[^"]*hidden md:inline-flex/);
+    expect(adminFaHtml).toContain('hidden md:inline-flex');
     expect(adminFaHtml).not.toContain('نسخه آزمایشی');
     expect(adminFaHtml).toContain('dir="ltr"');
     expect(adminFaHtml).toContain('۸۷٪');

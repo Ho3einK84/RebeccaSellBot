@@ -41,10 +41,12 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
     fallbackName
   );
 
+  const hasMobileQuickBar = Boolean(onOpenMore || onSwitchToUserPortal);
+
   return (
     <TopBar
       icon={
-        <IconTile tone="brand" size="md">
+        <IconTile tone="brand" size="sm" className="sm:w-10 sm:h-10">
           <ShieldCheck />
         </IconTile>
       }
@@ -68,35 +70,58 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
               }}
               title={t('admin.switchToUserPortal')}
               aria-label={t('admin.switchToUserPortal')}
-              className="inline-flex h-8 w-8 sm:w-auto items-center justify-center gap-1.5 rounded-ctl border border-brand/30 bg-brand-soft sm:px-2.5 text-xs font-medium text-brand-fg hover:bg-brand/15 rs-focus press cursor-pointer shrink-0 transition-colors"
+              className="hidden md:inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-brand/25 bg-brand-soft px-3 text-xs font-medium text-brand-fg hover:bg-brand/15 rs-focus press cursor-pointer shrink-0 transition-colors"
             >
               <Eye className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden sm:inline">{t('admin.switchToUserPortal')}</span>
-            </button>
-          ) : null}
-
-          {onOpenMore ? (
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('selection');
-                onOpenMore();
-              }}
-              title={t('admin.tabs.comingSoon')}
-              aria-label={t('admin.tabs.comingSoon')}
-              aria-pressed={isMoreActive}
-              className={`md:hidden inline-flex h-8 w-8 items-center justify-center rounded-ctl border rs-focus press cursor-pointer shrink-0 transition-colors ${
-                isMoreActive
-                  ? 'border-brand/40 bg-brand-soft text-brand-fg'
-                  : 'border-line bg-surface-2 text-ink-soft hover:border-line-strong hover:text-ink'
-              }`}
-            >
-              <Settings2 className="h-4 w-4 shrink-0" />
+              <span>{t('admin.switchToUserPortal')}</span>
             </button>
           ) : null}
 
           <HeaderUtilityActions onRefresh={onRefresh} isRefreshing={isRefreshing} />
         </div>
+      }
+      footerClassName="md:hidden"
+      footer={
+        hasMobileQuickBar ? (
+          <div
+            className={`w-full grid gap-2 ${
+              onOpenMore && onSwitchToUserPortal ? 'grid-cols-2' : 'grid-cols-1'
+            }`}
+          >
+            {onOpenMore ? (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onOpenMore();
+                }}
+                aria-pressed={isMoreActive}
+                className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-full border px-3 text-[11.5px] font-medium rs-focus press cursor-pointer transition-colors truncate ${
+                  isMoreActive
+                    ? 'border-brand/40 bg-brand-soft text-brand-fg'
+                    : 'border-line bg-surface-2 text-ink-soft hover:border-line-strong hover:text-ink'
+                }`}
+              >
+                <Settings2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{t('admin.tabs.comingSoon')}</span>
+              </button>
+            ) : null}
+
+            {onSwitchToUserPortal ? (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onSwitchToUserPortal();
+                }}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-brand/25 bg-brand-soft px-3 text-[11.5px] font-medium text-brand-fg hover:bg-brand/15 rs-focus press cursor-pointer transition-colors truncate"
+              >
+                <Eye className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{t('admin.switchToUserPortal')}</span>
+              </button>
+            ) : null}
+          </div>
+        ) : undefined
       }
     />
   );

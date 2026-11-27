@@ -101,7 +101,11 @@ export const PanelCard: React.FC<PanelCardProps> = ({
 
           {isEnabled && panel.isAvailableForCreate === false && (
             <Badge variant="error" size="xs">
-              {t('admin.panels.capacityFullBadge')}
+              {panel.unavailableReason?.endsWith('out_of_stock')
+                ? t('admin.panels.outOfStockBadge')
+                : panel.unavailableReason?.endsWith('daily_limit_reached')
+                  ? t('admin.panels.dailyLimitBadge')
+                  : t('admin.panels.capacityFullBadge')}
             </Badge>
           )}
 

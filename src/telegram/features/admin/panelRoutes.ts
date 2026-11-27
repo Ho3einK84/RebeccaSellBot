@@ -317,10 +317,6 @@ async function panelDetailText(
 
   const statsFields: UserScreenField[] = [
     {
-      label: t(ctx, 'admin_panel_configs_count_label'),
-      value: localizedNumber(activeConfigsCount, ctx),
-    },
-    {
       label: t(ctx, 'admin_panel_capacity_label'),
       value: formatLimitPair(
         ctx,
@@ -347,17 +343,20 @@ async function panelDetailText(
     },
   ];
 
+  const defaultSvcLabel = t(ctx, 'admin_panel_service_default_badge');
   const serviceSummaryFields: UserScreenField[] = panel.services.length
     ? panel.services.slice(0, 4).map((service) => {
         const isCustom =
           customTarget?.panelId === panel.id && customTarget?.serviceId === service.serviceId;
         const badges: string[] = [];
-        if (service.isDefault) badges.push(t(ctx, 'admin_panel_service_default_badge'));
+        if (service.isDefault && service.name.trim() !== defaultSvcLabel) {
+          badges.push(defaultSvcLabel);
+        }
         if (isCustom) badges.push(t(ctx, 'admin_panel_service_custom_target_badge'));
         const badgeSuffix = badges.length ? ` (${badges.join(' · ')})` : '';
         return {
           emoji: service.isDefault ? '⭐' : isCustom ? '🎯' : '🔹',
-          value: `[${service.serviceId}] ${escapeTelegramMarkdown(service.name)}${badgeSuffix}`,
+          value: `\`#${service.serviceId}\` ${escapeTelegramMarkdown(service.name)}${badgeSuffix}`,
         };
       })
     : [

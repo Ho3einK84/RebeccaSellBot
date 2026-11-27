@@ -1191,7 +1191,7 @@ export function registerAdminSalesRoutes(): void {
         ),
         body: t(
           ctx,
-          field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_panel_daily_limit_prompt',
+          field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_pkg_daily_limit_prompt',
           { current: currentDisplay }
         ),
       }),
@@ -1257,7 +1257,7 @@ export function registerAdminSalesRoutes(): void {
         ),
         body: t(
           ctx,
-          field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_panel_daily_limit_prompt',
+          field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_pkg_daily_limit_prompt',
           { current: currentDisplay }
         ),
       }),
@@ -1307,7 +1307,7 @@ export function registerAdminSalesRoutes(): void {
           ),
           body: t(
             ctx,
-            field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_panel_daily_limit_prompt',
+            field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_pkg_daily_limit_prompt',
             { current: String(state.payload?.currentDisplay ?? '—') }
           ),
           error: t(ctx, 'admin_setting_invalid'),

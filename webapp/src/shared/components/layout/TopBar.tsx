@@ -11,12 +11,15 @@ export interface TopBarProps {
   actions?: ReactNode;
   /** Identity or mode strip rendered under a clean hairline divider. */
   footer?: ReactNode;
+  /** Optional responsive/layout classes applied to the footer strip. */
+  footerClassName?: string;
   className?: string;
 }
 
 /**
  * Unified top chrome shared by User Portal and Admin Console.
- * Uses flat matte surface depth and crisp 1px structural borders.
+ * Uses flat matte surface depth, crisp 1px structural borders, and strict
+ * truncation boundaries so identity text never collides with action controls.
  */
 export const TopBar: React.FC<TopBarProps> = ({
   icon,
@@ -25,14 +28,15 @@ export const TopBar: React.FC<TopBarProps> = ({
   subtitle,
   actions,
   footer,
+  footerClassName = '',
   className = '',
 }) => (
   <header
     className={`rounded-card border border-line bg-surface/94 rs-backdrop-blur px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-[var(--shadow-card)] transition-shadow duration-200 ${className}`}
   >
-    <div className="flex items-center justify-between gap-2.5">
-      <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-        {icon}
+    <div className="flex items-center justify-between gap-2.5 min-w-0">
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 overflow-hidden">
+        {icon ? <div className="shrink-0">{icon}</div> : null}
         <div className="min-w-0 flex-1 text-start overflow-hidden">
           <div className="flex items-center gap-2 min-w-0 overflow-hidden">
             <h1 className="truncate font-semibold text-sm sm:text-[15px] text-ink leading-[1.35] m-0">
@@ -41,7 +45,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             {badge}
           </div>
           {subtitle ? (
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-muted min-w-0 overflow-hidden">
               {subtitle}
             </div>
           ) : null}
@@ -52,7 +56,9 @@ export const TopBar: React.FC<TopBarProps> = ({
     </div>
 
     {footer ? (
-      <div className="mt-2.5 pt-2.5 border-t border-line flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div
+        className={`mt-2.5 pt-2.5 border-t border-line/80 flex items-center justify-between gap-2 text-xs ${footerClassName}`}
+      >
         {footer}
       </div>
     ) : null}

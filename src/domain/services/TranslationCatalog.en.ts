@@ -1394,8 +1394,7 @@ export const EN_TEXTS: Record<string, string> = {
   admin_panel_status_enabled: 'Enabled',
   admin_panel_status_disabled: 'Disabled',
   admin_panel_default_badge: 'System Default',
-  admin_panel_stats_section: 'Panel Stats & Traffic',
-  admin_panel_configs_count_label: 'Linked configs',
+  admin_panel_stats_section: 'Stats & Limits',
   admin_panel_packages_count_label: 'Linked packages',
   admin_panel_services_count_label: 'Total services',
   admin_panel_services_manage_button: '📦 Manage Services',
@@ -2390,18 +2389,18 @@ export const EN_TEXTS: Record<string, string> = {
   shop_badge_out_of_stock: '🔴 Sold Out',
   shop_badge_low_stock: '🔥 {count} left',
 
-  admin_panel_capacity_label: 'Active capacity',
-  admin_panel_stock_label: 'Creation stock',
-  admin_panel_daily_limit_label: 'Daily limit',
-  admin_panel_edit_capacity_button: '📊 Capacity Limit',
-  admin_panel_edit_stock_button: '📦 Creation Stock',
+  admin_panel_capacity_label: 'Max total configs',
+  admin_panel_stock_label: 'New creation quota',
+  admin_panel_daily_limit_label: 'Daily creation limit',
+  admin_panel_edit_capacity_button: '📊 Max Configs',
+  admin_panel_edit_stock_button: '📦 Creation Quota',
   admin_panel_edit_daily_limit_button: '📅 Daily Limit',
   admin_panel_capacity_prompt:
-    'Enter maximum allowed active configs (current: *{current}*).\nTap Unlimited or send `-` to remove the limit:',
+    'Enter max concurrent configs on this target (current: *{current}*).\n💡 Deleting a config frees space; renewals are never blocked.\nTap Unlimited or send `-` to remove the limit:',
   admin_panel_stock_prompt:
-    'Enter available creation stock (current: *{current}*).\nSend `0` to close new creations, or tap Unlimited / send `-`:',
+    'Enter remaining new-creation quota (current: *{current}*).\n💡 Countdown quota; drops by 1 per new order and stops at `0`.\nTap Unlimited or send `-` to remove the limit:',
   admin_panel_daily_limit_prompt:
-    'Enter daily creation limit (current: *{current}*).\nSend `0` to pause daily creations, or tap Unlimited / send `-`:',
+    'Enter max new orders per day (current: *{current}*).\n💡 Resets daily at 00:00. Send `0` to stop today’s creations, or tap Unlimited / send `-`:',
   admin_panel_limit_unlimited_button: '♾️ Unlimited',
   admin_panel_service_status_label: 'New creations',
   admin_panel_service_enabled_badge: '🟢 Open',
@@ -2415,7 +2414,9 @@ export const EN_TEXTS: Record<string, string> = {
   admin_pkg_edit_stock_btn: '📦 Stock',
   admin_pkg_edit_user_limit_btn: '👤 User Limit',
   admin_pkg_stock_prompt:
-    'Enter available stock count (current: *{current}*).\nSend `0` to mark sold out, or tap Unlimited / send `-`:',
+    'Enter available stock count (current: *{current}*).\n💡 Countdown stock; `0` marks the plan sold out.\nTap Unlimited or send `-` to remove the limit:',
+  admin_pkg_daily_limit_prompt:
+    'Enter max daily creations (current: *{current}*).\n💡 Resets daily at 00:00. Send `0`, `-`, or tap Unlimited to remove the cap:',
   admin_pkg_user_limit_prompt:
     'Enter max purchases allowed per user (current: *{current}*).\nMinimum 1, or tap Unlimited / send `-`:',
   admin_pkg_show_out_of_stock_btn: '👁 Show Sold-Out',

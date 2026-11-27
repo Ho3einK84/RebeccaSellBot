@@ -6,6 +6,7 @@ import { Button } from '@/shared/components/ui/Button.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
+import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { normalizeInputDigits } from '@/shared/lib/formatters.js';
 import type { PanelSummary } from '@/shared/types/admin.js';
 import type { UpdatePanelPayload } from '@/shared/types/api.js';
@@ -26,6 +27,7 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
   loading,
 }) => {
   const { t } = useLanguage();
+  const { formatNumber } = useFormatters();
 
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -192,14 +194,28 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
 
         {/* Capacity & Limits */}
         <div className="p-3 rounded-tile border border-line bg-surface-2 space-y-2.5 text-start">
-          <div className="text-xs font-semibold text-ink">
-            {t('admin.panels.capacitySectionTitle')}
+          <div className="space-y-0.5">
+            <div className="text-xs font-semibold text-ink">
+              {t('admin.panels.capacitySectionTitle')}
+            </div>
+            <p className="text-[11px] text-ink-muted m-0 leading-relaxed">
+              {t('admin.panels.capacitySectionHint')}
+            </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
-              <label className="block text-[11px] font-medium text-ink-soft">
-                {t('admin.panels.maxConfigsField')}
-              </label>
+              <div className="flex items-center justify-between gap-1">
+                <label className="block text-[11px] font-medium text-ink-soft">
+                  {t('admin.panels.maxConfigsField')}
+                </label>
+                {panel.activeConfigsCount !== undefined && (
+                  <span className="text-[10.5px] text-ink-muted tnum">
+                    {t('admin.panels.currentCountInline', {
+                      count: formatNumber(panel.activeConfigsCount),
+                    })}
+                  </span>
+                )}
+              </div>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -212,6 +228,9 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
                 placeholder={t('admin.panels.unlimitedPlaceholder')}
                 disabled={loading}
               />
+              <p className="text-[10.5px] text-ink-muted m-0 leading-snug">
+                {t('admin.panels.maxConfigsHint')}
+              </p>
             </div>
             <div className="space-y-1">
               <label className="block text-[11px] font-medium text-ink-soft">
@@ -226,14 +245,26 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
                 onChange={(e) =>
                   setStockRemaining(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
                 }
-                placeholder={t('admin.panels.unlimitedPlaceholder')}
+                placeholder={t('admin.panels.zeroStopsPlaceholder')}
                 disabled={loading}
               />
+              <p className="text-[10.5px] text-ink-muted m-0 leading-snug">
+                {t('admin.panels.stockRemainingHint')}
+              </p>
             </div>
             <div className="space-y-1">
-              <label className="block text-[11px] font-medium text-ink-soft">
-                {t('admin.panels.dailyCreateLimitField')}
-              </label>
+              <div className="flex items-center justify-between gap-1">
+                <label className="block text-[11px] font-medium text-ink-soft">
+                  {t('admin.panels.dailyCreateLimitField')}
+                </label>
+                {panel.todayCreatedCount !== undefined && (
+                  <span className="text-[10.5px] text-ink-muted tnum">
+                    {t('admin.panels.todayCountInline', {
+                      count: formatNumber(panel.todayCreatedCount),
+                    })}
+                  </span>
+                )}
+              </div>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -243,9 +274,12 @@ export const EditPanelModal: React.FC<EditPanelModalProps> = ({
                 onChange={(e) =>
                   setDailyCreateLimit(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
                 }
-                placeholder={t('admin.panels.unlimitedPlaceholder')}
+                placeholder={t('admin.panels.zeroStopsPlaceholder')}
                 disabled={loading}
               />
+              <p className="text-[10.5px] text-ink-muted m-0 leading-snug">
+                {t('admin.panels.dailyCreateLimitHint')}
+              </p>
             </div>
           </div>
         </div>

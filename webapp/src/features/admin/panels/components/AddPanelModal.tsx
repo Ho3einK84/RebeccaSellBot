@@ -221,10 +221,15 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
 
         {/* Capacity & Limits (Optional) */}
         <div className="p-3 rounded-tile border border-line bg-surface-2 space-y-2.5 text-start">
-          <div className="text-xs font-semibold text-ink">
-            {t('admin.panels.capacitySectionTitle')}
+          <div className="space-y-0.5">
+            <div className="text-xs font-semibold text-ink">
+              {t('admin.panels.capacitySectionTitle')}
+            </div>
+            <p className="text-[11px] text-ink-muted m-0 leading-relaxed">
+              {t('admin.panels.capacitySectionHint')}
+            </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="block text-[11px] font-medium text-ink-soft">
                 {t('admin.panels.maxConfigsField')}
@@ -241,6 +246,9 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
                 placeholder={t('admin.panels.unlimitedPlaceholder')}
                 disabled={loading}
               />
+              <p className="text-[10.5px] text-ink-muted m-0 leading-snug">
+                {t('admin.panels.maxConfigsHint')}
+              </p>
             </div>
             <div className="space-y-1">
               <label className="block text-[11px] font-medium text-ink-soft">
@@ -255,9 +263,12 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
                 onChange={(e) =>
                   setStockRemaining(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
                 }
-                placeholder={t('admin.panels.unlimitedPlaceholder')}
+                placeholder={t('admin.panels.zeroStopsPlaceholder')}
                 disabled={loading}
               />
+              <p className="text-[10.5px] text-ink-muted m-0 leading-snug">
+                {t('admin.panels.stockRemainingHint')}
+              </p>
             </div>
             <div className="space-y-1">
               <label className="block text-[11px] font-medium text-ink-soft">
@@ -272,9 +283,12 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
                 onChange={(e) =>
                   setDailyCreateLimit(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
                 }
-                placeholder={t('admin.panels.unlimitedPlaceholder')}
+                placeholder={t('admin.panels.zeroStopsPlaceholder')}
                 disabled={loading}
               />
+              <p className="text-[10.5px] text-ink-muted m-0 leading-snug">
+                {t('admin.panels.dailyCreateLimitHint')}
+              </p>
             </div>
           </div>
         </div>

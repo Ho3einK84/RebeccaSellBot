@@ -1381,8 +1381,7 @@ export const FA_TEXTS: Record<string, string> = {
   admin_panel_status_enabled: 'فعال',
   admin_panel_status_disabled: 'غیرفعال',
   admin_panel_default_badge: 'پیش‌فرض سیستم',
-  admin_panel_stats_section: 'آمار و ترافیک پنل',
-  admin_panel_configs_count_label: 'کانفیگ‌های متصل',
+  admin_panel_stats_section: 'آمار و محدودیت‌ها',
   admin_panel_packages_count_label: 'بسته‌های متصل',
   admin_panel_services_count_label: 'تعداد سرویس‌ها',
   admin_panel_services_manage_button: '📦 مدیریت سرویس‌ها',
@@ -2379,18 +2378,18 @@ export const FA_TEXTS: Record<string, string> = {
   shop_badge_out_of_stock: '🔴 ناموجود',
   shop_badge_low_stock: '🔥 {count} عدد',
 
-  admin_panel_capacity_label: 'ظرفیت فعال',
-  admin_panel_stock_label: 'موجودی ساخت',
-  admin_panel_daily_limit_label: 'سقف روزانه',
-  admin_panel_edit_capacity_button: '📊 حد ظرفیت',
-  admin_panel_edit_stock_button: '📦 موجودی ساخت',
+  admin_panel_capacity_label: 'ظرفیت کل کانفیگ',
+  admin_panel_stock_label: 'سهمیه ساخت جدید',
+  admin_panel_daily_limit_label: 'سقف ساخت روزانه',
+  admin_panel_edit_capacity_button: '📊 ظرفیت کل',
+  admin_panel_edit_stock_button: '📦 سهمیه ساخت',
   admin_panel_edit_daily_limit_button: '📅 سقف روزانه',
   admin_panel_capacity_prompt:
-    'حداکثر تعداد اشتراک‌های فعال مجاز را وارد کنید (مقدار فعلی: *{current}*).\nبرای نامحدود کردن، دکمهٔ «نامحدود» را بزنید یا `-` ارسال کنید:',
+    'سقف کل اشتراک‌های هم‌زمان این بخش را وارد کنید (فعلی: *{current}*).\n💡 با حذف اشتراک، ظرفیت آزاد می‌شود؛ تمدید کاربران فعلی محدود نمی‌شود.\nبرای نامحدود، دکمهٔ زیر را بزنید یا `-` بفرستید:',
   admin_panel_stock_prompt:
-    'تعداد موجودی قابل ساخت را وارد کنید (مقدار فعلی: *{current}*).\nعدد ۰ ساخت جدید را متوقف می‌کند؛ برای نامحدود، دکمهٔ «نامحدود» را بزنید یا `-` ارسال کنید:',
+    'تعداد سهمیهٔ ساخت اشتراک جدید را وارد کنید (فعلی: *{current}*).\n💡 شمارنده کاهشی است؛ با هر خرید جدید ۱ عدد کم می‌شود و در ۰ متوقف می‌شود.\nبرای نامحدود، دکمهٔ زیر را بزنید یا `-` بفرستید:',
   admin_panel_daily_limit_prompt:
-    'سقف ساخت روزانه را وارد کنید (مقدار فعلی: *{current}*).\nعدد ۰ ساخت روزانه را متوقف می‌کند؛ برای نامحدود، دکمهٔ «نامحدود» را بزنید یا `-` ارسال کنید:',
+    'حداکثر ساخت اشتراک جدید در روز را وارد کنید (فعلی: *{current}*).\n💡 هر شب ساعت ۰۰:۰۰ ریست می‌شود. عدد ۰ ساخت امروز را می‌بندد.\nبرای نامحدود، دکمهٔ زیر را بزنید یا `-` بفرستید:',
   admin_panel_limit_unlimited_button: '♾️ نامحدود',
   admin_panel_service_status_label: 'وضعیت ساخت جدید',
   admin_panel_service_enabled_badge: '🟢 باز',
@@ -2404,9 +2403,11 @@ export const FA_TEXTS: Record<string, string> = {
   admin_pkg_edit_stock_btn: '📦 موجودی',
   admin_pkg_edit_user_limit_btn: '👤 سقف هر کاربر',
   admin_pkg_stock_prompt:
-    'تعداد موجودی قابل فروش را وارد کنید (مقدار فعلی: *{current}*).\nعدد ۰ بسته را ناموجود می‌کند؛ برای نامحدود کردن `-` بفرستید یا دکمهٔ زیر را بزنید:',
+    'تعداد موجودی قابل فروش را وارد کنید (فعلی: *{current}*).\n💡 شمارنده کاهشی است و در ۰ بسته ناموجود می‌شود.\nبرای نامحدود `-` بفرستید یا دکمهٔ زیر را بزنید:',
+  admin_pkg_daily_limit_prompt:
+    'حداکثر تعداد ساخت روزانه را وارد کنید (فعلی: *{current}*).\n💡 هر شب ساعت ۰۰:۰۰ ریست می‌شود. عدد ۰ یا `-` سقف روزانه را برمی‌دارد:',
   admin_pkg_user_limit_prompt:
-    'حداکثر تعداد خرید مجاز به ازای هر کاربر را وارد کنید (مقدار فعلی: *{current}*).\nحداقل ۱ یا برای نامحدود `-` بفرستید یا دکمهٔ زیر را بزنید:',
+    'حداکثر تعداد خرید مجاز به ازای هر کاربر را وارد کنید (فعلی: *{current}*).\nحداقل ۱ یا برای نامحدود `-` بفرستید یا دکمهٔ زیر را بزنید:',
   admin_pkg_show_out_of_stock_btn: '👁 نمایش ناموجودها',
 
   admin_home_alert_capacity: 'ظرفیت {count} پنل/سرویس پر است',

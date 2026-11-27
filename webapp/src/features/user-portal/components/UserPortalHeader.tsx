@@ -60,22 +60,22 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
           name={displayName}
           username={user.username}
           photoUrl={user.photo_url}
-          size="md"
+          size="sm"
           circle
-          className="shrink-0 ring-1 ring-line-strong"
+          className="sm:w-10 sm:h-10 shrink-0 ring-1 ring-line-strong"
         />
       }
       title={displayName}
       badge={
         isAdminView || groupLabel ? (
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 shrink-0">
             {groupLabel ? (
               <Badge variant="warning" size="xs" className="shrink-0">
                 <span>{groupLabel}</span>
               </Badge>
             ) : null}
             {isAdminView ? (
-              <Badge variant="primary" size="xs" className="hidden sm:inline-flex shrink-0">
+              <Badge variant="primary" size="xs" className="shrink-0">
                 <Shield className="w-3 h-3" />
                 <span>{t('user.adminViewBadge')}</span>
               </Badge>
@@ -84,18 +84,26 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
         ) : null
       }
       subtitle={
-        user.username ? (
-          <bdi dir="ltr" className="tnum text-[11px] font-medium text-brand-fg">
-            @{user.username}
-          </bdi>
-        ) : (
-          <span className="text-[11px] text-ink-muted">{t('user.userPortalBadge')}</span>
-        )
+        <span className="inline-flex items-center gap-1.5 min-w-0 truncate max-w-full">
+          {user.username ? (
+            <bdi dir="ltr" className="tnum text-[11px] font-medium text-brand-fg truncate">
+              @{user.username}
+            </bdi>
+          ) : (
+            <span className="text-[11px] text-ink-muted truncate">{t('user.userPortalBadge')}</span>
+          )}
+          {groupLabel ? (
+            <span className="sm:hidden inline-flex items-center gap-1 text-[10.5px] font-medium text-warn-fg truncate">
+              <span className="opacity-40 text-ink-muted">·</span>
+              <span className="truncate">{groupLabel}</span>
+            </span>
+          ) : null}
+        </span>
       }
       actions={<HeaderUtilityActions onRefresh={onRefresh} isRefreshing={isRefreshing} />}
       footer={
         <>
-          <div className="flex min-w-0 flex-1 items-center gap-2 flex-wrap">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 flex-wrap">
             <button
               type="button"
               onClick={() => void handleCopyId()}
@@ -149,7 +157,14 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
                 className="inline-flex h-7 items-center gap-1.5 rounded-full border border-brand/25 bg-brand-soft px-2.5 text-[11px] font-medium text-brand-fg hover:bg-brand/20 rs-focus press cursor-pointer shrink-0"
               >
                 <Shield className="w-3.5 h-3.5 shrink-0" />
-                <span>{t('user.backToAdmin')}</span>
+                {balance !== undefined ? (
+                  <>
+                    <span className="sm:hidden">{t('user.backToAdminShort')}</span>
+                    <span className="hidden sm:inline">{t('user.backToAdmin')}</span>
+                  </>
+                ) : (
+                  <span>{t('user.backToAdmin')}</span>
+                )}
               </button>
             </div>
           ) : null}
