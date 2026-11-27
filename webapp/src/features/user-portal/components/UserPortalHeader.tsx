@@ -8,13 +8,16 @@ import { TopBar } from '@/shared/components/layout/TopBar.js';
 import { HeaderUtilityActions } from '@/shared/components/layout/HeaderUtilityActions.js';
 import { Avatar } from '@/shared/components/ui/Avatar.js';
 import { Badge } from '@/shared/components/ui/Badge.js';
+import { VersionBadge } from '@/shared/components/ui/VersionBadge.js';
 import { useToast } from '@/shared/components/ui/Toast.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
+import type { AppVersionInfo } from '@/shared/types/api.js';
 import type { UserGroupSummary } from '@/shared/types/userPortal.js';
 
 interface UserPortalHeaderProps {
   user: TelegramWebAppUser;
   group?: UserGroupSummary | null;
+  appVersion?: AppVersionInfo;
   onRefresh: () => void;
   isAdminView?: boolean;
   onSwitchToAdmin?: () => void;
@@ -27,6 +30,7 @@ interface UserPortalHeaderProps {
 export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
   user,
   group,
+  appVersion,
   onRefresh,
   isAdminView = false,
   onSwitchToAdmin,
@@ -67,7 +71,7 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
       }
       title={displayName}
       badge={
-        isAdminView || groupLabel ? (
+        isAdminView || groupLabel || (appVersion && appVersion.channel !== 'stable') ? (
           <div className="flex items-center gap-1.5 shrink-0">
             {groupLabel ? (
               <Badge variant="warning" size="xs" className="shrink-0">
@@ -79,6 +83,9 @@ export const UserPortalHeader: React.FC<UserPortalHeaderProps> = ({
                 <Shield className="w-3 h-3" />
                 <span>{t('user.adminViewBadge')}</span>
               </Badge>
+            ) : null}
+            {appVersion && appVersion.channel !== 'stable' ? (
+              <VersionBadge version={appVersion} size="xs" />
             ) : null}
           </div>
         ) : null

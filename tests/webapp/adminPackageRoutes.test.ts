@@ -345,6 +345,8 @@ describe('Admin Package, Category & Custom Tariff Routes', () => {
         lowTrafficThresholdGb: 2,
         expiryWarningDays: 3,
         refundWindowHours: 0,
+        showOutOfStockPackages: true,
+        lowStockThreshold: 5,
       });
       expect(body.targets[0]).toMatchObject({
         panelId: 'panel_1',
@@ -667,6 +669,8 @@ describe('Admin Package, Category & Custom Tariff Routes', () => {
         lowTrafficThresholdGb: 1.5,
         expiryWarningDays: 5,
         refundWindowHours: 48,
+        showOutOfStockPackages: true,
+        lowStockThreshold: 5,
       });
 
       const invalidThreshold = await app.inject({

@@ -45,6 +45,10 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   custom_min_gb: '5',
   custom_max_gb: '500',
   custom_volume_target_json: '{}',
+  custom_volume_daily_limit: '0',
+  // Shop inventory display & warning policies.
+  shop_show_out_of_stock: 'true',
+  shop_low_stock_threshold: '5',
   card_number: '6037997900000000',
   card_holder: 'Name',
   topup_min_amount: '10000',
@@ -97,6 +101,7 @@ export const CONFIGURATION_DEFAULTS: Record<string, string> = {
   trial_enabled: 'true',
   trial_gb: '1',
   trial_days: '3',
+  trial_daily_limit: '0',
   referral_bonus_toman: '10000',
   cashback_percent: '5',
   lucky_wheel_enabled: 'true',

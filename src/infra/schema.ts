@@ -30,11 +30,28 @@ export const rebeccaPanels = pgTable(
     adminPasswordEncrypted: text('admin_password_encrypted'),
     enabled: boolean('enabled').notNull().default(false),
     isDefault: boolean('is_default').notNull().default(false),
+    maxConfigs: integer('max_configs'),
+    stockRemaining: integer('stock_remaining'),
+    dailyCreateLimit: integer('daily_create_limit'),
+    reservedCreations: integer('reserved_creations').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => [
     check('rebecca_panels_name_present', sql`length(btrim(${table.name})) BETWEEN 1 AND 80`),
+    check(
+      'rebecca_panels_max_configs_safe',
+      sql`${table.maxConfigs} IS NULL OR ${table.maxConfigs} >= 0`
+    ),
+    check(
+      'rebecca_panels_stock_remaining_safe',
+      sql`${table.stockRemaining} IS NULL OR ${table.stockRemaining} >= 0`
+    ),
+    check(
+      'rebecca_panels_daily_create_limit_safe',
+      sql`${table.dailyCreateLimit} IS NULL OR ${table.dailyCreateLimit} >= 0`
+    ),
+    check('rebecca_panels_reserved_creations_nonnegative', sql`${table.reservedCreations} >= 0`),
     uniqueIndex('rebecca_panels_one_default')
       .on(table.isDefault)
       .where(sql`${table.isDefault} = true`),
@@ -49,7 +66,12 @@ export const rebeccaPanelServices = pgTable(
       .references(() => rebeccaPanels.id, { onDelete: 'cascade' }),
     serviceId: integer('service_id').notNull(),
     name: text('name').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
     isDefault: boolean('is_default').notNull().default(false),
+    maxConfigs: integer('max_configs'),
+    stockRemaining: integer('stock_remaining'),
+    dailyCreateLimit: integer('daily_create_limit'),
+    reservedCreations: integer('reserved_creations').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -62,6 +84,22 @@ export const rebeccaPanelServices = pgTable(
     check(
       'rebecca_panel_services_name_present',
       sql`length(btrim(${table.name})) BETWEEN 1 AND 80`
+    ),
+    check(
+      'rebecca_panel_services_max_configs_safe',
+      sql`${table.maxConfigs} IS NULL OR ${table.maxConfigs} >= 0`
+    ),
+    check(
+      'rebecca_panel_services_stock_remaining_safe',
+      sql`${table.stockRemaining} IS NULL OR ${table.stockRemaining} >= 0`
+    ),
+    check(
+      'rebecca_panel_services_daily_create_limit_safe',
+      sql`${table.dailyCreateLimit} IS NULL OR ${table.dailyCreateLimit} >= 0`
+    ),
+    check(
+      'rebecca_panel_services_reserved_creations_nonnegative',
+      sql`${table.reservedCreations} >= 0`
     ),
     uniqueIndex('rebecca_panel_services_one_default')
       .on(table.panelId)
@@ -440,6 +478,11 @@ export const userConfigs = pgTable(
     ),
     index('user_configs_telegram_id_idx').on(table.telegramId),
     index('user_configs_sub_url_idx').on(table.subUrl),
+    index('user_configs_panel_service_status_idx').on(
+      table.panelId,
+      table.serviceId,
+      table.panelStatus
+    ),
     uniqueIndex('user_configs_panel_username_unique').on(table.panelId, table.configUsername),
     index('user_configs_first_use_pending_idx')
       .on(table.createdAt)
@@ -1405,3 +1448,106 @@ export const scheduledMessageDeletions = pgTable(
 
 export type ScheduledMessageDeletionRow = typeof scheduledMessageDeletions.$inferSelect;
 export type NewScheduledMessageDeletionRow = typeof scheduledMessageDeletions.$inferInsert;
+
+export const INVENTORY_RESERVATION_KINDS = ['purchase', 'trial'] as const;
+export type InventoryReservationKind = (typeof INVENTORY_RESERVATION_KINDS)[number];
+
+export const INVENTORY_RESERVATION_OPS = ['new_config', 'renew_config', 'trial'] as const;
+export type InventoryReservationOperation = (typeof INVENTORY_RESERVATION_OPS)[number];
+
+export const INVENTORY_RESERVATION_STATUSES = [
+  'reserved',
+  'committed',
+  'released',
+  'refunded',
+] as const;
+export type InventoryReservationStatus = (typeof INVENTORY_RESERVATION_STATUSES)[number];
+
+// Relational stock and per-user purchase limits for packages and special SKUs
+// ('__trial__', '__custom_volume__'). Kept out of settings.packages_json so
+// concurrent checkouts cannot race with admin catalog edits.
+export const packageInventory = pgTable(
+  'package_inventory',
+  {
+    packageId: text('package_id').primaryKey(),
+    stockRemaining: integer('stock_remaining'),
+    reservedCount: integer('reserved_count').notNull().default(0),
+    soldCount: integer('sold_count').notNull().default(0),
+    maxPurchasesPerUser: integer('max_purchases_per_user'),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    check('package_inventory_id_safe', sql`length(btrim(${table.packageId})) BETWEEN 1 AND 80`),
+    check(
+      'package_inventory_stock_remaining_safe',
+      sql`${table.stockRemaining} IS NULL OR ${table.stockRemaining} >= 0`
+    ),
+    check('package_inventory_reserved_count_nonnegative', sql`${table.reservedCount} >= 0`),
+    check('package_inventory_sold_count_nonnegative', sql`${table.soldCount} >= 0`),
+    check(
+      'package_inventory_max_per_user_positive',
+      sql`${table.maxPurchasesPerUser} IS NULL OR ${table.maxPurchasesPerUser} >= 1`
+    ),
+  ]
+);
+
+export type PackageInventoryRow = typeof packageInventory.$inferSelect;
+export type NewPackageInventoryRow = typeof packageInventory.$inferInsert;
+
+// Atomic 3-phase saga ledger for panel, panel-service, and package inventory.
+// Snapshotted boolean flags preserve exact accounting even if an admin edits
+// stock limits while a purchase or trial is in flight.
+export const inventoryReservations = pgTable(
+  'inventory_reservations',
+  {
+    id: text('id').primaryKey(), // ir_...
+    kind: text('kind').notNull(), // 'purchase' | 'trial'
+    referenceId: text('reference_id').notNull().unique(), // purchase_intents.id or trial:<tg>:<user>
+    telegramId: bigint('telegram_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.telegramId),
+    operationType: text('operation_type').notNull(), // 'new_config' | 'renew_config' | 'trial'
+    panelId: text('panel_id')
+      .notNull()
+      .references(() => rebeccaPanels.id, { onDelete: 'cascade' }),
+    serviceId: integer('service_id').notNull(),
+    packageId: text('package_id'),
+    creationReserved: boolean('creation_reserved').notNull().default(false),
+    panelStockConsumed: boolean('panel_stock_consumed').notNull().default(false),
+    serviceStockConsumed: boolean('service_stock_consumed').notNull().default(false),
+    packageReserved: boolean('package_reserved').notNull().default(false),
+    packageStockConsumed: boolean('package_stock_consumed').notNull().default(false),
+    status: text('status').notNull().default('reserved'), // 'reserved' | 'committed' | 'released' | 'refunded'
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    check('inventory_reservations_kind_supported', sql`${table.kind} IN ('purchase', 'trial')`),
+    check(
+      'inventory_reservations_operation_supported',
+      sql`${table.operationType} IN ('new_config', 'renew_config', 'trial')`
+    ),
+    check(
+      'inventory_reservations_status_supported',
+      sql`${table.status} IN ('reserved', 'committed', 'released', 'refunded')`
+    ),
+    check(
+      'inventory_reservations_service_id_positive',
+      sql`${table.serviceId} > 0 AND ${table.serviceId} <= 2147483647`
+    ),
+    index('inventory_reservations_user_pkg_idx').on(
+      table.telegramId,
+      table.packageId,
+      table.status
+    ),
+    index('inventory_reservations_panel_service_created_idx')
+      .on(table.panelId, table.serviceId, table.createdAt)
+      .where(sql`${table.status} IN ('reserved', 'committed')`),
+    index('inventory_reservations_pkg_created_idx')
+      .on(table.packageId, table.createdAt)
+      .where(sql`${table.status} IN ('reserved', 'committed')`),
+  ]
+);
+
+export type InventoryReservationRow = typeof inventoryReservations.$inferSelect;
+export type NewInventoryReservationRow = typeof inventoryReservations.$inferInsert;

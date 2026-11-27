@@ -14,6 +14,8 @@ export interface PurchaseSagaParams {
   durationDays: number;
   /** Optional promotion identifier. Pricing is never trusted from the UI. */
   promoCode?: string;
+  /** Optional package identifier (`pkg_...` or `custom_...`) for inventory & per-user limit enforcement. */
+  packageId?: string;
   /** Explicit immutable target selected by the checkout or owning config. */
   panelId?: string;
   serviceId?: number;

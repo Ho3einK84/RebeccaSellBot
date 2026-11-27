@@ -175,11 +175,46 @@ export interface UserReceiptItem {
   reviewedBy?: number | null;
 }
 
+export type InventoryUnavailableReason =
+  | 'panel_disabled'
+  | 'service_disabled'
+  | 'panel_capacity_full'
+  | 'service_capacity_full'
+  | 'panel_out_of_stock'
+  | 'service_out_of_stock'
+  | 'panel_daily_limit_reached'
+  | 'service_daily_limit_reached'
+  | 'package_out_of_stock'
+  | 'package_user_limit_reached'
+  | 'trial_out_of_stock'
+  | 'trial_daily_limit_reached'
+  | 'custom_volume_out_of_stock'
+  | 'custom_volume_daily_limit_reached';
+
+export interface FleetCapacitySummary {
+  totalPanels: number;
+  fullPanelsCount: number;
+  lowCapacityPanelsCount: number;
+  pausedServicesCount: number;
+  fullServicesCount: number;
+}
+
 export interface PanelServiceSummary {
   serviceId: number;
   name: string;
+  enabled?: boolean;
   isDefault: boolean;
   isCustomTarget?: boolean;
+  maxConfigs?: number | null;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
+  activeConfigsCount?: number;
+  reservedCount?: number;
+  todayCreatedCount?: number;
+  remainingCapacity?: number | null;
+  utilizationPercent?: number | null;
+  isAvailableForCreate?: boolean;
+  unavailableReason?: InventoryUnavailableReason | null;
 }
 
 export interface PanelSummary {
@@ -190,6 +225,15 @@ export interface PanelSummary {
   isDefault: boolean;
   credentialConfigured: boolean;
   credentialMode: 'api_key' | 'password' | 'none';
+  maxConfigs?: number | null;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
+  reservedCount?: number;
+  todayCreatedCount?: number;
+  remainingCapacity?: number | null;
+  utilizationPercent?: number | null;
+  isAvailableForCreate?: boolean;
+  unavailableReason?: InventoryUnavailableReason | null;
   services: PanelServiceSummary[];
   packagesCount?: number;
   activeConfigsCount?: number;
@@ -205,6 +249,10 @@ export interface FleetSummary {
   totalActiveConfigs: number;
   totalServices: number;
   allHealthy: boolean;
+  fullPanelsCount?: number;
+  lowCapacityPanelsCount?: number;
+  pausedServicesCount?: number;
+  fullServicesCount?: number;
 }
 
 export type BalanceOperation = 'add' | 'deduct' | 'set';
@@ -221,6 +269,13 @@ export interface AdminPackageDto {
   categoryId?: string;
   startOnFirstUse?: boolean;
   rolloverQuota?: boolean;
+  stockRemaining?: number | null;
+  reservedCount?: number;
+  soldCount?: number;
+  maxPurchasesPerUser?: number | null;
+  effectiveRemaining?: number | null;
+  isOutOfStock?: boolean;
+  outOfStockReason?: InventoryUnavailableReason | null;
 }
 
 export interface AdminCategoryDto {
@@ -239,6 +294,10 @@ export interface AdminTargetServiceDto {
   serviceId: number;
   name: string;
   isDefault: boolean;
+  enabled?: boolean;
+  isAvailableForCreate?: boolean;
+  remainingCapacity?: number | null;
+  unavailableReason?: InventoryUnavailableReason | null;
 }
 
 export interface AdminTargetPanelDto {
@@ -247,6 +306,9 @@ export interface AdminTargetPanelDto {
   enabled: boolean;
   isDefault: boolean;
   defaultServiceId: number | null;
+  isAvailableForCreate?: boolean;
+  remainingCapacity?: number | null;
+  unavailableReason?: InventoryUnavailableReason | null;
   services: AdminTargetServiceDto[];
 }
 
@@ -255,6 +317,8 @@ export interface AdminPackagePoliciesDto {
   lowTrafficThresholdGb: number;
   expiryWarningDays: number;
   refundWindowHours: number;
+  showOutOfStockPackages?: boolean;
+  lowStockThreshold?: number;
 }
 
 export interface AdminPackagesBoundsDto {
@@ -266,6 +330,8 @@ export interface AdminPackagesBoundsDto {
   maxLowTrafficThresholdGb: number;
   maxExpiryWarningDays: number;
   maxRefundWindowHours: number;
+  maxLowStockThreshold?: number;
+  maxStockRemaining?: number;
 }
 
 export interface AdminPackagesResponse {
@@ -290,6 +356,8 @@ export interface CreateAdminPackagePayload {
   categoryId?: string | null;
   startOnFirstUse?: boolean;
   rolloverQuota?: boolean;
+  stockRemaining?: number | null;
+  maxPurchasesPerUser?: number | null;
 }
 
 export interface UpdateAdminPackagePayload {
@@ -303,6 +371,8 @@ export interface UpdateAdminPackagePayload {
   categoryId?: string | null;
   startOnFirstUse?: boolean | null;
   rolloverQuota?: boolean | null;
+  stockRemaining?: number | null;
+  maxPurchasesPerUser?: number | null;
 }
 
 export interface AdminPackageMutationResponse {
@@ -373,6 +443,14 @@ export interface CustomPricingSettingsDto {
   defaultDays: number;
   target: CustomPricingTargetDto | null;
   warnings: string[];
+  stockRemaining?: number | null;
+  reservedCount?: number;
+  soldCount?: number;
+  dailyCreateLimit?: number;
+  todayCreatedCount?: number;
+  available?: boolean;
+  effectiveRemaining?: number | null;
+  unavailableReason?: InventoryUnavailableReason | null;
 }
 
 export interface VolumePricingTierDto {
@@ -420,6 +498,8 @@ export interface UpdateCustomPricingSettingsPayload {
   maxGb?: number;
   defaultDays?: number;
   target?: CustomPricingTargetDto | null;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
 }
 
 export interface CreateVolumeTierPayload {

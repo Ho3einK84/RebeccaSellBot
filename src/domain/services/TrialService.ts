@@ -16,6 +16,13 @@ import {
   normalizeRebeccaPanelAccess,
   type NormalizedRebeccaPanelAccess,
 } from './RebeccaPanelAccess.js';
+import {
+  InventoryUnavailableError,
+  TRIAL_INVENTORY_ID,
+  trialInventoryReferenceId,
+  type InventoryService,
+  type InventoryUnavailableReason,
+} from './InventoryService.js';
 
 export const MIN_TRIAL_GB = 0.001;
 export const MAX_TRIAL_GB = 10_000;
@@ -27,12 +34,14 @@ export interface TrialClaimResult {
   success: boolean;
   messageKey: string;
   subUrl?: string;
+  unavailableReason?: InventoryUnavailableReason;
 }
 
 type TrialReservation =
   | { state: 'reserved'; balance: number; claim: PendingTrialClaim }
   | { state: 'already_used' }
   | { state: 'user_not_found' }
+  | { state: 'unavailable'; reason: InventoryUnavailableReason }
   | { state: 'pending'; claim: PendingTrialClaim };
 
 interface PendingTrialClaim {
@@ -61,7 +70,11 @@ type RemoteTrialState =
 export class TrialService {
   constructor(
     panels: RebeccaPanelRegistry | RebeccaService,
-    private readonly translationService: TranslationService
+    private readonly translationService: TranslationService,
+    private readonly inventoryService?: Pick<
+      InventoryService,
+      'reserveInTransaction' | 'commitInTransaction' | 'releaseInTransaction'
+    >
   ) {
     this.panels = normalizeRebeccaPanelAccess(panels);
   }
@@ -104,6 +117,12 @@ export class TrialService {
           return { success: false, messageKey: 'user_not_found' };
         case 'already_used':
           return { success: false, messageKey: 'trial_already_used' };
+        case 'unavailable':
+          return {
+            success: false,
+            messageKey: trialUnavailableMessageKey(reservation.reason),
+            unavailableReason: reservation.reason,
+          };
         case 'reserved':
           return this.createAndFinalizeTrial(reservation);
         case 'pending': {
@@ -192,70 +211,99 @@ export class TrialService {
     }
   ): Promise<TrialReservation> {
     const db = getDb();
-    return db.transaction(async (tx) => {
-      const [user] = await tx
-        .select({ balance: users.balance, hasUsedTrial: users.hasUsedTrial })
-        .from(users)
-        .where(eq(users.telegramId, telegramId))
-        .limit(1);
-      if (!user) return { state: 'user_not_found' };
-      if (user.hasUsedTrial) return { state: 'already_used' };
+    try {
+      return await db.transaction(async (tx) => {
+        const [user] = await tx
+          .select({ balance: users.balance, hasUsedTrial: users.hasUsedTrial })
+          .from(users)
+          .where(eq(users.telegramId, telegramId))
+          .limit(1);
+        if (!user) return { state: 'user_not_found' as const };
+        if (user.hasUsedTrial) return { state: 'already_used' as const };
 
-      const [inserted] = await tx
-        .insert(trialClaims)
-        .values({
-          telegramId,
-          panelId: config.panelId,
-          serviceId: config.serviceId,
-          configUsername,
-          gbAmount: config.gbAmount,
-          durationDays: config.durationDays,
-          status: 'pending',
-        })
-        .onConflictDoNothing()
-        .returning();
-      if (inserted) {
-        return {
-          state: 'reserved',
-          balance: user.balance,
-          claim: toPendingClaim(inserted),
-        };
-      }
+        const [inserted] = await tx
+          .insert(trialClaims)
+          .values({
+            telegramId,
+            panelId: config.panelId,
+            serviceId: config.serviceId,
+            configUsername,
+            gbAmount: config.gbAmount,
+            durationDays: config.durationDays,
+            status: 'pending',
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (inserted) {
+          if (this.inventoryService) {
+            await this.inventoryService.reserveInTransaction(tx, {
+              kind: 'trial',
+              referenceId: trialInventoryReferenceId(telegramId, configUsername),
+              telegramId,
+              operationType: 'trial',
+              panelId: config.panelId,
+              serviceId: config.serviceId,
+              packageId: TRIAL_INVENTORY_ID,
+            });
+          }
+          return {
+            state: 'reserved' as const,
+            balance: user.balance,
+            claim: toPendingClaim(inserted),
+          };
+        }
 
-      // A known failed create can be retried. The status predicate makes this
-      // re-open operation race-safe: exactly one contender can turn it pending.
-      const [reopened] = await tx
-        .update(trialClaims)
-        .set({
-          configUsername,
-          panelId: config.panelId,
-          serviceId: config.serviceId,
-          gbAmount: config.gbAmount,
-          durationDays: config.durationDays,
-          status: 'pending',
-          subUrl: null,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(trialClaims.telegramId, telegramId), eq(trialClaims.status, 'failed')))
-        .returning();
-      if (reopened) {
-        return {
-          state: 'reserved',
-          balance: user.balance,
-          claim: toPendingClaim(reopened),
-        };
-      }
+        // A known failed create can be retried. The status predicate makes this
+        // re-open operation race-safe: exactly one contender can turn it pending.
+        const [reopened] = await tx
+          .update(trialClaims)
+          .set({
+            configUsername,
+            panelId: config.panelId,
+            serviceId: config.serviceId,
+            gbAmount: config.gbAmount,
+            durationDays: config.durationDays,
+            status: 'pending',
+            subUrl: null,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(trialClaims.telegramId, telegramId), eq(trialClaims.status, 'failed')))
+          .returning();
+        if (reopened) {
+          if (this.inventoryService) {
+            await this.inventoryService.reserveInTransaction(tx, {
+              kind: 'trial',
+              referenceId: trialInventoryReferenceId(telegramId, configUsername),
+              telegramId,
+              operationType: 'trial',
+              panelId: config.panelId,
+              serviceId: config.serviceId,
+              packageId: TRIAL_INVENTORY_ID,
+            });
+          }
+          return {
+            state: 'reserved' as const,
+            balance: user.balance,
+            claim: toPendingClaim(reopened),
+          };
+        }
 
-      const [existing] = await tx
-        .select()
-        .from(trialClaims)
-        .where(eq(trialClaims.telegramId, telegramId))
-        .limit(1);
-      if (!existing || existing.status === 'completed' || existing.status === 'converted') {
-        return { state: 'already_used' };
+        const [existing] = await tx
+          .select()
+          .from(trialClaims)
+          .where(eq(trialClaims.telegramId, telegramId))
+          .limit(1);
+        if (!existing || existing.status === 'completed' || existing.status === 'converted') {
+          return { state: 'already_used' as const };
+        }
+        return { state: 'pending' as const, claim: toPendingClaim(existing) };
+      });
+    } catch (err) {
+      if (err instanceof InventoryUnavailableError) {
+        return { state: 'unavailable', reason: err.reason };
       }
-      return { state: 'pending', claim: toPendingClaim(existing) };
-    });
+      throw err;
+    }
   }
 
   private async createAndFinalizeTrial(
@@ -544,6 +592,13 @@ export class TrialService {
           )
           .returning({ telegramId: trialClaims.telegramId });
         if (!completed) throw new Error('TRIAL_CLAIM_FINALIZE_CONFLICT');
+
+        if (this.inventoryService) {
+          await this.inventoryService.commitInTransaction(
+            tx,
+            trialInventoryReferenceId(claim.telegramId, claim.configUsername)
+          );
+        }
         return { alreadyCompleted: false, subUrl };
       });
 
@@ -635,16 +690,38 @@ export class TrialService {
   }
 
   private async completeCompensationAsFailed(claim: PendingTrialClaim): Promise<void> {
-    await getDb()
-      .update(trialClaims)
-      .set({ status: 'failed', updatedAt: new Date() })
-      .where(
-        and(
-          eq(trialClaims.telegramId, claim.telegramId),
-          eq(trialClaims.configUsername, claim.configUsername),
-          eq(trialClaims.status, 'compensating')
+    if (!this.inventoryService) {
+      await getDb()
+        .update(trialClaims)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(
+          and(
+            eq(trialClaims.telegramId, claim.telegramId),
+            eq(trialClaims.configUsername, claim.configUsername),
+            eq(trialClaims.status, 'compensating')
+          )
+        );
+      return;
+    }
+    await getDb().transaction(async (tx) => {
+      const [updated] = await tx
+        .update(trialClaims)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(
+          and(
+            eq(trialClaims.telegramId, claim.telegramId),
+            eq(trialClaims.configUsername, claim.configUsername),
+            eq(trialClaims.status, 'compensating')
+          )
         )
-      );
+        .returning({ telegramId: trialClaims.telegramId });
+      if (updated) {
+        await this.inventoryService!.releaseInTransaction(
+          tx,
+          trialInventoryReferenceId(claim.telegramId, claim.configUsername)
+        );
+      }
+    });
   }
 
   private remoteBelongsToClaim(claim: PendingTrialClaim, remote: RebeccaUserDetail): boolean {
@@ -655,16 +732,38 @@ export class TrialService {
   }
 
   private async markClaimForReview(claim: PendingTrialClaim): Promise<void> {
-    await getDb()
-      .update(trialClaims)
-      .set({ status: 'review_required', updatedAt: new Date() })
-      .where(
-        and(
-          eq(trialClaims.telegramId, claim.telegramId),
-          eq(trialClaims.configUsername, claim.configUsername),
-          or(eq(trialClaims.status, 'pending'), eq(trialClaims.status, 'compensating'))
-        )
-      );
+    if (!this.inventoryService) {
+      await getDb()
+        .update(trialClaims)
+        .set({ status: 'review_required', updatedAt: new Date() })
+        .where(
+          and(
+            eq(trialClaims.telegramId, claim.telegramId),
+            eq(trialClaims.configUsername, claim.configUsername),
+            or(eq(trialClaims.status, 'pending'), eq(trialClaims.status, 'compensating'))
+          )
+        );
+    } else {
+      await getDb().transaction(async (tx) => {
+        const [updated] = await tx
+          .update(trialClaims)
+          .set({ status: 'review_required', updatedAt: new Date() })
+          .where(
+            and(
+              eq(trialClaims.telegramId, claim.telegramId),
+              eq(trialClaims.configUsername, claim.configUsername),
+              or(eq(trialClaims.status, 'pending'), eq(trialClaims.status, 'compensating'))
+            )
+          )
+          .returning({ telegramId: trialClaims.telegramId });
+        if (updated) {
+          await this.inventoryService!.releaseInTransaction(
+            tx,
+            trialInventoryReferenceId(claim.telegramId, claim.configUsername)
+          );
+        }
+      });
+    }
     logger.error(
       { telegramId: claim.telegramId, configUsername: claim.configUsername },
       'Trial claim requires manual review because Rebecca ownership marker mismatched'
@@ -672,17 +771,55 @@ export class TrialService {
   }
 
   private async markClaimFailed(claim: PendingTrialClaim): Promise<void> {
-    await getDb()
-      .update(trialClaims)
-      .set({ status: 'failed', updatedAt: new Date() })
-      .where(
-        and(
-          eq(trialClaims.telegramId, claim.telegramId),
-          eq(trialClaims.panelId, claim.panelId),
-          eq(trialClaims.configUsername, claim.configUsername),
-          eq(trialClaims.status, 'pending')
+    if (!this.inventoryService) {
+      await getDb()
+        .update(trialClaims)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(
+          and(
+            eq(trialClaims.telegramId, claim.telegramId),
+            eq(trialClaims.panelId, claim.panelId),
+            eq(trialClaims.configUsername, claim.configUsername),
+            eq(trialClaims.status, 'pending')
+          )
+        );
+      return;
+    }
+    await getDb().transaction(async (tx) => {
+      const [updated] = await tx
+        .update(trialClaims)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(
+          and(
+            eq(trialClaims.telegramId, claim.telegramId),
+            eq(trialClaims.panelId, claim.panelId),
+            eq(trialClaims.configUsername, claim.configUsername),
+            eq(trialClaims.status, 'pending')
+          )
         )
-      );
+        .returning({ telegramId: trialClaims.telegramId });
+      if (updated) {
+        await this.inventoryService!.releaseInTransaction(
+          tx,
+          trialInventoryReferenceId(claim.telegramId, claim.configUsername)
+        );
+      }
+    });
+  }
+}
+
+function trialUnavailableMessageKey(reason: InventoryUnavailableReason): string {
+  switch (reason) {
+    case 'trial_out_of_stock':
+    case 'panel_out_of_stock':
+    case 'service_out_of_stock':
+      return 'trial_out_of_stock';
+    case 'trial_daily_limit_reached':
+    case 'panel_daily_limit_reached':
+    case 'service_daily_limit_reached':
+      return 'trial_daily_limit_reached';
+    default:
+      return 'trial_capacity_full';
   }
 }
 

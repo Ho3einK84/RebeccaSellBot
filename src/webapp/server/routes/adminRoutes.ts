@@ -20,6 +20,10 @@ import {
   RebeccaPanelInUseError,
 } from '../../../domain/services/RebeccaPanelRegistry.js';
 import {
+  MAX_INVENTORY_VALUE,
+  type InventoryService,
+} from '../../../domain/services/InventoryService.js';
+import {
   getCachedPanelHealth,
   invalidatePanelHealthCache,
 } from '../../../domain/services/PanelHealthCache.js';
@@ -39,6 +43,7 @@ import {
   uniqueTopupAmountEnabled,
 } from '../../../domain/services/FeatureSettings.js';
 import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
+import { getAppVersionInfo } from '../../../infra/appVersion.js';
 import { downloadTelegramFile } from '../../../infra/telegramFiles.js';
 import {
   formatDuplicateReceiptBanner,
@@ -70,6 +75,7 @@ export function registerAdminRoutes(
     pricingService?: PricingService;
     paymentService?: PaymentService;
     panelRegistry: RebeccaPanelRegistry;
+    inventoryService?: InventoryService;
     botToken?: string;
     adminService?: Pick<AdminService, 'isAdmin'> & { adminIds?: number[] };
     adminIds?: number[];
@@ -95,12 +101,15 @@ export function registerAdminRoutes(
     }>('/api/admin/stats', async (request, reply) => {
       const forceRefresh = request.query?.refresh === '1' || request.query?.refresh === 'true';
       const dbStartedAt = performance.now();
-      const [stats, cachedPanelHealth] = await Promise.all([
+      const [stats, cachedPanelHealth, fleetSnapshot] = await Promise.all([
         services.walletService.getDashboardStats().catch(() => null),
         getCachedPanelHealth(services.panelRegistry, {
           timeoutMs: 2_500,
           useCache: !forceRefresh,
         }),
+        services.inventoryService
+          ? services.inventoryService.getFleetCapacitySnapshot().catch(() => null)
+          : Promise.resolve(null),
       ]);
       const dbLatencyMs = Math.max(0, Math.round(performance.now() - dbStartedAt));
       const panelHealth = cachedPanelHealth
@@ -115,7 +124,9 @@ export function registerAdminRoutes(
       return reply.code(200).send({
         stats,
         panelHealth,
+        fleetCapacity: fleetSnapshot?.summary ?? null,
         dbLatencyMs,
+        appVersion: getAppVersionInfo(),
       });
     });
 
@@ -1095,24 +1106,49 @@ export function registerAdminRoutes(
       }
     );
 
+    const parseOptionalNullableInventoryLimit = (
+      raw: unknown,
+      fieldName: string
+    ): { ok: true; value: number | null | undefined } | { ok: false; error: string } => {
+      if (raw === undefined) return { ok: true, value: undefined };
+      if (raw === null || raw === '') return { ok: true, value: null };
+      const parsed = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+      if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > MAX_INVENTORY_VALUE) {
+        return {
+          ok: false,
+          error: `${fieldName} must be null or an integer between 0 and ${MAX_INVENTORY_VALUE}`,
+        };
+      }
+      return { ok: true, value: parsed };
+    };
+
     // GET /api/admin/panels
     adminScope.get('/api/admin/panels', async (_request, reply) => {
       const panels = services.panelRegistry.listPanels();
       const customTarget = services.pricingService?.getCustomVolumeTarget();
+      const fleetSnapshot = services.inventoryService
+        ? await services.inventoryService.getFleetCapacitySnapshot().catch(() => null)
+        : null;
+      const panelSnapById = new Map(
+        (fleetSnapshot?.panels ?? []).map((snap) => [snap.panelId, snap])
+      );
 
       const enrichedPanels = await Promise.all(
         panels.map(async (panel) => {
-          let activeConfigsCount = 0;
+          const panelSnap = panelSnapById.get(panel.id);
+          let activeConfigsCount = panelSnap?.activeConfigsCount ?? 0;
           let healthy = panel.enabled;
           let latencyMs: number | undefined;
 
-          try {
-            if (typeof services.panelRegistry.getPanelUsage === 'function') {
-              const countRes = await services.panelRegistry.getPanelUsage(panel.id);
-              activeConfigsCount = countRes.activeConfigsCount;
+          if (!panelSnap) {
+            try {
+              if (typeof services.panelRegistry.getPanelUsage === 'function') {
+                const countRes = await services.panelRegistry.getPanelUsage(panel.id);
+                activeConfigsCount = countRes.activeConfigsCount;
+              }
+            } catch {
+              // default to 0
             }
-          } catch {
-            // default to 0
           }
 
           try {
@@ -1139,14 +1175,42 @@ export function registerAdminRoutes(
             ? services.pricingService.getPackages(panel.id, undefined, true).length
             : 0;
 
-          const servicesWithCustom = panel.services.map((s) => ({
-            ...s,
-            isCustomTarget:
-              customTarget?.panelId === panel.id && customTarget?.serviceId === s.serviceId,
-          }));
+          const svcSnapById = new Map(
+            (panelSnap?.services ?? []).map((svc) => [svc.serviceId, svc])
+          );
+          const servicesWithCustom = panel.services.map((s) => {
+            const svcSnap = svcSnapById.get(s.serviceId);
+            return {
+              ...s,
+              enabled: svcSnap?.enabled ?? s.enabled ?? true,
+              maxConfigs: svcSnap?.maxConfigs ?? s.maxConfigs ?? null,
+              stockRemaining: svcSnap?.stockRemaining ?? s.stockRemaining ?? null,
+              dailyCreateLimit: svcSnap?.dailyCreateLimit ?? s.dailyCreateLimit ?? null,
+              activeConfigsCount: svcSnap?.activeConfigsCount ?? 0,
+              reservedCount: svcSnap?.reservedCount ?? 0,
+              todayCreatedCount: svcSnap?.todayCreatedCount ?? 0,
+              remainingCapacity: svcSnap?.remainingCapacity ?? null,
+              utilizationPercent: svcSnap?.utilizationPercent ?? null,
+              isAvailableForCreate:
+                svcSnap?.isAvailableForCreate ??
+                ((panelSnap?.isAvailableForCreate ?? panel.enabled) && (s.enabled ?? true)),
+              unavailableReason: svcSnap?.unavailableReason ?? null,
+              isCustomTarget:
+                customTarget?.panelId === panel.id && customTarget?.serviceId === s.serviceId,
+            };
+          });
 
           return {
             ...panel,
+            maxConfigs: panelSnap?.maxConfigs ?? panel.maxConfigs ?? null,
+            stockRemaining: panelSnap?.stockRemaining ?? panel.stockRemaining ?? null,
+            dailyCreateLimit: panelSnap?.dailyCreateLimit ?? panel.dailyCreateLimit ?? null,
+            reservedCount: panelSnap?.reservedCount ?? 0,
+            todayCreatedCount: panelSnap?.todayCreatedCount ?? 0,
+            remainingCapacity: panelSnap?.remainingCapacity ?? null,
+            utilizationPercent: panelSnap?.utilizationPercent ?? null,
+            isAvailableForCreate: panelSnap?.isAvailableForCreate ?? panel.enabled,
+            unavailableReason: panelSnap?.unavailableReason ?? null,
             services: servicesWithCustom,
             packagesCount,
             activeConfigsCount,
@@ -1167,6 +1231,23 @@ export function registerAdminRoutes(
       );
       const totalServices = enrichedPanels.reduce((acc, p) => acc + p.services.length, 0);
       const allHealthy = totalPanels > 0 && enabledPanels.length > 0 && unhealthyPanels === 0;
+      const fullPanelsCount =
+        fleetSnapshot?.summary.fullPanelsCount ??
+        enrichedPanels.filter((p) => p.enabled && !p.isAvailableForCreate).length;
+      const lowCapacityPanelsCount = fleetSnapshot?.summary.lowCapacityPanelsCount ?? 0;
+      const pausedServicesCount =
+        fleetSnapshot?.summary.pausedServicesCount ??
+        enrichedPanels.reduce(
+          (acc, p) => acc + p.services.filter((s) => s.enabled === false).length,
+          0
+        );
+      const fullServicesCount =
+        fleetSnapshot?.summary.fullServicesCount ??
+        enrichedPanels.reduce(
+          (acc, p) =>
+            acc + p.services.filter((s) => s.enabled !== false && !s.isAvailableForCreate).length,
+          0
+        );
 
       return reply.code(200).send({
         panels: enrichedPanels,
@@ -1178,6 +1259,10 @@ export function registerAdminRoutes(
           totalActiveConfigs,
           totalServices,
           allHealthy,
+          fullPanelsCount,
+          lowCapacityPanelsCount,
+          pausedServicesCount,
+          fullServicesCount,
         },
       });
     });
@@ -1190,9 +1275,21 @@ export function registerAdminRoutes(
         apiKey?: string;
         serviceId?: number;
         serviceName?: string;
+        maxConfigs?: number | null;
+        stockRemaining?: number | null;
+        dailyCreateLimit?: number | null;
       };
     }>('/api/admin/panels', async (request, reply) => {
-      const { name, baseUrl, apiKey, serviceId, serviceName } = request.body || {};
+      const {
+        name,
+        baseUrl,
+        apiKey,
+        serviceId,
+        serviceName,
+        maxConfigs,
+        stockRemaining,
+        dailyCreateLimit,
+      } = request.body || {};
       if (!name || typeof name !== 'string' || !name.trim() || name.trim().length > 80) {
         return reply.code(400).send({ error: 'Panel name must be between 1 and 80 characters' });
       }
@@ -1229,6 +1326,13 @@ export function registerAdminRoutes(
         return reply.code(400).send({ error: 'Invalid service ID' });
       }
 
+      const parsedMaxConfigs = parseOptionalNullableInventoryLimit(maxConfigs, 'maxConfigs');
+      if (!parsedMaxConfigs.ok) return reply.code(400).send({ error: parsedMaxConfigs.error });
+      const parsedStock = parseOptionalNullableInventoryLimit(stockRemaining, 'stockRemaining');
+      if (!parsedStock.ok) return reply.code(400).send({ error: parsedStock.error });
+      const parsedDaily = parseOptionalNullableInventoryLimit(dailyCreateLimit, 'dailyCreateLimit');
+      if (!parsedDaily.ok) return reply.code(400).send({ error: parsedDaily.error });
+
       const adminId = request.userSession!.telegramId;
       try {
         const newPanel = await services.panelRegistry.createPanel({
@@ -1237,6 +1341,9 @@ export function registerAdminRoutes(
           apiKey: apiKey?.trim() || undefined,
           serviceId: parsedServiceId,
           serviceName: serviceName?.trim() || 'سرویس اصلی',
+          ...(parsedMaxConfigs.value !== undefined ? { maxConfigs: parsedMaxConfigs.value } : {}),
+          ...(parsedStock.value !== undefined ? { stockRemaining: parsedStock.value } : {}),
+          ...(parsedDaily.value !== undefined ? { dailyCreateLimit: parsedDaily.value } : {}),
         });
         invalidatePanelHealthCache(services.panelRegistry);
 
@@ -1245,7 +1352,13 @@ export function registerAdminRoutes(
           action: 'admin_create_panel',
           entityType: 'rebecca_panel',
           entityId: newPanel.id,
-          metadata: { name: newPanel.name, baseUrl: newPanel.baseUrl },
+          metadata: {
+            name: newPanel.name,
+            baseUrl: newPanel.baseUrl,
+            ...(parsedMaxConfigs.value !== undefined ? { maxConfigs: parsedMaxConfigs.value } : {}),
+            ...(parsedStock.value !== undefined ? { stockRemaining: parsedStock.value } : {}),
+            ...(parsedDaily.value !== undefined ? { dailyCreateLimit: parsedDaily.value } : {}),
+          },
         });
 
         return reply.code(201).send({ success: true, panel: newPanel });
@@ -1262,11 +1375,22 @@ export function registerAdminRoutes(
         name?: string;
         baseUrl?: string;
         apiKey?: string | null;
+        maxConfigs?: number | null;
+        stockRemaining?: number | null;
+        dailyCreateLimit?: number | null;
       };
     }>('/api/admin/panels/:id', async (request, reply) => {
       const { id } = request.params;
-      const { name, baseUrl, apiKey } = request.body || {};
-      const changes: { name?: string; baseUrl?: string; apiKey?: string | null } = {};
+      const { name, baseUrl, apiKey, maxConfigs, stockRemaining, dailyCreateLimit } =
+        request.body || {};
+      const changes: {
+        name?: string;
+        baseUrl?: string;
+        apiKey?: string | null;
+        maxConfigs?: number | null;
+        stockRemaining?: number | null;
+        dailyCreateLimit?: number | null;
+      } = {};
 
       if (name !== undefined) {
         if (typeof name !== 'string' || !name.trim() || name.trim().length > 80) {
@@ -1294,6 +1418,18 @@ export function registerAdminRoutes(
         }
         changes.apiKey = typeof apiKey === 'string' ? apiKey.trim() || null : null;
       }
+
+      const parsedMaxConfigs = parseOptionalNullableInventoryLimit(maxConfigs, 'maxConfigs');
+      if (!parsedMaxConfigs.ok) return reply.code(400).send({ error: parsedMaxConfigs.error });
+      if (parsedMaxConfigs.value !== undefined) changes.maxConfigs = parsedMaxConfigs.value;
+
+      const parsedStock = parseOptionalNullableInventoryLimit(stockRemaining, 'stockRemaining');
+      if (!parsedStock.ok) return reply.code(400).send({ error: parsedStock.error });
+      if (parsedStock.value !== undefined) changes.stockRemaining = parsedStock.value;
+
+      const parsedDaily = parseOptionalNullableInventoryLimit(dailyCreateLimit, 'dailyCreateLimit');
+      if (!parsedDaily.ok) return reply.code(400).send({ error: parsedDaily.error });
+      if (parsedDaily.value !== undefined) changes.dailyCreateLimit = parsedDaily.value;
 
       const adminId = request.userSession!.telegramId;
       try {
@@ -1472,10 +1608,18 @@ export function registerAdminRoutes(
     // POST /api/admin/panels/:id/services
     adminScope.post<{
       Params: { id: string };
-      Body: { serviceId: number; name: string };
+      Body: {
+        serviceId: number;
+        name: string;
+        enabled?: boolean;
+        maxConfigs?: number | null;
+        stockRemaining?: number | null;
+        dailyCreateLimit?: number | null;
+      };
     }>('/api/admin/panels/:id/services', async (request, reply) => {
       const { id } = request.params;
-      const { serviceId, name } = request.body || {};
+      const { serviceId, name, enabled, maxConfigs, stockRemaining, dailyCreateLimit } =
+        request.body || {};
       const parsedServiceId = Number(serviceId);
       if (
         !Number.isSafeInteger(parsedServiceId) ||
@@ -1487,19 +1631,128 @@ export function registerAdminRoutes(
       if (!name || typeof name !== 'string' || !name.trim() || name.trim().length > 80) {
         return reply.code(400).send({ error: 'Service name must be between 1 and 80 characters' });
       }
+      if (enabled !== undefined && typeof enabled !== 'boolean') {
+        return reply.code(400).send({ error: 'Field "enabled" must be a boolean' });
+      }
+      const parsedMaxConfigs = parseOptionalNullableInventoryLimit(maxConfigs, 'maxConfigs');
+      if (!parsedMaxConfigs.ok) return reply.code(400).send({ error: parsedMaxConfigs.error });
+      const parsedStock = parseOptionalNullableInventoryLimit(stockRemaining, 'stockRemaining');
+      if (!parsedStock.ok) return reply.code(400).send({ error: parsedStock.error });
+      const parsedDaily = parseOptionalNullableInventoryLimit(dailyCreateLimit, 'dailyCreateLimit');
+      if (!parsedDaily.ok) return reply.code(400).send({ error: parsedDaily.error });
+
       const adminId = request.userSession!.telegramId;
       try {
-        await services.panelRegistry.addService(id, parsedServiceId, name.trim());
+        const hasInventoryOptions =
+          enabled !== undefined ||
+          parsedMaxConfigs.value !== undefined ||
+          parsedStock.value !== undefined ||
+          parsedDaily.value !== undefined;
+        if (hasInventoryOptions) {
+          await services.panelRegistry.addService(id, parsedServiceId, name.trim(), {
+            ...(enabled !== undefined ? { enabled } : {}),
+            ...(parsedMaxConfigs.value !== undefined ? { maxConfigs: parsedMaxConfigs.value } : {}),
+            ...(parsedStock.value !== undefined ? { stockRemaining: parsedStock.value } : {}),
+            ...(parsedDaily.value !== undefined ? { dailyCreateLimit: parsedDaily.value } : {}),
+          });
+        } else {
+          await services.panelRegistry.addService(id, parsedServiceId, name.trim());
+        }
         await services.userService.recordAdminAction({
           actorTelegramId: adminId,
           action: 'admin_add_panel_service',
           entityType: 'rebecca_panel_service',
           entityId: `${id}:${parsedServiceId}`,
-          metadata: { serviceId: parsedServiceId, name: name.trim() },
+          metadata: {
+            serviceId: parsedServiceId,
+            name: name.trim(),
+            ...(enabled !== undefined ? { enabled } : {}),
+            ...(parsedMaxConfigs.value !== undefined ? { maxConfigs: parsedMaxConfigs.value } : {}),
+            ...(parsedStock.value !== undefined ? { stockRemaining: parsedStock.value } : {}),
+            ...(parsedDaily.value !== undefined ? { dailyCreateLimit: parsedDaily.value } : {}),
+          },
         });
         return reply.code(200).send({ success: true });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to add service';
+        return reply.code(400).send({ error: message });
+      }
+    });
+
+    // PATCH /api/admin/panels/:id/services/:serviceId
+    adminScope.patch<{
+      Params: { id: string; serviceId: string };
+      Body: {
+        name?: string;
+        enabled?: boolean;
+        maxConfigs?: number | null;
+        stockRemaining?: number | null;
+        dailyCreateLimit?: number | null;
+      };
+    }>('/api/admin/panels/:id/services/:serviceId', async (request, reply) => {
+      const { id, serviceId } = request.params;
+      const parsedServiceId = Number(serviceId);
+      if (
+        !Number.isSafeInteger(parsedServiceId) ||
+        parsedServiceId <= 0 ||
+        parsedServiceId > 2_147_483_647
+      ) {
+        return reply.code(400).send({ error: 'Invalid service ID' });
+      }
+
+      const { name, enabled, maxConfigs, stockRemaining, dailyCreateLimit } = request.body || {};
+      const changes: {
+        name?: string;
+        enabled?: boolean;
+        maxConfigs?: number | null;
+        stockRemaining?: number | null;
+        dailyCreateLimit?: number | null;
+      } = {};
+
+      if (name !== undefined) {
+        if (typeof name !== 'string' || !name.trim() || name.trim().length > 80) {
+          return reply
+            .code(400)
+            .send({ error: 'Service name must be between 1 and 80 characters' });
+        }
+        changes.name = name.trim();
+      }
+      if (enabled !== undefined) {
+        if (typeof enabled !== 'boolean') {
+          return reply.code(400).send({ error: 'Field "enabled" must be a boolean' });
+        }
+        changes.enabled = enabled;
+      }
+
+      const parsedMaxConfigs = parseOptionalNullableInventoryLimit(maxConfigs, 'maxConfigs');
+      if (!parsedMaxConfigs.ok) return reply.code(400).send({ error: parsedMaxConfigs.error });
+      if (parsedMaxConfigs.value !== undefined) changes.maxConfigs = parsedMaxConfigs.value;
+
+      const parsedStock = parseOptionalNullableInventoryLimit(stockRemaining, 'stockRemaining');
+      if (!parsedStock.ok) return reply.code(400).send({ error: parsedStock.error });
+      if (parsedStock.value !== undefined) changes.stockRemaining = parsedStock.value;
+
+      const parsedDaily = parseOptionalNullableInventoryLimit(dailyCreateLimit, 'dailyCreateLimit');
+      if (!parsedDaily.ok) return reply.code(400).send({ error: parsedDaily.error });
+      if (parsedDaily.value !== undefined) changes.dailyCreateLimit = parsedDaily.value;
+
+      if (Object.keys(changes).length === 0) {
+        return reply.code(400).send({ error: 'Provide at least one service field to update' });
+      }
+
+      const adminId = request.userSession!.telegramId;
+      try {
+        await services.panelRegistry.updateService(id, parsedServiceId, changes);
+        await services.userService.recordAdminAction({
+          actorTelegramId: adminId,
+          action: 'admin_update_panel_service',
+          entityType: 'rebecca_panel_service',
+          entityId: `${id}:${parsedServiceId}`,
+          metadata: changes,
+        });
+        return reply.code(200).send({ success: true });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to update service';
         return reply.code(400).send({ error: message });
       }
     });

@@ -8,6 +8,7 @@ import type {
   CreatePanelPayload,
   UpdatePanelPayload,
   AddPanelServicePayload,
+  UpdatePanelServicePayload,
 } from '@/shared/types/api.js';
 
 export function useAdminPanels() {
@@ -187,6 +188,28 @@ export function useAdminPanels() {
     },
   });
 
+  const updateServiceMutation = useMutation({
+    mutationFn: ({
+      panelId,
+      serviceId,
+      payload,
+    }: {
+      panelId: string;
+      serviceId: number;
+      payload: UpdatePanelServicePayload;
+    }) => {
+      triggerHaptic('selection');
+      return api.updateAdminPanelService(panelId, serviceId, payload);
+    },
+    onSuccess: () => {
+      triggerHaptic('success');
+      invalidatePanelSurface();
+    },
+    onError: () => {
+      triggerHaptic('error');
+    },
+  });
+
   const setDefaultServiceMutation = useMutation({
     mutationFn: ({ panelId, serviceId }: { panelId: string; serviceId: number }) => {
       triggerHaptic('selection');
@@ -253,6 +276,7 @@ export function useAdminPanels() {
     isAddingService: addServiceMutation.isPending,
     isMutatingService:
       addServiceMutation.isPending ||
+      updateServiceMutation.isPending ||
       setDefaultServiceMutation.isPending ||
       setCustomTargetMutation.isPending ||
       deleteServiceMutation.isPending,
@@ -267,6 +291,8 @@ export function useAdminPanels() {
     deletePanel: (panelId: string) => deletePanelMutation.mutateAsync(panelId),
     addService: (panelId: string, payload: AddPanelServicePayload) =>
       addServiceMutation.mutateAsync({ panelId, payload }),
+    updateService: (panelId: string, serviceId: number, payload: UpdatePanelServicePayload) =>
+      updateServiceMutation.mutateAsync({ panelId, serviceId, payload }),
     setDefaultService: (panelId: string, serviceId: number) =>
       setDefaultServiceMutation.mutateAsync({ panelId, serviceId }),
     setCustomTarget: (panelId: string, serviceId: number) =>

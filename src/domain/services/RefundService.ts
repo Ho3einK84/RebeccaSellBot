@@ -18,6 +18,7 @@ import {
 } from './RebeccaService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import type { TranslationService } from './TranslationService.js';
+import type { InventoryService } from './InventoryService.js';
 import { purchaseOwnershipMarker, remoteMatchesOwnershipMarker } from './RebeccaOwnership.js';
 import {
   ConfigIncarnationMismatchError,
@@ -77,7 +78,8 @@ export class RefundService {
 
   constructor(
     panels: RebeccaPanelRegistry | RebeccaService,
-    private readonly translationService: TranslationService
+    private readonly translationService: TranslationService,
+    private readonly inventoryService?: Pick<InventoryService, 'restoreOnRefundInTransaction'>
   ) {
     this.panels = normalizeRebeccaPanelAccess(panels);
   }
@@ -303,7 +305,7 @@ export class RefundService {
       }
 
       try {
-        const completed = await completeRefundIntent(refundId, telegramId);
+        const completed = await completeRefundIntent(refundId, telegramId, this.inventoryService);
         if (!completed) throw new Error('REFUND_INTENT_NO_LONGER_ACTIVE');
       } catch (err) {
         logger.error({ err, refundId }, 'Remote config delete succeeded but refund commit failed');
@@ -455,7 +457,11 @@ export class RefundService {
         if (remoteExists) {
           await this.failIntent(intent.id, 'Reconciled: remote delete was not applied');
         } else {
-          const completed = await completeRefundIntent(intent.id, intent.telegramId);
+          const completed = await completeRefundIntent(
+            intent.id,
+            intent.telegramId,
+            this.inventoryService
+          );
           if (!completed) continue;
           this.notifyInvalidation(intent.telegramId);
         }
@@ -524,7 +530,11 @@ export class RefundService {
   }
 }
 
-async function completeRefundIntent(refundId: string, telegramId: number): Promise<boolean> {
+async function completeRefundIntent(
+  refundId: string,
+  telegramId: number,
+  inventoryService?: Pick<InventoryService, 'restoreOnRefundInTransaction'>
+): Promise<boolean> {
   const db = getDb();
   return db.transaction(async (tx) => {
     const [intent] = await tx
@@ -621,6 +631,10 @@ async function completeRefundIntent(refundId: string, telegramId: number): Promi
         updatedAt: new Date(),
       })
       .where(eq(users.telegramId, telegramId));
+
+    if (inventoryService) {
+      await inventoryService.restoreOnRefundInTransaction(tx, intent.purchaseIntentId);
+    }
 
     await tx.insert(auditLogs).values({
       id: `audit_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,

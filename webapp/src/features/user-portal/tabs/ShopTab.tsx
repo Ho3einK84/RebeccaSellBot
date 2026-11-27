@@ -238,7 +238,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
     let bestId: string | null = null;
     let bestRate = Number.POSITIVE_INFINITY;
     for (const pkg of filteredPackages) {
-      if (pkg.gbAmount <= 0 || pkg.featured) continue;
+      if (pkg.gbAmount <= 0 || pkg.featured || pkg.available === false) continue;
       const rate = pkg.price / pkg.gbAmount;
       if (rate < bestRate) {
         bestRate = rate;
@@ -247,6 +247,8 @@ export const ShopTab: React.FC<ShopTabProps> = ({
     }
     return bestId;
   }, [filteredPackages]);
+
+  const isCustomUnavailable = customVolumeSettings?.available === false;
 
   const handleSelect = (pkg: UserPackageItem) => {
     triggerHaptic('selection');
@@ -494,6 +496,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({
               } gap-3.5 anim-stagger`}
             >
               {filteredPackages.map((pkg) => {
+                const isUnavailable = pkg.available === false;
                 const hasDiscount =
                   typeof pkg.originalPrice === 'number' && pkg.originalPrice > pkg.price;
                 const discountPct =
@@ -501,16 +504,24 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                     ? Math.round(((pkg.originalPrice - pkg.price) / pkg.originalPrice) * 100)
                     : 0;
                 const unitPrice = pkg.gbAmount > 0 ? Math.round(pkg.price / pkg.gbAmount) : null;
-                const isBestValue = pkg.id === bestValuePackageId;
+                const isBestValue = !isUnavailable && pkg.id === bestValuePackageId;
+                const unavailableLabel = pkg.userLimitReached
+                  ? t('user.shop.userLimitReachedBadge')
+                  : pkg.unavailableReason === 'panel_capacity_full' ||
+                      pkg.unavailableReason === 'service_capacity_full'
+                    ? t('user.shop.capacityFullBadge')
+                    : t('user.shop.outOfStockBadge');
 
                 return (
                   <Card
                     key={pkg.id}
                     padding="md"
-                    className={`flex flex-col justify-between gap-4 text-start rs-card-interactive ${
-                      pkg.featured
-                        ? 'border-brand/35 ring-1 ring-brand/15 bg-gradient-to-b from-brand-soft/45 via-surface to-surface shadow-[var(--shadow-card-hover)]'
-                        : ''
+                    className={`flex flex-col justify-between gap-4 text-start ${
+                      isUnavailable
+                        ? 'opacity-70 bg-surface-2/60'
+                        : pkg.featured
+                          ? 'rs-card-interactive border-brand/35 ring-1 ring-brand/15 bg-gradient-to-b from-brand-soft/45 via-surface to-surface shadow-[var(--shadow-card-hover)]'
+                          : 'rs-card-interactive'
                     }`}
                   >
                     <div className="flex flex-col gap-2.5">
@@ -518,29 +529,50 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                         <h3 className="text-sm sm:text-[15px] font-semibold truncate text-ink m-0">
                           {pkg.name}
                         </h3>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {hasDiscount && discountPct > 0 && (
-                            <Badge variant="warning" size="xs" className="tnum">
-                              <Flame className="w-3 h-3" />
-                              <span>
-                                {t('user.shop.discountBadgeOff').replace(
-                                  '{percent}',
-                                  formatNumber(discountPct)
+                        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                          {isUnavailable ? (
+                            <Badge variant="error" size="xs">
+                              {unavailableLabel}
+                            </Badge>
+                          ) : (
+                            <>
+                              {pkg.lowStock &&
+                                pkg.remainingStock != null &&
+                                pkg.remainingStock > 0 && (
+                                  <Badge variant="warning" size="xs" className="tnum">
+                                    <Flame className="w-3 h-3" />
+                                    <span>
+                                      {t('user.shop.lowStockBadge').replace(
+                                        '{count}',
+                                        formatNumber(pkg.remainingStock)
+                                      )}
+                                    </span>
+                                  </Badge>
                                 )}
-                              </span>
-                            </Badge>
-                          )}
-                          {!hasDiscount && pkg.featured && (
-                            <Badge variant="primary" size="xs">
-                              <Sparkles className="w-3 h-3" />
-                              <span>{t('user.shop.featuredBadge')}</span>
-                            </Badge>
-                          )}
-                          {!hasDiscount && !pkg.featured && isBestValue && (
-                            <Badge variant="success" size="xs">
-                              <Tag className="w-3 h-3" />
-                              <span>{t('user.shop.bestValueBadge')}</span>
-                            </Badge>
+                              {hasDiscount && discountPct > 0 && (
+                                <Badge variant="warning" size="xs" className="tnum">
+                                  <Flame className="w-3 h-3" />
+                                  <span>
+                                    {t('user.shop.discountBadgeOff').replace(
+                                      '{percent}',
+                                      formatNumber(discountPct)
+                                    )}
+                                  </span>
+                                </Badge>
+                              )}
+                              {!hasDiscount && pkg.featured && (
+                                <Badge variant="primary" size="xs">
+                                  <Sparkles className="w-3 h-3" />
+                                  <span>{t('user.shop.featuredBadge')}</span>
+                                </Badge>
+                              )}
+                              {!hasDiscount && !pkg.featured && isBestValue && (
+                                <Badge variant="success" size="xs">
+                                  <Tag className="w-3 h-3" />
+                                  <span>{t('user.shop.bestValueBadge')}</span>
+                                </Badge>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -606,8 +638,13 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                         </div>
                       </div>
 
-                      <Button size="sm" variant="primary" onClick={() => handleSelect(pkg)}>
-                        {t('user.shop.selectPlan')}
+                      <Button
+                        size="sm"
+                        variant={isUnavailable ? 'secondary' : 'primary'}
+                        disabled={isUnavailable}
+                        onClick={() => handleSelect(pkg)}
+                      >
+                        {isUnavailable ? t('user.shop.soldOutButton') : t('user.shop.selectPlan')}
                       </Button>
                     </div>
                   </Card>
@@ -643,10 +680,36 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                 </div>
               </div>
 
-              <Badge variant="primary" size="xs" className="shrink-0">
-                {t('user.shop.customVolumeBadge')}
-              </Badge>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isCustomUnavailable ? (
+                  <Badge variant="error" size="xs">
+                    {t('user.shop.capacityFullBadge')}
+                  </Badge>
+                ) : customVolumeSettings?.lowStock &&
+                  customVolumeSettings.remainingStock != null &&
+                  customVolumeSettings.remainingStock > 0 ? (
+                  <Badge variant="warning" size="xs" className="tnum">
+                    <Flame className="w-3 h-3" />
+                    <span>
+                      {t('user.shop.lowStockBadge').replace(
+                        '{count}',
+                        formatNumber(customVolumeSettings.remainingStock)
+                      )}
+                    </span>
+                  </Badge>
+                ) : (
+                  <Badge variant="primary" size="xs">
+                    {t('user.shop.customVolumeBadge')}
+                  </Badge>
+                )}
+              </div>
             </div>
+
+            {isCustomUnavailable && (
+              <div className="rounded-ctl border border-danger/25 bg-danger-soft px-3 py-2 text-xs text-danger-fg leading-relaxed">
+                {t('user.shop.customVolumeUnavailable')}
+              </div>
+            )}
 
             {validPresets.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
@@ -838,9 +901,19 @@ export const ShopTab: React.FC<ShopTabProps> = ({
                   </Button>
                 )}
 
-                <Button size="md" variant="primary" onClick={handleOrderCustom} className="flex-1">
+                <Button
+                  size="md"
+                  variant={isCustomUnavailable ? 'secondary' : 'primary'}
+                  disabled={isCustomUnavailable}
+                  onClick={handleOrderCustom}
+                  className="flex-1"
+                >
                   <Zap className="w-4 h-4 shrink-0" />
-                  <span>{t('user.shop.customVolumeOrderButton')}</span>
+                  <span>
+                    {isCustomUnavailable
+                      ? t('user.shop.soldOutButton')
+                      : t('user.shop.customVolumeOrderButton')}
+                  </span>
                 </Button>
               </div>
             </div>

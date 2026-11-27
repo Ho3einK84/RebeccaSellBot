@@ -81,6 +81,24 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
           onNotify(t('user.trial.disabled'), 'error');
           return;
         }
+        if (err.code === 'OUT_OF_STOCK') {
+          onNotify(t('user.trial.outOfStock'), 'error');
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.trial });
+          return;
+        }
+        if (err.code === 'DAILY_LIMIT_REACHED') {
+          onNotify(t('user.trial.dailyLimitReached'), 'error');
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.trial });
+          return;
+        }
+        if (err.code === 'CAPACITY_FULL' || err.code === 'SERVICE_UNAVAILABLE') {
+          onNotify(t('user.trial.capacityFull'), 'error');
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.trial });
+          return;
+        }
       }
       onNotify(t('user.trial.failed'), 'error');
     } finally {
@@ -98,17 +116,25 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
 
   if (!trial || !trial.enabled || !trial.eligible) return null;
 
-  const showPhonePrompt = needsPhoneGate || Boolean(trial.phoneVerificationRequired);
+  const isCapacityUnavailable = trial.capacityAvailable === false;
+  const showPhonePrompt =
+    !isCapacityUnavailable && (needsPhoneGate || Boolean(trial.phoneVerificationRequired));
 
   return (
     <Card
-      tone="brand"
+      tone={isCapacityUnavailable ? 'default' : 'brand'}
       padding={compact ? 'md' : 'lg'}
-      className="rs-editorial-trial flex flex-col gap-3.5 text-start relative overflow-hidden"
+      className={`rs-editorial-trial flex flex-col gap-3.5 text-start relative overflow-hidden ${
+        isCapacityUnavailable ? 'opacity-80' : ''
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
-          <IconTile tone="brand" size={compact ? 'sm' : 'md'} className="shadow-sm">
+          <IconTile
+            tone={isCapacityUnavailable ? 'neutral' : 'brand'}
+            size={compact ? 'sm' : 'md'}
+            className="shadow-sm"
+          >
             <Gift />
           </IconTile>
           <div className="flex flex-col gap-1 min-w-0 flex-1">
@@ -116,17 +142,29 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
               <h3 className="text-[13px] sm:text-sm font-semibold text-ink m-0">
                 {t('user.trial.title')}
               </h3>
-              <Badge variant="primary" size="xs">
-                <Sparkles className="w-3 h-3" />
-                <span>{t('user.trial.badge')}</span>
-              </Badge>
+              {isCapacityUnavailable ? (
+                <Badge variant="error" size="xs">
+                  {t('user.trial.unavailableBadge')}
+                </Badge>
+              ) : (
+                <Badge variant="primary" size="xs">
+                  <Sparkles className="w-3 h-3" />
+                  <span>{t('user.trial.badge')}</span>
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-ink-soft m-0 leading-relaxed">
-              {showPhonePrompt
-                ? t('user.trial.phoneRequiredDesc')
-                : t('user.trial.desc')
-                    .replace('{gb}', formatDecimal(trial.gb))
-                    .replace('{days}', formatNumber(trial.days))}
+              {isCapacityUnavailable
+                ? trial.unavailableReason === 'trial_daily_limit_reached'
+                  ? t('user.trial.dailyLimitReached')
+                  : trial.unavailableReason === 'trial_out_of_stock'
+                    ? t('user.trial.outOfStock')
+                    : t('user.trial.capacityFull')
+                : showPhonePrompt
+                  ? t('user.trial.phoneRequiredDesc')
+                  : t('user.trial.desc')
+                      .replace('{gb}', formatDecimal(trial.gb))
+                      .replace('{days}', formatNumber(trial.days))}
             </p>
           </div>
         </div>
@@ -178,15 +216,21 @@ export const FreeTrialBanner: React.FC<FreeTrialBannerProps> = ({
       ) : (
         <Button
           type="button"
-          variant="primary"
+          variant={isCapacityUnavailable ? 'secondary' : 'primary'}
           size="md"
           loading={isClaiming}
-          disabled={isClaiming}
+          disabled={isClaiming || isCapacityUnavailable}
           onClick={() => void executeClaim()}
           block
         >
           <Sparkles className="w-4 h-4 shrink-0" />
-          <span>{isClaiming ? t('user.trial.claiming') : t('user.trial.claimCta')}</span>
+          <span>
+            {isCapacityUnavailable
+              ? t('user.trial.unavailableBadge')
+              : isClaiming
+                ? t('user.trial.claiming')
+                : t('user.trial.claimCta')}
+          </span>
         </Button>
       )}
       <ForcedJoinModal

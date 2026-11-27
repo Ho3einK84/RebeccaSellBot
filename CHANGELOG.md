@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Service, Panel & Package Inventory Limits:** Atomic `FOR NO KEY UPDATE` inventory reservation & rollback engine (`InventoryService`) supporting per-panel and per-service creation caps (`enabled`, `maxConfigs`, `stockRemaining`, `dailyCreateLimit`), per-package stock and per-user purchase limits (`package_inventory`), custom-volume stock/daily caps, sold-out visibility toggle (`shop_show_out_of_stock`), and low-stock warning threshold (`shop_low_stock_threshold`) across Telegram Bot and Mini App — while ensuring existing subscribers can always renew without being blocked by panel/service new-creation caps.
+- **Standard SemVer Version & Release Channel Display (`main` / `dev`):** Automated SemVer 2.0.0 build metadata resolution across Docker/Compose/`rsbot`/Vite (`stable`, `dev`, `prerelease`), surfaced in `/version`, Telegram Admin Home/Stats/Settings, User Home/Support footers, `/api/health`, `/readyz`, WebApp Admin Header badge, Admin Settings Build Info card, and unified WebApp footers.
+
 ## [0.3.0] - 2026-11-26
 
 First official GitHub release of **RebeccaSellBot** — delivering unified Telegram Bot & Mini App commerce, multi-panel fleet orchestration, VIP user groups, and automated payment gateways.

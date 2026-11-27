@@ -2360,4 +2360,74 @@ export const FA_TEXTS: Record<string, string> = {
   checkout_projected_debt_label: 'بدهی پس از پرداخت',
   checkout_remaining_credit_label: 'اعتبار باقی‌مانده',
   promo_not_allowed_for_group: 'استفاده از کد تخفیف برای گروه کاربری شما فعال نیست.',
+
+  // سیستم مدیریت موجودی و حد ساخت (پنل‌ها، سرویس‌ها، بسته‌ها، تست و حجم دلخواه)
+  purchase_inventory_out_of_stock:
+    'موجودی این بسته یا سرویس به اتمام رسیده است. لطفاً بستهٔ دیگری انتخاب کنید یا بعداً دوباره تلاش کنید.',
+  purchase_inventory_capacity_full:
+    'ظرفیت ساخت اشتراک جدید روی سرور هدف تکمیل شده است. لطفاً بستهٔ دیگری انتخاب کنید یا کمی بعد تلاش کنید.',
+  purchase_inventory_daily_limit:
+    'سقف ساخت روزانهٔ این سرویس برای امروز تکمیل شده است. لطفاً فردا مجدداً تلاش کنید.',
+  purchase_inventory_user_limit: 'شما به حداکثر تعداد خرید مجاز برای این بسته رسیده‌اید.',
+  purchase_inventory_service_paused:
+    'ساخت اشتراک جدید روی این سرویس موقتاً متوقف شده است. لطفاً بستهٔ دیگری انتخاب کنید.',
+  trial_capacity_full:
+    'ظرفیت ساخت اشتراک تست رایگان در حال حاضر تکمیل شده است. لطفاً کمی بعد دوباره تلاش کنید.',
+  trial_out_of_stock: 'موجودی سرویس تست رایگان در حال حاضر به اتمام رسیده است.',
+  trial_daily_limit_reached:
+    'سقف روزانهٔ ارائهٔ تست رایگان برای امروز تکمیل شده است. لطفاً فردا دوباره تلاش کنید.',
+  shop_badge_out_of_stock: '🔴 ناموجود',
+  shop_badge_low_stock: '🔥 {count} عدد',
+
+  admin_panel_capacity_label: 'ظرفیت فعال',
+  admin_panel_stock_label: 'موجودی ساخت',
+  admin_panel_daily_limit_label: 'سقف روزانه',
+  admin_panel_edit_capacity_button: '📊 حد ظرفیت',
+  admin_panel_edit_stock_button: '📦 موجودی ساخت',
+  admin_panel_edit_daily_limit_button: '📅 سقف روزانه',
+  admin_panel_capacity_prompt:
+    'حداکثر تعداد اشتراک‌های فعال مجاز را وارد کنید (مقدار فعلی: *{current}*).\nبرای نامحدود کردن، دکمهٔ «نامحدود» را بزنید یا `-` ارسال کنید:',
+  admin_panel_stock_prompt:
+    'تعداد موجودی قابل ساخت را وارد کنید (مقدار فعلی: *{current}*).\nعدد ۰ ساخت جدید را متوقف می‌کند؛ برای نامحدود، دکمهٔ «نامحدود» را بزنید یا `-` ارسال کنید:',
+  admin_panel_daily_limit_prompt:
+    'سقف ساخت روزانه را وارد کنید (مقدار فعلی: *{current}*).\nعدد ۰ ساخت روزانه را متوقف می‌کند؛ برای نامحدود، دکمهٔ «نامحدود» را بزنید یا `-` ارسال کنید:',
+  admin_panel_limit_unlimited_button: '♾️ نامحدود',
+  admin_panel_service_status_label: 'وضعیت ساخت جدید',
+  admin_panel_service_enabled_badge: '🟢 باز',
+  admin_panel_service_paused_badge: '⏸ متوقف',
+  admin_panel_service_pause_button: '⏸ توقف ساخت جدید',
+  admin_panel_service_resume_button: '▶️ باز کردن ساخت جدید',
+
+  admin_pkg_stock_label: 'موجودی بسته',
+  admin_pkg_user_limit_label: 'سقف خرید هر کاربر',
+  admin_pkg_sold_label: 'تعداد فروش',
+  admin_pkg_edit_stock_btn: '📦 موجودی',
+  admin_pkg_edit_user_limit_btn: '👤 سقف هر کاربر',
+  admin_pkg_stock_prompt:
+    'تعداد موجودی قابل فروش را وارد کنید (مقدار فعلی: *{current}*).\nعدد ۰ بسته را ناموجود می‌کند؛ برای نامحدود کردن `-` بفرستید یا دکمهٔ زیر را بزنید:',
+  admin_pkg_user_limit_prompt:
+    'حداکثر تعداد خرید مجاز به ازای هر کاربر را وارد کنید (مقدار فعلی: *{current}*).\nحداقل ۱ یا برای نامحدود `-` بفرستید یا دکمهٔ زیر را بزنید:',
+  admin_pkg_show_out_of_stock_btn: '👁 نمایش ناموجودها',
+
+  admin_home_alert_capacity: 'ظرفیت {count} پنل/سرویس پر است',
+  admin_home_alert_out_of_stock: '{count} بسته ناموجود است',
+
+  // App version & release channel
+  version_title: 'نسخه و اطلاعات ساخت',
+  version_subtitle: 'اطلاعات نسخه و کانال انتشار RebeccaSellBot',
+  version_section_build: 'مشخصات نسخه',
+  version_section_runtime: 'محیط اجرا',
+  version_product_label: 'نرم‌افزار',
+  version_version_label: 'نسخه',
+  version_full_label: 'شناسه کامل',
+  version_channel_label: 'کانال انتشار',
+  version_branch_label: 'شاخه (Branch)',
+  version_commit_label: 'کد کامیت',
+  version_built_at_label: 'زمان ساخت',
+  version_runtime_label: 'موتور اجرا',
+  version_channel_stable: 'پایدار',
+  version_channel_dev: 'توسعه',
+  version_channel_prerelease: 'پیش‌انتشار',
+  version_dirty_tag: 'تغییرات محلی',
+  admin_stats_version_label: 'نسخه ربات',
 };

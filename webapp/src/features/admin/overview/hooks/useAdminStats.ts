@@ -22,7 +22,9 @@ export function useAdminStats() {
   return {
     stats: query.data?.stats ?? null,
     panelHealth: query.data?.panelHealth ?? null,
+    fleetCapacity: query.data?.fleetCapacity ?? null,
     dbLatencyMs: query.data?.dbLatencyMs,
+    appVersion: query.data?.appVersion ?? null,
     isLoading: query.isLoading,
     isRefetching: query.isRefetching,
     error: query.error,

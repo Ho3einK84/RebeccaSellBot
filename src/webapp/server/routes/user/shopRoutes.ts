@@ -19,7 +19,13 @@ import {
   isCustomServiceNameAllowed,
   onHoldDefaultEnabled,
   renewalRolloverEnabled,
+  shopShowOutOfStock,
 } from '../../../../domain/services/FeatureSettings.js';
+import {
+  InventoryUnavailableError,
+  type InventoryErrorCode,
+  type InventoryUnavailableReason,
+} from '../../../../domain/services/InventoryService.js';
 import {
   resolveBestCatalogDiscount,
   safeListActiveDiscounts,
@@ -119,8 +125,16 @@ export function registerUserShopRoutes(
       const rawPackages = options.pricingService
         .getPackages(undefined, undefined, false)
         .filter((p) => p.enabled !== false);
+      const showOutOfStock = options.translationService
+        ? shopShowOutOfStock(options.translationService)
+        : true;
+      const availabilityMap = options.inventoryService
+        ? await options.inventoryService
+            .getPackagesAvailabilityMap(rawPackages, { telegramId, now })
+            .catch(() => null)
+        : null;
 
-      const packages = rawPackages.map((p) => {
+      const mappedPackages = rawPackages.map((p) => {
         const priced =
           typeof options.pricingService!.resolvePackagePrice === 'function'
             ? options.pricingService!.resolvePackagePrice(p, activeDiscounts, now, userPolicy)
@@ -154,6 +168,7 @@ export function registerUserShopRoutes(
                   discountExpiresAt: catDisc.discountExpiresAt,
                 };
               })();
+        const avail = availabilityMap?.get(p.id);
         return {
           id: p.id,
           name: localizePackageName(p.id, p.name, locale, options.translationService),
@@ -174,8 +189,18 @@ export function registerUserShopRoutes(
           startOnFirstUse: p.startOnFirstUse ?? defaultOnHold,
           rolloverQuota: p.rolloverQuota ?? defaultRollover,
           featured: p.id.includes('popular') || p.id.includes('best') || p.id.includes('pro'),
+          remainingStock: avail ? avail.effectiveRemaining : null,
+          lowStock: avail?.lowStock ?? false,
+          available: avail?.available ?? true,
+          unavailableReason: avail?.unavailableReason ?? null,
+          userLimitReached: avail?.userLimitReached ?? false,
+          maxPurchasesPerUser: avail?.maxPurchasesPerUser ?? null,
         };
       });
+
+      const packages = showOutOfStock
+        ? mappedPackages
+        : mappedPackages.filter((pkg) => pkg.available);
 
       const categories = rawCategories
         .filter((cat) => packages.some((pkg) => pkg.categoryId === cat.id))
@@ -827,16 +852,35 @@ export function registerUserShopRoutes(
         ? { panelId: renewConfig.panelId, serviceId: pkg.serviceId ?? renewConfig.serviceId }
         : target;
 
-      const checkout = await options.purchaseCheckoutService.create({
-        telegramId,
-        kind,
-        ...(renewConfig ? { configId: renewConfig.id } : {}),
-        pkg: checkoutPkg,
-        ...resolvedTarget,
-        ...(appliedPromo ? { promoCode: appliedPromo.code } : {}),
-        ...(requestedUsername ? { requestedUsername } : {}),
-        quotedAmount,
-      });
+      let checkout;
+      try {
+        checkout = await options.purchaseCheckoutService.create({
+          telegramId,
+          kind,
+          ...(renewConfig ? { configId: renewConfig.id } : {}),
+          pkg: checkoutPkg,
+          ...resolvedTarget,
+          ...(appliedPromo ? { promoCode: appliedPromo.code } : {}),
+          ...(requestedUsername ? { requestedUsername } : {}),
+          quotedAmount,
+        });
+      } catch (err: unknown) {
+        if (
+          err instanceof InventoryUnavailableError ||
+          (err instanceof Error && err.name === 'InventoryUnavailableError')
+        ) {
+          const invErr = err as {
+            code?: InventoryErrorCode;
+            reason?: InventoryUnavailableReason;
+          };
+          return reply.code(409).send({
+            error: err.message,
+            code: invErr.code ?? 'OUT_OF_STOCK',
+            reason: invErr.reason ?? 'package_out_of_stock',
+          });
+        }
+        throw err;
+      }
 
       const locale = await resolveUserLocale(telegramId, options);
       const defaultOnHold = options.translationService
@@ -1065,6 +1109,7 @@ export function registerUserShopRoutes(
           durationDays: checkout.durationDays,
           panelId: checkout.panelId,
           serviceId: checkout.serviceId,
+          packageId: checkout.packageId,
           checkoutId: checkout.id,
           ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
           ...(!isRenewal && resolvedPkg?.startOnFirstUse !== undefined
@@ -1115,6 +1160,21 @@ export function registerUserShopRoutes(
       } catch (err: unknown) {
         trackFunnelEvent('purchase_failed');
         await safeRecordCheckoutFailed(options.purchaseCheckoutService, checkout.id);
+
+        if (
+          err instanceof InventoryUnavailableError ||
+          (err instanceof Error && err.name === 'InventoryUnavailableError')
+        ) {
+          const invErr = err as {
+            code?: InventoryErrorCode;
+            reason?: InventoryUnavailableReason;
+          };
+          return reply.code(409).send({
+            error: err.message,
+            code: invErr.code ?? 'OUT_OF_STOCK',
+            reason: invErr.reason ?? 'package_out_of_stock',
+          });
+        }
 
         if (
           err instanceof PurchaseInProgressError ||

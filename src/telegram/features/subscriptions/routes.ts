@@ -37,6 +37,10 @@ import { calculateTraffic } from '../../../domain/services/ConfigLifecycle.js';
 import { RefundOutcomePendingError } from '../../../domain/services/RefundService.js';
 import { PurchaseCheckoutUnavailableError } from '../../../domain/services/PurchaseCheckoutService.js';
 import {
+  InventoryUnavailableError,
+  type PackageAvailabilitySnapshot,
+} from '../../../domain/services/InventoryService.js';
+import {
   type RebeccaUserDetail,
   RebeccaOriginDownError,
 } from '../../../domain/services/RebeccaService.js';
@@ -126,7 +130,8 @@ export function buildRenewalSelectionKeyboard(
   panelId?: string,
   serviceId?: number,
   activeDiscounts: readonly CatalogDiscountRow[] = [],
-  userPolicy?: EffectiveUserGroupPolicy | null
+  userPolicy?: EffectiveUserGroupPolicy | null,
+  availabilityMap?: Map<string, PackageAvailabilitySnapshot>
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   const packages = ctx.services!.pricingService.getPackages(panelId, serviceId);
@@ -135,6 +140,7 @@ export function buildRenewalSelectionKeyboard(
   const allowCatalog = userPolicy?.allowCatalogDiscounts ?? true;
   const pendingPromo = allowPromo ? ctx.session?.pendingPromo : undefined;
   for (const [index, pkg] of packages.entries()) {
+    const avail = availabilityMap?.get(pkg.id);
     const groupDisc = applyGroupDiscount(pkg.price, userPolicy?.discountPercent);
     const catalogDiscount = allowCatalog
       ? resolveBestCatalogDiscount(activeDiscounts, {
@@ -151,15 +157,21 @@ export function buildRenewalSelectionKeyboard(
           discountExpiresAt: null,
         };
     const effectivePrice = applyPendingPromoToPrice(catalogDiscount.effectivePrice, pendingPromo);
-    keyboard
-      .text(
-        formatCompactDiscountedPackageLabel(ctx, pkg, {
-          effectivePrice,
-          catalogDiscount,
-        }),
-        callbackData('r', 'p', configId, index, catalogToken)
-      )
-      .row();
+    let label = formatCompactDiscountedPackageLabel(ctx, pkg, {
+      effectivePrice,
+      catalogDiscount,
+    });
+    if (avail && !avail.renewalAvailable) {
+      label = `${t(ctx, 'shop_badge_out_of_stock')} · ${label}`;
+    } else if (
+      avail &&
+      avail.renewalRemaining !== null &&
+      avail.renewalRemaining > 0 &&
+      avail.renewalRemaining <= 5
+    ) {
+      label = `${label} · ${t(ctx, 'shop_badge_low_stock', { count: localizedNumber(avail.renewalRemaining, ctx) })}`;
+    }
+    keyboard.text(label, callbackData('r', 'p', configId, index, catalogToken)).row();
   }
   if (customVolumeEnabled(ctx.services!.translationService)) {
     const rawRate =
@@ -307,6 +319,12 @@ export async function renderRenewalSelection(
     targetTelegramId
   );
   const packages = ctx.services!.pricingService.getPackages(config.panelId, config.serviceId);
+  const availabilityMap =
+    typeof ctx.services?.inventoryService?.getPackagesAvailabilityMap === 'function'
+      ? await ctx.services.inventoryService
+          .getPackagesAvailabilityMap(packages, { telegramId: targetTelegramId })
+          .catch(() => new Map<string, PackageAvailabilitySnapshot>())
+      : undefined;
   const activeDiscounts = userPolicy.allowCatalogDiscounts
     ? await safeListActiveDiscounts(ctx.services!.catalogDiscountService)
     : [];
@@ -317,7 +335,8 @@ export async function renderRenewalSelection(
     config.panelId,
     config.serviceId,
     activeDiscounts,
-    userPolicy
+    userPolicy,
+    availabilityMap
   );
   const hasChoices = packages.length > 0 || isCustom;
 
@@ -562,19 +581,36 @@ async function renderRenewalCheckoutForResolvedPackage(
     return;
   }
 
+  let checkout;
+  try {
+    checkout = await ctx.services!.purchaseCheckoutService.create({
+      telegramId: targetTelegramId,
+      kind: 'renew_config',
+      configId: config.id,
+      pkg: effectivePkg,
+      panelId: config.panelId,
+      serviceId: pkg.serviceId ?? config.serviceId,
+      promoCode: pendingPromo.promoCode,
+      quotedAmount: price,
+    });
+  } catch (err) {
+    const errMsg =
+      err instanceof InventoryUnavailableError
+        ? purchaseFailureMessage(ctx.services!.translationService, err, resolveContextLocale(ctx))
+        : t(ctx, 'purchase_target_unavailable');
+    if (ctx.callbackQuery) {
+      await ctx.answerCallbackQuery({ text: errMsg, show_alert: true }).catch(() => undefined);
+    }
+    await renderSubscriptionScreen(
+      ctx,
+      buildUserEmptyState('⚠️', t(ctx, 'renewal_selection_title'), errMsg),
+      new InlineKeyboard().text(t(ctx, 'menu_back'), callbackData('renew', 'open', config.id))
+    );
+    return;
+  }
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery().catch(() => undefined);
   }
-  const checkout = await ctx.services!.purchaseCheckoutService.create({
-    telegramId: targetTelegramId,
-    kind: 'renew_config',
-    configId: config.id,
-    pkg: effectivePkg,
-    panelId: config.panelId,
-    serviceId: pkg.serviceId ?? config.serviceId,
-    promoCode: pendingPromo.promoCode,
-    quotedAmount: price,
-  });
 
   const rolloverEnabled =
     pkg.rolloverQuota ??
@@ -822,6 +858,7 @@ export function registerSubscriptionRoutes(bot: Bot<MenuContext>): void {
         durationDays: checkout.durationDays,
         panelId: checkout.panelId,
         serviceId: checkout.serviceId,
+        packageId: checkout.packageId,
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
         ...(resolvedPkg?.rolloverQuota !== undefined

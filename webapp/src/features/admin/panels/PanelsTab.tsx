@@ -20,6 +20,7 @@ import { ManageServicesModal } from './components/ManageServicesModal.js';
 import { DeletePanelModal } from './components/DeletePanelModal.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Modal } from '@/shared/components/ui/Modal.js';
@@ -33,6 +34,7 @@ import type {
   CreatePanelPayload,
   UpdatePanelPayload,
   AddPanelServicePayload,
+  UpdatePanelServicePayload,
 } from '@/shared/types/api.js';
 
 interface PanelsTabProps {
@@ -67,6 +69,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     deletePanel,
     isDeleting,
     addService,
+    updateService,
     isMutatingService,
     setDefaultService,
     setCustomTarget,
@@ -199,6 +202,22 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
     try {
       await addService(panelId, payload);
       onNotify(t('admin.panels.addServiceSuccessNotify'), 'success');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('admin.notifications.saveFailed');
+      onNotify(message, 'error');
+      throw err;
+    }
+  };
+
+  // Handle update service (toggle enabled or update limits)
+  const handleUpdateService = async (
+    panelId: string,
+    serviceId: number,
+    payload: UpdatePanelServicePayload
+  ) => {
+    try {
+      await updateService(panelId, serviceId, payload);
+      onNotify(t('admin.panels.updateServiceSuccessNotify'), 'success');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('admin.notifications.saveFailed');
       onNotify(message, 'error');
@@ -362,6 +381,17 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
       {/* Fleet Status Summary & KPIs */}
       {!isLoading && !isError && panels.length > 0 && (
         <Card padding="md" className="space-y-4">
+          {((fleetSummary?.fullPanelsCount ?? 0) > 0 ||
+            (fleetSummary?.pausedServicesCount ?? 0) > 0 ||
+            (fleetSummary?.fullServicesCount ?? 0) > 0) && (
+            <AlertBanner tone="warn">
+              {t('admin.panels.fleetCapacityAlert', {
+                fullPanels: formatNumber(fleetSummary?.fullPanelsCount ?? 0),
+                pausedServices: formatNumber(fleetSummary?.pausedServicesCount ?? 0),
+                fullServices: formatNumber(fleetSummary?.fullServicesCount ?? 0),
+              })}
+            </AlertBanner>
+          )}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <IconTile tone={allHealthy ? 'ok' : 'danger'} size="md">
@@ -518,6 +548,7 @@ export const PanelsTab: React.FC<PanelsTabProps> = ({ onNotify }) => {
         isOpen={Boolean(activeServicesPanel && servicesPanel)}
         onClose={() => setServicesPanel(null)}
         onAddService={handleAddService}
+        onUpdateService={handleUpdateService}
         onSetDefaultService={handleSetDefaultService}
         onSetCustomTarget={handleSetCustomTarget}
         onDeleteService={handleDeleteService}

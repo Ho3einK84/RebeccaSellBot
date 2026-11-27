@@ -3,13 +3,14 @@ import { Loader2, Shield } from 'lucide-react';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { AppVersionFooter } from '@/shared/components/ui/VersionBadge.js';
 
 export const AuthLoadingScreen: React.FC = () => {
   const { t, isRtl } = useLanguage();
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 rs-canvas-bg bg-canvas text-ink safe-top safe-bottom"
+      className="fixed inset-0 flex flex-col items-center justify-center p-4 rs-canvas-bg bg-canvas text-ink safe-top safe-bottom"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <Card
@@ -28,6 +29,8 @@ export const AuthLoadingScreen: React.FC = () => {
           <p className="text-xs text-ink-muted m-0">{t('user.serviceOnlineStatus')}</p>
         </div>
       </Card>
+
+      <AppVersionFooter className="mt-4 border-t-0 pt-0" />
     </div>
   );
 };

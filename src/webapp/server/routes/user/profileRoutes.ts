@@ -22,8 +22,10 @@ import {
 } from '../../../../domain/services/FeatureSettings.js';
 import { formatPaymentOrderShortId } from '../../../../domain/services/AutomatedPaymentService.js';
 import type { ContactVerificationService } from '../../../../domain/services/ContactVerificationService.js';
+import { mapInventoryReasonToCode } from '../../../../domain/services/InventoryService.js';
 import { safeGetEffectiveUserPolicy } from '../../../../domain/services/UserGroupService.js';
 import { sendWebAppConfigArtifact } from '../../../../telegram/webappNotifications.js';
+import { getAppVersionInfo, toPublicAppVersion } from '../../../../infra/appVersion.js';
 import {
   resolveSupportInfoForUser,
   resolveUserLocale,
@@ -299,6 +301,30 @@ export function registerUserProfileRoutes(
         typeof ts?.getSettingNum === 'function' ? ts.getSettingNum('trial_days', 3) : 3;
       const trialRequiresPhoneSetting = ts ? requirePhoneForTrial(ts) : false;
 
+      let customAvailability: Awaited<
+        ReturnType<NonNullable<typeof options.inventoryService>['getCustomVolumeAvailability']>
+      > | null = null;
+      let trialAvailability: Awaited<
+        ReturnType<NonNullable<typeof options.inventoryService>['getTrialAvailability']>
+      > | null = null;
+      if (options.inventoryService) {
+        try {
+          const fleetSnapshot = await options.inventoryService.getFleetCapacitySnapshot();
+          const cvTarget = options.pricingService?.getCustomVolumeTarget?.();
+          [customAvailability, trialAvailability] = await Promise.all([
+            options.inventoryService
+              .getCustomVolumeAvailability(cvTarget, { fleetSnapshot })
+              .catch(() => null),
+            options.inventoryService
+              .getTrialAvailability(undefined, { fleetSnapshot })
+              .catch(() => null),
+          ]);
+        } catch {
+          customAvailability = null;
+          trialAvailability = null;
+        }
+      }
+
       // Lucky Wheel summary (best-effort)
       let luckyWheelSummary: {
         enabled: boolean;
@@ -473,6 +499,10 @@ export function registerUserProfileRoutes(
               : 0,
             hasGroupCustomRate,
             tiers: volumePricingTiers,
+            available: customAvailability?.available ?? true,
+            remainingStock: customAvailability?.effectiveRemaining ?? null,
+            lowStock: customAvailability?.lowStock ?? false,
+            unavailableReason: customAvailability?.unavailableReason ?? null,
           },
         },
         trial: {
@@ -483,9 +513,13 @@ export function registerUserProfileRoutes(
           days: trialDays,
           requirePhone: trialRequiresPhoneSetting,
           phoneVerificationRequired: trialPhoneRequired,
+          capacityAvailable: trialAvailability?.available ?? true,
+          remainingStock: trialAvailability?.effectiveRemaining ?? null,
+          unavailableReason: trialAvailability?.unavailableReason ?? null,
         },
         luckyWheel: luckyWheelSummary,
         pendingReceipt,
+        appVersion: isAdmin ? getAppVersionInfo() : toPublicAppVersion(getAppVersionInfo()),
         activePaymentOrder,
       });
     }
@@ -527,6 +561,10 @@ export function registerUserProfileRoutes(
         phoneVerificationRequired = false;
       }
 
+      const trialAvailability = options.inventoryService
+        ? await options.inventoryService.getTrialAvailability().catch(() => null)
+        : null;
+
       return reply.code(200).send({
         enabled,
         eligible: enabled && !hasUsedTrial,
@@ -535,6 +573,9 @@ export function registerUserProfileRoutes(
         days,
         requirePhone,
         phoneVerificationRequired,
+        capacityAvailable: trialAvailability?.available ?? true,
+        remainingStock: trialAvailability?.effectiveRemaining ?? null,
+        unavailableReason: trialAvailability?.unavailableReason ?? null,
       });
     }
   );
@@ -622,6 +663,26 @@ export function registerUserProfileRoutes(
       );
 
       if (!result.success) {
+        if (
+          result.unavailableReason ||
+          result.messageKey === 'trial_capacity_full' ||
+          result.messageKey === 'trial_out_of_stock' ||
+          result.messageKey === 'trial_daily_limit_reached'
+        ) {
+          const code = result.unavailableReason
+            ? mapInventoryReasonToCode(result.unavailableReason)
+            : result.messageKey === 'trial_out_of_stock'
+              ? 'OUT_OF_STOCK'
+              : result.messageKey === 'trial_daily_limit_reached'
+                ? 'DAILY_LIMIT_REACHED'
+                : 'CAPACITY_FULL';
+          return reply.code(409).send({
+            error: result.messageKey,
+            code,
+            reason: result.unavailableReason ?? null,
+            messageKey: result.messageKey,
+          });
+        }
         const statusCode =
           result.messageKey === 'trial_already_used'
             ? 409

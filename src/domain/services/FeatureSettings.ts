@@ -383,3 +383,34 @@ export function registrationMode(settings: SettingReader): RegistrationMode {
   }
   return parseRegistrationMode(settings.getSetting('registration_mode', DEFAULT_REGISTRATION_MODE));
 }
+
+/**
+ * Whether sold-out or capacity-full packages stay visible in the shop with a
+ * disabled "Out of stock" badge (`true`) or are automatically hidden (`false`).
+ */
+export function shopShowOutOfStock(settings: SettingReader): boolean {
+  const value = settings.getSetting('shop_show_out_of_stock', 'true').trim().toLowerCase();
+  return value !== 'false' && value !== '0';
+}
+
+/**
+ * Remaining-unit threshold at or below which packages and panels display a
+ * "Low stock" warning badge (1..1000, default 5).
+ */
+export function shopLowStockThreshold(settings: SettingReader, fallback = 5): number {
+  return parseBoundedIntSetting(settings, 'shop_low_stock_threshold', fallback, 1, 1_000);
+}
+
+/**
+ * Optional Tehran-day creation ceiling for free trials (`0` = unlimited).
+ */
+export function trialDailyLimit(settings: SettingReader, fallback = 0): number {
+  return parseBoundedIntSetting(settings, 'trial_daily_limit', fallback, 0, 100_000);
+}
+
+/**
+ * Optional Tehran-day creation ceiling for custom-volume configs (`0` = unlimited).
+ */
+export function customVolumeDailyLimit(settings: SettingReader, fallback = 0): number {
+  return parseBoundedIntSetting(settings, 'custom_volume_daily_limit', fallback, 0, 100_000);
+}

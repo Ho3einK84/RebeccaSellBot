@@ -54,6 +54,8 @@ const DEFAULT_VALUES: PackageFormValues = {
   enabled: true,
   startOnFirstUse: 'default',
   rolloverQuota: 'default',
+  stockRemaining: '',
+  maxPurchasesPerUser: '',
 };
 
 export const PackageFormModal: React.FC<PackageFormModalProps> = ({
@@ -90,6 +92,12 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
         enabled: initialPackage.enabled,
         startOnFirstUse: toTriState(initialPackage.startOnFirstUse),
         rolloverQuota: toTriState(initialPackage.rolloverQuota),
+        stockRemaining:
+          initialPackage.stockRemaining != null ? String(initialPackage.stockRemaining) : '',
+        maxPurchasesPerUser:
+          initialPackage.maxPurchasesPerUser != null
+            ? String(initialPackage.maxPurchasesPerUser)
+            : '',
       });
     } else {
       const existingIds = new Set(existingPackages.map((p) => p.id));
@@ -187,6 +195,10 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
             ? { startOnFirstUse: parsed.startOnFirstUse }
             : {}),
           ...(parsed.rolloverQuota !== undefined ? { rolloverQuota: parsed.rolloverQuota } : {}),
+          ...(parsed.stockRemaining !== undefined ? { stockRemaining: parsed.stockRemaining } : {}),
+          ...(parsed.maxPurchasesPerUser !== undefined
+            ? { maxPurchasesPerUser: parsed.maxPurchasesPerUser }
+            : {}),
         });
         onClose();
         return;
@@ -223,6 +235,17 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
       }
       if (parsed.rolloverQuota !== initialPackage.rolloverQuota) {
         patch.rolloverQuota = parsed.rolloverQuota ?? null;
+      }
+      const prevStock = initialPackage.stockRemaining ?? null;
+      if (parsed.stockRemaining !== undefined && parsed.stockRemaining !== prevStock) {
+        patch.stockRemaining = parsed.stockRemaining;
+      }
+      const prevMaxPerUser = initialPackage.maxPurchasesPerUser ?? null;
+      if (
+        parsed.maxPurchasesPerUser !== undefined &&
+        parsed.maxPurchasesPerUser !== prevMaxPerUser
+      ) {
+        patch.maxPurchasesPerUser = parsed.maxPurchasesPerUser;
       }
 
       if (Object.keys(patch).length === 0) {
@@ -598,6 +621,66 @@ export const PackageFormModal: React.FC<PackageFormModalProps> = ({
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Inventory & Purchase Limits */}
+        <div className="p-3 rounded-tile bg-surface-2 border border-line space-y-3">
+          <div className="text-xs font-semibold text-ink">
+            {t('admin.packages.form.inventoryTitle')}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="pkg-stock-input"
+                className="block text-[11px] font-medium text-ink-soft mb-1"
+              >
+                {t('admin.packages.form.stockRemainingLabel')}
+              </label>
+              <Input
+                id="pkg-stock-input"
+                dir="ltr"
+                inputMode="numeric"
+                className="tnum"
+                value={values.stockRemaining ?? ''}
+                placeholder={t('admin.packages.form.stockRemainingPlaceholder')}
+                onChange={(e) => setValues((prev) => ({ ...prev, stockRemaining: e.target.value }))}
+              />
+              <p className="text-[11px] text-ink-muted mt-1 m-0">
+                {t('admin.packages.form.stockRemainingHint')}
+              </p>
+              {fieldError('stockRemaining') && (
+                <p className="text-xs text-danger-fg mt-1 m-0">{fieldError('stockRemaining')}</p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="pkg-max-user-input"
+                className="block text-[11px] font-medium text-ink-soft mb-1"
+              >
+                {t('admin.packages.form.maxPerUserLabel')}
+              </label>
+              <Input
+                id="pkg-max-user-input"
+                dir="ltr"
+                inputMode="numeric"
+                className="tnum"
+                value={values.maxPurchasesPerUser ?? ''}
+                placeholder={t('admin.packages.form.maxPerUserPlaceholder')}
+                onChange={(e) =>
+                  setValues((prev) => ({ ...prev, maxPurchasesPerUser: e.target.value }))
+                }
+              />
+              <p className="text-[11px] text-ink-muted mt-1 m-0">
+                {t('admin.packages.form.maxPerUserHint')}
+              </p>
+              {fieldError('maxPurchasesPerUser') && (
+                <p className="text-xs text-danger-fg mt-1 m-0">
+                  {fieldError('maxPurchasesPerUser')}
+                </p>
+              )}
             </div>
           </div>
         </div>

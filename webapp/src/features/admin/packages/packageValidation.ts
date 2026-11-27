@@ -13,6 +13,8 @@ export const WEB_MAX_DURATION_DAYS = 365;
 export const MAX_PRICE_RULES = 100;
 export const MAX_LOW_TRAFFIC_GB = 100_000;
 export const MAX_REFUND_HOURS = 8_760;
+export const MAX_INVENTORY_LIMIT = 2_147_483_647;
+export const MAX_LOW_STOCK_THRESHOLD = 1_000;
 
 export interface ValidationIssue {
   field: string;
@@ -41,6 +43,8 @@ export interface PackageFormValues {
   enabled: boolean;
   startOnFirstUse?: OverrideTriState;
   rolloverQuota?: OverrideTriState;
+  stockRemaining?: string;
+  maxPurchasesPerUser?: string;
 }
 
 export interface ParsedPackageInput {
@@ -55,6 +59,8 @@ export interface ParsedPackageInput {
   enabled: boolean;
   startOnFirstUse?: boolean;
   rolloverQuota?: boolean;
+  stockRemaining?: number | null;
+  maxPurchasesPerUser?: number | null;
 }
 
 export interface CategoryFormValues {
@@ -82,6 +88,8 @@ export interface CustomSettingsFormValues {
   defaultDays: string;
   panelId: string;
   serviceId: string;
+  stockRemaining?: string;
+  dailyCreateLimit?: string;
 }
 
 export interface ParsedCustomSettingsInput {
@@ -93,6 +101,8 @@ export interface ParsedCustomSettingsInput {
   defaultDays: number;
   panelId?: string;
   serviceId?: number;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
 }
 
 export type TierPricingMode = 'pricePerGb' | 'discountPercent';
@@ -141,6 +151,8 @@ export interface PoliciesFormValues {
   lowTrafficThresholdGb: string;
   expiryWarningDays: string;
   refundWindowHours: string;
+  showOutOfStockPackages?: boolean;
+  lowStockThreshold?: string;
 }
 
 export interface ParsedPoliciesInput {
@@ -148,6 +160,8 @@ export interface ParsedPoliciesInput {
   lowTrafficThresholdGb: number;
   expiryWarningDays: number;
   refundWindowHours: number;
+  showOutOfStockPackages?: boolean;
+  lowStockThreshold?: number;
 }
 
 export function normalizeNumericInput(raw: string): string {
@@ -469,6 +483,42 @@ export function validatePackageForm(
     errors.push({ field: 'target', messageKey: 'admin.packages.validation.targetIncomplete' });
   }
 
+  let parsedStockRemaining: number | null | undefined;
+  if (form.stockRemaining !== undefined) {
+    const trimmed = form.stockRemaining.trim();
+    if (!trimmed) {
+      parsedStockRemaining = null;
+    } else {
+      const n = parseNonNegativeIntInput(trimmed);
+      if (n === null || n > MAX_INVENTORY_LIMIT) {
+        errors.push({
+          field: 'stockRemaining',
+          messageKey: 'admin.packages.validation.stockInvalid',
+        });
+      } else {
+        parsedStockRemaining = n;
+      }
+    }
+  }
+
+  let parsedMaxPerUser: number | null | undefined;
+  if (form.maxPurchasesPerUser !== undefined) {
+    const trimmed = form.maxPurchasesPerUser.trim();
+    if (!trimmed) {
+      parsedMaxPerUser = null;
+    } else {
+      const n = parsePositiveIntInput(trimmed);
+      if (n === null || n > MAX_INVENTORY_LIMIT) {
+        errors.push({
+          field: 'maxPurchasesPerUser',
+          messageKey: 'admin.packages.validation.maxPerUserInvalid',
+        });
+      } else {
+        parsedMaxPerUser = n;
+      }
+    }
+  }
+
   if (errors.length > 0 || gbAmount === null || durationDays === null || price === null) {
     return { valid: false, errors, warnings: [] };
   }
@@ -494,6 +544,8 @@ export function validatePackageForm(
       enabled: form.enabled,
       ...(startOnFirstUse !== undefined ? { startOnFirstUse } : {}),
       ...(rolloverQuota !== undefined ? { rolloverQuota } : {}),
+      ...(parsedStockRemaining !== undefined ? { stockRemaining: parsedStockRemaining } : {}),
+      ...(parsedMaxPerUser !== undefined ? { maxPurchasesPerUser: parsedMaxPerUser } : {}),
     },
   };
 }
@@ -594,6 +646,42 @@ export function validateCustomSettingsForm(
     errors.push({ field: 'target', messageKey: 'admin.packages.validation.targetIncomplete' });
   }
 
+  let parsedStockRemaining: number | null | undefined;
+  if (form.stockRemaining !== undefined) {
+    const trimmed = form.stockRemaining.trim();
+    if (!trimmed) {
+      parsedStockRemaining = null;
+    } else {
+      const n = parseNonNegativeIntInput(trimmed);
+      if (n === null || n > MAX_INVENTORY_LIMIT) {
+        errors.push({
+          field: 'stockRemaining',
+          messageKey: 'admin.packages.validation.stockInvalid',
+        });
+      } else {
+        parsedStockRemaining = n;
+      }
+    }
+  }
+
+  let parsedDailyLimit: number | null | undefined;
+  if (form.dailyCreateLimit !== undefined) {
+    const trimmed = form.dailyCreateLimit.trim();
+    if (!trimmed) {
+      parsedDailyLimit = 0;
+    } else {
+      const n = parseNonNegativeIntInput(trimmed);
+      if (n === null || n > MAX_INVENTORY_LIMIT) {
+        errors.push({
+          field: 'dailyCreateLimit',
+          messageKey: 'admin.packages.validation.dailyLimitInvalid',
+        });
+      } else {
+        parsedDailyLimit = n;
+      }
+    }
+  }
+
   if (
     errors.length > 0 ||
     pricePerGb === null ||
@@ -618,6 +706,8 @@ export function validateCustomSettingsForm(
       defaultDays,
       panelId: target.panelId,
       serviceId: target.serviceId,
+      ...(parsedStockRemaining !== undefined ? { stockRemaining: parsedStockRemaining } : {}),
+      ...(parsedDailyLimit !== undefined ? { dailyCreateLimit: parsedDailyLimit } : {}),
     },
   };
 }
@@ -855,6 +945,19 @@ export function validatePoliciesForm(
     });
   }
 
+  let lowStockThreshold: number | undefined;
+  if (form.lowStockThreshold !== undefined) {
+    const parsedThreshold = parsePositiveIntInput(form.lowStockThreshold);
+    if (parsedThreshold === null || parsedThreshold > MAX_LOW_STOCK_THRESHOLD) {
+      errors.push({
+        field: 'lowStockThreshold',
+        messageKey: 'admin.packages.validation.lowStockThresholdInvalid',
+      });
+    } else {
+      lowStockThreshold = parsedThreshold;
+    }
+  }
+
   if (
     errors.length > 0 ||
     lowTrafficThresholdGb === null ||
@@ -873,6 +976,10 @@ export function validatePoliciesForm(
       lowTrafficThresholdGb,
       expiryWarningDays,
       refundWindowHours,
+      ...(form.showOutOfStockPackages !== undefined
+        ? { showOutOfStockPackages: form.showOutOfStockPackages }
+        : {}),
+      ...(lowStockThreshold !== undefined ? { lowStockThreshold } : {}),
     },
   };
 }

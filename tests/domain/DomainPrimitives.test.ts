@@ -422,7 +422,15 @@ describe('DomainPrimitives', () => {
       });
       expect(registry.getEnabledPanelIds()).toEqual([LEGACY_PANEL_ID]);
       expect(registry.getPanel(LEGACY_PANEL_ID)?.services).toEqual([
-        { serviceId: 10, name: 'سرویس پیش‌فرض', isDefault: true },
+        {
+          serviceId: 10,
+          name: 'سرویس پیش‌فرض',
+          enabled: true,
+          isDefault: true,
+          maxConfigs: null,
+          stockRemaining: null,
+          dailyCreateLimit: null,
+        },
       ]);
     });
 

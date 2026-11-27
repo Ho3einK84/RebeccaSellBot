@@ -27,6 +27,7 @@ import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile, type TileTone } from '@/shared/components/ui/IconTile.js';
 import { Badge, type BadgeVariant } from '@/shared/components/ui/Badge.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
+import { AdminVersionCard } from '@/shared/components/ui/VersionBadge.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
@@ -34,9 +35,11 @@ import { api } from '@/shared/lib/api.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
 import { openTelegramLinkAndMinimize } from '@/shared/lib/telegramNavigation.js';
 import type { TabType } from '@/shared/types/admin.js';
+import type { AppVersionInfo } from '@/shared/types/api.js';
 
 interface ModulesTabProps {
   botUsername?: string;
+  appVersion?: AppVersionInfo;
   onSwitchTab?: (tab: TabType) => void;
   onOpenUserGroups?: () => void;
   onOpenBankCards?: () => void;
@@ -73,6 +76,7 @@ interface ComingSoonModuleItem {
 
 export const ModulesTab: React.FC<ModulesTabProps> = ({
   botUsername,
+  appVersion,
   onOpenUserGroups,
   onOpenBankCards,
   onOpenPaymentGateways,
@@ -583,6 +587,9 @@ export const ModulesTab: React.FC<ModulesTabProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Zone 3: Release Version & Build Metadata */}
+      <AdminVersionCard version={appVersion} />
     </div>
   );
 };

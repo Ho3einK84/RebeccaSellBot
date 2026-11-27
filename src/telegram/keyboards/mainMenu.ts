@@ -38,12 +38,19 @@ import { backKeyboard, buildUserEmptyState, buildUserScreen, renderScreen } from
 import { showUserSubscriptions } from '../features/subscriptions/routes.js';
 import { renderLuckyWheelScreen } from '../features/luckyWheelRoutes.js';
 import { renderAdminHomeScreen } from '../admin/adminHome.js';
+import { formatUserVersionFooter } from '../versionBadge.js';
 import {
   customVolumeEnabled,
   isCustomServiceNameAllowed,
   onHoldDefaultEnabled,
+  shopShowOutOfStock,
   walletTransferEnabled,
 } from '../../domain/services/FeatureSettings.js';
+import {
+  InventoryUnavailableError,
+  type PackageAvailabilitySnapshot,
+} from '../../domain/services/InventoryService.js';
+import { inventoryUnavailableMessageKey, purchaseFailureMessage } from '../purchaseFeedback.js';
 import { trackFunnelEvent } from '../../domain/services/FunnelTelemetry.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import { formatConfigButtonTitle } from '../../domain/services/TelegramFormatting.js';
@@ -814,9 +821,12 @@ export const mainMenu = new Menu<MenuContext>('main-menu')
               emoji: '💬',
               title: t(c, 'support_title'),
               subtitle: t(c, 'support_subtitle'),
-              footer: supportInfo.isConfigured
-                ? t(c, 'support_message')
-                : `⚠️ ${t(c, 'support_not_configured')}`,
+              footer: [
+                supportInfo.isConfigured
+                  ? t(c, 'support_message')
+                  : `⚠️ ${t(c, 'support_not_configured')}`,
+                formatUserVersionFooter(c),
+              ].join('\n\n'),
             }),
             { parse_mode: 'Markdown', reply_markup: keyboard }
           );
@@ -914,12 +924,14 @@ function renderPackageButtons(
   range: Parameters<Parameters<typeof shopMenu.dynamic>[0]>[1],
   packages: readonly PackageOption[],
   activeDiscounts: readonly CatalogDiscountRow[] = [],
-  userPolicy?: EffectiveUserGroupPolicy | null
+  userPolicy?: EffectiveUserGroupPolicy | null,
+  availabilityMap?: Map<string, PackageAvailabilitySnapshot>
 ) {
   for (const pkg of packages) {
+    const avail = availabilityMap?.get(pkg.id);
     const isPopular =
       pkg.id.includes('popular') || pkg.id.includes('best') || pkg.id.includes('pro');
-    const tag = isPopular ? '⭐ ' : '';
+    const tag = avail && !avail.available ? '' : isPopular ? '⭐ ' : '';
     const priced = resolvePackageWithUserPolicy(pkg, activeDiscounts, userPolicy);
 
     range
@@ -930,16 +942,33 @@ function renderPackageButtons(
             { price: basePrice, gbAmount: pkg.gbAmount },
             userPolicy?.allowPromoCodes === false ? undefined : c.session.pendingPromo
           );
-          return formatCompactDiscountedPackageLabel(c, pkg, {
+          const baseLabel = formatCompactDiscountedPackageLabel(c, pkg, {
             effectivePrice,
             tag,
             catalogDiscount: priced.catalogDiscount,
           });
+          if (avail && !avail.available) {
+            return `${t(c, 'shop_badge_out_of_stock')} · ${baseLabel}`;
+          }
+          if (avail && avail.lowStock && avail.effectiveRemaining !== null) {
+            return `${baseLabel} · ${t(c, 'shop_badge_low_stock', {
+              count: localizedNumber(avail.effectiveRemaining, c),
+            })}`;
+          }
+          return baseLabel;
         },
         async (c) => {
           const telegramId = c.from?.id;
           const chatId = c.chat?.id;
           if (!telegramId || !chatId || !c.services) return;
+
+          if (avail && !avail.available && avail.unavailableReason) {
+            await c.answerCallbackQuery({
+              text: t(c, inventoryUnavailableMessageKey(avail.unavailableReason)),
+              show_alert: true,
+            });
+            return;
+          }
 
           if (await enforceForcedJoin(c, 'purchase', { kind: 'shop' })) {
             return;
@@ -1033,14 +1062,18 @@ function renderPackageButtons(
               quotedAmount: displayedPrice,
             });
             trackFunnelEvent('checkout_start');
-          } catch {
+          } catch (err) {
+            const reasonText =
+              err instanceof InventoryUnavailableError
+                ? purchaseFailureMessage(
+                    c.services.translationService,
+                    err,
+                    resolveContextLocale(c)
+                  )
+                : t(c, 'purchase_target_unavailable');
             await renderScreen(
               c,
-              buildUserEmptyState(
-                '⚠️',
-                t(c, 'purchase_review_title'),
-                t(c, 'purchase_target_unavailable')
-              ),
+              buildUserEmptyState('⚠️', t(c, 'purchase_review_title'), reasonText),
               { parse_mode: 'Markdown', reply_markup: backKeyboard(c, 'shop') }
             );
             return;
@@ -1103,12 +1136,30 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
       ? await safeListActiveDiscounts(ctx.services.catalogDiscountService)
       : [];
 
+    const showOutOfStock =
+      typeof ctx.services.translationService?.getSetting === 'function'
+        ? shopShowOutOfStock(ctx.services.translationService)
+        : true;
+    const allShopPackages = ctx.services.pricingService.getPackages();
+    const availabilityMap =
+      typeof ctx.services.inventoryService?.getPackagesAvailabilityMap === 'function'
+        ? await ctx.services.inventoryService
+            .getPackagesAvailabilityMap(allShopPackages, { telegramId: ctx.from?.id })
+            .catch(() => new Map<string, PackageAvailabilitySnapshot>())
+        : undefined;
+    const filterVisiblePackages = (list: readonly PackageOption[]) =>
+      showOutOfStock || !availabilityMap
+        ? list
+        : list.filter((pkg) => availabilityMap.get(pkg.id)?.available !== false);
+
     if (ctx.session.activeShopCategory) {
-      const categoryPackages = ctx.services.pricingService.getPackages(
-        undefined,
-        undefined,
-        false,
-        ctx.session.activeShopCategory
+      const categoryPackages = filterVisiblePackages(
+        ctx.services.pricingService.getPackages(
+          undefined,
+          undefined,
+          false,
+          ctx.session.activeShopCategory
+        )
       );
 
       if (categoryPackages.length === 0) {
@@ -1119,7 +1170,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           )
           .row();
       } else {
-        renderPackageButtons(range, categoryPackages, activeDiscounts, userPolicy);
+        renderPackageButtons(range, categoryPackages, activeDiscounts, userPolicy, availabilityMap);
       }
 
       range
@@ -1136,7 +1187,7 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
         .row();
     } else {
       const categories = (await ctx.services.packageCategoryService?.listCategories(false)) ?? [];
-      const allPackages = ctx.services.pricingService.getPackages();
+      const allPackages = filterVisiblePackages(allShopPackages);
       const nonEmptyCategories = categories.filter((cat) =>
         allPackages.some((pkg) => pkg.categoryId === cat.id)
       );
@@ -1155,22 +1206,50 @@ export const shopMenu = new Menu<MenuContext>('shop-menu')
           .row();
       }
 
-      const uncategorizedPackages =
+      const uncategorizedPackages = filterVisiblePackages(
         nonEmptyCategories.length > 0
           ? ctx.services.pricingService.getPackages(undefined, undefined, false, null)
-          : allPackages;
+          : allShopPackages
+      );
 
-      renderPackageButtons(range, uncategorizedPackages, activeDiscounts, userPolicy);
+      renderPackageButtons(
+        range,
+        uncategorizedPackages,
+        activeDiscounts,
+        userPolicy,
+        availabilityMap
+      );
 
       if (customVolumeEnabled(ctx.services.translationService)) {
         const customPricePerGb = resolveEffectiveCustomPricePerGb(ctx, userPolicy) ?? 5000;
+        const customAvail =
+          typeof ctx.services.inventoryService?.getCustomVolumeAvailability === 'function'
+            ? await ctx.services.inventoryService
+                .getCustomVolumeAvailability(ctx.services.pricingService.getCustomVolumeTarget())
+                .catch(() => null)
+            : null;
         range
           .text(
-            (c) => t(c, 'menu_custom_amount', { price: localizedNumber(customPricePerGb, c) }),
+            (c) => {
+              const base = t(c, 'menu_custom_amount', {
+                price: localizedNumber(customPricePerGb, c),
+              });
+              if (customAvail && !customAvail.available) {
+                return `${t(c, 'shop_badge_out_of_stock')} · ${base}`;
+              }
+              return base;
+            },
             async (c) => {
               if (!c.services || !customVolumeEnabled(c.services.translationService)) {
                 await renderScreen(c, t(c, 'custom_volume_unavailable'), {
                   reply_markup: backKeyboard(c, 'main'),
+                });
+                return;
+              }
+              if (customAvail && !customAvail.available && customAvail.unavailableReason) {
+                await c.answerCallbackQuery({
+                  text: t(c, inventoryUnavailableMessageKey(customAvail.unavailableReason)),
+                  show_alert: true,
                 });
                 return;
               }

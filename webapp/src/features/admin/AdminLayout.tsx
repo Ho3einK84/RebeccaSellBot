@@ -18,23 +18,28 @@ import { AdminDesktopNav } from './components/AdminDesktopNav.js';
 import { AdminBottomNav, type TabConfig } from './components/AdminBottomNav.js';
 import { useAdminStats } from './overview/hooks/useAdminStats.js';
 import { AppShell } from '@/shared/components/layout/AppShell.js';
+import { AppVersionFooter } from '@/shared/components/ui/VersionBadge.js';
 import { useToast } from '@/shared/components/ui/Toast.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
+import { resolveClientAppVersion } from '@/shared/lib/appVersion.js';
 import { queryKeys } from '@/shared/lib/queryKeys.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
 import type { TabType } from '@/shared/types/admin.js';
+import type { AppVersionInfo } from '@/shared/types/api.js';
 
 interface AdminLayoutProps {
   user: TelegramWebAppUser;
   botUsername?: string;
+  appVersion?: AppVersionInfo;
   onSwitchToUserPortal?: () => void;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   user,
   botUsername,
+  appVersion,
   onSwitchToUserPortal,
 }) => {
   const { t } = useLanguage();
@@ -52,7 +57,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isUserGroupsModalOpen, setIsUserGroupsModalOpen] = useState(false);
 
   // Single lightweight query drives both dashboard stats, pending badge count, and panel health indicator.
-  const { stats, panelHealth, forceRefresh: forceRefreshStats } = useAdminStats();
+  const {
+    stats,
+    panelHealth,
+    appVersion: statsAppVersion,
+    forceRefresh: forceRefreshStats,
+  } = useAdminStats();
+  const resolvedAppVersion = resolveClientAppVersion(statsAppVersion ?? appVersion);
   const pendingCount = stats?.pendingReceipts ?? 0;
   const hasConfiguredPanels = Boolean(panelHealth && panelHealth.configured > 0);
   const allPanelsHealthy = Boolean(
@@ -185,6 +196,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       header={
         <AdminHeader
           user={user}
+          appVersion={resolvedAppVersion}
           onRefresh={handleRefresh}
           isRefreshing={isFetchingAdmin}
           onSwitchToUserPortal={onSwitchToUserPortal}
@@ -196,6 +208,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <AdminDesktopNav tabs={desktopTabs} activeTab={activeTab} onSelectTab={switchTab} />
       }
       transitionKey={activeTab}
+      footer={<AppVersionFooter version={resolvedAppVersion} detailed />}
       bottomNav={
         <AdminBottomNav tabs={primaryTabs} activeTab={activeTab} onSelectTab={switchTab} />
       }
@@ -224,6 +237,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       {activeTab === 'coming-soon' && (
         <ModulesTab
           botUsername={botUsername}
+          appVersion={resolvedAppVersion}
           onOpenUserGroups={() => setIsUserGroupsModalOpen(true)}
           onOpenBankCards={() => setIsBankCardsModalOpen(true)}
           onOpenPaymentGateways={() => setIsPaymentGatewaysModalOpen(true)}

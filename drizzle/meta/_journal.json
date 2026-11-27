@@ -134,6 +134,13 @@
       "when": 1795900000000,
       "tag": "0018_allow_fractional_trial_gb",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1796000000000,
+      "tag": "0019_service_and_package_inventory",
+      "breakpoints": true
     }
   ]
 }

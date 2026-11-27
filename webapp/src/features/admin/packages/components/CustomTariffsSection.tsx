@@ -100,6 +100,11 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
     defaultDays: String(settings.defaultDays),
     panelId: settings.target?.panelId ?? '',
     serviceId: settings.target ? String(settings.target.serviceId) : '',
+    stockRemaining: settings.stockRemaining != null ? String(settings.stockRemaining) : '',
+    dailyCreateLimit:
+      settings.dailyCreateLimit && settings.dailyCreateLimit > 0
+        ? String(settings.dailyCreateLimit)
+        : '',
   });
   const [customIssues, setCustomIssues] = useState<ValidationIssue[]>([]);
 
@@ -108,6 +113,8 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
     lowTrafficThresholdGb: String(policies.lowTrafficThresholdGb),
     expiryWarningDays: String(policies.expiryWarningDays),
     refundWindowHours: String(policies.refundWindowHours),
+    showOutOfStockPackages: policies.showOutOfStockPackages ?? true,
+    lowStockThreshold: String(policies.lowStockThreshold ?? 5),
   });
   const [policyIssues, setPolicyIssues] = useState<ValidationIssue[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -122,6 +129,11 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       defaultDays: String(settings.defaultDays),
       panelId: settings.target?.panelId ?? '',
       serviceId: settings.target ? String(settings.target.serviceId) : '',
+      stockRemaining: settings.stockRemaining != null ? String(settings.stockRemaining) : '',
+      dailyCreateLimit:
+        settings.dailyCreateLimit && settings.dailyCreateLimit > 0
+          ? String(settings.dailyCreateLimit)
+          : '',
     });
     setCustomIssues([]);
   }, [settings]);
@@ -132,6 +144,8 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
       lowTrafficThresholdGb: String(policies.lowTrafficThresholdGb),
       expiryWarningDays: String(policies.expiryWarningDays),
       refundWindowHours: String(policies.refundWindowHours),
+      showOutOfStockPackages: policies.showOutOfStockPackages ?? true,
+      lowStockThreshold: String(policies.lowStockThreshold ?? 5),
     });
     setPolicyIssues([]);
   }, [policies]);
@@ -194,7 +208,7 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
     const parsed = validation.parsed;
 
     try {
-      await onSaveCustomSettings({
+      const payload: UpdateCustomPricingSettingsPayload = {
         enabled: parsed.enabled,
         pricePerGb: parsed.pricePerGb,
         pricePerDay: parsed.pricePerDay,
@@ -205,7 +219,15 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
           parsed.panelId && parsed.serviceId !== undefined
             ? { panelId: parsed.panelId, serviceId: parsed.serviceId }
             : null,
-      });
+      };
+      if (parsed.dailyCreateLimit !== undefined) {
+        payload.dailyCreateLimit = parsed.dailyCreateLimit;
+      }
+      const prevStock = settings.stockRemaining ?? null;
+      if (parsed.stockRemaining !== undefined && parsed.stockRemaining !== prevStock) {
+        payload.stockRemaining = parsed.stockRemaining;
+      }
+      await onSaveCustomSettings(payload);
     } catch {
       // error toast handled by useAdminPackages onError
     }
@@ -236,6 +258,11 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
   const maxRules = bounds.maxRules || MAX_PRICE_RULES;
   const effectiveDefaultDays = liveCustomDays ?? settings.defaultDays;
 
+  const prevCustomStockStr = settings.stockRemaining != null ? String(settings.stockRemaining) : '';
+  const prevCustomDailyStr =
+    settings.dailyCreateLimit && settings.dailyCreateLimit > 0
+      ? String(settings.dailyCreateLimit)
+      : '';
   const isCustomDirty =
     customForm.enabled !== settings.enabled ||
     customForm.pricePerGb.trim() !== String(settings.pricePerGb) ||
@@ -244,13 +271,17 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
     customForm.maxGb.trim() !== String(settings.maxGb) ||
     customForm.defaultDays.trim() !== String(settings.defaultDays) ||
     customForm.panelId !== (settings.target?.panelId ?? '') ||
-    customForm.serviceId !== (settings.target ? String(settings.target.serviceId) : '');
+    customForm.serviceId !== (settings.target ? String(settings.target.serviceId) : '') ||
+    (customForm.stockRemaining ?? '').trim() !== prevCustomStockStr ||
+    (customForm.dailyCreateLimit ?? '').trim() !== prevCustomDailyStr;
 
   const isPoliciesDirty =
     policiesForm.packageDisplayMode !== policies.packageDisplayMode ||
     policiesForm.lowTrafficThresholdGb.trim() !== String(policies.lowTrafficThresholdGb) ||
     policiesForm.expiryWarningDays.trim() !== String(policies.expiryWarningDays) ||
-    policiesForm.refundWindowHours.trim() !== String(policies.refundWindowHours);
+    policiesForm.refundWindowHours.trim() !== String(policies.refundWindowHours) ||
+    (policiesForm.showOutOfStockPackages ?? true) !== (policies.showOutOfStockPackages ?? true) ||
+    (policiesForm.lowStockThreshold ?? '5').trim() !== String(policies.lowStockThreshold ?? 5);
 
   return (
     <div className="space-y-4">
@@ -499,6 +530,71 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
           {customError('target') && (
             <p className="text-xs text-danger-fg m-0">{customError('target')}</p>
           )}
+
+          {/* Custom Volume Inventory & Daily Limit */}
+          <div className="p-3 rounded-tile bg-surface-2 border border-line space-y-2.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-ink">
+                {t('admin.packages.custom.inventoryTitle')}
+              </span>
+              {(settings.todayCreatedCount !== undefined || settings.soldCount !== undefined) && (
+                <span className="text-[11px] text-ink-muted tnum">
+                  {t('admin.packages.custom.todayCreatedHint', {
+                    today: formatNumber(settings.todayCreatedCount ?? 0),
+                    sold: formatNumber(settings.soldCount ?? 0),
+                  })}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="custom-stock-input"
+                  className="block text-[11px] font-medium text-ink-soft mb-1"
+                >
+                  {t('admin.packages.custom.stockRemainingLabel')}
+                </label>
+                <Input
+                  id="custom-stock-input"
+                  dir="ltr"
+                  inputMode="numeric"
+                  className="tnum"
+                  value={customForm.stockRemaining ?? ''}
+                  placeholder={t('admin.packages.custom.stockRemainingPlaceholder')}
+                  onChange={(e) =>
+                    setCustomForm((prev) => ({ ...prev, stockRemaining: e.target.value }))
+                  }
+                />
+                {customError('stockRemaining') && (
+                  <p className="text-xs text-danger-fg mt-1 m-0">{customError('stockRemaining')}</p>
+                )}
+              </div>
+              <div>
+                <label
+                  htmlFor="custom-daily-limit-input"
+                  className="block text-[11px] font-medium text-ink-soft mb-1"
+                >
+                  {t('admin.packages.custom.dailyCreateLimitLabel')}
+                </label>
+                <Input
+                  id="custom-daily-limit-input"
+                  dir="ltr"
+                  inputMode="numeric"
+                  className="tnum"
+                  value={customForm.dailyCreateLimit ?? ''}
+                  placeholder={t('admin.packages.custom.dailyCreateLimitPlaceholder')}
+                  onChange={(e) =>
+                    setCustomForm((prev) => ({ ...prev, dailyCreateLimit: e.target.value }))
+                  }
+                />
+                {customError('dailyCreateLimit') && (
+                  <p className="text-xs text-danger-fg mt-1 m-0">
+                    {customError('dailyCreateLimit')}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
 
           <div className="flex items-center justify-end gap-2.5 flex-wrap">
             {isCustomDirty && (
@@ -939,6 +1035,54 @@ export const CustomTariffsSection: React.FC<CustomTariffsSectionProps> = ({
                   {policyError('refundWindowHours') && (
                     <p className="text-xs text-danger-fg mt-1 m-0">
                       {policyError('refundWindowHours')}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Storefront Inventory Display Policies */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-line items-start">
+                <div className="flex items-center justify-between gap-3 p-3 rounded-tile bg-surface-2 border border-line">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-ink">
+                      {t('admin.packages.policies.showOutOfStockLabel')}
+                    </div>
+                    <div className="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
+                      {t('admin.packages.policies.showOutOfStockHint')}
+                    </div>
+                  </div>
+                  <Switch
+                    checked={policiesForm.showOutOfStockPackages ?? true}
+                    onChange={(checked) =>
+                      setPoliciesForm((prev) => ({ ...prev, showOutOfStockPackages: checked }))
+                    }
+                    ariaLabel={t('admin.packages.policies.showOutOfStockLabel')}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="policy-low-stock-threshold"
+                    className="block text-xs font-semibold text-ink-soft mb-1"
+                  >
+                    {t('admin.packages.policies.lowStockThresholdLabel')}
+                  </label>
+                  <Input
+                    id="policy-low-stock-threshold"
+                    dir="ltr"
+                    inputMode="numeric"
+                    className="tnum"
+                    value={policiesForm.lowStockThreshold ?? '5'}
+                    onChange={(e) =>
+                      setPoliciesForm((prev) => ({ ...prev, lowStockThreshold: e.target.value }))
+                    }
+                  />
+                  <p className="text-[11px] text-ink-muted mt-1 m-0">
+                    {t('admin.packages.policies.lowStockThresholdHint')}
+                  </p>
+                  {policyError('lowStockThreshold') && (
+                    <p className="text-xs text-danger-fg mt-1 m-0">
+                      {policyError('lowStockThreshold')}
                     </p>
                   )}
                 </div>

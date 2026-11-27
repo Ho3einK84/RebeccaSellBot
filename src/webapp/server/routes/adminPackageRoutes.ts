@@ -1,7 +1,19 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { adminGuardWithCheck } from '../middleware/adminGuard.js';
 import type { AdminService } from '../../../domain/services/AdminService.js';
-import { customVolumeEnabled } from '../../../domain/services/FeatureSettings.js';
+import {
+  customVolumeDailyLimit,
+  customVolumeEnabled,
+  shopLowStockThreshold,
+  shopShowOutOfStock,
+} from '../../../domain/services/FeatureSettings.js';
+import {
+  CUSTOM_VOLUME_INVENTORY_ID,
+  MAX_INVENTORY_VALUE,
+  type FleetCapacitySnapshot,
+  type InventoryService,
+  type InventoryUnavailableReason,
+} from '../../../domain/services/InventoryService.js';
 import type {
   PackageCategory,
   PackageCategoryService,
@@ -42,12 +54,20 @@ export interface AdminPackageRoutesDeps {
   packageCategoryService?: PackageCategoryService;
   translationService?: TranslationService;
   panelRegistry?: RebeccaPanelRegistry;
+  inventoryService?: InventoryService;
   userService?: Pick<UserService, 'recordAdminAction'>;
   adminService?: Pick<AdminService, 'isAdmin'>;
 }
 
 export interface AdminPackageDto extends PackageOption {
   enabled: boolean;
+  stockRemaining?: number | null;
+  reservedCount?: number;
+  soldCount?: number;
+  maxPurchasesPerUser?: number | null;
+  effectiveRemaining?: number | null;
+  isOutOfStock?: boolean;
+  outOfStockReason?: InventoryUnavailableReason | null;
 }
 
 export interface AdminCategoryDto {
@@ -68,10 +88,17 @@ export interface AdminTargetPanelDto {
   enabled: boolean;
   isDefault: boolean;
   defaultServiceId: number | null;
+  isAvailableForCreate?: boolean;
+  remainingCapacity?: number | null;
+  unavailableReason?: InventoryUnavailableReason | null;
   services: Array<{
     serviceId: number;
     name: string;
     isDefault: boolean;
+    enabled?: boolean;
+    isAvailableForCreate?: boolean;
+    remainingCapacity?: number | null;
+    unavailableReason?: InventoryUnavailableReason | null;
   }>;
 }
 
@@ -80,6 +107,8 @@ export interface PackagePoliciesDto {
   lowTrafficThresholdGb: number;
   expiryWarningDays: number;
   refundWindowHours: number;
+  showOutOfStockPackages: boolean;
+  lowStockThreshold: number;
 }
 
 export interface CustomPricingSettingsDto {
@@ -91,11 +120,20 @@ export interface CustomPricingSettingsDto {
   defaultDays: number;
   target: { panelId: string; serviceId: number } | null;
   warnings: string[];
+  stockRemaining?: number | null;
+  reservedCount?: number;
+  soldCount?: number;
+  dailyCreateLimit?: number;
+  todayCreatedCount?: number;
+  available?: boolean;
+  effectiveRemaining?: number | null;
+  unavailableReason?: InventoryUnavailableReason | null;
 }
 
 const MAX_LOW_TRAFFIC_THRESHOLD_GB = 100_000;
 const MAX_EXPIRY_WARNING_DAYS = 3_650;
 const MAX_REFUND_WINDOW_HOURS = 8_760;
+const MAX_LOW_STOCK_THRESHOLD = 1_000;
 const MAX_CATEGORY_NAME_LENGTH = 100;
 const MAX_CATEGORY_DESCRIPTION_LENGTH = 240;
 const MAX_CATEGORY_ICON_LENGTH = 32;
@@ -153,13 +191,22 @@ export function registerAdminPackageRoutes(
           })
           .filter((pkg) => (!filterPanelId ? true : pkg.panelId === filterPanelId));
 
+        const fleetSnapshot = deps.inventoryService
+          ? await deps.inventoryService.getFleetCapacitySnapshot().catch(() => null)
+          : null;
+        const enrichedPackages = await enrichPackagesWithInventory(
+          filteredPackages,
+          deps,
+          fleetSnapshot ?? undefined
+        );
+
         return reply.code(200).send({
-          packages: filteredPackages,
+          packages: enrichedPackages,
           totalPackages: snapshot.packages.length,
           isFallbackActive: snapshot.isFallbackActive,
           categories,
           policies: loadPackagePolicies(ts),
-          targets: buildTargetSummaries(deps.panelRegistry),
+          targets: buildTargetSummaries(deps.panelRegistry, fleetSnapshot ?? undefined),
           bounds: {
             maxPackages: MAX_PACKAGE_COUNT,
             maxNameLength: MAX_PACKAGE_NAME_LENGTH,
@@ -169,6 +216,8 @@ export function registerAdminPackageRoutes(
             maxLowTrafficThresholdGb: MAX_LOW_TRAFFIC_THRESHOLD_GB,
             maxExpiryWarningDays: MAX_EXPIRY_WARNING_DAYS,
             maxRefundWindowHours: MAX_REFUND_WINDOW_HOURS,
+            maxLowStockThreshold: MAX_LOW_STOCK_THRESHOLD,
+            maxStockRemaining: MAX_INVENTORY_VALUE,
           },
         });
       } catch (err) {
@@ -253,6 +302,20 @@ export function registerAdminPackageRoutes(
           body.rolloverQuota !== undefined
             ? parseBooleanField(body.rolloverQuota, 'INVALID_ROLLOVER_QUOTA_FLAG', 'rolloverQuota')
             : undefined;
+        const stockRemaining = parseOptionalNullableSafeInt(
+          body.stockRemaining,
+          0,
+          MAX_INVENTORY_VALUE,
+          'INVALID_PACKAGE_STOCK',
+          `stockRemaining must be null or an integer between 0 and ${MAX_INVENTORY_VALUE}`
+        );
+        const maxPurchasesPerUser = parseOptionalNullableSafeInt(
+          body.maxPurchasesPerUser,
+          1,
+          MAX_INVENTORY_VALUE,
+          'INVALID_PACKAGE_USER_LIMIT',
+          `maxPurchasesPerUser must be null or an integer between 1 and ${MAX_INVENTORY_VALUE}`
+        );
 
         const target = resolveCreatePackageTarget(deps.panelRegistry, body.panelId, body.serviceId);
         const categoryId = await resolveCategoryIdInput(
@@ -275,6 +338,15 @@ export function registerAdminPackageRoutes(
 
         const nextPackages = [...snapshot.packages, createdPkg];
         await saveSettingSingle(ts, 'packages_json', JSON.stringify(nextPackages));
+        if (
+          deps.inventoryService &&
+          (stockRemaining !== undefined || maxPurchasesPerUser !== undefined)
+        ) {
+          await deps.inventoryService.setPackageInventory(id, {
+            ...(stockRemaining !== undefined ? { stockRemaining } : {}),
+            ...(maxPurchasesPerUser !== undefined ? { maxPurchasesPerUser } : {}),
+          });
+        }
         await recordAudit(
           deps,
           request.userSession!.telegramId,
@@ -288,10 +360,14 @@ export function registerAdminPackageRoutes(
             price,
             ...(target ?? {}),
             ...(categoryId ? { categoryId } : {}),
+            ...(stockRemaining !== undefined ? { stockRemaining } : {}),
+            ...(maxPurchasesPerUser !== undefined ? { maxPurchasesPerUser } : {}),
           }
         );
 
-        return reply.code(201).send({ package: createdPkg, packages: nextPackages });
+        const enrichedAll = await enrichPackagesWithInventory(nextPackages, deps);
+        const enrichedCreated = enrichedAll.find((pkg) => pkg.id === id) ?? createdPkg;
+        return reply.code(201).send({ package: enrichedCreated, packages: enrichedAll });
       } catch (err) {
         return handleRouteError(reply, err);
       }
@@ -345,6 +421,26 @@ export function registerAdminPackageRoutes(
             `refundWindowHours must be an integer between 0 and ${MAX_REFUND_WINDOW_HOURS}`
           );
           updates.refund_window_hours = String(refundHours);
+        }
+
+        if ('showOutOfStockPackages' in body && body.showOutOfStockPackages !== undefined) {
+          const showOutOfStock = parseBooleanField(
+            body.showOutOfStockPackages,
+            'INVALID_SHOW_OUT_OF_STOCK',
+            'showOutOfStockPackages'
+          );
+          updates.shop_show_out_of_stock = showOutOfStock ? 'true' : 'false';
+        }
+
+        if ('lowStockThreshold' in body && body.lowStockThreshold !== undefined) {
+          const threshold = parseSafeInt(
+            body.lowStockThreshold,
+            1,
+            MAX_LOW_STOCK_THRESHOLD,
+            'INVALID_LOW_STOCK_THRESHOLD',
+            `lowStockThreshold must be an integer between 1 and ${MAX_LOW_STOCK_THRESHOLD}`
+          );
+          updates.shop_low_stock_threshold = String(threshold);
         }
 
         if (Object.keys(updates).length === 0) {
@@ -413,7 +509,7 @@ export function registerAdminPackageRoutes(
           }
           const existing = snapshot.packages[index]!;
 
-          const hasKnownField =
+          const hasPackageJsonField =
             'name' in body ||
             'gbAmount' in body ||
             'durationDays' in body ||
@@ -424,6 +520,8 @@ export function registerAdminPackageRoutes(
             'categoryId' in body ||
             'startOnFirstUse' in body ||
             'rolloverQuota' in body;
+          const hasInventoryField = 'stockRemaining' in body || 'maxPurchasesPerUser' in body;
+          const hasKnownField = hasPackageJsonField || hasInventoryField;
           if (!hasKnownField) {
             throw new RouteValidationError(
               400,
@@ -431,6 +529,21 @@ export function registerAdminPackageRoutes(
               'Provide at least one package field to update'
             );
           }
+
+          const stockRemaining = parseOptionalNullableSafeInt(
+            body.stockRemaining,
+            0,
+            MAX_INVENTORY_VALUE,
+            'INVALID_PACKAGE_STOCK',
+            `stockRemaining must be null or an integer between 0 and ${MAX_INVENTORY_VALUE}`
+          );
+          const maxPurchasesPerUser = parseOptionalNullableSafeInt(
+            body.maxPurchasesPerUser,
+            1,
+            MAX_INVENTORY_VALUE,
+            'INVALID_PACKAGE_USER_LIMIT',
+            `maxPurchasesPerUser must be null or an integer between 1 and ${MAX_INVENTORY_VALUE}`
+          );
 
           const nextName =
             'name' in body && body.name !== undefined
@@ -536,7 +649,25 @@ export function registerAdminPackageRoutes(
           };
 
           const nextPackages = snapshot.packages.map((pkg, i) => (i === index ? updatedPkg : pkg));
-          await saveSettingSingle(ts, 'packages_json', JSON.stringify(nextPackages));
+          if (hasPackageJsonField) {
+            await saveSettingSingle(ts, 'packages_json', JSON.stringify(nextPackages));
+          }
+          if (
+            hasInventoryField &&
+            (stockRemaining !== undefined || maxPurchasesPerUser !== undefined)
+          ) {
+            if (!deps.inventoryService) {
+              throw new RouteValidationError(
+                503,
+                'SERVICE_UNAVAILABLE',
+                'Inventory service is unavailable'
+              );
+            }
+            await deps.inventoryService.setPackageInventory(existing.id, {
+              ...(stockRemaining !== undefined ? { stockRemaining } : {}),
+              ...(maxPurchasesPerUser !== undefined ? { maxPurchasesPerUser } : {}),
+            });
+          }
           await recordAudit(
             deps,
             request.userSession!.telegramId,
@@ -546,7 +677,9 @@ export function registerAdminPackageRoutes(
             { updatedFields: Object.keys(body) }
           );
 
-          return reply.code(200).send({ package: updatedPkg, packages: nextPackages });
+          const enrichedAll = await enrichPackagesWithInventory(nextPackages, deps);
+          const enrichedUpdated = enrichedAll.find((pkg) => pkg.id === existing.id) ?? updatedPkg;
+          return reply.code(200).send({ package: enrichedUpdated, packages: enrichedAll });
         } catch (err) {
           return handleRouteError(reply, err);
         }
@@ -653,6 +786,20 @@ export function registerAdminPackageRoutes(
           ];
 
           await saveSettingSingle(ts, 'packages_json', JSON.stringify(nextPackages));
+          if (deps.inventoryService) {
+            const sourceInv = await deps.inventoryService
+              .getPackageInventoryRecord(pkgId)
+              .catch(() => null);
+            if (
+              sourceInv &&
+              (sourceInv.stockRemaining !== null || sourceInv.maxPurchasesPerUser !== null)
+            ) {
+              await deps.inventoryService.setPackageInventory(cloneId, {
+                stockRemaining: sourceInv.stockRemaining,
+                maxPurchasesPerUser: sourceInv.maxPurchasesPerUser,
+              });
+            }
+          }
           await recordAudit(
             deps,
             request.userSession!.telegramId,
@@ -662,7 +809,9 @@ export function registerAdminPackageRoutes(
             { sourcePackageId: pkgId, name: cloneName }
           );
 
-          return reply.code(201).send({ package: clonedPkg, packages: nextPackages });
+          const enrichedAll = await enrichPackagesWithInventory(nextPackages, deps);
+          const enrichedClone = enrichedAll.find((pkg) => pkg.id === cloneId) ?? clonedPkg;
+          return reply.code(201).send({ package: enrichedClone, packages: enrichedAll });
         } catch (err) {
           return handleRouteError(reply, err);
         }
@@ -690,6 +839,7 @@ export function registerAdminPackageRoutes(
 
           const nextPackages = snapshot.packages.filter((pkg) => pkg.id !== pkgId);
           await saveSettingSingle(ts, 'packages_json', JSON.stringify(nextPackages));
+          await deps.inventoryService?.deletePackageInventory(pkgId).catch(() => {});
           await recordAudit(
             deps,
             request.userSession!.telegramId,
@@ -699,7 +849,8 @@ export function registerAdminPackageRoutes(
             { name: existing.name }
           );
 
-          return reply.code(200).send({ deletedId: pkgId, packages: nextPackages });
+          const enrichedAll = await enrichPackagesWithInventory(nextPackages, deps);
+          return reply.code(200).send({ deletedId: pkgId, packages: enrichedAll });
         } catch (err) {
           return handleRouteError(reply, err);
         }
@@ -1079,11 +1230,21 @@ export function registerAdminPackageRoutes(
       try {
         const ts = requireTranslationService(deps);
         const pricingService = requirePricingService(deps);
+        const fleetSnapshot = deps.inventoryService
+          ? await deps.inventoryService.getFleetCapacitySnapshot().catch(() => null)
+          : null;
+        const baseSettings = loadCustomPricingSettings(ts, pricingService);
+        const settings = await enrichCustomPricingSettingsWithInventory(
+          baseSettings,
+          ts,
+          deps,
+          fleetSnapshot ?? undefined
+        );
         return reply.code(200).send({
-          settings: loadCustomPricingSettings(ts, pricingService),
+          settings,
           tiers: loadVolumeTiers(ts),
           overrides: loadCustomOverrides(ts),
-          targets: buildTargetSummaries(deps.panelRegistry),
+          targets: buildTargetSummaries(deps.panelRegistry, fleetSnapshot ?? undefined),
           bounds: {
             minGbLimit: 1,
             maxGbLimit: MAX_GB_AMOUNT,
@@ -1092,6 +1253,7 @@ export function registerAdminPackageRoutes(
             webMaxDaysLimit: MAX_WEB_CUSTOM_DAYS,
             maxRules: MAX_PRICE_RULES,
             maxPrice: MAX_PRICE,
+            maxStockRemaining: MAX_INVENTORY_VALUE,
           },
         });
       } catch (err) {
@@ -1106,6 +1268,8 @@ export function registerAdminPackageRoutes(
         const body = assertBodyRecord(request.body);
         const current = loadCustomPricingSettings(ts, pricingService);
         const updates: Record<string, string> = {};
+        let hasStockUpdate = false;
+        let nextStockRemaining: number | null | undefined;
 
         if ('enabled' in body && body.enabled !== undefined) {
           const enabled = parseBooleanField(body.enabled, 'INVALID_ENABLED_FLAG', 'enabled');
@@ -1205,7 +1369,29 @@ export function registerAdminPackageRoutes(
           }
         }
 
-        if (Object.keys(updates).length === 0) {
+        if ('dailyCreateLimit' in body && body.dailyCreateLimit !== undefined) {
+          const parsedDaily = parseOptionalNullableSafeInt(
+            body.dailyCreateLimit,
+            0,
+            MAX_INVENTORY_VALUE,
+            'INVALID_CUSTOM_DAILY_LIMIT',
+            `dailyCreateLimit must be null or an integer between 0 and ${MAX_INVENTORY_VALUE}`
+          );
+          updates.custom_volume_daily_limit = String(parsedDaily ?? 0);
+        }
+
+        if ('stockRemaining' in body && body.stockRemaining !== undefined) {
+          nextStockRemaining = parseOptionalNullableSafeInt(
+            body.stockRemaining,
+            0,
+            MAX_INVENTORY_VALUE,
+            'INVALID_CUSTOM_STOCK',
+            `stockRemaining must be null or an integer between 0 and ${MAX_INVENTORY_VALUE}`
+          );
+          hasStockUpdate = true;
+        }
+
+        if (Object.keys(updates).length === 0 && !hasStockUpdate) {
           throw new RouteValidationError(
             400,
             'EMPTY_UPDATE',
@@ -1213,18 +1399,40 @@ export function registerAdminPackageRoutes(
           );
         }
 
-        await saveSettingsBatch(ts, updates);
+        if (Object.keys(updates).length > 0) {
+          await saveSettingsBatch(ts, updates);
+        }
+        if (hasStockUpdate) {
+          if (!deps.inventoryService) {
+            throw new RouteValidationError(
+              503,
+              'SERVICE_UNAVAILABLE',
+              'Inventory service is unavailable'
+            );
+          }
+          await deps.inventoryService.setPackageInventory(CUSTOM_VOLUME_INVENTORY_ID, {
+            stockRemaining: nextStockRemaining ?? null,
+          });
+        }
         await recordAudit(
           deps,
           request.userSession!.telegramId,
           'admin_update_custom_pricing_settings',
           'setting',
           'custom_pricing',
-          updates
+          {
+            ...updates,
+            ...(hasStockUpdate ? { stockRemaining: nextStockRemaining ?? null } : {}),
+          }
         );
 
+        const refreshedSettings = await enrichCustomPricingSettingsWithInventory(
+          loadCustomPricingSettings(ts, pricingService),
+          ts,
+          deps
+        );
         return reply.code(200).send({
-          settings: loadCustomPricingSettings(ts, pricingService),
+          settings: refreshedSettings,
         });
       } catch (err) {
         return handleRouteError(reply, err);
@@ -1772,6 +1980,73 @@ function loadPackagePolicies(ts: TranslationService): PackagePoliciesDto {
     lowTrafficThresholdGb,
     expiryWarningDays,
     refundWindowHours,
+    showOutOfStockPackages: shopShowOutOfStock(ts),
+    lowStockThreshold: shopLowStockThreshold(ts),
+  };
+}
+
+async function enrichPackagesWithInventory(
+  packages: readonly AdminPackageDto[],
+  deps: AdminPackageRoutesDeps,
+  fleetSnapshot?: FleetCapacitySnapshot
+): Promise<AdminPackageDto[]> {
+  if (!deps.inventoryService || packages.length === 0) {
+    return [...packages];
+  }
+  const availabilityMap = await deps.inventoryService
+    .getPackagesAvailabilityMap(packages, { fleetSnapshot })
+    .catch(() => null);
+  if (!availabilityMap) {
+    return [...packages];
+  }
+  return packages.map((pkg) => {
+    const avail = availabilityMap.get(pkg.id);
+    if (!avail) return pkg;
+    return {
+      ...pkg,
+      stockRemaining: avail.stockRemaining,
+      reservedCount: avail.reservedCount,
+      soldCount: avail.soldCount,
+      maxPurchasesPerUser: avail.maxPurchasesPerUser,
+      effectiveRemaining: avail.effectiveRemaining,
+      isOutOfStock: !avail.available,
+      outOfStockReason: avail.unavailableReason,
+    };
+  });
+}
+
+async function enrichCustomPricingSettingsWithInventory(
+  settings: CustomPricingSettingsDto,
+  ts: TranslationService,
+  deps: AdminPackageRoutesDeps,
+  fleetSnapshot?: FleetCapacitySnapshot
+): Promise<CustomPricingSettingsDto> {
+  const dailyCreateLimit = customVolumeDailyLimit(ts);
+  if (!deps.inventoryService) {
+    return {
+      ...settings,
+      dailyCreateLimit,
+    };
+  }
+  const availability = await deps.inventoryService
+    .getCustomVolumeAvailability(settings.target ?? undefined, { fleetSnapshot })
+    .catch(() => null);
+  if (!availability) {
+    return {
+      ...settings,
+      dailyCreateLimit,
+    };
+  }
+  return {
+    ...settings,
+    stockRemaining: availability.stockRemaining,
+    reservedCount: availability.reservedCount,
+    soldCount: availability.soldCount,
+    dailyCreateLimit,
+    todayCreatedCount: availability.todayCreatedCount,
+    available: availability.available,
+    effectiveRemaining: availability.effectiveRemaining,
+    unavailableReason: availability.unavailableReason,
   };
 }
 
@@ -1911,9 +2186,19 @@ function serializeCategoryWithCount(
   };
 }
 
-function buildTargetSummaries(panelRegistry?: RebeccaPanelRegistry): AdminTargetPanelDto[] {
+function buildTargetSummaries(
+  panelRegistry?: RebeccaPanelRegistry,
+  fleetSnapshot?: FleetCapacitySnapshot
+): AdminTargetPanelDto[] {
   if (!panelRegistry || typeof panelRegistry.listPanels !== 'function') return [];
+  const panelSnapById = new Map(
+    (fleetSnapshot?.panels ?? []).map((panelSnap) => [panelSnap.panelId, panelSnap])
+  );
   return panelRegistry.listPanels().map((panel: RebeccaPanelSummary) => {
+    const panelSnap = panelSnapById.get(panel.id);
+    const svcSnapById = new Map(
+      (panelSnap?.services ?? []).map((svcSnap) => [svcSnap.serviceId, svcSnap])
+    );
     const defaultService = panel.services.find((service) => service.isDefault) ?? panel.services[0];
     return {
       panelId: panel.id,
@@ -1921,11 +2206,31 @@ function buildTargetSummaries(panelRegistry?: RebeccaPanelRegistry): AdminTarget
       enabled: panel.enabled,
       isDefault: panel.isDefault,
       defaultServiceId: defaultService?.serviceId ?? null,
-      services: panel.services.map((service) => ({
-        serviceId: service.serviceId,
-        name: service.name,
-        isDefault: service.isDefault,
-      })),
+      ...(panelSnap
+        ? {
+            isAvailableForCreate: panelSnap.isAvailableForCreate,
+            remainingCapacity: panelSnap.remainingCapacity,
+            unavailableReason: panelSnap.unavailableReason,
+          }
+        : {}),
+      services: panel.services.map((service) => {
+        const svcSnap = svcSnapById.get(service.serviceId);
+        return {
+          serviceId: service.serviceId,
+          name: service.name,
+          isDefault: service.isDefault,
+          ...(svcSnap
+            ? {
+                enabled: svcSnap.enabled,
+                isAvailableForCreate: svcSnap.isAvailableForCreate,
+                remainingCapacity: svcSnap.remainingCapacity,
+                unavailableReason: svcSnap.unavailableReason,
+              }
+            : service.enabled !== undefined
+              ? { enabled: service.enabled }
+              : {}),
+        };
+      }),
     };
   });
 }
@@ -2282,6 +2587,18 @@ function parseOptionalNullableText(
     throw new RouteValidationError(400, code, message);
   }
   return trimmed;
+}
+
+function parseOptionalNullableSafeInt(
+  value: unknown,
+  min: number,
+  max: number,
+  code: string,
+  message: string
+): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  return parseSafeInt(value, min, max, code, message);
 }
 
 function parseSafeInt(

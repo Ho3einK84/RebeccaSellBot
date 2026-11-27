@@ -242,6 +242,26 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     };
   }, [isOpen, isSelectingRenewalPackage, renewTab, renewCustomGb, defaultDays]);
 
+  const resolveInventoryErrorMessage = useCallback(
+    (code?: string): string | null => {
+      switch (code) {
+        case 'OUT_OF_STOCK':
+          return t('user.shop.errorOutOfStock');
+        case 'CAPACITY_FULL':
+          return t('user.shop.errorCapacityFull');
+        case 'DAILY_LIMIT_REACHED':
+          return t('user.shop.errorDailyLimitReached');
+        case 'PACKAGE_USER_LIMIT_REACHED':
+          return t('user.shop.errorPackageUserLimit');
+        case 'SERVICE_UNAVAILABLE':
+          return t('user.shop.errorServiceUnavailable');
+        default:
+          return null;
+      }
+    },
+    [t]
+  );
+
   const createCheckoutSession = useCallback(
     async (overrides?: { promoCode?: string | null; requestedUsername?: string | null }) => {
       const targetPkg = effectivePkg;
@@ -321,6 +341,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             return;
           }
 
+          const resolvedInvError = resolveInventoryErrorMessage(err.code ?? errData?.code);
+          if (err.status === 409 && resolvedInvError) {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.user.packages });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+            dispatch({ type: 'CREATE_ERROR', message: resolvedInvError });
+            return;
+          }
+
           if (
             err.status === 409 &&
             (err.code === 'INSUFFICIENT_BALANCE' || errData?.code === 'INSUFFICIENT_BALANCE')
@@ -367,6 +395,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       appliedPromo?.code,
       customServiceNameEnabled,
       customNameInput,
+      queryClient,
+      resolveInventoryErrorMessage,
       t,
     ]
   );
@@ -576,6 +606,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           void queryClient.invalidateQueries({ queryKey: ['user', 'transactions'] });
           void queryClient.invalidateQueries({ queryKey: ['user'] });
           dispatch({ type: 'CONFIRM_VERIFYING' });
+          return;
+        }
+
+        const resolvedInvError = resolveInventoryErrorMessage(err.code ?? errData?.code);
+        if (err.status === 409 && resolvedInvError) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.packages });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+          dispatch({ type: 'CONFIRM_ERROR', message: resolvedInvError });
           return;
         }
 
@@ -925,6 +963,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   ) : (
                     <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pe-0.5">
                       {(renewalOptions?.packages ?? []).map((p) => {
+                        const isUnavailable = p.available === false;
                         const hasDiscount =
                           typeof p.originalPrice === 'number' && p.originalPrice > p.price;
                         const discountPct =
@@ -935,27 +974,60 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           <button
                             key={p.id}
                             type="button"
+                            disabled={isUnavailable}
                             onClick={() => {
+                              if (isUnavailable) return;
                               triggerHaptic('selection');
                               setSelectedRenewalPkg(p);
                             }}
-                            className="w-full p-3 rounded-tile border border-line bg-surface-2 hover:border-brand/45 hover:bg-surface-3 text-start flex items-center justify-between gap-2.5 press rs-focus cursor-pointer transition-all"
+                            className={`w-full p-3 rounded-tile border border-line bg-surface-2 text-start flex items-center justify-between gap-2.5 transition-all ${
+                              isUnavailable
+                                ? 'opacity-60 cursor-not-allowed'
+                                : 'hover:border-brand/45 hover:bg-surface-3 press rs-focus cursor-pointer'
+                            }`}
                           >
                             <div className="flex flex-col gap-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-xs sm:text-sm font-semibold text-ink truncate">
                                   {p.name}
                                 </span>
-                                {hasDiscount && discountPct > 0 && (
-                                  <Badge variant="warning" size="xs" className="tnum shrink-0">
-                                    <Flame className="w-3 h-3" />
-                                    <span>
-                                      {t('user.shop.discountBadgeOff').replace(
-                                        '{percent}',
-                                        formatNumber(discountPct)
-                                      )}
-                                    </span>
+                                {isUnavailable ? (
+                                  <Badge variant="error" size="xs" className="shrink-0">
+                                    {p.userLimitReached
+                                      ? t('user.shop.userLimitReachedBadge')
+                                      : t('user.shop.outOfStockBadge')}
                                   </Badge>
+                                ) : (
+                                  <>
+                                    {p.lowStock &&
+                                      p.remainingStock != null &&
+                                      p.remainingStock > 0 && (
+                                        <Badge
+                                          variant="warning"
+                                          size="xs"
+                                          className="tnum shrink-0"
+                                        >
+                                          <Flame className="w-3 h-3" />
+                                          <span>
+                                            {t('user.shop.lowStockBadge').replace(
+                                              '{count}',
+                                              formatNumber(p.remainingStock)
+                                            )}
+                                          </span>
+                                        </Badge>
+                                      )}
+                                    {hasDiscount && discountPct > 0 && (
+                                      <Badge variant="warning" size="xs" className="tnum shrink-0">
+                                        <Flame className="w-3 h-3" />
+                                        <span>
+                                          {t('user.shop.discountBadgeOff').replace(
+                                            '{percent}',
+                                            formatNumber(discountPct)
+                                          )}
+                                        </span>
+                                      </Badge>
+                                    )}
+                                  </>
                                 )}
                               </div>
                               <div className="flex items-center gap-1.5 flex-wrap">

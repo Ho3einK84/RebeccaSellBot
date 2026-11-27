@@ -29,11 +29,13 @@ import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Skeleton, SkeletonCard, SkeletonList } from '@/shared/components/ui/Skeleton.js';
 import { AppShell } from '@/shared/components/layout/AppShell.js';
 import { DesktopNav } from '@/shared/components/layout/DesktopNav.js';
+import { AppVersionFooter } from '@/shared/components/ui/VersionBadge.js';
 import { useUserNavItems } from './hooks/useUserNavItems.js';
 import { useTelegramBackButton } from '@/shared/hooks/useTelegramBackButton.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { ApiClientError } from '@/shared/lib/api.js';
+import { resolveClientAppVersion } from '@/shared/lib/appVersion.js';
 import { parseWebAppDeepLink } from '@/shared/lib/deepLinks.js';
 import { minimizeOrCloseWebApp } from '@/shared/lib/telegramNavigation.js';
 import {
@@ -43,6 +45,7 @@ import {
   useUserTransactions,
 } from './hooks/useUserPortalData.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
+import type { AppVersionInfo } from '@/shared/types/api.js';
 import type {
   UserTabType,
   UserPackageItem,
@@ -54,6 +57,7 @@ import type {
 interface UserPortalProps {
   user: TelegramWebAppUser;
   startParam?: string;
+  appVersion?: AppVersionInfo;
   isAdminView?: boolean;
   onSwitchToAdmin?: () => void;
 }
@@ -128,6 +132,7 @@ const SectionErrorCard: React.FC<{
 export const UserPortal: React.FC<UserPortalProps> = ({
   user,
   startParam,
+  appVersion,
   isAdminView = false,
   onSwitchToAdmin,
 }) => {
@@ -318,6 +323,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
 
   const profile = profileData?.user ?? null;
   const settings = profileData?.settings ?? null;
+  const resolvedAppVersion = resolveClientAppVersion(profileData?.appVersion ?? appVersion);
   const trial = profileData?.trial ?? null;
   const luckyWheel = profileData?.luckyWheel ?? null;
   const pendingReceipt = profileData?.pendingReceipt ?? null;
@@ -610,6 +616,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
         <UserPortalHeader
           user={user}
           group={profile?.group}
+          appVersion={resolvedAppVersion}
           onRefresh={handleRefresh}
           isAdminView={isAdminView}
           onSwitchToAdmin={onSwitchToAdmin}
@@ -627,6 +634,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
           ariaLabel={t('user.navAriaLabel')}
         />
       }
+      footer={<AppVersionFooter version={resolvedAppVersion} detailed={isAdminView} />}
       bottomNav={
         <UserBottomNav
           activeTab={activeTab}

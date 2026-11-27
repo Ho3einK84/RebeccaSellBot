@@ -8,6 +8,8 @@ interface AppShellProps {
   bottomNav?: ReactNode;
   /** Desktop tab rail (md+). */
   desktopNav?: ReactNode;
+  /** Optional subtle footer rendered below main content. */
+  footer?: ReactNode;
   /** Optional overlays rendered outside the scroll column. */
   overlay?: ReactNode;
   /**
@@ -29,6 +31,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   header,
   bottomNav,
   desktopNav,
+  footer,
   overlay,
   width = 'wide',
   transitionKey,
@@ -50,6 +53,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         <main key={transitionKey} className="flex-1 min-w-0 anim-rise">
           {children}
         </main>
+        {footer}
       </div>
 
       {bottomNav}

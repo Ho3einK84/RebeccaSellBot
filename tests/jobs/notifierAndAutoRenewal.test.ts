@@ -346,6 +346,7 @@ describe('autoRenewal — eligible statuses, price ceiling fail-closed, uncondit
       durationDays: 30,
       panelId: 'legacy',
       serviceId: 1,
+      packageId: 'pkg_1',
     });
   });
 

@@ -2372,4 +2372,73 @@ export const EN_TEXTS: Record<string, string> = {
   checkout_projected_debt_label: 'Debt After Payment',
   checkout_remaining_credit_label: 'Remaining Credit',
   promo_not_allowed_for_group: 'Promo codes are not enabled for your user group.',
+
+  // Inventory & creation capacity limits (panels, services, packages, trial, custom volume)
+  purchase_inventory_out_of_stock:
+    'This package or service is currently out of stock. Please choose another option or try again later.',
+  purchase_inventory_capacity_full:
+    'The target server has reached its active capacity for new subscriptions. Please choose another plan or try again later.',
+  purchase_inventory_daily_limit:
+    'The daily creation limit for this service has been reached today. Please try again tomorrow.',
+  purchase_inventory_user_limit: 'You have reached the maximum allowed purchases for this package.',
+  purchase_inventory_service_paused:
+    'New creations on this service are temporarily paused. Please choose another plan.',
+  trial_capacity_full: 'Free trial capacity is currently full. Please try again later.',
+  trial_out_of_stock: 'Free trial stock is currently exhausted.',
+  trial_daily_limit_reached:
+    'Today’s free trial quota has been reached. Please try again tomorrow.',
+  shop_badge_out_of_stock: '🔴 Sold Out',
+  shop_badge_low_stock: '🔥 {count} left',
+
+  admin_panel_capacity_label: 'Active capacity',
+  admin_panel_stock_label: 'Creation stock',
+  admin_panel_daily_limit_label: 'Daily limit',
+  admin_panel_edit_capacity_button: '📊 Capacity Limit',
+  admin_panel_edit_stock_button: '📦 Creation Stock',
+  admin_panel_edit_daily_limit_button: '📅 Daily Limit',
+  admin_panel_capacity_prompt:
+    'Enter maximum allowed active configs (current: *{current}*).\nTap Unlimited or send `-` to remove the limit:',
+  admin_panel_stock_prompt:
+    'Enter available creation stock (current: *{current}*).\nSend `0` to close new creations, or tap Unlimited / send `-`:',
+  admin_panel_daily_limit_prompt:
+    'Enter daily creation limit (current: *{current}*).\nSend `0` to pause daily creations, or tap Unlimited / send `-`:',
+  admin_panel_limit_unlimited_button: '♾️ Unlimited',
+  admin_panel_service_status_label: 'New creations',
+  admin_panel_service_enabled_badge: '🟢 Open',
+  admin_panel_service_paused_badge: '⏸ Paused',
+  admin_panel_service_pause_button: '⏸ Pause Creations',
+  admin_panel_service_resume_button: '▶️ Resume Creations',
+
+  admin_pkg_stock_label: 'Package stock',
+  admin_pkg_user_limit_label: 'Per-user limit',
+  admin_pkg_sold_label: 'Total sold',
+  admin_pkg_edit_stock_btn: '📦 Stock',
+  admin_pkg_edit_user_limit_btn: '👤 User Limit',
+  admin_pkg_stock_prompt:
+    'Enter available stock count (current: *{current}*).\nSend `0` to mark sold out, or tap Unlimited / send `-`:',
+  admin_pkg_user_limit_prompt:
+    'Enter max purchases allowed per user (current: *{current}*).\nMinimum 1, or tap Unlimited / send `-`:',
+  admin_pkg_show_out_of_stock_btn: '👁 Show Sold-Out',
+
+  admin_home_alert_capacity: '{count} panel/service at capacity',
+  admin_home_alert_out_of_stock: '{count} package(s) sold out',
+
+  // App version & release channel
+  version_title: 'Version & Build Info',
+  version_subtitle: 'RebeccaSellBot release version and channel details',
+  version_section_build: 'Release Metadata',
+  version_section_runtime: 'Runtime',
+  version_product_label: 'Application',
+  version_version_label: 'Version',
+  version_full_label: 'Build ID',
+  version_channel_label: 'Release Channel',
+  version_branch_label: 'Branch',
+  version_commit_label: 'Commit',
+  version_built_at_label: 'Built At',
+  version_runtime_label: 'Runtime',
+  version_channel_stable: 'Stable',
+  version_channel_dev: 'Dev',
+  version_channel_prerelease: 'Pre-release',
+  version_dirty_tag: 'local changes',
+  admin_stats_version_label: 'Bot Version',
 };

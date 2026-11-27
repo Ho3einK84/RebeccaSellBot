@@ -1,15 +1,18 @@
 import React from 'react';
 import { ShieldCheck, Eye, Settings2 } from 'lucide-react';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
+import { VersionBadge } from '@/shared/components/ui/VersionBadge.js';
 import { TopBar } from '@/shared/components/layout/TopBar.js';
 import { HeaderUtilityActions } from '@/shared/components/layout/HeaderUtilityActions.js';
 import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useHaptic } from '@/shared/hooks/useHaptic.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import type { TelegramWebAppUser } from '@/shared/types/telegram.js';
+import type { AppVersionInfo } from '@/shared/types/api.js';
 
 interface AdminHeaderProps {
   user: TelegramWebAppUser;
+  appVersion?: AppVersionInfo;
   onRefresh: () => void;
   isRefreshing?: boolean;
   onClose?: () => void;
@@ -20,6 +23,7 @@ interface AdminHeaderProps {
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({
   user,
+  appVersion,
   onRefresh,
   isRefreshing = false,
   onSwitchToUserPortal,
@@ -45,6 +49,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         </IconTile>
       }
       title={t('admin.title')}
+      badge={<VersionBadge version={appVersion} size="xs" showChannel />}
       subtitle={
         <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted truncate max-w-full">
           <span className="truncate font-medium text-ink-soft">{adminDisplayName}</span>

@@ -93,6 +93,8 @@ export const PackagesTab: React.FC<PackagesTabProps> = ({ onNotify }) => {
     lowTrafficThresholdGb: 5,
     expiryWarningDays: 3,
     refundWindowHours: 0,
+    showOutOfStockPackages: true,
+    lowStockThreshold: 5,
   };
   const customSettings = customPricingData?.settings ?? {
     enabled: false,

@@ -1,3 +1,5 @@
+import type { AppVersionInfo } from './api.js';
+
 export type UserTabType = 'dashboard' | 'services' | 'shop' | 'wallet' | 'referral';
 
 export type TransactionFilterType = 'all' | 'topup' | 'purchase' | 'rewards' | 'transfer';
@@ -67,6 +69,10 @@ export interface CustomVolumeSettings {
   groupDiscountPercent?: number;
   hasGroupCustomRate?: boolean;
   tiers?: VolumePricingTierItem[];
+  available?: boolean;
+  remainingStock?: number | null;
+  lowStock?: boolean;
+  unavailableReason?: string | null;
 }
 
 export interface PendingReceiptInfo {
@@ -139,6 +145,9 @@ export interface UserTrialStatus {
   days: number;
   requirePhone: boolean;
   phoneVerificationRequired?: boolean;
+  capacityAvailable?: boolean;
+  remainingStock?: number | null;
+  unavailableReason?: string | null;
 }
 
 export interface TrialClaimResponse {
@@ -243,6 +252,7 @@ export interface UserProfileResponse {
   luckyWheel?: LuckyWheelSummary | null;
   pendingReceipt?: PendingReceiptInfo | null;
   activePaymentOrder?: UserPaymentOrderDto | null;
+  appVersion?: AppVersionInfo;
 }
 
 export interface UserConfigRecord {
@@ -395,6 +405,12 @@ export interface UserPackageItem {
   startOnFirstUse?: boolean;
   rolloverQuota?: boolean;
   featured?: boolean;
+  remainingStock?: number | null;
+  lowStock?: boolean;
+  available?: boolean;
+  unavailableReason?: string | null;
+  userLimitReached?: boolean;
+  maxPurchasesPerUser?: number | null;
 }
 
 export interface UserPackagesResponse {

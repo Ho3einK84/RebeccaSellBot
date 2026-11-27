@@ -10,6 +10,7 @@ import type { MenuContext } from '../types.js';
 import { renderScreen } from '../ui.js';
 import { appendAdminFooterNav, markAdminContext, resetAdminNav } from './adminNav.js';
 import { registerAdminRoute } from './adminRouter.js';
+import { formatAdminStatsVersionValue, formatAdminVersionFooter } from '../versionBadge.js';
 
 import {
   getCachedPanelHealth,
@@ -77,10 +78,16 @@ export async function renderAdminHomeScreen(
   let dailyRevenue: number | undefined;
   let activeSubscriptions: number | undefined;
 
-  const [pendingRes, panelHealth, statsRes] = await Promise.all([
+  const activePackages = ctx.services?.pricingService?.getPackages?.() ?? [];
+  const [pendingRes, panelHealth, statsRes, fleetSnapshot, pkgInvRecords] = await Promise.all([
     ctx.services?.walletService?.getPendingReceiptCount?.().catch(() => 0) ?? Promise.resolve(0),
     measurePanelHealth(ctx, PANEL_HEALTH_FAST_TIMEOUT_MS, true),
     ctx.services?.walletService?.getDashboardStats?.().catch(() => null) ?? Promise.resolve(null),
+    ctx.services?.inventoryService?.getFleetCapacitySnapshot?.().catch(() => null) ??
+      Promise.resolve(null),
+    ctx.services?.inventoryService
+      ?.getPackageInventoryRecords?.(activePackages.map((p) => p.id))
+      .catch(() => null) ?? Promise.resolve(null),
   ]);
 
   let pendingReceipts = pendingRes ?? 0;
@@ -104,6 +111,24 @@ export async function renderAdminHomeScreen(
         healthy: localizedNumber(panelHealth.healthy, ctx),
         total: localizedNumber(panelHealth.configured, ctx),
       })
+    );
+  }
+  const fullCapacityCount =
+    (fleetSnapshot?.summary.fullPanelsCount ?? 0) + (fleetSnapshot?.summary.fullServicesCount ?? 0);
+  if (fullCapacityCount > 0) {
+    alerts.push(
+      t(ctx, 'admin_home_alert_capacity', { count: localizedNumber(fullCapacityCount, ctx) })
+    );
+  }
+  const outOfStockPkgCount = pkgInvRecords
+    ? activePackages.filter((pkg) => {
+        const rec = pkgInvRecords.get(pkg.id);
+        return rec && rec.stockRemaining !== null && rec.stockRemaining <= 0;
+      }).length
+    : 0;
+  if (outOfStockPkgCount > 0) {
+    alerts.push(
+      t(ctx, 'admin_home_alert_out_of_stock', { count: localizedNumber(outOfStockPkgCount, ctx) })
     );
   }
 
@@ -136,6 +161,7 @@ export async function renderAdminHomeScreen(
     subtitle: t(ctx, 'admin_home_subtitle'),
     notice,
     sections: [{ fields: pulseFields }],
+    footer: formatAdminVersionFooter(ctx),
   });
 
   await renderScreen(ctx, text, {
@@ -246,6 +272,10 @@ export async function renderAdminStatsScreen(
           {
             label: t(ctx, 'admin_stats_database_label'),
             value: `${buildStatusBadge(ctx, 'healthy')} · ${localizedNumber(dbLatency, ctx)} ${t(ctx, 'admin_stats_latency_unit')}`,
+          },
+          {
+            label: t(ctx, 'admin_stats_version_label'),
+            value: formatAdminStatsVersionValue(ctx),
           },
         ],
       },
@@ -388,6 +418,7 @@ export async function renderAdminSettingsHub(
         ],
       },
     ],
+    footer: formatAdminVersionFooter(ctx),
   });
 
   await renderScreen(ctx, text, {

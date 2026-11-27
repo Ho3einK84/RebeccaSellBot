@@ -1,5 +1,6 @@
 import type {
   AuthResponse,
+  BotInfoResponse,
   StatsResponse,
   ReceiptsResponse,
   ReceiptActionPayload,
@@ -14,6 +15,7 @@ import type {
   UpdatePanelPayload,
   TogglePanelResponse,
   AddPanelServicePayload,
+  UpdatePanelServicePayload,
   TestAllPanelsResponse,
   SupportedLocale,
   ApiErrorResponse,
@@ -250,8 +252,7 @@ export const api = {
   setAuthToken,
   getAuthToken,
 
-  getBotInfo: (): Promise<{ username?: string }> =>
-    request<{ username?: string }>('/api/auth/bot-info'),
+  getBotInfo: (): Promise<BotInfoResponse> => request<BotInfoResponse>('/api/auth/bot-info'),
 
   validateTelegramAuth: async (initData: string): Promise<AuthResponse> => {
     const res = await request<AuthResponse>('/api/auth/telegram-validate', {
@@ -728,6 +729,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  updateAdminPanelService: (
+    panelId: string,
+    serviceId: number,
+    payload: UpdatePanelServicePayload
+  ): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(
+      `/api/admin/panels/${encodeURIComponent(panelId)}/services/${serviceId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    ),
 
   setDefaultAdminPanelService: (
     panelId: string,

@@ -21,6 +21,7 @@ import { BulkGiftService } from '../../domain/services/BulkGiftService.js';
 import { ForcedJoinService } from '../../domain/services/ForcedJoinService.js';
 import { PaymentService } from '../../domain/services/PaymentService.js';
 import { logger } from '../../infra/logger.js';
+import { getAppVersionInfo } from '../../infra/appVersion.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
 import { registerAdminRoutes } from './routes/adminRoutes.js';
 import { registerAdminGroupRoutes } from './routes/adminGroupRoutes.js';
@@ -375,7 +376,13 @@ export async function createWebAppServer(
 
   // Health check endpoint on webapp port
   app.get('/api/health', async (_req, reply) => {
-    return reply.send({ status: 'ok', component: 'webapp' });
+    const appVersion = getAppVersionInfo();
+    return reply.send({
+      status: 'ok',
+      component: 'webapp',
+      version: appVersion.displayVersion,
+      channel: appVersion.channel,
+    });
   });
 
   // Caddy On-Demand TLS verification endpoint
@@ -449,6 +456,7 @@ export async function createWebAppServer(
     pricingService: services.pricingService,
     paymentService: services.paymentService,
     panelRegistry: services.panelRegistry,
+    inventoryService: services.inventoryService,
     botToken: config.BOT_TOKEN,
     adminService: services.adminService,
     adminIds: services.adminIds,
@@ -480,6 +488,7 @@ export async function createWebAppServer(
     packageCategoryService: resolvedCategoryService,
     translationService: services.translationService,
     panelRegistry: services.panelRegistry,
+    inventoryService: services.inventoryService,
     userService: services.userService,
     adminService: services.adminService,
   });
@@ -588,6 +597,7 @@ export async function createWebAppServer(
     refundService: services.refundService,
     configTransferService: services.configTransferService,
     panelRegistry: services.panelRegistry,
+    inventoryService: services.inventoryService,
     userGroupService: services.userGroupService,
     purchaseCheckoutService: services.purchaseCheckoutService,
     catalogDiscountService: resolvedCatalogDiscountService,

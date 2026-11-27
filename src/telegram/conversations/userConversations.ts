@@ -40,6 +40,7 @@ import {
 } from '../ui.js';
 import { logger } from '../../infra/logger.js';
 import { recordCheckoutCompleted, recordCheckoutFailed } from '../checkoutLifecycle.js';
+import { InventoryUnavailableError } from '../../domain/services/InventoryService.js';
 import {
   MAX_CONFIG_USER_LABEL_LENGTH,
   normalizeCustomServiceName,
@@ -552,8 +553,12 @@ async function executePurchaseFlow(
         quotedAmount: displayedCost,
       })
     );
-  } catch {
-    await replyInConversation(conversation, ctx, t(ctx, 'custom_volume_unavailable'));
+  } catch (err) {
+    const msg =
+      err instanceof InventoryUnavailableError
+        ? purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
+        : t(ctx, 'custom_volume_unavailable');
+    await replyInConversation(conversation, ctx, msg);
     return;
   }
 
@@ -665,6 +670,7 @@ async function executePurchaseFlow(
         durationDays: checkout.durationDays,
         panelId: checkout.panelId,
         serviceId: checkout.serviceId,
+        packageId: checkout.packageId,
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
       })
@@ -940,15 +946,15 @@ export async function buyPackageCustomNameConversation(
       };
     });
     trackFunnelEvent('checkout_start');
-  } catch {
+  } catch (err) {
+    const reasonText =
+      err instanceof InventoryUnavailableError
+        ? purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
+        : t(ctx, 'purchase_target_unavailable');
     await replyInConversation(
       conversation,
       ctx,
-      buildUserEmptyState(
-        '⚠️',
-        t(ctx, 'purchase_review_title'),
-        t(ctx, 'purchase_target_unavailable')
-      ),
+      buildUserEmptyState('⚠️', t(ctx, 'purchase_review_title'), reasonText),
       { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'main') }
     );
     return;
@@ -1166,8 +1172,12 @@ export async function renewConfigConversation(
         quotedAmount: displayedCost,
       })
     );
-  } catch {
-    await replyInConversation(conversation, ctx, t(ctx, 'custom_volume_unavailable'));
+  } catch (err) {
+    const msg =
+      err instanceof InventoryUnavailableError
+        ? purchaseFailureMessage(ctx.services.translationService, err, resolveContextLocale(ctx))
+        : t(ctx, 'custom_volume_unavailable');
+    await replyInConversation(conversation, ctx, msg);
     return;
   }
 
@@ -1284,6 +1294,7 @@ export async function renewConfigConversation(
         durationDays: checkout.durationDays,
         panelId: checkout.panelId,
         serviceId: checkout.serviceId,
+        packageId: checkout.packageId,
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
         allowAdminOverride: isAdmin,

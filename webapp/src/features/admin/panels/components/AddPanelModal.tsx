@@ -29,6 +29,9 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
   const [apiKey, setApiKey] = useState('');
   const [serviceId, setServiceId] = useState('1');
   const [serviceName, setServiceName] = useState('');
+  const [maxConfigs, setMaxConfigs] = useState('');
+  const [stockRemaining, setStockRemaining] = useState('');
+  const [dailyCreateLimit, setDailyCreateLimit] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,9 +41,21 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
       setApiKey('');
       setServiceId('1');
       setServiceName('');
+      setMaxConfigs('');
+      setStockRemaining('');
+      setDailyCreateLimit('');
       setValidationError(null);
     }
   }, [isOpen]);
+
+  const parseOptionalLimit = (raw: string): { ok: true; value: number | null } | { ok: false } => {
+    const normalized = normalizeInputDigits(raw).trim();
+    if (!normalized) return { ok: true, value: null };
+    if (!/^\d+$/u.test(normalized)) return { ok: false };
+    const n = Number(normalized);
+    if (!Number.isSafeInteger(n) || n < 0 || n > 2_147_483_647) return { ok: false };
+    return { ok: true, value: n };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +83,14 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
       return;
     }
 
+    const parsedMax = parseOptionalLimit(maxConfigs);
+    const parsedStock = parseOptionalLimit(stockRemaining);
+    const parsedDaily = parseOptionalLimit(dailyCreateLimit);
+    if (!parsedMax.ok || !parsedStock.ok || !parsedDaily.ok) {
+      setValidationError(t('admin.panels.validationLimitInvalid'));
+      return;
+    }
+
     try {
       await onSubmit({
         name: trimmedName,
@@ -75,12 +98,18 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
         apiKey: apiKey.trim() || undefined,
         serviceId: parsedServiceId,
         serviceName: serviceName.trim() || undefined,
+        ...(parsedMax.value !== null ? { maxConfigs: parsedMax.value } : {}),
+        ...(parsedStock.value !== null ? { stockRemaining: parsedStock.value } : {}),
+        ...(parsedDaily.value !== null ? { dailyCreateLimit: parsedDaily.value } : {}),
       });
       setName('');
       setBaseUrl('');
       setApiKey('');
       setServiceId('1');
       setServiceName('');
+      setMaxConfigs('');
+      setStockRemaining('');
+      setDailyCreateLimit('');
       onClose();
     } catch (err: unknown) {
       setValidationError(err instanceof Error ? err.message : t('admin.notifications.saveFailed'));
@@ -187,6 +216,66 @@ export const AddPanelModal: React.FC<AddPanelModalProps> = ({
               disabled={loading}
               maxLength={80}
             />
+          </div>
+        </div>
+
+        {/* Capacity & Limits (Optional) */}
+        <div className="p-3 rounded-tile border border-line bg-surface-2 space-y-2.5 text-start">
+          <div className="text-xs font-semibold text-ink">
+            {t('admin.panels.capacitySectionTitle')}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="space-y-1">
+              <label className="block text-[11px] font-medium text-ink-soft">
+                {t('admin.panels.maxConfigsField')}
+              </label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className="tnum"
+                value={maxConfigs}
+                onChange={(e) =>
+                  setMaxConfigs(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
+                }
+                placeholder={t('admin.panels.unlimitedPlaceholder')}
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[11px] font-medium text-ink-soft">
+                {t('admin.panels.stockRemainingField')}
+              </label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className="tnum"
+                value={stockRemaining}
+                onChange={(e) =>
+                  setStockRemaining(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
+                }
+                placeholder={t('admin.panels.unlimitedPlaceholder')}
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[11px] font-medium text-ink-soft">
+                {t('admin.panels.dailyCreateLimitField')}
+              </label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className="tnum"
+                value={dailyCreateLimit}
+                onChange={(e) =>
+                  setDailyCreateLimit(normalizeInputDigits(e.target.value).replace(/[^0-9]/g, ''))
+                }
+                placeholder={t('admin.panels.unlimitedPlaceholder')}
+                disabled={loading}
+              />
+            </div>
           </div>
         </div>
       </form>

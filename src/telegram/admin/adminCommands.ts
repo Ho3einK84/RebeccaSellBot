@@ -8,12 +8,14 @@ import { clearAdminInput } from './adminInput.js';
 import { markAdminContext } from './adminNav.js';
 import { dispatchAdminRoute } from './adminRouter.js';
 import { formatUserDisplayName } from '../features/admin/userRoutes.js';
+import { buildVersionScreen } from '../versionBadge.js';
 
 const ADMIN_COMMANDS = [
   { command: 'admin', description: 'پنل مدیریت' },
   { command: 'r', description: 'صف رسیدهای در انتظار' },
   { command: 'u', description: 'جست‌وجو یا مشاهدهٔ کاربر (/u 12345)' },
   { command: 'stats', description: 'آمار فوری و وضعیت زیرساخت' },
+  { command: 'version', description: 'نسخه و اطلاعات ساخت ربات' },
   { command: 'cancel', description: 'لغو عملیات فعال' },
 ] as const;
 
@@ -104,6 +106,26 @@ export function registerAdminQuickCommands(bot: Bot<MenuContext>, services: BotS
   bot.command('stats', async (ctx) => {
     if (!(await ensureAdmin(ctx))) return;
     await dispatchAdminRoute(ctx, 'adm:stats');
+  });
+
+  bot.command('version', async (ctx) => {
+    const telegramId = ctx.from?.id;
+    const isAdmin = Boolean(telegramId && services.isAdmin(telegramId));
+    clearTransientConversationSession(ctx.session);
+    clearAdminInput(ctx.session);
+    if (isAdmin && telegramId) {
+      void ensureAdminCommandsSyncedForChat(ctx.api, telegramId);
+      markAdminContext(ctx);
+    }
+    const kb = isAdmin
+      ? new InlineKeyboard()
+          .text(t(ctx, 'admin_menu_stats'), 'adm:stats')
+          .text(t(ctx, 'admin_menu_back_to_admin'), 'adm:home')
+      : new InlineKeyboard().text(t(ctx, 'menu_back_main'), 'nav:home');
+    await renderScreen(ctx, buildVersionScreen(ctx, { isAdmin }), {
+      parse_mode: 'Markdown',
+      reply_markup: kb,
+    });
   });
 
   bot.command('u', async (ctx) => {

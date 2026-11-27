@@ -31,6 +31,9 @@ export function getDb() {
   return db;
 }
 
+export type DbClient = ReturnType<typeof getDb>;
+export type DbTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
+
 export function getPool() {
   if (!pool) throw new Error('Database pool not initialized. Call initDatabase first.');
   return pool;

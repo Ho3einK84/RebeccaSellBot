@@ -1,4 +1,5 @@
 import { loadConfig } from './infra/config.js';
+import { getAppVersionInfo } from './infra/appVersion.js';
 import { initLogger, logger } from './infra/logger.js';
 import { initDatabase, closeDatabase } from './infra/db.js';
 import { autoMigrate } from './infra/migrate.js';
@@ -28,6 +29,7 @@ import { ForcedJoinService } from './domain/services/ForcedJoinService.js';
 import { BulkGiftService } from './domain/services/BulkGiftService.js';
 import { ScheduledMessageDeletionService } from './domain/services/ScheduledMessageDeletionService.js';
 import { UserGroupService } from './domain/services/UserGroupService.js';
+import { InventoryService } from './domain/services/InventoryService.js';
 import { DomainRegistryService } from './domain/services/DomainRegistryService.js';
 import {
   normalizeDomainInput,
@@ -333,7 +335,17 @@ async function shutdown(signal: string): Promise<void> {
 
 async function main() {
   initLogger();
-  logger.info('Starting RebeccaSellBot...');
+  const appVersion = getAppVersionInfo();
+  logger.info(
+    {
+      version: appVersion.displayVersion,
+      fullVersion: appVersion.fullVersion,
+      channel: appVersion.channel,
+      branch: appVersion.branch,
+      commit: appVersion.commit,
+    },
+    'Starting RebeccaSellBot...'
+  );
 
   process.once('SIGINT', () => void shutdown('SIGINT'));
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
@@ -369,6 +381,7 @@ async function main() {
   );
   await panelRegistry.initialize(translationService);
 
+  const inventoryService = new InventoryService(translationService);
   const userGroupService = new UserGroupService();
   const referralService = new ReferralService(translationService, userGroupService);
   const promoService = new PromoService(userGroupService);
@@ -377,7 +390,8 @@ async function main() {
     translationService,
     referralService,
     promoService,
-    userGroupService
+    userGroupService,
+    inventoryService
   );
   userGroupService.registerInvalidationHook((telegramId) =>
     walletService.invalidateUserCache(telegramId)
@@ -387,15 +401,15 @@ async function main() {
   );
   const configService = new ConfigService(panelRegistry, translationService);
   const pricingService = new PricingService(translationService);
-  const purchaseCheckoutService = new PurchaseCheckoutService(panelRegistry);
-  const trialService = new TrialService(panelRegistry, translationService);
+  const purchaseCheckoutService = new PurchaseCheckoutService(panelRegistry, inventoryService);
+  const trialService = new TrialService(panelRegistry, translationService, inventoryService);
   const userService = new UserService();
   userService.registerInvalidationHook((telegramId) =>
     walletService.invalidateUserCache(telegramId)
   );
   const adminService = new AdminService();
   await adminService.initialize(config.ADMIN_IDS);
-  const refundService = new RefundService(panelRegistry, translationService);
+  const refundService = new RefundService(panelRegistry, translationService, inventoryService);
   refundService.registerInvalidationHook((telegramId) =>
     walletService.invalidateUserCache(telegramId)
   );
@@ -576,6 +590,7 @@ async function main() {
     bulkGiftService,
     scheduledMessageDeletionService,
     userGroupService,
+    inventoryService,
     supportUrl: config.SUPPORT_URL,
     webAppUrl: currentWebAppUrl,
     webAppPort: config.WEBAPP_HOST_PORT ?? config.WEBAPP_PORT,
@@ -607,6 +622,7 @@ async function main() {
     refundService,
     configReconciliationService,
     purchaseCheckoutService,
+    inventoryService,
   });
   startTrialCleanupCron(panelRegistry, configService);
   startAutoRenewalCron(panelRegistry, walletService, pricingService, translationService, bot.api, {

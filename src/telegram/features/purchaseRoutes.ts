@@ -3,6 +3,7 @@
 import { InlineKeyboard, type Bot } from 'grammy';
 import type { BotServices, MenuContext } from '../types.js';
 import { PurchaseCheckoutUnavailableError } from '../../domain/services/PurchaseCheckoutService.js';
+import { InventoryUnavailableError } from '../../domain/services/InventoryService.js';
 import {
   resolveBestCatalogDiscount,
   safeListActiveDiscounts,
@@ -146,14 +147,14 @@ async function renderResumedCheckout(ctx: MenuContext, services: BotServices): P
       ...(context.requestedUsername ? { requestedUsername: context.requestedUsername } : {}),
       quotedAmount: displayedPrice,
     });
-  } catch {
+  } catch (err) {
+    const reasonText =
+      err instanceof InventoryUnavailableError
+        ? purchaseFailureMessage(services.translationService, err, resolveContextLocale(ctx))
+        : t(ctx, 'purchase_target_unavailable');
     await renderScreen(
       ctx,
-      buildUserEmptyState(
-        '⚠️',
-        t(ctx, 'purchase_review_title'),
-        t(ctx, 'purchase_target_unavailable')
-      ),
+      buildUserEmptyState('⚠️', t(ctx, 'purchase_review_title'), reasonText),
       { parse_mode: 'Markdown', reply_markup: backKeyboard(ctx, 'shop') }
     );
     return true;
@@ -319,6 +320,7 @@ export function registerPurchaseRoutes(bot: Bot<MenuContext>, services: BotServi
         durationDays: checkout.durationDays,
         panelId: checkout.panelId,
         serviceId: checkout.serviceId,
+        packageId: checkout.packageId,
         checkoutId: checkout.id,
         ...(checkout.promoCode ? { promoCode: checkout.promoCode } : {}),
         ...(resolvedPkg?.startOnFirstUse !== undefined

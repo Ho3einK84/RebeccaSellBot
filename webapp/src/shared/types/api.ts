@@ -12,10 +12,33 @@ import type {
   UserAuditLogItem,
   PanelSummary,
   FleetSummary,
+  FleetCapacitySummary,
   BalanceOperation,
 } from './admin.js';
 
 export type SupportedLocale = 'fa' | 'en';
+
+export type ReleaseChannel = 'stable' | 'dev' | 'prerelease';
+
+export interface AppVersionInfo {
+  name: string;
+  version: string;
+  displayVersion: string;
+  fullVersion?: string;
+  channel: ReleaseChannel;
+  branch?: string | null;
+  commit?: string | null;
+  tag?: string | null;
+  commitsAhead?: number | null;
+  dirty?: boolean;
+  builtAt?: string | null;
+  repositoryUrl?: string;
+}
+
+export interface BotInfoResponse {
+  username?: string;
+  appVersion?: AppVersionInfo;
+}
 
 export interface AuthResponse {
   token?: string;
@@ -25,12 +48,15 @@ export interface AuthResponse {
   languageSelectionEnabled?: boolean;
   botUsername?: string;
   startParam?: string;
+  appVersion?: AppVersionInfo;
 }
 
 export interface StatsResponse {
   stats: DashboardStats;
   panelHealth: PanelHealth;
+  fleetCapacity?: FleetCapacitySummary | null;
   dbLatencyMs?: number;
+  appVersion?: AppVersionInfo;
 }
 
 export interface ReceiptsResponse {
@@ -118,6 +144,9 @@ export interface CreatePanelPayload {
   apiKey?: string;
   serviceId?: number;
   serviceName?: string;
+  maxConfigs?: number | null;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
 }
 
 export interface CreatePanelResponse {
@@ -129,6 +158,9 @@ export interface UpdatePanelPayload {
   name?: string;
   baseUrl?: string;
   apiKey?: string | null;
+  maxConfigs?: number | null;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
 }
 
 export interface TogglePanelResponse {
@@ -139,6 +171,18 @@ export interface TogglePanelResponse {
 export interface AddPanelServicePayload {
   serviceId: number;
   name: string;
+  enabled?: boolean;
+  maxConfigs?: number | null;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
+}
+
+export interface UpdatePanelServicePayload {
+  name?: string;
+  enabled?: boolean;
+  maxConfigs?: number | null;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
 }
 
 export interface TestAllPanelsResponse {

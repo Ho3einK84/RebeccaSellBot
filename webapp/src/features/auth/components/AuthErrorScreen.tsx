@@ -6,6 +6,9 @@ import { api } from '@/shared/lib/api.js';
 import { Card } from '@/shared/components/ui/Card.js';
 import { IconTile } from '@/shared/components/ui/IconTile.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { AppVersionFooter } from '@/shared/components/ui/VersionBadge.js';
+import { resolveClientAppVersion } from '@/shared/lib/appVersion.js';
+import type { AppVersionInfo } from '@/shared/types/api.js';
 
 interface AuthErrorScreenProps {
   error: string | null;
@@ -23,19 +26,23 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({
     const envName = (import.meta.env.VITE_BOT_USERNAME as string | undefined) || '';
     return envName.replace(/^@/, '').trim();
   });
+  const [serverVersion, setServerVersion] = useState<AppVersionInfo | null>(null);
 
   useEffect(() => {
-    if (resolvedBotUsername) return;
     let cancelled = false;
     api
       .getBotInfo()
       .then((res) => {
-        if (!cancelled && res.username) {
+        if (cancelled) return;
+        if (!resolvedBotUsername && res.username) {
           setResolvedBotUsername(res.username.replace(/^@/, '').trim());
+        }
+        if (res.appVersion) {
+          setServerVersion(res.appVersion);
         }
       })
       .catch(() => {
-        // Graceful fallback to tg:// when backend info is unreachable
+        // Graceful fallback to build-time metadata & tg:// when backend info is unreachable
       });
     return () => {
       cancelled = true;
@@ -79,7 +86,7 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 rs-canvas-bg bg-canvas text-ink safe-top safe-bottom"
+      className="fixed inset-0 flex flex-col items-center justify-center p-4 rs-canvas-bg bg-canvas text-ink safe-top safe-bottom"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <Card
@@ -122,6 +129,11 @@ export const AuthErrorScreen: React.FC<AuthErrorScreenProps> = ({
           </Button>
         </div>
       </Card>
+
+      <AppVersionFooter
+        version={resolveClientAppVersion(serverVersion)}
+        className="mt-4 border-t-0 pt-0"
+      />
     </div>
   );
 };

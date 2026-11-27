@@ -5,6 +5,7 @@ import { purchaseCheckouts, purchaseIntents } from '../../infra/schema.js';
 import { logger } from '../../infra/logger.js';
 import type { PackageOption } from './PricingService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
+import type { InventoryService } from './InventoryService.js';
 import { normalizeCustomServiceName } from './ConfigService.js';
 
 const CHECKOUT_TTL_MS = 15 * 60 * 1000;
@@ -20,7 +21,10 @@ export class PurchaseCheckoutUnavailableError extends Error {
 export type PurchaseCheckout = typeof purchaseCheckouts.$inferSelect;
 
 export class PurchaseCheckoutService {
-  constructor(private readonly panels: RebeccaPanelRegistry) {}
+  constructor(
+    private readonly panels: RebeccaPanelRegistry,
+    private readonly inventoryService?: Pick<InventoryService, 'assertCheckoutAvailability'>
+  ) {}
 
   async create(input: {
     telegramId: number;
@@ -39,6 +43,15 @@ export class PurchaseCheckoutService {
     const requestedPanelId = input.panelId ?? input.pkg.panelId;
     const requestedServiceId = input.serviceId ?? input.pkg.serviceId;
     const target = await this.panels.resolveTarget(requestedPanelId, requestedServiceId);
+    if (this.inventoryService) {
+      await this.inventoryService.assertCheckoutAvailability({
+        telegramId: input.telegramId,
+        operationType: input.kind,
+        panelId: target.panelId,
+        serviceId: target.serviceId,
+        packageId: input.pkg.id,
+      });
+    }
     const id = `co_${crypto.randomBytes(8).toString('base64url')}`;
     const [checkout] = await getDb()
       .insert(purchaseCheckouts)

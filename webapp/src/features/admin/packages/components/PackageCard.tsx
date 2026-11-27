@@ -71,7 +71,19 @@ export const PackageCard: React.FC<PackageCardProps> = ({
       : undefined;
 
   const hasTargetWarning =
-    pkg.panelId !== undefined && (!targetPanel || !targetPanel.enabled || !targetService);
+    pkg.panelId !== undefined &&
+    (!targetPanel ||
+      !targetPanel.enabled ||
+      !targetService ||
+      targetPanel.isAvailableForCreate === false ||
+      targetService.enabled === false ||
+      targetService.isAvailableForCreate === false);
+  const isTargetCapacityFull =
+    pkg.panelId !== undefined &&
+    Boolean(targetPanel && targetPanel.enabled && targetService) &&
+    (targetPanel?.isAvailableForCreate === false ||
+      targetService?.enabled === false ||
+      targetService?.isAvailableForCreate === false);
 
   const isLastPackage = totalCount <= 1;
 
@@ -134,6 +146,46 @@ export const PackageCard: React.FC<PackageCardProps> = ({
                 {pkg.rolloverQuota
                   ? t('admin.packages.card.rolloverOn')
                   : t('admin.packages.card.rolloverOff')}
+              </Badge>
+            )}
+
+            {pkg.isOutOfStock && (
+              <Badge variant="error" size="xs">
+                {t('admin.packages.card.outOfStockBadge')}
+              </Badge>
+            )}
+
+            {pkg.stockRemaining != null && (
+              <Badge
+                variant={
+                  pkg.stockRemaining <= 0
+                    ? 'error'
+                    : pkg.stockRemaining <= 5
+                      ? 'warning'
+                      : 'success'
+                }
+                size="xs"
+                className="tnum"
+              >
+                {t('admin.packages.card.stockRemainingBadge', {
+                  count: formatNumber(pkg.stockRemaining),
+                })}
+              </Badge>
+            )}
+
+            {pkg.maxPurchasesPerUser != null && (
+              <Badge variant="info" size="xs" className="tnum">
+                {t('admin.packages.card.perUserLimitBadge', {
+                  count: formatNumber(pkg.maxPurchasesPerUser),
+                })}
+              </Badge>
+            )}
+
+            {(pkg.soldCount ?? 0) > 0 && (
+              <Badge variant="neutral" size="xs" className="tnum">
+                {t('admin.packages.card.soldCountLabel', {
+                  count: formatNumber(pkg.soldCount ?? 0),
+                })}
               </Badge>
             )}
           </div>
@@ -216,6 +268,11 @@ export const PackageCard: React.FC<PackageCardProps> = ({
               {!targetPanel.enabled && (
                 <Badge variant="warning" size="xs">
                   {t('admin.packages.card.panelDisabledWarning')}
+                </Badge>
+              )}
+              {isTargetCapacityFull && (
+                <Badge variant="error" size="xs">
+                  {t('admin.packages.card.targetFullWarning')}
                 </Badge>
               )}
             </div>

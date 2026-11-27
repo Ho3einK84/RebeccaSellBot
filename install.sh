@@ -1110,6 +1110,23 @@ if [[ -n "$("${DOCKER[@]}" ps -q -f name=nodexia-caddy-1 2>/dev/null || true)" ]
 fi
 
 info "Building application image..."
+if [[ -d "$INSTALL_DIR/.git" ]] && command -v git >/dev/null 2>&1; then
+  _app_branch="$(git -C "$INSTALL_DIR" -c safe.directory="$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  [[ "$_app_branch" != "HEAD" ]] || _app_branch=""
+  _app_sha="$(git -C "$INSTALL_DIR" -c safe.directory="$INSTALL_DIR" rev-parse --short=7 HEAD 2>/dev/null || true)"
+  _app_tag="$(git -C "$INSTALL_DIR" -c safe.directory="$INSTALL_DIR" describe --tags --exact-match HEAD 2>/dev/null || true)"
+  _app_latest_tag="$(git -C "$INSTALL_DIR" -c safe.directory="$INSTALL_DIR" describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+  _app_ahead=""
+  if [[ -n "$_app_latest_tag" ]]; then
+    _app_ahead="$(git -C "$INSTALL_DIR" -c safe.directory="$INSTALL_DIR" rev-list --count "${_app_latest_tag}..HEAD" 2>/dev/null || true)"
+  fi
+  export APP_GIT_BRANCH="${APP_GIT_BRANCH:-$_app_branch}"
+  export APP_GIT_SHA="${APP_GIT_SHA:-$_app_sha}"
+  export APP_GIT_TAG="${APP_GIT_TAG:-$_app_tag}"
+  export APP_GIT_COMMITS_AHEAD="${APP_GIT_COMMITS_AHEAD:-$_app_ahead}"
+  export APP_GIT_DIRTY="${APP_GIT_DIRTY:-false}"
+  export APP_BUILD_TIME="${APP_BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+fi
 dc build bot
 info "Starting PostgreSQL 16 and waiting for readiness..."
 dc up -d --wait db

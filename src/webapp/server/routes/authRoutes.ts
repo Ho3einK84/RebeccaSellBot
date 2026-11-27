@@ -15,6 +15,7 @@ import type {
   TranslationService,
 } from '../../../domain/services/TranslationService.js';
 import { authGuard } from '../middleware/adminGuard.js';
+import { getAppVersionInfo, toPublicAppVersion } from '../../../infra/appVersion.js';
 
 interface ValidateRequestBody {
   initData: string;
@@ -74,6 +75,7 @@ export function registerAuthRoutes(
   app.get('/api/auth/bot-info', async (_req, reply) => {
     return reply.send({
       username: options.botUsername,
+      appVersion: toPublicAppVersion(getAppVersionInfo()),
     });
   });
 
@@ -183,6 +185,7 @@ export function registerAuthRoutes(
       const userLocale = await options.userService.getLocale(telegramId);
       const locale = userLocale ?? defaultLocale;
 
+      const appVersion = getAppVersionInfo();
       return reply.code(200).send({
         token,
         role,
@@ -190,6 +193,7 @@ export function registerAuthRoutes(
         locale,
         languageSelectionEnabled,
         botUsername: options.botUsername,
+        appVersion: role === 'admin' ? appVersion : toPublicAppVersion(appVersion),
         ...(startParam ? { startParam } : {}),
       });
     }

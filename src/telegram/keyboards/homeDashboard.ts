@@ -2,6 +2,7 @@ import type { MenuContext } from '../types.js';
 import { localizedNumber, t, tm } from '../locale.js';
 import { escapeTelegramMarkdown } from '../rendering.js';
 import { buildStatusBadge, buildUserScreen } from '../ui.js';
+import { formatUserVersionFooter } from '../versionBadge.js';
 import {
   formatUserGroupDisplayLabel,
   safeGetEffectiveUserPolicy,
@@ -147,6 +148,6 @@ export async function renderHomeDashboard(ctx: MenuContext): Promise<string> {
         fields: overviewFields,
       },
     ],
-    footer: notices.join('\n\n'),
+    footer: [...notices, formatUserVersionFooter(ctx)].filter(Boolean).join('\n\n'),
   });
 }

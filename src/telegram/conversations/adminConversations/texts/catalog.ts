@@ -251,6 +251,7 @@ const USER_HOME_NAV_PREFIXES = [
   'forced_join_',
   'registration_',
   'user_group_',
+  'version_',
 ] as const;
 
 const USER_HOME_NAV_EXACT = new Set([

@@ -35,6 +35,7 @@ import type { SupportedLocale, TranslationService } from './TranslationService.j
 import type { ReferralService } from './ReferralService.js';
 import type { PromoService } from './PromoService.js';
 import type { UserGroupService } from './UserGroupService.js';
+import type { InventoryService } from './InventoryService.js';
 import { receiptDuplicatePolicy } from './FeatureSettings.js';
 import { dbIntegerToSafeNumber } from './DbNumber.js';
 import crypto from 'crypto';
@@ -120,6 +121,10 @@ export class WalletService {
     private readonly userGroupService?: Pick<
       UserGroupService,
       'getEffectiveUserPolicy' | 'getEffectiveUserPolicyInTx'
+    >,
+    inventoryService?: Pick<
+      InventoryService,
+      'reserveInTransaction' | 'commitInTransaction' | 'releaseInTransaction'
     >
   ) {
     this.purchaseSaga = new WalletPurchaseSaga(
@@ -128,7 +133,8 @@ export class WalletService {
       promoService,
       isRebeccaPanelRegistryAccess(panels),
       translationService,
-      userGroupService
+      userGroupService,
+      inventoryService
     );
   }
 

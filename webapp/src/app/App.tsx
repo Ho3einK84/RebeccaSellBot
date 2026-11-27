@@ -32,18 +32,24 @@ export const App: React.FC = () => {
               <AdminLayout
                 user={authData.user}
                 botUsername={authData.botUsername}
+                appVersion={authData.appVersion}
                 onSwitchToUserPortal={() => setAdminViewMode('user')}
               />
             ) : (
               <UserPortal
                 user={authData.user}
                 startParam={authData.startParam}
+                appVersion={authData.appVersion}
                 isAdminView={true}
                 onSwitchToAdmin={() => setAdminViewMode('admin')}
               />
             )
           ) : (
-            <UserPortal user={authData.user} startParam={authData.startParam} />
+            <UserPortal
+              user={authData.user}
+              startParam={authData.startParam}
+              appVersion={authData.appVersion}
+            />
           )}
         </Suspense>
       )}

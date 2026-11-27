@@ -1,8 +1,14 @@
 import { InlineKeyboard, type Bot } from 'grammy';
 import {
   RebeccaPanelInUseError,
+  type RebeccaPanelServiceSummary,
   type RebeccaPanelSummary,
 } from '../../../domain/services/RebeccaPanelRegistry.js';
+import {
+  MAX_INVENTORY_VALUE,
+  type PanelCapacitySnapshot,
+  type ServiceCapacitySnapshot,
+} from '../../../domain/services/InventoryService.js';
 import { validateRebeccaBaseUrl } from '../../../infra/rebeccaBaseUrl.js';
 import type { MenuContext } from '../../types.js';
 import { callbackData } from '../../callbackData.js';
@@ -29,7 +35,11 @@ import {
 } from '../../admin/adminNav.js';
 import { invalidatePanelHealthCache } from '../../admin/adminHome.js';
 import { registerAdminRoute } from '../../admin/adminRouter.js';
-import { registerAdminInputHandler, startAdminInput } from '../../admin/adminInput.js';
+import {
+  adminInputCancelKeyboard,
+  registerAdminInputHandler,
+  startAdminInput,
+} from '../../admin/adminInput.js';
 
 const PANEL_ID_CAPTURE = '([a-z0-9_-]{3,40})';
 const PANEL_PAGE_SIZE = 7;
@@ -37,14 +47,60 @@ const PANEL_SERVICE_PAGE_SIZE = 6;
 const PANEL_SECRET_INPUT_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_SERVICE_ID = 2_147_483_647;
 
-type PanelEditAction = 'name' | 'url' | 'api_key' | 'add_service';
-type PanelServiceAction = 'default' | 'custom';
+type PanelEditAction =
+  | 'name'
+  | 'url'
+  | 'api_key'
+  | 'add_service'
+  | 'max_configs'
+  | 'stock_remaining'
+  | 'daily_create_limit';
+type PanelServiceAction = 'default' | 'custom' | 'toggle_enabled';
+type LimitFieldCode = 'm' | 'q' | 'l';
 const COMPACT_PANEL_EDIT_ACTIONS: Record<string, PanelEditAction> = {
   n: 'name',
   u: 'url',
   k: 'api_key',
   s: 'add_service',
+  m: 'max_configs',
+  q: 'stock_remaining',
+  l: 'daily_create_limit',
 };
+
+function parseLimitTextInput(
+  raw: string
+): { valid: true; value: number | null } | { valid: false } {
+  const trimmed = normalizeInputDigits(raw.trim()).toLowerCase();
+  if (['-', 'unlimited', 'none', 'نامحدود', 'بی‌نهایت', 'بینهایت'].includes(trimmed)) {
+    return { valid: true, value: null };
+  }
+  if (!/^\d+$/u.test(trimmed)) return { valid: false };
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > MAX_INVENTORY_VALUE) {
+    return { valid: false };
+  }
+  return { valid: true, value: parsed };
+}
+
+function formatLimitPair(
+  ctx: MenuContext,
+  used: number,
+  limit: number | null,
+  percent?: number | null
+): string {
+  const usedStr = localizedNumber(used, ctx);
+  if (limit === null) {
+    return `${usedStr} / ♾️`;
+  }
+  const limitStr = localizedNumber(limit, ctx);
+  return percent !== undefined && percent !== null
+    ? `${usedStr} / ${limitStr} (${localizedNumber(percent, ctx)}%)`
+    : `${usedStr} / ${limitStr}`;
+}
+
+function formatStockValue(ctx: MenuContext, stock: number | null): string {
+  return stock === null ? t(ctx, 'unlimited') : localizedNumber(stock, ctx);
+}
 
 export function panelCallback(...parts: Array<string | number>): string {
   return callbackData('a', 'p', ...parts);
@@ -66,20 +122,28 @@ export async function renderPanelRegistry(
   }
   const pagePanels = panels.slice((page - 1) * PANEL_PAGE_SIZE, page * PANEL_PAGE_SIZE);
 
-  const orphanSummary = await ctx.services.configReconciliationService
-    ?.getQueueSummary?.()
-    .catch(() => null);
+  const [orphanSummary, fleetSnapshot] = await Promise.all([
+    ctx.services.configReconciliationService?.getQueueSummary?.().catch(() => null),
+    ctx.services.inventoryService?.getFleetCapacitySnapshot?.().catch(() => null),
+  ]);
   const openOrphans = orphanSummary?.openTotal ?? 0;
   const orphanLabel =
     openOrphans > 0
       ? `${t(ctx, 'admin_menu_orphans')} (⚠️ ${localizedNumber(openOrphans, ctx)})`
       : t(ctx, 'admin_menu_orphans');
 
+  const panelCapMap = new Map(fleetSnapshot?.panels.map((p) => [p.panelId, p]) ?? []);
   const keyboard = new InlineKeyboard();
   for (const panel of pagePanels) {
+    const cap = panelCapMap.get(panel.id);
+    const statusIcon = !panel.enabled ? '⚪️' : cap && !cap.isAvailableForCreate ? '🔴' : '🟢';
+    const capSuffix =
+      cap && cap.maxConfigs !== null
+        ? ` [${localizedNumber(cap.activeConfigsCount + cap.reservedCount, ctx)}/${localizedNumber(cap.maxConfigs, ctx)}]`
+        : '';
     keyboard
       .text(
-        `${panel.isDefault ? '⭐ ' : ''}${panel.enabled ? '🟢' : '⚪️'} ${panel.name}`,
+        `${panel.isDefault ? '⭐ ' : ''}${statusIcon} ${panel.name}${capSuffix}`,
         panelCallback('v', panel.id)
       )
       .row();
@@ -186,12 +250,16 @@ export function buildPanelDetailKeyboard(
     .text(t(ctx, 'admin_panel_edit_name_button'), panelCallback('e', panel.id, 'n'))
     .text(t(ctx, 'admin_panel_edit_url_button'), panelCallback('e', panel.id, 'u'))
     .row()
+    .text(t(ctx, 'admin_panel_edit_capacity_button'), panelCallback('e', panel.id, 'm'))
+    .text(t(ctx, 'admin_panel_edit_stock_button'), panelCallback('e', panel.id, 'q'))
+    .row()
+    .text(t(ctx, 'admin_panel_edit_daily_limit_button'), panelCallback('e', panel.id, 'l'))
     .text(t(ctx, 'admin_panel_edit_key_button'), panelCallback('e', panel.id, 'k'))
+    .row()
     .text(
       `${t(ctx, 'admin_panel_services_manage_button')} (${localizedNumber(panel.services.length, ctx)})`,
       panelCallback('sm', panel.id)
     )
-    .row()
     .text(t(ctx, 'admin_panel_delete_button'), panelCallback('x', panel.id))
     .row();
   appendAdminFooterNav(keyboard, ctx, {
@@ -209,9 +277,13 @@ async function panelDetailText(
   options?: { lastPingMs?: number; isError?: boolean; notice?: AdminScreenNotice }
 ): Promise<string> {
   const customTarget = ctx.services?.pricingService.getCustomVolumeTarget();
-  const usageStats = await ctx.services?.panelRegistry
-    .getPanelUsage(panel.id)
-    .catch(() => ({ activeConfigsCount: 0 }));
+  const [usageStats, fleetSnapshot] = await Promise.all([
+    ctx.services?.panelRegistry.getPanelUsage(panel.id).catch(() => ({ activeConfigsCount: 0 })),
+    ctx.services?.inventoryService?.getFleetCapacitySnapshot?.().catch(() => null),
+  ]);
+  const panelCap: PanelCapacitySnapshot | undefined = fleetSnapshot?.panels.find(
+    (p) => p.panelId === panel.id
+  );
   const packages = ctx.services?.pricingService.getPackages(panel.id, undefined, true) ?? [];
 
   const connectionFields: UserScreenField[] = [];
@@ -237,10 +309,33 @@ async function panelDetailText(
     }
   );
 
+  const activeConfigsCount = panelCap?.activeConfigsCount ?? usageStats?.activeConfigsCount ?? 0;
+  const maxConfigsVal = panelCap ? panelCap.maxConfigs : (panel.maxConfigs ?? null);
+  const stockRemainingVal = panelCap ? panelCap.stockRemaining : (panel.stockRemaining ?? null);
+  const dailyLimitVal = panelCap ? panelCap.dailyCreateLimit : (panel.dailyCreateLimit ?? null);
+  const todayCreated = panelCap?.todayCreatedCount ?? 0;
+
   const statsFields: UserScreenField[] = [
     {
       label: t(ctx, 'admin_panel_configs_count_label'),
-      value: localizedNumber(usageStats?.activeConfigsCount ?? 0, ctx),
+      value: localizedNumber(activeConfigsCount, ctx),
+    },
+    {
+      label: t(ctx, 'admin_panel_capacity_label'),
+      value: formatLimitPair(
+        ctx,
+        activeConfigsCount + (panelCap?.reservedCount ?? 0),
+        maxConfigsVal,
+        panelCap?.utilizationPercent
+      ),
+    },
+    {
+      label: t(ctx, 'admin_panel_stock_label'),
+      value: formatStockValue(ctx, stockRemainingVal),
+    },
+    {
+      label: t(ctx, 'admin_panel_daily_limit_label'),
+      value: formatLimitPair(ctx, todayCreated, dailyLimitVal),
     },
     {
       label: t(ctx, 'admin_panel_packages_count_label'),
@@ -469,22 +564,53 @@ export async function renderServiceDetail(
     );
     return;
   }
+  const fleetSnapshot = await ctx.services.inventoryService
+    ?.getFleetCapacitySnapshot?.()
+    .catch(() => null);
+  const serviceCap = fleetSnapshot?.panels
+    .find((p) => p.panelId === panel.id)
+    ?.services.find((s) => s.serviceId === service.serviceId);
   const keyboard = buildServiceDetailKeyboard(ctx, panel, service);
-  const text = serviceDetailText(ctx, panel, service, notice);
+  const text = serviceDetailText(ctx, panel, service, notice, serviceCap);
   await renderPanelScreen(ctx, text, keyboard, 'Markdown');
 }
 
 export function buildServiceDetailKeyboard(
   ctx: MenuContext,
   panel: RebeccaPanelSummary,
-  service: { serviceId: number; name: string; isDefault: boolean }
+  service: Pick<RebeccaPanelServiceSummary, 'serviceId' | 'name' | 'isDefault'> & {
+    enabled?: boolean;
+  }
 ): InlineKeyboard {
   if (!ctx.services) throw new Error('BOT_SERVICES_UNAVAILABLE');
   const customTarget = ctx.services.pricingService.getCustomVolumeTarget();
   const isCustomTarget =
     customTarget.panelId === panel.id && customTarget.serviceId === service.serviceId;
+  const serviceEnabled = service.enabled !== false;
 
-  const keyboard = new InlineKeyboard();
+  const keyboard = new InlineKeyboard()
+    .text(
+      t(
+        ctx,
+        serviceEnabled ? 'admin_panel_service_pause_button' : 'admin_panel_service_resume_button'
+      ),
+      panelCallback('ss', 'e', panel.id, service.serviceId)
+    )
+    .row()
+    .text(
+      t(ctx, 'admin_panel_edit_capacity_button'),
+      panelCallback('se', panel.id, service.serviceId, 'm')
+    )
+    .text(
+      t(ctx, 'admin_panel_edit_stock_button'),
+      panelCallback('se', panel.id, service.serviceId, 'q')
+    )
+    .row()
+    .text(
+      t(ctx, 'admin_panel_edit_daily_limit_button'),
+      panelCallback('se', panel.id, service.serviceId, 'l')
+    )
+    .row();
 
   if (!service.isDefault) {
     keyboard
@@ -528,12 +654,26 @@ export function buildServiceDetailKeyboard(
 function serviceDetailText(
   ctx: MenuContext,
   panel: RebeccaPanelSummary,
-  service: { serviceId: number; name: string; isDefault: boolean },
-  notice?: AdminScreenNotice
+  service: Pick<RebeccaPanelServiceSummary, 'serviceId' | 'name' | 'isDefault'> & {
+    enabled?: boolean;
+    maxConfigs?: number | null;
+    stockRemaining?: number | null;
+    dailyCreateLimit?: number | null;
+  },
+  notice?: AdminScreenNotice,
+  serviceCap?: ServiceCapacitySnapshot
 ): string {
   const customTarget = ctx.services?.pricingService.getCustomVolumeTarget();
   const isCustomTarget =
     customTarget?.panelId === panel.id && customTarget?.serviceId === service.serviceId;
+  const serviceEnabled = serviceCap ? serviceCap.enabled : service.enabled !== false;
+  const maxConfigsVal = serviceCap ? serviceCap.maxConfigs : (service.maxConfigs ?? null);
+  const stockRemainingVal = serviceCap
+    ? serviceCap.stockRemaining
+    : (service.stockRemaining ?? null);
+  const dailyLimitVal = serviceCap
+    ? serviceCap.dailyCreateLimit
+    : (service.dailyCreateLimit ?? null);
 
   const fields: UserScreenField[] = [
     {
@@ -543,6 +683,30 @@ function serviceDetailText(
     {
       label: t(ctx, 'admin_panel_service_id_label'),
       value: `\`${service.serviceId}\``,
+    },
+    {
+      label: t(ctx, 'admin_panel_service_status_label'),
+      value: t(
+        ctx,
+        serviceEnabled ? 'admin_panel_service_enabled_badge' : 'admin_panel_service_paused_badge'
+      ),
+    },
+    {
+      label: t(ctx, 'admin_panel_capacity_label'),
+      value: formatLimitPair(
+        ctx,
+        (serviceCap?.activeConfigsCount ?? 0) + (serviceCap?.reservedCount ?? 0),
+        maxConfigsVal,
+        serviceCap?.utilizationPercent
+      ),
+    },
+    {
+      label: t(ctx, 'admin_panel_stock_label'),
+      value: formatStockValue(ctx, stockRemainingVal),
+    },
+    {
+      label: t(ctx, 'admin_panel_daily_limit_label'),
+      value: formatLimitPair(ctx, serviceCap?.todayCreatedCount ?? 0, dailyLimitVal),
     },
     {
       label: t(ctx, 'admin_panel_default_label'),
@@ -711,6 +875,67 @@ function registerPanelInputHandlers(): void {
       };
     }
   });
+
+  registerAdminInputHandler('pnl:limit', async (ctx, rawText, state) => {
+    const panelId = String(state.payload?.panelId ?? '');
+    const field = String(state.payload?.field ?? 'm') as LimitFieldCode;
+    const serviceIdRaw = state.payload?.serviceId;
+    const serviceId = typeof serviceIdRaw === 'number' ? serviceIdRaw : undefined;
+    const parsed = parseLimitTextInput(rawText);
+    const promptKey =
+      field === 'm'
+        ? 'admin_panel_capacity_prompt'
+        : field === 'q'
+          ? 'admin_panel_stock_prompt'
+          : 'admin_panel_daily_limit_prompt';
+    const titleKey =
+      field === 'm'
+        ? 'admin_panel_edit_capacity_button'
+        : field === 'q'
+          ? 'admin_panel_edit_stock_button'
+          : 'admin_panel_edit_daily_limit_button';
+    const redirectRoute =
+      serviceId !== undefined ? `adm:pnl:sd:${panelId}:${serviceId}` : `adm:pnl:v:${panelId}`;
+
+    if (!parsed.valid) {
+      return {
+        status: 'retry',
+        promptText: buildAdminPromptScreen(
+          '📊',
+          t(ctx, titleKey),
+          t(ctx, promptKey, { current: String(state.payload?.currentDisplay ?? '—') }),
+          {
+            breadcrumb: buildBreadcrumb(t(ctx, 'admin_home_title'), t(ctx, 'admin_nav_panels')),
+            error: t(ctx, 'admin_setting_invalid'),
+          }
+        ),
+      };
+    }
+    const changes =
+      field === 'm'
+        ? { maxConfigs: parsed.value }
+        : field === 'q'
+          ? { stockRemaining: parsed.value }
+          : { dailyCreateLimit: parsed.value };
+    try {
+      if (serviceId !== undefined) {
+        await ctx.services!.panelRegistry.updateService(panelId, serviceId, changes);
+      } else {
+        await ctx.services!.panelRegistry.updatePanel(panelId, changes);
+      }
+      return {
+        status: 'done',
+        redirectRoute,
+        notice: { tone: 'success', text: t(ctx, 'admin_panel_saved') },
+      };
+    } catch {
+      return {
+        status: 'done',
+        redirectRoute,
+        notice: { tone: 'error', text: t(ctx, 'admin_panel_save_failed') },
+      };
+    }
+  });
 }
 
 export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
@@ -731,6 +956,12 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     new RegExp(`^adm:pnl:sm:${PANEL_ID_CAPTURE}(?::(\\d+))?$`, 'u'),
     async (ctx, match, notice) => {
       await renderPanelServicesMenu(ctx, match![1]!, Number(match![2]) || 1, notice);
+    }
+  );
+  registerAdminRoute(
+    new RegExp(`^adm:pnl:sd:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'),
+    async (ctx, match, notice) => {
+      await renderServiceDetail(ctx, match![1]!, Number(match![2]), notice);
     }
   );
   registerAdminRoute(
@@ -765,7 +996,7 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
     await ctx.answerCallbackQuery();
     await renderServiceDetail(ctx, ctx.match[1]!, Number(ctx.match[2]));
   });
-  adminCallback(new RegExp(`^a:p:ss:([dcx]):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:ss:([dcxe]):${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     if (!ctx.services) return;
     const action = ctx.match[1]!;
     const panelId = ctx.match[2]!;
@@ -774,13 +1005,67 @@ export function registerAdminPanelRoutes(bot: Bot<MenuContext>): void {
       await promptPanelServiceDeletion(ctx, panelId, serviceId);
       return;
     }
-    await updatePanelService(ctx, action === 'd' ? 'default' : 'custom', panelId, serviceId);
+    const mapped: PanelServiceAction =
+      action === 'd' ? 'default' : action === 'c' ? 'custom' : 'toggle_enabled';
+    await updatePanelService(ctx, mapped, panelId, serviceId);
   });
   adminCallback(new RegExp(`^a:p:ss:xc:${PANEL_ID_CAPTURE}:(\\d+)$`, 'u'), async (ctx) => {
     await deletePanelService(ctx, ctx.match[1]!, Number(ctx.match[2]));
   });
-  adminCallback(new RegExp(`^a:p:e:${PANEL_ID_CAPTURE}:([nuks])$`, 'u'), async (ctx) => {
+  adminCallback(new RegExp(`^a:p:e:${PANEL_ID_CAPTURE}:([nuksmql])$`, 'u'), async (ctx) => {
     await beginPanelEdit(ctx, ctx.match[1]!, COMPACT_PANEL_EDIT_ACTIONS[ctx.match[2]!]!);
+  });
+  adminCallback(new RegExp(`^a:p:eu:${PANEL_ID_CAPTURE}:([mql])$`, 'u'), async (ctx) => {
+    if (!ctx.services) return;
+    const panelId = ctx.match[1]!;
+    const field = ctx.match[2]! as LimitFieldCode;
+    if (ctx.session) delete ctx.session.adminInput;
+    const changes =
+      field === 'm'
+        ? { maxConfigs: null }
+        : field === 'q'
+          ? { stockRemaining: null }
+          : { dailyCreateLimit: null };
+    try {
+      await ctx.services.panelRegistry.updatePanel(panelId, changes);
+      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_saved') });
+      await renderPanelDetail(ctx, panelId, {
+        notice: { tone: 'success', text: t(ctx, 'admin_panel_saved') },
+      });
+    } catch {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
+    }
+  });
+  adminCallback(new RegExp(`^a:p:se:${PANEL_ID_CAPTURE}:(\\d+):([mql])$`, 'u'), async (ctx) => {
+    await beginServiceLimitEdit(
+      ctx,
+      ctx.match[1]!,
+      Number(ctx.match[2]),
+      ctx.match[3]! as LimitFieldCode
+    );
+  });
+  adminCallback(new RegExp(`^a:p:su:${PANEL_ID_CAPTURE}:(\\d+):([mql])$`, 'u'), async (ctx) => {
+    if (!ctx.services) return;
+    const panelId = ctx.match[1]!;
+    const serviceId = Number(ctx.match[2]);
+    const field = ctx.match[3]! as LimitFieldCode;
+    if (ctx.session) delete ctx.session.adminInput;
+    const changes =
+      field === 'm'
+        ? { maxConfigs: null }
+        : field === 'q'
+          ? { stockRemaining: null }
+          : { dailyCreateLimit: null };
+    try {
+      await ctx.services.panelRegistry.updateService(panelId, serviceId, changes);
+      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_saved') });
+      await renderServiceDetail(ctx, panelId, serviceId, {
+        tone: 'success',
+        text: t(ctx, 'admin_panel_saved'),
+      });
+    } catch {
+      await ctx.answerCallbackQuery({ text: t(ctx, 'admin_panel_save_failed'), show_alert: true });
+    }
   });
   adminCallback(new RegExp(`^a:p:t:${PANEL_ID_CAPTURE}$`, 'u'), async (ctx) => {
     await testPanelConnection(ctx, ctx.match[1]!);
@@ -1112,8 +1397,107 @@ async function beginPanelEdit(
     return;
   }
 
+  if (action === 'max_configs' || action === 'stock_remaining' || action === 'daily_create_limit') {
+    const field: LimitFieldCode =
+      action === 'max_configs' ? 'm' : action === 'stock_remaining' ? 'q' : 'l';
+    const currentNum =
+      field === 'm'
+        ? (panel?.maxConfigs ?? null)
+        : field === 'q'
+          ? (panel?.stockRemaining ?? null)
+          : (panel?.dailyCreateLimit ?? null);
+    const currentDisplay =
+      currentNum === null ? t(ctx, 'unlimited') : localizedNumber(currentNum, ctx);
+    const promptKey =
+      field === 'm'
+        ? 'admin_panel_capacity_prompt'
+        : field === 'q'
+          ? 'admin_panel_stock_prompt'
+          : 'admin_panel_daily_limit_prompt';
+    const titleKey =
+      field === 'm'
+        ? 'admin_panel_edit_capacity_button'
+        : field === 'q'
+          ? 'admin_panel_edit_stock_button'
+          : 'admin_panel_edit_daily_limit_button';
+    await startAdminInput(ctx, {
+      kind: 'pnl:limit',
+      payload: { panelId, field, currentDisplay },
+      returnRoute: `adm:pnl:v:${panelId}`,
+      promptText: buildAdminPromptScreen(
+        '📊',
+        t(ctx, titleKey),
+        t(ctx, promptKey, { current: currentDisplay }),
+        {
+          breadcrumb: buildBreadcrumb(t(ctx, 'admin_home_title'), t(ctx, 'admin_nav_panels')),
+        }
+      ),
+      keyboard: adminInputCancelKeyboard(ctx, (kb) => {
+        kb.text(
+          t(ctx, 'admin_panel_limit_unlimited_button'),
+          panelCallback('eu', panelId, field)
+        ).row();
+      }),
+    });
+    return;
+  }
+
   ctx.session.adminPanelAction = action;
   await ctx.conversation.enter('adminPanelConversation');
+}
+
+async function beginServiceLimitEdit(
+  ctx: MenuContext,
+  panelId: string,
+  serviceId: number,
+  field: LimitFieldCode
+): Promise<void> {
+  const panel = ctx.services?.panelRegistry.getPanel(panelId);
+  const service = panel?.services.find((s) => s.serviceId === serviceId);
+  await ctx.answerCallbackQuery();
+  const currentNum =
+    field === 'm'
+      ? (service?.maxConfigs ?? null)
+      : field === 'q'
+        ? (service?.stockRemaining ?? null)
+        : (service?.dailyCreateLimit ?? null);
+  const currentDisplay =
+    currentNum === null ? t(ctx, 'unlimited') : localizedNumber(currentNum, ctx);
+  const promptKey =
+    field === 'm'
+      ? 'admin_panel_capacity_prompt'
+      : field === 'q'
+        ? 'admin_panel_stock_prompt'
+        : 'admin_panel_daily_limit_prompt';
+  const titleKey =
+    field === 'm'
+      ? 'admin_panel_edit_capacity_button'
+      : field === 'q'
+        ? 'admin_panel_edit_stock_button'
+        : 'admin_panel_edit_daily_limit_button';
+  await startAdminInput(ctx, {
+    kind: 'pnl:limit',
+    payload: { panelId, serviceId, field, currentDisplay },
+    returnRoute: `adm:pnl:sd:${panelId}:${serviceId}`,
+    promptText: buildAdminPromptScreen(
+      '📊',
+      t(ctx, titleKey),
+      t(ctx, promptKey, { current: currentDisplay }),
+      {
+        breadcrumb: buildBreadcrumb(
+          t(ctx, 'admin_home_title'),
+          t(ctx, 'admin_nav_panels'),
+          panel ? escapeTelegramMarkdown(panel.name) : undefined
+        ),
+      }
+    ),
+    keyboard: adminInputCancelKeyboard(ctx, (kb) => {
+      kb.text(
+        t(ctx, 'admin_panel_limit_unlimited_button'),
+        panelCallback('su', panelId, serviceId, field)
+      ).row();
+    }),
+  });
 }
 
 async function promptPanelDisable(ctx: MenuContext, panelId: string): Promise<void> {
@@ -1209,6 +1593,13 @@ async function updatePanelService(
   try {
     if (action === 'default') {
       await ctx.services.panelRegistry.setDefaultService(panelId, serviceId);
+    } else if (action === 'toggle_enabled') {
+      const currentPanel = ctx.services.panelRegistry.getPanel(panelId);
+      const currentService = currentPanel?.services.find((s) => s.serviceId === serviceId);
+      if (!currentService) throw new Error('SERVICE_NOT_FOUND');
+      await ctx.services.panelRegistry.updateService(panelId, serviceId, {
+        enabled: !currentService.enabled,
+      });
     } else {
       await ctx.services.panelRegistry.resolveTarget(panelId, serviceId);
       await ctx.services.translationService.updateSettings({

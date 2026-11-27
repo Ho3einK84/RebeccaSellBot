@@ -30,6 +30,7 @@ import {
 import type { ReferralService } from './ReferralService.js';
 import { PromoValidationError, type PromoService } from './PromoService.js';
 import type { UserGroupService } from './UserGroupService.js';
+import type { InventoryService } from './InventoryService.js';
 import type { RebeccaPanelRegistry } from './RebeccaPanelRegistry.js';
 import { purchaseOwnershipMarker, remoteFingerprint } from './RebeccaOwnership.js';
 import { verifyOrEstablishConfigIncarnation } from './ConfigIncarnation.js';
@@ -61,7 +62,11 @@ export class WalletPurchaseSaga {
     private readonly promoService: PromoService,
     private readonly verifyBindingConflict = true,
     private readonly settings?: Partial<SettingReader>,
-    private readonly userGroupService?: Pick<UserGroupService, 'getEffectiveUserPolicyInTx'>
+    private readonly userGroupService?: Pick<UserGroupService, 'getEffectiveUserPolicyInTx'>,
+    private readonly inventoryService?: Pick<
+      InventoryService,
+      'reserveInTransaction' | 'commitInTransaction' | 'releaseInTransaction'
+    >
   ) {}
 
   private resolveStartOnFirstUse(params: PurchaseSagaParams): boolean {
@@ -246,6 +251,18 @@ export class WalletPurchaseSaga {
           )
           .returning({ telegramId: users.telegramId });
         if (reserved.length === 0) throw new Error('INSUFFICIENT_BALANCE');
+
+        if (this.inventoryService) {
+          await this.inventoryService.reserveInTransaction(tx, {
+            kind: 'purchase',
+            referenceId: intentId,
+            telegramId: params.telegramId,
+            operationType: params.type,
+            panelId,
+            serviceId,
+            packageId: params.packageId,
+          });
+        }
       });
     } catch (err) {
       // The partial unique index is the final race-safe double-submit guard.
@@ -290,6 +307,10 @@ export class WalletPurchaseSaga {
           )
           .returning({ telegramId: users.telegramId });
         if (released.length === 0) throw new Error('RESERVATION_INVARIANT_VIOLATION');
+
+        if (this.inventoryService) {
+          await this.inventoryService.releaseInTransaction(tx, intentId);
+        }
         return true;
       });
     };
@@ -712,6 +733,9 @@ export class WalletPurchaseSaga {
           }
 
           await this.promoService.finalizeReservedPurchasePromo(tx, intentId);
+          if (this.inventoryService) {
+            await this.inventoryService.commitInTransaction(tx, intentId);
+          }
           return true;
         });
 

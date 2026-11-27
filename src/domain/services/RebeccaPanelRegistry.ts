@@ -53,13 +53,20 @@ export type RebeccaPanelSummary = {
   isDefault: boolean;
   credentialConfigured: boolean;
   credentialMode: 'api_key' | 'password' | 'none';
+  maxConfigs: number | null;
+  stockRemaining: number | null;
+  dailyCreateLimit: number | null;
   services: RebeccaPanelServiceSummary[];
 };
 
 export type RebeccaPanelServiceSummary = {
   serviceId: number;
   name: string;
+  enabled: boolean;
   isDefault: boolean;
+  maxConfigs: number | null;
+  stockRemaining: number | null;
+  dailyCreateLimit: number | null;
 };
 
 export type RebeccaTarget = {
@@ -78,6 +85,9 @@ export type CreateRebeccaPanelInput = {
   adminPassword?: string;
   serviceId: number;
   serviceName: string;
+  maxConfigs?: number | null;
+  stockRemaining?: number | null;
+  dailyCreateLimit?: number | null;
 };
 
 type LoadedPanel = typeof rebeccaPanels.$inferSelect;
@@ -261,7 +271,11 @@ export class RebeccaPanelRegistry {
         .map((service) => ({
           serviceId: service.serviceId,
           name: service.name,
+          enabled: service.enabled ?? true,
           isDefault: service.isDefault,
+          maxConfigs: service.maxConfigs ?? null,
+          stockRemaining: service.stockRemaining ?? null,
+          dailyCreateLimit: service.dailyCreateLimit ?? null,
         }))
         .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.serviceId - b.serviceId);
       const credentialMode = panel.apiKeyEncrypted
@@ -299,6 +313,9 @@ export class RebeccaPanelRegistry {
         isDefault: panel.isDefault,
         credentialConfigured: credentialMode !== 'none',
         credentialMode,
+        maxConfigs: panel.maxConfigs ?? null,
+        stockRemaining: panel.stockRemaining ?? null,
+        dailyCreateLimit: panel.dailyCreateLimit ?? null,
         services,
       };
     });
@@ -379,11 +396,17 @@ export class RebeccaPanelRegistry {
         adminPasswordEncrypted: this.cipher.encrypt(values.adminPassword),
         enabled: true,
         isDefault: !hasEnabledDefault,
+        ...(values.maxConfigs !== undefined ? { maxConfigs: values.maxConfigs } : {}),
+        ...(values.stockRemaining !== undefined ? { stockRemaining: values.stockRemaining } : {}),
+        ...(values.dailyCreateLimit !== undefined
+          ? { dailyCreateLimit: values.dailyCreateLimit }
+          : {}),
       });
       await tx.insert(rebeccaPanelServices).values({
         panelId,
         serviceId: values.serviceId,
         name: values.serviceName,
+        enabled: true,
         isDefault: true,
       });
     });
@@ -399,6 +422,9 @@ export class RebeccaPanelRegistry {
       apiKey?: string | null;
       adminUsername?: string;
       adminPassword?: string | null;
+      maxConfigs?: number | null;
+      stockRemaining?: number | null;
+      dailyCreateLimit?: number | null;
     }
   ): Promise<void> {
     const panel = await this.requirePanelRow(panelId);
@@ -406,6 +432,12 @@ export class RebeccaPanelRegistry {
     if (name !== undefined && (name.length < 1 || name.length > 80)) {
       throw new Error('PANEL_NAME_INVALID');
     }
+    const maxConfigs = normalizeOptionalLimit(changes.maxConfigs, 'PANEL_LIMIT_INVALID');
+    const stockRemaining = normalizeOptionalLimit(changes.stockRemaining, 'PANEL_LIMIT_INVALID');
+    const dailyCreateLimit = normalizeOptionalLimit(
+      changes.dailyCreateLimit,
+      'PANEL_LIMIT_INVALID'
+    );
     const baseUrl = changes.baseUrl ? validateRebeccaBaseUrl(changes.baseUrl) : undefined;
     const apiKeyEncrypted =
       changes.apiKey === undefined ? undefined : this.cipher.encrypt(changes.apiKey || undefined);
@@ -426,6 +458,9 @@ export class RebeccaPanelRegistry {
           ? {}
           : { adminUsername: changes.adminUsername.trim() || 'admin' }),
         ...(passwordEncrypted === undefined ? {} : { adminPasswordEncrypted: passwordEncrypted }),
+        ...(maxConfigs === undefined ? {} : { maxConfigs }),
+        ...(stockRemaining === undefined ? {} : { stockRemaining }),
+        ...(dailyCreateLimit === undefined ? {} : { dailyCreateLimit }),
         enabled: Boolean(baseUrl ?? panel.baseUrl) && nextHasCredential && panel.enabled,
         updatedAt: new Date(),
       })
@@ -500,11 +535,28 @@ export class RebeccaPanelRegistry {
     await this.reload();
   }
 
-  async addService(panelId: string, serviceId: number, name: string): Promise<void> {
+  async addService(
+    panelId: string,
+    serviceId: number,
+    name: string,
+    options?: {
+      enabled?: boolean;
+      maxConfigs?: number | null;
+      stockRemaining?: number | null;
+      dailyCreateLimit?: number | null;
+    }
+  ): Promise<void> {
     await this.requirePanelRow(panelId);
     if (!validServiceId(serviceId)) throw new Error('SERVICE_ID_INVALID');
     const normalizedName = name.trim();
     if (!normalizedName || normalizedName.length > 80) throw new Error('SERVICE_NAME_INVALID');
+    const maxConfigs = normalizeOptionalLimit(options?.maxConfigs, 'SERVICE_LIMIT_INVALID');
+    const stockRemaining = normalizeOptionalLimit(options?.stockRemaining, 'SERVICE_LIMIT_INVALID');
+    const dailyCreateLimit = normalizeOptionalLimit(
+      options?.dailyCreateLimit,
+      'SERVICE_LIMIT_INVALID'
+    );
+    const enabled = options?.enabled ?? true;
     const existing = this.getPanel(panelId)?.services ?? [];
     await getDb()
       .insert(rebeccaPanelServices)
@@ -512,12 +564,67 @@ export class RebeccaPanelRegistry {
         panelId,
         serviceId,
         name: normalizedName,
+        enabled,
         isDefault: existing.length === 0,
+        ...(maxConfigs !== undefined ? { maxConfigs } : {}),
+        ...(stockRemaining !== undefined ? { stockRemaining } : {}),
+        ...(dailyCreateLimit !== undefined ? { dailyCreateLimit } : {}),
       })
       .onConflictDoUpdate({
         target: [rebeccaPanelServices.panelId, rebeccaPanelServices.serviceId],
-        set: { name: normalizedName, updatedAt: new Date() },
+        set: {
+          name: normalizedName,
+          ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
+          ...(maxConfigs !== undefined ? { maxConfigs } : {}),
+          ...(stockRemaining !== undefined ? { stockRemaining } : {}),
+          ...(dailyCreateLimit !== undefined ? { dailyCreateLimit } : {}),
+          updatedAt: new Date(),
+        },
       });
+    await this.reload();
+  }
+
+  async updateService(
+    panelId: string,
+    serviceId: number,
+    changes: {
+      name?: string;
+      enabled?: boolean;
+      maxConfigs?: number | null;
+      stockRemaining?: number | null;
+      dailyCreateLimit?: number | null;
+    }
+  ): Promise<void> {
+    await this.requirePanelRow(panelId);
+    if (!validServiceId(serviceId)) throw new Error('SERVICE_ID_INVALID');
+    const normalizedName = changes.name?.trim();
+    if (normalizedName !== undefined && (!normalizedName || normalizedName.length > 80)) {
+      throw new Error('SERVICE_NAME_INVALID');
+    }
+    const maxConfigs = normalizeOptionalLimit(changes.maxConfigs, 'SERVICE_LIMIT_INVALID');
+    const stockRemaining = normalizeOptionalLimit(changes.stockRemaining, 'SERVICE_LIMIT_INVALID');
+    const dailyCreateLimit = normalizeOptionalLimit(
+      changes.dailyCreateLimit,
+      'SERVICE_LIMIT_INVALID'
+    );
+    const [updated] = await getDb()
+      .update(rebeccaPanelServices)
+      .set({
+        ...(normalizedName === undefined ? {} : { name: normalizedName }),
+        ...(changes.enabled === undefined ? {} : { enabled: changes.enabled }),
+        ...(maxConfigs === undefined ? {} : { maxConfigs }),
+        ...(stockRemaining === undefined ? {} : { stockRemaining }),
+        ...(dailyCreateLimit === undefined ? {} : { dailyCreateLimit }),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(rebeccaPanelServices.panelId, panelId),
+          eq(rebeccaPanelServices.serviceId, serviceId)
+        )
+      )
+      .returning({ serviceId: rebeccaPanelServices.serviceId });
+    if (!updated) throw new Error('SERVICE_NOT_FOUND');
     await this.reload();
   }
 
@@ -602,7 +709,12 @@ export class RebeccaPanelRegistry {
     const [row] = await db
       .select({ count: sql<number>`count(*)` })
       .from(userConfigs)
-      .where(eq(userConfigs.panelId, panelId));
+      .where(
+        and(
+          eq(userConfigs.panelId, panelId),
+          sql`${userConfigs.panelStatus} IS DISTINCT FROM 'deleted'`
+        )
+      );
     return { activeConfigsCount: Number(row?.count ?? 0) };
   }
 
@@ -744,12 +856,30 @@ function validatePanelInput(input: CreateRebeccaPanelInput): CreateRebeccaPanelI
   if (!serviceName || serviceName.length > 80) throw new Error('SERVICE_NAME_INVALID');
   if (!validServiceId(input.serviceId)) throw new Error('SERVICE_ID_INVALID');
   if (!input.apiKey && !input.adminPassword) throw new Error('PANEL_CREDENTIAL_MISSING');
+  const maxConfigs = normalizeOptionalLimit(input.maxConfigs, 'PANEL_LIMIT_INVALID');
+  const stockRemaining = normalizeOptionalLimit(input.stockRemaining, 'PANEL_LIMIT_INVALID');
+  const dailyCreateLimit = normalizeOptionalLimit(input.dailyCreateLimit, 'PANEL_LIMIT_INVALID');
   return {
     ...input,
     name,
     serviceName,
     baseUrl: validateRebeccaBaseUrl(input.baseUrl),
+    ...(maxConfigs !== undefined ? { maxConfigs } : {}),
+    ...(stockRemaining !== undefined ? { stockRemaining } : {}),
+    ...(dailyCreateLimit !== undefined ? { dailyCreateLimit } : {}),
   };
+}
+
+function normalizeOptionalLimit(
+  value: number | null | undefined,
+  errorCode: string
+): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (!Number.isSafeInteger(value) || value < 0 || value > MAX_SERVICE_ID) {
+    throw new Error(errorCode);
+  }
+  return value;
 }
 
 function validServiceId(value: number): boolean {

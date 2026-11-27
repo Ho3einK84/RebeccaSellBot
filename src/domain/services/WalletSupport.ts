@@ -57,6 +57,12 @@ export function validatePurchaseSagaParams(params: PurchaseSagaParams): void {
   if (params.promoCode !== undefined && !params.promoCode.trim()) {
     throw new Error('INVALID_PROMO_CODE');
   }
+  if (
+    params.packageId !== undefined &&
+    (!params.packageId.trim() || params.packageId.trim().length > 80)
+  ) {
+    throw new Error('INVALID_PACKAGE_ID');
+  }
   if (params.panelId !== undefined && !/^[a-z0-9][a-z0-9_-]{1,39}$/iu.test(params.panelId)) {
     throw new Error('INVALID_PANEL_ID');
   }

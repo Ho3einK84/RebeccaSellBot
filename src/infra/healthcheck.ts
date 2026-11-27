@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { sql } from 'drizzle-orm';
+import { getAppVersionInfo } from './appVersion.js';
 import { logger } from './logger.js';
 import { getDb } from './db.js';
 
@@ -126,9 +127,15 @@ async function handleHealthRequest(
   try {
     const rawUrl = req.url ?? '/';
     const pathname = rawUrl.split('?')[0].replace(/\/+$/, '') || '/';
+    const appVersion = getAppVersionInfo();
     const body = JSON.stringify({
       ...snapshot,
       uptime: process.uptime(),
+      version: appVersion.displayVersion,
+      fullVersion: appVersion.fullVersion,
+      channel: appVersion.channel,
+      branch: appVersion.branch,
+      commit: appVersion.commit,
     });
 
     if (

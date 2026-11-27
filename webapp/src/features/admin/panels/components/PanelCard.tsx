@@ -98,6 +98,21 @@ export const PanelCard: React.FC<PanelCardProps> = ({
               {t('admin.panels.latency', { ms: formatNumber(panel.latencyMs) })}
             </Badge>
           )}
+
+          {isEnabled && panel.isAvailableForCreate === false && (
+            <Badge variant="error" size="xs">
+              {t('admin.panels.capacityFullBadge')}
+            </Badge>
+          )}
+
+          {isEnabled &&
+            panel.isAvailableForCreate !== false &&
+            typeof panel.utilizationPercent === 'number' &&
+            panel.utilizationPercent >= 80 && (
+              <Badge variant="warning" size="xs" className="tnum">
+                {t('admin.panels.lowCapacityBadge')} ({formatNumber(panel.utilizationPercent)}%)
+              </Badge>
+            )}
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center">
@@ -208,6 +223,88 @@ export const PanelCard: React.FC<PanelCardProps> = ({
         </Card>
       </div>
 
+      {/* Capacity & Limits Strip (when any limit is configured) */}
+      {(panel.maxConfigs != null ||
+        panel.stockRemaining != null ||
+        panel.dailyCreateLimit != null) && (
+        <Card subCard padding="sm" className="space-y-2">
+          {panel.maxConfigs != null && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2 text-[11px] tnum">
+                <span className="font-medium text-ink-soft">
+                  {t('admin.panels.maxConfigsField')}
+                </span>
+                <span className="font-semibold text-ink">
+                  {t('admin.panels.capacityUsageLabel', {
+                    used: formatNumber(
+                      (panel.activeConfigsCount ?? 0) + (panel.reservedCount ?? 0)
+                    ),
+                    max: formatNumber(panel.maxConfigs),
+                  })}
+                  {(panel.reservedCount ?? 0) > 0 && (
+                    <span className="text-ink-muted ms-1">
+                      (
+                      {t('admin.panels.reservedHint', {
+                        count: formatNumber(panel.reservedCount!),
+                      })}
+                      )
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-surface-3 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    (panel.utilizationPercent ?? 0) >= 95
+                      ? 'bg-danger'
+                      : (panel.utilizationPercent ?? 0) >= 75
+                        ? 'bg-warn'
+                        : 'bg-ok'
+                  }`}
+                  style={{
+                    width: `${Math.min(100, Math.max(0, panel.utilizationPercent ?? 0))}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {(panel.stockRemaining != null || panel.dailyCreateLimit != null) && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {panel.stockRemaining != null && (
+                <Badge
+                  variant={
+                    panel.stockRemaining <= 0
+                      ? 'error'
+                      : panel.stockRemaining <= 5
+                        ? 'warning'
+                        : 'success'
+                  }
+                  size="xs"
+                  className="tnum"
+                >
+                  {t('admin.panels.stockLabel', { count: formatNumber(panel.stockRemaining) })}
+                </Badge>
+              )}
+              {panel.dailyCreateLimit != null && (
+                <Badge
+                  variant={
+                    (panel.todayCreatedCount ?? 0) >= panel.dailyCreateLimit ? 'error' : 'info'
+                  }
+                  size="xs"
+                  className="tnum"
+                >
+                  {t('admin.panels.dailyUsageLabel', {
+                    today: formatNumber(panel.todayCreatedCount ?? 0),
+                    limit: formatNumber(panel.dailyCreateLimit),
+                  })}
+                </Badge>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Services Section */}
       <div className="space-y-1.5 pt-1">
         <div className="flex items-center justify-between">
@@ -226,33 +323,62 @@ export const PanelCard: React.FC<PanelCardProps> = ({
 
         {panel.services.length > 0 ? (
           <div className="flex gap-2 flex-wrap">
-            {panel.services.map((s) => (
-              <span
-                key={s.serviceId}
-                className="inline-flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-ctl border tnum bg-surface-2 border-line text-ink-soft"
-              >
-                <span className="font-medium text-ink">{s.name}</span>
-                <bdi dir="ltr" className="text-[11px] font-mono text-ink-muted tnum">
-                  ({s.serviceId})
-                </bdi>
-                {s.isDefault && (
+            {panel.services.map((s) => {
+              const svcPaused = s.enabled === false;
+              const svcFull = !svcPaused && s.isAvailableForCreate === false;
+              return (
+                <span
+                  key={s.serviceId}
+                  className={`inline-flex items-center gap-1.5 text-xs py-1 px-2.5 rounded-ctl border tnum ${
+                    svcPaused
+                      ? 'bg-surface-2/60 border-line text-ink-muted opacity-70'
+                      : svcFull
+                        ? 'bg-danger-soft/60 border-danger/30 text-danger-fg'
+                        : 'bg-surface-2 border-line text-ink-soft'
+                  }`}
+                >
                   <span
-                    className="inline-flex items-center text-warn-fg"
-                    title={t('admin.panels.defaultService')}
+                    className={`font-medium ${svcPaused ? 'line-through text-ink-muted' : 'text-ink'}`}
                   >
-                    <Star className="w-3 h-3 fill-current" aria-hidden="true" />
+                    {s.name}
                   </span>
-                )}
-                {s.isCustomTarget && (
-                  <span
-                    className="inline-flex items-center text-info-fg"
-                    title={t('admin.panels.customTargetBadge')}
-                  >
-                    <Target className="w-3 h-3" aria-hidden="true" />
-                  </span>
-                )}
-              </span>
-            ))}
+                  <bdi dir="ltr" className="text-[11px] font-mono text-ink-muted tnum">
+                    ({s.serviceId})
+                  </bdi>
+                  {svcPaused && (
+                    <Badge variant="neutral" size="xs">
+                      {t('admin.panels.servicePausedBadge')}
+                    </Badge>
+                  )}
+                  {svcFull && (
+                    <Badge variant="error" size="xs">
+                      {t('admin.panels.capacityFullBadge')}
+                    </Badge>
+                  )}
+                  {!svcPaused && !svcFull && s.remainingCapacity != null && (
+                    <span className="text-[10px] text-ink-muted tnum">
+                      ({formatNumber(s.remainingCapacity)})
+                    </span>
+                  )}
+                  {s.isDefault && (
+                    <span
+                      className="inline-flex items-center text-warn-fg"
+                      title={t('admin.panels.defaultService')}
+                    >
+                      <Star className="w-3 h-3 fill-current" aria-hidden="true" />
+                    </span>
+                  )}
+                  {s.isCustomTarget && (
+                    <span
+                      className="inline-flex items-center text-info-fg"
+                      title={t('admin.panels.customTargetBadge')}
+                    >
+                      <Target className="w-3 h-3" aria-hidden="true" />
+                    </span>
+                  )}
+                </span>
+              );
+            })}
           </div>
         ) : (
           <p className={`text-xs m-0 ${textMuted}`}>{t('admin.panels.noServices')}</p>

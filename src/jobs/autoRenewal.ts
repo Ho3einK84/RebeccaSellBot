@@ -18,6 +18,7 @@ import {
   PurchaseOutcomePendingError,
   type WalletService,
 } from '../domain/services/WalletService.js';
+import { InventoryUnavailableError } from '../domain/services/InventoryService.js';
 import type { PricingService } from '../domain/services/PricingService.js';
 import type { CatalogDiscountService } from '../domain/services/CatalogDiscountService.js';
 import { safeListActiveDiscounts } from '../domain/services/CatalogDiscountService.js';
@@ -422,6 +423,7 @@ export async function runAutoRenewalSweep(
           durationDays: selectedPackage.durationDays,
           panelId: config.panelId,
           serviceId: config.serviceId,
+          packageId: selectedPackage.id,
           ...(selectedPackage.rolloverQuota !== undefined
             ? { rolloverQuota: selectedPackage.rolloverQuota }
             : {}),
@@ -431,6 +433,15 @@ export async function runAutoRenewalSweep(
           logger.info(
             { errorName: err.name, configUsername: config.configUsername },
             'Auto-renewal deferred to purchase reconciliation'
+          );
+        } else if (err instanceof InventoryUnavailableError) {
+          logger.info(
+            {
+              reason: err.reason,
+              packageId: selectedPackage.id,
+              configUsername: config.configUsername,
+            },
+            'Auto-renewal skipped because package inventory is unavailable'
           );
         } else {
           logger.warn({ err, configUsername: config.configUsername }, 'Auto-renewal saga failed');

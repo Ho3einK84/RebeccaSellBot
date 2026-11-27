@@ -7,6 +7,7 @@ import { useLanguage } from '@/shared/i18n/LanguageContext.js';
 import { useFormatters } from '@/shared/hooks/useFormatters.js';
 import { StatCard } from '@/shared/components/ui/StatCard.js';
 import { Button } from '@/shared/components/ui/Button.js';
+import { AlertBanner } from '@/shared/components/ui/AlertBanner.js';
 import { SectionHeader } from '@/shared/components/ui/SectionHeader.js';
 import { EmptyState } from '@/shared/components/ui/EmptyState.js';
 import { IconTile, type TileTone } from '@/shared/components/ui/IconTile.js';
@@ -19,7 +20,8 @@ interface OverviewTabProps {
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
   const { t } = useLanguage();
-  const { stats, panelHealth, dbLatencyMs, isLoading, error, forceRefresh } = useAdminStats();
+  const { stats, panelHealth, fleetCapacity, dbLatencyMs, isLoading, error, forceRefresh } =
+    useAdminStats();
   const { formatMoney, formatNumber } = useFormatters();
 
   if (isLoading && !stats) {
@@ -85,6 +87,29 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onSwitchTab }) => {
         dbLatencyMs={dbLatencyMs}
         onSwitchToPanels={() => onSwitchTab('panels')}
       />
+
+      {fleetCapacity &&
+        (fleetCapacity.fullPanelsCount > 0 ||
+          fleetCapacity.pausedServicesCount > 0 ||
+          fleetCapacity.fullServicesCount > 0) && (
+          <AlertBanner
+            tone="warn"
+            action={
+              <Button variant="secondary" size="xs" onClick={() => onSwitchTab('panels')}>
+                {t('admin.overview.managePanelsCta')}
+              </Button>
+            }
+          >
+            <span className="font-semibold">{t('admin.overview.fleetCapacityAlertTitle')}: </span>
+            <span>
+              {t('admin.overview.fleetCapacityAlertDesc', {
+                fullPanels: formatNumber(fleetCapacity.fullPanelsCount),
+                pausedServices: formatNumber(fleetCapacity.pausedServicesCount),
+                fullServices: formatNumber(fleetCapacity.fullServicesCount),
+              })}
+            </span>
+          </AlertBanner>
+        )}
 
       {/* Primary KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

@@ -8,6 +8,7 @@ import { normalizeDataLimit } from '../../../../domain/services/TrafficLimit.js'
 import {
   customVolumeEnabled,
   renewalRolloverEnabled,
+  shopLowStockThreshold,
 } from '../../../../domain/services/FeatureSettings.js';
 import {
   resolveBestCatalogDiscount,
@@ -734,65 +735,87 @@ export function registerUserConfigRoutes(
         safeGetEffectiveUserPolicy(options.userGroupService, telegramId),
       ]);
       const now = new Date();
-      const compatiblePackages = (
+      const rawCompatible = (
         options.pricingService?.getPackages(config.panelId, config.serviceId, false) ?? []
-      )
-        .filter((p) => p.enabled !== false)
-        .map((p) => {
-          const priced =
-            typeof options.pricingService?.resolvePackagePrice === 'function'
-              ? options.pricingService.resolvePackagePrice(p, activeDiscounts, now, userPolicy)
-              : (() => {
-                  const groupDisc = applyGroupDiscount(p.price, userPolicy.discountPercent);
-                  const catDisc = userPolicy.allowCatalogDiscounts
-                    ? resolveBestCatalogDiscount(
-                        activeDiscounts,
-                        {
-                          packageId: p.id,
-                          categoryId: p.categoryId ?? null,
-                          originalPrice: groupDisc.finalAmount,
-                        },
-                        now
-                      )
-                    : {
+      ).filter((p) => p.enabled !== false);
+      const availabilityMap = options.inventoryService
+        ? await options.inventoryService
+            .getPackagesAvailabilityMap(rawCompatible, { telegramId, now })
+            .catch(() => null)
+        : null;
+      const lowStockThreshold = options.translationService
+        ? shopLowStockThreshold(options.translationService)
+        : 5;
+
+      const compatiblePackages = rawCompatible.map((p) => {
+        const priced =
+          typeof options.pricingService?.resolvePackagePrice === 'function'
+            ? options.pricingService.resolvePackagePrice(p, activeDiscounts, now, userPolicy)
+            : (() => {
+                const groupDisc = applyGroupDiscount(p.price, userPolicy.discountPercent);
+                const catDisc = userPolicy.allowCatalogDiscounts
+                  ? resolveBestCatalogDiscount(
+                      activeDiscounts,
+                      {
+                        packageId: p.id,
+                        categoryId: p.categoryId ?? null,
                         originalPrice: groupDisc.finalAmount,
-                        effectivePrice: groupDisc.finalAmount,
-                        discountAmount: 0,
-                        activeDiscountTitle: null,
-                        discountExpiresAt: null,
-                      };
-                  return {
-                    originalPrice: p.price,
-                    effectivePrice: catDisc.effectivePrice,
-                    discountAmount: Math.max(0, p.price - catDisc.effectivePrice),
-                    groupDiscountPercent: groupDisc.discountPercent,
-                    groupDiscountAmount: groupDisc.discountAmount,
-                    catalogDiscountAmount: catDisc.discountAmount,
-                    activeDiscountTitle: catDisc.activeDiscountTitle,
-                    discountExpiresAt: catDisc.discountExpiresAt,
-                  };
-                })();
-          return {
-            id: p.id,
-            name: localizePackageName(p.id, p.name, locale, options.translationService),
-            gbAmount: p.gbAmount,
-            durationDays: p.durationDays,
-            price: priced.effectivePrice,
-            originalPrice: priced.originalPrice,
-            effectivePrice: priced.effectivePrice,
-            discountAmount: priced.discountAmount,
-            groupDiscountPercent: priced.groupDiscountPercent ?? 0,
-            groupDiscountAmount: priced.groupDiscountAmount ?? 0,
-            catalogDiscountAmount: priced.catalogDiscountAmount ?? 0,
-            activeDiscountTitle: priced.activeDiscountTitle,
-            discountExpiresAt: priced.discountExpiresAt
-              ? priced.discountExpiresAt.toISOString()
-              : null,
-            categoryId: p.categoryId ?? null,
-            rolloverQuota: p.rolloverQuota ?? defaultRollover,
-            featured: p.id.includes('popular') || p.id.includes('best') || p.id.includes('pro'),
-          };
-        });
+                      },
+                      now
+                    )
+                  : {
+                      originalPrice: groupDisc.finalAmount,
+                      effectivePrice: groupDisc.finalAmount,
+                      discountAmount: 0,
+                      activeDiscountTitle: null,
+                      discountExpiresAt: null,
+                    };
+                return {
+                  originalPrice: p.price,
+                  effectivePrice: catDisc.effectivePrice,
+                  discountAmount: Math.max(0, p.price - catDisc.effectivePrice),
+                  groupDiscountPercent: groupDisc.discountPercent,
+                  groupDiscountAmount: groupDisc.discountAmount,
+                  catalogDiscountAmount: catDisc.discountAmount,
+                  activeDiscountTitle: catDisc.activeDiscountTitle,
+                  discountExpiresAt: catDisc.discountExpiresAt,
+                };
+              })();
+        const avail = availabilityMap?.get(p.id);
+        const renewalRemaining = avail ? avail.renewalRemaining : null;
+        const renewalAvailable = avail?.renewalAvailable ?? true;
+        const renewalLowStock =
+          renewalAvailable &&
+          renewalRemaining !== null &&
+          renewalRemaining > 0 &&
+          renewalRemaining <= lowStockThreshold;
+        return {
+          id: p.id,
+          name: localizePackageName(p.id, p.name, locale, options.translationService),
+          gbAmount: p.gbAmount,
+          durationDays: p.durationDays,
+          price: priced.effectivePrice,
+          originalPrice: priced.originalPrice,
+          effectivePrice: priced.effectivePrice,
+          discountAmount: priced.discountAmount,
+          groupDiscountPercent: priced.groupDiscountPercent ?? 0,
+          groupDiscountAmount: priced.groupDiscountAmount ?? 0,
+          catalogDiscountAmount: priced.catalogDiscountAmount ?? 0,
+          activeDiscountTitle: priced.activeDiscountTitle,
+          discountExpiresAt: priced.discountExpiresAt
+            ? priced.discountExpiresAt.toISOString()
+            : null,
+          categoryId: p.categoryId ?? null,
+          rolloverQuota: p.rolloverQuota ?? defaultRollover,
+          featured: p.id.includes('popular') || p.id.includes('best') || p.id.includes('pro'),
+          remainingStock: renewalRemaining,
+          lowStock: renewalLowStock,
+          available: renewalAvailable,
+          unavailableReason: avail?.renewalUnavailableReason ?? null,
+          userLimitReached: avail?.userLimitReached ?? false,
+          maxPurchasesPerUser: avail?.maxPurchasesPerUser ?? null,
+        };
+      });
 
       const basePreview = computeRolloverPreview({
         enabled: true,

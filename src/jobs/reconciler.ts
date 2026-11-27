@@ -35,6 +35,7 @@ import type { RefundService } from '../domain/services/RefundService.js';
 import type { ConfigReconciliationService } from '../domain/services/ConfigReconciliationService.js';
 import type { PurchaseCheckoutService } from '../domain/services/PurchaseCheckoutService.js';
 import type { RebeccaPanelRegistry } from '../domain/services/RebeccaPanelRegistry.js';
+import type { InventoryService } from '../domain/services/InventoryService.js';
 import { getRebeccaService } from '../domain/services/RebeccaPanelAccess.js';
 import { PARTIAL_RENEWAL_REVIEW_MESSAGE } from '../domain/services/WalletContracts.js';
 import {
@@ -59,11 +60,15 @@ export interface ReconciliationServices {
   refundService?: RefundService;
   configReconciliationService?: ConfigReconciliationService;
   purchaseCheckoutService?: PurchaseCheckoutService;
+  inventoryService?: Pick<InventoryService, 'commitInTransaction' | 'releaseInTransaction'>;
 }
 
 export async function reconcilePendingIntents(
   panels: Pick<RebeccaPanelRegistry, 'getService'> | RebeccaService,
-  services: Pick<ReconciliationServices, 'promoService' | 'referralService'> = {}
+  services: Pick<
+    ReconciliationServices,
+    'promoService' | 'referralService' | 'inventoryService'
+  > = {}
 ): Promise<number> {
   const db = getDb();
   const timeoutCutoff = new Date(Date.now() - PENDING_INTENT_MIN_AGE_MS);
@@ -138,7 +143,8 @@ export async function reconcilePendingIntents(
             intent,
             remote.user,
             services.promoService,
-            true
+            true,
+            services.inventoryService
           );
           if (completed) {
             await settleRecoveredBonuses(services.referralService, intent);
@@ -153,7 +159,8 @@ export async function reconcilePendingIntents(
             db,
             intent,
             'Reconciled: Rebecca confirms the configuration is absent',
-            services.promoService
+            services.promoService,
+            services.inventoryService
           );
           if (released) {
             resolvedCount++;
@@ -173,7 +180,8 @@ export async function reconcilePendingIntents(
           intent,
           remote.user!,
           services.promoService,
-          true
+          true,
+          services.inventoryService
         );
         if (completed) {
           await settleRecoveredBonuses(services.referralService, intent);
@@ -188,7 +196,8 @@ export async function reconcilePendingIntents(
           db,
           intent,
           'Reconciled: Rebecca confirms the renewal was not applied',
-          services.promoService
+          services.promoService,
+          services.inventoryService
         );
         if (released) {
           resolvedCount++;
@@ -392,7 +401,8 @@ async function completePendingIntent(
   intent: PurchaseIntent,
   remote: RebeccaUserDetail,
   promoService?: PromoService,
-  verifyBindingConflict = true
+  verifyBindingConflict = true,
+  inventoryService?: Pick<InventoryService, 'commitInTransaction'>
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
     const observedAt = new Date();
@@ -513,6 +523,9 @@ async function completePendingIntent(
     if (promoService) {
       await promoService.finalizeReservedPurchasePromo(tx, intent.id);
     }
+    if (inventoryService) {
+      await inventoryService.commitInTransaction(tx, intent.id);
+    }
 
     return true;
   });
@@ -522,7 +535,8 @@ async function failAndReleaseIntent(
   db: ReturnType<typeof getDb>,
   intent: PurchaseIntent,
   errorMessage: string,
-  promoService?: PromoService
+  promoService?: PromoService,
+  inventoryService?: Pick<InventoryService, 'releaseInTransaction'>
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
     const transitioned = await tx
@@ -551,6 +565,9 @@ async function failAndReleaseIntent(
       )
       .returning({ telegramId: users.telegramId });
     if (released.length === 0) throw new Error('RESERVATION_INVARIANT_VIOLATION');
+    if (inventoryService) {
+      await inventoryService.releaseInTransaction(tx, intent.id);
+    }
     return true;
   });
 }

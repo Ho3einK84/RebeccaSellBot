@@ -13,9 +13,17 @@ import {
   type PackageOption,
 } from '../../domain/services/PricingService.js';
 import {
+  customVolumeDailyLimit,
   onHoldDefaultEnabled,
   renewalRolloverEnabled,
+  shopShowOutOfStock,
+  trialDailyLimit,
 } from '../../domain/services/FeatureSettings.js';
+import {
+  CUSTOM_VOLUME_INVENTORY_ID,
+  MAX_INVENTORY_VALUE,
+  TRIAL_INVENTORY_ID,
+} from '../../domain/services/InventoryService.js';
 import { localizedDate, localizedNumber, normalizeInputDigits, t } from '../locale.js';
 import { escapeTelegramMarkdown, sanitizeTelegramInlineCode } from '../rendering.js';
 import {
@@ -124,6 +132,10 @@ export async function renderCustomVolumeScreen(
   const enabled = ts.getSettingBool('custom_volume_enabled', true);
   const pricePerGb = ts.getSettingNum('price_per_gb', 5000);
   const defaultDays = ts.getSettingNum('custom_default_days', 30);
+  const dailyLim = customVolumeDailyLimit(ts);
+  const customAvail = await ctx.services.inventoryService
+    ?.getCustomVolumeAvailability(ctx.services.pricingService.getCustomVolumeTarget())
+    .catch(() => null);
 
   const text = buildAdminScreen({
     emoji: '📐',
@@ -151,6 +163,20 @@ export async function renderCustomVolumeScreen(
             label: t(ctx, 'admin_setting_custom_default_days'),
             value: `${localizedNumber(defaultDays, ctx)} ${t(ctx, 'days_unit')}`,
           },
+          {
+            label: t(ctx, 'admin_panel_stock_label'),
+            value:
+              customAvail?.stockRemaining !== null && customAvail?.stockRemaining !== undefined
+                ? localizedNumber(customAvail.stockRemaining, ctx)
+                : t(ctx, 'unlimited'),
+          },
+          {
+            label: t(ctx, 'admin_panel_daily_limit_label'),
+            value:
+              dailyLim > 0
+                ? `${localizedNumber(customAvail?.todayCreatedCount ?? 0, ctx)} / ${localizedNumber(dailyLim, ctx)}`
+                : `${localizedNumber(customAvail?.todayCreatedCount ?? 0, ctx)} / ♾️`,
+          },
         ],
       },
     ],
@@ -164,6 +190,9 @@ export async function renderCustomVolumeScreen(
     .row()
     .text(t(ctx, 'admin_setting_price_per_gb'), 'adm:cv:ed:price_per_gb')
     .text(t(ctx, 'admin_setting_custom_default_days'), 'adm:cv:ed:custom_default_days')
+    .row()
+    .text(t(ctx, 'admin_panel_edit_stock_button'), 'adm:cv:inv:stk')
+    .text(t(ctx, 'admin_panel_edit_daily_limit_button'), 'adm:cv:inv:dly')
     .row();
   appendAdminFooterNav(kb, ctx, {
     backCallback: 'adm:sales',
@@ -187,6 +216,8 @@ export async function renderTrialScreen(
   const trialGb = ts.getSettingNum('trial_gb', 1);
   const trialDays = ts.getSettingNum('trial_days', 3);
   const requirePhone = ts.getSettingBool('require_phone_for_trial', false);
+  const dailyLim = trialDailyLimit(ts);
+  const trialAvail = await ctx.services.inventoryService?.getTrialAvailability().catch(() => null);
 
   const text = buildAdminScreen({
     emoji: '🎁',
@@ -215,6 +246,20 @@ export async function renderTrialScreen(
             value: `${localizedNumber(trialDays, ctx)} ${t(ctx, 'days_unit')}`,
           },
           {
+            label: t(ctx, 'admin_panel_stock_label'),
+            value:
+              trialAvail?.stockRemaining !== null && trialAvail?.stockRemaining !== undefined
+                ? localizedNumber(trialAvail.stockRemaining, ctx)
+                : t(ctx, 'unlimited'),
+          },
+          {
+            label: t(ctx, 'admin_panel_daily_limit_label'),
+            value:
+              dailyLim > 0
+                ? `${localizedNumber(trialAvail?.todayCreatedCount ?? 0, ctx)} / ${localizedNumber(dailyLim, ctx)}`
+                : `${localizedNumber(trialAvail?.todayCreatedCount ?? 0, ctx)} / ♾️`,
+          },
+          {
             label: t(ctx, 'admin_setting_require_phone_for_trial'),
             value: buildStatusBadge(ctx, requirePhone ? 'active' : 'inactive'),
           },
@@ -231,6 +276,9 @@ export async function renderTrialScreen(
     .row()
     .text(t(ctx, 'admin_setting_trial_gb'), 'adm:trl:ed:trial_gb')
     .text(t(ctx, 'admin_setting_trial_days'), 'adm:trl:ed:trial_days')
+    .row()
+    .text(t(ctx, 'admin_panel_edit_stock_button'), 'adm:trl:inv:stk')
+    .text(t(ctx, 'admin_panel_edit_daily_limit_button'), 'adm:trl:inv:dly')
     .row()
     .text(t(ctx, 'admin_cfg_phone_shortcut'), 'adm:cfg:gen')
     .row();
@@ -420,13 +468,22 @@ export async function renderPackagesListScreen(
   const visible = packages.slice((page - 1) * PKG_PAGE_SIZE, page * PKG_PAGE_SIZE);
   const activeCount = packages.filter((p) => p.enabled !== false).length;
   const inactiveCount = packages.length - activeCount;
+  const availMap = await ctx.services.inventoryService
+    ?.getPackagesAvailabilityMap(visible)
+    .catch(() => null);
+  const showOutOfStock = shopShowOutOfStock(ctx.services.translationService);
 
   const kb = new InlineKeyboard();
   for (const pkg of visible) {
-    const icon = pkg.enabled !== false ? '🟢' : '⚪';
+    const avail = availMap?.get(pkg.id);
+    const icon = pkg.enabled === false ? '⚪' : avail && !avail.available ? '🔴' : '🟢';
+    const stockBadge =
+      avail && avail.stockRemaining !== null
+        ? ` · 📦${localizedNumber(avail.stockRemaining, ctx)}`
+        : '';
     kb.text(
       truncateButtonLabel(
-        `${icon} ${pkg.name} · ${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')} · ${localizedNumber(pkg.price, ctx)}`
+        `${icon} ${pkg.name} · ${localizedNumber(pkg.gbAmount, ctx)} ${t(ctx, 'traffic_unit_gb')}${stockBadge}`
       ),
       `adm:pkg:v:${pkg.id}`
     ).row();
@@ -441,6 +498,10 @@ export async function renderPackagesListScreen(
   kb.text(t(ctx, 'admin_pkg_add'), 'adm:pkg:add')
     .text(t(ctx, 'admin_pkg_categories_button'), 'adm:cat:p:1')
     .row()
+    .text(
+      `${t(ctx, 'admin_pkg_show_out_of_stock_btn')}: ${showOutOfStock ? '🟢' : '⚪'}`,
+      'adm:pkg:soos'
+    )
     .text(t(ctx, 'admin_cfg_service_button'), 'adm:cfg:svc')
     .row();
   appendAdminFooterNav(kb, ctx, {
@@ -538,6 +599,19 @@ export async function renderPackageDetailScreen(
       ? `${t(ctx, 'admin_pkg_override_default')} (${globalRollover ? t(ctx, 'admin_overview_active') : t(ctx, 'admin_overview_inactive')})`
       : buildStatusBadge(ctx, pkg.rolloverQuota ? 'active' : 'inactive');
 
+  const inv = await ctx.services.inventoryService
+    ?.getPackageInventoryRecord(pkg.id)
+    .catch(() => null);
+  const stockDisplay =
+    inv && inv.stockRemaining !== null
+      ? localizedNumber(inv.stockRemaining, ctx)
+      : t(ctx, 'unlimited');
+  const userLimitDisplay =
+    inv && inv.maxPurchasesPerUser !== null
+      ? localizedNumber(inv.maxPurchasesPerUser, ctx)
+      : t(ctx, 'unlimited');
+  const soldDisplay = localizedNumber(inv?.soldCount ?? 0, ctx);
+
   const text = buildAdminScreen({
     emoji: '📦',
     title: escapeTelegramMarkdown(pkg.name),
@@ -567,6 +641,18 @@ export async function renderPackageDetailScreen(
           {
             label: t(ctx, 'admin_pkg_price_label'),
             value: `${localizedNumber(pkg.price, ctx)} ${t(ctx, 'currency_toman')}`,
+          },
+          {
+            label: t(ctx, 'admin_pkg_stock_label'),
+            value: stockDisplay,
+          },
+          {
+            label: t(ctx, 'admin_pkg_user_limit_label'),
+            value: userLimitDisplay,
+          },
+          {
+            label: t(ctx, 'admin_pkg_sold_label'),
+            value: soldDisplay,
           },
           {
             label: t(ctx, 'admin_pkg_category_label'),
@@ -605,6 +691,9 @@ export async function renderPackageDetailScreen(
     .row()
     .text(t(ctx, 'admin_pkg_edit_days_btn'), `adm:pkg:ed:days:${pkg.id}`)
     .text(t(ctx, 'admin_pkg_edit_price_btn'), `adm:pkg:ed:price:${pkg.id}`)
+    .row()
+    .text(t(ctx, 'admin_pkg_edit_stock_btn'), `adm:pkg:ed:stk:${pkg.id}`)
+    .text(t(ctx, 'admin_pkg_edit_user_limit_btn'), `adm:pkg:ed:lim:${pkg.id}`)
     .row()
     .text(t(ctx, 'admin_pkg_edit_category_btn'), `adm:pkg:cat:${pkg.id}:1`)
     .text(t(ctx, 'admin_pkg_edit_target_btn'), `adm:pkg:tgt:${pkg.id}`)
@@ -1073,6 +1162,60 @@ export function registerAdminSalesRoutes(): void {
   registerAdminRoute(/^adm:cv:ed:(price_per_gb|custom_default_days)$/u, async (ctx, match) => {
     await startSimpleSettingEdit(ctx, match![1] as SettingKey, 'adm:cv');
   });
+  registerAdminRoute(/^adm:cv:inv:(stk|dly)$/u, async (ctx, match) => {
+    if (!ctx.services) return;
+    const field = match![1]!;
+    const currentDisplay =
+      field === 'stk'
+        ? await (async () => {
+            const rec = await ctx
+              .services!.inventoryService?.getPackageInventoryRecord(CUSTOM_VOLUME_INVENTORY_ID)
+              .catch(() => null);
+            return rec && rec.stockRemaining !== null
+              ? localizedNumber(rec.stockRemaining, ctx)
+              : t(ctx, 'unlimited');
+          })()
+        : (() => {
+            const lim = customVolumeDailyLimit(ctx.services!.translationService);
+            return lim > 0 ? localizedNumber(lim, ctx) : t(ctx, 'unlimited');
+          })();
+    await startAdminInput(ctx, {
+      kind: 'sales:sku_inv',
+      payload: { scope: 'cv', field, currentDisplay },
+      returnRoute: 'adm:cv',
+      promptText: buildAdminPromptScreen({
+        emoji: '📦',
+        title: t(
+          ctx,
+          field === 'stk' ? 'admin_panel_edit_stock_button' : 'admin_panel_edit_daily_limit_button'
+        ),
+        body: t(
+          ctx,
+          field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_panel_daily_limit_prompt',
+          { current: currentDisplay }
+        ),
+      }),
+      keyboard: adminInputCancelKeyboard(ctx, (kb) => {
+        kb.text(t(ctx, 'admin_panel_limit_unlimited_button'), `adm:cv:ul:${field}`).row();
+      }),
+    });
+  });
+  registerAdminRoute(/^adm:cv:ul:(stk|dly)$/u, async (ctx, match) => {
+    if (!ctx.services) return;
+    if (ctx.session) delete ctx.session.adminInput;
+    const field = match![1]!;
+    if (field === 'stk') {
+      await ctx.services.inventoryService?.setPackageInventory(CUSTOM_VOLUME_INVENTORY_ID, {
+        stockRemaining: null,
+      });
+    } else {
+      await ctx.services.translationService.updateSetting('custom_volume_daily_limit', '0');
+    }
+    await renderCustomVolumeScreen(ctx, {
+      tone: 'success',
+      text: t(ctx, 'admin_setting_saved_title'),
+    });
+  });
 
   // ── Free Trial ──
   registerAdminRoute('adm:trl', async (ctx, _m, notice) => renderTrialScreen(ctx, notice));
@@ -1084,6 +1227,106 @@ export function registerAdminSalesRoutes(): void {
   });
   registerAdminRoute(/^adm:trl:ed:(trial_gb|trial_days)$/u, async (ctx, match) => {
     await startSimpleSettingEdit(ctx, match![1] as SettingKey, 'adm:trl');
+  });
+  registerAdminRoute(/^adm:trl:inv:(stk|dly)$/u, async (ctx, match) => {
+    if (!ctx.services) return;
+    const field = match![1]!;
+    const currentDisplay =
+      field === 'stk'
+        ? await (async () => {
+            const rec = await ctx
+              .services!.inventoryService?.getPackageInventoryRecord(TRIAL_INVENTORY_ID)
+              .catch(() => null);
+            return rec && rec.stockRemaining !== null
+              ? localizedNumber(rec.stockRemaining, ctx)
+              : t(ctx, 'unlimited');
+          })()
+        : (() => {
+            const lim = trialDailyLimit(ctx.services!.translationService);
+            return lim > 0 ? localizedNumber(lim, ctx) : t(ctx, 'unlimited');
+          })();
+    await startAdminInput(ctx, {
+      kind: 'sales:sku_inv',
+      payload: { scope: 'trl', field, currentDisplay },
+      returnRoute: 'adm:trl',
+      promptText: buildAdminPromptScreen({
+        emoji: '📦',
+        title: t(
+          ctx,
+          field === 'stk' ? 'admin_panel_edit_stock_button' : 'admin_panel_edit_daily_limit_button'
+        ),
+        body: t(
+          ctx,
+          field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_panel_daily_limit_prompt',
+          { current: currentDisplay }
+        ),
+      }),
+      keyboard: adminInputCancelKeyboard(ctx, (kb) => {
+        kb.text(t(ctx, 'admin_panel_limit_unlimited_button'), `adm:trl:ul:${field}`).row();
+      }),
+    });
+  });
+  registerAdminRoute(/^adm:trl:ul:(stk|dly)$/u, async (ctx, match) => {
+    if (!ctx.services) return;
+    if (ctx.session) delete ctx.session.adminInput;
+    const field = match![1]!;
+    if (field === 'stk') {
+      await ctx.services.inventoryService?.setPackageInventory(TRIAL_INVENTORY_ID, {
+        stockRemaining: null,
+      });
+    } else {
+      await ctx.services.translationService.updateSetting('trial_daily_limit', '0');
+    }
+    await renderTrialScreen(ctx, {
+      tone: 'success',
+      text: t(ctx, 'admin_setting_saved_title'),
+    });
+  });
+
+  registerAdminInputHandler('sales:sku_inv', async (ctx, rawText, state) => {
+    if (!ctx.services) return { status: 'done' };
+    const scope = String(state.payload?.scope ?? 'cv');
+    const field = String(state.payload?.field ?? 'stk');
+    const returnRoute = scope === 'trl' ? 'adm:trl' : 'adm:cv';
+    const skuId = scope === 'trl' ? TRIAL_INVENTORY_ID : CUSTOM_VOLUME_INVENTORY_ID;
+    const settingKey = scope === 'trl' ? 'trial_daily_limit' : 'custom_volume_daily_limit';
+    const trimmed = normalizeInputDigits(rawText.trim()).toLowerCase();
+    const isUnlimited = ['-', 'unlimited', 'none', 'نامحدود'].includes(trimmed);
+    const parsed = isUnlimited ? null : parseNonNegInt(rawText);
+    const maxAllowed = field === 'dly' ? 100_000 : MAX_INVENTORY_VALUE;
+    if (!isUnlimited && (parsed === undefined || parsed === null || parsed > maxAllowed)) {
+      return {
+        status: 'retry',
+        promptText: buildAdminPromptScreen({
+          emoji: '📦',
+          title: t(
+            ctx,
+            field === 'stk'
+              ? 'admin_panel_edit_stock_button'
+              : 'admin_panel_edit_daily_limit_button'
+          ),
+          body: t(
+            ctx,
+            field === 'stk' ? 'admin_panel_stock_prompt' : 'admin_panel_daily_limit_prompt',
+            { current: String(state.payload?.currentDisplay ?? '—') }
+          ),
+          error: t(ctx, 'admin_setting_invalid'),
+        }),
+      };
+    }
+    if (field === 'stk') {
+      await ctx.services.inventoryService?.setPackageInventory(skuId, { stockRemaining: parsed });
+    } else {
+      await ctx.services.translationService.updateSetting(
+        settingKey,
+        String(parsed === null ? 0 : parsed)
+      );
+    }
+    return {
+      status: 'done',
+      redirectRoute: returnRoute,
+      notice: { tone: 'success', text: t(ctx, 'admin_setting_saved_title') },
+    };
   });
 
   // ── Growth & Rewards (Referral + Cashback + Lucky Wheel) ──
@@ -1116,6 +1359,16 @@ export function registerAdminSalesRoutes(): void {
   );
 
   // ── Packages ──
+  registerAdminRoute('adm:pkg:soos', async (ctx) => {
+    if (!ctx.services) return;
+    const next = !shopShowOutOfStock(ctx.services.translationService);
+    await ctx.services.translationService.updateSetting('shop_show_out_of_stock', String(next));
+    await renderPackagesListScreen(ctx, 1, {
+      tone: 'success',
+      text: t(ctx, 'admin_setting_saved_title'),
+    });
+  });
+
   registerAdminRoute(/^adm:pkg:p:(\d+)$/u, async (ctx, match, notice) => {
     await renderPackagesListScreen(ctx, Number(match?.[1]) || 1, notice);
   });
@@ -1211,6 +1464,20 @@ export function registerAdminSalesRoutes(): void {
     };
     const next = [...pkgs.slice(0, sourceIdx + 1), clone, ...pkgs.slice(sourceIdx + 1)];
     await savePackages(ctx, next);
+    const sourceInv = await ctx.services?.inventoryService
+      ?.getPackageInventoryRecord(source.id)
+      .catch(() => null);
+    if (
+      sourceInv &&
+      (sourceInv.stockRemaining !== null || sourceInv.maxPurchasesPerUser !== null)
+    ) {
+      await ctx.services?.inventoryService
+        ?.setPackageInventory(clone.id, {
+          stockRemaining: sourceInv.stockRemaining,
+          maxPurchasesPerUser: sourceInv.maxPurchasesPerUser,
+        })
+        .catch(() => undefined);
+    }
     await renderPackageDetailScreen(ctx, clone.id, {
       tone: 'success',
       text: t(ctx, 'admin_setting_saved_title'),
@@ -1249,33 +1516,57 @@ export function registerAdminSalesRoutes(): void {
     const id = match![1]!;
     const next = loadPackages(ctx).filter((p) => p.id !== id);
     await savePackages(ctx, next);
+    await ctx.services?.inventoryService?.deletePackageInventory(id).catch(() => undefined);
     await renderPackagesListScreen(ctx, 1, {
       tone: 'success',
       text: t(ctx, 'admin_setting_saved_title'),
     });
   });
 
+  registerAdminRoute(/^adm:pkg:ul:(stk|lim):([a-z0-9_-]{1,64})$/u, async (ctx, match) => {
+    if (!ctx.services) return;
+    if (ctx.session) delete ctx.session.adminInput;
+    const field = match![1]!;
+    const id = match![2]!;
+    await ctx.services.inventoryService?.setPackageInventory(
+      id,
+      field === 'stk' ? { stockRemaining: null } : { maxPurchasesPerUser: null }
+    );
+    await renderPackageDetailScreen(ctx, id, {
+      tone: 'success',
+      text: t(ctx, 'admin_setting_saved_title'),
+    });
+  });
+
   // Package single-field edits via non-blocking adminInput
-  const formatPkgFieldPrompt = (ctx: MenuContext, pkg: PackageOption, field: string): string => {
+  const formatPkgFieldPrompt = (
+    ctx: MenuContext,
+    pkg: PackageOption,
+    field: string,
+    currentOverride?: string
+  ): string => {
     const promptKeyMap: Record<string, string> = {
       name: 'admin_pkg_name_prompt',
       gb: 'admin_pkg_gb_prompt',
       days: 'admin_pkg_days_prompt',
       price: 'admin_pkg_price_prompt',
+      stk: 'admin_pkg_stock_prompt',
+      lim: 'admin_pkg_user_limit_prompt',
     };
     const currentVal =
-      field === 'name'
+      currentOverride ??
+      (field === 'name'
         ? sanitizeTelegramInlineCode(pkg.name)
         : field === 'gb'
           ? localizedNumber(pkg.gbAmount, ctx)
           : field === 'days'
             ? localizedNumber(pkg.durationDays, ctx)
-            : localizedNumber(pkg.price, ctx);
+            : localizedNumber(pkg.price, ctx));
     return t(ctx, promptKeyMap[field]!, { current: currentVal });
   };
 
   registerAdminRoute(
-    /^adm:pkg:ed:(name|gb|days|price):([a-z0-9_-]{1,64})$/u,
+    /^adm:pkg:ed:(name|gb|days|price|stk|lim):([a-z0-9_-]{1,64})$/u,
     async (ctx, match) => {
       const field = match![1]!;
       const id = match![2]!;
@@ -1284,15 +1575,34 @@ export function registerAdminSalesRoutes(): void {
         await renderPackagesListScreen(ctx, 1);
         return;
       }
+      let currentDisplay: string | undefined;
+      if (field === 'stk' || field === 'lim') {
+        const inv = await ctx.services?.inventoryService
+          ?.getPackageInventoryRecord(id)
+          .catch(() => null);
+        const val =
+          field === 'stk' ? (inv?.stockRemaining ?? null) : (inv?.maxPurchasesPerUser ?? null);
+        currentDisplay = val === null ? t(ctx, 'unlimited') : localizedNumber(val, ctx);
+      }
       await startAdminInput(ctx, {
         kind: 'pkg:edit_field',
-        payload: { id, field },
+        payload: { id, field, ...(currentDisplay !== undefined ? { currentDisplay } : {}) },
         returnRoute: `adm:pkg:v:${id}`,
         promptText: buildAdminPromptScreen({
           emoji: '✏️',
           title: escapeTelegramMarkdown(pkg.name),
-          body: formatPkgFieldPrompt(ctx, pkg, field),
+          body: formatPkgFieldPrompt(ctx, pkg, field, currentDisplay),
         }),
+        ...(field === 'stk' || field === 'lim'
+          ? {
+              keyboard: adminInputCancelKeyboard(ctx, (kb) => {
+                kb.text(
+                  t(ctx, 'admin_panel_limit_unlimited_button'),
+                  `adm:pkg:ul:${field}:${id}`
+                ).row();
+              }),
+            }
+          : {}),
       });
     }
   );
@@ -1300,6 +1610,8 @@ export function registerAdminSalesRoutes(): void {
   registerAdminInputHandler('pkg:edit_field', async (ctx, text, state) => {
     const id = String(state.payload?.id ?? '');
     const field = String(state.payload?.field ?? '');
+    const currentDisplay =
+      typeof state.payload?.currentDisplay === 'string' ? state.payload.currentDisplay : undefined;
     const pkgs = loadPackages(ctx);
     const pkg = pkgs.find((p) => p.id === id);
     if (!pkg) return { status: 'done', redirectRoute: 'adm:pkg:p:1' };
@@ -1309,7 +1621,7 @@ export function registerAdminSalesRoutes(): void {
       promptText: buildAdminPromptScreen({
         emoji: '✏️',
         title: escapeTelegramMarkdown(pkg.name),
-        body: formatPkgFieldPrompt(ctx, pkg, field),
+        body: formatPkgFieldPrompt(ctx, pkg, field, currentDisplay),
         error: errText,
       }),
     });
@@ -1348,6 +1660,22 @@ export function registerAdminSalesRoutes(): void {
         ctx,
         pkgs.map((p) => (p.id === id ? { ...p, price: val } : p))
       );
+    } else if (field === 'stk') {
+      const norm = normalizeInputDigits(text.trim()).toLowerCase();
+      const isUnlimited = ['-', 'unlimited', 'none', 'نامحدود'].includes(norm);
+      const val = isUnlimited ? null : parseNonNegInt(text);
+      if (!isUnlimited && (val === undefined || val === null || val > MAX_INVENTORY_VALUE)) {
+        return retry(t(ctx, 'admin_setting_invalid'));
+      }
+      await ctx.services?.inventoryService?.setPackageInventory(id, { stockRemaining: val });
+    } else if (field === 'lim') {
+      const norm = normalizeInputDigits(text.trim()).toLowerCase();
+      const isUnlimited = ['-', 'unlimited', 'none', 'نامحدود'].includes(norm);
+      const val = isUnlimited ? null : parsePosInt(text);
+      if (!isUnlimited && (val === undefined || val === null || val > MAX_INVENTORY_VALUE)) {
+        return retry(t(ctx, 'admin_setting_invalid'));
+      }
+      await ctx.services?.inventoryService?.setPackageInventory(id, { maxPurchasesPerUser: val });
     }
     return {
       status: 'done',
